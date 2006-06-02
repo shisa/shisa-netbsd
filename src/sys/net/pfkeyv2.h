@@ -76,7 +76,8 @@ you leave this credit intact on any copies of this file.
 #define SADB_X_SPDEXPIRE  21	/* not yet */
 #define SADB_X_SPDDELETE2 22	/* by policy id */
 #define SADB_X_NAT_T_NEW_MAPPING 23
-#define SADB_MAX          23
+#define SADB_X_MIGRATE    24      /* draft-sugimoto-mip6-pfkey-migrate */
+#define SADB_MAX          24
 
 struct sadb_msg {
   u_int8_t sadb_msg_version;

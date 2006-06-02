@@ -39,6 +39,7 @@ __KERNEL_RCSID(0, "$NetBSD: ipsec.c,v 1.101 2005/03/09 14:17:13 itojun Exp $");
 
 #include "opt_inet.h"
 #include "opt_ipsec.h"
+#include "opt_mip6.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -76,6 +77,9 @@ __KERNEL_RCSID(0, "$NetBSD: ipsec.c,v 1.101 2005/03/09 14:17:13 itojun Exp $");
 #include <netinet6/in6_pcb.h>
 #include <netinet/icmp6.h>
 #endif
+#ifdef MIP6
+#include <netinet/ip6mh.h>
+#endif
 
 #include <netinet6/ipsec.h>
 #include <netinet6/ah.h>
@@ -88,6 +92,13 @@ __KERNEL_RCSID(0, "$NetBSD: ipsec.c,v 1.101 2005/03/09 14:17:13 itojun Exp $");
 #include <netkey/key_debug.h>
 
 #include <net/net_osdep.h>
+
+#ifdef MIP6
+#include "mip.h"
+#include <netinet/ip6mh.h>
+#include <netinet6/mip6.h>
+#include <netinet6/mip6_var.h>
+#endif /* MIP6 */ 
 
 #ifdef IPSEC_DEBUG
 int ipsec_debug = 1;
@@ -1065,6 +1076,9 @@ ipsec6_get_ulp(m, spidx, needport)
 	int off, nxt;
 	struct tcphdr th;
 	struct udphdr uh;
+#ifdef MIP6
+	struct ip6_mh mh;
+#endif /* MIP6 */
 
 	/* sanity check */
 	if (m == NULL)
@@ -1104,6 +1118,16 @@ ipsec6_get_ulp(m, spidx, needport)
 		((struct sockaddr_in6 *)&spidx->src)->sin6_port = uh.uh_sport;
 		((struct sockaddr_in6 *)&spidx->dst)->sin6_port = uh.uh_dport;
 		break;
+#ifdef MIP6
+	case IPPROTO_MH:
+		spidx->ul_proto = nxt;
+		if (off + sizeof(struct ip6_mh) > m->m_pkthdr.len)
+			break;
+		m_copydata(m, off, sizeof(mh), (caddr_t)&mh);
+		((struct sockaddr_in6 *)&spidx->src)->sin6_port =
+			htons((u_int16_t)mh.ip6mh_type);
+		break;
+#endif /* MIP6 */
 	case IPPROTO_ICMPV6:
 	default:
 		/* XXX intermediate headers??? */

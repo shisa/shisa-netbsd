@@ -875,6 +875,7 @@
 ./usr/include/net/if_ieee80211.h		comp-obsolete		obsolete
 ./usr/include/net/if_llc.h			comp-c-include
 ./usr/include/net/if_media.h			comp-c-include
+./usr/include/net/if_mip.h			comp-c-include
 ./usr/include/net/if_ppp.h			comp-c-include
 ./usr/include/net/if_pppoe.h			comp-c-include
 ./usr/include/net/if_pppvar.h			comp-c-include
@@ -3339,6 +3340,32 @@
 ./usr/share/man/cat3/inet6_rthdr_reverse.0	comp-c-catman		.cat
 ./usr/share/man/cat3/inet6_rthdr_segments.0	comp-c-catman		.cat
 ./usr/share/man/cat3/inet6_rthdr_space.0	comp-c-catman		.cat
+./usr/share/man/cat3/inet6_opt_append.0		comp-c-catman		.cat
+./usr/share/man/cat3/inet6_opt_find.0		comp-c-catman		.cat
+./usr/share/man/cat3/inet6_opt_finish.0		comp-c-catman		.cat
+./usr/share/man/cat3/inet6_opt_get_val.0	comp-c-catman		.cat
+./usr/share/man/cat3/inet6_opt_init.0		comp-c-catman		.cat
+./usr/share/man/cat3/inet6_opt_next.0		comp-c-catman		.cat
+./usr/share/man/cat3/inet6_opt_set_val.0	comp-c-catman		.cat
+./usr/share/man/cat3/inet6_rth_add.0		comp-c-catman		.cat
+./usr/share/man/cat3/inet6_rth_getaddr.0	comp-c-catman		.cat
+./usr/share/man/cat3/inet6_rth_init.0		comp-c-catman		.cat
+./usr/share/man/cat3/inet6_rth_reverse.0	comp-c-catman		.cat
+./usr/share/man/cat3/inet6_rth_segments.0	comp-c-catman		.cat
+./usr/share/man/cat3/inet6_rth_space.0		comp-c-catman		.cat
+./usr/share/man/man3/inet6_opt_append.3		comp-c-catman		.cat
+./usr/share/man/man3/inet6_opt_find.3		comp-c-catman		.cat
+./usr/share/man/man3/inet6_opt_finish.3		comp-c-catman		.cat
+./usr/share/man/man3/inet6_opt_get_val.3	comp-c-catman		.cat
+./usr/share/man/man3/inet6_opt_init.3		comp-c-catman		.cat
+./usr/share/man/man3/inet6_opt_next.3		comp-c-catman		.cat
+./usr/share/man/man3/inet6_opt_set_val.3	comp-c-catman		.cat
+./usr/share/man/man3/inet6_rth_add.3		comp-c-catman		.cat
+./usr/share/man/man3/inet6_rth_getaddr.3	comp-c-catman		.cat
+./usr/share/man/man3/inet6_rth_init.3		comp-c-catman		.cat
+./usr/share/man/man3/inet6_rth_reverse.3	comp-c-catman		.cat
+./usr/share/man/man3/inet6_rth_segments.3	comp-c-catman		.cat
+./usr/share/man/man3/inet6_rth_space.3		comp-c-catman		.cat
 ./usr/share/man/cat3/inet_addr.0		comp-c-catman		.cat
 ./usr/share/man/cat3/inet_aton.0		comp-c-catman		.cat
 ./usr/share/man/cat3/inet_lnaof.0		comp-c-catman		.cat

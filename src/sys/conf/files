@@ -158,6 +158,8 @@ defflag	opt_ppp.h		PPP_DEFLATE PPP_BSDCOMP PPP_FILTER
 #
 defflag				GATEWAY
 
+defflag	opt_mip6.h		MIP6
+
 defparam			SB_MAX
 
 # UVM options
@@ -1085,6 +1087,8 @@ defpseudo gif:		ifnet
 defpseudo faith:	ifnet
 defpseudo stf:		ifnet
 defpseudo tap {[unit = -1]}:		ifnet, ether, bpf_filter
+defpseudo mip:		ifnet
+defpseudo nemo:		ifnet
 
 defpseudo sequencer
 defpseudo clockctl
@@ -1313,6 +1317,9 @@ file	net/if_faith.c			faith & inet & inet6	needs-flag
 file	net/if_fddisubr.c		fddi			needs-flag
 file	net/if_gif.c			gif			needs-flag
 file	net/if_gre.c			gre			needs-flag
+file	net/if_mip.c			mip			needs-count
+file	net/if_nemo.c			nemo			needs-count
+file	net/mipsock.c			mip6
 file	net/if_hippisubr.c		hippi			needs-flag
 file	net/if_ieee1394subr.c		ieee1394
 file	net/if_loop.c			loop			needs-flag

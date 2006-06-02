@@ -121,24 +121,27 @@ udp6_output(in6p, m, addr6, control, p)
 	struct in6_addr laddr_mapped; /* XXX ugly */
 	u_int16_t fport;
 	int error = 0;
-	struct ip6_pktopts opt, *stickyopt = in6p->in6p_outputopts;
+	struct ip6_pktopts *optp, opt;
 	int priv;
 	int af = AF_INET6, hlen = sizeof(struct ip6_hdr);
 #ifdef INET
 	struct ip *ip;
 	struct udpiphdr *ui;
-#endif
 	int flags = 0;
+#endif
 	struct sockaddr_in6 tmp;
 
 	priv = 0;
 	if (p && !suser(p->p_ucred, &p->p_acflag))
 		priv = 1;
 	if (control) {
-		if ((error = ip6_setpktoptions(control, &opt, priv)) != 0)
+		if ((error = ip6_setpktopts(control, &opt,
+		    in6p->in6p_outputopts, priv, IPPROTO_UDP)) != 0)
 			goto release;
-		in6p->in6p_outputopts = &opt;
-	}
+		optp = &opt;
+	} else
+		optp = in6p->in6p_outputopts;
+
 
 	if (addr6) {
 		/*
@@ -215,7 +218,7 @@ udp6_output(in6p, m, addr6, control, p)
 		}
 
 		if (!IN6_IS_ADDR_V4MAPPED(faddr)) {
-			laddr = in6_selectsrc(sin6, in6p->in6p_outputopts,
+			laddr = in6_selectsrc(sin6, optp,
 					      in6p->in6p_moptions,
 					      &in6p->in6p_route,
 					      &in6p->in6p_laddr, &error);
@@ -335,12 +338,9 @@ udp6_output(in6p, m, addr6, control, p)
 			udp6->uh_sum = 0xffff;
 		}
 
-		if (in6p->in6p_flags & IN6P_MINMTU)
-			flags |= IPV6_MINMTU;
-
 		udp6stat.udp6s_opackets++;
-		error = ip6_output(m, in6p->in6p_outputopts, &in6p->in6p_route,
-		    flags, in6p->in6p_moptions, in6p->in6p_socket, NULL);
+		error = ip6_output(m, optp, &in6p->in6p_route, 0,
+		    in6p->in6p_moptions, in6p->in6p_socket, NULL);
 		break;
 	case AF_INET:
 #ifdef INET
@@ -387,7 +387,7 @@ release:
 
 releaseopt:
 	if (control) {
-		in6p->in6p_outputopts = stickyopt;
+		ip6_clearpktopts(&opt, -1);
 		m_freem(control);
 	}
 	return (error);

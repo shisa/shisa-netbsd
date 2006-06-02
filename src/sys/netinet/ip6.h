@@ -162,6 +162,8 @@ struct ip6_dest {
 #define IP6OPT_RTALERT_ACTNET	2 	/* contains an Active Networks msg */
 #define IP6OPT_MINLEN		2
 
+#define	IP6OPT_HOME_ADDRESS	0xc9	/* 11 0 01001 */
+
 #define IP6OPT_TYPE(o)		((o) & 0xC0)
 #define IP6OPT_TYPE_SKIP	0x00
 #define IP6OPT_TYPE_DISCARD	0x40
@@ -220,6 +222,14 @@ struct ip6_opt_router {
 #endif /* LITTLE_ENDIAN */
 #endif
 
+/* Home Address Option */
+struct ip6_opt_home_address {
+	u_int8_t ip6oh_type;
+	u_int8_t ip6oh_len;
+	u_int8_t ip6oh_addr[16];/* Home Address */
+	/* followed by sub-options */
+} __attribute__((__packed__));
+
 /* Routing header */
 struct ip6_rthdr {
 	u_int8_t  ip6r_nxt;	/* next header */
@@ -236,6 +246,16 @@ struct ip6_rthdr0 {
 	u_int8_t  ip6r0_type;		/* always zero */
 	u_int8_t  ip6r0_segleft;	/* segments left */
 	u_int32_t ip6r0_reserved;	/* reserved field */
+} __attribute__((__packed__));
+
+/* Type 2 Routing header for Mobile IPv6 */
+struct ip6_rthdr2 {
+	u_int8_t  ip6r2_nxt;		/* next header */
+	u_int8_t  ip6r2_len;		/* always 2 */
+	u_int8_t  ip6r2_type;		/* always 2 */
+	u_int8_t  ip6r2_segleft;	/* 0 or 1 */
+	u_int32_t  ip6r2_reserved;	/* reserved field */
+	/* followed by one struct in6_addr */
 } __attribute__((__packed__));
 
 /* Fragment header */
@@ -268,6 +288,37 @@ struct ip6_frag {
 #define IPV6_MAXPACKET	65535	/* ip6 max packet size without Jumbo payload*/
 
 #ifdef _KERNEL
+/*
+ * IP6_EXTHDR_CHECK ensures that region between the IP6 header and the
+ * target header (including IPv6 itself, extension headers and
+ * TCP/UDP/ICMP6 headers) are continuous. KAME requires drivers
+ * to store incoming data into one internal mbuf or one or more external
+ * mbufs(never into two or more internal mbufs). Thus, the third case is
+ * supposed to never be matched but is prepared just in case.
+ */
+#define IP6_EXTHDR_CHECK(m, off, hlen, ret)				\
+do {									\
+    if ((m)->m_next != NULL) {						\
+	if ((m)->m_len < (off) + (hlen)) {				\
+		ip6stat.ip6s_exthdrtoolong++;				\
+		m_freem(m);						\
+		return ret;						\
+	}								\
+    } else {								\
+	if ((m)->m_len < (off) + (hlen)) {				\
+		ip6stat.ip6s_tooshort++;				\
+		in6_ifstat_inc(m->m_pkthdr.rcvif, ifs6_in_truncated);	\
+		m_freem(m);						\
+		return ret;						\
+	}								\
+    }									\
+} while (/*CONSTCOND*/ 0)
+#ifdef PULLDOWN_STAT
+#define IP6_EXTHDR_STAT(x)	x
+#else
+#define IP6_EXTHDR_STAT(x)
+#endif
+
 /*
  * IP6_EXTHDR_GET ensures that intermediate protocol header (from "off" to
  * "len") is located in single mbuf, on contiguous memory region.

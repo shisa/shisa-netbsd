@@ -193,6 +193,7 @@ struct	linger {
 #define pseudo_AF_KEY	29		/* Internal key management protocol  */
 #define	pseudo_AF_HDRCMPLT 30		/* Used by BPF to not rewrite hdrs
 					   in interface output routine */
+#define	pseudo_AF_MOBILITY 31		/* IP mobility */
 #endif
 
 #define	AF_MAX		31
@@ -281,6 +282,7 @@ struct sockaddr_storage {
 #if defined(_NETBSD_SOURCE)
 #define PF_KEY 		pseudo_AF_KEY	/* like PF_ROUTE, only for key mgmt */
 #endif
+#define	PF_MOBILITY	pseudo_AF_MOBILITY
 
 #define	PF_MAX		AF_MAX
 

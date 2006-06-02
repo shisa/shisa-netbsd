@@ -41,6 +41,7 @@
 
 #if defined(_KERNEL) && !defined(_LKM)
 #include "opt_inet.h"
+#include "opt_mip6.h"
 #endif
 
 #include <netinet/in.h>
@@ -65,6 +66,9 @@ struct gif_softc {
 #ifdef __HAVE_GENERIC_SOFT_INTERRUPTS
 	void	*gif_si;		/* softintr handle */
 #endif
+#ifdef MIP6
+	struct sockaddr *gif_nexthop;	/* nexthop address */
+#endif /* MIP6 */
 };
 
 #define gif_ro gifsc_gifscr.gifscr_ro

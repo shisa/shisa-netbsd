@@ -35,6 +35,7 @@ __KERNEL_RCSID(0, "$NetBSD: nd6_nbr.c,v 1.56 2005/02/26 22:45:13 perry Exp $");
 
 #include "opt_inet.h"
 #include "opt_ipsec.h"
+#include "opt_mip6.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -67,18 +68,31 @@ __KERNEL_RCSID(0, "$NetBSD: nd6_nbr.c,v 1.56 2005/02/26 22:45:13 perry Exp $");
 #include <netinet6/ipsec.h>
 #endif
 
+#ifdef MIP6
+#include "mip.h"
+#include <net/mipsock.h>
+#include <netinet6/mip6.h>
+#include <netinet6/mip6_var.h>
+#if NMIP > 0
+#include <net/if_mip.h>
+#endif /* NMIP > 0 */
+#endif /* MIP6 */
+
 #include <net/net_osdep.h>
 
 #define SDL(s) ((struct sockaddr_dl *)s)
 
 struct dadq;
-static struct dadq *nd6_dad_find __P((struct ifaddr *));
+struct dadq *nd6_dad_find __P((struct ifaddr *));
 static void nd6_dad_starttimer __P((struct dadq *, int));
 static void nd6_dad_stoptimer __P((struct dadq *));
 static void nd6_dad_timer __P((struct ifaddr *));
 static void nd6_dad_ns_output __P((struct dadq *, struct ifaddr *));
 static void nd6_dad_ns_input __P((struct ifaddr *));
 static void nd6_dad_na_input __P((struct ifaddr *));
+#ifdef MIP6
+struct ifaddr *nd6_dad_find_by_addr __P((struct in6_addr *));
+#endif /* MIP6 */
 
 static int dad_ignore_ns = 0;	/* ignore NS in DAD - specwise incorrect*/
 static int dad_maxtry = 15;	/* max # of *tries* to transmit DAD packet */
@@ -438,10 +452,20 @@ nd6_ns_output(ifp, daddr6, taddr6, ln, dad)
 		else {
 			struct in6_addr *src0;
 			int error;
+			struct ip6_pktopts *popts = NULL;
+#if defined(MIP6) && NMIP > 0
+			struct ip6_pktopts opts;
+
+			bzero(&opts, sizeof(opts));
+			opts.ip6po_hlim = -1;
+
+			opts.ip6po_flags |= IP6PO_USECOA;
+			popts = &opts;
+#endif /* MIP6 && NMIP > 0 */
 
 			bcopy(&dst_sa, &ro.ro_dst, sizeof(dst_sa));
-			src0 = in6_selectsrc(&dst_sa, NULL, NULL, &ro, NULL,
-			    &error);
+			src0 = in6_selectsrc(&dst_sa, popts, NULL, &ro, NULL,
+					     &error);
 			if (src0 == NULL) {
 				nd6log((LOG_DEBUG,
 				    "nd6_ns_output: source can't be "
@@ -451,6 +475,37 @@ nd6_ns_output(ifp, daddr6, taddr6, ln, dad)
 			}
 			src_sa.sin6_addr = *src0;
 		}
+#if defined(MIP6) && NMIP > 0
+		/*
+		 * returning home case: don't send a unicast NS before
+		 * deregistration has been completed.
+		 */
+		{
+			struct in6_ifaddr *ia6;
+
+			ia6 = in6ifa_ifpwithaddr(ifp, &src_sa.sin6_addr);
+			if (ia6 == NULL)
+				goto bad;
+			if (ia6->ia6_flags & IN6_IFF_DEREGISTERING) {
+				ip6->ip6_dst.s6_addr16[0] =
+				    IPV6_ADDR_INT16_MLL;
+				ip6->ip6_dst.s6_addr16[1] = 0;
+				ip6->ip6_dst.s6_addr32[1] = 0;
+				ip6->ip6_dst.s6_addr32[2] =
+				    IPV6_ADDR_INT32_ONE;
+				ip6->ip6_dst.s6_addr32[3] =
+				    taddr6->s6_addr32[3];
+				ip6->ip6_dst.s6_addr8[12] = 0xff;
+				if (in6_addr2scopeid(ifp, &ip6->ip6_dst))
+					goto bad;
+#if 0
+				bzero(&src_in, sizeof(src_in));
+				src = &src_in;
+#endif /* XXX mitsuya */
+				dad = 1; /* XXX to set IPV6_UNSPECSRC */
+			}
+		}
+#endif /* MIP6 && NMIP > 0 */
 	} else {
 		/*
 		 * Source address for DAD packet must always be IPv6
@@ -605,6 +660,10 @@ nd6_na_input(m, off, icmp6len)
 		lladdrlen = ndopts.nd_opts_tgt_lladdr->nd_opt_len << 3;
 	}
 
+#ifdef MIP6
+	ifa = nd6_dad_find_by_addr(&taddr6);
+	if (!ifa)
+#endif
 	ifa = (struct ifaddr *)in6ifa_ifpwithaddr(ifp, &taddr6);
 
 	/*
@@ -841,6 +900,10 @@ nd6_na_output(ifp, daddr6, taddr6, flags, tlladdr, sdl0)
 	int icmp6len, maxlen, error;
 	caddr_t mac;
 	struct route_in6 ro;
+	struct ip6_pktopts *popts = NULL;
+#if defined(MIP6) && NMIP > 0
+	struct ip6_pktopts opts;
+#endif /* MIP6 && NMIP > 0 */
 
 	mac = NULL;
 	bzero(&ro, sizeof(ro));
@@ -906,8 +969,15 @@ nd6_na_output(ifp, daddr6, taddr6, flags, tlladdr, sdl0)
 	/*
 	 * Select a source whose scope is the same as that of the dest.
 	 */
+#if defined(MIP6) && NMIP > 0
+	bzero(&opts, sizeof(opts));
+	opts.ip6po_hlim = -1;
+
+	opts.ip6po_flags |= IP6PO_USECOA;
+	popts = &opts;
+#endif /* MIP6 && NMIP > 0 */
 	bcopy(&dst_sa, &ro.ro_dst, sizeof(dst_sa));
-	src0 = in6_selectsrc(&dst_sa, NULL, NULL, &ro, NULL, &error);
+	src0 = in6_selectsrc(&dst_sa, popts, NULL, &ro, NULL, &error);
 	if (src0 == NULL) {
 		nd6log((LOG_DEBUG, "nd6_na_output: source can't be "
 		    "determined: dst=%s, error=%d\n",
@@ -1018,7 +1088,22 @@ struct dadq {
 static struct dadq_head dadq;
 static int dad_init = 0;
 
-static struct dadq *
+#ifdef MIP6
+struct ifaddr *
+nd6_dad_find_by_addr(addr)
+	struct in6_addr *addr;
+{
+	struct dadq *dp;
+
+	for (dp = dadq.tqh_first; dp; dp = dp->dad_list.tqe_next) {
+		if (IN6_ARE_ADDR_EQUAL(&((struct in6_ifaddr *)dp->dad_ifa)->ia_addr.sin6_addr, addr))
+			return dp->dad_ifa;
+	}
+	return NULL;
+}
+#endif /* MIP6 */
+
+struct dadq *
 nd6_dad_find(ifa)
 	struct ifaddr *ifa;
 {
@@ -1206,6 +1291,14 @@ nd6_dad_timer(ifa)
 		TAILQ_REMOVE(&dadq, (struct dadq *)dp, dad_list);
 		free(dp, M_IP6NDP);
 		dp = NULL;
+#ifdef MIP6
+		if (ia->ia6_flags & IN6_IFF_PSEUDOIFA) {
+			/* Notify the address was not duplicated via mipsock */
+			mips_notify_dad_result(MIPM_DAD_SUCCESS,
+					       &ia->ia_addr.sin6_addr,
+					       ia->ia_ifp->if_index);
+		}
+#endif /* MIP6 */
 		IFAFREE(ifa);
 		goto done;
 	}
@@ -1259,6 +1352,18 @@ nd6_dad_timer(ifa)
 			TAILQ_REMOVE(&dadq, (struct dadq *)dp, dad_list);
 			free(dp, M_IP6NDP);
 			dp = NULL;
+#if defined(MIP6) && NMIP > 0
+			rt_addrinfomsg((struct ifaddr *)ia);
+#endif /* MIP6 && NMIP > 0 */
+#ifdef MIP6
+			if (ia->ia6_flags & IN6_IFF_PSEUDOIFA) {
+				/* Notify the address was not duplicated
+				   via mipsock */
+				mips_notify_dad_result(MIPM_DAD_SUCCESS,
+						       &ia->ia_addr.sin6_addr,
+						       ia->ia_ifp->if_index);
+			}
+#endif /* MIP6 */
 			IFAFREE(ifa);
 		}
 	}
@@ -1299,6 +1404,13 @@ nd6_dad_duplicated(ifa)
 	TAILQ_REMOVE(&dadq, (struct dadq *)dp, dad_list);
 	free(dp, M_IP6NDP);
 	dp = NULL;
+#ifdef MIP6
+	if (ia->ia6_flags & IN6_IFF_PSEUDOIFA) {
+		/* Notify the address was not duplicated via mipsock */
+		mips_notify_dad_result(MIPM_DAD_FAIL, &ia->ia_addr.sin6_addr,
+				       ia->ia_ifp->if_index);
+	}
+#endif /* MIP6 */
 	IFAFREE(ifa);
 }
 

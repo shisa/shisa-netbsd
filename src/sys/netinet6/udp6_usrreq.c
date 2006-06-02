@@ -235,10 +235,11 @@ udp6_ctlinput(cmd, sa, d)
 			icmp6_mtudisc_update((struct ip6ctlparam *)d, valid);
 
 			/*
-			 * regardless of if we called icmp6_mtudisc_update(),
-			 * we need to call in6_pcbnotify(), to notify path
-			 * MTU change to the userland (2292bis-02), because
-			 * some unconnected sockets may share the same
+			 * regardless of if we called
+			 * icmp6_mtudisc_update(), we need to call
+			 * in6_pcbnotify(), to notify path MTU change
+			 * to the userland (RFC3542), because some
+			 * unconnected sockets may share the same
 			 * destination and want to know the path MTU.
 			 */
 		}

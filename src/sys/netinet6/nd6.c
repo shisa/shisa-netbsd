@@ -34,6 +34,7 @@
 __KERNEL_RCSID(0, "$NetBSD: nd6.c,v 1.91.10.1 2005/04/07 17:06:56 jmc Exp $");
 
 #include "opt_ipsec.h"
+#include "opt_mip6.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -64,6 +65,17 @@ __KERNEL_RCSID(0, "$NetBSD: nd6.c,v 1.91.10.1 2005/04/07 17:06:56 jmc Exp $");
 #include <netinet6/ip6_var.h>
 #include <netinet6/nd6.h>
 #include <netinet/icmp6.h>
+
+#ifdef MIP6
+#include "mip.h"
+#include <netinet6/mip6.h>
+#include <netinet6/mip6_var.h>
+#if NMIP > 0
+#include <net/mipsock.h>
+#include <net/if_mip.h>
+#include <netinet/ip6mh.h>
+#endif /* NMIP > 0 */
+#endif /* MIP6 */
 
 #ifdef IPSEC
 #include <netinet6/ipsec.h>
@@ -659,7 +671,12 @@ nd6_purge(ifp)
 	if (nd6_defifindex == ifp->if_index)
 		nd6_setdefaultiface(0);
 
-	if (!ip6_forwarding && ip6_accept_rtadv) { /* XXX: too restrictive? */
+#if defined(MIP6) && NMIP > 0
+	if (MIP6_IS_MR || (!ip6_forwarding && ip6_accept_rtadv)) /* XXX: too restrictive? */
+#else
+	if (!ip6_forwarding && ip6_accept_rtadv) /* XXX: too restrictive? */
+#endif
+	  {
 		/* refresh default router list */
 		defrouter_select();
 	}
@@ -1694,7 +1711,12 @@ fail:
 	 * for those are not autoconfigured hosts, we explicitly avoid such
 	 * cases for safety.
 	 */
+#if defined(MIP6) && NMIP > 0
+	if (do_update && ln->ln_router && 
+		((!ip6_forwarding && ip6_accept_rtadv) || MIP6_IS_MR))
+#else
 	if (do_update && ln->ln_router && !ip6_forwarding && ip6_accept_rtadv)
+#endif 
 		defrouter_select();
 
 	return rt;
@@ -1742,6 +1764,63 @@ nd6_output(ifp, origifp, m0, dst, rt0)
 	struct sockaddr_in6 *gw6 = NULL;
 	struct llinfo_nd6 *ln = NULL;
 	int error = 0;
+#if defined(MIP6) && NMIP > 0
+	int presence;
+	struct ip6_hdr *ip6;
+	struct in6_ifaddr *src_ia6;
+	struct sockaddr_in6 sin6_src;
+	struct in6_addr in6_src, in6_dst;
+	struct mip6_bul_internal *bul, *cnbul;
+#endif /* MIP6 && NMIP > 0 */
+
+#if defined(MIP6) && NMIP > 0
+	ip6 = mtod(m0, struct ip6_hdr *);
+
+	bzero(&sin6_src, sizeof(struct sockaddr_in6));
+	sin6_src.sin6_len = sizeof(struct sockaddr_in6);
+	sin6_src.sin6_family = AF_INET6;
+	sin6_src.sin6_addr = ip6->ip6_src;
+
+	src_ia6 = (struct in6_ifaddr *)ifa_ifwithaddr(
+	    (struct sockaddr *)&sin6_src);
+
+	if (src_ia6 && ((src_ia6->ia6_flags & IN6_IFF_DEREGISTERING) == 0)) {
+		/* 
+		 * if R flag is set, skip kernel tunnel. 
+		 * packets are tunneled by gif 
+		 */
+		bul = mip6_bul_get_home_agent(&ip6->ip6_src);
+		if ((bul != NULL) && (bul->mbul_mip != NULL) && 
+			(bul->mbul_flags & IP6_MH_BU_ROUTER) == 0) {
+			if (ip6->ip6_nxt == IPPROTO_MH)
+				goto dontstartrr;
+
+			if (mip6_get_ip6hdrinfo(m, &in6_src, 
+					&in6_dst, NULL, NULL, 1 /* logical */, &presence)) {
+				mip6log((LOG_ERR, "nd6_output: "
+				    "failed to get logical source and "
+				    "destination addresses.\n"));
+				senderr(EIO); /* XXX ? */
+			}
+			if (IN6_IS_ADDR_MULTICAST(&in6_dst))
+				goto dontstartrr;
+			if (IN6_IS_ADDR_LINKLOCAL(&in6_dst))
+				goto dontstartrr;
+			cnbul = mip6_bul_get(&in6_src, &in6_dst, 0);
+			if (cnbul != NULL)
+				goto dontstartrr;
+
+			/* send a hint to start RR to this node. */
+			mip6_notify_rr_hint(&in6_src, &in6_dst);
+
+		dontstartrr:
+			/* send this packet via bi-directional tunnel. */
+			return ((*bul->mbul_mip->mip_if.if_output)(
+			    (struct ifnet *)bul->mbul_mip, m,
+			    (struct sockaddr *)dst, rt));
+		}
+	}
+#endif /* MIP6 && NMIP > 0 */
 
 	if (IN6_IS_ADDR_MULTICAST(&dst->sin6_addr))
 		goto sendpkt;

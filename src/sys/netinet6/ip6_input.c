@@ -67,6 +67,7 @@ __KERNEL_RCSID(0, "$NetBSD: ip6_input.c,v 1.77 2004/12/04 16:10:25 peter Exp $")
 #include "opt_inet.h"
 #include "opt_ipsec.h"
 #include "opt_pfil_hooks.h"
+#include "opt_mip6.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -139,7 +140,7 @@ struct pfil_head inet6_pfil_hook;
 struct ip6stat ip6stat;
 
 static void ip6_init2 __P((void *));
-
+static struct m_tag *ip6_setdstifaddr __P((struct mbuf *, struct in6_ifaddr *));
 static int ip6_hopopts_input __P((u_int32_t *, u_int32_t *, struct mbuf **, int *));
 static struct mbuf *ip6_pullexthdr __P((struct mbuf *, size_t, int));
 
@@ -507,11 +508,51 @@ ip6_input(m)
 	    IN6_ARE_ADDR_EQUAL(&ip6->ip6_dst,
 	    &rt6_key(ip6_forward_rt.ro_rt)->sin6_addr) &&
 #endif
-	    ip6_forward_rt.ro_rt->rt_ifp->if_type == IFT_LOOP) {
+#ifdef MIP6
+	    ((ip6_forward_rt.ro_rt->rt_flags & RTF_ANNOUNCE) ||
+	     ip6_forward_rt.ro_rt->rt_ifp->if_type == IFT_LOOP)
+#else
+	    ip6_forward_rt.ro_rt->rt_ifp->if_type == IFT_LOOP
+#endif /* MIP6 */
+	    ) {
 		struct in6_ifaddr *ia6 =
 			(struct in6_ifaddr *)ip6_forward_rt.ro_rt->rt_ifa;
 		if (ia6->ia6_flags & IN6_IFF_ANYCAST)
 			m->m_flags |= M_ANYCAST6;
+
+#ifdef MIP6
+		/* check unicast NS */
+	    	if ((ip6_forward_rt.ro_rt->rt_flags & RTF_ANNOUNCE) != 0) {
+			/* This route shows proxy nd. thus the packet was
+			 *  captured. this packet should be tunneled to
+			 * actual coa with tunneling unless this is NS.
+			 */
+			int nxt, loff;
+			struct icmp6_hdr *icp;
+			loff = ip6_lasthdr(m, 0, IPPROTO_IPV6, &nxt);
+			if (loff <  0 || nxt != IPPROTO_ICMPV6)
+				goto mip6_forwarding;
+#ifndef PULLDOWN_TEST
+			IP6_EXTHDR_CHECK(m, 0, loff + sizeof(struct icmp6_hdr),);
+			icp = (struct icmp6_hdr *)(mtod(m, caddr_t) + loff);
+#else
+			IP6_EXTHDR_GET(icp, struct icmp6_hdr *, m, loff,
+				sizeof(*icp));
+			if (icp == NULL) {
+				icmp6stat.icp6s_tooshort++;
+				return;
+			}
+#endif
+			if (icp->icmp6_type != ND_NEIGHBOR_SOLICIT)
+				goto mip6_forwarding;
+		}
+#endif /* MIP6 */
+		/*
+		 * record address information into m_tag.
+		 */
+		(void)ip6_setdstifaddr(m, ia6);		
+
+
 		/*
 		 * packets to a tentative, duplicated, or somehow invalid
 		 * address must not be accepted.
@@ -532,6 +573,9 @@ ip6_input(m)
 		}
 	}
 
+#ifdef MIP6
+ mip6_forwarding:
+#endif /* MIP6 */
 	/*
 	 * FAITH (Firewall Aided Internet Translator)
 	 */
@@ -744,12 +788,45 @@ ip6_input(m)
 			goto bad;
 		}
 #endif
-
+#ifdef MIP6
+		if (dest6_mip6_hao(m, off, nxt) < 0)
+			goto bad;
+#endif /* MIP6 */
 		nxt = (*inet6sw[ip6_protox[nxt]].pr_input)(&m, &off, nxt);
 	}
 	return;
  bad:
 	m_freem(m);
+}
+
+/*
+ * set/grab in6_ifaddr correspond to IPv6 destination address.
+ * XXX backward compatibility wrapper
+ */
+static struct m_tag *
+ip6_setdstifaddr(m, ia6)
+	struct mbuf *m;
+	struct in6_ifaddr *ia6;
+{
+	struct m_tag *mtag;
+
+	mtag = ip6_addaux(m);
+	if (mtag)
+		((struct ip6aux *)(mtag + 1))->ip6a_dstia6 = ia6;
+	return mtag;	/* NULL if failed to set */
+}
+
+struct in6_ifaddr *
+ip6_getdstifaddr(m)
+	struct mbuf *m;
+{
+	struct m_tag *mtag;
+
+	mtag = ip6_findaux(m);
+	if (mtag)
+		return ((struct ip6aux *)(mtag + 1))->ip6a_dstia6;
+	else
+		return NULL;
 }
 
 /*
@@ -993,6 +1070,7 @@ ip6_savecontrol(in6p, mp, ip6, m)
 	struct ip6_hdr *ip6;
 	struct mbuf *m;
 {
+#define IS2292(x, y)	((in6p->in6p_flags & IN6P_RFC2292) ? (x) : (y))
 
 #ifdef SO_TIMESTAMP
 	if (in6p->in6p_socket->so_options & SO_TIMESTAMP) {
@@ -1031,25 +1109,40 @@ ip6_savecontrol(in6p, mp, ip6, m)
 					? m->m_pkthdr.rcvif->if_index
 					: 0;
 		*mp = sbcreatecontrol((caddr_t) &pi6,
-		    sizeof(struct in6_pktinfo), IPV6_PKTINFO, IPPROTO_IPV6);
+			sizeof(struct in6_pktinfo),
+			IS2292(IPV6_2292PKTINFO, IPV6_PKTINFO), IPPROTO_IPV6);
 		if (*mp)
 			mp = &(*mp)->m_next;
 	}
-	if (in6p->in6p_flags & IN6P_HOPLIMIT) {
+	if ((in6p->in6p_flags & IN6P_HOPLIMIT) != 0) {
 		int hlim = ip6->ip6_hlim & 0xff;
 		*mp = sbcreatecontrol((caddr_t) &hlim, sizeof(int),
-		    IPV6_HOPLIMIT, IPPROTO_IPV6);
+			IS2292(IPV6_2292HOPLIMIT, IPV6_HOPLIMIT), IPPROTO_IPV6);
 		if (*mp)
 			mp = &(*mp)->m_next;
 	}
-	/* IN6P_NEXTHOP - for outgoing packet only */
+
+	if ((in6p->in6p_flags & IN6P_TCLASS) != 0) {
+		u_int32_t flowinfo;
+		int tclass;
+
+		flowinfo = (u_int32_t)ntohl(ip6->ip6_flow & IPV6_FLOWINFO_MASK);
+		flowinfo >>= 20;
+
+		tclass = flowinfo & 0xff;
+		*mp = sbcreatecontrol((caddr_t)&tclass, sizeof(tclass),
+						IPV6_TCLASS, IPPROTO_IPV6);
+		if (*mp)
+			mp = &(*mp)->m_next;
+	}
+
 
 	/*
 	 * IPV6_HOPOPTS socket option.  Recall that we required super-user
 	 * privilege for the option (see ip6_ctloutput), but it might be too
 	 * strict, since there might be some hop-by-hop options which can be
 	 * returned to normal user.
-	 * See also RFC 2292 section 6.
+	 * See also RFC3542 section 8 (RFC 2292 section 6).
 	 */
 	if ((in6p->in6p_flags & IN6P_HOPOPTS) != 0) {
 		/*
@@ -1083,10 +1176,11 @@ ip6_savecontrol(in6p, mp, ip6, m)
 			 * XXX: We copy whole the header even if a jumbo
 			 * payload option is included, which option is to
 			 * be removed before returning in the RFC 2292.
-			 * But it's too painful operation...
+			 * Note: this constraint is removed in RFC3542.
 			 */
 			*mp = sbcreatecontrol((caddr_t)hbh, hbhlen,
-			    IPV6_HOPOPTS, IPPROTO_IPV6);
+			    IS2292(IPV6_2292HOPOPTS, IPV6_HOPOPTS),
+			    IPPROTO_IPV6);
 			if (*mp)
 				mp = &(*mp)->m_next;
 			m_freem(ext);
@@ -1147,7 +1241,8 @@ ip6_savecontrol(in6p, mp, ip6, m)
 					break;
 
 				*mp = sbcreatecontrol((caddr_t)ip6e, elen,
-				    IPV6_DSTOPTS, IPPROTO_IPV6);
+				    IS2292(IPV6_2292DSTOPTS, IPV6_DSTOPTS),
+				    IPPROTO_IPV6);
 				if (*mp)
 					mp = &(*mp)->m_next;
 				break;
@@ -1157,7 +1252,8 @@ ip6_savecontrol(in6p, mp, ip6, m)
 					break;
 
 				*mp = sbcreatecontrol((caddr_t)ip6e, elen,
-				    IPV6_RTHDR, IPPROTO_IPV6);
+				    IS2292(IPV6_2292RTHDR, IPV6_RTHDR),
+				    IPPROTO_IPV6);
 				if (*mp)
 					mp = &(*mp)->m_next;
 				break;
@@ -1188,6 +1284,58 @@ ip6_savecontrol(in6p, mp, ip6, m)
 	  loopend:
 	  	;
 	}
+#undef IS2292
+}
+
+void
+ip6_notify_pmtu(in6p, dst, mtu)
+	struct in6pcb *in6p;
+	struct sockaddr_in6 *dst;
+	u_int32_t *mtu;
+{
+	struct socket *so;
+	struct mbuf *m_mtu;
+	struct ip6_mtuinfo mtuctl;
+
+	so = in6p->in6p_socket;
+
+	if (mtu == NULL)
+		return;
+
+#ifdef DIAGNOSTIC
+	if (so == NULL)		/* I believe this is impossible */
+		panic("ip6_notify_pmtu: socket is NULL");
+#endif
+
+	bzero(&mtuctl, sizeof(mtuctl));	/* zero-clear for safety */
+	mtuctl.ip6m_mtu = *mtu;
+	mtuctl.ip6m_addr = *dst;
+	/* XXX */
+	/* should support scope6.c */
+#if 0
+	if (sa6_recoverscope(&mtuctl.ip6m_addr))
+		return;
+#else
+	if (IN6_IS_SCOPE_LINKLOCAL(&mtuctl.ip6m_addr.sin6_addr)
+	    /*||IN6_IS_ADDR_MC_INTFACELOCAL(&mtuctl.ip6m_addr)*/) {
+	        mtuctl.ip6m_addr.sin6_scope_id =
+		    ntohs(mtuctl.ip6m_addr.sin6_addr.s6_addr16[1]);
+		mtuctl.ip6m_addr.sin6_addr.s6_addr16[1] = 0;
+        }
+#endif 
+
+	if ((m_mtu = sbcreatecontrol((caddr_t)&mtuctl, sizeof(mtuctl),
+	    IPV6_PATHMTU, IPPROTO_IPV6)) == NULL)
+		return;
+
+	if (sbappendaddr(&so->so_rcv, (struct sockaddr *)dst, NULL, m_mtu)
+	    == 0) {
+		m_freem(m_mtu);
+		/* XXX: should count statistics */
+	} else
+		sorwakeup(so);
+
+	return;
 }
 
 /*
@@ -1404,6 +1552,46 @@ ip6_lasthdr(m, off, proto, nxtp)
 		proto = *nxtp;
 	}
 }
+
+struct m_tag *
+ip6_addaux(m)
+	struct mbuf *m;
+{
+	struct m_tag *mtag;
+
+	mtag = m_tag_find(m, PACKET_TAG_INET6, NULL);
+	if (!mtag) {
+		mtag = m_tag_get(PACKET_TAG_INET6, sizeof(struct ip6aux),
+		    M_NOWAIT);
+		if (mtag) {
+			m_tag_prepend(m, mtag);
+			bzero(mtag + 1, sizeof(struct ip6aux));
+		}
+	}
+	return mtag;
+}
+
+struct m_tag *
+ip6_findaux(m)
+	struct mbuf *m;
+{
+	struct m_tag *mtag;
+
+	mtag = m_tag_find(m, PACKET_TAG_INET6, NULL);
+	return mtag;
+}
+
+void
+ip6_delaux(m)
+	struct mbuf *m;
+{
+	struct m_tag *mtag;
+
+	mtag = m_tag_find(m, PACKET_TAG_INET6, NULL);
+	if (mtag)
+		m_tag_delete(m, mtag);
+}
+
 
 /*
  * System control for IP6

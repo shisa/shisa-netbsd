@@ -126,6 +126,13 @@ struct icmp6_hdr {
 #define ICMP6_NI_QUERY			139	/* node information request */
 #define ICMP6_NI_REPLY			140	/* node information reply */
 
+/* Folloing numbers are defined in the mobile-ip draft. */
+#define MIP6_HA_DISCOVERY_REQUEST	144	/* home agent addr disc req */
+#define MIP6_HA_DISCOVERY_REPLY		145	/* home agent addr dis reply */
+#define MIP6_PREFIX_SOLICIT		146	/* mobile prefix sol */
+#define MIP6_PREFIX_ADVERT		147	/* mobile prefix adv */
+
+
 /* The definitions below are experimental. TBA */
 #define MLD_MTRACE_RESP			200	/* mtrace response(to sender) */
 #define MLD_MTRACE			201	/* mtrace messages */
@@ -270,6 +277,71 @@ struct nd_redirect {		/* redirect */
 #define nd_rd_code		nd_rd_hdr.icmp6_code
 #define nd_rd_cksum		nd_rd_hdr.icmp6_cksum
 #define nd_rd_reserved		nd_rd_hdr.icmp6_data32[0]
+
+struct mip6_dhaad_req {		/* HA Address Discovery Request */
+	struct icmp6_hdr	mip6_dhreq_hdr;
+} __attribute__((__packed__));
+
+#define mip6_dhreq_type		mip6_dhreq_hdr.icmp6_type
+#define mip6_dhreq_code		mip6_dhreq_hdr.icmp6_code
+#define mip6_dhreq_cksum	mip6_dhreq_hdr.icmp6_cksum
+#define mip6_dhreq_id		mip6_dhreq_hdr.icmp6_data16[0]
+#define mip6_dhreq_reserved	mip6_dhreq_hdr.icmp6_data16[1]
+
+#if BYTE_ORDER == BIG_ENDIAN
+#define MIP6_DHREQ_FLAG_MR	0x8000
+#endif /* BIG_ENDIAN */
+#if BYTE_ORDER == LITTLE_ENDIAN
+#define MIP6_DHREQ_FLAG_MR	0x0080
+#endif /* LITTLE_ENDIAN */
+
+
+struct mip6_dhaad_rep {		/* HA Address Discovery Reply */
+	struct icmp6_hdr	mip6_dhrep_hdr;
+	/* could be followed by home agent addresses */
+} __attribute__((__packed__));
+
+#define mip6_dhrep_type		mip6_dhrep_hdr.icmp6_type
+#define mip6_dhrep_code		mip6_dhrep_hdr.icmp6_code
+#define mip6_dhrep_cksum	mip6_dhrep_hdr.icmp6_cksum
+#define mip6_dhrep_id		mip6_dhrep_hdr.icmp6_data16[0]
+#define mip6_dhrep_reserved	mip6_dhrep_hdr.icmp6_data16[1]
+
+#if BYTE_ORDER == BIG_ENDIAN
+#define MIP6_DHREP_FLAG_MR	0x8000
+#endif /* BIG_ENDIAN */
+#if BYTE_ORDER == LITTLE_ENDIAN
+#define MIP6_DHREP_FLAG_MR	0x0080
+#endif /* LITTLE_ENDIAN */
+
+struct mip6_prefix_solicit {	/* Mobile Prefix Solicitation */
+	struct icmp6_hdr	mip6_ps_hdr;
+} __attribute__((__packed__));
+
+#define mip6_ps_type		mip6_ps_hdr.icmp6_type
+#define mip6_ps_code		mip6_ps_hdr.icmp6_code
+#define mip6_ps_cksum		mip6_ps_hdr.icmp6_cksum
+#define mip6_ps_id		mip6_ps_hdr.icmp6_data16[0]
+#define mip6_ps_reserved	mip6_ps_hdr.icmp6_data16[1]
+
+struct mip6_prefix_advert {	/* Mobile Prefix Advertisement */
+	struct icmp6_hdr	mip6_pa_hdr;
+	/* followed by options */
+} __attribute__((__packed__));
+
+#define mip6_pa_type		mip6_pa_hdr.icmp6_type
+#define mip6_pa_code		mip6_pa_hdr.icmp6_code
+#define mip6_pa_cksum		mip6_pa_hdr.icmp6_cksum
+#define mip6_pa_id		mip6_pa_hdr.icmp6_data16[0]
+#define mip6_pa_flags_reserved	mip6_pa_hdr.icmp6_data16[1]
+#if BYTE_ORDER == BIG_ENDIAN
+#define MIP6_PA_FLAG_MANAGED	0x8000
+#define MIP6_PA_FLAG_OTHER	0x4000
+#endif /* BIG_ENDIAN */
+#if BYTE_ORDER == LITTLE_ENDIAN
+#define MIP6_PA_FLAG_MANAGED	0x0080
+#define MIP6_PA_FLAG_OTHER	0x0040
+#endif /* LITTLE_ENDIAN */
 
 struct nd_opt_hdr {		/* Neighbor discovery option header */
 	u_int8_t	nd_opt_type;

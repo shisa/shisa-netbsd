@@ -92,6 +92,7 @@ struct nd_ifinfo {
 
 #define ND6_IFF_PERFORMNUD	0x1
 #define ND6_IFF_ACCEPT_RTADV	0x2
+#define ND6_IFF_DONT_SET_IFROUTE 0x10
 
 #ifdef _KERNEL
 #define ND_IFINFO(ifp) \

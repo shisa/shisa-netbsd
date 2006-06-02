@@ -65,6 +65,7 @@
 __KERNEL_RCSID(0, "$NetBSD: raw_ip6.c,v 1.71 2005/03/11 06:16:16 atatat Exp $");
 
 #include "opt_ipsec.h"
+#include "opt_mip6.h"
 
 #include <sys/param.h>
 #include <sys/sysctl.h>
@@ -105,6 +106,10 @@ __KERNEL_RCSID(0, "$NetBSD: raw_ip6.c,v 1.71 2005/03/11 06:16:16 atatat Exp $");
 #if defined(NFAITH) && 0 < NFAITH
 #include <net/if_faith.h>
 #endif
+
+#ifdef MIP6
+#include <netinet/ip6mh.h>
+#endif /* MIP6 */
 
 extern struct inpcbtable rawcbtable;
 struct	inpcbtable raw6cbtable;
@@ -348,10 +353,10 @@ rip6_ctlinput(cmd, sa, d)
 
 		/*
 		 * regardless of if we called icmp6_mtudisc_update(),
-		 * we need to call in6_pcbnotify(), to notify path
-		 * MTU change to the userland (2292bis-02), because
-		 * some unconnected sockets may share the same
-		 * destination and want to know the path MTU.
+		 * we need to call in6_pcbnotify(), to notify path MTU
+		 * change to the userland (RFC3542), because some
+		 * unconnected sockets may share the same destination
+		 * and want to know the path MTU.
 		 */
 	}
 
@@ -385,7 +390,6 @@ rip6_output(m, va_alist)
 	int type, code;		/* for ICMPv6 output statistics only */
 	int priv = 0;
 	va_list ap;
-	int flags;
 
 	va_start(ap, m);
 	so = va_arg(ap, struct socket *);
@@ -404,8 +408,11 @@ rip6_output(m, va_alist)
     }
 	dst = &dstsock->sin6_addr;
 	if (control) {
-		if ((error = ip6_setpktoptions(control, &opt, priv)) != 0)
+		if ((error = ip6_setpktopts(control, &opt,
+		    in6p->in6p_outputopts,
+		    priv, so->so_proto->pr_protocol)) != 0) {
 			goto bad;
+		}
 		optp = &opt;
 	} else
 		optp = in6p->in6p_outputopts;
@@ -479,6 +486,9 @@ rip6_output(m, va_alist)
 	ip6->ip6_hlim = in6_selecthlim(in6p, oifp);
 
 	if (so->so_proto->pr_protocol == IPPROTO_ICMPV6 ||
+#ifdef MIP6
+	    so->so_proto->pr_protocol == IPPROTO_MH ||
+#endif /* MIP6 */
 	    in6p->in6p_cksum != -1) {
 		int off;
 		u_int16_t sum;
@@ -486,6 +496,10 @@ rip6_output(m, va_alist)
 		/* compute checksum */
 		if (so->so_proto->pr_protocol == IPPROTO_ICMPV6)
 			off = offsetof(struct icmp6_hdr, icmp6_cksum);
+#ifdef MIP6
+		else if (so->so_proto->pr_protocol == IPPROTO_MH)
+			off = offsetof(struct ip6_mh, ip6mh_cksum);
+#endif /* MIP6 */
 		else
 			off = in6p->in6p_cksum;
 		if (plen < off + 1) {
@@ -510,11 +524,7 @@ rip6_output(m, va_alist)
 		}
 	}
 
-	flags = 0;
-	if (in6p->in6p_flags & IN6P_MINMTU)
-		flags |= IPV6_MINMTU;
-
-	error = ip6_output(m, optp, &in6p->in6p_route, flags,
+	error = ip6_output(m, optp, &in6p->in6p_route, 0,
 	    in6p->in6p_moptions, so, &oifp);
 	if (so->so_proto->pr_protocol == IPPROTO_ICMPV6) {
 		if (oifp)
@@ -530,10 +540,10 @@ rip6_output(m, va_alist)
 		m_freem(m);
 
  freectl:
-	if (optp == &opt && optp->ip6po_rthdr && optp->ip6po_route.ro_rt)
-		RTFREE(optp->ip6po_route.ro_rt);
-	if (control)
+	if (control) {
+		ip6_clearpktopts(&opt, -1);
 		m_freem(control);
+	}
 	return (error);
 }
 

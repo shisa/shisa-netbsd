@@ -67,13 +67,16 @@
  * FreeBSD is excluded here as they make max_keylen a static variable, and
  * thus forbid definition of radix table other than proper domains.
  */
+#ifndef MIP6
 #define USE_RADIX
+#endif /* MIP6 */
 
 #include <sys/cdefs.h>
 __KERNEL_RCSID(0, "$NetBSD: ip_encap.c,v 1.23 2005/02/03 03:49:01 perry Exp $");
 
 #include "opt_mrouting.h"
 #include "opt_inet.h"
+#include "opt_mip6.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>

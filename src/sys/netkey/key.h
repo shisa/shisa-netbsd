@@ -86,6 +86,13 @@ extern int key_checktunnelsanity __P((struct secasvar *, u_int,
 extern void key_sa_recordxfer __P((struct secasvar *, struct mbuf *));
 extern void key_sa_routechange __P((struct sockaddr *));
 extern void key_sa_stir_iv __P((struct secasvar *));
+#ifdef MIP6
+void key_mip6_update_mobile_node_ipsecdb(struct sockaddr_in6 *,
+    struct sockaddr_in6 *, struct sockaddr_in6 *, struct sockaddr_in6 *);
+void key_mip6_update_home_agent_ipsecdb(struct sockaddr_in6 *,
+    struct sockaddr_in6 *, struct sockaddr_in6 *, struct sockaddr_in6 *);
+#endif /* MIP6 */
+
 
 extern int key_sysctl __P((int *, u_int, void *, size_t *, void *, size_t));
 #ifdef IPSEC_NAT_T

@@ -67,6 +67,7 @@ __KERNEL_RCSID(0, "$NetBSD: in6_proto.c,v 1.58.6.1 2005/08/15 19:04:43 tron Exp 
 #include "opt_inet.h"
 #include "opt_ipsec.h"
 #include "opt_iso.h"
+#include "opt_mip6.h"
 
 #include <sys/param.h>
 #include <sys/socket.h>
@@ -114,6 +115,10 @@ __KERNEL_RCSID(0, "$NetBSD: in6_proto.c,v 1.58.6.1 2005/08/15 19:04:43 tron Exp 
 #endif
 #include <netinet6/ipcomp.h>
 #endif /* IPSEC */
+
+#ifdef MIP6
+#include <netinet6/mip6_var.h>
+#endif /* MIP6 */
 
 #include <netinet6/ip6protosw.h>
 
@@ -178,6 +183,22 @@ const struct ip6protosw inet6sw[] = {
   0,
   0,		0,		0,		0,
 },
+#ifdef MIP6
+{ SOCK_RAW,	&inet6domain,	IPPROTO_MH,PR_ATOMIC|PR_ADDR|PR_LASTHDR,
+  mip6_input,	0,	 	0,		rip6_ctloutput,
+#if defined(__FreeBSD__) && __FreeBSD__ >= 3
+  0,
+#else
+  rip6_usrreq,
+#endif
+  0,		0,		0,		0,
+#ifdef __OpenBSD__
+  mip6_sysctl,
+#elif defined(__FreeBSD__)
+  &rip6_usrreqs,
+#endif
+},
+#endif /* MIP6 */
 #ifdef IPSEC
 { SOCK_RAW,	&inet6domain,	IPPROTO_AH,	PR_ATOMIC|PR_ADDR,
   ah6_input,	0,	 	ah6_ctlinput,	0,
@@ -231,6 +252,23 @@ const struct ip6protosw inet6sw[] = {
   rip6_init,	0,		0,		0,
 },
 };
+
+/* To receive tunneled packet on mobile node or home agent */
+#ifdef MIP6
+struct ip6protosw mip6_tunnel_protosw =
+{ SOCK_RAW,	&inet6domain,	IPPROTO_IPV6,	PR_ATOMIC|PR_ADDR,
+  mip6_tunnel_input, rip6_output,	0,	rip6_ctloutput,
+#ifdef __FreeBSD__
+  0,
+#else
+  rip6_usrreq,
+#endif
+  0,            0,              0,              0,
+#ifdef __FreeBSD__
+  &rip6_usrreqs
+#endif
+};
+#endif /* MIP6 */
 
 struct domain inet6domain =
     { AF_INET6, "internet6", 0, 0, 0,

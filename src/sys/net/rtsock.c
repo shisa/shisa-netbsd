@@ -64,6 +64,7 @@
 __KERNEL_RCSID(0, "$NetBSD: rtsock.c,v 1.75 2005/02/26 22:45:09 perry Exp $");
 
 #include "opt_inet.h"
+#include "opt_mip6.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -755,6 +756,43 @@ rt_ifmsg(struct ifnet *ifp)
 	raw_input(m, &route_proto, &route_src, &route_dst);
 #endif
 }
+
+#ifdef MIP6
+/*
+ * This routine is called to generate a message from the routing
+ * socket indicating that the status of a address has changed.
+ */
+void
+rt_addrinfomsg(ifa)
+	register struct ifaddr *ifa;
+{
+	struct ifnet *ifp = ifa->ifa_ifp;
+	struct ifa_msghdr ifam;
+	struct mbuf *m;
+	struct rt_addrinfo info;
+	struct sockaddr *sa;
+
+	if (route_cb.any_count == 0)
+		return;
+
+	bzero((caddr_t)&info, sizeof(info));
+
+	ifaaddr = sa = ifa->ifa_addr;
+	bzero((caddr_t)&ifam, sizeof(ifam));
+	ifam.ifam_index = ifp->if_index;
+	ifam.ifam_metric = ifa->ifa_metric;
+	ifam.ifam_flags = ifa->ifa_flags;
+	m = rt_msg1(RTM_ADDRINFO, &info, (caddr_t)&ifam, sizeof(ifam));
+	if (m == NULL)
+		return;
+	mtod(m, struct ifa_msghdr *)->ifam_addrs = info.rti_addrs;
+
+	route_proto.sp_protocol = sa ? sa->sa_family : 0;
+	raw_input(m, &route_proto, &route_src, &route_dst);
+
+	printf("RTM_ADDRINFO rtsock done\n");
+}
+#endif /* MIP6 */
 
 /*
  * This is called to generate messages from the routing socket

@@ -880,6 +880,7 @@ struct	m_tag *m_tag_next(struct mbuf *, struct m_tag *);
 
 #define	PACKET_TAG_PF_TRANSLATE_LOCALHOST	24 /* translated to localhost */
 #define	PACKET_TAG_IPSEC_NAT_T_PORTS		25 /* two u_int16_t */
+#define	PACKET_TAG_INET6			26 /* IPv6 info */
 
 /*
  * Return the number of bytes in the mbuf chain, m.

@@ -186,6 +186,7 @@ struct rt_msghdr {
 #define RTM_OIFINFO	0xe	/* Old (pre-1.5) RTM_IFINFO message */
 #define RTM_IFINFO	0xf	/* iface/link going up/down etc. */
 #define	RTM_IFANNOUNCE	0x10	/* iface arrival/departure */
+#define	RTM_ADDRINFO	0x11	/* change address flags */
 
 #define RTV_MTU		0x1	/* init or lock _mtu */
 #define RTV_HOPCOUNT	0x2	/* init or lock _hopcount */
@@ -286,6 +287,7 @@ void	 rt_ifmsg(struct ifnet *);
 void	 rt_maskedcopy(const struct sockaddr *,
 	    struct sockaddr *, const struct sockaddr *);
 void	 rt_missmsg(int, struct rt_addrinfo *, int, int);
+void	 rt_addrinfomsg __P((struct ifaddr *));
 void	 rt_newaddrmsg(int, struct ifaddr *, int, struct rtentry *);
 int	 rt_setgate(struct rtentry *,
 	    const struct sockaddr *, const struct sockaddr *);

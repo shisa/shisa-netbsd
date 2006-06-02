@@ -5,7 +5,7 @@
 DEPFILEGLOB=	${DESTDIR}/usr/include/*/*.h
 
 .if !make(cleandir) && !make(obj) && !make(includes)
-DEPFILES != egrep -l '(_IO\(|_IOR\(|_IOW\(|_IORW\()' ${DEPFILEGLOB}
+DEPFILES != egrep -l '(_IO\(|_IOR\(|_IOW\(|_IOWR\()' ${DEPFILEGLOB}
 .endif
 
 ${PROG}-ioctl.c: mkioctls Makefile ${DEPFILES}

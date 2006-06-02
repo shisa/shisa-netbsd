@@ -83,7 +83,8 @@ MLINKS+=resolver.3 dn_comp.3 resolver.3 dn_expand.3 resolver.3 res_init.3 \
 
 # IPv6
 MAN+=	gai_strerror.3 getaddrinfo.3 getnameinfo.3 if_indextoname.3 \
-	inet6_option_space.3 inet6_rthdr_space.3
+	inet6_option_space.3 inet6_rthdr_space.3 \
+	inet6_opt_init.3 inet6_rth_space.3
 MLINKS+=getaddrinfo.3 freeaddrinfo.3 \
 	getifaddrs.3 freeifaddrs.3 \
 	if_indextoname.3 if_nametoindex.3 if_indextoname.3 if_nameindex.3 \
@@ -100,5 +101,16 @@ MLINKS+=getaddrinfo.3 freeaddrinfo.3 \
 	inet6_rthdr_space.3 inet6_rthdr_segments.3 \
 	inet6_rthdr_space.3 inet6_rthdr_getaddr.3 \
 	inet6_rthdr_space.3 inet6_rthdr_getflags.3 \
+	inet6_opt_init.3 inet6_opt_append.3 \
+	inet6_opt_init.3 inet6_opt_finish.3 \
+	inet6_opt_init.3 inet6_opt_set_val.3 \
+	inet6_opt_init.3 inet6_opt_next.3 \
+	inet6_opt_init.3 inet6_opt_find.3 \
+	inet6_opt_init.3 inet6_opt_get_val.3 \
+	inet6_rth_space.3 inet6_rth_init.3 \
+	inet6_rth_space.3 inet6_rth_add.3 \
+	inet6_rth_space.3 inet6_rth_reverse.3 \
+	inet6_rth_space.3 inet6_rth_segments.3 \
+	inet6_rth_space.3 inet6_rth_getaddr.3 \
 	rcmd.3 rcmd_af.3 rcmd.3 iruserok_sa.3 rcmd.3 rresvport_af.3 \
 	rcmd.3 orcmd_af.3
