@@ -1,4 +1,4 @@
-/*	$NetBSD: intercept.h,v 1.13.6.2 2005/07/02 18:50:06 tron Exp $	*/
+/*	$NetBSD: intercept.h,v 1.19 2006/04/16 05:19:02 provos Exp $	*/
 /*	$OpenBSD: intercept.h,v 1.11 2002/08/04 04:15:50 provos Exp $	*/
 /*
  * Copyright 2002 Niels Provos <provos@citi.umich.edu>
@@ -40,7 +40,7 @@ struct intercept_replace;
 struct elevate;
 
 struct intercept_system {
-	char *name;
+	const char *name;
 	int (*init)(void);
 	int (*open)(void);
 	int (*attach)(int, pid_t);
@@ -60,6 +60,7 @@ struct intercept_system {
 	int (*replace)(int, pid_t, u_int16_t, struct intercept_replace *);
 	void (*clonepid)(struct intercept_pid *, struct intercept_pid *);
 	void (*freepid)(struct intercept_pid *);
+	int (*scriptname)(int, pid_t, char *);
 };
 
 #define INTERCEPT_READ	1
@@ -113,7 +114,7 @@ struct intercept_pid {
 #define INTERCEPT_MAXSYSCALLARGS	10
 
 struct intercept_translate {
-	char *name;
+	const char *name;
 	int (*translate)(struct intercept_translate *, int, pid_t, void *);
 	int (*print)(char *, size_t, struct intercept_translate *);
 	int off2;
@@ -155,7 +156,7 @@ int intercept_replace_init(struct intercept_replace *);
 int intercept_replace_add(struct intercept_replace *, int, u_char *, size_t, u_int);
 int intercept_replace(int, pid_t, u_int16_t, struct intercept_replace *);
 
-int intercept_register_sccb(char *, char *,
+int intercept_register_sccb(const char *, const char *,
     short (*)(int, pid_t, int, const char *, int, const char *, void *, int,
 	struct intercept_replace *, struct intercept_tlq *, void *),
     void *);
@@ -165,10 +166,10 @@ int intercept_register_gencb(short (*)(int, pid_t, int, const char *, int, const
 int intercept_register_execcb(void (*)(int, pid_t, int, const char *, const char *, void *), void *);
 int intercept_register_pfreecb(void (*)(int, void *), void *);
 
-struct intercept_translate *intercept_register_translation(char *, char *,
-    int, struct intercept_translate *);
+struct intercept_translate *intercept_register_translation(const char *,
+    const char *, int, struct intercept_translate *);
 int intercept_translate(struct intercept_translate *, int, pid_t, int, void *, int);
-char *intercept_translate_print(struct intercept_translate *);
+const char *intercept_translate_print(struct intercept_translate *);
 
 #define intercept_register_transstring(x,y,z)	\
 	intercept_register_translation(x, y, z, &ic_translate_string)
@@ -182,21 +183,27 @@ extern struct intercept_translate ic_translate_filename;
 extern struct intercept_translate ic_translate_linkname;
 extern struct intercept_translate ic_translate_unlinkname;
 extern struct intercept_translate ic_translate_connect;
+extern struct intercept_translate ic_translate_sendmsg;
 
 void intercept_freepid(pid_t);
+struct intercept_pid *intercept_findpid(pid_t);
 struct intercept_pid *intercept_getpid(pid_t);
 int intercept_existpids(void);
 
 char *intercept_get_string(int, pid_t, void *);
 char *normalize_filename(int, pid_t, char *, int);
-char *intercept_filename(int, pid_t, void *, int);
+char *intercept_filename(int, pid_t, void *, int, char *);
 void intercept_syscall(int, pid_t, u_int16_t, int, const char *, int,
     const char *, void *, int);
 void intercept_syscall_result(int, pid_t, u_int16_t, int, const char *, int,
     const char *, void *, int, int, void *);
 void intercept_ugid(struct intercept_pid *, uid_t, gid_t);
 void intercept_setpid(struct intercept_pid *, uid_t, gid_t);
+void intercept_newimage(int, pid_t, int, const char *, char *,
+    struct intercept_pid *);
 
 int intercept_isvalidsystemcall(char *, char *);
+
+char *intercept_realpath(const char *, char *);
 
 #endif /* _INTERCEPT_H_ */

@@ -1,4 +1,4 @@
-/* $NetBSD: console.c,v 1.5 2002/01/26 13:18:58 aymeric Exp $ */
+/* $NetBSD: console.c,v 1.7 2005/12/11 12:16:36 christos Exp $ */
 
 /*-
  * Copyright (c) 1996 The NetBSD Foundation, Inc.
@@ -42,7 +42,7 @@
 
 #include <sys/types.h>
 
-#include <stand.h>
+#include <lib/libsa/stand.h>
 #include "samachdep.h"
 
 #include "amigatypes.h"

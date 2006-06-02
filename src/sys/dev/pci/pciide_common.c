@@ -1,4 +1,4 @@
-/*	$NetBSD: pciide_common.c,v 1.26 2005/02/27 00:27:33 perry Exp $	*/
+/*	$NetBSD: pciide_common.c,v 1.31 2006/03/29 04:16:50 thorpej Exp $	*/
 
 
 /*
@@ -76,7 +76,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: pciide_common.c,v 1.26 2005/02/27 00:27:33 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pciide_common.c,v 1.31 2006/03/29 04:16:50 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/malloc.h>
@@ -401,7 +401,7 @@ pciide_mapreg_dma(sc, pa)
 			sc->sc_wdcdev.dma_finish = pciide_dma_finish;
 		}
 
-		if (sc->sc_wdcdev.sc_atac.atac_dev.dv_cfdata->cf_flags &
+		if (device_cfdata(&sc->sc_wdcdev.sc_atac.atac_dev)->cf_flags &
 		    PCIIDE_OPTIONS_NODMA) {
 			aprint_normal(
 			    ", but unused (forced off by config file)");
@@ -791,6 +791,7 @@ pciide_chansetup(sc, channel, interface)
 		sc->sc_wdcdev.sc_atac.atac_dev.dv_xname, cp->name);
 		return 0;
 	}
+	cp->ata_channel.ch_ndrive = 2;
 	aprint_normal("%s: %s channel %s to %s mode\n",
 	    sc->sc_wdcdev.sc_atac.atac_dev.dv_xname, cp->name,
 	    (interface & PCIIDE_INTERFACE_SETTABLE(channel)) ?
@@ -856,11 +857,10 @@ default_chip_map(sc, pa)
 	struct pciide_channel *cp;
 	pcireg_t interface = PCI_INTERFACE(pa->pa_class);
 	pcireg_t csr;
-	int channel, drive, s;
-	struct ata_drive_datas *drvp;
+	int channel, drive;
 	u_int8_t idedma_ctl;
 	bus_size_t cmdsize, ctlsize;
-	char *failreason;
+	const char *failreason;
 	struct wdc_regs *wdr;
 
 	if (pciide_chipen(sc, pa) == 0)
@@ -870,7 +870,7 @@ default_chip_map(sc, pa)
 		aprint_normal("%s: bus-master DMA support present",
 		    sc->sc_wdcdev.sc_atac.atac_dev.dv_xname);
 		if (sc->sc_pp == &default_product_desc &&
-		    (sc->sc_wdcdev.sc_atac.atac_dev.dv_cfdata->cf_flags &
+		    (device_cfdata(&sc->sc_wdcdev.sc_atac.atac_dev)->cf_flags &
 		    PCIIDE_OPTIONS_DMA) == 0) {
 			aprint_normal(", but unused (no driver support)");
 			sc->sc_dma_ok = 0;
@@ -970,12 +970,10 @@ next:
 		idedma_ctl = 0;
 		cp = &sc->pciide_channels[channel];
 		for (drive = 0; drive < cp->ata_channel.ch_ndrive; drive++) {
-			drvp = &cp->ata_channel.ch_drive[drive];
-			/* If no drive, skip */
-			if ((drvp->drive_flags & DRIVE) == 0)
-				continue;
-			if ((drvp->drive_flags & DRIVE_DMA) == 0)
-				continue;
+			/*
+			 * we have not probed the drives yet, allocate
+			 * ressources for all of them.
+			 */
 			if (pciide_dma_table_setup(sc, channel, drive) != 0) {
 				/* Abort DMA setup */
 				aprint_error(
@@ -983,13 +981,11 @@ next:
 				    "using PIO transfers\n",
 				    sc->sc_wdcdev.sc_atac.atac_dev.dv_xname,
 				    channel, drive);
-				s = splbio();
-				drvp->drive_flags &= ~DRIVE_DMA;
-				splx(s);
+				sc->sc_dma_ok = 0;
+				sc->sc_wdcdev.sc_atac.atac_cap &= ~ATAC_CAP_DMA;
+				sc->sc_wdcdev.irqack = NULL;
+				break;
 			}
-			aprint_normal("%s:%d:%d: using DMA data transfers\n",
-			    sc->sc_wdcdev.sc_atac.atac_dev.dv_xname,
-			    channel, drive);
 			idedma_ctl |= IDEDMA_CTL_DRV_DMA(drive);
 		}
 		if (idedma_ctl != 0) {

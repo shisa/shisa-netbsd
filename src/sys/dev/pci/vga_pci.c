@@ -1,4 +1,4 @@
-/*	$NetBSD: vga_pci.c,v 1.26 2005/02/27 00:27:34 perry Exp $	*/
+/*	$NetBSD: vga_pci.c,v 1.28 2005/12/11 12:22:51 christos Exp $	*/
 
 /*
  * Copyright (c) 1995, 1996 Carnegie-Mellon University.
@@ -28,7 +28,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: vga_pci.c,v 1.26 2005/02/27 00:27:34 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: vga_pci.c,v 1.28 2005/12/11 12:22:51 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -71,17 +71,17 @@ struct vga_pci_softc {
 	struct vga_bar sc_rom;
 };
 
-int	vga_pci_match(struct device *, struct cfdata *, void *);
-void	vga_pci_attach(struct device *, struct device *, void *);
-static int vga_pci_lookup_quirks(struct pci_attach_args *);
+static int	vga_pci_match(struct device *, struct cfdata *, void *);
+static void	vga_pci_attach(struct device *, struct device *, void *);
+static int	vga_pci_lookup_quirks(struct pci_attach_args *);
 
 CFATTACH_DECL(vga_pci, sizeof(struct vga_pci_softc),
     vga_pci_match, vga_pci_attach, NULL, NULL);
 
-int	vga_pci_ioctl(void *, u_long, caddr_t, int, struct proc *);
-paddr_t	vga_pci_mmap(void *, off_t, int);
+static int	vga_pci_ioctl(void *, u_long, caddr_t, int, struct lwp *);
+static paddr_t	vga_pci_mmap(void *, off_t, int);
 
-const struct vga_funcs vga_pci_funcs = {
+static const struct vga_funcs vga_pci_funcs = {
 	vga_pci_ioctl,
 	vga_pci_mmap,
 };
@@ -102,8 +102,7 @@ static const struct {
 };
 
 static int
-vga_pci_lookup_quirks(pa)
-	struct pci_attach_args *pa;
+vga_pci_lookup_quirks(struct pci_attach_args *pa)
 {
 	int i;
 
@@ -120,7 +119,7 @@ vga_pci_lookup_quirks(pa)
 	return (0);
 }
 
-int
+static int
 vga_pci_match(struct device *parent, struct cfdata *match, void *aux)
 {
 	struct pci_attach_args *pa = aux;
@@ -161,7 +160,7 @@ vga_pci_match(struct device *parent, struct cfdata *match, void *aux)
 	return (1);
 }
 
-void
+static void
 vga_pci_attach(struct device *parent, struct device *self, void *aux)
 {
 	struct vga_pci_softc *psc = (void *) self;
@@ -224,8 +223,8 @@ vga_pci_cnattach(bus_space_tag_t iot, bus_space_tag_t memt,
 	return (vga_cnattach(iot, memt, WSDISPLAY_TYPE_PCIVGA, 0));
 }
 
-int
-vga_pci_ioctl(void *v, u_long cmd, caddr_t data, int flag, struct proc *p)
+static int
+vga_pci_ioctl(void *v, u_long cmd, caddr_t data, int flag, struct lwp *l)
 {
 	struct vga_config *vc = v;
 	struct vga_pci_softc *psc = (void *) vc->softc;
@@ -235,14 +234,14 @@ vga_pci_ioctl(void *v, u_long cmd, caddr_t data, int flag, struct proc *p)
 	case PCI_IOC_CFGREAD:
 	case PCI_IOC_CFGWRITE:
 		return (pci_devioctl(psc->sc_pc, psc->sc_pcitag,
-		    cmd, data, flag, p));
+		    cmd, data, flag, l));
 
 	default:
 		return (EPASSTHROUGH);
 	}
 }
 
-paddr_t
+static paddr_t
 vga_pci_mmap(void *v, off_t offset, int prot)
 {
 	struct vga_config *vc = v;

@@ -1,4 +1,4 @@
-/*	$NetBSD: clock.c,v 1.9 2004/06/29 12:01:11 kleink Exp $	*/
+/*	$NetBSD: clock.c,v 1.16 2006/05/09 03:13:00 garbled Exp $	*/
 /*      $OpenBSD: clock.c,v 1.3 1997/10/13 13:42:53 pefo Exp $	*/
 
 /*
@@ -33,12 +33,14 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: clock.c,v 1.9 2004/06/29 12:01:11 kleink Exp $");
+__KERNEL_RCSID(0, "$NetBSD: clock.c,v 1.16 2006/05/09 03:13:00 garbled Exp $");
 
 #include <sys/param.h>
 #include <sys/kernel.h>
 #include <sys/systm.h>
 #include <sys/device.h>
+
+#include <uvm/uvm_extern.h>
 
 #include <dev/clock_subr.h>
 
@@ -46,15 +48,11 @@ __KERNEL_RCSID(0, "$NetBSD: clock.c,v 1.9 2004/06/29 12:01:11 kleink Exp $");
 
 #define	MINYEAR	1990
 
-void decr_intr __P((struct clockframe *));
+void decr_intr(struct clockframe *);
 
-/*
- * Initially we assume a processor with a bus frequency of 12.5 MHz.
- */
 u_long ticks_per_sec;
 u_long ns_per_tick;
 static long ticks_per_intr;
-static volatile u_long lasttb;
 
 struct device *clockdev;
 const struct clockfns *clockfns;
@@ -62,8 +60,7 @@ const struct clockfns *clockfns;
 static todr_chip_handle_t todr_handle;
 
 void
-todr_attach(handle)
-	todr_chip_handle_t handle;
+todr_attach(todr_chip_handle_t handle)
 {
 
 	if (todr_handle)
@@ -77,16 +74,17 @@ todr_attach(handle)
  * are no other timers available.
  */
 void
-cpu_initclocks()
+cpu_initclocks(void)
 {
+	struct cpu_info * const ci = curcpu();
 
 	ticks_per_intr = ticks_per_sec / hz;
 	cpu_timebase = ticks_per_sec;
 	if ((mfpvr() >> 16) == MPC601)
-		asm volatile ("mfspr %0,%1" : "=r"(lasttb) : "n"(SPR_RTCL_R));
+		__asm volatile ("mfspr %0,%1" : "=r"(ci->ci_lasttb) : "n"(SPR_RTCL_R));
 	else
-		asm volatile ("mftb %0" : "=r"(lasttb));
-	asm volatile ("mtdec %0" :: "r"(ticks_per_intr));
+		__asm volatile ("mftb %0" : "=r"(ci->ci_lasttb));
+	__asm volatile ("mtdec %0" :: "r"(ticks_per_intr));
 }
 
 /*
@@ -94,8 +92,7 @@ cpu_initclocks()
  * from a filesystem.
  */
 void
-inittodr(base)
-	time_t base;
+inittodr(time_t base)
 {
 	int badbase, waszero;
 
@@ -110,7 +107,7 @@ inittodr(base)
 		badbase = 1;
 	}
 
-	if (todr_gettime(todr_handle, (struct timeval *)&time) != 0 ||
+	if (todr_gettime(todr_handle, &time) != 0 ||
 	    time.tv_sec == 0) {
 		printf("WARNING: bad date in battery clock");
 		/*
@@ -144,13 +141,13 @@ inittodr(base)
  * to wrap the TODR around.
  */
 void
-resettodr()
+resettodr(void)
 {
 
 	if (time.tv_sec == 0)
 		return;
 
-	if (todr_settime(todr_handle, (struct timeval *)&time) != 0)
+	if (todr_settime(todr_handle, &time) != 0)
 		printf("resettodr: cannot set time in time-of-day clock\n");
 }
 
@@ -160,23 +157,21 @@ resettodr()
  * but that would be a drag.
  */
 void
-setstatclockrate(arg)
-	int arg;
+setstatclockrate(int arg)
 {
 
 	/* Nothing we can do */
 }
 
 void
-decr_intr(frame)
-	struct clockframe *frame;
+decr_intr(struct clockframe *frame)
 {
+	struct cpu_info * const ci = curcpu();
 	int msr;
 	int pri;
 	u_long tb;
-	long tick;
+	long ticks;
 	int nticks;
-	extern long intrcnt[];
 
 	/*
 	 * Check whether we are initialized.
@@ -188,37 +183,38 @@ decr_intr(frame)
 	 * Based on the actual time delay since the last decrementer reload,
 	 * we arrange for earlier interrupt next time.
 	 */
-	if ((mfpvr() >> 16) == MPC601) {
-		asm volatile ("mfspr %0,%1" : "=r"(tb) : "n"(SPR_RTCL_R));
-	} else {
-		asm volatile ("mftb %0" : "=r"(tb));
-	}
-	asm ("mfdec %0" : "=r"(tick));
-	for (nticks = 0; tick < 0; nticks++)
-		tick += ticks_per_intr;
-	asm volatile ("mtdec %0" :: "r"(tick));
+	__asm ("mfdec %0" : "=r"(ticks));
+	for (nticks = 0; ticks < 0; nticks++)
+		ticks += ticks_per_intr;
+	__asm volatile ("mtdec %0" :: "r"(ticks));
 
-	/*
-	 * lasttb is used during microtime. Set it to the virtual
-	 * start of this tick interval.
-	 */
-	lasttb = tb + tick - ticks_per_intr;
-
-	intrcnt[CNT_CLOCK]++;
+	uvmexp.intrs++;
+	ci->ci_ev_clock.ev_count++;
 
 	pri = splclock();
-	if (pri & SPL_CLOCK)
-		tickspending += nticks;
-	else {
-		nticks += tickspending;
-		tickspending = 0;
+	if (pri & SPL_CLOCK) {
+		ci->ci_tickspending += nticks;
+	} else {
+		nticks += ci->ci_tickspending;
+		ci->ci_tickspending = 0;
+
+		/*
+		 * lasttb is used during microtime. Set it to the virtual
+		 * start of this tick interval.
+		 */
+		if ((mfpvr() >> 16) == MPC601) {
+			__asm volatile ("mfspr %0,%1" : "=r"(tb) : "n"(SPR_RTCL_R));
+		} else {
+			__asm volatile ("mftb %0" : "=r"(tb));
+		}
+		ci->ci_lasttb = tb + ticks - ticks_per_intr;
 
 		/*
 		 * Reenable interrupts
 		 */
-		asm volatile ("mfmsr %0; ori %0, %0, %1; mtmsr %0"
+		__asm volatile ("mfmsr %0; ori %0, %0, %1; mtmsr %0"
 			      : "=r"(msr) : "K"(PSL_EE));
-		
+
 		/*
 		 * Do standard timer interrupt stuff.
 		 * Do softclock stuff only on the last iteration.
@@ -236,22 +232,21 @@ decr_intr(frame)
  * Fill in *tvp with current time with microsecond resolution.
  */
 void
-microtime(tvp)
-	struct timeval *tvp;
+microtime(struct timeval *tvp)
 {
 	u_long tb;
 	u_long ticks;
 	int msr, scratch;
 	
-	asm volatile ("mfmsr %0; andi. %1,%0,%2; mtmsr %1"
+	__asm volatile ("mfmsr %0; andi. %1,%0,%2; mtmsr %1"
 		      : "=r"(msr), "=r"(scratch) : "K"((u_short)~PSL_EE));
 	if ((mfpvr() >> 16) == MPC601)
-		asm volatile ("mfspr %0,%1" : "=r"(tb) : "n"(SPR_RTCL_R));
+		__asm volatile ("mfspr %0,%1" : "=r"(tb) : "n"(SPR_RTCL_R));
 	else
-		asm volatile ("mftb %0" : "=r"(tb));
-	ticks = (tb - lasttb) * ns_per_tick;
+		__asm volatile ("mftb %0" : "=r"(tb));
+	ticks = (tb - curcpu()->ci_lasttb) * ns_per_tick;
 	*tvp = time;
-	asm volatile ("mtmsr %0" :: "r"(msr));
+	mtmsr(msr);
 	ticks /= 1000;
 	tvp->tv_usec += ticks;
 	while (tvp->tv_usec >= 1000000) {
@@ -264,8 +259,7 @@ microtime(tvp)
  * Wait for about n microseconds (at least!).
  */
 void
-delay(n)
-	unsigned int n;
+delay(unsigned int n)
 {
 	u_quad_t tb;
 	u_long tbh, tbl, scratch;
@@ -283,7 +277,7 @@ delay(n)
 			rtc[0]++;
 			rtc[1] -= 1000000000;
 		}
-		asm volatile ("1: mfspr %0,%3; cmplw %0,%1; blt 1b; bgt 2f;"
+		__asm volatile ("1: mfspr %0,%3; cmplw %0,%1; blt 1b; bgt 2f;"
 		    "mfspr %0,%4; cmplw %0,%2; blt 1b; 2:"
 		    : "=&r"(scratch)
 		    : "r"(rtc[0]), "r"(rtc[1]), "n"(SPR_RTCU_R), "n"(SPR_RTCL_R)
@@ -293,7 +287,7 @@ delay(n)
 		tb += (n * 1000 + ns_per_tick - 1) / ns_per_tick;
 		tbh = tb >> 32;
 		tbl = tb;
-		asm volatile ("1: mftbu %0; cmplw %0,%1; blt 1b; bgt 2f;"
+		__asm volatile ("1: mftbu %0; cmplw %0,%1; blt 1b; bgt 2f;"
 			      "mftb %0; cmplw %0,%2; blt 1b; 2:"
 			      : "=&r"(scratch) : "r"(tbh), "r"(tbl)
 			      : "cr0");

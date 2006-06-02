@@ -1,4 +1,4 @@
-/*	$NetBSD: sockaddr_snprintf.c,v 1.4 2005/01/13 00:44:25 dyoung Exp $	*/
+/*	$NetBSD: sockaddr_snprintf.c,v 1.6 2005/08/27 17:01:49 elad Exp $	*/
 
 /*-
  * Copyright (c) 2004 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 #include <sys/cdefs.h>
 #if defined(LIBC_SCCS) && !defined(lint)
-__RCSID("$NetBSD: sockaddr_snprintf.c,v 1.4 2005/01/13 00:44:25 dyoung Exp $");
+__RCSID("$NetBSD: sockaddr_snprintf.c,v 1.6 2005/08/27 17:01:49 elad Exp $");
 #endif /* LIBC_SCCS and not lint */
 
 #include <sys/types.h>
@@ -59,20 +59,26 @@ sockaddr_snprintf(char *buf, size_t len, const char *fmt,
     const struct sockaddr *sa)
 {
 	const void *a = NULL;
-	char abuf[1024], nbuf[1024], *addr, *w;
+	char abuf[1024], nbuf[1024], *addr = NULL, *w = NULL;
+	char Abuf[1024], pbuf[32], *name = NULL, *port = NULL;
 	char *ebuf = &buf[len - 1], *sbuf = buf;
 	const char *ptr, *s;
-	in_port_t p = (in_port_t)~0;
+	int p = -1;
 	const struct sockaddr_at *sat = NULL;
 	const struct sockaddr_in *sin4 = NULL;
 	const struct sockaddr_in6 *sin6 = NULL;
 	const struct sockaddr_un *sun = NULL;
 	const struct sockaddr_dl *sdl = NULL;
+	int na = 1;
 
-#define ADDC(c) if (buf < ebuf) *buf++ = c; else buf++
-#define ADDN()	if (buf < ebuf) *buf = '\0'; else buf[len - 1] = '\0'
-#define ADDS(p) for (s = p; *s; s++) ADDC(*s)
-#define ADDNA() ADDS("N/A")
+#define ADDC(c) do { if (buf < ebuf) *buf++ = c; else buf++; } \
+	while (/*CONSTCOND*/0)
+#define ADDN()	do { if (buf < ebuf) *buf = '\0'; else buf[len - 1] = '\0'; } \
+	while (/*CONSTCOND*/0)
+#define ADDS(p) do { for (s = p; *s; s++) ADDC(*s); } \
+	while (/*CONSTCOND*/0)
+#define ADDNA() do { if (na) ADDS("N/A"); } \
+	while (/*CONSTCOND*/0)
 
 	switch (sa->sa_family) {
 	case AF_UNSPEC:
@@ -82,6 +88,7 @@ sockaddr_snprintf(char *buf, size_t len, const char *fmt,
 		p = ntohs(sat->sat_port);
 		(void)snprintf(addr = abuf, sizeof(abuf), "%u.%u",
 			ntohs(sat->sat_addr.s_net), sat->sat_addr.s_node);
+		(void)snprintf(port = pbuf, sizeof(pbuf), "%d", p);
 		break;
 	case AF_LOCAL:
 		sun = ((const struct sockaddr_un *)(const void *)sa);
@@ -103,7 +110,6 @@ sockaddr_snprintf(char *buf, size_t len, const char *fmt,
 		if ((w = strchr(addr, ':')) != 0) {
 			*w++ = '\0';
 			addr = w;
-			
 		}
 		break;
 	default:
@@ -111,8 +117,12 @@ sockaddr_snprintf(char *buf, size_t len, const char *fmt,
 		return -1;
 	}
 
+	if (addr == abuf)
+		name = addr;
+
 	if (a && getnameinfo(sa, (socklen_t)sa->sa_len, addr = abuf,
-	    sizeof(abuf), NULL, 0, NI_NUMERICHOST|NI_NUMERICSERV) != 0)
+	    (unsigned int)sizeof(abuf), NULL, 0,
+	    NI_NUMERICHOST|NI_NUMERICSERV) != 0)
 		return -1;
 
 	for (ptr = fmt; *ptr; ptr++) {
@@ -120,20 +130,20 @@ sockaddr_snprintf(char *buf, size_t len, const char *fmt,
 			ADDC(*ptr);
 			continue;
 		}
+	  next_char:
 		switch (*++ptr) {
-		case '\0':
-			ADDC('%');
-			goto done;
+		case '?':
+			na = 0;
+			goto next_char;
 		case 'a':
 			ADDS(addr);
 			break;
 		case 'p':
-			if (p != (in_port_t)~0) {
-			    (void)snprintf(nbuf, sizeof(nbuf), "%d", p);
-			    ADDS(nbuf);
-			} else {
-			    ADDNA();
-			}
+			if (p != -1) {
+				(void)snprintf(nbuf, sizeof(nbuf), "%d", p);
+				ADDS(nbuf);
+			} else
+				ADDNA();
 			break;
 		case 'f':
 			(void)snprintf(nbuf, sizeof(nbuf), "%d", sa->sa_family);
@@ -142,6 +152,30 @@ sockaddr_snprintf(char *buf, size_t len, const char *fmt,
 		case 'l':
 			(void)snprintf(nbuf, sizeof(nbuf), "%d", sa->sa_len);
 			ADDS(nbuf);
+			break;
+		case 'A':
+			if (name)
+				ADDS(name);
+			else if (!a)
+				ADDNA();
+			else {
+				getnameinfo(sa, (socklen_t)sa->sa_len,
+					name = Abuf,
+					(unsigned int)sizeof(nbuf), NULL, 0, 0);
+				ADDS(name);
+			}
+			break;
+		case 'P':
+			if (port)
+				ADDS(port);
+			else if (p == -1)
+				ADDNA();
+			else {
+				getnameinfo(sa, (socklen_t)sa->sa_len, NULL, 0,
+					port = pbuf,
+					(unsigned int)sizeof(pbuf), 0);
+				ADDS(port);
+			}
 			break;
 		case 'I':
 			if (sdl && addr != abuf) {
@@ -184,11 +218,16 @@ sockaddr_snprintf(char *buf, size_t len, const char *fmt,
 			break;
 		default:
 			ADDC('%');
+			if (na == 0)
+				ADDC('?');
+			if (*ptr == '\0')
+				goto done;
 			ADDC(*ptr);
 			break;
 		}
+		na = 1;
 	}
 done:
 	ADDN();
-	return buf - sbuf;
+	return (int)(buf - sbuf);
 }

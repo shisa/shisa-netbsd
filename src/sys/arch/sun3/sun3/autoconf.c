@@ -1,4 +1,4 @@
-/*	$NetBSD: autoconf.c,v 1.62 2005/01/22 15:36:10 chs Exp $	*/
+/*	$NetBSD: autoconf.c,v 1.67 2006/02/21 04:32:38 thorpej Exp $	*/
 
 /*-
  * Copyright (c) 1996 The NetBSD Foundation, Inc.
@@ -45,7 +45,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.62 2005/01/22 15:36:10 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.67 2006/02/21 04:32:38 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -94,7 +94,7 @@ cpu_configure(void)
 
 /*
  * bus_scan:
- * This function is passed to config_search() by the attach function
+ * This function is passed to config_search_ia() by the attach function
  * for each of the "bus" drivers (obctl, obio, obmem, vme, ...).
  * The purpose of this function is to copy the "locators" into our
  * confargs structure, so child drivers may use the confargs both
@@ -105,7 +105,8 @@ cpu_configure(void)
  * setup the confargs for each child match and attach call.
  */
 int 
-bus_scan(struct device *parent, struct cfdata *cf, void *aux)
+bus_scan(struct device *parent, struct cfdata *cf,
+	 const int *ldesc, void *aux)
 {
 	struct confargs *ca = aux;
 
@@ -195,7 +196,7 @@ cpu_rootconf(void)
 	struct prom_n2f *nf;
 	struct device *boot_device;
 	int boot_partition;
-	char *devname;
+	const char *devname;
 	findfunc_t find;
 	char promname[4];
 	char partname[4];
@@ -229,7 +230,7 @@ cpu_rootconf(void)
 		boot_device = (*find)(promname, bp->ctlrNum, bp->unitNum);
 	if (boot_device) {
 		devname = boot_device->dv_xname;
-		if (boot_device->dv_class == DV_DISK) {
+		if (device_class(boot_device) == DV_DISK) {
 			boot_partition = bp->partNum & 7;
 			partname[0] = 'a' + boot_partition;
 			partname[1] = '\0';

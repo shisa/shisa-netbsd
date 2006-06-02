@@ -1,4 +1,4 @@
-/*	$NetBSD: darwin_iohidsystem.h,v 1.13 2005/02/26 23:10:18 perry Exp $ */
+/*	$NetBSD: darwin_iohidsystem.h,v 1.15 2005/12/11 12:19:56 christos Exp $ */
 
 /*-
  * Copyright (c) 2003 The NetBSD Foundation, Inc.
@@ -211,7 +211,7 @@ typedef struct {
 	int dne_flags;
 } darwin_nxll_event;
 
-typedef volatile struct {
+typedef struct {
 	int die_type;
 	int die_location_x;
 	int die_location_y;
@@ -289,7 +289,7 @@ struct  darwin_iohidsystem_shmem {
 int darwin_iohidsystem_connect_method_scalari_scalaro(struct mach_trap_args *);
 int darwin_iohidsystem_connect_method_structi_structo(struct mach_trap_args *);
 int darwin_iohidsystem_connect_map_memory(struct mach_trap_args *);
-void darwin_iohidsystem_postfake(struct proc *);
+void darwin_iohidsystem_postfake(struct lwp *);
 
 /* I/O notifications: XXX not checked on Darwin */
 

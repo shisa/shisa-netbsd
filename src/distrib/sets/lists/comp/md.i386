@@ -1,4 +1,4 @@
-# $NetBSD: md.i386,v 1.85 2005/01/21 04:47:23 dyoung Exp $
+# $NetBSD: md.i386,v 1.92 2006/05/17 15:07:05 tron Exp $
 ./usr/include/emmintrin.h			comp-c-include		gcccmds
 ./usr/include/i386				comp-c-include
 ./usr/include/i386/_G_config.h			comp-obsolete		obsolete
@@ -7,6 +7,7 @@
 ./usr/include/i386/apmvar.h			comp-c-include
 ./usr/include/i386/asm.h			comp-c-include
 ./usr/include/i386/atomic.h			comp-c-include
+./usr/include/i386/autoconf.h			comp-obsolete		obsolete
 ./usr/include/i386/bioscall.h			comp-c-include
 ./usr/include/i386/bootinfo.h			comp-c-include
 ./usr/include/i386/bswap.h			comp-c-include
@@ -39,11 +40,13 @@
 ./usr/include/i386/joystick.h			comp-c-include
 ./usr/include/i386/kcore.h			comp-c-include
 ./usr/include/i386/limits.h			comp-c-include
+./usr/include/i386/loadfile_machdep.h		comp-obsolete		obsolete
 ./usr/include/i386/lock.h			comp-c-include
 ./usr/include/i386/math.h			comp-c-include
 ./usr/include/i386/mcontext.h			comp-c-include
 ./usr/include/i386/mouse.h			comp-obsolete		obsolete
 ./usr/include/i386/mtrr.h			comp-c-include
+./usr/include/i386/multiboot.h			comp-c-include
 ./usr/include/i386/npx.h			comp-c-include
 ./usr/include/i386/param.h			comp-c-include
 ./usr/include/i386/pcb.h			comp-c-include
@@ -77,6 +80,7 @@
 ./usr/include/pmc.h				comp-c-include
 ./usr/include/x86				comp-c-include
 ./usr/include/x86/aout_machdep.h		comp-c-include
+./usr/include/x86/autoconf.h			comp-obsolete		obsolete
 ./usr/include/x86/bootinfo.h			comp-c-include
 ./usr/include/x86/bus.h				comp-c-include
 ./usr/include/x86/cacheinfo.h			comp-c-include

@@ -1,4 +1,4 @@
-/*      $NetBSD: if_xge.c,v 1.1.2.1 2005/09/13 20:59:37 tron Exp $ */
+/*      $NetBSD: if_xge.c,v 1.2 2005/12/11 12:22:50 christos Exp $ */
 
 /*
  * Copyright (c) 2004, SUNET, Swedish University Computer Network.
@@ -43,7 +43,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_xge.c,v 1.1.2.1 2005/09/13 20:59:37 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_xge.c,v 1.2 2005/12/11 12:22:50 christos Exp $");
 
 #include "bpfilter.h"
 #include "rnd.h"
@@ -541,7 +541,9 @@ xge_attach(struct device *parent, struct device *self, void *aux)
 	sc->sc_ethercom.ec_capabilities |=
 	    ETHERCAP_JUMBO_MTU | ETHERCAP_VLAN_MTU;
 	ifp->if_capabilities |=
-	    IFCAP_CSUM_IPv4 | IFCAP_CSUM_TCPv4 | IFCAP_CSUM_UDPv4 | IFCAP_TSOv4;
+	    IFCAP_CSUM_IPv4_Rx | IFCAP_CSUM_IPv4_Tx |
+	    IFCAP_CSUM_TCPv4_Rx | IFCAP_CSUM_TCPv4_Tx |
+	    IFCAP_CSUM_UDPv4_Rx | IFCAP_CSUM_UDPv4_Tx | IFCAP_TSOv4;
 
 	/*
 	 * Attach the interface.

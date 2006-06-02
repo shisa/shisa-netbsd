@@ -1,4 +1,4 @@
-/*	$NetBSD: lstDestroy.c,v 1.11 2004/05/07 00:04:41 ross Exp $	*/
+/*	$NetBSD: lstDestroy.c,v 1.14 2005/08/09 21:36:42 christos Exp $	*/
 
 /*
  * Copyright (c) 1988, 1989, 1990, 1993
@@ -33,14 +33,14 @@
  */
 
 #ifndef MAKE_NATIVE
-static char rcsid[] = "$NetBSD: lstDestroy.c,v 1.11 2004/05/07 00:04:41 ross Exp $";
+static char rcsid[] = "$NetBSD: lstDestroy.c,v 1.14 2005/08/09 21:36:42 christos Exp $";
 #else
 #include <sys/cdefs.h>
 #ifndef lint
 #if 0
 static char sccsid[] = "@(#)lstDestroy.c	8.1 (Berkeley) 6/6/93";
 #else
-__RCSID("$NetBSD: lstDestroy.c,v 1.11 2004/05/07 00:04:41 ross Exp $");
+__RCSID("$NetBSD: lstDestroy.c,v 1.14 2005/08/09 21:36:42 christos Exp $");
 #endif
 #endif /* not lint */
 #endif
@@ -68,7 +68,7 @@ __RCSID("$NetBSD: lstDestroy.c,v 1.11 2004/05/07 00:04:41 ross Exp $");
  *-----------------------------------------------------------------------
  */
 void
-Lst_Destroy(Lst l, void (*freeProc)(ClientData))
+Lst_Destroy(Lst l, FreeProc *freeProc)
 {
     ListNode	ln;
     ListNode	tln = NilListNode;
@@ -86,22 +86,22 @@ Lst_Destroy(Lst l, void (*freeProc)(ClientData))
     if (list->lastPtr != NilListNode)
 	list->lastPtr->nextPtr = NilListNode;
     else {
-	free ((Address)l);
+	free(l);
 	return;
     }
 
     if (freeProc) {
 	for (ln = list->firstPtr; ln != NilListNode; ln = tln) {
 	     tln = ln->nextPtr;
-	     (*freeProc) (ln->datum);
-	     free ((Address)ln);
+	     freeProc(ln->datum);
+	     free(ln);
 	}
     } else {
 	for (ln = list->firstPtr; ln != NilListNode; ln = tln) {
 	     tln = ln->nextPtr;
-	     free ((Address)ln);
+	     free(ln);
 	}
     }
 
-    free ((Address)l);
+    free(l);
 }

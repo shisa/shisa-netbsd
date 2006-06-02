@@ -1,4 +1,4 @@
-/*	$NetBSD: i82557.c,v 1.89.10.2 2005/10/15 16:39:17 riz Exp $	*/
+/*	$NetBSD: i82557.c,v 1.97 2006/02/20 16:50:37 thorpej Exp $	*/
 
 /*-
  * Copyright (c) 1997, 1998, 1999, 2001, 2002 The NetBSD Foundation, Inc.
@@ -73,7 +73,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: i82557.c,v 1.89.10.2 2005/10/15 16:39:17 riz Exp $");
+__KERNEL_RCSID(0, "$NetBSD: i82557.c,v 1.97 2006/02/20 16:50:37 thorpej Exp $");
 
 #include "bpfilter.h"
 #include "rnd.h"
@@ -237,7 +237,7 @@ static int tx_threshold = 64;
  * Wait for the previous command to be accepted (but not necessarily
  * completed).
  */
-static __inline void
+static inline void
 fxp_scb_wait(struct fxp_softc *sc)
 {
 	int i = 10000;
@@ -252,7 +252,7 @@ fxp_scb_wait(struct fxp_softc *sc)
 /*
  * Submit a command to the i82557.
  */
-static __inline void
+static inline void
 fxp_scb_cmd(struct fxp_softc *sc, u_int8_t cmd)
 {
 
@@ -395,17 +395,16 @@ fxp_attach(struct fxp_softc *sc)
 	if (sc->sc_flags & FXPF_IPCB) {
 		KASSERT(sc->sc_flags & FXPF_EXT_RFA); /* we have both or none */
 		/*
-		 * IFCAP_CSUM_IPv4 seems to have a problem,
+		 * IFCAP_CSUM_IPv4_Tx seems to have a problem,
 		 * at least, on i82550 rev.12.
 		 * specifically, it doesn't calculate ipv4 checksum correctly
 		 * when sending 20 byte ipv4 header + 1 or 2 byte data.
 		 * FreeBSD driver has related comments.
-		 *
-		 * XXX we should have separate IFCAP flags
-		 * for transmit and receive.
 		 */
 		ifp->if_capabilities =
-		    /*IFCAP_CSUM_IPv4 |*/ IFCAP_CSUM_TCPv4 | IFCAP_CSUM_UDPv4;
+		    IFCAP_CSUM_IPv4_Rx |
+		    IFCAP_CSUM_TCPv4_Tx | IFCAP_CSUM_TCPv4_Rx |
+		    IFCAP_CSUM_UDPv4_Tx | IFCAP_CSUM_UDPv4_Rx;
 		sc->sc_ethercom.ec_capabilities |= ETHERCAP_VLAN_HWTAGGING;
 	}
 
@@ -1004,6 +1003,7 @@ fxp_start(struct ifnet *ifp)
 
 		KASSERT((csum_flags & (M_CSUM_TCPv6 | M_CSUM_UDPv6)) == 0);
 		if (sc->sc_flags & FXPF_IPCB) {
+			struct m_tag *vtag;
 			struct fxp_ipcb *ipcb;
 			/*
 			 * Deal with TCP/IP checksum offload. Note that
@@ -1038,16 +1038,12 @@ fxp_start(struct ifnet *ifp)
 			/*
 			 * request VLAN tag insertion if needed.
 			 */
-			if (sc->sc_ethercom.ec_nvlans != 0) {
-				struct m_tag *vtag;
-
-				vtag = m_tag_find(m0, PACKET_TAG_VLAN, NULL);
-				if (vtag) {
-					ipcb->ipcb_vlan_id =
-					    htobe16(*(u_int *)(vtag + 1));
-					ipcb->ipcb_ip_activation_high |=
-					    FXP_IPCB_INSERTVLAN_ENABLE;
-				}
+			vtag = VLAN_OUTPUT_TAG(&sc->sc_ethercom, m0);
+			if (vtag) {
+				ipcb->ipcb_vlan_id =
+				    htobe16(*(u_int *)(vtag + 1));
+				ipcb->ipcb_ip_activation_high |=
+				    FXP_IPCB_INSERTVLAN_ENABLE;
 			}
 		} else {
 			KASSERT((csum_flags &
@@ -1127,7 +1123,7 @@ fxp_intr(void *arg)
 	int claimed = 0;
 	u_int8_t statack;
 
-	if ((sc->sc_dev.dv_flags & DVF_ACTIVE) == 0 || sc->sc_enabled == 0)
+	if (!device_is_active(&sc->sc_dev) || sc->sc_enabled == 0)
 		return (0);
 	/*
 	 * If the interface isn't running, don't try to
@@ -1436,7 +1432,7 @@ fxp_tick(void *arg)
 	struct fxp_stats *sp = &sc->sc_control_data->fcd_stats;
 	int s;
 
-	if ((sc->sc_dev.dv_flags & DVF_ACTIVE) == 0)
+	if (!device_is_active(&sc->sc_dev))
 		return;
 
 	s = splnet();
@@ -1843,7 +1839,7 @@ fxp_init(struct ifnet *ifp)
 	cb_ias->cb_command = htole16(FXP_CB_COMMAND_IAS | FXP_CB_COMMAND_EL);
 	/* BIG_ENDIAN: no need to swap to store 0xffffffff */
 	cb_ias->link_addr = 0xffffffff;
-	memcpy((void *)cb_ias->macaddr, LLADDR(ifp->if_sadl), ETHER_ADDR_LEN);
+	memcpy(cb_ias->macaddr, LLADDR(ifp->if_sadl), ETHER_ADDR_LEN);
 
 	FXP_CDIASSYNC(sc, BUS_DMASYNC_PREREAD|BUS_DMASYNC_PREWRITE);
 
@@ -2207,7 +2203,7 @@ fxp_mc_setup(struct fxp_softc *sc)
 			ifp->if_flags |= IFF_ALLMULTI;
 			return;
 		}
-		memcpy((void *)&mcsp->mc_addr[nmcasts][0], enm->enm_addrlo,
+		memcpy(&mcsp->mc_addr[nmcasts][0], enm->enm_addrlo,
 		    ETHER_ADDR_LEN);
 		nmcasts++;
 		ETHER_NEXT_MULTI(step, enm);
@@ -2328,11 +2324,11 @@ fxp_load_ucode(struct fxp_softc *sc)
 		cbp->ucode[i] = htole32(uc->ucode[i]);
 
 	if (uc->int_delay_offset)
-		*(uint16_t *) &cbp->ucode[uc->int_delay_offset] =
+		*(volatile uint16_t *) &cbp->ucode[uc->int_delay_offset] =
 		    htole16(fxp_int_delay + (fxp_int_delay / 2));
 
 	if (uc->bundle_max_offset)
-		*(uint16_t *) &cbp->ucode[uc->bundle_max_offset] =
+		*(volatile uint16_t *) &cbp->ucode[uc->bundle_max_offset] =
 		    htole16(fxp_bundle_max);
 
 	FXP_CDUCODESYNC(sc, BUS_DMASYNC_PREREAD|BUS_DMASYNC_PREWRITE);

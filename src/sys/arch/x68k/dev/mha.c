@@ -1,4 +1,4 @@
-/*	$NetBSD: mha.c,v 1.36 2005/02/21 00:29:07 thorpej Exp $	*/
+/*	$NetBSD: mha.c,v 1.41 2006/03/08 23:46:24 lukem Exp $	*/
 
 /*-
  * Copyright (c) 1996-1999 The NetBSD Foundation, Inc.
@@ -66,7 +66,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mha.c,v 1.36 2005/02/21 00:29:07 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: mha.c,v 1.41 2006/03/08 23:46:24 lukem Exp $");
 
 #include "opt_ddb.h"
 
@@ -291,14 +291,14 @@ mhamatch(struct device *parent, struct cfdata *cf, void *aux)
 	if (ia->ia_addr != 0xea0000)
 		return 0;
 
-	if (intio_map_allocate_region(parent->dv_parent, ia,
+	if (intio_map_allocate_region(device_parent(parent), ia,
 				      INTIO_MAP_TESTONLY) < 0) /* FAKE */
 		return 0;
 
 	if (bus_space_map(iot, ia->ia_addr, 0x20, BUS_SPACE_MAP_SHIFTED,
 			  &ioh) < 0)
 		return 0;
-	if (!badaddr ((caddr_t)INTIO_ADDR(ia->ia_addr + 0)))
+	if (!badaddr(INTIO_ADDR(ia->ia_addr + 0)))
 		return 0;
 	bus_space_unmap(iot, ioh, 0x20);
 
@@ -323,7 +323,7 @@ mhaattach(struct device *parent, struct device *self, void *aux)
 	SPC_TRACE(("mhaattach  "));
 	sc->sc_state = SPC_INIT;
 	sc->sc_iobase = INTIO_ADDR(ia->ia_addr + 0x80); /* XXX */
-	intio_map_allocate_region (parent->dv_parent, ia, INTIO_MAP_ALLOCATE);
+	intio_map_allocate_region (device_parent(parent), ia, INTIO_MAP_ALLOCATE);
 				/* XXX: FAKE  */
 	sc->sc_dmat = ia->ia_dmat;
 
@@ -405,12 +405,12 @@ mha_reset(struct mha_softc *sc)
 	u_short	dummy;
 printf("reset...");
 	CMR = CMD_SOFT_RESET;
-	asm volatile ("nop");	/* XXX wait (4clk in 20mhz) ??? */
+	__asm volatile ("nop");	/* XXX wait (4clk in 20 MHz) ??? */
 	dummy = sc->sc_ps[-1];
 	dummy = sc->sc_ps[-1];
 	dummy = sc->sc_ps[-1];
 	dummy = sc->sc_ps[-1];
-	asm volatile ("nop");
+	__asm volatile ("nop");
 	CMR = CMD_SOFT_RESET;
 	sc->sc_spcinitialized = 0;
 	CMR = CMD_SET_UP_REG;	/* setup reg cmd. */
@@ -906,7 +906,7 @@ mha_done(struct mha_softc *sc, struct acb *acb)
 			switch (xs->status) {
 			case SCSI_CHECK:
 				xs->resid = acb->dleft;
-				/* FALLTHOUGH */
+				/* FALLTHROUGH */
 			case SCSI_BUSY:
 				xs->error = XS_BUSY;
 				break;
@@ -1420,7 +1420,7 @@ nextbyte:
 	sc->sc_ps[4] = n >> 8;
 	sc->sc_pc[10] = n;
 	sc->sc_ps[-1] = 0x000F;	/* burst */
-	asm volatile ("nop");
+	__asm volatile ("nop");
 	CMR = CMD_SEND_FROM_DMA;	/* send from DMA */
 	for (;;) {
 		if ((SSR & SS_BUSY) != 0)
@@ -1588,7 +1588,8 @@ mha_dataio_dma(int dw, int cw, struct mha_softc *sc, u_char *p, int n)
 
 	paddr = (char *)sc->sc_dmaseg[0].ds_addr;
 #if MHA_DMA_SHORT_BUS_CYCLE == 1
-	if ((*(int *)&IODEVbase->io_sram[0xac]) & (1 << ((paddr_t)paddr >> 19)))
+	if ((*(volatile int *)&IODEVbase->io_sram[0xac]) &
+	    (1 << ((paddr_t)paddr >> 19)))
 		dw &= ~(1 << 3);
 #endif
 	sc->sc_pc[0x80 + (((long)paddr >> 16) & 0xFF)] = 0;
@@ -1604,7 +1605,7 @@ mha_dataio_dma(int dw, int cw, struct mha_softc *sc, u_char *p, int n)
 	   1 ... BURST XFER.
 	   0 ... R/W */
 	sc->sc_ps[-1] = dw;	/* burst */
-	asm volatile ("nop");
+	__asm volatile ("nop");
 	CMR = cw;	/* receive to DMA */
 	return n;
 }

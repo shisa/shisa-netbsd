@@ -1,4 +1,4 @@
-/*	$NetBSD: snapshot.h,v 1.2.2.2 2005/04/21 19:05:37 tron Exp $	*/
+/*	$NetBSD: snapshot.h,v 1.2 2005/04/19 08:10:43 hannken Exp $	*/
 
 /*-
  * Copyright (c) 2005 The NetBSD Foundation, Inc.

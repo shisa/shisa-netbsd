@@ -1,4 +1,4 @@
-/*	$NetBSD: finger.c,v 1.24 2004/06/03 18:32:18 kleink Exp $	*/
+/*	$NetBSD: finger.c,v 1.27 2006/05/11 01:20:33 mrg Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993
@@ -52,7 +52,7 @@ __COPYRIGHT("@(#) Copyright (c) 1989, 1993\n\
 #if 0
 static char sccsid[] = "@(#)finger.c	8.5 (Berkeley) 5/4/95";
 #else
-__RCSID("$NetBSD: finger.c,v 1.24 2004/06/03 18:32:18 kleink Exp $");
+__RCSID("$NetBSD: finger.c,v 1.27 2006/05/11 01:20:33 mrg Exp $");
 #endif
 #endif /* not lint */
 
@@ -97,26 +97,24 @@ int entries, gflag, lflag, mflag, oflag, sflag, eightflag, pplan;
 char tbuf[1024];
 struct utmpentry *ehead;
 
-static void loginlist __P((void));
-static void userlist __P((int, char **));
-int main __P((int, char **));
+static void loginlist(void);
+static void userlist(int, char **);
+int main(int, char **);
 
 int
-main(argc, argv)
-	int argc;
-	char **argv;
+main(int argc, char **argv)
 {
 	int ch;
 
 	/* Allow user's locale settings to affect character output. */
-	(void *) setlocale(LC_CTYPE, "");
+	setlocale(LC_CTYPE, "");
 
 	/*
 	 * Reset back to the C locale, unless we are using a known
 	 * single-byte 8-bit locale.
 	 */
 	if (strncmp(nl_langinfo(CODESET), "ISO8859-", 8))
-	    (void *) setlocale(LC_CTYPE, "C");
+		setlocale(LC_CTYPE, "C");
 
 	oflag = 1;		/* default to old "office" behavior */
 
@@ -189,7 +187,7 @@ main(argc, argv)
 }
 
 static void
-loginlist()
+loginlist(void)
 {
 	PERSON *pn;
 	DBT data, key;
@@ -220,11 +218,9 @@ loginlist()
 }
 
 static void
-userlist(argc, argv)
-	int argc;
-	char **argv;
+userlist(int argc, char **argv)
 {
-	register PERSON *pn;
+	PERSON *pn;
 	DBT data, key;
 	struct passwd *pw;
 	int r, sflag, *used, *ip;
@@ -257,8 +253,7 @@ userlist(argc, argv)
 			if ((pw = getpwnam(*p)) != NULL)
 				enter_person(pw);
 			else
-				(void)fprintf(stderr,
-				    "finger: %s: no such user\n", *p);
+				warnx("%s: no such user", *p);
 	} else {
 		while ((pw = getpwent()) != NULL)
 			for (p = argv, ip = used; *p; ++p, ++ip)
@@ -268,8 +263,7 @@ userlist(argc, argv)
 				}
 		for (p = argv, ip = used; *p; ++p, ++ip)
 			if (!*ip)
-				(void)fprintf(stderr,
-				    "finger: %s: no such user\n", *p);
+				warnx("%s: no such user", *p);
 	}
 
 	/* Handle network requests. */
@@ -278,7 +272,7 @@ net:
 		netfinger(*p++);
 
 	if (entries == 0)
-		return;
+		goto done;
 
 	/*
 	 * Scan thru the list of users currently logged in, saving
@@ -301,4 +295,7 @@ net:
 			memmove(&tmp, data.data, sizeof tmp);
 			enter_lastlog(tmp);
 		}
+done:
+	free(nargv);
+	free(used);
 }

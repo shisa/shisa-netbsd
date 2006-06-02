@@ -1,9 +1,9 @@
-/*	$NetBSD: var.c,v 1.10 2004/10/28 20:15:37 dsl Exp $	*/
+/*	$NetBSD: var.c,v 1.14 2006/03/29 15:51:00 christos Exp $	*/
 
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: var.c,v 1.10 2004/10/28 20:15:37 dsl Exp $");
+__RCSID("$NetBSD: var.c,v 1.14 2006/03/29 15:51:00 christos Exp $");
 #endif
 
 
@@ -48,7 +48,7 @@ newblock()
 	ainit(&l->area); /* todo: could use e->area (l->area => l->areap) */
 	if (!e->loc) {
 		l->argc = 0;
-		l->argv = (char **) empty;
+		l->argv = (char **) __UNCONST(empty);
 	} else {
 		l->argc = e->loc->argc;
 		l->argv = e->loc->argv;
@@ -339,8 +339,12 @@ str_val(vp)
 		}
 		if (!(vp->flag & INT_U) && vp->val.i < 0)
 			*--s = '-';
-		if (vp->flag & (RJUST|LJUST)) /* case already dealt with */
+		if (vp->flag & (RJUST|LJUST)) { /* case already dealt with */
 			s = formatstr(vp, s);
+			(void)strlcpy(strbuf, s, sizeof(strbuf));
+			afree(s, ATEMP);
+			s = strbuf;
+		}
 	}
 	return s;
 }
@@ -367,6 +371,7 @@ setstr(vq, s, error_ok)
 	const char *s;
 	int error_ok;
 {
+	char *fs = NULL;
 	int no_ro_check = error_ok & 0x4;
 	error_ok &= ~0x4;
 	if ((vq->flag & RDONLY) && !no_ro_check) {
@@ -388,7 +393,7 @@ setstr(vq, s, error_ok)
 		vq->flag &= ~(ISSET|ALLOC);
 		vq->type = 0;
 		if (s && (vq->flag & (UCASEV_AL|LCASEV|LJUST|RJUST)))
-			s = formatstr(vq, s);
+			s = fs = formatstr(vq, s);
 		if ((vq->flag&EXPORT))
 			export(vq, s);
 		else {
@@ -401,6 +406,8 @@ setstr(vq, s, error_ok)
 	vq->flag |= ISSET;
 	if ((vq->flag&SPECIAL))
 		setspec(vq);
+	if (fs)
+		afree(fs, ATEMP);
 	return 1;
 }
 
@@ -451,7 +458,7 @@ getint(vp, nump)
 	base = 10;
 	num = 0;
 	neg = 0;
-	for (c = *s++; c ; c = *s++) {
+	for (c = (unsigned char)*s++; c ; c = (unsigned char)*s++) {
 		if (c == '-') {
 			neg++;
 		} else if (c == '#') {
@@ -528,11 +535,11 @@ formatstr(vp, s)
 		int slen;
 
 		if (vp->flag & RJUST) {
-			const char *q = s + olen;
+			const char *r = s + olen;
 			/* strip trailing spaces (at&t ksh uses q[-1] == ' ') */
-			while (q > s && isspace((unsigned char)q[-1]))
-				--q;
-			slen = q - s;
+			while (r > s && isspace((unsigned char)r[-1]))
+				--r;
+			slen = r - s;
 			if (slen > vp->u2.field) {
 				s += slen - vp->u2.field;
 				slen = vp->u2.field;
@@ -637,7 +644,7 @@ typeset(var, set, clr, field, base)
 		/* Importing from original environment: must have an = */
 		if (set & IMPORT)
 			return NULL;
-		tvar = (char *) var;
+		tvar = (char *) __UNCONST(var);
 		val = NULL;
 	}
 
@@ -793,7 +800,7 @@ skip_varname(s, aok)
 		if (aok && *s == '[' && (alen = array_ref_len(s)))
 			s += alen;
 	}
-	return (char *) s;
+	return (char *) __UNCONST(s);
 }
 
 /* Return a pointer to the first character past any legal variable name.  */
@@ -826,7 +833,7 @@ skip_wdvarname(s, aok)
 			}
 		}
 	}
-	return (char *) s;
+	return (char *) __UNCONST(s);
 }
 
 /* Check if coded string s is a variable name */
@@ -1208,7 +1215,7 @@ arrayname(str)
 
 	if ((p = strchr(str, '[')) == 0)
 		/* Shouldn't happen, but why worry? */
-		return (char *) str;
+		return (char *) __UNCONST(str);
 
 	return str_nsave(str, p - str, ATEMP);
 }

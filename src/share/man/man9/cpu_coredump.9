@@ -1,6 +1,6 @@
-.\"     $NetBSD: cpu_coredump.9,v 1.6 2003/04/16 13:35:26 wiz Exp $
+.\"     $NetBSD: cpu_coredump.9,v 1.8 2005/12/24 21:07:05 matt Exp $
 .\"
-.\" Copyright (c) 2002 The NetBSD Foundation, Inc.
+.\" Copyright (c) 2002, 2005 The NetBSD Foundation, Inc.
 .\" All rights reserved.
 .\"
 .\" This code is derived from software contributed to The NetBSD Foundation
@@ -34,7 +34,7 @@
 .\" ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 .\" POSSIBILITY OF SUCH DAMAGE.
 .\"
-.Dd May 24, 2002
+.Dd December 24, 2005
 .Dt CPU_COREDUMP 9
 .Os
 .Sh NAME
@@ -43,8 +43,9 @@
 .Sh SYNOPSIS
 .In sys/signalvar.h
 .Ft int
-.Fn cpu_coredump "struct proc *p" "struct vnode *vp" "struct ucred *cred" \
-"struct core *chdr"
+.Fn cpu_coredump "struct lwp *l" "void *iocookie" "struct core *chdr"
+.Ft int
+.Fn cpu_coredump32 "struct lwp *l" "void *iocookie" "struct core32 *chdr"
 .Sh DESCRIPTION
 .Fn cpu_coredump
 is the machine-dependent interface invoked by machine-independent code
@@ -52,12 +53,11 @@ to dump the machine-dependent header information at the start of a
 process core dump.
 The header information primarily consists of the
 CPU and floating-point registers.
-.Fa p
-is the process structure of the processing being dumped.
-.Fa vp
-is the vnode pointer to the process core dump file.
-.Fa cred
-are the credentials of the core dump file.
+.Fa l
+is the lwp structure of the thread being dumped.
+.Fa iocookie
+is an opaque pointer to be passed to
+.Fn coredump_write .
 Information about the machine-dependent header sections are returned in
 .Fa chdr .
 .Pp
@@ -73,9 +73,15 @@ All pathnames are relative to
 .Pp
 Process core dumps are initiated within the file
 .Pa sys/kern/kern_sig.c .
-Process core dumps for native
+Process core dumps for ELF
+.Nx
+binaries are performed within the files
+.Pa sys/kern/core_elf32.c
+or
+.Pa sys/kern/core_elf64.c .
+Process core dumps for other
 .Nx
 binaries are performed within the file
 .Pa sys/kern/core_netbsd.c .
 .Sh SEE ALSO
-.Xr vnode 9
+.Xr coredump_write 9

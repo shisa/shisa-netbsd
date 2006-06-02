@@ -1,4 +1,4 @@
-.\"	$NetBSD: make.1,v 1.105.2.4 2005/07/02 16:23:36 tron Exp $
+.\"	$NetBSD: make.1,v 1.125 2006/03/19 10:45:03 wiz Exp $
 .\"
 .\" Copyright (c) 1990, 1993
 .\"	The Regents of the University of California.  All rights reserved.
@@ -29,7 +29,7 @@
 .\"
 .\"	from: @(#)make.1	8.4 (Berkeley) 3/19/94
 .\"
-.Dd May 6, 2004
+.Dd March 18, 2006
 .Dt MAKE 1
 .Os
 .Sh NAME
@@ -132,6 +132,20 @@ Print debugging information about running multiple shells.
 .It Ar m
 Print debugging information about making targets, including modification
 dates.
+.It Ar n
+Don't delete the temporary command scripts created in
+.Pa /tmp
+when running commands.
+These are created via
+.Xr mkstemp 3
+and have names of the form
+.Pa /tmp/makeXXXXX .
+.Em NOTE :
+This can create many file in
+.Pa /tmp
+so use with care.
+.It Ar p
+Print debugging information about makefile parsing.
 .It Ar s
 Print debugging information about suffix-transformation rules.
 .It Ar t
@@ -403,6 +417,11 @@ Assign the value to the variable if it is not already defined.
 Assign with expansion, i.e. expand the value before assigning it
 to the variable.
 Normally, expansion is not done until the variable is referenced.
+.Em NOTE :
+References to undefined variables are
+.Em not
+expanded.
+This can cause problems when variable modifiers are used.
 .It Ic \&!=
 Expand the value and pass it to the shell for execution and assign
 the result to the variable.
@@ -521,6 +540,9 @@ Makefile parsing, lists only those targets encountered thus far.
 A path to the directory where
 .Nm
 was executed.
+Refer to the description of
+.Ql Ev PWD
+for more details.
 .It Ev MAKE
 The name that
 .Nm
@@ -583,6 +605,49 @@ For example, the printing of
 could be done as ${MAKE_PRINT_VAR_ON_ERROR:@v@$v='${$v}'${.newline}@}.
 .It Va .OBJDIR
 A path to the directory where the targets are built.
+Its value is determined by trying to
+.Xr chdir 2
+to the following directories in order and using the first match:
+.Bl -enum
+.It
+.Ev ${MAKEOBJDIRPREFIX}${.CURDIR}
+.Pp
+(Only if
+.Ql Ev MAKEOBJDIRPREFIX
+is set in the environment or on the command line.)
+.It
+.Ev ${MAKEOBJDIR}
+.Pp
+(Only if
+.Ql Ev MAKEOBJDIR
+is set in the environment or on the command line.)
+.It
+.Ev ${.CURDIR} Ns Pa /obj. Ns Ev ${MACHINE}
+.It
+.Ev ${.CURDIR} Ns Pa /obj
+.It
+.Pa /usr/obj/ Ns Ev ${.CURDIR}
+.It
+.Ev ${.CURDIR}
+.El
+.Pp
+Variable expansion is performed on the value before it's used,
+so expressions such as
+.Dl ${.CURDIR:C,^/usr/src,/var/obj,}
+may be used.
+.Pp
+.Ql Va .OBJDIR
+may be modified in the makefile as a global variable.
+In all cases, 
+.Nm
+will
+.Xr chdir 2
+to
+.Ql Va .OBJDIR
+and set
+.Ql Ev PWD
+to that directory before executing any targets.
+.
 .It Va .PARSEDIR
 A path to the directory of the current
 .Ql Pa Makefile
@@ -621,7 +686,9 @@ to the value of
 instead.
 This behaviour is disabled if
 .Ql Ev MAKEOBJDIRPREFIX
-is set.
+is set or
+.Ql Ev MAKEOBJDIR
+contains a variable transform.
 .Ql Ev PWD
 is set to the value of
 .Ql Va .OBJDIR
@@ -634,11 +701,24 @@ Variable expansion may be modified to select or modify each word of the
 variable (where a ``word'' is white-space delimited sequence of characters).
 The general format of a variable expansion is as follows:
 .Pp
-.Dl {variable[:modifier[:...]]}
+.Dl ${variable[:modifier[:...]]}
 .Pp
 Each modifier begins with a colon,
 which may be escaped with a backslash
 .Pq Ql \e .
+.Pp
+A set of modifiers can be specified via a variable, as follows:
+.Pp
+.Dl modifier_variable=modifier[:...]
+.Dl ${variable:${modifier_variable}[:...]}
+.Pp
+In this case the first modifier in the modifier_variable does not
+start with a colon, since that must appear in the referencing
+variable.
+If any of the modifiers in the modifier_variable contain a dollar sign
+.Pq Ql $ ,
+these must be doubled to avoid early expansion.
+.Pp
 The supported modifiers are:
 .Bl -tag -width EEE
 .It Cm \&:E
@@ -664,6 +744,35 @@ but selects all words which do not match
 .Ar pattern .
 .It Cm \&:O
 Order every word in variable alphabetically.
+To sort words in
+reverse order use the
+.Ql Cm \&:O:[-1..1]
+combination of modifiers.
+.It Cm \&:Ox
+Randomize words in variable.
+The results will be different each time you are referring to the
+modified variable; use the assignment with expansion
+.Pq Ql Cm \&:=
+to prevent such behaviour.
+For example,
+.Bd -literal -offset indent
+LIST=			uno due tre quattro
+RANDOM_LIST=		${LIST:Ox}
+STATIC_RANDOM_LIST:=	${LIST:Ox}
+
+all:
+	@echo "${RANDOM_LIST}"
+	@echo "${RANDOM_LIST}"
+	@echo "${STATIC_RANDOM_LIST}"
+	@echo "${STATIC_RANDOM_LIST}"
+.Ed
+may produce output similar to:
+.Bd -literal -offset indent
+quattro due tre uno
+tre due quattro uno
+due uno quattro tre
+due uno quattro tre
+.Ed
 .It Cm \&:Q
 Quotes every shell meta-character in the variable, so that it can be passed
 safely through recursive invocations of
@@ -975,7 +1084,8 @@ selects all the words from last to first.
 .\" :[*]
 .It Cm \&*
 Causes subsequent modifiers to treat the value as a single word
-(possibly containing embedded white space).  Analogous to the effect of
+(possibly containing embedded white space).
+Analogous to the effect of
 \&"$*\&"
 in Bourne shell.
 .\" :[0]
@@ -985,7 +1095,8 @@ Means the same as
 .\" :[*]
 .It Cm \&@
 Causes subsequent modifiers to treat the value as a sequence of words
-delimited by white space.  Analogous to the effect of
+delimited by white space.
+Analogous to the effect of
 \&"$@\&"
 in Bourne shell.
 .\" :[#]
@@ -1245,7 +1356,7 @@ of three.
 Comments begin with a hash
 .Pq Ql \&#
 character, anywhere but in a shell
-command line, and continue to the end of a unescaped new line.
+command line, and continue to the end of an unescaped new line.
 .Sh SPECIAL SOURCES (ATTRIBUTES)
 .Bl -tag -width .IGNOREx
 .It Ic .EXEC
@@ -1326,6 +1437,11 @@ appears in a dependency line, the sources that precede it are
 made before the sources that succeed it in the line.
 Loops are not
 detected and targets that form loops will be silently ignored.
+The ordering imposed by
+.Ic .WAIT
+applies recursively to dependents of the named targets,
+except where recursive interpretation of the ordering
+would cause a cycle in the ordering graph.
 .El
 .Sh SPECIAL TARGETS
 Special targets may not be included with other targets, i.e. they must be
@@ -1391,6 +1507,10 @@ Synonym for
 for compatibility with other pmake variants.
 .It Ic .ORDER
 The named targets are made in sequence.
+The ordering imposed by
+.Ic .ORDER
+applies only to the named targets themselves,
+not to dependents of the named targets.
 .\" XXX: NOT YET!!!!
 .\" .It Ic .PARALLEL
 .\" The named targets are executed in parallel mode.
@@ -1488,22 +1608,15 @@ uses the following environment variables, if they exist:
 and
 .Ev PWD .
 .Pp
-If
 .Ev MAKEOBJDIRPREFIX
-is set, then
-.Nm
-will
-.Xr chdir 2
-to ${MAKEOBJDIRPREFIX}${.CURDIR} if it exists.
-Otherwise if
+and
 .Ev MAKEOBJDIR
-and the named directory exists
+may only be set in the environment or on the command line to
 .Nm
-will
-.Xr chdir 2
-to it.
-These actions are taken before any makefiles are read which is why they
-need to be set in the environment.
+and not as makefile variables;
+see the description of
+.Ql Va .OBJDIR
+for more details.
 .Sh FILES
 .Bl -tag -width /usr/share/mk -compact
 .It .depend

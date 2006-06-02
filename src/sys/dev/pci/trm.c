@@ -1,4 +1,4 @@
-/*	$NetBSD: trm.c,v 1.18.2.1 2005/04/16 14:35:27 tron Exp $	*/
+/*	$NetBSD: trm.c,v 1.23 2006/05/22 00:09:34 christos Exp $	*/
 /*
  * Device Driver for Tekram DC395U/UW/F, DC315/U
  * PCI SCSI Bus Master Host Adapter
@@ -42,7 +42,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: trm.c,v 1.18.2.1 2005/04/16 14:35:27 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: trm.c,v 1.23 2006/05/22 00:09:34 christos Exp $");
 
 /* #define TRM_DEBUG */
 #ifdef TRM_DEBUG
@@ -634,7 +634,7 @@ trm_init(struct trm_softc *sc)
 	    bus_space_read_2(iot, ioh, TRM_DMA_CONFIG) | DMA_ENHANCE);
 
 	/* Clear pending interrupt status */
-	bus_space_read_1(iot, ioh, TRM_SCSI_INTSTATUS);
+	(void)bus_space_read_1(iot, ioh, TRM_SCSI_INTSTATUS);
 
 	/* Enable SCSI interrupt */
 	bus_space_write_1(iot, ioh, TRM_SCSI_INTEN,
@@ -1065,18 +1065,25 @@ static void
 trm_timeout(void *arg)
 {
 	struct trm_srb *srb = (struct trm_srb *)arg;
-	struct scsipi_xfer *xs = srb->xs;
-	struct scsipi_periph *periph = xs->xs_periph;
+	struct scsipi_xfer *xs;
+	struct scsipi_periph *periph;
 	struct trm_softc *sc;
 	int s;
 
-	if (xs == NULL)
-		printf("trm_timeout called with xs == NULL\n");
-
-	else {
-		scsipi_printaddr(xs->xs_periph);
-		printf("SCSI OpCode 0x%02x timed out\n", xs->cmd->opcode);
+	if (srb == NULL) {
+		printf("trm_timeout called with srb == NULL\n");
+		return;
 	}
+
+	xs = srb->xs;
+	if (xs == NULL) {
+		printf("trm_timeout called with xs == NULL\n");
+		return;
+	}
+
+	periph = xs->xs_periph;
+	scsipi_printaddr(xs->xs_periph);
+	printf("SCSI OpCode 0x%02x timed out\n", xs->cmd->opcode);
 
 	sc = (void *)periph->periph_channel->chan_adapter->adapt_dev;
 
@@ -1569,7 +1576,7 @@ trm_dataio_xfer(struct trm_softc *sc, int iodir)
 			if (iodir == XFERDATAOUT)
 				bus_space_write_2(iot, ioh, TRM_SCSI_FIFO, 0);
 			else
-				bus_space_read_2(iot, ioh, TRM_SCSI_FIFO);
+				(void)bus_space_read_2(iot, ioh, TRM_SCSI_FIFO);
 
 			sc->sc_state = TRM_XFERPAD;
 			/* it's important for atn stop */
@@ -1722,7 +1729,7 @@ trm_msgin_phase0(struct trm_softc *sc)
 
 		case MSG_IGN_WIDE_RESIDUE:
 			bus_space_write_4(iot, ioh, TRM_SCSI_XCNT, 1);
-			bus_space_read_1(iot, ioh, TRM_SCSI_FIFO);
+			(void)bus_space_read_1(iot, ioh, TRM_SCSI_FIFO);
 			break;
 
 		default:
@@ -2447,7 +2454,7 @@ trm_eeprom_write_all(struct trm_softc *sc, struct trm_nvram *eeprom)
 {
 	bus_space_tag_t iot = sc->sc_iot;
 	bus_space_handle_t ioh = sc->sc_ioh;
-	uint8_t *buf = (uint8_t *)eeprom;
+	uint8_t *sbuf = (uint8_t *)eeprom;
 	uint8_t addr;
 
 	/* Enable SEEPROM */
@@ -2461,8 +2468,8 @@ trm_eeprom_write_all(struct trm_softc *sc, struct trm_nvram *eeprom)
 	bus_space_write_1(iot, ioh, TRM_GEN_NVRAM, 0);
 	trm_eeprom_wait();
 
-	for (addr = 0; addr < 128; addr++, buf++)
-		trm_eeprom_set_data(sc, addr, *buf);
+	for (addr = 0; addr < 128; addr++, sbuf++)
+		trm_eeprom_set_data(sc, addr, *sbuf);
 
 	/*
 	 * Write disable
@@ -2539,7 +2546,7 @@ trm_eeprom_read_all(struct trm_softc *sc, struct trm_nvram *eeprom)
 {
 	bus_space_tag_t iot = sc->sc_iot;
 	bus_space_handle_t ioh = sc->sc_ioh;
-	uint8_t *buf = (uint8_t *)eeprom;
+	uint8_t *sbuf = (uint8_t *)eeprom;
 	uint8_t addr;
 
 	/*
@@ -2549,7 +2556,7 @@ trm_eeprom_read_all(struct trm_softc *sc, struct trm_nvram *eeprom)
 	    bus_space_read_1(iot, ioh, TRM_GEN_CONTROL) | EN_EEPROM);
 
 	for (addr = 0; addr < 128; addr++)
-		*buf++ = trm_eeprom_get_data(sc, addr);
+		*sbuf++ = trm_eeprom_get_data(sc, addr);
 
 	/*
 	 * Disable SEEPROM

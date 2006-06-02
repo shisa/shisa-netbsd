@@ -1,4 +1,4 @@
-.\"	$NetBSD: uvm.9,v 1.61 2005/03/11 19:40:47 rumble Exp $
+.\"	$NetBSD: uvm.9,v 1.73 2006/03/04 15:05:02 sketch Exp $
 .\"
 .\" Copyright (c) 1998 Matthew R. Green
 .\" All rights reserved.
@@ -26,7 +26,7 @@
 .\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 .\" SUCH DAMAGE.
 .\"
-.Dd January 9, 2005
+.Dd February 27, 2006
 .Dt UVM 9
 .Os
 .Sh NAME
@@ -76,7 +76,7 @@ There are also several miscellaneous functions.
 .Pp
 .Ft void
 .br
-.Fn uvm_init_limits "struct proc *p" ;
+.Fn uvm_init_limits "struct lwp *l" ;
 .Pp
 .Ft void
 .br
@@ -88,7 +88,7 @@ There are also several miscellaneous functions.
 .Pp
 .Fn uvm_init
 sets up the UVM system at system boot time, after the
-copyright has been printed.
+console has been setup.
 It initialises global state, the page, map, kernel virtual memory state,
 machine-dependent physical map, kernel memory allocator,
 pager and anonymous memory sub-systems, and then enables
@@ -114,7 +114,7 @@ initialises the swap sub-system.
 .br
 .Fn uvm_map "struct vm_map *map" "vaddr_t *startp" "vsize_t size" "struct uvm_object *uobj" "voff_t uoffset" "vsize_t align" "uvm_flag_t flags" ;
 .Pp
-.Ft int
+.Ft void
 .br
 .Fn uvm_unmap "struct vm_map *map" "vaddr_t start" "vaddr_t end" ;
 .Pp
@@ -140,7 +140,7 @@ initialises the swap sub-system.
 .Pp
 .Ft void
 .br
-.Fn uvmspace_exec "struct proc *p" "vaddr_t start" "vaddr_t end" ;
+.Fn uvmspace_exec "struct lwp *l" "vaddr_t start" "vaddr_t end" ;
 .Pp
 .Ft struct vmspace *
 .br
@@ -156,7 +156,7 @@ initialises the swap sub-system.
 .Pp
 .Ft void
 .br
-.Fn uvmspace_unshare "struct proc *p" ;
+.Fn uvmspace_unshare "struct lwp *l" ;
 .Pp
 .Ft boolean_t
 .br
@@ -172,7 +172,7 @@ establishes a valid mapping in map
 which must be unlocked.
 The new mapping has size
 .Fa size ,
-which must a multiple of
+which must be a multiple of
 .Dv PAGE_SIZE .
 The
 .Fa uobj
@@ -368,8 +368,8 @@ setting the pageability of the address space to
 .Fa pageable .
 .Pp
 .Fn uvmspace_exec
-either reuses the address space of process
-.Fa p
+either reuses the address space of lwp
+.Fa l
 if there are no other references to it, or creates
 a new one with
 .Fn uvmspace_alloc .
@@ -396,8 +396,8 @@ to share the address space of
 .Fa p1 .
 .Pp
 .Fn uvmspace_unshare
-ensures that process
-.Fa p
+ensures that lwp
+.Fa l
 has its own, unshared address space, by creating a new one if
 necessary by calling
 .Fn uvmspace_fork .
@@ -445,7 +445,8 @@ returns a standard UVM return value.
 .Pp
 .Ft void *
 .br
-.Fn ubc_alloc "struct uvm_object *uobj" "voff_t offset" "vsize_t *lenp" "int flags" ;
+.Fn ubc_alloc "struct uvm_object *uobj" "voff_t offset" "vsize_t *lenp" \
+"int advice" "int flags" ;
 .Pp
 .Ft void
 .br
@@ -466,15 +467,27 @@ Caller must hold a reference to the vnode.
 If the vnode shrinks, pages no longer used are discarded.
 .Pp
 .Fn ubc_alloc
-creates a kernel mappings of
+creates a kernel mapping of
 .Fa uobj
 starting at offset
 .Fa offset .
-the desired length of the mapping is pointed to by
+The desired length of the mapping is pointed to by
 .Fa lenp ,
 but the actual mapping may be smaller than this.
 .Fa lenp
 is updated to contain the actual length mapped.
+.Fa advice
+is the access pattern hint, which must be one of
+.Pp
+.Bl -tag -offset indent -width "UVM_ADV_SEQUENTIAL" -compact
+.It UVM_ADV_NORMAL
+No hint
+.It UVM_ADV_RANDOM
+Random access hint
+.It UVM_ADV_SEQUENTIAL
+Sequential access hint (from lower offset to higher offset)
+.El
+.Pp
 The flags must be one of
 .Bd -literal
 #define UBC_READ        0x01    /* mapping will be accessed for read */
@@ -516,142 +529,102 @@ on the memory described in
 .Sh ALLOCATION OF KERNEL MEMORY
 .Ft vaddr_t
 .br
-.Fn uvm_km_alloc "struct vm_map *map" "vsize_t size" ;
+.Fn uvm_km_alloc "struct vm_map *map" "vsize_t size" "vsize_t align" "uvm_flag_t flags" ;
 .Pp
-.Ft vaddr_t
+.Ft void
 .br
-.Fn uvm_km_zalloc "struct vm_map *map" "vsize_t size" ;
-.Pp
-.Ft vaddr_t
-.br
-.Fn uvm_km_alloc1 "struct vm_map *map" "vsize_t size" "boolean_t zeroit" ;
-.Pp
-.Ft vaddr_t
-.br
-.Fn uvm_km_kmemalloc1 "struct vm_map *map" "struct uvm_object *obj" "vsize_t size" "vsize_t align" "voff_t preferred offset" "int flags" ;
-.Pp
-.Ft vaddr_t
-.br
-.Fn uvm_km_kmemalloc "struct vm_map *map" "struct uvm_object *obj" "vsize_t size" "int flags" ;
-.Pp
-.Ft vaddr_t
-.br
-.Fn uvm_km_valloc "struct vm_map *map" "vsize_t size" ;
-.Pp
-.Ft vaddr_t
-.br
-.Fn uvm_km_valloc_wait "struct vm_map *map" "vsize_t size" ;
+.Fn uvm_km_free "struct vm_map *map" "vaddr_t addr" "vsize_t size" "uvm_flag_t flags" ;
 .Pp
 .Ft struct vm_map *
 .br
-.Fn uvm_km_suballoc "struct vm_map *map" "vaddr_t *min" "vaddr_t *max " "vsize_t size" "boolean_t pageable" "boolean_t fixed" "struct vm_map *submap" ;
-.Pp
-.Ft void
-.br
-.Fn uvm_km_free "struct vm_map *map" "vaddr_t addr" "vsize_t size" ;
-.Pp
-.Ft void
-.br
-.Fn uvm_km_free_wakeup "struct vm_map *map" "vaddr_t addr" "vsize_t size" ;
+.Fn uvm_km_suballoc "struct vm_map *map" "vaddr_t *min" "vaddr_t *max" "vsize_t size" "boolean_t pageable" "boolean_t fixed" "struct vm_map *submap" ;
 .Pp
 .Fn uvm_km_alloc
-and
-.Fn uvm_km_zalloc
-allocate
+allocates
 .Fa size
-bytes of wired kernel memory in map
+bytes of kernel memory in map
 .Fa map .
-In addition to allocation,
-.Fn uvm_km_zalloc
-zeros the memory.
-Both of these functions are defined as macros in terms of
-.Fn uvm_km_alloc1 ,
-and should almost always be used in preference to
-.Fn uvm_km_alloc1 .
-.Pp
-.Fn uvm_km_alloc1
-allocates and returns
-.Fa size
-bytes of wired memory in the kernel map, zeroing the memory if the
-.Fa zeroit
-argument is non-zero.
-.Pp
-.Fn uvm_km_kmemalloc1
-allocates and returns
-.Fa size
-bytes of wired kernel memory into
-.Fa obj .
 The first address of the allocated memory range will be aligned according to the
 .Fa align
 argument
 .Pq specify 0 if no alignment is necessary .
-The flags can be any of:
-.Bd -literal
-#define UVM_KMF_NOWAIT  0x1                     /* matches M_NOWAIT */
-#define UVM_KMF_VALLOC  0x2                     /* allocate VA only */
-#define UVM_KMF_CANFAIL 0x4			/* caller handles failure */
-#define UVM_KMF_TRYLOCK UVM_FLAG_TRYLOCK        /* try locking only */
-.Ed
+The alignment must be a multiple of page size.
+The
+.Fa flags
+is a bitwise inclusive OR of the allocation type and operation flags.
 .Pp
+The allocation type should be one of:
+.Bl -tag -width UVM_KMF_PAGEABLE
+.It UVM_KMF_WIRED
+Wired memory.
+.It UVM_KMF_PAGEABLE
+Demand-paged zero-filled memory.
+.It UVM_KMF_VAONLY
+Virtual address only.
+No physical pages are mapped in the allocated region.
+If necessary, it's the caller's responsibility to enter page mappings.
+It's also the caller's responsibility to clean up the mappings before freeing
+the address range.
+.El
+.Pp
+The following operation flags are available:
+.Bl -tag -width UVM_KMF_PAGEABLE
+.It UVM_KMF_CANFAIL
+Can fail even if
 .Dv UVM_KMF_NOWAIT
-causes
-.Fn uvm_km_kmemalloc1
-to return immediately if no memory is available.
-.Dv UVM_KMF_VALLOC
-causes no physical pages to be allocated, only virtual space.
-.Dv UVM_KMF_TRYLOCK
-causes
-.Fn uvm_km_kmemalloc1
-to use
-.Fn simple_lock_try
-when locking maps.
-.Dv UVM_KMF_CANFAIL
-indicates that
-.Fn uvm_km_kmemalloc1
-can return 0 even if
-.Dv UVM_KMF_NOWAIT
-is not specified.
+is not specified and
+.Dv UVM_KMF_WAITVA
+is specified.
+.It UVM_KMF_ZERO
+Request zero-filled memory.
+Only supported for
+.Dv UVM_KMF_WIRED .
+Shouldn't be used with other types.
+.It UVM_KMF_TRYLOCK
+Fail if we can't lock the map.
+.It UVM_KMF_NOWAIT
+Fail immediately if no memory is available.
+.It UVM_KMF_WAITVA
+Sleep to wait for the virtual address resources if needed.
+.El
+.Pp
 (If neither
 .Dv UVM_KMF_NOWAIT
 nor
 .Dv UVM_KMF_CANFAIL
-are specified,
-.Fn uvm_km_kmemalloc1
+are specified and
+.Dv UVM_KMF_WAITVA
+is specified,
+.Fn uvm_km_alloc
 will never fail, but rather sleep indefinitely until the allocation succeeds.)
 .Pp
-.Fn uvm_km_kmemalloc
-allocates kernel memory like
-.Fn uvm_km_kmemalloc1
-but uses the default values
-.Dv 0
-for the
-.Fa align ,
-and
-.Dv UVM_UNKNOWN_OFFSET
-for the
-.Fa prefer
-arguments.
-.Pp
-.Fn uvm_km_valloc
-and
-.Fn uvm_km_valloc_wait
-return a newly allocated zero-filled address in the kernel map of size
-.Fa size .
-.Fn uvm_km_valloc_wait
-will also wait for kernel memory to become available, if there is a
-memory shortage.
+Pageability of the pages allocated with
+.Dv UVM_KMF_PAGEABLE
+can be changed by
+.Fn uvm_map_pageable .
+In that case, the entire range must be changed atomically.
+Changing a part of the range is not supported.
 .Pp
 .Fn uvm_km_free
+frees the memory range allocated by
+.Fn uvm_km_alloc .
+.Fa addr
+must be an address returned by
+.Fn uvm_km_alloc .
+.Fa map
 and
-.Fn uvm_km_free_wakeup
-free
 .Fa size
-bytes of memory in the kernel map, starting at address
-.Fa addr .
-.Fn uvm_km_free_wakeup
-calls
-.Fn wakeup
-on the map before unlocking the map.
+must be the same as the ones used for the corresponding
+.Fn uvm_km_alloc .
+.Fa flags
+must be the allocation type used for the corresponding
+.Fn uvm_km_alloc .
+.Pp
+.Fn uvm_km_free
+is the only way to free memory ranges allocated by
+.Fn uvm_km_alloc .
+.Fn uvm_unmap
+must not be used.
 .Pp
 .Fn uvm_km_suballoc
 allocates submap from
@@ -821,7 +794,7 @@ addresses of pages not already in use.
 .Pp
 .Ft void
 .br
-.Fn uvm_swapin "struct proc *p" ;
+.Fn uvm_swapin "struct lwp *l" ;
 .Pp
 .Fn uvm_pageout
 is the main loop for the page daemon.
@@ -846,7 +819,7 @@ swaps in the named process.
 .Fn uvm_loan
 loans pages in a map out to anons or to the kernel.
 .Fa map
-should be unlocked ,
+should be unlocked,
 .Fa start
 and
 .Fa len
@@ -917,7 +890,7 @@ and should match what was used for previous call to
 .Pp
 .Ft int
 .br
-.Fn uvm_vslock "struct proc *p" "caddr_t addr" "size_t len" "vm_prot_t prot" ;
+.Fn uvm_vslock "struct proc *l" "caddr_t addr" "size_t len" "vm_prot_t prot" ;
 .Pp
 .Ft void
 .br
@@ -929,7 +902,7 @@ and should match what was used for previous call to
 .Pp
 .Ft void
 .br
-.Fn uvm_fork "struct proc *p1" "struct proc *p2" "boolean_t shared" ;
+.Fn uvm_fork "struct lwp *l1" "struct lwp *l2" "boolean_t shared" ;
 .Pp
 .Ft int
 .br

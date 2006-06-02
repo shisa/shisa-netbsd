@@ -1,4 +1,4 @@
-/*	$NetBSD: setup.c,v 1.75 2005/01/19 17:33:59 xtraeme Exp $	*/
+/*	$NetBSD: setup.c,v 1.79 2006/03/17 15:53:46 rumble Exp $	*/
 
 /*
  * Copyright (c) 1980, 1986, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)setup.c	8.10 (Berkeley) 5/9/95";
 #else
-__RCSID("$NetBSD: setup.c,v 1.75 2005/01/19 17:33:59 xtraeme Exp $");
+__RCSID("$NetBSD: setup.c,v 1.79 2006/03/17 15:53:46 rumble Exp $");
 #endif
 #endif /* not lint */
 
@@ -65,7 +65,7 @@ __RCSID("$NetBSD: setup.c,v 1.75 2005/01/19 17:33:59 xtraeme Exp $");
 
 #define POWEROF2(num)	(((num) & ((num) - 1)) == 0)
 
-static void badsb(int, char *);
+static void badsb(int, const char *);
 static int calcsb(const char *, int, struct fs *);
 static struct disklabel *getdisklabel(const char *, int);
 static struct partition *getdisklabelpart(const char *, struct disklabel *);
@@ -84,7 +84,7 @@ setup(const char *dev)
 {
 	long cg, size, asked, i, j;
 	long bmapsize;
-	struct disklabel *lp;
+	struct disklabel *lp = NULL;
 	off_t sizepb;
 	struct stat statb;
 	struct fs proto;
@@ -281,7 +281,7 @@ setup(const char *dev)
 			dirty(&asblk);
 		}
 	}
-	if (sblock->fs_old_inodefmt >= FS_44INODEFMT) {
+	if (is_ufs2 || sblock->fs_old_inodefmt >= FS_44INODEFMT) {
 		if (sblock->fs_maxfilesize != maxfilesize) {
 			pwarn("INCORRECT MAXFILESIZE=%lld IN SUPERBLOCK",
 			    (unsigned long long)sblock->fs_maxfilesize);
@@ -390,6 +390,11 @@ setup(const char *dev)
 	 */
 	asked = 0;
 	sblock->fs_csp = (struct csum *)calloc(1, sblock->fs_cssize);
+	if (sblock->fs_csp == NULL) {
+		pwarn("cannot alloc %u bytes for summary info\n",
+		    sblock->fs_cssize);	
+		goto badsblabel;
+	}
 	for (i = 0, j = 0; i < sblock->fs_cssize; i += sblock->fs_bsize, j++) {
 		size = sblock->fs_cssize - i < sblock->fs_bsize ?
 		    sblock->fs_cssize - i : sblock->fs_bsize;
@@ -640,7 +645,7 @@ static off_t sblock_try[] = SBLOCKSEARCH;
 static int
 readsb(int listerr)
 {
-	daddr_t super;
+	daddr_t super = 0;
 	struct fs *fs;
 	int i;
 
@@ -905,7 +910,7 @@ cmpsblks44(const struct fs *sb, struct fs *asb)
 
 
 static void
-badsb(int listerr, char *s)
+badsb(int listerr, const char *s)
 {
 
 	if (!listerr)

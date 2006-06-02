@@ -1,4 +1,4 @@
-/*	$NetBSD: cgsix_sbus.c,v 1.15.2.1 2005/06/08 11:53:59 tron Exp $ */
+/*	$NetBSD: cgsix_sbus.c,v 1.19 2006/03/29 04:16:50 thorpej Exp $ */
 
 /*-
  * Copyright (c) 1998 The NetBSD Foundation, Inc.
@@ -41,7 +41,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: cgsix_sbus.c,v 1.15.2.1 2005/06/08 11:53:59 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: cgsix_sbus.c,v 1.19 2006/03/29 04:16:50 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -111,7 +111,7 @@ cgsixattach(parent, self, aux)
 	struct sbus_attach_args *sa = aux;
 	struct fbdevice *fb = &sc->sc_fb;
 	int node, isconsole;
-	char *name;
+	const char *name;
 	bus_space_handle_t bh;
 
 	/* Remember cookies for cgsix_mmap() */
@@ -122,7 +122,7 @@ cgsixattach(parent, self, aux)
 	
 	fb->fb_device = &sc->sc_dev;
 	fb->fb_type.fb_type = FBTYPE_SUNFAST_COLOR;
-	fb->fb_flags = sc->sc_dev.dv_cfdata->cf_flags & FB_USERMASK;
+	fb->fb_flags = device_cfdata(&sc->sc_dev)->cf_flags & FB_USERMASK;
 	fb->fb_type.fb_depth = 8;
 
 	fb_setsize_obp(fb, fb->fb_type.fb_depth, 1152, 900, node);

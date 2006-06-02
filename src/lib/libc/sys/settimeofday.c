@@ -1,4 +1,4 @@
-/*	$NetBSD: settimeofday.c,v 1.6 2004/04/27 01:12:44 kleink Exp $ */
+/*	$NetBSD: settimeofday.c,v 1.8 2006/03/09 23:44:43 christos Exp $ */
 
 /*
  * Copyright (c) 2001 The NetBSD Foundation, Inc.      
@@ -31,12 +31,16 @@
  * SUCH DAMAGE.
  */
 
+#include <sys/cdefs.h>
+#if defined(LIBC_SCCS) && !defined(lint)
+__RCSID("$NetBSD: settimeofday.c,v 1.8 2006/03/09 23:44:43 christos Exp $");
+#endif /* LIBC_SCCS and not lint */
+
 #include "namespace.h"
 
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/syscall.h>
-#include <sys/systm.h>
 
 #include <sys/clockctl.h>
 
@@ -58,7 +62,7 @@ settimeofday(tv, tzp)
 	const struct timeval *tv;
 	const void *tzp;
 {
-	struct sys_settimeofday_args args;
+	struct clockctl_settimeofday args;
 	int error;
 	quad_t q;
 	int rv;
@@ -116,9 +120,8 @@ try_syscall:
 	 * If __clockctl_fd >=0, clockctl has already been open
 	 * and used, so we carry on using it.
 	 */
-	SCARG(&args, tv) = tv;
-	SCARG(&args, tzp) = tzp;
+	args.tv = tv;
+	args.tzp = tzp;
 	error = ioctl(__clockctl_fd, CLOCKCTL_SETTIMEOFDAY, &args);
 	return error;
-
 }

@@ -1,4 +1,4 @@
-/* $NetBSD: bus_dma.c,v 1.57.2.1 2005/08/04 18:22:35 tron Exp $ */
+/* $NetBSD: bus_dma.c,v 1.62 2006/03/01 12:38:10 yamt Exp $ */
 
 /*-
  * Copyright (c) 1997, 1998 The NetBSD Foundation, Inc.
@@ -39,7 +39,7 @@
 
 #include <sys/cdefs.h>			/* RCS ID & Copyright macro defns */
 
-__KERNEL_RCSID(0, "$NetBSD: bus_dma.c,v 1.57.2.1 2005/08/04 18:22:35 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: bus_dma.c,v 1.62 2006/03/01 12:38:10 yamt Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -56,7 +56,7 @@ __KERNEL_RCSID(0, "$NetBSD: bus_dma.c,v 1.57.2.1 2005/08/04 18:22:35 tron Exp $"
 #include <machine/intr.h>
 
 int	_bus_dmamap_load_buffer_direct(bus_dma_tag_t,
-	    bus_dmamap_t, void *, bus_size_t, struct proc *, int,
+	    bus_dmamap_t, void *, bus_size_t, struct vmspace *, int,
 	    paddr_t *, int *, int);
 
 extern paddr_t avail_start, avail_end;	/* from pmap.c */
@@ -129,7 +129,7 @@ _bus_dmamap_destroy(bus_dma_tag_t t, bus_dmamap_t map)
  */
 int
 _bus_dmamap_load_buffer_direct(bus_dma_tag_t t, bus_dmamap_t map,
-    void *buf, size_t buflen, struct proc *p, int flags, paddr_t *lastaddrp,
+    void *buf, size_t buflen, struct vmspace *vm, int flags, paddr_t *lastaddrp,
     int *segp, int first)
 {
 	bus_size_t sgsize;
@@ -144,9 +144,8 @@ _bus_dmamap_load_buffer_direct(bus_dma_tag_t t, bus_dmamap_t map,
 		/*
 		 * Get the physical address for this segment.
 		 */
-		if (p != NULL)
-			(void) pmap_extract(p->p_vmspace->vm_map.pmap,
-			    vaddr, &curaddr);
+		if (!VMSPACE_IS_KERNEL_P(vm))
+			(void) pmap_extract(vm->vm_map.pmap, vaddr, &curaddr);
 		else
 			curaddr = vtophys(vaddr);
 
@@ -236,6 +235,7 @@ _bus_dmamap_load_direct(bus_dma_tag_t t, bus_dmamap_t map, void *buf,
 {
 	paddr_t lastaddr;
 	int seg, error;
+	struct vmspace *vm;
 
 	/*
 	 * Make sure that on error condition we return "no valid mappings".
@@ -248,9 +248,14 @@ _bus_dmamap_load_direct(bus_dma_tag_t t, bus_dmamap_t map, void *buf,
 	if (buflen > map->_dm_size)
 		return (EINVAL);
 
+	if (p != NULL) {
+		vm = p->p_vmspace;
+	} else {
+		vm = vmspace_kernel();
+	}
 	seg = 0;
 	error = _bus_dmamap_load_buffer_direct(t, map, buf, buflen,
-	    p, flags, &lastaddr, &seg, 1);
+	    vm, flags, &lastaddr, &seg, 1);
 	if (error == 0) {
 		map->dm_mapsize = buflen;
 		map->dm_nsegs = seg + 1;
@@ -335,8 +340,8 @@ _bus_dmamap_load_mbuf_direct(bus_dma_tag_t t, bus_dmamap_t map,
 
 		default:
 			error = _bus_dmamap_load_buffer_direct(t, map,
-			    m->m_data, m->m_len, NULL, flags, &lastaddr,
-			    &seg, first);
+			    m->m_data, m->m_len, vmspace_kernel(), flags,
+			    &lastaddr, &seg, first);
 		}
 		first = 0;
 	}
@@ -363,7 +368,7 @@ _bus_dmamap_load_uio_direct(bus_dma_tag_t t, bus_dmamap_t map,
 	paddr_t lastaddr;
 	int seg, i, error, first;
 	bus_size_t minlen, resid;
-	struct proc *p = NULL;
+	struct vmspace *vm;
 	struct iovec *iov;
 	caddr_t addr;
 
@@ -378,14 +383,7 @@ _bus_dmamap_load_uio_direct(bus_dma_tag_t t, bus_dmamap_t map,
 	resid = uio->uio_resid;
 	iov = uio->uio_iov;
 
-	if (uio->uio_segflg == UIO_USERSPACE) {
-		p = uio->uio_procp;
-#ifdef DIAGNOSTIC
-		if (p == NULL)
-			panic("_bus_dmamap_load_uio_direct: "
-			    "USERSPACE but no proc");
-#endif
-	}
+	vm = uio->uio_vmspace;
 
 	first = 1;
 	seg = 0;
@@ -399,7 +397,7 @@ _bus_dmamap_load_uio_direct(bus_dma_tag_t t, bus_dmamap_t map,
 		addr = (caddr_t)iov[i].iov_base;
 
 		error = _bus_dmamap_load_buffer_direct(t, map,
-		    addr, minlen, p, flags, &lastaddr, &seg, first);
+		    addr, minlen, vm, flags, &lastaddr, &seg, first);
 		first = 0;
 
 		resid -= minlen;
@@ -574,6 +572,8 @@ _bus_dmamem_map(bus_dma_tag_t t, bus_dma_segment_t *segs, int nsegs,
 	vaddr_t va;
 	bus_addr_t addr;
 	int curseg;
+	const uvm_flag_t kmflags =
+	    (flags & BUS_DMA_NOWAIT) != 0 ? UVM_KMF_NOWAIT : 0;
 
 	/*
 	 * If we're only mapping 1 segment, use K0SEG, to avoid
@@ -586,7 +586,7 @@ _bus_dmamem_map(bus_dma_tag_t t, bus_dma_segment_t *segs, int nsegs,
 
 	size = round_page(size);
 
-	va = uvm_km_valloc(kernel_map, size);
+	va = uvm_km_alloc(kernel_map, size, 0, UVM_KMF_VAONLY | kmflags);
 
 	if (va == 0)
 		return (ENOMEM);
@@ -630,7 +630,9 @@ _bus_dmamem_unmap(bus_dma_tag_t t, caddr_t kva, size_t size)
 		return;
 
 	size = round_page(size);
-	uvm_km_free(kernel_map, (vaddr_t)kva, size);
+	pmap_remove(pmap_kernel(), (vaddr_t)kva, (vaddr_t)kva + size);
+	pmap_update(pmap_kernel());
+	uvm_km_free(kernel_map, (vaddr_t)kva, size, UVM_KMF_VAONLY);
 }
 
 /*

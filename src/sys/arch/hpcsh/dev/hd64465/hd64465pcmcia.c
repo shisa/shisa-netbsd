@@ -1,4 +1,4 @@
-/*	$NetBSD: hd64465pcmcia.c,v 1.16 2004/08/11 06:30:15 mycroft Exp $	*/
+/*	$NetBSD: hd64465pcmcia.c,v 1.21 2006/03/04 02:26:33 uwe Exp $	*/
 
 /*-
  * Copyright (c) 2001, 2002 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: hd64465pcmcia.c,v 1.16 2004/08/11 06:30:15 mycroft Exp $");
+__KERNEL_RCSID(0, "$NetBSD: hd64465pcmcia.c,v 1.21 2006/03/04 02:26:33 uwe Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -183,7 +183,8 @@ STATIC struct pcmcia_chip_functions hd64465pcmcia_functions = {
 STATIC int hd64465pcmcia_match(struct device *, struct cfdata *, void *);
 STATIC void hd64465pcmcia_attach(struct device *, struct device *, void *);
 STATIC int hd64465pcmcia_print(void *, const char *);
-STATIC int hd64465pcmcia_submatch(struct device *, struct cfdata *, void *);
+STATIC int hd64465pcmcia_submatch(struct device *, struct cfdata *,
+				  const int *, void *);
 
 CFATTACH_DECL(hd64465pcmcia, sizeof(struct hd64465pcmcia_softc),
     hd64465pcmcia_match, hd64465pcmcia_attach, NULL, NULL);
@@ -202,7 +203,7 @@ STATIC void hd64465pcmcia_memory_window16_switch(int,  enum memory_window_16);
 /* bus width */
 STATIC void __sh_set_bus_width(int, int);
 /* bus space access */
-STATIC int __sh_hd64465_map(vaddr_t, paddr_t, size_t, u_int32_t);
+STATIC int __sh_hd64465_map(vaddr_t, paddr_t, size_t, uint32_t);
 STATIC vaddr_t __sh_hd64465_map_2page(paddr_t);
 
 #define	DELAY_MS(x)	delay((x) * 1000)
@@ -231,9 +232,11 @@ hd64465pcmcia_attach(struct device *parent, struct device *self, void *aux)
 	if (sc->sc_area5 == 0 || sc->sc_area6 == 0) {
 		printf("%s: can't map memory.\n", sc->sc_dev.dv_xname);
 		if (sc->sc_area5)
-			uvm_km_free(kernel_map, sc->sc_area5, 0x03000000);
+			uvm_km_free(kernel_map, sc->sc_area5, 0x03000000,
+			    UVM_KMF_VAONLY);
 		if (sc->sc_area6)
-			uvm_km_free(kernel_map, sc->sc_area6, 0x03000000);
+			uvm_km_free(kernel_map, sc->sc_area6, 0x03000000,
+			    UVM_KMF_VAONLY);
 
 		return;
 	}
@@ -304,7 +307,8 @@ hd64465pcmcia_print(void *arg, const char *pnp)
 }
 
 int
-hd64465pcmcia_submatch(struct device *parent, struct cfdata *cf, void *aux)
+hd64465pcmcia_submatch(struct device *parent, struct cfdata *cf,
+		       const int *ldesc, void *aux)
 {
 	struct pcmciabus_attach_args *paa = aux;
 	struct hd64465pcmcia_channel *ch =
@@ -333,7 +337,7 @@ hd64465pcmcia_attach_channel(struct hd64465pcmcia_softc *sc, int channel)
 	struct hd64465pcmcia_channel *ch = &sc->sc_ch[channel];
 	struct pcmciabus_attach_args paa;
 	bus_addr_t baseaddr;
-	u_int8_t r;
+	uint8_t r;
 	int i;
 
 	ch->ch_parent = sc;
@@ -378,8 +382,8 @@ hd64465pcmcia_attach_channel(struct hd64465pcmcia_softc *sc, int channel)
 	paa.iobase = ch->ch_iobase;
 	paa.iosize = ch->ch_iosize;
 
-	ch->ch_pcmcia = config_found_sm(parent, &paa, hd64465pcmcia_print,
-	    hd64465pcmcia_submatch);
+	ch->ch_pcmcia = config_found_sm_loc(parent, "pcmciabus", NULL, &paa,
+	    hd64465pcmcia_print, hd64465pcmcia_submatch);
 
 	if (ch->ch_pcmcia && (__detect_card(ch->ch_channel) == EVENT_INSERT)) {
 		ch->ch_attached = 1;
@@ -391,8 +395,8 @@ int
 hd64465pcmcia_intr(void *arg)
 {
 	struct hd64465pcmcia_channel *ch = (struct hd64465pcmcia_channel *)arg;
-	u_int32_t cscr;
-	u_int8_t r;
+	uint32_t cscr;
+	uint8_t r;
 	int ret = 0;
 
 	cscr = HD64461_PCCCSCR(ch->ch_channel);
@@ -471,7 +475,7 @@ hd64465pcmcia_chip_intr_establish(pcmcia_chipset_handle_t pch,
 	struct hd64465pcmcia_channel *ch = (struct hd64465pcmcia_channel *)pch;
 	int channel = ch->ch_channel;
 	bus_addr_t cscier = HD64461_PCCCSCIER(channel);
-	u_int8_t r;
+	uint8_t r;
 	int s = splhigh();
 
 	hd6446x_intr_priority(ch->ch_channel == 0 ? HD64465_PCC0 : HD64465_PCC1,
@@ -499,7 +503,7 @@ hd64465pcmcia_chip_intr_disestablish(pcmcia_chipset_handle_t pch, void *ih)
 	int channel = ch->ch_channel;
 	bus_addr_t cscier = HD64461_PCCCSCIER(channel);
 	int s = splhigh();
-	u_int8_t r;
+	uint8_t r;
 
 	hd6446x_intr_priority(ch->ch_channel == 0 ? HD64465_PCC0 : HD64465_PCC1,
 	    IPL_TTY);
@@ -682,7 +686,7 @@ hd64465pcmcia_chip_socket_enable(pcmcia_chipset_handle_t pch)
 	struct hd64465pcmcia_channel *ch = (struct hd64465pcmcia_channel *)pch;
 	int channel = ch->ch_channel;
 	bus_addr_t gcr;
-	u_int8_t r;
+	uint8_t r;
 
 	DPRINTF("enable channel %d\n", channel);
 	gcr = HD64461_PCCGCR(channel);
@@ -703,7 +707,7 @@ hd64465pcmcia_chip_socket_settype(pcmcia_chipset_handle_t pch, int type)
 	struct hd64465pcmcia_channel *ch = (struct hd64465pcmcia_channel *)pch;
 	int channel = ch->ch_channel;
 	bus_addr_t gcr;
-	u_int8_t r;
+	uint8_t r;
 
 	DPRINTF("settype channel %d\n", channel);
 	gcr = HD64461_PCCGCR(channel);
@@ -736,7 +740,7 @@ hd64465pcmcia_chip_socket_disable(pcmcia_chipset_handle_t pch)
 enum hd64465pcmcia_event_type
 __detect_card(int channel)
 {
-	u_int8_t r;
+	uint8_t r;
 
 	r = hd64465_reg_read_1(HD64461_PCCISR(channel)) &
 	    (HD64461_PCCISR_CD2 | HD64461_PCCISR_CD1);
@@ -761,7 +765,7 @@ void
 hd64465pcmcia_memory_window16_switch(int channel, enum memory_window_16 window)
 {
 	bus_addr_t a = HD64461_PCCGCR(channel);
-	u_int8_t r;
+	uint8_t r;
 
 	r = hd64465_reg_read_1(a);
 	r &= ~(HD64461_PCCGCR_PA25 | HD64461_PCCGCR_PA24);
@@ -789,7 +793,7 @@ hd64465pcmcia_memory_window16_switch(int channel, enum memory_window_16 window)
 void
 __sh_set_bus_width(int channel, int width)
 {
-	u_int16_t r16;
+	uint16_t r16;
 
 	r16 = _reg_read_2(SH4_BCR2);
 #ifdef HD64465PCMCIA_DEBUG
@@ -808,13 +812,13 @@ __sh_set_bus_width(int channel, int width)
 vaddr_t
 __sh_hd64465_map_2page(paddr_t pa)
 {
-	static const u_int32_t mode[] =
+	static const uint32_t mode[] =
 	{ _PG_PCMCIA_ATTR16, _PG_PCMCIA_MEM16, _PG_PCMCIA_IO };
 	vaddr_t va, v;
 	int i;
 
 	/* allocate kernel virtual */
-	v = va = uvm_km_valloc(kernel_map, 0x03000000);
+	v = va = uvm_km_alloc(kernel_map, 0x03000000, 0, UVM_KMF_VAONLY);
 	if (va == 0) {
 		PRINTF("can't allocate virtual for paddr 0x%08x\n",
 		    (unsigned)pa);
@@ -825,7 +829,8 @@ __sh_hd64465_map_2page(paddr_t pa)
  	/* map to physical addreess with specified memory type. */
 	for (i = 0; i < 3; i++, pa += 0x01000000, va += 0x01000000) {
 		if (__sh_hd64465_map(va, pa, 0x2000, mode[i]) != 0) {
-			uvm_km_free(kernel_map, v, 0x03000000);
+			pmap_kremove(v, 0x03000000);
+			uvm_km_free(kernel_map, v, 0x03000000, UVM_KMF_VAONLY);
 			return (0);
 		}
 	}
@@ -834,7 +839,7 @@ __sh_hd64465_map_2page(paddr_t pa)
 }
 
 int
-__sh_hd64465_map(vaddr_t va, paddr_t pa, size_t sz, u_int32_t flags)
+__sh_hd64465_map(vaddr_t va, paddr_t pa, size_t sz, uint32_t flags)
 {
 	pt_entry_t *pte;
 	paddr_t epa;

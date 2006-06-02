@@ -1,4 +1,4 @@
-/*	$NetBSD: boot.c,v 1.21 2003/11/01 13:02:04 jdolecek Exp $ */
+/*	$NetBSD: boot.c,v 1.26 2005/12/24 22:45:40 perry Exp $ */
 /*-
  * Copyright (c) 1982, 1986 The Regents of the University of California.
  * All rights reserved.
@@ -33,9 +33,10 @@
 #include <sys/param.h>
 #include <sys/reboot.h>
 #include <sys/boot_flag.h>
-#include "lib/libsa/stand.h"
-#include "lib/libsa/loadfile.h"
-#include "lib/libkern/libkern.h"
+
+#include <lib/libsa/stand.h>
+#include <lib/libsa/loadfile.h>
+#include <lib/libkern/libkern.h>
 
 #define V750UCODE(x)    ((x>>8)&255)
 
@@ -150,7 +151,7 @@ Xmain(void)
 					      (void *)marks[MARK_END]);
 			}
 			if (!filelist[fileindex].quiet)
-				printf("%s: boot failed: %s\n", 
+				printf("%s: boot failed: %s\n",
 				    filelist[fileindex].name, strerror(errno));
 #if 0 /* Will hang VAX 4000 machines */
 			if (testkey())
@@ -192,7 +193,7 @@ Xmain(void)
 void
 halt(char *hej)
 {
-	asm("halt");
+	__asm("halt");
 }
 
 void
@@ -230,7 +231,7 @@ fail:			printf("usage: boot [filename] [-asdqv]\n");
 		}
 		bootrpb.rpb_bootr5 = howto;
 	}
-load:	
+load:
 	marks[MARK_START] = 0;
 	err = loadfile(fn, marks, LOAD_KERNEL|COUNT_KERNEL);
 	if (err == 0) {
@@ -257,7 +258,7 @@ load:
 
 #define	extzv(one, two, three,four)	\
 ({			\
-	asm __volatile ("extzv %0,%3,%1,%2"	\
+	__asm volatile ("extzv %0,%3,%1,%2"	\
 			:			\
 			: "g"(one),"m"(two),"mo>"(three),"g"(four));	\
 })

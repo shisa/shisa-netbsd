@@ -1,4 +1,4 @@
-/*	$NetBSD: afsc.c,v 1.34 2004/03/28 18:59:39 mhitch Exp $ */
+/*	$NetBSD: afsc.c,v 1.37 2006/03/08 23:46:22 lukem Exp $ */
 
 /*
  * Copyright (c) 1982, 1990 The Regents of the University of California.
@@ -58,7 +58,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: afsc.c,v 1.34 2004/03/28 18:59:39 mhitch Exp $");
+__KERNEL_RCSID(0, "$NetBSD: afsc.c,v 1.37 2006/03/08 23:46:22 lukem Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -109,10 +109,11 @@ afscmatch(struct device *pdp, struct cfdata *cfp, void *auxp)
 	zap = auxp;
 	if (zap->manid == 514 && zap->prodid == 84)
 		return(1);		/* It's an A4091 SCSI card */
-	if (!is_a4000() || !matchname(auxp, "afsc"))
+	if (!is_a4000() || !matchname("afsc", auxp))
 		return(0);		/* Not on an A4000 or not A4000T SCSI */
 	rp = ztwomap(0xdd0040);
-	if (badaddr((caddr_t)&rp->siop_scratch) || badaddr((caddr_t)&rp->siop_temp)) {
+	if (badaddr((caddr_t)__UNVOLATILE(&rp->siop_scratch)) || 
+	    badaddr((caddr_t)__UNVOLATILE(&rp->siop_temp))) {
 		return(0);
 	}
 	scratch = rp->siop_scratch;
@@ -150,7 +151,7 @@ afscattach(struct device *pdp, struct device *dp, void *auxp)
 	/*
 	 * CTEST7 = 80 [disable burst]
 	 */
-	sc->sc_clock_freq = 50;		/* Clock = 50Mhz */
+	sc->sc_clock_freq = 50;		/* Clock = 50 MHz */
 	sc->sc_ctest7 = SIOP_CTEST7_CDIS;
 	sc->sc_dcntl = SIOP_DCNTL_EA;
 

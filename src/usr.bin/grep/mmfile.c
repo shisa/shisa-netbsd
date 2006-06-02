@@ -1,4 +1,4 @@
-/*	$NetBSD: mmfile.c,v 1.1.1.2.6.1 2005/07/03 21:22:03 tron Exp $	*/
+/*	$NetBSD: mmfile.c,v 1.3 2006/05/15 21:12:21 rillig Exp $	*/
 
 /*-
  * Copyright (c) 1999 James Howard and Dag-Erling Coïdan Smørgrav
@@ -29,7 +29,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: mmfile.c,v 1.1.1.2.6.1 2005/07/03 21:22:03 tron Exp $");
+__RCSID("$NetBSD: mmfile.c,v 1.3 2006/05/15 21:12:21 rillig Exp $");
 #endif /* not lint */
 
 #include <sys/param.h>
@@ -46,7 +46,7 @@ __RCSID("$NetBSD: mmfile.c,v 1.1.1.2.6.1 2005/07/03 21:22:03 tron Exp $");
 #define MAX_MAP_LEN (SIZE_T_MAX / 64)	/* ~70M is reasonable size */
 
 mmf_t *
-mmopen(char *fn, char *mode)
+mmopen(const char *fn, const char *mode)
 {
 	mmf_t *mmf;
 	struct stat st;

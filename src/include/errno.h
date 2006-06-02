@@ -1,4 +1,4 @@
-/*	$NetBSD: errno.h,v 1.7 2005/02/03 04:39:32 perry Exp $	*/
+/*	$NetBSD: errno.h,v 1.9 2005/12/24 19:16:02 perry Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1989, 1993
@@ -50,8 +50,10 @@ int *__errno(void);
 #endif
 
 #if defined(_NETBSD_SOURCE)
-extern __const int sys_nerr __RENAME(__sys_nerr14);
-extern __const char *__const *sys_errlist __RENAME(__sys_errlist14);
+#ifndef __LIBC12_SOURCE__
+extern const int sys_nerr __RENAME(__sys_nerr14);
+extern const char *const *sys_errlist __RENAME(__sys_errlist14);
+#endif
 #endif
 __END_DECLS
 

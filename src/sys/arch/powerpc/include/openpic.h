@@ -1,4 +1,4 @@
-/*	$NetBSD: openpic.h,v 1.3 2001/02/05 19:22:23 briggs Exp $	*/
+/*	$NetBSD: openpic.h,v 1.5 2006/02/16 20:17:14 perry Exp $	*/
 
 /*-
  * Copyright (c) 2000 Tsubai Masanari.  All rights reserved.

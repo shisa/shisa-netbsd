@@ -1,4 +1,4 @@
-/*	$NetBSD: uep.c,v 1.3 2005/02/27 00:27:51 perry Exp $	*/
+/*	$NetBSD: uep.c,v 1.5 2005/12/11 12:24:01 christos Exp $	*/
 
 /*
  * Copyright (c) 2004 The NetBSD Foundation, Inc.
@@ -45,7 +45,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: uep.c,v 1.3 2005/02/27 00:27:51 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: uep.c,v 1.5 2005/12/11 12:24:01 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -94,7 +94,7 @@ Static void uep_intr(usbd_xfer_handle, usbd_private_handle, usbd_status);
 
 Static int	uep_enable(void *);
 Static void	uep_disable(void *);
-Static int	uep_ioctl(void *, u_long, caddr_t, int, usb_proc_ptr);
+Static int	uep_ioctl(void *, u_long, caddr_t, int, struct lwp *);
 
 const struct wsmouse_accessops uep_accessops = {
 	uep_enable,
@@ -133,15 +133,14 @@ USB_ATTACH(uep)
 	usb_interface_descriptor_t *id;
 	usb_endpoint_descriptor_t *ed;
 	struct wsmousedev_attach_args a;
-	char devinfo[1024];
+	char *devinfop;
 	usbd_status err;
 	int i, found;
 
-	usbd_devinfo(dev, 0, devinfo, sizeof(devinfo));
-
+	devinfop = usbd_devinfo_alloc(dev, 0);
 	USB_ATTACH_SETUP;
-
-	printf("%s: %s\n", USBDEVNAME(sc->sc_dev), devinfo);
+	printf("%s: %s\n", USBDEVNAME(sc->sc_dev), devinfop);
+	usbd_devinfo_free(devinfop);
 
 	sc->sc_udev = dev;
 	sc->sc_intr_number = -1;
@@ -320,7 +319,7 @@ uep_disable(void *v)
 }
 
 Static int
-uep_ioctl(void *v, u_long cmd, caddr_t data, int flag, usb_proc_ptr p)
+uep_ioctl(void *v, u_long cmd, caddr_t data, int flag, struct lwp *l)
 {
 	struct uep_softc *sc = v;
 	struct wsmouse_id *id;
@@ -346,7 +345,7 @@ uep_ioctl(void *v, u_long cmd, caddr_t data, int flag, usb_proc_ptr p)
 
 	case WSMOUSEIO_SCALIBCOORDS:
 	case WSMOUSEIO_GCALIBCOORDS:
-		return tpcalib_ioctl(&sc->sc_tpcalib, cmd, data, flag, p);
+		return tpcalib_ioctl(&sc->sc_tpcalib, cmd, data, flag, l);
 	}
 
 	return EPASSTHROUGH;

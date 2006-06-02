@@ -1,4 +1,4 @@
-/* $NetBSD: if_skvar.h,v 1.5 2005/02/27 00:27:33 perry Exp $ */
+/* $NetBSD: if_skvar.h,v 1.10 2006/03/28 18:29:42 riz Exp $ */
 
 /*-
  * Copyright (c) 2003 The NetBSD Foundation, Inc.
@@ -87,10 +87,11 @@
 #ifndef _DEV_PCI_IF_SKVAR_H_
 #define _DEV_PCI_IF_SKVAR_H_
 
-struct sk_jslot {
-	caddr_t			sk_buf;
-	int			sk_inuse;
-};
+#include "rnd.h"
+
+#if NRND > 0
+#include <sys/rnd.h>
+#endif
 
 struct sk_jpool_entry {
 	int                             slot;
@@ -122,6 +123,7 @@ struct sk_chain_data {
 	struct sk_chain		sk_rx_chain[SK_RX_RING_CNT];
 	struct sk_txmap_entry	*sk_tx_map[SK_TX_RING_CNT];
 	bus_dmamap_t		sk_rx_map[SK_RX_RING_CNT];
+	bus_dmamap_t		sk_rx_jumbo_map;
 	int			sk_tx_prod;
 	int			sk_tx_cons;
 	int			sk_tx_cnt;
@@ -129,7 +131,7 @@ struct sk_chain_data {
 	int			sk_rx_cons;
 	int			sk_rx_cnt;
 	/* Stick the jumbo mem management stuff here too. */
-	struct sk_jslot		sk_jslots[SK_JSLOTS];
+	caddr_t			sk_jslots[SK_JSLOTS];
 	void			*sk_jumbo_buf;
 
 };
@@ -199,15 +201,21 @@ struct sk_softc {
 	struct resource		*sk_res;	/* I/O or shared mem handle */
 	u_int8_t		sk_type;
 	u_int8_t		sk_rev;
-  	char			*sk_name;
+  	const char		*sk_name;
 	char			*sk_vpd_prodname;
 	char			*sk_vpd_readonly;
 	u_int32_t		sk_rboff;	/* RAMbuffer offset */
 	u_int32_t		sk_ramsize;	/* amount of RAM on NIC */
 	u_int32_t		sk_pmd;		/* physical media type */
 	u_int32_t		sk_intrmask;
+	struct sysctllog	*sk_clog;
+	int			sk_int_mod;
+	int			sk_int_mod_pending;
 	bus_dma_tag_t		sc_dmatag;
 	struct sk_if_softc	*sk_if[2];
+#if NRND > 0
+	rndsource_element_t     rnd_source;
+#endif
 };
 
 /* Softc for each logical interface */

@@ -1,4 +1,4 @@
-/*	$NetBSD: autoconf.c,v 1.48 2004/12/13 02:14:13 chs Exp $	*/
+/*	$NetBSD: autoconf.c,v 1.52 2005/12/11 12:16:54 christos Exp $	*/
 
 /*
  * Copyright (c) 1995 Leo Weppelman
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.48 2004/12/13 02:14:13 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.52 2005/12/11 12:16:54 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -63,7 +63,7 @@ cpu_configure()
 	
 	atari_realconfig = 1;
 
-	if (config_rootfound("mainbus", "mainbus") == NULL)
+	if (config_rootfound("mainbus", __UNCONST("mainbus")) == NULL)
 		panic("no mainbus found");
 }
 
@@ -84,7 +84,7 @@ simple_devprint(auxp, pnp)
 }
 
 /*
- * use config_search to find appropriate device, then call that device
+ * use config_search_ia to find appropriate device, then call that device
  * directly with NULL device variable storage.  A device can then 
  * always tell the difference between the real and console init 
  * by checking for NULL.
@@ -112,7 +112,7 @@ atari_config_found(pcfp, pdp, auxp, pfn)
 	pdp->dv_cfdriver = config_cfdriver_lookup(pcfp->cf_name);
 	pdp->dv_unit = pcfp->cf_unit;
 
-	if ((cf = config_search((cfmatch_t)NULL, pdp, auxp)) != NULL) {
+	if ((cf = config_search_ia(NULL, pdp, NULL, auxp)) != NULL) {
 		ca = config_cfattach_lookup(cf->cf_name, cf->cf_atname);
 		if (ca != NULL) {
 			(*ca->ca_attach)(pdp, NULL, auxp);
@@ -139,7 +139,7 @@ config_console()
 	/*
 	 * we need mainbus' cfdata.
 	 */
-	cf = config_rootsearch(NULL, "mainbus", "mainbus");
+	cf = config_rootsearch(NULL, "mainbus", __UNCONST("mainbus"));
 	if (cf == NULL)
 		panic("no mainbus");
 
@@ -149,9 +149,9 @@ config_console()
 	 * some setup for the 'grf-side'. This make it possible to use
 	 * a PCI card for both wscons and grfabs.
 	 */
-	atari_config_found(cf, NULL, "pcib"  , NULL);
-	atari_config_found(cf, NULL, "isab"  , NULL);
-	atari_config_found(cf, NULL, "grfbus", NULL);
+	atari_config_found(cf, NULL, __UNCONST("pcib")  , NULL);
+	atari_config_found(cf, NULL, __UNCONST("isab")  , NULL);
+	atari_config_found(cf, NULL, __UNCONST("grfbus"), NULL);
 }
 
 /*
@@ -239,10 +239,10 @@ findroot(void)
 
 			/* Open disk; forces read of disklabel. */
 			if ((*bdev->d_open)(MAKEDISKDEV(maj,
-			    unit, 0), FREAD|FNONBLOCK, 0, &proc0))
+			    unit, 0), FREAD|FNONBLOCK, 0, &lwp0))
 				continue;
 			(void)(*bdev->d_close)(MAKEDISKDEV(maj,
-			    unit, 0), FREAD|FNONBLOCK, 0, &proc0);
+			    unit, 0), FREAD|FNONBLOCK, 0, &lwp0);
 			
 			pp = &dkp->dk_label->d_partitions[booted_partition];
 			if (pp->p_size != 0 && pp->p_fstype == FS_BSDFFS) {
@@ -287,19 +287,19 @@ mbattach(pdp, dp, auxp)
 	mb_attached = 1;
 
 	printf ("\n");
-	config_found(dp, "clock"   , simple_devprint);
-	config_found(dp, "grfbus"  , simple_devprint);
-	config_found(dp, "kbd"     , simple_devprint);
-	config_found(dp, "fdc"     , simple_devprint);
-	config_found(dp, "ser"     , simple_devprint);
-	config_found(dp, "zs"      , simple_devprint);
-	config_found(dp, "ncrscsi" , simple_devprint);
-	config_found(dp, "nvr"     , simple_devprint);
-	config_found(dp, "lpt"     , simple_devprint);
-	config_found(dp, "wdc"     , simple_devprint);
-	config_found(dp, "isab"    , simple_devprint);
-	config_found(dp, "pcib"    , simple_devprint);
-	config_found(dp, "avmebus" , simple_devprint);
+	config_found(dp, __UNCONST("clock")   , simple_devprint);
+	config_found(dp, __UNCONST("grfbus")  , simple_devprint);
+	config_found(dp, __UNCONST("kbd")     , simple_devprint);
+	config_found(dp, __UNCONST("fdc")     , simple_devprint);
+	config_found(dp, __UNCONST("ser")     , simple_devprint);
+	config_found(dp, __UNCONST("zs")      , simple_devprint);
+	config_found(dp, __UNCONST("ncrscsi") , simple_devprint);
+	config_found(dp, __UNCONST("nvr")     , simple_devprint);
+	config_found(dp, __UNCONST("lpt")     , simple_devprint);
+	config_found(dp, __UNCONST("wdc")     , simple_devprint);
+	config_found(dp, __UNCONST("isab")    , simple_devprint);
+	config_found(dp, __UNCONST("pcib")    , simple_devprint);
+	config_found(dp, __UNCONST("avmebus") , simple_devprint);
 }
 
 int

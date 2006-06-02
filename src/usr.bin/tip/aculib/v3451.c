@@ -1,4 +1,4 @@
-/*	$NetBSD: v3451.c,v 1.10 2004/04/23 22:11:44 christos Exp $	*/
+/*	$NetBSD: v3451.c,v 1.12 2006/04/03 02:25:27 perry Exp $	*/
 
 /*
  * Copyright (c) 1983, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)v3451.c	8.1 (Berkeley) 6/6/93";
 #endif
-__RCSID("$NetBSD: v3451.c,v 1.10 2004/04/23 22:11:44 christos Exp $");
+__RCSID("$NetBSD: v3451.c,v 1.12 2006/04/03 02:25:27 perry Exp $");
 #endif /* not lint */
 
 /*
@@ -44,16 +44,14 @@ __RCSID("$NetBSD: v3451.c,v 1.10 2004/04/23 22:11:44 christos Exp $");
 
 static	jmp_buf Sjbuf;
 
-static	void	alarmtr __P((int));
-static	int	expect __P((const char *));
-static	int	notin __P((const char *, char *));
-static	int	prefix __P((const char *, char *));
-static	void	vawrite __P((const char *, int));
+static	void	alarmtr(int);
+static	int	expect(const char *);
+static	int	notin(const char *, char *);
+static	int	prefix(const char *, char *);
+static	void	vawrite(const char *, int);
 
 int
-v3451_dialer(num, acu)
-	char *num;
-	char *acu;
+v3451_dialer(char *num, char *acu)
 {
 	sig_t func;
 	int ok;
@@ -70,9 +68,6 @@ v3451_dialer(num, acu)
 	vawrite("\005\r", 2 + slow);
 	if (!expect("READY")) {
 		printf("can't synchronize with vadic 3451\n");
-#ifdef ACULOG
-		logent(value(HOST), num, "vadic", "can't synch up");
-#endif
 		return (0);
 	}
 	tcgetattr(FD, &cntrl);
@@ -82,18 +77,12 @@ v3451_dialer(num, acu)
 	vawrite("D\r", 2 + slow);
 	if (!expect("NUMBER?")) {
 		printf("Vadic will not accept dial command\n");
-#ifdef ACULOG
-		logent(value(HOST), num, "vadic", "will not accept dial");
-#endif
 		return (0);
 	}
 	snprintf(phone, sizeof phone, "%s\r", num);
 	vawrite(phone, 1 + slow);
 	if (!expect(phone)) {
 		printf("Vadic will not accept phone number\n");
-#ifdef ACULOG
-		logent(value(HOST), num, "vadic", "will not accept number");
-#endif
 		return (0);
 	}
 	func = signal(SIGINT,SIG_IGN);
@@ -106,9 +95,6 @@ v3451_dialer(num, acu)
 	vawrite("\r", 1 + slow);
 	if (!expect("DIALING:")) {
 		printf("Vadic failed to dial\n");
-#ifdef ACULOG
-		logent(value(HOST), num, "vadic", "failed to dial");
-#endif
 		return (0);
 	}
 	if (boolean(value(VERBOSE)))
@@ -117,9 +103,6 @@ v3451_dialer(num, acu)
 	signal(SIGINT, func);
 	if (!ok) {
 		printf("call failed\n");
-#ifdef ACULOG
-		logent(value(HOST), num, "vadic", "call failed");
-#endif
 		return (0);
 	}
 	tcflush(FD, TCIOFLUSH);
@@ -127,23 +110,21 @@ v3451_dialer(num, acu)
 }
 
 void
-v3451_disconnect()
+v3451_disconnect(void)
 {
 
 	close(FD);
 }
 
 void
-v3451_abort()
+v3451_abort(void)
 {
 
 	close(FD);
 }
 
 static void
-vawrite(cp, delay)
-	const char *cp;
-	int delay;
+vawrite(const char *cp, int delay)
 {
 
 	for (; *cp; sleep(delay), cp++)
@@ -151,8 +132,7 @@ vawrite(cp, delay)
 }
 
 static int
-expect(cp)
-	const char *cp;
+expect(const char *cp)
 {
 	char buf[300];
 	char *rp = buf;
@@ -196,17 +176,14 @@ expect(cp)
 }
 
 static void
-alarmtr(dummy)
-	int dummy;
+alarmtr(int dummy)
 {
 
 	longjmp(Sjbuf, 1);
 }
 
 static int
-notin(sh, lg)
-	const char *sh;
-	char *lg;
+notin(const char *sh, char *lg)
 {
 
 	for (; *lg; lg++)
@@ -216,9 +193,7 @@ notin(sh, lg)
 }
 
 static int
-prefix(s1, s2)
-	const char *s1;
-	char *s2;
+prefix(const char *s1, char *s2)
 {
 	char c;
 

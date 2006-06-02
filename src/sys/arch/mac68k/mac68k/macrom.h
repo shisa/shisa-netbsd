@@ -1,4 +1,4 @@
-/*	$NetBSD: macrom.h,v 1.14 2005/01/15 16:00:59 chs Exp $	*/
+/*	$NetBSD: macrom.h,v 1.17 2005/12/24 22:45:35 perry Exp $	*/
 
 /*-
  * Copyright (C) 1994	Bradley A. Grantham
@@ -165,7 +165,7 @@ typedef struct rsrc_s {
 } rsrc_t;
 
 typedef struct romvec_s {
-	char *romident; 	/* just to print it out */
+	const char *romident; 	/* just to print it out */
 	caddr_t adbintr;	/* where is ADB interrupt */
 	caddr_t pmintr; 	/* where is ADB/PM interrupt, on machines */
 				/*  that have it */
@@ -239,6 +239,6 @@ int	mach_cputype(void);
 
 /* trace all instructions, not just flow changes. */
 #define tron() \
-	asm("movw %%sr, %%d0 ; orw #0x8000, %%d0 ; movw %%d0, %%sr" : : : "d0")
+	__asm("movw %%sr, %%d0 ; orw #0x8000, %%d0 ; movw %%d0, %%sr" : : : "d0")
 #define troff() \
-	asm("movw %%sr, %%d0 ; andw #0x3fff, %%d0 ; movw %%d0, %%sr" : : : "d0")
+	__asm("movw %%sr, %%d0 ; andw #0x3fff, %%d0 ; movw %%d0, %%sr" : : : "d0")

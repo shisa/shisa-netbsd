@@ -1,4 +1,4 @@
-/*	$NetBSD: isapnp.c,v 1.45 2005/02/27 00:27:21 perry Exp $	*/
+/*	$NetBSD: isapnp.c,v 1.50 2006/03/29 06:51:47 thorpej Exp $	*/
 
 /*-
  * Copyright (c) 1996 The NetBSD Foundation, Inc.
@@ -41,7 +41,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: isapnp.c,v 1.45 2005/02/27 00:27:21 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: isapnp.c,v 1.50 2006/03/29 06:51:47 thorpej Exp $");
 
 #include "isadma.h"
 
@@ -65,7 +65,7 @@ __KERNEL_RCSID(0, "$NetBSD: isapnp.c,v 1.45 2005/02/27 00:27:21 perry Exp $");
 #endif
 
 static void isapnp_init(struct isapnp_softc *);
-static __inline u_char isapnp_shift_bit(struct isapnp_softc *);
+static inline u_char isapnp_shift_bit(struct isapnp_softc *);
 static int isapnp_findcard(struct isapnp_softc *);
 static void isapnp_free_region(bus_space_tag_t, struct isapnp_region *);
 static int isapnp_alloc_region(bus_space_tag_t, struct isapnp_region *);
@@ -82,7 +82,7 @@ static void isapnp_print_pin(const char *, struct isapnp_pin *, size_t);
 static int isapnp_print(void *, const char *);
 #ifdef _KERNEL
 static int isapnp_submatch(struct device *, struct cfdata *,
-				const locdesc_t *, void *);
+				const int *, void *);
 #endif
 static int isapnp_find(struct isapnp_softc *, int);
 static int isapnp_match(struct device *, struct cfdata *, void *);
@@ -127,7 +127,7 @@ isapnp_init(sc)
 /* isapnp_shift_bit():
  *	Read a bit at a time from the config card.
  */
-static __inline u_char
+static inline u_char
 isapnp_shift_bit(sc)
 	struct isapnp_softc *sc;
 {
@@ -508,16 +508,15 @@ isapnp_id_to_vendor(v, id)
 	char   *v;
 	const u_char *id;
 {
-	static const char hex[] = "0123456789ABCDEF";
 	char *p = v;
 
 	*p++ = 'A' + (id[0] >> 2) - 1;
 	*p++ = 'A' + ((id[0] & 3) << 3) + (id[1] >> 5) - 1;
 	*p++ = 'A' + (id[1] & 0x1f) - 1;
-	*p++ = hex[id[2] >> 4];
-	*p++ = hex[id[2] & 0x0f];
-	*p++ = hex[id[3] >> 4];
-	*p++ = hex[id[3] & 0x0f];
+	*p++ = HEXDIGITS[id[2] >> 4];
+	*p++ = HEXDIGITS[id[2] & 0x0f];
+	*p++ = HEXDIGITS[id[3] >> 4];
+	*p++ = HEXDIGITS[id[3] & 0x0f];
 	*p = '\0';
 
 	return v;
@@ -605,7 +604,7 @@ static int
 isapnp_submatch(parent, match, ldesc, aux)
 	struct device *parent;
 	struct cfdata *match;
-	const locdesc_t *ldesc;
+	const int *ldesc;
 	void *aux;
 {
 
@@ -943,7 +942,7 @@ isapnp_attach(parent, self, aux)
 	struct device *parent, *self;
 	void *aux;
 {
-	struct isapnp_softc *sc = (struct isapnp_softc *) self;
+	struct isapnp_softc *sc = device_private(self);
 	struct isa_attach_args *ia = aux;
 
 	sc->sc_iot = ia->ia_iot;
@@ -978,7 +977,7 @@ void
 isapnp_callback(self)
 	struct device *self;
 {
-	struct isapnp_softc *sc = (struct isapnp_softc *)self;
+	struct isapnp_softc *sc = device_private(self);
 	struct isapnp_attach_args *ipa, *lpa;
 	int c, d;
 

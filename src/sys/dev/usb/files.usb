@@ -1,4 +1,4 @@
-#	$NetBSD: files.usb,v 1.58.6.2 2005/04/17 10:34:15 tron Exp $
+#	$NetBSD: files.usb,v 1.66 2006/04/03 08:15:48 scw Exp $
 #
 # Config file and device description for machine-independent USB code.
 # Included by ports that need it.  Ports that use it must provide
@@ -72,6 +72,7 @@ attach	uhid at uhidbus
 file	dev/usb/uhid.c			uhid			needs-flag
 
 # Keyboards
+defparam	UKBD_LAYOUT
 device	ukbd: hid, wskbddev
 attach	ukbd at uhidbus
 file	dev/usb/ukbd.c			ukbd			needs-flag
@@ -86,6 +87,11 @@ file	dev/usb/ums.c			ums
 device	uep: wsmousedev, tpcalib
 attach	uep at uhub
 file	dev/usb/uep.c			uep			needs-flag
+
+# Cypress microcontroller based serial adpaters
+device	ucycom: hid
+attach	ucycom at uhidbus
+file	dev/usb/ucycom.c		ucycom			needs-flag
 
 # Printers
 device	ulpt
@@ -226,6 +232,11 @@ device	ubsa: ucombus
 attach	ubsa at uhub
 file	dev/usb/ubsa.c			ubsa
 
+# iPAQ PDAs
+device  uipaq: ucombus
+attach  uipaq at uhub
+file    dev/usb/uipaq.c			uipaq
+
 # Kyocera AIR-EDGE PHONE
 device	ukyopon: ucombus, umodem_common
 attach	ukyopon at uhub
@@ -247,3 +258,12 @@ file	dev/usb/usscanner.c		usscanner
 device	atu: ether, ifnet, arp, wlan
 attach	atu at uhub
 file	dev/usb/if_atu.c		atu
+
+# Ralink Technology RT2500USB
+attach	ral at uhub with ural
+file	dev/usb/if_ural.c		ural
+
+# Topfield digital PVRs
+device	utoppy
+attach	utoppy at uhub
+file	dev/usb/utoppy.c		utoppy

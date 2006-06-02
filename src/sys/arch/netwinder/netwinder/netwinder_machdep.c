@@ -1,4 +1,4 @@
-/*	$NetBSD: netwinder_machdep.c,v 1.58 2004/12/12 20:42:54 abs Exp $	*/
+/*	$NetBSD: netwinder_machdep.c,v 1.61 2006/04/05 00:37:11 uwe Exp $	*/
 
 /*
  * Copyright (c) 1997,1998 Mark Brinicombe.
@@ -40,7 +40,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: netwinder_machdep.c,v 1.58 2004/12/12 20:42:54 abs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: netwinder_machdep.c,v 1.61 2006/04/05 00:37:11 uwe Exp $");
 
 #include "opt_ddb.h"
 #include "opt_ipkdb.h"
@@ -154,7 +154,7 @@ pv_addr_t systempage;
 pv_addr_t irqstack;
 pv_addr_t undstack;
 pv_addr_t abtstack;
-pv_addr_t kernelstack;
+extern pv_addr_t kernelstack;	/* in arm32_machdep.c */
 
 vm_offset_t msgbufphys;
 
@@ -186,7 +186,7 @@ pv_addr_t kernel_pt_table[NUM_KERNEL_PTS];
 #define KERNEL_VM_SIZE		0x0C000000
 #endif
 
-struct user *proc0paddr;
+extern struct user *proc0paddr;	/* in arm32_machdep.c */
 
 /* Prototypes */
 
@@ -921,7 +921,7 @@ void
 consinit(void)
 {
 	static int consinit_called = 0;
-	char *console = CONSDEVNAME;
+	const char *console = CONSDEVNAME;
 
 	if (consinit_called != 0)
 		return;

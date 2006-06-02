@@ -1,4 +1,4 @@
-/*	$NetBSD: if_wm.c,v 1.100.2.3 2005/08/28 09:51:46 tron Exp $	*/
+/*	$NetBSD: if_wm.c,v 1.115 2006/05/05 18:04:42 thorpej Exp $	*/
 
 /*
  * Copyright (c) 2001, 2002, 2003, 2004 Wasabi Systems, Inc.
@@ -47,7 +47,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_wm.c,v 1.100.2.3 2005/08/28 09:51:46 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_wm.c,v 1.115 2006/05/05 18:04:42 thorpej Exp $");
 
 #include "bpfilter.h"
 #include "rnd.h"
@@ -152,7 +152,7 @@ int	wm_debug = WM_DEBUG_TX|WM_DEBUG_RX|WM_DEBUG_LINK;
 
 /*
  * Control structures are DMA'd to the i82542 chip.  We allocate them in
- * a single clump that maps to a single DMA segment to make serveral things
+ * a single clump that maps to a single DMA segment to make several things
  * easier.
  */
 struct wm_control_data_82544 {
@@ -276,6 +276,7 @@ struct wm_softc {
 	struct evcnt sc_ev_rxtusum;	/* TCP/UDP cksums checked in-bound */
 	struct evcnt sc_ev_txipsum;	/* IP checksums comp. out-bound */
 	struct evcnt sc_ev_txtusum;	/* TCP/UDP cksums comp. out-bound */
+	struct evcnt sc_ev_txtusum6;	/* TCP/UDP v6 cksums comp. out-bound */
 	struct evcnt sc_ev_txtso;	/* TCP seg offload out-bound */
 	struct evcnt sc_ev_txtsopain;	/* painful header manip. for TSO */
 
@@ -356,6 +357,7 @@ do {									\
 #define	WM_F_HAS_MII		0x01	/* has MII */
 #define	WM_F_EEPROM_HANDSHAKE	0x02	/* requires EEPROM handshake */
 #define	WM_F_EEPROM_SPI		0x04	/* EEPROM is SPI */
+#define	WM_F_EEPROM_INVALID	0x08	/* EEPROM not present (bad checksum) */
 #define	WM_F_IOH_VALID		0x10	/* I/O handle is valid */
 #define	WM_F_BUS64		0x20	/* bus is 64-bit */
 #define	WM_F_PCIX		0x40	/* bus is PCI-X */
@@ -462,6 +464,7 @@ static void	wm_reset(struct wm_softc *);
 static void	wm_rxdrain(struct wm_softc *);
 static int	wm_add_rxbuf(struct wm_softc *, int);
 static int	wm_read_eeprom(struct wm_softc *, int, int, u_int16_t *);
+static int	wm_validate_eeprom_checksum(struct wm_softc *);
 static void	wm_tick(void *);
 
 static void	wm_set_filter(struct wm_softc *);
@@ -645,7 +648,7 @@ static char wm_txseg_evcnt_names[WM_NTXSEGS][sizeof("txsegXXX")];
 #endif /* WM_EVENT_COUNTERS */
 
 #if 0 /* Not currently used */
-static __inline uint32_t
+static inline uint32_t
 wm_io_read(struct wm_softc *sc, int reg)
 {
 
@@ -654,7 +657,7 @@ wm_io_read(struct wm_softc *sc, int reg)
 }
 #endif
 
-static __inline void
+static inline void
 wm_io_write(struct wm_softc *sc, int reg, uint32_t val)
 {
 
@@ -662,8 +665,8 @@ wm_io_write(struct wm_softc *sc, int reg, uint32_t val)
 	bus_space_write_4(sc->sc_iot, sc->sc_ioh, 4, val);
 }
 
-static __inline void
-wm_set_dma_addr(__volatile wiseman_addr_t *wa, bus_addr_t v)
+static inline void
+wm_set_dma_addr(volatile wiseman_addr_t *wa, bus_addr_t v)
 {
 	wa->wa_low = htole32(v & 0xffffffffU);
 	if (sizeof(bus_addr_t) == 8)
@@ -713,6 +716,8 @@ wm_attach(struct device *parent, struct device *self, void *aux)
 	int memh_valid;
 	int i, rseg, error;
 	const struct wm_product *wmp;
+	prop_data_t ea;
+	prop_number_t pn;
 	uint8_t enaddr[ETHER_ADDR_LEN];
 	uint16_t myea[ETHER_ADDR_LEN / 2], cfg1, cfg2, swdpin;
 	pcireg_t preg, memtype;
@@ -1065,29 +1070,56 @@ wm_attach(struct device *parent, struct device *self, void *aux)
 		sc->sc_flags |= WM_F_EEPROM_SPI;
 		sc->sc_ee_addrbits = (reg & EECD_EE_ABITS) ? 16 : 8;
 	}
-	if (sc->sc_flags & WM_F_EEPROM_SPI)
-		eetype = "SPI";
-	else
-		eetype = "MicroWire";
-	aprint_verbose("%s: %u word (%d address bits) %s EEPROM\n",
-	    sc->sc_dev.dv_xname, 1U << sc->sc_ee_addrbits,
-	    sc->sc_ee_addrbits, eetype);
 
 	/*
-	 * Read the Ethernet address from the EEPROM.
+	 * Defer printing the EEPROM type until after verifying the checksum
+	 * This allows the EEPROM type to be printed correctly in the case
+	 * that no EEPROM is attached.
 	 */
-	if (wm_read_eeprom(sc, EEPROM_OFF_MACADDR,
-	    sizeof(myea) / sizeof(myea[0]), myea)) {
-		aprint_error("%s: unable to read Ethernet address\n",
-		    sc->sc_dev.dv_xname);
-		return;
+
+ 
+	/*
+	 * Validate the EEPROM checksum. If the checksum fails, flag this for
+	 * later, so we can fail future reads from the EEPROM.
+	 */
+	if (wm_validate_eeprom_checksum(sc))
+		sc->sc_flags |= WM_F_EEPROM_INVALID;
+
+	if (sc->sc_flags & WM_F_EEPROM_INVALID)
+		aprint_verbose("%s: No EEPROM\n", sc->sc_dev.dv_xname);
+	else {
+		if (sc->sc_flags & WM_F_EEPROM_SPI)
+			eetype = "SPI";
+		else
+			eetype = "MicroWire";
+		aprint_verbose("%s: %u word (%d address bits) %s EEPROM\n",
+		    sc->sc_dev.dv_xname, 1U << sc->sc_ee_addrbits,
+		    sc->sc_ee_addrbits, eetype);
 	}
-	enaddr[0] = myea[0] & 0xff;
-	enaddr[1] = myea[0] >> 8;
-	enaddr[2] = myea[1] & 0xff;
-	enaddr[3] = myea[1] >> 8;
-	enaddr[4] = myea[2] & 0xff;
-	enaddr[5] = myea[2] >> 8;
+
+	/*
+	 * Read the Ethernet address from the EEPROM, if not first found
+	 * in device properties.
+	 */
+	ea = prop_dictionary_get(device_properties(&sc->sc_dev), "mac-addr");
+	if (ea != NULL) {
+		KASSERT(prop_object_type(ea) == PROP_TYPE_DATA);
+		KASSERT(prop_data_size(ea) == ETHER_ADDR_LEN);
+		memcpy(enaddr, prop_data_data_nocopy(ea), ETHER_ADDR_LEN);
+	} else {
+		if (wm_read_eeprom(sc, EEPROM_OFF_MACADDR,
+		    sizeof(myea) / sizeof(myea[0]), myea)) {
+			aprint_error("%s: unable to read Ethernet address\n",
+			    sc->sc_dev.dv_xname);
+			return;
+		}
+		enaddr[0] = myea[0] & 0xff;
+		enaddr[1] = myea[0] >> 8;
+		enaddr[2] = myea[1] & 0xff;
+		enaddr[3] = myea[1] >> 8;
+		enaddr[4] = myea[2] & 0xff;
+		enaddr[5] = myea[2] >> 8;
+	}
 
 	/*
 	 * Toggle the LSB of the MAC address on the second port
@@ -1105,21 +1137,44 @@ wm_attach(struct device *parent, struct device *self, void *aux)
 	 * Read the config info from the EEPROM, and set up various
 	 * bits in the control registers based on their contents.
 	 */
-	if (wm_read_eeprom(sc, EEPROM_OFF_CFG1, 1, &cfg1)) {
-		aprint_error("%s: unable to read CFG1 from EEPROM\n",
-		    sc->sc_dev.dv_xname);
-		return;
-	}
-	if (wm_read_eeprom(sc, EEPROM_OFF_CFG2, 1, &cfg2)) {
-		aprint_error("%s: unable to read CFG2 from EEPROM\n",
-		    sc->sc_dev.dv_xname);
-		return;
-	}
-	if (sc->sc_type >= WM_T_82544) {
-		if (wm_read_eeprom(sc, EEPROM_OFF_SWDPIN, 1, &swdpin)) {
-			aprint_error("%s: unable to read SWDPIN from EEPROM\n",
+	pn = prop_dictionary_get(device_properties(&sc->sc_dev),
+				 "i82543-cfg1");
+	if (pn != NULL) {
+		KASSERT(prop_object_type(pn) == PROP_TYPE_NUMBER);
+		cfg1 = (uint16_t) prop_number_integer_value(pn);
+	} else {
+		if (wm_read_eeprom(sc, EEPROM_OFF_CFG1, 1, &cfg1)) {
+			aprint_error("%s: unable to read CFG1\n",
 			    sc->sc_dev.dv_xname);
 			return;
+		}
+	}
+
+	pn = prop_dictionary_get(device_properties(&sc->sc_dev),
+				 "i82543-cfg2");
+	if (pn != NULL) {
+		KASSERT(prop_object_type(pn) == PROP_TYPE_NUMBER);
+		cfg2 = (uint16_t) prop_number_integer_value(pn);
+	} else {
+		if (wm_read_eeprom(sc, EEPROM_OFF_CFG2, 1, &cfg2)) {
+			aprint_error("%s: unable to read CFG2\n",
+			    sc->sc_dev.dv_xname);
+			return;
+		}
+	}
+
+	if (sc->sc_type >= WM_T_82544) {
+		pn = prop_dictionary_get(device_properties(&sc->sc_dev),
+					 "i82543-swdpin");
+		if (pn != NULL) {
+			KASSERT(prop_object_type(pn) == PROP_TYPE_NUMBER);
+			swdpin = (uint16_t) prop_number_integer_value(pn);
+		} else {
+			if (wm_read_eeprom(sc, EEPROM_OFF_SWDPIN, 1, &swdpin)) {
+				aprint_error("%s: unable to read SWDPIN\n",
+				    sc->sc_dev.dv_xname);
+				return;
+			}
 		}
 	}
 
@@ -1218,7 +1273,11 @@ wm_attach(struct device *parent, struct device *self, void *aux)
 	 */
 	if (sc->sc_type >= WM_T_82543)
 		ifp->if_capabilities |=
-		    IFCAP_CSUM_IPv4 | IFCAP_CSUM_TCPv4 | IFCAP_CSUM_UDPv4;
+		    IFCAP_CSUM_IPv4_Tx | IFCAP_CSUM_IPv4_Rx |
+		    IFCAP_CSUM_TCPv4_Tx | IFCAP_CSUM_TCPv4_Rx |
+		    IFCAP_CSUM_UDPv4_Tx | IFCAP_CSUM_UDPv4_Rx |
+		    IFCAP_CSUM_TCPv6_Tx |
+		    IFCAP_CSUM_UDPv6_Tx;
 
 	/* 
 	 * If we're a i82544 or greater (except i82547), we can do
@@ -1262,6 +1321,8 @@ wm_attach(struct device *parent, struct device *self, void *aux)
 	    NULL, sc->sc_dev.dv_xname, "txipsum");
 	evcnt_attach_dynamic(&sc->sc_ev_txtusum, EVCNT_TYPE_MISC,
 	    NULL, sc->sc_dev.dv_xname, "txtusum");
+	evcnt_attach_dynamic(&sc->sc_ev_txtusum6, EVCNT_TYPE_MISC,
+	    NULL, sc->sc_dev.dv_xname, "txtusum6");
 
 	evcnt_attach_dynamic(&sc->sc_ev_txtso, EVCNT_TYPE_MISC,
 	    NULL, sc->sc_dev.dv_xname, "txtso");
@@ -1367,6 +1428,7 @@ wm_tx_offload(struct wm_softc *sc, struct wm_txsoft *txs, uint32_t *cmdp,
 	eh = mtod(m0, struct ether_header *);
 	switch (htons(eh->ether_type)) {
 	case ETHERTYPE_IP:
+	case ETHERTYPE_IPV6:
 		offset = ETHER_HDR_LEN;
 		break;
 
@@ -1383,7 +1445,12 @@ wm_tx_offload(struct wm_softc *sc, struct wm_txsoft *txs, uint32_t *cmdp,
 		return (0);
 	}
 
-	iphl = M_CSUM_DATA_IPv4_IPHL(m0->m_pkthdr.csum_data);
+	if ((m0->m_pkthdr.csum_flags &
+	    (M_CSUM_TSOv4|M_CSUM_UDPv4|M_CSUM_TCPv4)) != 0) {
+		iphl = M_CSUM_DATA_IPv4_IPHL(m0->m_pkthdr.csum_data);
+	} else {
+		iphl = M_CSUM_DATA_IPv6_HL(m0->m_pkthdr.csum_data);
+	}
 
 	cmd = WTX_CMD_DEXT | WTX_DTYP_D;
 	cmdlen = WTX_CMD_DEXT | WTX_DTYP_C | WTX_CMD_IDE;
@@ -1465,8 +1532,17 @@ wm_tx_offload(struct wm_softc *sc, struct wm_txsoft *txs, uint32_t *cmdp,
 		WM_EVCNT_INCR(&sc->sc_ev_txtusum);
 		fields |= WTX_TXSM;
 		tucs = WTX_TCPIP_TUCSS(offset) |
-		   WTX_TCPIP_TUCSO(offset + M_CSUM_DATA_IPv4_OFFSET(m0->m_pkthdr.csum_data)) |
-		   WTX_TCPIP_TUCSE(0) /* rest of packet */;
+		    WTX_TCPIP_TUCSO(offset +
+		    M_CSUM_DATA_IPv4_OFFSET(m0->m_pkthdr.csum_data)) |
+		    WTX_TCPIP_TUCSE(0) /* rest of packet */;
+	} else if ((m0->m_pkthdr.csum_flags &
+	    (M_CSUM_TCPv6|M_CSUM_UDPv6)) != 0) {
+		WM_EVCNT_INCR(&sc->sc_ev_txtusum6);
+		fields |= WTX_TXSM;
+		tucs = WTX_TCPIP_TUCSS(offset) |
+		    WTX_TCPIP_TUCSO(offset +
+		    M_CSUM_DATA_IPv6_OFFSET(m0->m_pkthdr.csum_data)) |
+		    WTX_TCPIP_TUCSE(0) /* rest of packet */;
 	} else {
 		/* Just initialize it to a valid TCP context. */
 		tucs = WTX_TCPIP_TUCSS(offset) |
@@ -1725,7 +1801,7 @@ wm_start(struct ifnet *ifp)
 			 * layer that there are no more slots left.
 			 */
 			DPRINTF(WM_DEBUG_TX,
-			    ("%s: TX: need %d (%) descriptors, have %d\n",
+			    ("%s: TX: need %d (%d) descriptors, have %d\n",
 			    sc->sc_dev.dv_xname, dmamap->dm_nsegs, segs_needed,
 			    sc->sc_txfree - 1));
 			ifp->if_flags |= IFF_OACTIVE;
@@ -1777,7 +1853,8 @@ wm_start(struct ifnet *ifp)
 
 		/* Set up offload parameters for this packet. */
 		if (m0->m_pkthdr.csum_flags &
-		    (M_CSUM_IPv4|M_CSUM_TCPv4|M_CSUM_UDPv4)) {
+		    (M_CSUM_IPv4|M_CSUM_TCPv4|M_CSUM_UDPv4|
+		    M_CSUM_TCPv6|M_CSUM_UDPv6)) {
 			if (wm_tx_offload(sc, txs, &cksumcmd,
 					  &cksumfields) != 0) {
 				/* Error message already displayed. */
@@ -1831,10 +1908,10 @@ wm_start(struct ifnet *ifp)
 				lasttx = nexttx;
 
 				DPRINTF(WM_DEBUG_TX,
-				    ("%s: TX: desc %d: low 0x%08x, "
+				    ("%s: TX: desc %d: low 0x%08lx, "
 				     "len 0x%04x\n",
 				    sc->sc_dev.dv_xname, nexttx,
-				    curaddr & 0xffffffffU, curlen, curlen));
+				    curaddr & 0xffffffffUL, (unsigned)curlen));
 			}
 		}
 
@@ -2002,9 +2079,9 @@ wm_intr(void *arg)
 	struct wm_softc *sc = arg;
 	struct ifnet *ifp = &sc->sc_ethercom.ec_if;
 	uint32_t icr;
-	int wantinit, handled = 0;
+	int handled = 0;
 
-	for (wantinit = 0; wantinit == 0;) {
+	while (1 /* CONSTCOND */) {
 		icr = CSR_READ(sc, WMREG_ICR);
 		if ((icr & sc->sc_icr) == 0)
 			break;
@@ -2043,16 +2120,15 @@ wm_intr(void *arg)
 		}
 
 		if (icr & ICR_RXO) {
+			ifp->if_ierrors++;
+#if defined(WM_DEBUG)
 			log(LOG_WARNING, "%s: Receive overrun\n",
 			    sc->sc_dev.dv_xname);
-			wantinit = 1;
+#endif /* defined(WM_DEBUG) */
 		}
 	}
 
 	if (handled) {
-		if (wantinit)
-			wm_init(ifp);
-
 		/* Try to get more packets going. */
 		wm_start(ifp);
 	}
@@ -2254,8 +2330,8 @@ wm_rxintr(struct wm_softc *sc)
 		m->m_len -= ETHER_CRC_LEN;
 
 		*sc->sc_rxtailp = NULL;
-		m = sc->sc_rxhead;
 		len = m->m_len + sc->sc_rxlen;
+		m = sc->sc_rxhead;
 
 		WM_RXCHAIN_RESET(sc);
 
@@ -2696,15 +2772,15 @@ wm_init(struct ifnet *ifp)
 	 * Set up checksum offload parameters.
 	 */
 	reg = CSR_READ(sc, WMREG_RXCSUM);
-	if (ifp->if_capenable & IFCAP_CSUM_IPv4)
+	if (ifp->if_capenable & IFCAP_CSUM_IPv4_Rx)
 		reg |= RXCSUM_IPOFL;
 	else
 		reg &= ~RXCSUM_IPOFL;
-	if (ifp->if_capenable & (IFCAP_CSUM_TCPv4 | IFCAP_CSUM_UDPv4))
+	if (ifp->if_capenable & (IFCAP_CSUM_TCPv4_Rx | IFCAP_CSUM_UDPv4_Rx))
 		reg |= RXCSUM_IPOFL | RXCSUM_TUOFL;
 	else {
 		reg &= ~RXCSUM_TUOFL;
-		if ((ifp->if_capenable & IFCAP_CSUM_IPv4) == 0)
+		if ((ifp->if_capenable & IFCAP_CSUM_IPv4_Rx) == 0)
 			reg &= ~RXCSUM_IPOFL;
 	}
 	CSR_WRITE(sc, WMREG_RXCSUM, reg);
@@ -3089,6 +3165,35 @@ wm_read_eeprom_spi(struct wm_softc *sc, int word, int wordcnt, uint16_t *data)
 	return (0);
 }
 
+#define EEPROM_CHECKSUM		0xBABA
+#define EEPROM_SIZE		0x0040
+
+/*
+ * wm_validate_eeprom_checksum
+ *
+ * The checksum is defined as the sum of the first 64 (16 bit) words.
+ */
+static int
+wm_validate_eeprom_checksum(struct wm_softc *sc)
+{   
+	uint16_t checksum;
+	uint16_t eeprom_data;
+	int i;
+
+	checksum = 0;
+
+	for (i = 0; i < EEPROM_SIZE; i++) {
+		if(wm_read_eeprom(sc, i, 1, &eeprom_data))
+			return 1;
+		checksum += eeprom_data;
+	}
+
+	if (checksum != (uint16_t) EEPROM_CHECKSUM)
+		return 1;
+
+	return 0;
+}
+
 /*
  * wm_read_eeprom:
  *
@@ -3099,8 +3204,11 @@ wm_read_eeprom(struct wm_softc *sc, int word, int wordcnt, uint16_t *data)
 {
 	int rv;
 
+	if (sc->sc_flags & WM_F_EEPROM_INVALID)
+		return 1;
+
 	if (wm_acquire_eeprom(sc))
-		return (1);
+		return 1;
 
 	if (sc->sc_flags & WM_F_EEPROM_SPI)
 		rv = wm_read_eeprom_spi(sc, word, wordcnt, data);
@@ -3108,7 +3216,7 @@ wm_read_eeprom(struct wm_softc *sc, int word, int wordcnt, uint16_t *data)
 		rv = wm_read_eeprom_uwire(sc, word, wordcnt, data);
 
 	wm_release_eeprom(sc);
-	return (rv);
+	return rv;
 }
 
 /*

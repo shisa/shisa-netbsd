@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.1.2.1 2005/04/06 21:42:07 tron Exp $
+#	$NetBSD: Makefile,v 1.1 2005/03/23 11:09:59 martin Exp $
 
 XMODULEDIR=	${X11USRLIBDIR}/modules/drivers
 

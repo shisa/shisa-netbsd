@@ -1,4 +1,4 @@
-/*	$NetBSD: process_machdep.c,v 1.4 2003/11/30 12:59:30 fvdl Exp $	*/
+/*	$NetBSD: process_machdep.c,v 1.8 2005/12/24 20:06:47 perry Exp $	*/
 
 /*-
  * Copyright (c) 1998, 2000 The NetBSD Foundation, Inc.
@@ -60,7 +60,7 @@
 
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: process_machdep.c,v 1.4 2003/11/30 12:59:30 fvdl Exp $");
+__KERNEL_RCSID(0, "$NetBSD: process_machdep.c,v 1.8 2005/12/24 20:06:47 perry Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -78,14 +78,14 @@ __KERNEL_RCSID(0, "$NetBSD: process_machdep.c,v 1.4 2003/11/30 12:59:30 fvdl Exp
 #include <machine/segments.h>
 #include <machine/fpu.h>
 
-static __inline struct trapframe *process_frame __P((struct lwp *));
-static __inline struct fxsave64 *process_fpframe __P((struct lwp *));
+static inline struct trapframe *process_frame __P((struct lwp *));
+static inline struct fxsave64 *process_fpframe __P((struct lwp *));
 #if 0
-static __inline int verr_gdt __P((struct pmap *, int sel));
-static __inline int verr_ldt __P((struct pmap *, int sel));
+static inline int verr_gdt __P((struct pmap *, int sel));
+static inline int verr_ldt __P((struct pmap *, int sel));
 #endif
 
-static __inline struct trapframe *
+static inline struct trapframe *
 process_frame(l)
 	struct lwp *l;
 {
@@ -93,7 +93,7 @@ process_frame(l)
 	return (l->l_md.md_regs);
 }
 
-static __inline struct fxsave64 *
+static inline struct fxsave64 *
 process_fpframe(l)
 	struct lwp *l;
 {
@@ -150,7 +150,7 @@ process_read_fpregs(l, regs)
 int
 process_write_regs(l, regp)
 	struct lwp *l;
-	struct reg *regp;
+	const struct reg *regp;
 {
 	struct trapframe *tf = process_frame(l);
 	int error;
@@ -161,7 +161,7 @@ process_write_regs(l, regp)
 	 * Note that struct regs is compatible with
 	 * the __gregs array in mcontext_t.
 	 */
-	error = check_mcontext((mcontext_t *)regs, tf);
+	error = check_mcontext(l, (mcontext_t *)regs, tf);
 	if (error != 0)
 		return error;
 
@@ -173,7 +173,7 @@ process_write_regs(l, regp)
 int
 process_write_fpregs(l, regs)
 	struct lwp *l;
-	struct fpreg *regs;
+	const struct fpreg *regs;
 {
 	struct fxsave64 *frame = process_fpframe(l);
 

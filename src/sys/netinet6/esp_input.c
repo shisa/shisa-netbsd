@@ -1,4 +1,4 @@
-/*	$NetBSD: esp_input.c,v 1.35.14.2 2005/07/18 21:06:45 riz Exp $	*/
+/*	$NetBSD: esp_input.c,v 1.39 2005/12/11 12:25:02 christos Exp $	*/
 /*	$KAME: esp_input.c,v 1.60 2001/09/04 08:43:19 itojun Exp $	*/
 
 /*
@@ -35,7 +35,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: esp_input.c,v 1.35.14.2 2005/07/18 21:06:45 riz Exp $");
+__KERNEL_RCSID(0, "$NetBSD: esp_input.c,v 1.39 2005/12/11 12:25:02 christos Exp $");
 
 #include "opt_inet.h"
 #include "opt_ipsec.h"
@@ -62,6 +62,7 @@ __KERNEL_RCSID(0, "$NetBSD: esp_input.c,v 1.35.14.2 2005/07/18 21:06:45 riz Exp 
 #include <netinet/ip.h>
 #include <netinet/ip_var.h>
 #include <netinet/in_var.h>
+#include <netinet/in_proto.h>
 #include <netinet/ip_ecn.h>
 #include <netinet/ip_icmp.h>
 

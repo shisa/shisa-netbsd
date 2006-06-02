@@ -1,4 +1,4 @@
-/*	$NetBSD: pcf8583.c,v 1.1 2003/09/30 00:35:31 thorpej Exp $	*/
+/*	$NetBSD: pcf8583.c,v 1.4 2006/03/29 06:41:24 thorpej Exp $	*/
 
 /*
  * Copyright (c) 2003 Wasabi Systems, Inc.
@@ -86,8 +86,8 @@ static int pcfrtc_clock_read(struct pcfrtc_softc *, struct clock_ymdhms *,
 			     uint8_t *);
 static int pcfrtc_clock_write(struct pcfrtc_softc *, struct clock_ymdhms *,
 			      uint8_t);
-static int pcfrtc_gettime(struct todr_chip_handle *, struct timeval *);
-static int pcfrtc_settime(struct todr_chip_handle *, struct timeval *);
+static int pcfrtc_gettime(struct todr_chip_handle *, volatile struct timeval *);
+static int pcfrtc_settime(struct todr_chip_handle *, volatile struct timeval *);
 static int pcfrtc_getcal(struct todr_chip_handle *, int *);
 static int pcfrtc_setcal(struct todr_chip_handle *, int);
 
@@ -105,7 +105,7 @@ pcfrtc_match(struct device *parent, struct cfdata *cf, void *aux)
 void
 pcfrtc_attach(struct device *parent, struct device *self, void *aux)
 {
-	struct pcfrtc_softc *sc = (struct pcfrtc_softc *)self;
+	struct pcfrtc_softc *sc = device_private(self);
 	struct i2c_attach_args *ia = aux;
 	uint8_t cmdbuf[1], csr;
 
@@ -159,7 +159,7 @@ pcfrtc_attach(struct device *parent, struct device *self, void *aux)
 
 /*ARGSUSED*/
 int
-pcfrtc_open(dev_t dev, int flag, int fmt, struct proc *p)
+pcfrtc_open(dev_t dev, int flag, int fmt, struct lwp *l)
 {
 	struct pcfrtc_softc *sc;
 
@@ -177,7 +177,7 @@ pcfrtc_open(dev_t dev, int flag, int fmt, struct proc *p)
 
 /*ARGSUSED*/
 int
-pcfrtc_close(dev_t dev, int flag, int fmt, struct proc *p)
+pcfrtc_close(dev_t dev, int flag, int fmt, struct lwp *l)
 {
 	struct pcfrtc_softc *sc;
 
@@ -265,7 +265,7 @@ pcfrtc_write(dev_t dev, struct uio *uio, int flags)
 }
 
 static int
-pcfrtc_gettime(struct todr_chip_handle *ch, struct timeval *tv)
+pcfrtc_gettime(struct todr_chip_handle *ch, volatile struct timeval *tv)
 {
 	struct pcfrtc_softc *sc = ch->cookie;
 	struct clock_ymdhms dt;
@@ -281,7 +281,7 @@ pcfrtc_gettime(struct todr_chip_handle *ch, struct timeval *tv)
 }
 
 static int
-pcfrtc_settime(struct todr_chip_handle *ch, struct timeval *tv)
+pcfrtc_settime(struct todr_chip_handle *ch, volatile struct timeval *tv)
 {
 	struct pcfrtc_softc *sc = ch->cookie;
 	struct clock_ymdhms dt;

@@ -30,6 +30,8 @@ my @dirs = (
 "crypto/dso",
 "crypto/dh",
 "crypto/ec",
+"crypto/ecdh",
+"crypto/ecdsa",
 "crypto/buffer",
 "crypto/bio",
 "crypto/stack",
@@ -51,14 +53,17 @@ my @dirs = (
 "crypto/ocsp",
 "crypto/ui",
 "crypto/krb5",
+"crypto/store",
+"crypto/pqueue",
 "ssl",
 "apps",
+"engines",
 "test",
 "tools"
 );
 
 foreach (@dirs) {
-	&files_dir ($_, "Makefile.ssl");
+	&files_dir ($_, "Makefile");
 }
 
 exit(0);

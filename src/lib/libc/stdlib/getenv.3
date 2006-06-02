@@ -1,4 +1,4 @@
-.\"	$NetBSD: getenv.3,v 1.17 2003/08/07 16:43:39 agc Exp $
+.\"	$NetBSD: getenv.3,v 1.19 2005/09/26 10:56:54 wiz Exp $
 .\"
 .\" Copyright (c) 1988, 1991, 1993
 .\"	The Regents of the University of California.  All rights reserved.
@@ -33,11 +33,12 @@
 .\"
 .\"     from: @(#)getenv.3	8.2 (Berkeley) 12/11/93
 .\"
-.Dd April 1, 2003
+.Dd September 25, 2005
 .Dt GETENV 3
 .Os
 .Sh NAME
 .Nm getenv ,
+.Nm getenv_r ,
 .Nm putenv ,
 .Nm setenv ,
 .Nm unsetenv
@@ -48,6 +49,8 @@
 .In stdlib.h
 .Ft char *
 .Fn getenv "const char *name"
+.Ft int
+.Fn getenv_r "const char *name" "char *buf" "size_t len"
 .Ft int
 .Fn setenv "const char *name" "const char *value" "int overwrite"
 .Ft int
@@ -72,12 +75,29 @@ except for
 .Pp
 The
 .Fn getenv
-function obtains the current value of the environment variable,
+function obtains the current value of the environment variable
 .Ar name .
 If the variable
 .Ar name
-is not in the current environment,
-a null pointer is returned.
+is not in the current environment, a
+.Dv NULL
+pointer is returned.
+.Pp
+The
+.Fn getenv_r
+function obtains the current value of the environment variable
+.Fa name
+and copies it to
+.Fa buf .
+If
+.Fa name
+is not in the current environment, or the string length of the value of
+.Fa name
+is longer than
+.Fa len
+characters, then \-1 is returned and
+.Va errno
+is set to indicate the error.
 .Pp
 The
 .Fn setenv
@@ -114,8 +134,9 @@ deletes all instances of the variable name pointed to by
 from the list.
 .Sh RETURN VALUES
 The functions
+.Fn getenv_r ,
 .Fn setenv ,
-.Fn putenv
+.Fn putenv ,
 and
 .Fn unsetenv
 return zero if successful; otherwise the global variable
@@ -143,6 +164,17 @@ The function
 or
 .Fn putenv
 failed because they were unable to allocate memory for the environment.
+.El
+The function
+.Fn getenv_r
+can return the following errors:
+.Bl -tag -width Er
+.It Bq Er ENOENT
+The variable
+.Fa name
+was not found in the environment.
+.It Bq Er ERANGE
+The value of the named variable is too long to fit in the supplied buffer.
 .El
 .Sh SEE ALSO
 .Xr csh 1 ,

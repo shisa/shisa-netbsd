@@ -1,4 +1,4 @@
-/*	$NetBSD: sched.c,v 1.3.6.1 2005/10/10 11:32:28 tron Exp $	*/
+/*	$NetBSD: sched.c,v 1.4 2005/10/09 11:17:28 kleink Exp $	*/
 
 /*-
  * Copyright (c) 2001 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: sched.c,v 1.3.6.1 2005/10/10 11:32:28 tron Exp $");
+__RCSID("$NetBSD: sched.c,v 1.4 2005/10/09 11:17:28 kleink Exp $");
 
 #include <errno.h>
 #include <sched.h>

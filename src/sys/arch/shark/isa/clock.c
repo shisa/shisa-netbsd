@@ -1,4 +1,4 @@
-/*	$NetBSD: clock.c,v 1.7 2004/02/13 11:36:17 wiz Exp $	*/
+/*	$NetBSD: clock.c,v 1.10 2005/12/24 20:07:32 perry Exp $	*/
 
 /*
  * Copyright 1997
@@ -154,7 +154,7 @@ WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: clock.c,v 1.7 2004/02/13 11:36:17 wiz Exp $");
+__KERNEL_RCSID(0, "$NetBSD: clock.c,v 1.10 2005/12/24 20:07:32 perry Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -188,15 +188,15 @@ static int  gettick(void);
 
 void startrtclock(void);
 
-__inline u_int mc146818_read(void *, u_int);
-__inline void mc146818_write(void *, u_int, u_int);
+inline u_int mc146818_read(void *, u_int);
+inline void mc146818_write(void *, u_int, u_int);
 
 #define	SECMIN	((unsigned)60)			/* seconds per minute */
 #define	SECHOUR	((unsigned)(60*SECMIN))		/* seconds per hour */
 #define	SECDAY	((unsigned)(24*SECHOUR))	/* seconds per day */
 #define	SECYR	((unsigned)(365*SECDAY))	/* seconds per common year */
 
-__inline u_int
+inline u_int
 mc146818_read(sc, reg)
 	void *sc;					/* XXX use it? */
 	u_int reg;
@@ -206,7 +206,7 @@ mc146818_read(sc, reg)
 	return (inb(IO_RTC+1));
 }
 
-__inline void
+inline void
 mc146818_write(sc, reg, datum)
 	void *sc;					/* XXX use it? */
 	u_int reg, datum;
@@ -462,7 +462,7 @@ void
 delay(n)
 	unsigned n;
 {
-	int tick, otick;
+	int ticks, otick;
 	int nticks;
 
 	if (n < 100) {
@@ -494,12 +494,12 @@ delay(n)
 	}
 
 	while (nticks > 0) {
-		tick = gettick();
-		if (tick > otick)
-			nticks -= TIMER0_ROLLOVER - (tick - otick);
+		ticks = gettick();
+		if (ticks > otick)
+			nticks -= TIMER0_ROLLOVER - (ticks - otick);
 		else
-			nticks -= otick - tick;
-		otick = tick;
+			nticks -= otick - ticks;
+		otick = ticks;
 	}
 
 }

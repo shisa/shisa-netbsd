@@ -35,7 +35,7 @@
 
 #ifdef __RCSID
 __RCSID("$Heimdal: gen.c,v 1.50 2003/04/17 07:09:18 lha Exp $"
-        "$NetBSD: gen.c,v 1.6 2003/05/15 21:36:39 lha Exp $");
+        "$NetBSD: gen.c,v 1.8 2005/04/25 17:20:51 matt Exp $");
 #endif
 
 FILE *headerfile, *codefile, *logfile;

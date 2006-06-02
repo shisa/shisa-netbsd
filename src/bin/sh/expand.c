@@ -1,4 +1,4 @@
-/*	$NetBSD: expand.c,v 1.68.2.2 2005/04/07 11:37:39 tron Exp $	*/
+/*	$NetBSD: expand.c,v 1.74 2006/05/20 13:57:27 dsl Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -37,7 +37,7 @@
 #if 0
 static char sccsid[] = "@(#)expand.c	8.5 (Berkeley) 5/15/95";
 #else
-__RCSID("$NetBSD: expand.c,v 1.68.2.2 2005/04/07 11:37:39 tron Exp $");
+__RCSID("$NetBSD: expand.c,v 1.74 2006/05/20 13:57:27 dsl Exp $");
 #endif
 #endif /* not lint */
 
@@ -186,7 +186,7 @@ argstr(char *p, int flag)
 	char c;
 	int quotes = flag & (EXP_FULL | EXP_CASE);	/* do CTLESC */
 	int firsteq = 1;
-	const char *ifs;
+	const char *ifs = NULL;
 	int ifs_split = EXP_IFS_SPLIT;
 
 	if (flag & EXP_IFS_SPLIT)
@@ -510,8 +510,6 @@ subevalvar(char *p, char *str, int strloc, int subtype, int startloc, int varfla
 		amount = startp - expdest;
 		STADJUST(amount, expdest);
 		varflags &= ~VSNUL;
-		if (c != 0)
-			*loc = c;
 		return 1;
 
 	case VSQUESTION:
@@ -866,7 +864,7 @@ numvar:
 		break;
 	case '-':
 		for (i = 0; optlist[i].name; i++) {
-			if (optlist[i].val)
+			if (optlist[i].val && optlist[i].letter)
 				STPUTC(optlist[i].letter, expdest);
 		}
 		break;
@@ -874,8 +872,8 @@ numvar:
 		if (flag & EXP_FULL && quoted) {
 			for (ap = shellparam.p ; (p = *ap++) != NULL ; ) {
 				STRTODEST(p);
-				if (*ap)
-					STPUTC('\0', expdest);
+				/* Nul forces a parameter split inside "" */
+				STPUTC('\0', expdest);
 			}
 			break;
 		}
@@ -1036,7 +1034,7 @@ ifsbreakup(char *string, struct arglist *arglist)
 	 * Some recent clarification of the Posix spec say that it
 	 * should only generate one....
 	 */
-	if (*start /* || (!ifsspc && start > string) */) {
+	if (*start) {
 		sp = (struct strlist *)stalloc(sizeof *sp);
 		sp->text = start;
 		*arglist->lastp = sp;

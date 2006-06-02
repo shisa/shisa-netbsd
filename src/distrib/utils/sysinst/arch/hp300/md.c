@@ -1,4 +1,4 @@
-/*	$NetBSD: md.c,v 1.18 2004/11/11 00:19:48 he Exp $ */
+/*	$NetBSD: md.c,v 1.24 2006/04/05 16:55:05 garbled Exp $ */
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.
@@ -51,9 +51,6 @@
 #include "msg_defs.h"
 #include "menu_defs.h"
 
-const char *fdtype = "ffs";
-
-
 int
 md_get_info(void)
 {
@@ -62,7 +59,7 @@ md_get_info(void)
 	char dev_name[100];
 	struct disklabel disklabel;
 
-	snprintf(dev_name, 100, "/dev/r%sc", diskdev);
+	snprintf(dev_name, sizeof(dev_name), "/dev/r%sc", diskdev);
 
 	fd = open(dev_name, O_RDONLY, 0);
 	if (fd < 0) {
@@ -102,12 +99,12 @@ md_get_info(void)
 		exit(1);
 	}
 
-	/* preserve first cylinder for system. */
-	ptstart = disklabel.d_secpercyl;
+	/* We will preserve the first cylinder as PART_BOOT for bootloader. */
+	ptstart = 0;
 
 	close(fd);
 
-	return (1);
+	return 1;
 }
 
 /*
@@ -117,7 +114,7 @@ int
 md_pre_disklabel(void)
 {
 
-	return (0);
+	return 0;
 }
 
 /*
@@ -130,7 +127,7 @@ md_post_disklabel(void)
 	if (get_ramsize() < 6)
 		set_swap(diskdev, bsdlabel);
 
-	return (0);
+	return 0;
 }
 
 /*
@@ -149,11 +146,10 @@ md_post_newfs(void)
 	/* boot blocks ... */
 	msg_display(MSG_dobootblks, diskdev);
 	if (run_program(RUN_DISPLAY | RUN_NO_CLEAR,
-	    "/usr/mdec/installboot /usr/mdec/uboot.lif /dev/r%sc",
-	    diskdev))
+	    "/usr/sbin/installboot /dev/r%sc /usr/mdec/uboot.lif", diskdev))
 		process_menu(MENU_ok,
-			 deconst("Warning: disk is probably not bootable"));
-	return (0);
+		    deconst("Warning: disk is probably not bootable"));
+	return 0;
 }
 
 /*
@@ -163,7 +159,7 @@ int
 md_copy_filesystem(void)
 {
 
-	return (0);
+	return 0;
 }
 
 /*
@@ -173,7 +169,7 @@ int
 md_make_bsd_partitions(void)
 {
 
-	return(make_bsd_partitions());
+	return make_bsd_partitions();
 }
 
 /*
@@ -183,15 +179,17 @@ int
 md_check_partitions(void)
 {
 	/* hp300 partitions must be in order of the range. */
-	int part, start = 0, last = PART_A-1;
+	int part, start, last;
 
-	for (part = PART_A; part < 8; part++) {
-		if (part == PART_C)
+	start = 0;
+	last = PART_A - 1;
+	for (part = PART_A; part < MAXPARTITIONS; part++) {
+		if (part == PART_RAW || part == PART_BOOT)
 			continue;
 		if (last >= PART_A && bsdlabel[part].pi_size > 0) {
 			msg_display(MSG_emptypart, part+'a');
 			process_menu(MENU_ok, NULL);
-			return (0);
+			return 0;
 		}
 		if (bsdlabel[part].pi_size == 0) {
 			if (last < PART_A)
@@ -201,13 +199,13 @@ md_check_partitions(void)
 				msg_display(MSG_ordering, part+'a');
 				process_menu(MENU_yesno, NULL);
 				if (yesno)
-					return (0);
+					return 0;
 			}
 			start = bsdlabel[part].pi_offset;
 		}
 	}
 
-	return (1);
+	return 1;
 }
 
 /* Upgrade support */
@@ -222,12 +220,13 @@ md_update(void)
 	wmove(stdscr, 0, 0);
 	wclear(stdscr);
 	wrefresh(stdscr);
-	return (1);
+	return 1;
 }
 
 void
 md_cleanup_install(void)
 {
+
 #ifdef notyet			/* sed is too large for ramdisk */
 	enable_rc_conf();
 #endif
@@ -237,15 +236,33 @@ md_cleanup_install(void)
 }
 
 int
-md_pre_update()
+md_pre_update(void)
 {
 
 	if (get_ramsize() < 6)
 		set_swap(diskdev, NULL);
-	return (1);
+	return 1;
 }
 
 void
-md_init()
+md_init(void)
 {
+}
+
+int
+hp300_boot_size(void)
+{
+	int i;
+
+	i = dlcylsize;
+	if (i >= 1024) /* XXX: bsddisklabel.c has a hack. */
+		i = dlcylsize * sectorsize * 2;
+
+	return i;
+}
+
+int
+md_post_extract(void)
+{
+	return 0;
 }

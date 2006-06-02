@@ -1,4 +1,4 @@
-/*	$NetBSD: vector.S,v 1.17.10.2 2005/10/11 21:04:19 tron Exp $	*/
+/*	$NetBSD: vector.S,v 1.22 2005/12/11 12:17:41 christos Exp $	*/
 
 /*
  * Copyright 2002 (c) Wasabi Systems, Inc.
@@ -83,8 +83,6 @@
 #include <machine/frameasm.h>
 #include <machine/segments.h>
 #include <machine/trap.h>
-#include <machine/intr.h>
-#include <machine/psl.h>
 
 #include <net/netisr.h>
 
@@ -590,19 +588,6 @@ _C_LABEL(ioapic_level_stubs):
 	.long _C_LABEL(Xintr_ioapic_level31), _C_LABEL(Xrecurse_ioapic_level31)
 	.long _C_LABEL(Xresume_ioapic_level31)
 #endif
-
-/*
- * Symbols that vmstat -i wants, even though they're not used.
- */
-.globl	_C_LABEL(intrnames)
-_C_LABEL(intrnames):
-.globl	_C_LABEL(eintrnames)
-_C_LABEL(eintrnames):
-
-.globl	_C_LABEL(intrcnt)
-_C_LABEL(intrcnt):
-.globl	_C_LABEL(eintrcnt)
-_C_LABEL(eintrcnt):
 
 /*
  * Soft interrupt handlers

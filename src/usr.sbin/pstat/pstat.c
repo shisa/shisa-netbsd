@@ -1,4 +1,4 @@
-/*	$NetBSD: pstat.c,v 1.88 2004/12/18 08:43:35 christos Exp $	*/
+/*	$NetBSD: pstat.c,v 1.95 2006/05/25 01:49:30 christos Exp $	*/
 
 /*-
  * Copyright (c) 1980, 1991, 1993, 1994
@@ -39,7 +39,7 @@ __COPYRIGHT("@(#) Copyright (c) 1980, 1991, 1993, 1994\n\
 #if 0
 static char sccsid[] = "@(#)pstat.c	8.16 (Berkeley) 5/9/95";
 #else
-__RCSID("$NetBSD: pstat.c,v 1.88 2004/12/18 08:43:35 christos Exp $");
+__RCSID("$NetBSD: pstat.c,v 1.95 2006/05/25 01:49:30 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -156,37 +156,35 @@ struct flagbit_desc {
 } while (/* CONSTCOND */0)
 #endif
 
-void	filemode __P((void));
-int	getfiles __P((char **, int *, char **));
-int	getflags __P((const struct flagbit_desc *, char *, u_int));
+void	filemode(void);
+int	getfiles(char **, int *, char **);
+int	getflags(const struct flagbit_desc *, char *, u_int);
 struct mount *
-	getmnt __P((struct mount *));
-char *	kinfo_vnodes __P((int *));
-void	layer_header __P((void));
-int	layer_print __P((struct vnode *, int));
-char *	loadvnodes __P((int *));
-int	main __P((int, char **));
-void	mount_print __P((struct mount *));
-void	nfs_header __P((void));
-int	nfs_print __P((struct vnode *, int));
-void	ttymode __P((void));
-void	ttyprt __P((struct tty *));
-void	ufs_header __P((void));
-int	ufs_print __P((struct vnode *, int));
-int	ext2fs_print __P((struct vnode *, int));
-void	union_header __P((void));
-int	union_print __P((struct vnode *, int));
-void	usage __P((void));
-void	vnode_header __P((void));
-int	vnode_print __P((struct vnode *, struct vnode *));
-void	vnodemode __P((void));
+	getmnt(struct mount *);
+char *	kinfo_vnodes(int *);
+void	layer_header(void);
+int	layer_print(struct vnode *, int);
+char *	loadvnodes(int *);
+int	main(int, char **);
+void	mount_print(struct mount *);
+void	nfs_header(void);
+int	nfs_print(struct vnode *, int);
+void	ttymode(void);
+void	ttyprt(struct tty *);
+void	ufs_header(void);
+int	ufs_print(struct vnode *, int);
+int	ext2fs_print(struct vnode *, int);
+void	union_header(void);
+int	union_print(struct vnode *, int);
+void	usage(void);
+void	vnode_header(void);
+int	vnode_print(struct vnode *, struct vnode *);
+void	vnodemode(void);
 
 int
-main(argc, argv)
-	int argc;
-	char *argv[];
+main(int argc, char *argv[])
 {
-	int ch, i, quit, ret;
+	int ch, i, quit, ret, use_sysctl;
 	int fileflag, swapflag, ttyflag, vnodeflag;
 	gid_t egid = getegid();
 	char buf[_POSIX2_LINE_MAX];
@@ -249,6 +247,8 @@ main(argc, argv)
 	else
 		(void)setegid(egid);
 
+	use_sysctl = (nlistf == NULL && memf == NULL);
+
 	if ((kd = kvm_openfiles(nlistf, memf, NULL, O_RDONLY, buf)) == 0)
 		errx(1, "kvm_openfiles: %s", buf);
 
@@ -275,7 +275,8 @@ main(argc, argv)
 	if (ttyflag)
 		ttymode();
 	if (swapflag || totalflag)
-		list_swap(0, kflag, 0, totalflag, 1, hflag);
+		if (use_sysctl)
+			list_swap(0, kflag, 0, totalflag, 1, hflag);
 	exit(0);
 }
 
@@ -286,14 +287,13 @@ main(argc, argv)
 						 in hexadecimal. */
 
 void
-vnodemode()
+vnodemode(void)
 {
 	char *e_vnodebase, *endvnode, *evp;
 	struct vnode *vp;
 	struct mount *maddr, *mp;
 	int numvnodes, ovflw;
-	int (*vnode_fsprint)
-	    __P((struct vnode *, int)); /* per-fs data printer */
+	int (*vnode_fsprint) (struct vnode *, int); /* per-fs data printer */
 
 	mp = NULL;
 	e_vnodebase = loadvnodes(&numvnodes);
@@ -353,10 +353,7 @@ vnodemode()
 }
 
 int
-getflags(fd, p, flags)
-	const struct flagbit_desc *fd;
-	char *p;
-	u_int flags;
+getflags(const struct flagbit_desc *fd, char *p, u_int flags)
 {
 	char *q = p;
 
@@ -390,7 +387,7 @@ const struct flagbit_desc vnode_flags[] = {
 };
 
 void
-vnode_header()
+vnode_header(void)
 {
 
 	(void)printf("%-*s TYP VFLAG  USE HOLD TAG NPAGE",
@@ -398,9 +395,7 @@ vnode_header()
 }
 
 int
-vnode_print(avnode, vp)
-	struct vnode *avnode;
-	struct vnode *vp;
+vnode_print(struct vnode *avnode, struct vnode *vp)
 {
 	char *type, flags[sizeof(vnode_flags) / sizeof(vnode_flags[0])];
 	int ovflw;
@@ -462,16 +457,14 @@ const struct flagbit_desc ufs_flags[] = {
 };
 
 void
-ufs_header()
+ufs_header(void)
 {
 
 	(void)printf(" FILEID IFLAG RDEV|SZ");
 }
 
 int
-ufs_print(vp, ovflw)
-	struct vnode *vp;
-	int ovflw;
+ufs_print(struct vnode *vp, int ovflw)
 {
 	struct inode inode, *ip = &inode;
 	union dinode {
@@ -501,7 +494,7 @@ ufs_print(vp, ovflw)
 	 */
 
 	(void)getflags(ufs_flags, flags, ip->i_flag);
-	PRWORD(ovflw, " %*d", 7, 1, ip->i_number);
+	PRWORD(ovflw, " %*llu", 7, 1, (unsigned long long)ip->i_number);
 	PRWORD(ovflw, " %*s", 6, 1, flags);
 	type = ip->i_mode & S_IFMT;
 	if (S_ISCHR(ip->i_mode) || S_ISBLK(ip->i_mode)) {
@@ -518,9 +511,7 @@ ufs_print(vp, ovflw)
 }
 
 int
-ext2fs_print(vp, ovflw)
-	struct vnode *vp;
-	int ovflw;
+ext2fs_print(struct vnode *vp, int ovflw)
 {
 	struct inode inode, *ip = &inode;
 	char flags[sizeof(ufs_flags) / sizeof(ufs_flags[0])];
@@ -535,7 +526,7 @@ ext2fs_print(vp, ovflw)
 	 */
 
 	(void)getflags(ufs_flags, flags, ip->i_flag);
-	PRWORD(ovflw, " %*d", 7, 1, ip->i_number);
+	PRWORD(ovflw, " %*llu", 7, 1, (unsigned long long)ip->i_number);
 	PRWORD(ovflw, " %*s", 6, 1, flags);
 	type = ip->i_e2fs_mode & S_IFMT;
 	if (S_ISCHR(ip->i_e2fs_mode) || S_ISBLK(ip->i_e2fs_mode)) {
@@ -566,16 +557,14 @@ const struct flagbit_desc nfs_flags[] = {
 };
 
 void
-nfs_header()
+nfs_header(void)
 {
 
 	(void)printf(" FILEID NFLAG RDEV|SZ");
 }
 
 int
-nfs_print(vp, ovflw)
-	struct vnode *vp;
-	int ovflw;
+nfs_print(struct vnode *vp, int ovflw)
 {
 	struct nfsnode nfsnode, *np = &nfsnode;
 	char flags[sizeof(nfs_flags) / sizeof(nfs_flags[0])];
@@ -613,16 +602,14 @@ nfs_print(vp, ovflw)
 }
 
 void
-layer_header()
+layer_header(void)
 {
 
 	(void)printf(" %*s", PTRSTRWIDTH, "LOWER");
 }
 
 int
-layer_print(vp, ovflw)
-	struct vnode *vp;
-	int ovflw;
+layer_print(struct vnode *vp, int ovflw)
 {
 	struct layer_node lnode, *lp = &lnode;
 
@@ -633,16 +620,14 @@ layer_print(vp, ovflw)
 }
 
 void
-union_header()
+union_header(void)
 {
 
 	(void)printf(" %*s %*s", PTRSTRWIDTH, "UPPER", PTRSTRWIDTH, "LOWER");
 }
 
 int
-union_print(vp, ovflw)
-	struct vnode *vp;
-	int ovflw;
+union_print(struct vnode *vp, int ovflw)
 {
 	struct union_node unode, *up = &unode;
 
@@ -658,8 +643,7 @@ union_print(vp, ovflw)
  * read it in and return a usable pointer to it.
  */
 struct mount *
-getmnt(maddr)
-	struct mount *maddr;
+getmnt(struct mount *maddr)
 {
 	static struct mtab {
 		struct mtab *next;
@@ -667,13 +651,15 @@ getmnt(maddr)
 		struct mount mount;
 	} *mhead = NULL;
 	struct mtab *mt;
+	struct mount mb;
 
 	for (mt = mhead; mt != NULL; mt = mt->next)
 		if (maddr == mt->maddr)
 			return (&mt->mount);
+	KGETRET(maddr, &mb, sizeof(struct mount), "mount table");
 	if ((mt = malloc(sizeof(struct mtab))) == NULL)
 		err(1, "malloc");
-	KGETRET(maddr, &mt->mount, sizeof(struct mount), "mount table");
+	mt->mount = mb;
 	mt->maddr = maddr;
 	mt->next = mhead;
 	mhead = mt;
@@ -681,8 +667,7 @@ getmnt(maddr)
 }
 
 void
-mount_print(mp)
-	struct mount *mp;
+mount_print(struct mount *mp)
 {
 	int flags;
 
@@ -692,7 +677,7 @@ mount_print(mp)
 		int i;
 		const char *sep = " (";
 
-		for (i = 0; i <= sizeof mnt_flags / sizeof mnt_flags[0]; i++) {
+		for (i = 0; i < sizeof mnt_flags / sizeof mnt_flags[0]; i++) {
 			if (flags & mnt_flags[i].m_flag) {
 				(void)printf("%s%s", sep, mnt_flags[i].m_name);
 				flags &= ~mnt_flags[i].m_flag;
@@ -707,8 +692,7 @@ mount_print(mp)
 }
 
 char *
-loadvnodes(avnodes)
-	int *avnodes;
+loadvnodes(int *avnodes)
 {
 	int mib[2];
 	size_t copysize;
@@ -739,8 +723,7 @@ loadvnodes(avnodes)
  * simulate what a running kernel does in in kinfo_vnode
  */
 char *
-kinfo_vnodes(avnodes)
-	int *avnodes;
+kinfo_vnodes(int *avnodes)
 {
 	struct mntlist mountlist;
 	struct mount *mp, mount;
@@ -776,7 +759,7 @@ kinfo_vnodes(avnodes)
 }
 
 void
-ttymode()
+ttymode(void)
 {
 	int ntty;
 	struct ttylist_head tty_head;
@@ -815,13 +798,13 @@ static const struct flagbit_desc ttystates[] = {
 };
 
 void
-ttyprt(tp)
-	struct tty *tp;
+ttyprt(struct tty *tp)
 {
 	char state[sizeof(ttystates) / sizeof(ttystates[0]) + 1];
 	char dev[2 + 3 + 1 + 5 + 1]; /* 12bit major + 20bit minor */
 	struct linesw t_linesw;
-	char *name, buffer;
+	const char *name;
+	char buffer;
 	pid_t pgid;
 	int n, ovflw;
 
@@ -876,7 +859,7 @@ static const struct flagbit_desc filemode_flags[] = {
 };
 
 void
-filemode()
+filemode(void)
 {
 	struct file *fp;
 	struct file *addr;
@@ -906,7 +889,7 @@ filemode()
 	    (PTRSTRWIDTH - 4) / 2, "", " LOC", (PTRSTRWIDTH - 4) / 2, "",
 	    (PTRSTRWIDTH - 4) / 2, "", "DATA", (PTRSTRWIDTH - 4) / 2, "");
 	for (; (char *)fp < offset + len; addr = fp->f_list.le_next, fp++) {
-		if ((unsigned)fp->f_type > sizeof(dtypes) / sizeof(dtypes[0]))
+		if ((unsigned)fp->f_type >= sizeof(dtypes) / sizeof(dtypes[0]))
 			continue;
 		ovflw = 0;
 		(void)getflags(filemode_flags, flags, fp->f_flag);
@@ -929,10 +912,7 @@ filemode()
 }
 
 int
-getfiles(abuf, alen, aoffset)
-	char **abuf;
-	int *alen;
-	char **aoffset;
+getfiles(char **abuf, int *alen, char **aoffset)
 {
 	size_t len;
 	int mib[2];
@@ -967,7 +947,7 @@ getfiles(abuf, alen, aoffset)
 }
 
 void
-usage()
+usage(void)
 {
 
 	(void)fprintf(stderr,

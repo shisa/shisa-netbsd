@@ -1,4 +1,4 @@
-#	$NetBSD: files.ata,v 1.11.10.1 2005/07/03 21:10:58 tron Exp $
+#	$NetBSD: files.ata,v 1.13 2005/12/11 12:21:14 christos Exp $
 #
 # Config file and device description for machine-independent devices
 # which attach to ATA busses.  Included by ports that need it.  Ports

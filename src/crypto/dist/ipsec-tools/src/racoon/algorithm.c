@@ -1,4 +1,4 @@
-/*	$NetBSD: algorithm.c,v 1.1.1.2.2.2 2005/11/21 21:12:30 tron Exp $	*/
+/*	$NetBSD: algorithm.c,v 1.5 2005/11/21 14:20:28 manu Exp $	*/
 
 /* Id: algorithm.c,v 1.11.4.1 2005/06/28 22:38:02 manubsd Exp */
 

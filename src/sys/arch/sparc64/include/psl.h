@@ -1,4 +1,4 @@
-/*	$NetBSD: psl.h,v 1.27 2005/01/27 08:50:27 martin Exp $ */
+/*	$NetBSD: psl.h,v 1.33 2006/05/04 12:18:54 yamt Exp $ */
 
 /*
  * Copyright (c) 1992, 1993
@@ -81,11 +81,12 @@
 #define PIL_TTY		6
 #define PIL_LPT		6
 #define PIL_NET		6
-#define PIL_IMP		7
+#define PIL_VM		7
 #define	PIL_AUD		8
 #define PIL_CLOCK	10
 #define PIL_FD		11
 #define PIL_SER		12
+#define	PIL_STATCLOCK	14
 #define PIL_HIGH	15
 #define PIL_SCHED	PIL_CLOCK
 #define PIL_LOCK	PIL_HIGH
@@ -247,53 +248,45 @@
 
 #if defined(_KERNEL) && !defined(_LOCORE)
 
-static __inline int getpstate __P((void));
-static __inline void setpstate __P((int));
-static __inline int getcwp __P((void));
-static __inline void setcwp __P((int));
-#ifndef SPLDEBUG
-static __inline void splx __P((int));
-#endif
-static __inline u_int64_t getver __P((void));
-static __inline int intr_disable __P((void));
-static __inline void intr_restore __P((int));
-
 /*
- * GCC pseudo-functions for manipulating privileged registers
+ * Inlines for manipulating privileged registers
  */
-static __inline int getpstate()
+static __inline int
+getpstate(void)
 {
 	int pstate;
 
-	__asm __volatile("rdpr %%pstate,%0" : "=r" (pstate));
+	__asm volatile("rdpr %%pstate,%0" : "=r" (pstate));
 	return (pstate);
 }
 
-static __inline void setpstate(newpstate)
-	int newpstate;
+static __inline void
+setpstate(int newpstate)
 {
-	__asm __volatile("wrpr %0,0,%%pstate" : : "r" (newpstate));
+	__asm volatile("wrpr %0,0,%%pstate" : : "r" (newpstate));
 }
 
-static __inline int getcwp()
+static __inline int
+getcwp(void)
 {
 	int cwp;
 
-	__asm __volatile("rdpr %%cwp,%0" : "=r" (cwp));
+	__asm volatile("rdpr %%cwp,%0" : "=r" (cwp));
 	return (cwp);
 }
 
-static __inline void setcwp(newcwp)
-	int newcwp;
+static __inline void
+setcwp(int newcwp)
 {
-	__asm __volatile("wrpr %0,0,%%cwp" : : "r" (newcwp));
+	__asm volatile("wrpr %0,0,%%cwp" : : "r" (newcwp));
 }
 
-static __inline u_int64_t getver()
+static __inline uint64_t
+getver(void)
 {
-	u_int64_t ver;
+	uint64_t ver;
 
-	__asm __volatile("rdpr %%ver,%0" : "=r" (ver));
+	__asm volatile("rdpr %%ver,%0" : "=r" (ver));
 	return (ver);
 }
 
@@ -317,7 +310,7 @@ intr_restore(int pstate)
  */
 
 #ifdef SPLDEBUG
-void prom_printf __P((const char *fmt, ...));
+void prom_printf(const char *fmt, ...);
 extern int printspl;
 #define SPLPRINT(x) \
 { \
@@ -329,53 +322,65 @@ extern int printspl;
 	} \
 }
 #define	SPL(name, newpil) \
-static __inline int name##X __P((const char*, int)); \
 static __inline int name##X(const char* file, int line) \
 { \
 	int oldpil; \
-	__asm __volatile("rdpr %%pil,%0" : "=r" (oldpil)); \
+	__asm volatile("rdpr %%pil,%0" : "=r" (oldpil)); \
 	SPLPRINT(("{%s:%d %d=>%d}", file, line, oldpil, newpil)); \
-	__asm __volatile("wrpr %%g0,%0,%%pil" : : "n" (newpil)); \
+	__asm volatile("wrpr %%g0,%0,%%pil" : : "n" (newpil)); \
 	return (oldpil); \
 }
 /* A non-priority-decreasing version of SPL */
 #define	SPLHOLD(name, newpil) \
-static __inline int name##X __P((const char*, int)); \
 static __inline int name##X(const char* file, int line) \
 { \
 	int oldpil; \
-	__asm __volatile("rdpr %%pil,%0" : "=r" (oldpil)); \
+	__asm volatile("rdpr %%pil,%0" : "=r" (oldpil)); \
 	if (newpil <= oldpil) \
 		return oldpil; \
 	SPLPRINT(("{%s:%d %d->!d}", file, line, oldpil, newpil)); \
-	__asm __volatile("wrpr %%g0,%0,%%pil" : : "n" (newpil)); \
+	__asm volatile("wrpr %%g0,%0,%%pil" : : "n" (newpil)); \
 	return (oldpil); \
 }
 
 #else
 #define SPLPRINT(x)	
 #define	SPL(name, newpil) \
-static __inline int name __P((void)); \
-static __inline int name() \
+static __inline int name(void) \
 { \
 	int oldpil; \
-	__asm __volatile("rdpr %%pil,%0" : "=r" (oldpil)); \
-	__asm __volatile("wrpr %%g0,%0,%%pil" : : "n" (newpil)); \
+	__asm volatile("rdpr %%pil,%0" : "=r" (oldpil)); \
+	__asm volatile("wrpr %%g0,%0,%%pil" : : "n" (newpil)); \
 	return (oldpil); \
 }
 /* A non-priority-decreasing version of SPL */
 #define	SPLHOLD(name, newpil) \
-static __inline int name __P((void)); \
-static __inline int name() \
+static __inline int name(void) \
 { \
 	int oldpil; \
-	__asm __volatile("rdpr %%pil,%0" : "=r" (oldpil)); \
+	__asm volatile("rdpr %%pil,%0" : "=r" (oldpil)); \
 	if (newpil <= oldpil) \
 		return oldpil; \
-	__asm __volatile("wrpr %%g0,%0,%%pil" : : "n" (newpil)); \
+	__asm volatile("wrpr %%g0,%0,%%pil" : : "n" (newpil)); \
 	return (oldpil); \
 }
 #endif
+
+static __inline int __attribute__((__unused__))
+splraiseipl(int newpil)
+{
+	int oldpil;
+
+	/*
+	 * NetBSD/sparc64's IPL_* constants equate directly to the
+	 * corresponding PIL_* names; no need to map them here.
+	 */
+	__asm __volatile("rdpr %%pil,%0" : "=r" (oldpil));
+	if (newpil <= oldpil)
+		return (oldpil);
+	__asm __volatile("wrpr %0,0,%%pil" : : "r" (newpil));
+	return (oldpil);
+}
 
 SPL(spl0, 0)
 
@@ -408,7 +413,7 @@ SPLHOLD(spllpt, PIL_LPT)
 /*
  * Memory allocation (must be as high as highest network, tty, or disk device)
  */
-SPLHOLD(splvm, PIL_IMP)
+SPLHOLD(splvm, PIL_VM)
 
 SPLHOLD(splclock, PIL_CLOCK)
 
@@ -423,7 +428,7 @@ SPLHOLD(splserial, PIL_SER)
 SPLHOLD(splaudio, PIL_AUD)
 
 /* second sparc timer interrupts at level 14 */
-SPLHOLD(splstatclock, 14)
+SPLHOLD(splstatclock, PIL_STATCLOCK)
 
 SPLHOLD(splsched, PIL_SCHED)
 SPLHOLD(spllock, PIL_LOCK)
@@ -457,23 +462,18 @@ SPLHOLD(splhigh, PIL_HIGH)
 #define splx(x)		splxX((x),__FILE__, __LINE__)
 #define splipi()	splhighX(__FILE__, __LINE__)
 
-static __inline void splxX __P((int, const char*, int));
-static __inline void splxX(newpil, file, line)
-	int newpil;
-	const char *file;
-	int line;
+static __inline void splxX(int newpil, const char *file, int line)
 #else
-static __inline void splx(newpil)
-	int newpil;
+static __inline void splx(int newpil)
 #endif
 {
 #ifdef SPLDEBUG
 	int pil;
 
-	__asm __volatile("rdpr %%pil,%0" : "=r" (pil));
+	__asm volatile("rdpr %%pil,%0" : "=r" (pil));
 	SPLPRINT(("{%d->%d}", pil, newpil));
 #endif
-	__asm __volatile("wrpr %%g0,%0,%%pil" : : "rn" (newpil));
+	__asm volatile("wrpr %%g0,%0,%%pil" : : "rn" (newpil));
 }
 #endif /* KERNEL && !_LOCORE */
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: if_ray.c,v 1.56.2.1 2005/09/13 20:56:42 tron Exp $	*/
+/*	$NetBSD: if_ray.c,v 1.60 2006/04/14 17:50:27 christos Exp $	*/
 
 /*
  * Copyright (c) 2000 Christian E. Hopps
@@ -57,7 +57,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_ray.c,v 1.56.2.1 2005/09/13 20:56:42 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_ray.c,v 1.60 2006/04/14 17:50:27 christos Exp $");
 
 #include "opt_inet.h"
 #include "bpfilter.h"
@@ -353,10 +353,10 @@ static int ray_debug_dump_rx = 0;
 static int ray_debug_dump_tx = 0;
 static struct timeval rtv, tv1, tv2, *ttp, *ltp;
 #define	RAY_DPRINTF(x)	do { if (ray_debug) {	\
-	struct timeval *tmp;			\
+	struct timeval *ttmp;			\
 	microtime(ttp);				\
 	timersub(ttp, ltp, &rtv);		\
-	tmp = ttp; ttp = ltp; ltp = tmp;	\
+	ttmp = ttp; ttp = ltp; ltp = ttmp;	\
 	printf("%ld:%ld %ld:%06ld: ",		\
 	    (long int)ttp->tv_sec,		\
 	    (long int)ttp->tv_usec,		\
@@ -365,10 +365,10 @@ static struct timeval rtv, tv1, tv2, *ttp, *ltp;
 	printf x ;				\
 	} } while (0)
 #define	RAY_DPRINTF_XMIT(x)	do { if (ray_debug_xmit_sum) {	\
-	struct timeval *tmp;			\
+	struct timeval *ttmp;			\
 	microtime(ttp);				\
 	timersub(ttp, ltp, &rtv);		\
-	tmp = ttp; ttp = ltp; ltp = tmp;	\
+	ttmp = ttp; ttp = ltp; ltp = ttmp;	\
 	printf("%ld:%ld %ld:%06ld: ",		\
 	    (long int)ttp->tv_sec,		\
 	    (long int)ttp->tv_usec,		\
@@ -835,7 +835,7 @@ ray_stop(sc)
 		wakeup(ray_report_params);
 	}
 	if (sc->sc_updreq) {
-		sc->sc_repreq->r_failcause = RAY_FAILCAUSE_EDEVSTOP;
+		sc->sc_updreq->r_failcause = RAY_FAILCAUSE_EDEVSTOP;
 		wakeup(ray_update_params);
 	}
 

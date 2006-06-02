@@ -1,4 +1,4 @@
-/* $NetBSD: wsemul_sun.c,v 1.19.10.1 2005/06/07 17:20:37 tron Exp $ */
+/* $NetBSD: wsemul_sun.c,v 1.23 2005/12/11 12:24:12 christos Exp $ */
 
 /*
  * Copyright (c) 1996, 1997 Christopher G. Demetriou.  All rights reserved.
@@ -33,7 +33,7 @@
 /* XXX DESCRIPTION/SOURCE OF INFORMATION */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: wsemul_sun.c,v 1.19.10.1 2005/06/07 17:20:37 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: wsemul_sun.c,v 1.23 2005/12/11 12:24:12 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -53,7 +53,7 @@ void	*wsemul_sun_attach(int console, const struct wsscreen_descr *,
 				void *, int, int, void *, long);
 void	wsemul_sun_output(void *cookie, const u_char *data, u_int count,
 			       int);
-int	wsemul_sun_translate(void *cookie, keysym_t, char **);
+int	wsemul_sun_translate(void *cookie, keysym_t, const char **);
 void	wsemul_sun_detach(void *cookie, u_int *crowp, u_int *ccolp);
 void	wsemul_sun_resetop(void *, enum wsemul_resetops);
 
@@ -525,7 +525,7 @@ wsemul_sun_output(void *cookie, const u_char *data, u_int count, int kernel)
 	(*edp->emulops->cursor)(edp->emulcookie, 1, edp->crow, edp->ccol);
 }
 
-static char *sun_fkeys[] = {
+static const char *sun_fkeys[] = {
 	"\033[224z",	/* F1 */
 	"\033[225z",
 	"\033[226z",
@@ -539,7 +539,7 @@ static char *sun_fkeys[] = {
 };
 
 int
-wsemul_sun_translate(void *cookie, keysym_t in, char **out)
+wsemul_sun_translate(void *cookie, keysym_t in, const char **out)
 {
 	static char c;
 

@@ -479,11 +479,23 @@ BUILDING
      sourcesets    Create source sets of the source tree into
                    RELEASEDIR/source/sets.
 
+     syspkgs       Create syspkgs from DESTDIR into
+                   RELEASEDIR/MACHINE/binary/syspkgs.  Should be run after
+                   ``make distribution'' (as ``make build'' does not install
+                   all of the required files).
+
      release       Do a ``make distribution'', build kernels, distribution
                    media, and install sets (this as per ``make sets''), and
                    then package the system into a standard release layout as
                    described by release(7).  This requires that RELEASEDIR be
                    set (see above).
+
+     iso-image     Create a CD-ROM image in
+                   RELEASEDIR/MACHINE/installation/cdrom.  RELEASEDIR must
+                   already have been populated by ``make release'' or equiva-
+                   lent.  This requires the mkisofs(1) utility, which is not
+                   part of NetBSD, but which can be installed from
+                   pkgsrc/sysutils/cdrtools.
 
      regression-tests
                    Can only be run after building the regression tests in the
@@ -529,7 +541,7 @@ BUILDING
                    installworld''.
 
      kernel=kconf  Build a new kernel.  The kconf argument is the name of a
-                   configuration file suitable for use by config(8).  If kconf
+                   configuration file suitable for use by config(1).  If kconf
                    does not contain any `/' characters, the configuration file
                    is expected to be found in the KERNCONFDIR directory, which
                    is typically sys/arch/MACHINE/conf.  The new kernel will be
@@ -548,6 +560,10 @@ BUILDING
      sets          Perform ``make sets''.
 
      sourcesets    Perform ``make sourcesets''.
+
+     syspkgs       Perform ``make syspkgs''.
+
+     iso-image     Perform ``make iso-image''.
 
      The following command line options alter the behaviour of the build.sh
      operations described above:
@@ -699,7 +715,7 @@ OBSOLETE VARIABLES
                  TOOLCHAIN_MISSING=yes.
 
 SEE ALSO
-     make(1), hier(7), release(7)
+     make(1), hier(7), release(7), pkgsrc/sysutils/cdrtools
 
 HISTORY
      The build.sh based build scheme was introduced for NetBSD 1.6 as
@@ -708,4 +724,4 @@ HISTORY
 BUGS
      A few platforms are not yet using this build system.
 
-NetBSD                         February 6, 2003                         NetBSD
+NetBSD                          January 4, 2006                         NetBSD

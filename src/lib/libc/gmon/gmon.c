@@ -1,4 +1,4 @@
-/*	$NetBSD: gmon.c,v 1.22 2004/05/10 22:16:42 thorpej Exp $	*/
+/*	$NetBSD: gmon.c,v 1.26 2006/05/11 17:19:15 mrg Exp $	*/
 
 /*
  * Copyright (c) 2003, 2004 Wasabi Systems, Inc.
@@ -69,7 +69,7 @@
 #if 0
 static char sccsid[] = "@(#)gmon.c	8.1 (Berkeley) 6/4/93";
 #else
-__RCSID("$NetBSD: gmon.c,v 1.22 2004/05/10 22:16:42 thorpej Exp $");
+__RCSID("$NetBSD: gmon.c,v 1.26 2006/05/11 17:19:15 mrg Exp $");
 #endif
 #endif
 
@@ -202,7 +202,7 @@ _m_gmon_destructor(void *arg)
 	/* XXX eww, linear list traversal. */
 	for (q = _gmoninuse, prev = &_gmoninuse;
 	     q != NULL;
-	     prev = (struct gmonparam **)&q->kcount,
+	     prev = (struct gmonparam **)(void *)&q->kcount,	/* XXX */
 		 q = (struct gmonparam *)(void *)q->kcount) {
 		if (q == p)
 			*prev = (struct gmonparam *)(void *)q->kcount;
@@ -377,10 +377,10 @@ _mcleanup()
 	int mib[2];
 	size_t size;
 	char *profdir;
-	char *proffile;
+	const char *proffile;
 	char  buf[PATH_MAX];
 #ifdef DEBUG
-	int log, len;
+	int logfd, len;
 	char buf2[200];
 #endif
 
@@ -438,14 +438,14 @@ _mcleanup()
 		return;
 	}
 #ifdef DEBUG
-	log = open("gmon.log", O_CREAT|O_TRUNC|O_WRONLY, 0664);
-	if (log < 0) {
+	logfd = open("gmon.log", O_CREAT|O_TRUNC|O_WRONLY, 0664);
+	if (logfd < 0) {
 		warn("mcount: Cannot open `gmon.log'");
 		return;
 	}
-	len = snprintf(buf2, sizeof buf2, "[mcleanup1] kcount 0x%x ssiz %d\n",
+	len = snprintf(buf2, sizeof buf2, "[mcleanup1] kcount %p ssiz %lu\n",
 	    p->kcount, p->kcountsize);
-	write(log, buf2, len);
+	(void)write(logfd, buf2, (size_t)len);
 #endif
 #ifdef _REENTRANT
 	_m_gmon_merge();
@@ -469,10 +469,10 @@ _mcleanup()
 		     toindex = p->tos[toindex].link) {
 #ifdef DEBUG
 			len = snprintf(buf2, sizeof buf2,
-			"[mcleanup2] frompc 0x%x selfpc 0x%x count %d\n" ,
-				frompc, p->tos[toindex].selfpc,
-				p->tos[toindex].count);
-			write(log, buf2, len);
+			"[mcleanup2] frompc 0x%lx selfpc 0x%lx count %lu\n" ,
+				(u_long)frompc, (u_long)p->tos[toindex].selfpc,
+				(u_long)p->tos[toindex].count);
+			(void)write(logfd, buf2, (size_t)len);
 #endif
 			rawarc.raw_frompc = frompc;
 			rawarc.raw_selfpc = p->tos[toindex].selfpc;

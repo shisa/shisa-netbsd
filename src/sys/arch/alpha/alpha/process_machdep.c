@@ -1,4 +1,4 @@
-/* $NetBSD: process_machdep.c,v 1.21 2003/09/21 15:14:51 skd Exp $ */
+/* $NetBSD: process_machdep.c,v 1.23 2005/12/11 12:16:10 christos Exp $ */
 
 /*
  * Copyright (c) 1994 Christopher G. Demetriou
@@ -54,7 +54,7 @@
 
 #include <sys/cdefs.h>			/* RCS ID & Copyright macro defns */
 
-__KERNEL_RCSID(0, "$NetBSD: process_machdep.c,v 1.21 2003/09/21 15:14:51 skd Exp $");
+__KERNEL_RCSID(0, "$NetBSD: process_machdep.c,v 1.23 2005/12/11 12:16:10 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -84,7 +84,7 @@ process_read_regs(struct lwp *l, struct reg *regs)
 }
 
 int
-process_write_regs(struct lwp *l, struct reg *regs)
+process_write_regs(struct lwp *l, const struct reg *regs)
 {
 
 	regtoframe(regs, lwp_frame(l));
@@ -124,7 +124,7 @@ process_read_fpregs(struct lwp *l, struct fpreg *regs)
 }
 
 int
-process_write_fpregs(struct lwp *l, struct fpreg *regs)
+process_write_fpregs(struct lwp *l, const struct fpreg *regs)
 {
 
 	if (l->l_addr->u_pcb.pcb_fpcpu != NULL)

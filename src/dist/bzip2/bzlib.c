@@ -1,4 +1,4 @@
-/*	$NetBSD: bzlib.c,v 1.1.1.2 2002/03/15 01:35:26 mjl Exp $	*/
+/*	$NetBSD: bzlib.c,v 1.3 2006/03/17 02:52:56 chris Exp $	*/
 
 
 /*-------------------------------------------------------------*/
@@ -1432,7 +1432,7 @@ BZFILE * bzopen_or_bzdopen
       case 's':
          smallMode = 1; break;
       default:
-         if (isdigit((int)(*mode))) {
+         if (isdigit((unsigned char)(*mode))) {
             blockSize100k = *mode-BZ_HDR_0;
          }
       }
@@ -1538,9 +1538,10 @@ int BZ_API(BZ2_bzflush) (BZFILE *b)
 void BZ_API(BZ2_bzclose) (BZFILE* b)
 {
    int bzerr;
-   FILE *fp = ((bzFile *)b)->handle;
+   FILE *fp;
    
    if (b==NULL) {return;}
+   fp = ((bzFile *)b)->handle;
    if(((bzFile*)b)->writing){
       BZ2_bzWriteClose(&bzerr,b,0,NULL,NULL);
       if(bzerr != BZ_OK){

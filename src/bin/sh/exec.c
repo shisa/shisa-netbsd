@@ -1,4 +1,4 @@
-/*	$NetBSD: exec.c,v 1.37 2003/08/07 09:05:31 agc Exp $	*/
+/*	$NetBSD: exec.c,v 1.39 2006/03/18 05:23:08 christos Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -37,7 +37,7 @@
 #if 0
 static char sccsid[] = "@(#)exec.c	8.4 (Berkeley) 6/8/95";
 #else
-__RCSID("$NetBSD: exec.c,v 1.37 2003/08/07 09:05:31 agc Exp $");
+__RCSID("$NetBSD: exec.c,v 1.39 2006/03/18 05:23:08 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -363,7 +363,8 @@ hashcmd(int argc, char **argv)
 		if (verbose) {
 			if (entry.cmdtype != CMDUNKNOWN) {	/* if no error msg */
 				cmdp = cmdlookup(name, 0);
-				printentry(cmdp, verbose);
+				if (cmdp != NULL)
+					printentry(cmdp, verbose);
 			}
 			flushall();
 		}
@@ -602,9 +603,12 @@ builtin_success:
 	cmdp->param.bltin = bltin;
 	INTON;
 success:
-	cmdp->rehash = 0;
-	entry->cmdtype = cmdp->cmdtype;
-	entry->u = cmdp->param;
+	if (cmdp) {
+		cmdp->rehash = 0;
+		entry->cmdtype = cmdp->cmdtype;
+		entry->u = cmdp->param;
+	} else
+		entry->cmdtype = CMDUNKNOWN;
 }
 
 

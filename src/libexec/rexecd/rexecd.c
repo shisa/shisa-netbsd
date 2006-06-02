@@ -1,4 +1,4 @@
-/*	$NetBSD: rexecd.c,v 1.21.2.2 2005/07/05 21:41:43 tron Exp $	*/
+/*	$NetBSD: rexecd.c,v 1.24 2006/05/11 00:22:52 mrg Exp $	*/
 
 /*
  * Copyright (c) 1983, 1993
@@ -36,7 +36,7 @@ __COPYRIGHT("@(#) Copyright (c) 1983, 1993\n\
 #if 0
 static char sccsid[] = "from: @(#)rexecd.c	8.1 (Berkeley) 6/4/93";
 #else
-__RCSID("$NetBSD: rexecd.c,v 1.21.2.2 2005/07/05 21:41:43 tron Exp $");
+__RCSID("$NetBSD: rexecd.c,v 1.24 2006/05/11 00:22:52 mrg Exp $");
 #endif
 #endif /* not lint */
 
@@ -368,7 +368,7 @@ doit(struct sockaddr *fromp)
 		cp = pwd->pw_shell;
 	if (dolog)
 		syslog(LOG_INFO, "running command for %s: %s", user, cmdbuf);
-	(void)execl(pwd->pw_shell, cp, "-c", cmdbuf, 0);
+	(void)execl(pwd->pw_shell, cp, "-c", cmdbuf, NULL);
 	if (dolog)
 		syslog(LOG_ERR, "execl failed for %s: %m", user);
 	err(EXIT_FAILURE, "%s", pwd->pw_shell);

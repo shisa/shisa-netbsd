@@ -1,4 +1,4 @@
-/* $NetBSD: segwrite.c,v 1.7.2.1 2005/05/07 11:21:29 tron Exp $ */
+/* $NetBSD: segwrite.c,v 1.12 2006/05/23 22:35:20 jnemeth Exp $ */
 /*-
  * Copyright (c) 2003 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -93,7 +93,7 @@
 
 #include "bufcache.h"
 #include "vnode.h"
-#include "lfs.h"
+#include "lfs_user.h"
 #include "segwrite.h"
 
 /* Compatibility definitions */
@@ -317,6 +317,7 @@ lfs_writeinode(struct lfs * fs, struct segment * sp, struct inode * ip)
 		    (sp->ninodes % INOPB(fs));
 	if (gotblk) {
 		LFS_LOCK_BUF(bp);
+		assert(!(bp->b_flags & B_INVAL));
 		brelse(bp);
 	}
 	/* Increment inode count in segment summary block. */
@@ -788,6 +789,8 @@ lfs_writeseg(struct lfs * fs, struct segment * sp)
 	else
 		el_size = sizeof(u_int32_t);
 	datap = dp = malloc(nblocks * el_size);
+	if (dp == NULL)
+		err(1, NULL);
 	for (bpp = sp->bpp, i = nblocks - 1; i--;) {
 		++bpp;
 		/* Loop through gop_write cluster blocks */
@@ -897,6 +900,8 @@ lfs_seglock(struct lfs * fs, unsigned long flags)
 	fs->lfs_seglock = 1;
 
 	sp = fs->lfs_sp = (struct segment *) malloc(sizeof(*sp));
+	if (sp == NULL)
+		err(1, NULL);
 	sp->bpp = (struct ubuf **) malloc(fs->lfs_ssize * sizeof(struct ubuf *));
 	if (!sp->bpp)
 		errx(!preen, "Could not allocate %zu bytes: %s",

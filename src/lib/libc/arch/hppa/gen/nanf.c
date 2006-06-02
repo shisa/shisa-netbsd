@@ -1,8 +1,8 @@
-/*	$NetBSD: nanf.c,v 1.1.2.1 2005/04/19 12:32:50 tron Exp $	*/
+/*	$NetBSD: nanf.c,v 1.1 2005/04/15 22:39:10 kleink Exp $	*/
 
 #include <sys/cdefs.h>
 #if defined(LIBC_SCCS) && !defined(lint)
-__RCSID("$NetBSD: nanf.c,v 1.1.2.1 2005/04/19 12:32:50 tron Exp $");
+__RCSID("$NetBSD: nanf.c,v 1.1 2005/04/15 22:39:10 kleink Exp $");
 #endif /* LIBC_SCCS and not lint */
 
 #include <math.h>

@@ -1,4 +1,4 @@
-/*	$NetBSD: rpcb_prot.c,v 1.5 2003/09/09 03:56:40 itojun Exp $	*/
+/*	$NetBSD: rpcb_prot.c,v 1.9 2006/05/11 17:11:57 mrg Exp $	*/
 
 /*
  * Sun RPC is a product of Sun Microsystems, Inc. and is provided for
@@ -39,7 +39,7 @@
 #if 0
 static char sccsid[] = "@(#)rpcb_prot.c 1.9 89/04/21 Copyr 1984 Sun Micro";
 #else
-__RCSID("$NetBSD: rpcb_prot.c,v 1.5 2003/09/09 03:56:40 itojun Exp $");
+__RCSID("$NetBSD: rpcb_prot.c,v 1.9 2006/05/11 17:11:57 mrg Exp $");
 #endif
 #endif
 
@@ -139,6 +139,7 @@ xdr_rpcblist_ptr(xdrs, rp)
 	/* XXX: rp may be NULL ??? */
 
 	freeing = (xdrs->x_op == XDR_FREE);
+	next = NULL;
 
 	for (;;) {
 		more_elements = (bool_t)(*rp != NULL);
@@ -153,7 +154,7 @@ xdr_rpcblist_ptr(xdrs, rp)
 		 * the case of freeing we must remember the next object
 		 * before we free the current object ...
 		 */
-		if (freeing)
+		if (freeing && *rp)
 			next = (*rp)->rpcb_next;
 		if (! xdr_reference(xdrs, (caddr_t *)rp,
 		    (u_int)sizeof (rpcblist), (xdrproc_t)xdr_rpcb)) {
@@ -167,7 +168,7 @@ xdr_rpcblist_ptr(xdrs, rp)
 			 * gets nulled out by the xdr_reference
 			 * but next itself survives.
 			 */
-		} else {
+		} else if (*rp) {
 			rp = &((*rp)->rpcb_next);
 		}
 	}
@@ -235,6 +236,7 @@ xdr_rpcb_entry_list_ptr(xdrs, rp)
 	/* XXX: rp is allowed to be NULL ??? */
 
 	freeing = (xdrs->x_op == XDR_FREE);
+	next = NULL;
 
 	for (;;) {
 		more_elements = (bool_t)(*rp != NULL);
@@ -249,7 +251,7 @@ xdr_rpcb_entry_list_ptr(xdrs, rp)
 		 * the case of freeing we must remember the next object
 		 * before we free the current object ...
 		 */
-		if (freeing)
+		if (freeing && *rp)
 			next = (*rp)->rpcb_entry_next;
 		if (! xdr_reference(xdrs, (caddr_t *)rp,
 		    (u_int)sizeof (rpcb_entry_list),
@@ -264,7 +266,7 @@ xdr_rpcb_entry_list_ptr(xdrs, rp)
 			 * gets nulled out by the xdr_reference
 			 * but next itself survives.
 			 */
-		} else {
+		} else if (*rp) {
 			rp = &((*rp)->rpcb_entry_next);
 		}
 	}
@@ -361,7 +363,7 @@ xdr_netbuf(xdrs, objp)
 	if (!xdr_u_int32_t(xdrs, (u_int32_t *) &objp->maxlen)) {
 		return (FALSE);
 	}
-	dummy = xdr_bytes(xdrs, (char **)&(objp->buf),
+	dummy = xdr_bytes(xdrs, (char **)(void *)&(objp->buf),
 			(u_int *)&(objp->len), objp->maxlen);
 	return (dummy);
 }

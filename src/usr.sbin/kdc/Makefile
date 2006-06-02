@@ -1,4 +1,4 @@
-# $NetBSD: Makefile,v 1.11 2005/01/10 03:11:18 lukem Exp $
+# $NetBSD: Makefile,v 1.13 2006/03/23 21:51:14 wiz Exp $
 
 NOLINT= # defined
 
@@ -10,16 +10,6 @@ DIST=		${NETBSDSRCDIR}/crypto/dist
 WARNS?=  1
 
 PROG= kdc
-
-.if ${MKKERBEROS4} != "no"
-CPPFLAGS+= -DKRB4
-CPPFLAGS+= -I${DESTDIR}/usr/include/kerberosIV
-KRB4LDADD= -lkrb -ldes
-KRB4DPADD= ${LIBKRB} ${LIBDES}
-
-SRCS+= 	kaserver.c
-
-.endif
 
 SRCS+= 	524.c		\
 	config.c	\
@@ -45,9 +35,9 @@ CPPFLAGS+=-DHAVE_IPV6
 
 VERS!=	cd ${NETBSDSRCDIR}/lib/libvers && ${PRINTOBJDIR}
 
-LDADD+=	-lhdb -lkrb5 ${KRB4LDADD} -lcrypto -lasn1 -lcom_err \
+LDADD+=	-lhdb -lkrb5 -lcrypto -lasn1 -lcom_err \
 	-L${VERS} -lvers -lroken -lcrypt -lutil
-DPADD+=	${LIBHDB} ${LIBKRB5} ${KRB4DPADD} ${LIBCRYPTO} ${LIBASN1} ${LIBCOM_ERR} \
+DPADD+=	${LIBHDB} ${LIBKRB5} ${LIBCRYPTO} ${LIBASN1} ${LIBCOM_ERR} \
 	${VERS}/libvers.a ${LIBROKEN} ${LIBCRYPT} ${LIBUTIL}
 
 MAN=	kdc.8

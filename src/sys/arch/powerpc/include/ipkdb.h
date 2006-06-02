@@ -1,4 +1,4 @@
-/*	$NetBSD: ipkdb.h,v 1.2 1997/04/16 22:57:06 thorpej Exp $	*/
+/*	$NetBSD: ipkdb.h,v 1.4 2006/02/16 20:17:14 perry Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996 Wolfgang Solfrank.

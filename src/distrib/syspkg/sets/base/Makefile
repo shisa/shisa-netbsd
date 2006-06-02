@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.6 2004/06/30 03:37:41 jmc Exp $
+#	$NetBSD: Makefile,v 1.8 2006/03/23 20:00:36 wiz Exp $
 
 SUBDIR+=base-adosfs-lkm
 SUBDIR+=base-adosfs-root
@@ -38,8 +38,6 @@ SUBDIR+=base-htmldoc-share
 SUBDIR+=base-i18n-shlib
 SUBDIR+=base-ipf-lkm
 SUBDIR+=base-isdn-bin
-SUBDIR+=base-krb4-root
-SUBDIR+=base-krb4-shlib
 SUBDIR+=base-krb5-bin
 SUBDIR+=base-krb5-examples
 SUBDIR+=base-krb5-root
@@ -118,9 +116,6 @@ SUBDIR+=base-slip-root
 SUBDIR+=base-smm-share
 SUBDIR+=base-sup-bin
 SUBDIR+=base-sup-examples
-SUBDIR+=base-sushi-bin
-SUBDIR+=base-sushi-share
-SUBDIR+=base-sushi_locale-share
 SUBDIR+=base-sys-devlinks
 SUBDIR+=base-sys-examples
 SUBDIR+=base-sys-lkm

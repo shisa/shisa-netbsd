@@ -1,4 +1,4 @@
-/*	$NetBSD: route6d.c,v 1.51 2003/10/31 10:09:55 hannken Exp $	*/
+/*	$NetBSD: route6d.c,v 1.58 2006/05/25 02:40:58 rpaulo Exp $	*/
 /*	$KAME: route6d.c,v 1.94 2002/10/26 20:08:55 itojun Exp $	*/
 
 /*
@@ -32,7 +32,7 @@
 
 #include <sys/cdefs.h>
 #ifndef	lint
-__RCSID("$NetBSD: route6d.c,v 1.51 2003/10/31 10:09:55 hannken Exp $");
+__RCSID("$NetBSD: route6d.c,v 1.58 2006/05/25 02:40:58 rpaulo Exp $");
 #endif
 
 #include <stdio.h>
@@ -117,7 +117,7 @@ struct	ifc {			/* Configuration of an interface */
 	int	ifc_joined;			/* joined to ff02::9 */
 };
 
-struct	ifac {			/* Adddress associated to an interface */ 
+struct	ifac {			/* Address associated to an interface */ 
 	struct	ifc *ifa_conf;		/* back pointer */
 	struct	ifac *ifa_next;
 	struct	in6_addr ifa_addr;	/* address */
@@ -208,66 +208,77 @@ volatile sig_atomic_t seenusr1;
 #define RRTF_SENDANYWAY		0x40000000
 #define	RRTF_CHANGED		0x80000000
 
-int main __P((int, char **));
-void sighandler __P((int));
-void ripalarm __P((void));
-void riprecv __P((void));
-void ripsend __P((struct ifc *, struct sockaddr_in6 *, int));
-int out_filter __P((struct riprt *, struct ifc *));
-void init __P((void));
-void sockopt __P((struct ifc *));
-void ifconfig __P((void));
-void ifconfig1 __P((const char *, const struct sockaddr *, struct ifc *, int));
-void rtrecv __P((void));
-int rt_del __P((const struct sockaddr_in6 *, const struct sockaddr_in6 *,
-	const struct sockaddr_in6 *));
-int rt_deladdr __P((struct ifc *, const struct sockaddr_in6 *,
-	const struct sockaddr_in6 *));
-void filterconfig __P((void));
-int getifmtu __P((int));
-const char *rttypes __P((struct rt_msghdr *));
-const char *rtflags __P((struct rt_msghdr *));
-const char *ifflags __P((int));
-int ifrt __P((struct ifc *, int));
-void ifrt_p2p __P((struct ifc *, int));
-void applymask __P((struct in6_addr *, struct in6_addr *));
-void applyplen __P((struct in6_addr *, int));
-void ifrtdump __P((int));
-void ifdump __P((int));
-void ifdump0 __P((FILE *, const struct ifc *));
-void rtdump __P((int));
-void rt_entry __P((struct rt_msghdr *, int));
-void rtdexit __P((void));
-void riprequest __P((struct ifc *, struct netinfo6 *, int,
-	struct sockaddr_in6 *));
-void ripflush __P((struct ifc *, struct sockaddr_in6 *));
-void sendrequest __P((struct ifc *));
-int sin6mask2len __P((const struct sockaddr_in6 *));
-int mask2len __P((const struct in6_addr *, int));
-int sendpacket __P((struct sockaddr_in6 *, int));
-int addroute __P((struct riprt *, const struct in6_addr *, struct ifc *));
-int delroute __P((struct netinfo6 *, struct in6_addr *));
-struct in6_addr *getroute __P((struct netinfo6 *, struct in6_addr *));
-void krtread __P((int));
-int tobeadv __P((struct riprt *, struct ifc *));
-char *allocopy __P((char *));
-char *hms __P((void));
-const char *inet6_n2p __P((const struct in6_addr *));
-struct ifac *ifa_match __P((const struct ifc *, const struct in6_addr *, int));
-struct in6_addr *plen2mask __P((int));
-struct riprt *rtsearch __P((struct netinfo6 *, struct riprt **));
-int ripinterval __P((int));
-time_t ripsuptrig __P((void));
-void fatal __P((const char *, ...))
+int	main(int, char **);
+void	sighandler(int);
+void	ripalarm(void);
+void	riprecv(void);
+void	ripsend(struct ifc *, struct sockaddr_in6 *, int);
+int	out_filter(struct riprt *, struct ifc *);
+void	init(void);
+void	sockopt(struct ifc *);
+void	ifconfig(void);
+void	ifconfig1(const char *, const struct sockaddr *, struct ifc *, int);
+void	rtrecv(void);
+int	rt_del(const struct sockaddr_in6 *, const struct sockaddr_in6 *,
+	    const struct sockaddr_in6 *);
+int	rt_deladdr(struct ifc *, const struct sockaddr_in6 *,
+	    const struct sockaddr_in6 *);
+void	filterconfig(void);
+int	getifmtu(int);
+const char *
+	rttypes(struct rt_msghdr *);
+const char *
+	rtflags(struct rt_msghdr *);
+const char *
+	ifflags(int);
+int	ifrt(struct ifc *, int);
+void	ifrt_p2p(struct ifc *, int);
+void	applymask(struct in6_addr *, struct in6_addr *);
+void	applyplen(struct in6_addr *, int);
+void	ifrtdump(int);
+void	ifdump(int);
+void	ifdump0(FILE *, const struct ifc *);
+void	rtdump(int);
+void	rt_entry(struct rt_msghdr *, int);
+void	rtdexit(void);
+void	riprequest(struct ifc *, struct netinfo6 *, int,
+	    struct sockaddr_in6 *);
+void	ripflush(struct ifc *, struct sockaddr_in6 *);
+void	sendrequest(struct ifc *);
+int	sin6mask2len(const struct sockaddr_in6 *);
+int	mask2len(const struct in6_addr *, int);
+int	sendpacket(struct sockaddr_in6 *, int);
+int	addroute(struct riprt *, const struct in6_addr *, struct ifc *);
+int	delroute(struct netinfo6 *, struct in6_addr *);
+struct in6_addr *
+	getroute(struct netinfo6 *, struct in6_addr *);
+void	krtread(int);
+int	tobeadv(struct riprt *, struct ifc *);
+char *	allocopy(char *);
+char *	hms(void);
+const char *
+	inet6_n2p(const struct in6_addr *);
+struct ifac *
+	ifa_match(const struct ifc *, const struct in6_addr *, int);
+struct in6_addr *
+	plen2mask(int);
+struct riprt *
+	rtsearch(struct netinfo6 *, struct riprt **);
+int	ripinterval(int);
+time_t	ripsuptrig(void);
+void	fatal(const char *, ...)
 	__attribute__((__format__(__printf__, 1, 2)));
-void trace __P((int, const char *, ...))
+void	trace(int, const char *, ...)
 	__attribute__((__format__(__printf__, 2, 3)));
-void tracet __P((int, const char *, ...))
+void	tracet(int, const char *, ...)
 	__attribute__((__format__(__printf__, 2, 3)));
-unsigned int if_maxindex __P((void));
-struct ifc *ifc_find __P((char *));
-struct iff *iff_find __P((struct ifc *, int));
-void setindex2ifc __P((int, struct ifc *));
+unsigned int
+	if_maxindex(void);
+struct ifc *
+	ifc_find(char *);
+struct iff *
+	iff_find(struct ifc *, int);
+void	setindex2ifc(int, struct ifc *);
 
 #define	MALLOC(type)	((type *)malloc(sizeof(type)))
 
@@ -700,7 +711,7 @@ ripflush(struct ifc *ifcp, struct sockaddr_in6 *sin6)
 		}
 	}
 	error = sendpacket(sin6, RIPSIZE(nrt));
-	if (error == EAFNOSUPPORT) {
+	if (error == EAFNOSUPPORT && ifcp) {
 		/* Protocol not supported */
 		tracet(1, "Could not send info to %s (%s): "
 			"set IFF_UP to 0\n",
@@ -2059,7 +2070,10 @@ ifrt_p2p(struct ifc *ifcp, int again)
 #define P2PADVERT_ADDR		2
 #define P2PADVERT_DEST		4
 #define P2PADVERT_MAX		4
-	const enum { CISCO, GATED, ROUTE6D } behavior = GATED;
+#define	CISCO	0
+#define	GATED	1
+#define ROUTE6D	2
+#define BEHAVIOR GATED
 	const char *category = "";
 	const char *noadv;
 
@@ -2069,61 +2083,59 @@ ifrt_p2p(struct ifc *ifcp, int again)
 		applyplen(&addr, ifa->ifa_plen);
 		applyplen(&dest, ifa->ifa_plen);
 		advert = ignore = 0;
-		switch (behavior) {
-		case CISCO:
-			/*
-			 * honor addr/plen, just like normal shared medium
-			 * interface.  this may cause trouble if you reuse
-			 * addr/plen on other interfaces.
-			 *
-			 * advertise addr/plen.
-			 */
-			advert |= P2PADVERT_NETWORK;
-			break;
-		case GATED:
-			/*
-			 * prefixlen on p2p interface is meaningless.
-			 * advertise addr/128 and dest/128.
-			 *
-			 * do not install network route to route6d routing
-			 * table (if we do, it would prevent route installation
-			 * for other p2p interface that shares addr/plen).
-			 *
-			 * XXX what should we do if dest is ::?  it will not
-			 * get announced anyways (see following filter),
-			 * but we need to think.
-			 */
-			advert |= P2PADVERT_ADDR;
-			advert |= P2PADVERT_DEST;
-			ignore |= P2PADVERT_NETWORK;
-			break;
-		case ROUTE6D:
-			/*
-			 * just for testing.  actually the code is redundant
-			 * given the current p2p interface address assignment
-			 * rule for kame kernel.
-			 *
-			 * intent:
-			 *	A/n -> announce A/n
-			 *	A B/n, A and B share prefix -> A/n (= B/n)
-			 *	A B/n, do not share prefix -> A/128 and B/128
-			 * actually, A/64 and A B/128 are the only cases
-			 * permitted by the kernel:
-			 *	A/64 -> A/64
-			 *	A B/128 -> A/128 and B/128
-			 */
-			if (!IN6_IS_ADDR_UNSPECIFIED(&ifa->ifa_raddr)) {
-				if (IN6_ARE_ADDR_EQUAL(&addr, &dest))
-					advert |= P2PADVERT_NETWORK;
-				else {
-					advert |= P2PADVERT_ADDR;
-					advert |= P2PADVERT_DEST;
-					ignore |= P2PADVERT_NETWORK;
-				}
-			} else
+#if BEHAVIOR == CISCO
+		/*
+		 * honor addr/plen, just like normal shared medium
+		 * interface.  this may cause trouble if you reuse
+		 * addr/plen on other interfaces.
+		 *
+		 * advertise addr/plen.
+		 */
+		advert |= P2PADVERT_NETWORK;
+#endif
+#if BEHAVIOR == GATED
+		/*
+		 * prefixlen on p2p interface is meaningless.
+		 * advertise addr/128 and dest/128.
+		 *
+		 * do not install network route to route6d routing
+		 * table (if we do, it would prevent route installation
+		 * for other p2p interface that shares addr/plen).
+		 *
+		 * XXX what should we do if dest is ::?  it will not
+		 * get announced anyways (see following filter),
+		 * but we need to think.
+		 */
+		advert |= P2PADVERT_ADDR;
+		advert |= P2PADVERT_DEST;
+		ignore |= P2PADVERT_NETWORK;
+#endif
+#if BEHAVIOR == ROUTE6D
+		/*
+		 * just for testing.  actually the code is redundant
+		 * given the current p2p interface address assignment
+		 * rule for kame kernel.
+		 *
+		 * intent:
+		 *	A/n -> announce A/n
+		 *	A B/n, A and B share prefix -> A/n (= B/n)
+		 *	A B/n, do not share prefix -> A/128 and B/128
+		 * actually, A/64 and A B/128 are the only cases
+		 * permitted by the kernel:
+		 *	A/64 -> A/64
+		 *	A B/128 -> A/128 and B/128
+		 */
+		if (!IN6_IS_ADDR_UNSPECIFIED(&ifa->ifa_raddr)) {
+			if (IN6_ARE_ADDR_EQUAL(&addr, &dest))
 				advert |= P2PADVERT_NETWORK;
-			break;
-		}
+			else {
+				advert |= P2PADVERT_ADDR;
+				advert |= P2PADVERT_DEST;
+				ignore |= P2PADVERT_NETWORK;
+			}
+		} else
+			advert |= P2PADVERT_NETWORK;
+#endif
 
 		for (i = 1; i <= P2PADVERT_MAX; i *= 2) {
 			if ((ignore & i) != 0)
@@ -2407,7 +2419,7 @@ krtread(int again)
 {
 	int mib[6];
 	size_t msize;
-	char *buf, *p, *lim;
+	char *buf = NULL, *p, *lim;
 	struct rt_msghdr *rtm;
 	int retry;
 	const char *errmsg;
@@ -2423,8 +2435,10 @@ krtread(int again)
 	do {
 		retry++;
 		errmsg = NULL;
-		if (buf)
+		if (buf) {
 			free(buf);
+			buf = NULL;
+		}
 		if (sysctl(mib, 6, NULL, &msize, NULL, 0) < 0) {
 			errmsg = "sysctl estimate";
 			continue;
@@ -2443,7 +2457,7 @@ krtread(int again)
 		    (u_long)msize);
 		/*NOTREACHED*/
 	} else if (1 < retry)
-		syslog(LOG_INFO, "NET_RT_DUMP %d retires", retry);
+		syslog(LOG_INFO, "NET_RT_DUMP %d retries", retry);
 
 	lim = buf + msize;
 	for (p = buf; p < lim; p += rtm->rtm_msglen) {

@@ -1,4 +1,4 @@
-/*	$NetBSD: chat.c,v 1.2 2005/02/20 10:47:16 cube Exp $	*/
+/*	$NetBSD: chat.c,v 1.8 2006/03/25 21:56:29 he Exp $	*/
 
 /*
  *	Chat -- a program for automatic session establishment (i.e. dial
@@ -93,7 +93,7 @@
 #if 0
 static const char rcsid[] = "Id: chat.c,v 1.30 2004/01/17 05:47:55 carlsonj Exp";
 #else
-__RCSID("$NetBSD: chat.c,v 1.2 2005/02/20 10:47:16 cube Exp $");
+__RCSID("$NetBSD: chat.c,v 1.8 2006/03/25 21:56:29 he Exp $");
 #endif
 #endif
 
@@ -646,7 +646,7 @@ int status;
 	int c, rep_len;
 
 	rep_len = strlen(report_buffer);
-	while (rep_len + 1 <= sizeof(report_buffer)) {
+	while (rep_len < sizeof(report_buffer) - 1) {
 	    alarm(1);
 	    c = get_char();
 	    alarm(0);
@@ -1295,8 +1295,10 @@ int c;
 int put_string (s)
 register char *s;
 {
+    char *ss;
+
     quiet = 0;
-    s = clean(s, 1);
+    s = ss = clean(s, 1);
 
     if (verbose) {
 	if (quiet)
@@ -1311,8 +1313,10 @@ register char *s;
 	register char c = *s++;
 
 	if (c != '\\') {
-	    if (!write_char (c))
+	    if (!write_char (c)) {
+		free(ss);
 		return 0;
+	    }
 	    continue;
 	}
 
@@ -1331,14 +1335,17 @@ register char *s;
 	    break;
 
 	default:
-	    if (!write_char (c))
+	    if (!write_char (c)) {
+		free(ss);
 		return 0;
+	    }
 	    break;
 	}
     }
 
     alarm(0);
     alarmed = 0;
+    free(ss);
     return (1);
 }
 
@@ -1379,7 +1386,7 @@ int get_string(string)
 register char *string;
 {
     char temp[STR_LEN];
-    int c, printed = 0, len, minlen;
+    int c, len, minlen;
     register char *s = temp, *end = s + STR_LEN;
     char *logged = temp;
 
@@ -1394,12 +1401,14 @@ register char *string;
     if (len > STR_LEN) {
 	msgf("expect string is too long");
 	exit_code = 1;
+	free(string);
 	return 0;
     }
 
     if (len == 0) {
 	if (verbose)
 	    msgf("got it");
+	free(string);
 	return (1);
     }
 
@@ -1475,6 +1484,7 @@ register char *string;
 
 	    alarm(0);
 	    alarmed = 0;
+	    free(string);
 	    return (1);
 	}
 
@@ -1492,6 +1502,7 @@ register char *string;
 		exit_code = n + 4;
 		strlcpy(fail_buffer, abort_string[n], sizeof(fail_buffer));
 		fail_reason = fail_buffer;
+		free(string);
 		return (0);
 	    }
 	}
@@ -1513,16 +1524,10 @@ register char *string;
     }
 
     alarm(0);
-    
-    if (verbose && printed) {
-	if (alarmed)
-	    msgf(" -- read timed out");
-	else
-	    msgf(" -- read failed: %m");
-    }
 
     exit_code = 3;
     alarmed   = 0;
+    free(string);
     return (0);
 }
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: system.c,v 1.17 2003/08/07 11:16:36 agc Exp $	*/
+/*	$NetBSD: system.c,v 1.20 2006/05/11 00:27:27 mrg Exp $	*/
 
 /*-
  * Copyright (c) 1988 The Regents of the University of California.
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)system.c	4.5 (Berkeley) 4/26/91";
 #else
-__RCSID("$NetBSD: system.c,v 1.17 2003/08/07 11:16:36 agc Exp $");
+__RCSID("$NetBSD: system.c,v 1.20 2006/05/11 00:27:27 mrg Exp $");
 #endif
 #endif /* not lint */
 
@@ -205,8 +205,7 @@ doassociate()
     if (api_exch_intype(EXCH_TYPE_STORE_DESC, sizeof sd, (char *)&sd) == -1) {
 	return -1;
     }
-    sd.length = sd.length;
-    if (sd.length > sizeof buffer) {
+    if (sd.length >= sizeof buffer) {
 	doreject("(internal error) Authentication key too long");
 	return -1;
     }
@@ -484,7 +483,7 @@ doconnect()
 		return -1;
 	    }
 	} else {
-	    i = accept(serversock, (struct sockaddr *)0, (int *)0);
+	    i = accept(serversock, (struct sockaddr *)0, (socklen_t *)0);
 	    if (i == -1) {
 		perror("accepting API connection");
 		return -1;
@@ -631,7 +630,7 @@ shell(argc,argv)
 int	argc;
 char	*argv[];
 {
-    int length;
+    socklen_t length;
     struct sockaddr_in server;
     char sockNAME[128];
     static char **whereAPI = 0;
@@ -749,7 +748,7 @@ char	*argv[];
 	    char *cmdname;
 
 	    cmdname = getenv("SHELL");
-	    execlp(cmdname, cmdname, 0);
+	    execlp(cmdname, cmdname, NULL);
 	    perror("Exec'ing new shell");
 	    _exit(1);
 	} else {

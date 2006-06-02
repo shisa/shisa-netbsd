@@ -1,4 +1,4 @@
-/* $NetBSD: dol.c,v 1.21 2003/08/07 09:05:04 agc Exp $ */
+/* $NetBSD: dol.c,v 1.23 2006/03/18 07:09:08 christos Exp $ */
 
 /*-
  * Copyright (c) 1980, 1991, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)dol.c	8.1 (Berkeley) 5/31/93";
 #else
-__RCSID("$NetBSD: dol.c,v 1.21 2003/08/07 09:05:04 agc Exp $");
+__RCSID("$NetBSD: dol.c,v 1.23 2006/03/18 07:09:08 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -763,8 +763,10 @@ setDolp(Char *cp)
 	addla(dp);
 	xfree((ptr_t) dp);
     }
-    else
+    else {
 	addla(cp);
+	xfree((ptr_t) cp);
+    }
 
     dolp = STRNULL;
     if (seterr)
@@ -825,8 +827,10 @@ again:
 	if (errno == EEXIST) {
 	    if (unlink(tmp) == -1) {
 		(void)gettimeofday(&tv, NULL);
-		shtemp = Strspl(STRtmpsh, putn((((int)tv.tv_sec) ^ 
-		    ((int)tv.tv_usec) ^ ((int)getpid())) & 0x00ffffff));
+		mbp = putn((((int)tv.tv_sec) ^ 
+		    ((int)tv.tv_usec) ^ ((int)getpid())) & 0x00ffffff);
+		shtemp = Strspl(STRtmpsh, mbp);
+		xfree((ptr_t)mbp);
 	    }
 	    goto again;
 	}

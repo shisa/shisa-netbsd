@@ -1,4 +1,4 @@
-/*	$NetBSD: mcontext.h,v 1.5 2004/10/21 16:49:47 fvdl Exp $	*/
+/*	$NetBSD: mcontext.h,v 1.8 2006/03/29 23:07:50 cube Exp $	*/
 
 /*-
  * Copyright (c) 1999 The NetBSD Foundation, Inc.
@@ -138,6 +138,8 @@ typedef __greg32_t	__gregset32_t[_NGREG32];
 #define _REG32_UESP	17
 #define _REG32_SS	18
 
+#define _UC_MACHINE32_SP(uc)	((uc)->uc_mcontext.__gregs[_REG32_UESP])
+
 /*
  * Floating point register state
  */
@@ -151,7 +153,8 @@ typedef struct {
 #define _UC_MACHINE_PAD32	5
 
 struct trapframe;
-int check_mcontext(const mcontext_t *, struct trapframe *);
+struct lwp;
+int check_mcontext(struct lwp *, const mcontext_t *, struct trapframe *);
 
 #endif /* _KERNEL */
 

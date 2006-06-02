@@ -1,4 +1,4 @@
-/*	$NetBSD: systrace-translate.c,v 1.11 2003/03/25 23:15:22 provos Exp $	*/
+/*	$NetBSD: systrace-translate.c,v 1.16 2005/06/25 18:47:42 elad Exp $	*/
 /*	$OpenBSD: systrace-translate.c,v 1.10 2002/08/01 20:50:17 provos Exp $	*/
 /*
  * Copyright 2002 Niels Provos <provos@citi.umich.edu>
@@ -35,6 +35,7 @@
 #include <sys/tree.h>
 #include <sys/socket.h>
 #include <sys/signal.h>
+#include <sys/mman.h>
 #include <inttypes.h>
 #include <limits.h>
 #include <stdlib.h>
@@ -72,6 +73,8 @@ static int print_number(char *, size_t, struct intercept_translate *);
 static int print_uname(char *, size_t, struct intercept_translate *);
 static int print_pidname(char *, size_t, struct intercept_translate *);
 static int print_signame(char *, size_t, struct intercept_translate *);
+static int print_fcntlcmd(char *, size_t, struct intercept_translate *);
+static int print_memprot(char *, size_t, struct intercept_translate *);
 static int get_argv(struct intercept_translate *, int, pid_t, void *);
 static int print_argv(char *, size_t, struct intercept_translate *);
 
@@ -196,7 +199,7 @@ static int
 print_sockdom(char *buf, size_t buflen, struct intercept_translate *tl)
 {
 	int domain = (intptr_t)tl->trans_addr;
-	char *what = NULL;
+	const char *what = NULL;
 
 	switch (domain) {
 	case AF_UNIX:
@@ -235,7 +238,7 @@ static int
 print_socktype(char *buf, size_t buflen, struct intercept_translate *tl)
 {
 	int type = (intptr_t)tl->trans_addr;
-	char *what = NULL;
+	const char *what = NULL;
 
 	switch (type) {
 	case SOCK_STREAM:
@@ -271,7 +274,7 @@ print_uname(char *buf, size_t buflen, struct intercept_translate *tl)
 	uid_t uid = (intptr_t)tl->trans_addr;
 
 	pw = getpwuid(uid);
-	snprintf(buf, buflen, "%s", pw != NULL ? pw->pw_name : "<unknown>");
+	strlcpy(buf, pw != NULL ? pw->pw_name : "<unknown>", buflen);
 
 	return (0);
 }
@@ -284,8 +287,8 @@ print_pidname(char *buf, size_t buflen, struct intercept_translate *tl)
 
 	if (pid != 0) {
 		icpid = intercept_getpid(pid);
-		snprintf(buf, buflen, "%s",
-		    icpid->name != NULL ? icpid->name : "<unknown>");
+		strlcpy(buf, icpid->name != NULL ? icpid->name
+						 : "<unknown>", buflen);
 		if (icpid->name == NULL)
 			intercept_freepid(pid);
 	} else
@@ -298,7 +301,7 @@ static int
 print_signame(char *buf, size_t buflen, struct intercept_translate *tl)
 {
 	int sig = (intptr_t)tl->trans_addr;
-	char *name;
+	const char *name;
 
 	switch (sig) {
 	case SIGHUP: 
@@ -384,8 +387,97 @@ print_signame(char *buf, size_t buflen, struct intercept_translate *tl)
 		return (0);
 	}
 
-	snprintf(buf, buflen, "%s", name);
+	strlcpy(buf, name, buflen);
 	return (0);
+}
+
+static int
+print_fcntlcmd(char *buf, size_t buflen, struct intercept_translate *tl)
+{
+	int cmd = (intptr_t)tl->trans_addr;
+	const char *name;
+
+	switch (cmd) {
+	case F_DUPFD:
+		name = "F_DUPFD";
+		break;
+	case F_GETFD:
+		name = "F_GETFD";
+		break;
+	case F_SETFD:
+		name = "F_SETFD";
+		break;
+	case F_GETFL:
+		name = "F_GETFL";
+		break;
+	case F_SETFL:
+		name = "F_SETFL";
+		break;
+	case F_GETOWN:
+		name = "F_GETOWN";
+		break;
+	case F_SETOWN:
+		name = "F_SETOWN";
+		break;
+	case F_CLOSEM:
+		name = "F_CLOSEM";
+		break;
+	case F_MAXFD:
+		name = "F_MAXFD";
+		break;
+	default:
+		snprintf(buf, buflen, "<unknown>: %d", cmd);
+		return (0);
+	}
+
+	strlcpy(buf, name, buflen);
+	return (0);
+}
+
+static int
+print_memprot(char *buf, size_t buflen, struct intercept_translate *tl)
+{
+	int prot = (intptr_t)tl->trans_addr;
+	char lbuf[64];
+
+	if (prot == PROT_NONE) {
+		(void)strlcpy(buf, "PROT_NONE", buflen);
+		return 0;
+	}
+
+	*buf = '\0';
+
+	while (prot) {
+		if (*buf)
+			strlcat(buf, "|", buflen);
+
+		if (prot & PROT_READ) {
+			strlcat(buf, "PROT_READ", buflen);
+			prot &= ~PROT_READ;
+			continue;
+		}
+
+		if (prot & PROT_WRITE) {
+			strlcat(buf, "PROT_WRITE", buflen);
+			prot &= ~PROT_WRITE;
+			continue;
+		}
+
+		if (prot & PROT_EXEC) {
+			strlcat(buf, "PROT_EXEC", buflen);
+			prot &= ~PROT_EXEC;
+			continue;
+		}
+
+		if (prot) {
+			snprintf(lbuf, sizeof(lbuf), "<unknown:0x%x>", prot);
+			strlcat(buf, lbuf, buflen);
+			prot = 0;
+			continue;
+		}
+	}
+
+	return 0;
 }
 
 static int
@@ -434,7 +526,7 @@ get_argv(struct intercept_translate *trans, int fd, pid_t pid, void *addr)
 static int
 print_argv(char *buf, size_t buflen, struct intercept_translate *tl)
 {
-	snprintf(buf, buflen, "%s", (char *)tl->trans_data);
+	strlcpy(buf, (char *)tl->trans_data, buflen);
 
 	return (0);
 }
@@ -499,4 +591,14 @@ struct intercept_translate ic_pidname = {
 struct intercept_translate ic_signame = {
 	"signame",
 	NULL, print_signame,
+};
+
+struct intercept_translate ic_fcntlcmd = {
+	"cmd",
+	NULL, print_fcntlcmd,
+};
+
+struct intercept_translate ic_memprot = {
+	"prot",
+	NULL, print_memprot,
 };

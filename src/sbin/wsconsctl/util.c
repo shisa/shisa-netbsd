@@ -1,11 +1,11 @@
-/*	$NetBSD: util.c,v 1.22 2005/01/31 06:24:08 joff Exp $ */
+/*	$NetBSD: util.c,v 1.25 2006/02/05 18:11:46 jmmv Exp $ */
 
 /*-
- * Copyright (c) 1998 The NetBSD Foundation, Inc.
+ * Copyright (c) 1998, 2006 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
  * This code is derived from software contributed to The NetBSD Foundation
- * by Juergen Hannken-Illjes.
+ * by Juergen Hannken-Illjes and Julio M. Merino Vidal.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -37,12 +37,18 @@
  */
 
 #include <sys/time.h>
+
 #include <dev/wscons/wsconsio.h>
 #include <dev/wscons/wsksymdef.h>
+
 #include <err.h>
-#include <string.h>
+#include <errno.h>
+#include <limits.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
+
 #include "wsconsctl.h"
 
 #define TABLEN(t)		(sizeof(t)/sizeof(t[0]))
@@ -52,7 +58,7 @@ extern struct wskbd_map_data newkbmap;	/* from map_parse.y */
 
 struct nameint {
 	int value;
-	char *name;
+	const char *name;
 };
 
 static struct nameint kbtype_tab[] = {
@@ -166,13 +172,16 @@ static struct nameint attr_tab[] = {
 static struct field *field_tab;
 static int field_tab_len;
 
-static char *int2name(int, int, struct nameint *, int);
+static const char *int2name(int, int, struct nameint *, int);
 static int name2int(char *, struct nameint *, int);
 static void print_kmap(struct wskbd_map_data *);
+static unsigned int rd_bitfield(const char *);
+static void pr_bitfield(unsigned int);
 
 void
 field_setup(struct field *ftab, int len)
 {
+
 	field_tab = ftab;
 	field_tab_len = len;
 }
@@ -184,9 +193,9 @@ field_by_name(char *name)
 
 	for (i = 0; i < field_tab_len; i++)
 		if (strcmp(field_tab[i].name, name) == 0)
-			return(field_tab + i);
+			return field_tab + i;
 
-	errx(1, "%s: not found", name);
+	errx(EXIT_FAILURE, "%s: not found", name);
 }
 
 struct field *
@@ -196,9 +205,9 @@ field_by_value(void *addr)
 
 	for (i = 0; i < field_tab_len; i++)
 		if (field_tab[i].valp == addr)
-			return(field_tab + i);
+			return field_tab + i;
 
-	errx(1, "internal error: field_by_value: not found");
+	errx(EXIT_FAILURE, "internal error: field_by_value: not found");
 }
 
 void
@@ -210,7 +219,7 @@ field_disable_by_value(void *addr)
 	f->flags |= FLG_DISABLED;
 }
 
-static char *
+static const char *
 int2name(int val, int uflag, struct nameint *tab, int len)
 {
 	static char tmp[20];
@@ -218,13 +227,13 @@ int2name(int val, int uflag, struct nameint *tab, int len)
 
 	for (i = 0; i < len; i++)
 		if (tab[i].value == val)
-			return(tab[i].name);
+			return tab[i].name;
 
 	if (uflag) {
-		snprintf(tmp, sizeof(tmp), "unknown_%d", val);
-		return(tmp);
+		(void)snprintf(tmp, sizeof(tmp), "unknown_%d", val);
+		return tmp;
 	} else
-		return(NULL);
+		return NULL;
 }
 
 static int
@@ -234,107 +243,133 @@ name2int(char *val, struct nameint *tab, int len)
 
 	for (i = 0; i < len; i++)
 		if (strcmp(tab[i].name, val) == 0)
-			return(tab[i].value);
-	return(-1);
+			return tab[i].value;
+	return -1;
 }
 
 void
-pr_field(struct field *f, char *sep)
+pr_field(struct field *f, const char *sep)
 {
-	char *p;
-	u_int flags;
+	const char *p;
+	unsigned int flags;
 	int first, i, mask;
 
 	if (sep)
-		printf("%s%s", f->name, sep);
+		(void)printf("%s%s", f->name, sep);
 
 	switch (f->format) {
 	case FMT_UINT:
-		printf("%u", *((u_int *) f->valp));
+		(void)printf("%u", *((unsigned int *) f->valp));
 		break;
 	case FMT_STRING:
-		printf("\"%s\"", *((char **) f->valp));
+		(void)printf("\"%s\"", *((char **) f->valp));
+		break;
+	case FMT_BITFIELD:
+		pr_bitfield(*((unsigned int *) f->valp));
 		break;
 	case FMT_KBDTYPE:
-		p = int2name(*((u_int *) f->valp), 1,
-			     kbtype_tab, TABLEN(kbtype_tab));
-		printf("%s", p);
+		p = int2name(*((unsigned int *) f->valp), 1,
+		    kbtype_tab, TABLEN(kbtype_tab));
+		(void)printf("%s", p);
 		break;
 	case FMT_MSTYPE:
-		p = int2name(*((u_int *) f->valp), 1,
-			     mstype_tab, TABLEN(mstype_tab));
-		printf("%s", p);
+		p = int2name(*((unsigned int *) f->valp), 1,
+		    mstype_tab, TABLEN(mstype_tab));
+		(void)printf("%s", p);
 		break;
 	case FMT_DPYTYPE:
-		p = int2name(*((u_int *) f->valp), 1,
-			     dpytype_tab, TABLEN(dpytype_tab));
-		printf("%s", p);
+		p = int2name(*((unsigned int *) f->valp), 1,
+		    dpytype_tab, TABLEN(dpytype_tab));
+		(void)printf("%s", p);
 		break;
 	case FMT_KBDENC:
-		p = int2name(KB_ENCODING(*((u_int *) f->valp)), 1,
-			     kbdenc_tab, TABLEN(kbdenc_tab));
-		printf("%s", p);
+		p = int2name(KB_ENCODING(*((unsigned int *) f->valp)), 1,
+		    kbdenc_tab, TABLEN(kbdenc_tab));
+		(void)printf("%s", p);
 
-		flags = KB_VARIANT(*((u_int *) f->valp));
+		flags = KB_VARIANT(*((unsigned int *) f->valp));
 		for (i = 0; i < 32; i++) {
 			if (!(flags & (1 << i)))
 				continue;
 			p = int2name(flags & (1 << i), 1,
-				     kbdvar_tab, TABLEN(kbdvar_tab));
-			printf(".%s", p);
+			    kbdvar_tab, TABLEN(kbdvar_tab));
+			(void)printf(".%s", p);
 		}
 		break;
 	case FMT_KBMAP:
 		print_kmap((struct wskbd_map_data *) f->valp);
 		break;
 	case FMT_COLOR:
-		p = int2name(*((u_int *) f->valp), 1,
-			     color_tab, TABLEN(color_tab));
-		printf("%s", p);
+		p = int2name(*((unsigned int *) f->valp), 1,
+		    color_tab, TABLEN(color_tab));
+		(void)printf("%s", p);
 		break;
 	case FMT_ATTRS:
 		mask = 0x10;
 		first = 1;
 		while (mask > 0) {
-			if (*((u_int *) f->valp) & mask) {
-				p = int2name(*((u_int *) f->valp) & mask, 1,
-					     attr_tab, TABLEN(attr_tab));
-				printf("%s%s", first ? "" : ",", p);
+			if (*((unsigned int *) f->valp) & mask) {
+				p = int2name(*((unsigned int *) f->valp) & mask,
+				    1, attr_tab, TABLEN(attr_tab));
+				(void)printf("%s%s", first ? "" : ",", p);
 				first = 0;
 			}
 			mask >>= 1;
 		}
 		if (first)
-			printf("none");
+			(void)printf("none");
 		break;
 	default:
-		errx(1, "internal error: pr_field: no format %d", f->format);
+		errx(EXIT_FAILURE, "internal error: pr_field: no format %d",
+		    f->format);
 		break;
 	}
 
-	printf("\n");
+	(void)printf("\n");
+}
+
+static void
+pr_bitfield(unsigned int f)
+{
+
+	if (f == 0)
+		(void)printf("none");
+	else {
+		int i, first, mask;
+
+		for (i = 0, first = 1, mask = 1; i < sizeof(f) * 8; i++) {
+			if (f & mask) {
+				(void)printf("%s%d", first ? "" : " ", i);
+				first = 0;
+			}
+			mask = mask << 1;
+		}
+	}
 }
 
 void
 rd_field(struct field *f, char *val, int merge)
 {
 	int i;
-	u_int u;
+	unsigned int u;
 	char *p;
 	struct wscons_keymap *mp;
 
 	switch (f->format) {
 	case FMT_UINT:
 		if (sscanf(val, "%u", &u) != 1)
-			errx(1, "%s: not a number", val);
+			errx(EXIT_FAILURE, "%s: not a number", val);
 		if (merge)
-			*((u_int *) f->valp) += u;
+			*((unsigned int *) f->valp) += u;
 		else
-			*((u_int *) f->valp) = u;
+			*((unsigned int *) f->valp) = u;
 		break;
 	case FMT_STRING:
 		if ((*((char **) f->valp) = strdup(val)) == NULL)
-			err(1, "strdup");
+			err(EXIT_FAILURE, "strdup");
+		break;
+	case FMT_BITFIELD:
+		*((unsigned int *) f->valp) = rd_bitfield(val);
 		break;
 	case FMT_KBDENC:
 		p = strchr(val, '.');
@@ -343,8 +378,8 @@ rd_field(struct field *f, char *val, int merge)
 
 		i = name2int(val, kbdenc_tab, TABLEN(kbdenc_tab));
 		if (i == -1)
-			errx(1, "%s: not a valid encoding", val);
-		*((u_int *) f->valp) = i;
+			errx(EXIT_FAILURE, "%s: not a valid encoding", val);
+		*((unsigned int *) f->valp) = i;
 
 		while (p) {
 			val = p;
@@ -353,8 +388,9 @@ rd_field(struct field *f, char *val, int merge)
 				*p++ = '\0';
 			i = name2int(val, kbdvar_tab, TABLEN(kbdvar_tab));
 			if (i == -1)
-				errx(1, "%s: not a valid variant", val);
-			*((u_int *) f->valp) |= i;
+				errx(EXIT_FAILURE, "%s: not a valid variant",
+				    val);
+			*((unsigned int *) f->valp) |= i;
 		}
 		break;
 	case FMT_KBMAP:
@@ -377,13 +413,13 @@ rd_field(struct field *f, char *val, int merge)
 		}
 		kbmap.maplen = newkbmap.maplen;
 		bcopy(newkbmap.map, kbmap.map,
-		      kbmap.maplen*sizeof(struct wscons_keymap));
+		    kbmap.maplen * sizeof(struct wscons_keymap));
 		break;
 	case FMT_COLOR:
 		i = name2int(val, color_tab, TABLEN(color_tab));
 		if (i == -1)
-			errx(1, "%s: not a valid color", val);
-		*((u_int *) f->valp) = i;
+			errx(EXIT_FAILURE, "%s: not a valid color", val);
+		*((unsigned int *) f->valp) = i;
 		break;
 	case FMT_ATTRS:
 		p = val;
@@ -394,14 +430,46 @@ rd_field(struct field *f, char *val, int merge)
 				*p++ = '\0';
 			i = name2int(val, attr_tab, TABLEN(attr_tab));
 			if (i == -1)
-				errx(1, "%s: not a valid attribute", val);
-			*((u_int *) f->valp) |= i;
+				errx(EXIT_FAILURE, "%s: not a valid attribute",
+				    val);
+			*((unsigned int *) f->valp) |= i;
 		}
 		break;
 	default:
-		errx(1, "internal error: rd_field: no format %d", f->format);
+		errx(EXIT_FAILURE, "internal error: rd_field: no format %d",
+		    f->format);
 		break;
 	}
+}
+
+static unsigned int
+rd_bitfield(const char *str)
+{
+	const char *ptr;
+	char *ep;
+	long lval;
+	unsigned int result;
+
+	ep = NULL;
+	ptr = str;
+	result = 0;
+	while (*ptr != '\0') {
+		errno = 0;
+		lval = strtol(ptr, &ep, 10);
+		if (*ep != '\0' && *ep != ' ')
+			errx(EXIT_FAILURE, "%s: not a valid number list", str);
+		if (errno == ERANGE && (lval == LONG_MAX || lval == LONG_MIN))
+			errx(EXIT_FAILURE, "%s: not a valid number list", str);
+		if (lval >= sizeof(result) * 8)
+			errx(EXIT_FAILURE, "%ld: number out of range", lval);
+		result |= (1 << lval);
+
+		ptr = ep;
+		while (*ptr == ' ')
+			ptr++;
+	}
+
+	return result;
 }
 
 static void
@@ -419,19 +487,19 @@ print_kmap(struct wskbd_map_data *map)
 		    mp->group2[0] == KS_voidSymbol &&
 		    mp->group2[1] == KS_voidSymbol)
 			continue;
-		printf("\n");
-		printf("keycode %u =", i);
+		(void)printf("\n");
+		(void)printf("keycode %u =", i);
 		if (mp->command != KS_voidSymbol)
-			printf(" %s", ksym2name(mp->command));
-		printf(" %s", ksym2name(mp->group1[0]));
+			(void)printf(" %s", ksym2name(mp->command));
+		(void)printf(" %s", ksym2name(mp->group1[0]));
 		if (mp->group1[0] != mp->group1[1] ||
 		    mp->group1[0] != mp->group2[0] ||
 		    mp->group1[0] != mp->group2[1]) {
-			printf(" %s", ksym2name(mp->group1[1]));
+			(void)printf(" %s", ksym2name(mp->group1[1]));
 			if (mp->group1[0] != mp->group2[0] ||
 			    mp->group1[1] != mp->group2[1]) {
-				printf(" %s", ksym2name(mp->group2[0]));
-				printf(" %s", ksym2name(mp->group2[1]));
+				(void)printf(" %s", ksym2name(mp->group2[0]));
+				(void)printf(" %s", ksym2name(mp->group2[1]));
 			}
 		}
 	}

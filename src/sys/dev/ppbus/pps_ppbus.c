@@ -1,4 +1,4 @@
-/* $NetBSD: pps_ppbus.c,v 1.2 2005/02/27 00:27:44 perry Exp $ */
+/* $NetBSD: pps_ppbus.c,v 1.6 2006/05/10 10:33:40 drochner Exp $ */
 
 /*
  * Copyright (c) 2004
@@ -27,7 +27,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: pps_ppbus.c,v 1.2 2005/02/27 00:27:44 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pps_ppbus.c,v 1.6 2006/05/10 10:33:40 drochner Exp $");
 
 #include "opt_ntp.h"
 
@@ -87,7 +87,7 @@ pps_probe(struct device *parent, struct cfdata *match, void *aux)
 static void
 pps_attach(struct device *parent, struct device *self, void *aux)
 {
-	struct pps_softc *sc = (struct pps_softc *)self;
+	struct pps_softc *sc = device_private(self);
 
 	sc->ppbus = parent;
 
@@ -95,10 +95,10 @@ pps_attach(struct device *parent, struct device *self, void *aux)
 }
 
 static int
-ppsopen(dev_t dev, int flags, int fmt, struct proc *p)
+ppsopen(dev_t dev, int flags, int fmt, struct lwp *l)
 {
 	struct pps_softc *sc;
-	int res;
+	int res, weg = 0;
 
 	sc = device_lookup(&pps_cd, minor(dev));
 	if (!sc)
@@ -110,6 +110,8 @@ ppsopen(dev_t dev, int flags, int fmt, struct proc *p)
 	if (ppbus_request_bus(sc->ppbus, &sc->pps_dev.sc_dev,
 			      PPBUS_WAIT|PPBUS_INTR, 0))
 		return (EINTR);
+
+	ppbus_write_ivar(sc->ppbus, PPBUS_IVAR_IEEE, &weg);
 
 	/* attach the interrupt handler */
 	/* XXX priority should be set here */
@@ -128,7 +130,7 @@ ppsopen(dev_t dev, int flags, int fmt, struct proc *p)
 }
 
 static int
-ppsclose(dev_t dev, int flags, int fmt, struct proc *p)
+ppsclose(dev_t dev, int flags, int fmt, struct lwp *l)
 {
 	struct pps_softc *sc = device_lookup(&pps_cd, minor(dev));
 	struct device *ppbus = sc->ppbus;
@@ -173,7 +175,7 @@ ppsintr(void *arg)
 }
 
 static int
-ppsioctl(dev_t dev, u_long cmd, caddr_t data, int flags, struct proc *p)
+ppsioctl(dev_t dev, u_long cmd, caddr_t data, int flags, struct lwp *l)
 {
 	struct pps_softc *sc = device_lookup(&pps_cd, minor(dev));
 	int error = 0;

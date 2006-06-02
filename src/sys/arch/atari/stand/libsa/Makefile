@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.23 2003/10/28 11:41:46 he Exp $
+#	$NetBSD: Makefile,v 1.27 2005/12/30 00:24:48 he Exp $
 
 LIB=	sa
 
@@ -12,22 +12,22 @@ CFLAGS+=	-fomit-frame-pointer -Wall -fno-function-cse -fstrength-reduce
 NO_NET=
 
 DEFS=	-D_STANDALONE -DHEAP_VARIABLE
-INCL=	-I${S_MACHSA} -I${S_KERN} -I${S_SA} -I${S} 
+INCL=	-I${S_MACHSA} -I${S_KERN} -I${S_SA} -I${S}
 
 #
-# NetBSD/Atari specific replacements: stand.h dev.c
+# NetBSD/atari specific replacements: dev.c
 #
 
 # machine dependant routines
 SRCS=	consio.S diskio.c
 
-# from lib/libkern
+# from common/lib/libc
 SRCS+=	ashldi3.c ashrdi3.c bzero.c strcmp.c strlen.c
 
 # stand routines
 SRCS+=	alloc.c bcmp.c bcopy.c exec.c files.c getfile.c gets.c globals.c \
-	panic.c memcpy.c memmove.c memset.c printf.c strerror.c \
-	subr_prf.c twiddle.c 
+	panic.c memcmp.c memcpy.c memmove.c memset.c printf.c strerror.c \
+	subr_prf.c twiddle.c
 
 # io routines
 SRCS+=	close.c closeall.c dev.c disklabel.c dkcksum.c ioctl.c \
@@ -49,6 +49,8 @@ S=${.CURDIR}/../../../..
 S_SA=${S}/lib/libsa
 S_KERN=${S}/lib/libkern
 S_MACHSA=${S}/arch/atari/stand/libsa
+
+.include "${S}/../common/lib/libc/Makefile.inc"
 
 .PATH:  ${S_SA} ${S_KERN}
 

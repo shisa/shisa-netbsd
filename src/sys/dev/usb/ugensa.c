@@ -1,4 +1,4 @@
-/*	$NetBSD: ugensa.c,v 1.2 2005/01/23 01:25:57 elric Exp $	*/
+/*	$NetBSD: ugensa.c,v 1.6 2006/05/14 21:47:00 elad Exp $	*/
 
 /*
  * Copyright (c) 2004, 2005 The NetBSD Foundation, Inc.
@@ -92,6 +92,7 @@ struct ucom_methods ugensa_methods = {
 
 static const struct usb_devno ugensa_devs[] = {
 	{ USB_VENDOR_AIRPRIME, USB_PRODUCT_AIRPRIME_PC5220 },
+	{ USB_VENDOR_QUALCOMM_K, USB_PRODUCT_QUALCOMM_K_CDMA_MSM_K },
 };
 #define ugensa_lookup(v, p) usb_lookup(ugensa_devs, v, p)
 
@@ -118,7 +119,7 @@ USB_ATTACH(ugensa)
 	usbd_interface_handle iface;
 	usb_interface_descriptor_t *id;
 	usb_endpoint_descriptor_t *ed;
-	char devinfo[1024];
+	char *devinfop;
 	char *devname = USBDEVNAME(sc->sc_dev);
 	usbd_status err;
 	struct ucom_attach_args uca;
@@ -141,9 +142,10 @@ USB_ATTACH(ugensa)
 		goto bad;
 	}
 
-	usbd_devinfo(dev, 0, devinfo, sizeof(devinfo));
+	devinfop = usbd_devinfo_alloc(dev, 0);
 	USB_ATTACH_SETUP;
-	printf("%s: %s\n", devname, devinfo);
+	printf("%s: %s\n", devname, devinfop);
+	usbd_devinfo_free(devinfop);
 
 	id = usbd_get_interface_descriptor(iface);
 

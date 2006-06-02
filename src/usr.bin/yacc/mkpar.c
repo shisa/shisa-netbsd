@@ -1,4 +1,4 @@
-/*	$NetBSD: mkpar.c,v 1.9 2003/08/07 11:17:53 agc Exp $	*/
+/*	$NetBSD: mkpar.c,v 1.11 2006/05/24 18:01:43 christos Exp $	*/
 
 /*
  * Copyright (c) 1989 The Regents of the University of California.
@@ -37,7 +37,7 @@
 #if 0
 static char sccsid[] = "@(#)mkpar.c	5.3 (Berkeley) 1/20/91";
 #else
-__RCSID("$NetBSD: mkpar.c,v 1.9 2003/08/07 11:17:53 agc Exp $");
+__RCSID("$NetBSD: mkpar.c,v 1.11 2006/05/24 18:01:43 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -56,23 +56,23 @@ short final_state;
 static int SRcount;
 static int RRcount;
 
-action *parse_actions __P((int));
-action *get_shifts __P((int));
-action *add_reductions __P((int, action *));
-action *add_reduce __P((action *, int, int));
+static action *parse_actions(int);
+static action *get_shifts(int);
+static action *add_reductions(int, action *);
+static action *add_reduce(action *, int, int);
 
-int sole_reduction __P((int));
-void free_action_row __P((action *));
+static int sole_reduction(int);
+static void free_action_row(action *);
 
-void find_final_state __P((void));
-void unused_rules __P((void));
-void remove_conflicts __P((void));
-void total_conflicts __P((void));
-void defreds __P((void));
+static void find_final_state(void);
+static void unused_rules(void);
+static void remove_conflicts(void);
+static void total_conflicts(void);
+static void defreds(void);
 
 
 void
-make_parser()
+make_parser(void)
 {
     int i;
 
@@ -88,9 +88,8 @@ make_parser()
 }
 
 
-action *
-parse_actions(stateno)
-int stateno;
+static action *
+parse_actions(int stateno)
 {
     action *actions;
 
@@ -100,9 +99,8 @@ int stateno;
 }
 
 
-action *
-get_shifts(stateno)
-int stateno;
+static action *
+get_shifts(int stateno)
 {
     action *actions, *temp;
     shifts *sp;
@@ -135,10 +133,8 @@ int stateno;
     return (actions);
 }
 
-action *
-add_reductions(stateno, actions)
-int stateno;
-action *actions;
+static action *
+add_reductions(int stateno, action *actions)
 {
     int i, j, m, n;
     int ruleno, tokensetsize;
@@ -161,10 +157,8 @@ action *actions;
 }
 
 
-action *
-add_reduce(actions, ruleno, symbol)
-action *actions;
-int ruleno, symbol;
+static action *
+add_reduce(action *actions, int ruleno, int symbol)
 {
     action *temp, *prev, *next;
 
@@ -202,8 +196,8 @@ int ruleno, symbol;
 }
 
 
-void
-find_final_state()
+static void
+find_final_state(void)
 {
     int goal, i;
     short *to_state;
@@ -220,8 +214,8 @@ find_final_state()
 }
 
 
-void
-unused_rules()
+static void
+unused_rules(void)
 {
     int i;
     action *p;
@@ -254,8 +248,8 @@ unused_rules()
 }
 
 
-void
-remove_conflicts()
+static void
+remove_conflicts(void)
 {
     int i;
     int symbol;
@@ -283,44 +277,48 @@ remove_conflicts()
 		SRcount++;
 		p->suppressed = 1;
 	    }
-	    else if (pref->action_code == SHIFT)
+	    else 
 	    {
-		if (pref->prec > 0 && p->prec > 0)
+		assert(pref != NULL);
+		if (pref->action_code == SHIFT)
 		{
-		    if (pref->prec < p->prec)
+		    if (pref->prec > 0 && p->prec > 0)
 		    {
-			pref->suppressed = 2;
-			pref = p;
-		    }
-		    else if (pref->prec > p->prec)
-		    {
-			p->suppressed = 2;
-		    }
-		    else if (pref->assoc == LEFT)
-		    {
-			pref->suppressed = 2;
-			pref = p;
-		    }
-		    else if (pref->assoc == RIGHT)
-		    {
-			p->suppressed = 2;
+			if (pref->prec < p->prec)
+			{
+			    pref->suppressed = 2;
+			    pref = p;
+			}
+			else if (pref->prec > p->prec)
+			{
+			    p->suppressed = 2;
+			}
+			else if (pref->assoc == LEFT)
+			{
+			    pref->suppressed = 2;
+			    pref = p;
+			}
+			else if (pref->assoc == RIGHT)
+			{
+			    p->suppressed = 2;
+			}
+			else
+			{
+			    pref->suppressed = 2;
+			    p->suppressed = 2;
+			}
 		    }
 		    else
 		    {
-			pref->suppressed = 2;
-			p->suppressed = 2;
+			SRcount++;
+			p->suppressed = 1;
 		    }
 		}
 		else
 		{
-		    SRcount++;
+		    RRcount++;
 		    p->suppressed = 1;
 		}
-	    }
-	    else
-	    {
-		RRcount++;
-		p->suppressed = 1;
 	    }
 	}
 	SRtotal += SRcount;
@@ -331,8 +329,8 @@ remove_conflicts()
 }
 
 
-void
-total_conflicts()
+static void
+total_conflicts(void)
 {
     fprintf(stderr, "%s: ", myname);
     if (SRtotal == 1)
@@ -352,9 +350,8 @@ total_conflicts()
 }
 
 
-int
-sole_reduction(stateno)
-int stateno;
+static int
+sole_reduction(int stateno)
 {
     int count, ruleno;
     action *p;
@@ -381,8 +378,8 @@ int stateno;
 }
 
 
-void
-defreds()
+static void
+defreds(void)
 {
     int i;
 
@@ -391,9 +388,8 @@ defreds()
 	defred[i] = sole_reduction(i);
 }
 
-void 
-free_action_row(p)
-action *p;
+static void 
+free_action_row(action *p)
 {
   action *q;
 
@@ -406,7 +402,7 @@ action *p;
 }
 
 void
-free_parser()
+free_parser(void)
 {
   int i;
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: vconsole.h,v 1.2 2004/05/08 21:04:07 jmc Exp $	*/
+/*	$NetBSD: vconsole.h,v 1.4 2005/12/11 12:16:05 christos Exp $	*/
 
 /*
  * Copyright (c) 1994,1995 Melvyn Tang-Richardson
@@ -97,7 +97,7 @@ struct render_engine {
 	int ( *sgr		) __P(( struct vconsole *vc, int type ));
 	int ( *blank		) __P(( struct vconsole *vc, int type ));
         int ( *ioctl		) __P(( struct vconsole *vc, dev_t dev, int cmd,
-				    caddr_t data, int flag, struct proc *p));
+				    caddr_t data, int flag, struct lwp *l));
         int ( *redraw		) __P(( struct vconsole *vc, int x, int y, int a, int b ));
 	int ( *attach		) __P(( struct vconsole *vc, struct device *dev, struct device *dev1, void * arg));
 	int ( *flash		) __P(( struct vconsole *vc, int flash ));
@@ -152,7 +152,7 @@ struct terminal_emulator {
 	char *name;
 	/* Terminal emulation routines */
 	int (*term_init)	__P((struct vconsole *vc));
-        int (*putstring)	__P((char *string, int length, struct vconsole *vc));
+        int (*putstring)	__P((const char *string, int length, struct vconsole *vc));
         int (*swapin)		__P((struct vconsole *vc));
 	int (*swapout)		__P((struct vconsole *vc));
 	int (*sleep)		__P((struct vconsole *vc));

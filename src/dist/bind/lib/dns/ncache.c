@@ -1,4 +1,4 @@
-/*	$NetBSD: ncache.c,v 1.1.1.1 2004/05/17 23:44:51 christos Exp $	*/
+/*	$NetBSD: ncache.c,v 1.1.1.3 2005/12/21 23:16:19 christos Exp $	*/
 
 /*
  * Copyright (C) 2004  Internet Systems Consortium, Inc. ("ISC")

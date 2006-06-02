@@ -1,4 +1,4 @@
-/*	$NetBSD: erase.c,v 1.17.6.1 2005/07/30 17:52:00 tron Exp $	*/
+/*	$NetBSD: erase.c,v 1.21 2006/02/05 17:39:52 jdc Exp $	*/
 
 /*
  * Copyright (c) 1981, 1993, 1994
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)erase.c	8.2 (Berkeley) 5/4/94";
 #else
-__RCSID("$NetBSD: erase.c,v 1.17.6.1 2005/07/30 17:52:00 tron Exp $");
+__RCSID("$NetBSD: erase.c,v 1.21 2006/02/05 17:39:52 jdc Exp $");
 #endif
 #endif				/* not lint */
 
@@ -65,20 +65,22 @@ werase(WINDOW *win)
 
 	int     y;
 	__LDATA *sp, *end, *start;
+	attr_t	attr;
 
 #ifdef DEBUG
 	__CTRACE("werase: (%p)\n", win);
 #endif
+	if (__using_color && win != curscr)
+		attr = win->battr & __COLOR;
+	else
+		attr = 0;
 	for (y = 0; y < win->maxy; y++) {
 		start = win->lines[y]->line;
 		end = &start[win->maxx];
 		for (sp = start; sp < end; sp++)
-			if (sp->ch != ' ' || sp->attr != 0 ||
-			    sp->bch != win->bch || sp->battr != win->battr) {
-				sp->ch = ' ';
-				sp->bch = win->bch;
-				sp->attr = 0;
-				sp->battr = win->battr;
+			if (sp->ch != win->bch || sp->attr != 0) {
+				sp->ch = win->bch;
+				sp->attr = attr;
 			}
 	}
 	/*

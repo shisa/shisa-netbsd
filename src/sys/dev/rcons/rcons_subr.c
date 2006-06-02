@@ -1,4 +1,4 @@
-/*	$NetBSD: rcons_subr.c,v 1.13 2005/02/27 00:27:48 perry Exp $ */
+/*	$NetBSD: rcons_subr.c,v 1.16 2006/01/21 19:28:44 chs Exp $ */
 
 /*
  * Copyright (c) 1991, 1993
@@ -41,7 +41,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: rcons_subr.c,v 1.13 2005/02/27 00:27:48 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: rcons_subr.c,v 1.16 2006/01/21 19:28:44 chs Exp $");
 
 #include <sys/param.h>
 #ifdef _KERNEL
@@ -105,11 +105,11 @@ rcons_init_ops(rc)
 void
 rcons_puts(rc, str, n)
 	struct rconsole *rc;
-	unsigned char *str;
+	const unsigned char *str;
  	int n;
 {
 	int c, i, j;
-	unsigned char *cp;
+	const unsigned char *cp;
 
 	/* Jump scroll */
 	/* XXX maybe this should be an option? */
@@ -335,8 +335,9 @@ rcons_doesc(rc, c)
 
 	case 'A':
 		/* Cursor Up (CUU) */
-		rc->rc_row -= rc->rc_p0;
-		if (rc->rc_row < 0)
+		if (rc->rc_row >= rc->rc_p0)
+			rc->rc_row -= rc->rc_p0;
+		else
 			rc->rc_row = 0;
 		break;
 
@@ -356,8 +357,9 @@ rcons_doesc(rc, c)
 
 	case 'D':
 		/* Cursor Backward (CUB) */
-		rc->rc_col -= rc->rc_p0;
-		if (rc->rc_col < 0)
+		if (rc->rc_col >= rc->rc_p0)
+			rc->rc_col -= rc->rc_p0;
+		else
 			rc->rc_col = 0;
 		break;
 
@@ -373,17 +375,8 @@ rcons_doesc(rc, c)
 		/* Horizontal And Vertical Position (HVP) */
 	case 'H':
 		/* Cursor Position (CUP) */
-		rc->rc_col = rc->rc_p1 - 1;
-		if (rc->rc_col < 0)
-			rc->rc_col = 0;
-		else if (rc->rc_col >= rc->rc_maxcol)
-			rc->rc_col = rc->rc_maxcol - 1;
-
-		rc->rc_row = rc->rc_p0 - 1;
-		if (rc->rc_row < 0)
-			rc->rc_row = 0;
-		else if (rc->rc_row >= rc->rc_maxrow)
-			rc->rc_row = rc->rc_maxrow - 1;
+		rc->rc_col = MIN(MAX(rc->rc_p1, 1), rc->rc_maxcol) - 1;
+		rc->rc_row = MIN(MAX(rc->rc_p0, 1), rc->rc_maxrow) - 1;
 		break;
 
 	case 'J':
@@ -535,7 +528,7 @@ rcons_setcolor(rc, fg, bg)
 void
 rcons_text(rc, str, n)
 	struct rconsole *rc;
-	unsigned char *str;
+	const unsigned char *str;
 	int n;
 {
 	u_int uc;
@@ -617,9 +610,9 @@ rcons_scroll(rc, n)
 		n = rc->rc_maxrow;
 
 	/* Calculate new row */
-	rc->rc_row -= n;
-
-	if (rc->rc_row < 0)
+	if (rc->rc_row >= n)
+		rc->rc_row -= n;
+	else 
 		rc->rc_row = 0;
 
 	rc->rc_ops->copyrows(rc->rc_cookie, n, 0, rc->rc_maxrow - n);

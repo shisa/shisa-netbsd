@@ -1,4 +1,4 @@
-/*	$NetBSD: line.c,v 1.9.2.1 2005/08/25 19:33:35 snj Exp $	*/
+/*	$NetBSD: line.c,v 1.10 2005/08/24 11:33:09 tron Exp $	*/
 
 /*
  * Copyright (C) 1984-2002  Mark Nudelman

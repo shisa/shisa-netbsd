@@ -1,4 +1,4 @@
-/*     $NetBSD: login.c,v 1.82.2.2 2005/03/30 10:25:08 tron Exp $       */
+/*	$NetBSD: login.c,v 1.92 2006/05/20 10:31:59 mrg Exp $	*/
 
 /*-
  * Copyright (c) 1980, 1987, 1988, 1991, 1993, 1994
@@ -40,7 +40,7 @@ __COPYRIGHT(
 #if 0
 static char sccsid[] = "@(#)login.c	8.4 (Berkeley) 4/2/94";
 #endif
-__RCSID("$NetBSD: login.c,v 1.82.2.2 2005/03/30 10:25:08 tron Exp $");
+__RCSID("$NetBSD: login.c,v 1.92 2006/05/20 10:31:59 mrg Exp $");
 #endif /* not lint */
 
 /*
@@ -94,7 +94,6 @@ __RCSID("$NetBSD: login.c,v 1.82.2.2 2005/03/30 10:25:08 tron Exp $");
 
 #ifdef KERBEROS5
 int login_krb5_get_tickets = 1;
-int login_krb4_get_tickets = 0;
 int login_krb5_forwardable_tgt = 0;
 int login_krb5_retain_ccache = 0;
 #endif
@@ -117,17 +116,13 @@ void	 sigint(int);
 void	 sleepexit(int);
 const	 char *stypeof(const char *);
 void	 timedout(int);
-#if defined(KERBEROS)
-int	 klogin(struct passwd *, char *, char *, char *);
-void	 kdestroy(void);
-#endif
 #ifdef KERBEROS5
 int	 k5login(struct passwd *, char *, char *, char *);
 void	 k5destroy(void);
 int	 k5_read_creds(char*);
 int	 k5_write_creds(void);
 #endif
-#if defined(KERBEROS) || defined(KERBEROS5)
+#if defined(KERBEROS5)
 void	 dofork(void);
 #endif
 void	 decode_ss(const char *);
@@ -144,27 +139,17 @@ void	 usage(void);
  */
 u_int	timeout = 300;
 
-#if defined(KERBEROS) || defined(KERBEROS5)
+#if defined(KERBEROS5)
 int	notickets = 1;
 char	*instance;
 int	has_ccache = 0;
-#endif
-#ifdef KERBEROS
-extern char	*krbtkfile_env;
-extern int	krb_configured;
-#endif
-#ifdef KERBEROS5
 extern krb5_context kcontext;
 extern int	have_forward;
 extern char	*krb5tkfile_env;
 extern int	krb5_configured;
 #endif
 
-#if defined(KERBEROS) && defined(KERBEROS5)
-#define	KERBEROS_CONFIGURED	(krb_configured || krb5_configured)
-#elif defined(KERBEROS)
-#define	KERBEROS_CONFIGURED	krb_configured
-#elif defined(KERBEROS5)
+#if defined(KERBEROS5)
 #define	KERBEROS_CONFIGURED	krb5_configured
 #endif
 
@@ -188,7 +173,6 @@ main(int argc, char *argv[])
 	gid_t saved_gid, saved_gids[NGROUPS_MAX];
 	int nsaved_gids;
 	char *domain, *p, *ttyn, *pwprompt;
-	const char *salt;
 	char tbuf[MAXPATHLEN + 2], tname[sizeof(_PATH_TTY) + 10];
 	char localhost[MAXHOSTNAMELEN + 1];
 	int need_chpass, require_chpass;
@@ -198,7 +182,7 @@ main(int argc, char *argv[])
 #ifdef KERBEROS5
 	krb5_error_code kerror;
 #endif
-#if defined(KERBEROS) || defined(KERBEROS5)
+#if defined(KERBEROS5)
 	int got_tickets = 0;
 #endif
 #ifdef LOGIN_CAP
@@ -225,7 +209,7 @@ main(int argc, char *argv[])
 	 * -f is used to skip a second login authentication
 	 * -h is used by other servers to pass the name of the remote host to
 	 *    login so that it may be placed in utmp/utmpx and wtmp/wtmpx
-	 * -a in addition to -h, a server my supply -a to pass the actual
+	 * -a in addition to -h, a server may supply -a to pass the actual
 	 *    server address.
 	 * -s is used to force use of S/Key or equivalent.
 	 */
@@ -353,9 +337,6 @@ main(int argc, char *argv[])
 #endif /* KERBEROS5 */
 
 	for (cnt = 0;; ask = 1) {
-#if defined(KERBEROS)
-	        kdestroy();
-#endif
 #if defined(KERBEROS5)
 		if (login_krb5_get_tickets)
 			k5destroy();
@@ -365,12 +346,6 @@ main(int argc, char *argv[])
 			getloginname();
 		}
 		rootlogin = 0;
-#ifdef KERBEROS
-		if ((instance = strchr(username, '.')) != NULL)
-			*instance++ = '\0';
-		else
-			instance = "";
-#endif
 #ifdef KERBEROS5
 		if ((instance = strchr(username, '/')) != NULL)
 			*instance++ = '\0';
@@ -392,10 +367,7 @@ main(int argc, char *argv[])
 		}
 		(void)strlcpy(tbuf, username, sizeof(tbuf));
 
-		if ((pwd = getpwnam(username)) != NULL)
-			salt = pwd->pw_passwd;
-		else
-			salt = "xx";
+		pwd = getpwnam(username);
 
 #ifdef LOGIN_CAP
 		/*
@@ -452,20 +424,6 @@ main(int argc, char *argv[])
 			rval = 1;
 			goto skip;
 		}
-#ifdef KERBEROS
-		if (
-#ifdef KERBEROS5
-		    /* allow a user to get both krb4 and krb5 tickets, if
-		     * desired.  If krb5 is compiled in, the default action
-		     * is to ignore krb4 and get krb5 tickets, but the user
-		     * can override this in the krb5.conf. */
-		    login_krb4_get_tickets &&
-#endif
-		    klogin(pwd, instance, localhost, p) == 0) {
-			rval = 0;
-			got_tickets = 1;
-		}
-#endif
 #ifdef KERBEROS5
 		if (login_krb5_get_tickets &&
 		    k5login(pwd, instance, localhost, p) == 0) {
@@ -473,7 +431,7 @@ main(int argc, char *argv[])
 			got_tickets = 1;
 		}
 #endif
-#if defined(KERBEROS) || defined(KERBEROS5)
+#if defined(KERBEROS5)
 		if (got_tickets)
 			goto skip;
 #endif
@@ -503,9 +461,8 @@ main(int argc, char *argv[])
 		 * but with insecure terminal, refuse the login attempt.
 		 */
 		if (pwd && !rval && rootlogin && !rootterm(tty)) {
-			(void)fprintf(stderr,
-			    "%s login refused on this terminal.\n",
-			    pwd->pw_name);
+			(void)printf("Login incorrect or refused on this "
+			    "terminal.\n");
 			if (hostname)
 				syslog(LOG_NOTICE,
 				    "LOGIN %s REFUSED FROM %s ON TTY %s",
@@ -520,16 +477,21 @@ main(int argc, char *argv[])
 		if (pwd && !rval)
 			break;
 
-		(void)printf("Login incorrect\n");
+		(void)printf("Login incorrect or refused on this "
+		    "terminal.\n");
 		failures++;
 		cnt++;
-		/* we allow 10 tries, but after 3 we start backing off */
+		/*
+		 * We allow login_retries tries, but after login_backoff
+		 * we start backing off.  These default to 10 and 3
+		 * respectively.
+		 */
 		if (cnt > login_backoff) {
 			if (cnt >= login_retries) {
 				badlogin(username);
 				sleepexit(1);
 			}
-			sleep((u_int)((cnt - 3) * 5));
+			sleep((u_int)((cnt - login_backoff) * 5));
 		}
 	}
 
@@ -623,13 +585,9 @@ main(int argc, char *argv[])
 	if (ttyaction(ttyn, "login", pwd->pw_name))
 		(void)printf("Warning: ttyaction failed.\n");
 
-#if defined(KERBEROS) || defined(KERBEROS5)
+#if defined(KERBEROS5)
 	/* Fork so that we can call kdestroy */
-	if (
-#ifdef KERBEROS5
-	    ! login_krb5_retain_ccache &&
-#endif
-	    has_ccache)
+	if (! login_krb5_retain_ccache && has_ccache)
 		dofork();
 #endif
 
@@ -696,10 +654,6 @@ main(int argc, char *argv[])
 	(void)setenv("PATH", _PATH_DEFPATH, 0);
 #endif
 
-#ifdef KERBEROS
-	if (krbtkfile_env)
-		(void)setenv("KRBTKFILE", krbtkfile_env, 1);
-#endif
 #ifdef KERBEROS5
 	if (krb5tkfile_env)
 		(void)setenv("KRB5CCNAME", krb5tkfile_env, 1);
@@ -718,7 +672,7 @@ main(int argc, char *argv[])
 			    username, tty);
 	}
 
-#if defined(KERBEROS) || defined(KERBEROS5)
+#if defined(KERBEROS5)
 	if (KERBEROS_CONFIGURED && !quietlog && notickets == 1)
 		(void)printf("Warning: no Kerberos tickets issued.\n");
 #endif
@@ -775,7 +729,7 @@ main(int argc, char *argv[])
 				warn("fork");
 				sleepexit(1);
 			case 0:
-				execl(_PATH_BINPASSWD, "passwd", 0);
+				execl(_PATH_BINPASSWD, "passwd", NULL);
 				_exit(1);
 			default:
 				if (wait(&status) == -1 ||
@@ -789,17 +743,17 @@ main(int argc, char *argv[])
 	if (login_krb5_get_tickets)
 		k5_write_creds();
 #endif
-	execlp(pwd->pw_shell, tbuf, 0);
+	execlp(pwd->pw_shell, tbuf, NULL);
 	err(1, "%s", pwd->pw_shell);
 }
 
-#if defined(KERBEROS) || defined(KERBEROS5)
+#if defined(KERBEROS5)
 #define	NBUFSIZ		(MAXLOGNAME + 1 + 5)	/* .root suffix */
 #else
 #define	NBUFSIZ		(MAXLOGNAME + 1)
 #endif
 
-#if defined(KERBEROS) || defined(KERBEROS5)
+#if defined(KERBEROS5)
 /*
  * This routine handles cleanup stuff, and the like.
  * It exists only in the child process.
@@ -825,13 +779,8 @@ dofork(void)
 
 	/* Cleanup stuff */
 	/* Run kdestroy to destroy tickets */
-#ifdef KERBEROS
-	kdestroy();
-#endif
-#ifdef KERBEROS5
 	if (login_krb5_get_tickets)
 		k5destroy();
-#endif
 
 	/* Leave */
 	exit(0);
@@ -940,7 +889,8 @@ update_db(int quietlog)
 	}
 	if (hostname != NULL && have_ss == 0) {
 		socklen_t len = sizeof(ss);
-		(void)getpeername(STDIN_FILENO, (struct sockaddr *)&ss, &len);
+		have_ss = getpeername(STDIN_FILENO, (struct sockaddr *)&ss,
+		    &len) != -1;
 	}
 	(void)gettimeofday(&now, NULL);
 #ifdef SUPPORT_UTMPX
@@ -989,7 +939,7 @@ static void
 dolastlogx(int quiet)
 {
 	struct lastlogx ll;
-	if (getlastlogx(_PATH_LASTLOGX, pwd->pw_uid, &ll) != NULL) {
+	if (!quiet && getlastlogx(_PATH_LASTLOGX, pwd->pw_uid, &ll) != NULL) {
 		time_t t = (time_t)ll.ll_tv.tv_sec;
 		(void)printf("Last login: %.24s ", ctime(&t));
 		if (*ll.ll_host != '\0')
@@ -1002,10 +952,14 @@ dolastlogx(int quiet)
 	}
 	ll.ll_tv = now;
 	(void)strncpy(ll.ll_line, tty, sizeof(ll.ll_line));
-	if (hostname) {
+	if (hostname)
 		(void)strncpy(ll.ll_host, hostname, sizeof(ll.ll_host));
+	else
+		(void)memset(ll.ll_host, '\0', sizeof(ll.ll_host));
+	if (have_ss)
 		ll.ll_ss = ss;
-	}
+	else
+		(void)memset(&ll.ll_ss, 0, sizeof(ll.ll_ss));
 	if (updlastlogx(_PATH_LASTLOGX, pwd->pw_uid, &ll) != 0)
 		syslog(LOG_NOTICE, "Cannot update lastlogx: %m");
 }

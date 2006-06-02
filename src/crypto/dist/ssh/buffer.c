@@ -1,4 +1,4 @@
-/*	$NetBSD: buffer.c,v 1.6 2005/02/13 05:57:26 christos Exp $	*/
+/*	$NetBSD: buffer.c,v 1.8 2006/02/04 22:32:13 christos Exp $	*/
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -13,8 +13,8 @@
  */
 
 #include "includes.h"
-RCSID("$OpenBSD: buffer.c,v 1.21 2003/11/21 11:57:03 djm Exp $");
-__RCSID("$NetBSD: buffer.c,v 1.6 2005/02/13 05:57:26 christos Exp $");
+RCSID("$OpenBSD: buffer.c,v 1.23 2005/03/14 11:46:56 markus Exp $");
+__RCSID("$NetBSD: buffer.c,v 1.8 2006/02/04 22:32:13 christos Exp $");
 
 #include "xmalloc.h"
 #include "buffer.h"
@@ -80,7 +80,7 @@ buffer_append_space(Buffer *buffer, u_int len)
 	u_int newlen;
 	void *p;
 
-	if (len > 0x100000)
+	if (len > BUFFER_MAX_CHUNK)
 		fatal("buffer_append_space: len %u not supported", len);
 
 	/* If the buffer is empty, start using it from the beginning. */
@@ -99,7 +99,7 @@ restart:
 	 * If the buffer is quite empty, but all data is at the end, move the
 	 * data to the beginning and retry.
 	 */
-	if (buffer->offset > buffer->alloc / 2) {
+	if (buffer->offset > MIN(buffer->alloc, BUFFER_MAX_CHUNK)) {
 		memmove(buffer->buf, buffer->buf + buffer->offset,
 			buffer->end - buffer->offset);
 		buffer->end -= buffer->offset;
@@ -109,7 +109,7 @@ restart:
 	/* Increase the size of the buffer and retry. */
 
 	newlen = buffer->alloc + len + 32768;
-	if (newlen > 0xa00000)
+	if (newlen > BUFFER_MAX_LEN)
 		fatal("buffer_append_space: alloc %u not supported",
 		    newlen);
 	buffer->buf = xrealloc(buffer->buf, newlen);
@@ -128,34 +128,62 @@ buffer_len(Buffer *buffer)
 
 /* Gets data from the beginning of the buffer. */
 
+int
+buffer_get_ret(Buffer *buffer, void *buf, u_int len)
+{
+	if (len > buffer->end - buffer->offset) {
+		error("buffer_get_ret: trying to get more bytes %d than in buffer %d",
+		    len, buffer->end - buffer->offset);
+		return (-1);
+	}
+	memcpy(buf, buffer->buf + buffer->offset, len);
+	buffer->offset += len;
+	return (0);
+}
+
 void
 buffer_get(Buffer *buffer, void *buf, u_int len)
 {
-	if (len > buffer->end - buffer->offset)
-		fatal("buffer_get: trying to get more bytes %d than in buffer %d",
-		    len, buffer->end - buffer->offset);
-	memcpy(buf, buffer->buf + buffer->offset, len);
-	buffer->offset += len;
+	if (buffer_get_ret(buffer, buf, len) == -1)
+		fatal("buffer_get: buffer error");
 }
 
 /* Consumes the given number of bytes from the beginning of the buffer. */
 
+int
+buffer_consume_ret(Buffer *buffer, u_int bytes)
+{
+	if (bytes > buffer->end - buffer->offset) {
+		error("buffer_consume_ret: trying to get more bytes than in buffer");
+		return (-1);
+	}
+	buffer->offset += bytes;
+	return (0);
+}
+
 void
 buffer_consume(Buffer *buffer, u_int bytes)
 {
-	if (bytes > buffer->end - buffer->offset)
-		fatal("buffer_consume: trying to get more bytes than in buffer");
-	buffer->offset += bytes;
+	if (buffer_consume_ret(buffer, bytes) == -1)
+		fatal("buffer_consume: buffer error");
 }
 
 /* Consumes the given number of bytes from the end of the buffer. */
 
+int
+buffer_consume_end_ret(Buffer *buffer, u_int bytes)
+{
+	if (bytes > buffer->end - buffer->offset)
+		return (-1);
+	buffer->end -= bytes;
+	return (0);
+}
+
 void
 buffer_consume_end(Buffer *buffer, u_int bytes)
 {
-	if (bytes > buffer->end - buffer->offset)
+	if (buffer_consume_end_ret(buffer, bytes) == -1)
 		fatal("buffer_consume_end: trying to get more bytes than in buffer");
-	buffer->end -= bytes;
 }
 
 /* Returns a pointer to the first used byte in the buffer. */

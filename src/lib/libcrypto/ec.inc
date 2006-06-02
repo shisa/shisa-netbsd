@@ -1,4 +1,4 @@
-#	$NetBSD: ec.inc,v 1.1 2003/07/24 14:16:32 itojun Exp $
+#	$NetBSD: ec.inc,v 1.3 2006/03/17 20:47:45 dsl Exp $
 #
 #	@(#) Copyright (c) 1995 Simon J. Gerraty
 #
@@ -7,7 +7,12 @@
 
 .PATH:	${OPENSSLSRC}/crypto/ec
 
-CPPFLAGS+=	-I${OPENSSLSRC}/crypto/ec
 
-SRCS+=	ec_lib.c ecp_smpl.c ecp_mont.c ecp_recp.c ecp_nist.c ec_cvt.c ec_mult.c \
-	ec_err.c
+EC_SRCS = ec_lib.c ecp_smpl.c ecp_mont.c ecp_nist.c ec_cvt.c ec_mult.c \
+	ec_err.c ec_asn1.c ec_key.c ec_print.c ec_curve.c ec2_smpl.c \
+	ec2_mult.c ec_check.c
+SRCS += ${EC_SRCS}
+
+.for cryptosrc in ${EC_SRCS}
+CPPFLAGS.${cryptosrc} = -I${OPENSSLSRC}/crypto/ec
+.endfor

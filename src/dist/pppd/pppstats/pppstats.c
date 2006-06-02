@@ -1,4 +1,4 @@
-/*	$NetBSD: pppstats.c,v 1.1.1.1 2005/02/20 10:28:35 cube Exp $	*/
+/*	$NetBSD: pppstats.c,v 1.3 2006/05/10 21:53:14 mrg Exp $	*/
 
 /*
  * print PPP statistics:
@@ -42,7 +42,7 @@
 #if 0
 static const char rcsid[] = "Id: pppstats.c,v 1.29 2002/10/27 12:56:26 fcusack Exp";
 #else
-__RCSID("$NetBSD: pppstats.c,v 1.1.1.1 2005/02/20 10:28:35 cube Exp $");
+__RCSID("$NetBSD: pppstats.c,v 1.3 2006/05/10 21:53:14 mrg Exp $");
 #endif
 #endif
 
@@ -113,6 +113,9 @@ extern char *optarg;
 #if !defined(PPP_DRV_NAME)
 #define PPP_DRV_NAME    "ppp"
 #endif /* !defined(PPP_DRV_NAME) */
+#if !defined(SL_DRV_NAME)
+#define SL_DRV_NAME    "sl"
+#endif /* !defined(SL_DRV_NAME) */
 
 static void usage __P((void));
 static void catchalarm __P((int));
@@ -302,6 +305,7 @@ intpr()
     struct ppp_stats cur, old;
     struct ppp_comp_stats ccs, ocs;
 
+    memset(&ccs, 0, sizeof(ccs));	/* XXX gcc */
     memset(&old, 0, sizeof(old));
     memset(&ocs, 0, sizeof(ocs));
 
@@ -458,12 +462,20 @@ main(argc, argv)
 #ifdef STREAMS
     char *dev;
 #endif
+    const char *fmt;
 
-    interface = PPP_DRV_NAME "0";
     if ((progname = strrchr(argv[0], '/')) == NULL)
 	progname = argv[0];
     else
 	++progname;
+
+    if (strncmp(progname, SL_DRV_NAME, sizeof(SL_DRV_NAME) - 1) == 0) {
+	interface = SL_DRV_NAME "0";
+	fmt =  SL_DRV_NAME "%d";
+    } else {
+	interface = PPP_DRV_NAME "0";
+	fmt =  PPP_DRV_NAME "%d";
+    }
 
     while ((c = getopt(argc, argv, "advrzc:w:")) != -1) {
 	switch (c) {
@@ -513,7 +525,7 @@ main(argc, argv)
     if (argc > 0)
 	interface = argv[0];
 
-    if (sscanf(interface, PPP_DRV_NAME "%d", &unit) != 1) {
+    if (sscanf(interface, fmt, &unit) != 1) {
 	fprintf(stderr, "%s: invalid interface '%s' specified\n",
 		progname, interface);
     }

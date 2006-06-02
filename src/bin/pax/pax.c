@@ -1,4 +1,4 @@
-/*	$NetBSD: pax.c,v 1.36 2004/10/10 21:53:23 christos Exp $	*/
+/*	$NetBSD: pax.c,v 1.40 2006/02/11 11:04:57 dsl Exp $	*/
 
 /*-
  * Copyright (c) 1992 Keith Muller.
@@ -44,7 +44,7 @@ __COPYRIGHT("@(#) Copyright (c) 1992, 1993\n\
 #if 0
 static char sccsid[] = "@(#)pax.c	8.2 (Berkeley) 4/18/94";
 #else
-__RCSID("$NetBSD: pax.c,v 1.36 2004/10/10 21:53:23 christos Exp $");
+__RCSID("$NetBSD: pax.c,v 1.40 2006/02/11 11:04:57 dsl Exp $");
 #endif
 #endif /* not lint */
 
@@ -242,6 +242,7 @@ main(int argc, char **argv)
 {
 	const char *tmpdir;
 	size_t tdlen;
+	int rval;
 
 	setprogname(argv[0]);
 
@@ -256,16 +257,18 @@ main(int argc, char **argv)
 	 * general init
 	 */
 	if ((gen_init() < 0) || (tty_init() < 0))
-		return(exit_val);
+		return exit_val;
 
 	/*
 	 * Keep a reference to cwd, so we can always come back home.
 	 */
 	cwdfd = open(".", O_RDONLY);
 	if (cwdfd < 0) {
-		syswarn(0, errno, "Can't open current working directory.");
-		return(exit_val);
+		syswarn(1, errno, "Can't open current working directory.");
+		return exit_val;
 	}
+	if (updatepath() == -1)
+		return exit_val;
 
 	/*
 	 * Where should we put temporary files?
@@ -278,7 +281,7 @@ main(int argc, char **argv)
 	tempfile = malloc(tdlen + 1 + sizeof(_TFILE_BASE));
 	if (tempfile == NULL) {
 		tty_warn(1, "Cannot allocate memory for temp file name.");
-		return(exit_val);
+		return exit_val;
 	}
 	if (tdlen)
 		memcpy(tempfile, tmpdir, tdlen);
@@ -292,35 +295,37 @@ main(int argc, char **argv)
 	/*
 	 * select a primary operation mode
 	 */
-	switch(act) {
+	switch (act) {
 	case EXTRACT:
-		extract();
+		rval = extract();
 		break;
 	case ARCHIVE:
-		archive();
+		rval = archive();
 		break;
 	case APPND:
 		if (gzip_program != NULL)
 			err(1, "cannot gzip while appending");
-		append();
+		rval = append();
 		/* 
 		 * Check if we tried to append on an empty file and
 		 * turned into ARCHIVE mode.
 		 */
 		if (act == -ARCHIVE) {
 			act = ARCHIVE;
-			archive();
+			rval = archive();
 		}
 		break;
 	case COPY:
-		copy();
+		rval = copy();
 		break;
 	default:
 	case LIST:
-		list();
+		rval = list();
 		break;
 	}
-	return(exit_val);
+	if (rval != 0)
+		exit_val = 1;
+	return exit_val;
 }
 
 /*
@@ -343,10 +348,10 @@ sig_cleanup(int which_sig)
 	vflag = vfpart = 1;
 #ifdef SIGXCPU
 	if (which_sig == SIGXCPU)
-		tty_warn(0, "CPU time limit reached, cleaning up.");
+		tty_warn(1, "CPU time limit reached, cleaning up.");
 	else
 #endif
-		tty_warn(0, "Signal caught, cleaning up.");
+		tty_warn(1, "Signal caught, cleaning up.");
 
 	/* delete any open temporary file */
 	if (xtmp_name)
@@ -424,18 +429,18 @@ gen_init(void)
 	    (sigaddset(&s_mask,SIGINT) < 0)||(sigaddset(&s_mask,SIGHUP) < 0) ||
 	    (sigaddset(&s_mask,SIGPIPE) < 0)||(sigaddset(&s_mask,SIGQUIT)<0)){
 		tty_warn(1, "Unable to set up signal mask");
-		return(-1);
+		return -1;
 	}
 #ifdef SIGXCPU
 	if (sigaddset(&s_mask,SIGXCPU) < 0) {
 		tty_warn(1, "Unable to set up signal mask");
-		return(-1);
+		return -1;
 	}
 #endif
 #ifdef SIGXFSZ
 	if (sigaddset(&s_mask,SIGXFSZ) < 0) {
 		tty_warn(1, "Unable to set up signal mask");
-		return(-1);
+		return -1;
 	}
 #endif
 
@@ -477,9 +482,9 @@ gen_init(void)
 	if (sigaction(SIGXFSZ, &n_hand, &o_hand) < 0)
 		goto out;
 #endif
-	return(0);
+	return 0;
 
     out:
 	syswarn(1, errno, "Unable to set up signal handler");
-	return(-1);
+	return -1;
 }

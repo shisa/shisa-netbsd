@@ -1,4 +1,4 @@
-/*	$NetBSD: getcap.c,v 1.41 2004/04/25 06:45:29 christos Exp $	*/
+/*	$NetBSD: getcap.c,v 1.46 2006/05/29 21:55:41 jnemeth Exp $	*/
 
 /*-
  * Copyright (c) 1992, 1993
@@ -41,7 +41,7 @@
 #if 0
 static char sccsid[] = "@(#)getcap.c	8.3 (Berkeley) 3/25/94";
 #else
-__RCSID("$NetBSD: getcap.c,v 1.41 2004/04/25 06:45:29 christos Exp $");
+__RCSID("$NetBSD: getcap.c,v 1.46 2006/05/29 21:55:41 jnemeth Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
@@ -213,6 +213,7 @@ cgetcap(buf, cap, type)
  * encountered (couldn't open/read a file, etc.), and -3 if a potential
  * reference loop is detected.
  */
+/* coverity[+alloc : arg-*0] */
 int
 cgetent(char **buf, const char * const *db_array, const char *name)
 {
@@ -243,6 +244,7 @@ cgetent(char **buf, const char * const *db_array, const char *name)
  *	  names interpolated, a name can't be found, or depth exceeds
  *	  MAX_RECURSION.
  */
+/* coverity[+alloc : arg-*0] */
 static int
 getent(char **cap, size_t *len, const char * const *db_array, int fd,
     const char *name, int depth, char *nfield)
@@ -324,7 +326,11 @@ getent(char **cap, size_t *len, const char * const *db_array, int fd,
 				}
 				/* save the data; close frees it */
 				clen = strlen(record);
-				cbuf = malloc(clen + 1);
+				if ((cbuf = malloc(clen + 1)) == NULL) {
+					(void)capdbp->close(capdbp);
+					errno = ENOMEM;
+					return (-2);
+				}
 				memmove(cbuf, record, clen + 1);
 				if (capdbp->close(capdbp) < 0) {
 					int serrno = errno;
@@ -656,8 +662,7 @@ cdbget(DB *capdbp, char **bp, const char *name)
 	_DIAGASSERT(bp != NULL);
 	_DIAGASSERT(name != NULL);
 
-	/* LINTED key is not modified */
-	key.data = (char *)name;
+	key.data = __UNCONST(name);
 	key.size = strlen(name);
 
 	for (;;) {
@@ -762,10 +767,11 @@ cgetclose(void)
  * specified by db_array.  It returns 0 upon completion of the database, 1
  * upon returning an entry with more remaining, and -1 if an error occurs.
  */
+/* coverity[+alloc : arg-*0] */
 int
 cgetnext(char **bp, const char * const *db_array)
 {
-	size_t len;
+	size_t len = 0;
 	int status, done;
 	char *cp, *line, *rp, *np, buf[BSIZE], nbuf[BSIZE];
 	size_t dummy;
@@ -786,7 +792,9 @@ cgetnext(char **bp, const char * const *db_array)
 			line = toprec;
 		} else {
 			line = fgetln(pfp, &len);
-			if (line == NULL && pfp) {
+			if (line == NULL) {
+				if (pfp == NULL)
+					return -1;
 				if (ferror(pfp)) {
 					(void)cgetclose();
 					return (-1);

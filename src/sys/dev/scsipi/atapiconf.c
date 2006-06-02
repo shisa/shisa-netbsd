@@ -1,4 +1,4 @@
-/*	$NetBSD: atapiconf.c,v 1.66 2004/09/13 12:55:48 drochner Exp $	*/
+/*	$NetBSD: atapiconf.c,v 1.70 2006/03/30 16:09:28 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1996, 2001 Manuel Bouyer.  All rights reserved.
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: atapiconf.c,v 1.66 2004/09/13 12:55:48 drochner Exp $");
+__KERNEL_RCSID(0, "$NetBSD: atapiconf.c,v 1.70 2006/03/30 16:09:28 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -62,7 +62,7 @@ static int	atapibusactivate(struct device *, enum devact);
 static int	atapibusdetach(struct device *, int flags);
 
 static int	atapibussubmatch(struct device *, struct cfdata *,
-				 const locdesc_t *, void *);
+				 const int *, void *);
 
 static int	atapi_probe_bus(struct atapibus_softc *, int);
 
@@ -130,7 +130,7 @@ atapibusmatch(struct device *parent, struct cfdata *cf, void *aux)
 
 static int
 atapibussubmatch(struct device *parent, struct cfdata *cf,
-		 const locdesc_t *ldesc, void *aux)
+		 const int *ldesc, void *aux)
 {
 	struct scsipibus_attach_args *sa = aux;
 	struct scsipi_periph *periph = sa->sa_periph;
@@ -144,7 +144,7 @@ atapibussubmatch(struct device *parent, struct cfdata *cf,
 static void
 atapibusattach(struct device *parent, struct device *self, void *aux)
 {
-	struct atapibus_softc *sc = (void *) self;
+	struct atapibus_softc *sc = device_private(self);
 	struct scsipi_channel *chan = aux;
 
 	sc->sc_channel = chan;
@@ -167,7 +167,7 @@ atapibusattach(struct device *parent, struct device *self, void *aux)
 static int
 atapibusactivate(struct device *self, enum devact act)
 {
-	struct atapibus_softc *sc = (void *) self;
+	struct atapibus_softc *sc = device_private(self);
 	struct scsipi_channel *chan = sc->sc_channel;
 	struct scsipi_periph *periph;
 	int target, error = 0, s;
@@ -197,7 +197,7 @@ atapibusactivate(struct device *self, enum devact act)
 static int
 atapibusdetach(struct device *self, int flags)
 {
-	struct atapibus_softc *sc = (void *)self;
+	struct atapibus_softc *sc = device_private(self);
 	struct scsipi_channel *chan = sc->sc_channel;
 	struct scsipi_periph *periph;
 	int target, error;
@@ -255,12 +255,12 @@ atapi_probe_device(struct atapibus_softc *sc, int target,
     struct scsipi_periph *periph, struct scsipibus_attach_args *sa)
 {
 	struct scsipi_channel *chan = sc->sc_channel;
-	struct scsi_quirk_inquiry_pattern *finger;
+	const struct scsi_quirk_inquiry_pattern *finger;
 	struct cfdata *cf;
 	int priority, quirks;
 
-	finger = (struct scsi_quirk_inquiry_pattern *)scsipi_inqmatch(
-	    &sa->sa_inqbuf, (caddr_t)atapi_quirk_patterns,
+	finger = scsipi_inqmatch(
+	    &sa->sa_inqbuf, (const void *)atapi_quirk_patterns,
 	    sizeof(atapi_quirk_patterns) /
 	        sizeof(atapi_quirk_patterns[0]),
 	    sizeof(atapi_quirk_patterns[0]), &priority);

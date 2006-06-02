@@ -1,4 +1,9 @@
-/*	$NetBSD: mdreloc.c,v 1.19 2003/07/24 10:12:28 skrll Exp $	*/
+/*	$NetBSD: mdreloc.c,v 1.22 2006/03/18 23:09:34 christos Exp $	*/
+
+#include <sys/cdefs.h>
+#ifndef lint
+__RCSID("$NetBSD: mdreloc.c,v 1.22 2006/03/18 23:09:34 christos Exp $");
+#endif /* not lint */
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -34,6 +39,8 @@ _rtld_relocate_nonplt_self(Elf_Dyn *dynp, Elf_Addr relocbase)
 			break;
 		}
 	}
+	if (rel == 0 || relsz == 0)
+		return;
 	rellim = (const Elf_Rel *)((caddr_t)rel + relsz);
 	for (; rel < rellim; rel++) {
 		where = (Elf_Addr *)(relocbase + rel->r_offset);
@@ -49,7 +56,7 @@ _rtld_relocate_nonplt_objects(const Obj_Entry *obj)
 #ifdef COMBRELOC
 	unsigned long lastsym = -1;
 #endif
-	Elf_Addr target;
+	Elf_Addr target = 0;
 
 	for (rel = obj->rel; rel < obj->rellim; rel++) {
 		Elf_Addr        *where;

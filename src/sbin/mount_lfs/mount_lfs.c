@@ -1,4 +1,4 @@
-/*	$NetBSD: mount_lfs.c,v 1.22 2005/02/09 14:31:29 xtraeme Exp $	*/
+/*	$NetBSD: mount_lfs.c,v 1.27 2006/03/21 21:11:41 christos Exp $	*/
 
 /*-
  * Copyright (c) 1993, 1994
@@ -39,7 +39,7 @@ __COPYRIGHT("@(#) Copyright (c) 1993, 1994\n\
 #if 0
 static char sccsid[] = "@(#)mount_lfs.c	8.4 (Berkeley) 4/26/95";
 #else
-__RCSID("$NetBSD: mount_lfs.c,v 1.22 2005/02/09 14:31:29 xtraeme Exp $");
+__RCSID("$NetBSD: mount_lfs.c,v 1.27 2006/03/21 21:11:41 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -75,8 +75,8 @@ static void	usage(void);
 static void	kill_daemon(char *);
 static void	kill_cleaner(char *);
 
-static int short_rds, cleaner_debug, cleaner_bytes;
-static char *nsegs;
+static int short_rds, cleaner_debug, cleaner_bytes, fs_idle;
+static const char *nsegs;
 
 #ifndef MOUNT_NOMAIN
 int
@@ -93,6 +93,7 @@ mount_lfs(int argc, char *argv[])
 	int ch, mntflags, noclean, mntsize, oldflags, i;
 	char fs_name[MAXPATHLEN], canon_dev[MAXPATHLEN];
 	char *options;
+	mntoptparse_t mp;
 
 	const char *errcause;
 	struct statvfs *mntbuf;
@@ -101,13 +102,16 @@ mount_lfs(int argc, char *argv[])
 	nsegs = "4";
 	mntflags = noclean = 0;
 	cleaner_bytes = 1;
-	while ((ch = getopt(argc, argv, "bdN:no:s")) != -1)
+	while ((ch = getopt(argc, argv, "bdiN:no:s")) != -1)
 		switch (ch) {
 		case 'b':
 			cleaner_bytes = !cleaner_bytes;
 			break;
 		case 'd':
 			cleaner_debug = 1;
+			break;
+		case 'i':
+			fs_idle = 1;
 			break;
 		case 'n':
 			noclean = 1;
@@ -116,7 +120,10 @@ mount_lfs(int argc, char *argv[])
 			nsegs = optarg;
 			break;
 		case 'o':
-			getmntopts(optarg, mopts, &mntflags, 0);
+			mp = getmntopts(optarg, mopts, &mntflags, 0);
+			if (mp == NULL)
+				err(1, "getmntopts");
+			freemntopts(mp);
 			break;
 		case 's':
 			short_rds = 1;
@@ -145,14 +152,6 @@ mount_lfs(int argc, char *argv[])
 		warnx("\"%s\" is a relative path.", argv[1]);
 		warnx("using \"%s\" instead.", fs_name);
 	}
-
-#define DEFAULT_ROOTUID	-2
-	args.export.ex_root = DEFAULT_ROOTUID;
-	if (mntflags & MNT_RDONLY) {
-		args.export.ex_flags = MNT_EXRDONLY;
-		noclean = 1;
-	} else
-		args.export.ex_flags = 0;
 
 	/*
 	 * Record the previous status of this filesystem (if any) before
@@ -252,7 +251,7 @@ kill_cleaner(char *name)
 static void
 invoke_cleaner(char *name)
 {
-	char *args[6], **ap = args;
+	const char *args[7], **ap = args;
 
 	/* Build the argument list. */
 	*ap++ = _PATH_LFS_CLEANERD;
@@ -266,10 +265,12 @@ invoke_cleaner(char *name)
 		*ap++ = "-s";
 	if (cleaner_debug)
 		*ap++ = "-d";
+	if (fs_idle)
+		*ap++ = "-f";
 	*ap++ = name;
 	*ap = NULL;
 
-	execv(args[0], args);
+	execv(args[0], __UNCONST(args));
 	err(1, "exec %s", _PATH_LFS_CLEANERD);
 }
 
@@ -277,7 +278,7 @@ static void
 usage(void)
 {
 	(void)fprintf(stderr,
-		"usage: %s [-bdns] [-N nsegs] [-o options] special node\n",
+		"usage: %s [-bdins] [-N nsegs] [-o options] special node\n",
 		getprogname());
 	exit(1);
 }

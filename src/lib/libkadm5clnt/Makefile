@@ -1,4 +1,4 @@
-# $NetBSD: Makefile,v 1.19 2005/01/10 03:11:17 lukem Exp $
+# $NetBSD: Makefile,v 1.21 2006/05/11 23:16:28 mrg Exp $
 
 NOLINT=		# defined
 
@@ -10,6 +10,10 @@ DIST=		${NETBSDSRCDIR}/crypto/dist
 WARNS?=		1
 
 LIB=		kadm5clnt
+
+LIBDPLIBS=	krb5	${.CURDIR}/../libkrb5 \
+		hdb	${.CURDIR}/../libhdb \
+		roken	${.CURDIR}/../libroken
 
 .if ${USETOOLS} != "yes"
 COMPILEETOBJ!=		cd ${NETBSDSRCDIR}/lib/libcom_err/compile_et && ${PRINTOBJDIR}
@@ -80,6 +84,10 @@ CLEANFILES=	kadm5_err.h kadm5_err.c
 		echo "Error: you must first remove the MIT headers from ${DESTDIR}${INCSDIR}" >&2; \
 		false; \
 	fi
+.endif
+
+.if ${HAVE_GCC} == 4
+COPTS.marshall.c+=	-Wno-pointer-sign
 .endif
 
 .include <bsd.lib.mk>

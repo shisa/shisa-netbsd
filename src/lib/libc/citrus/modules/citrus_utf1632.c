@@ -1,4 +1,4 @@
-/*	$NetBSD: citrus_utf1632.c,v 1.3 2003/06/27 12:55:13 yamt Exp $	*/
+/*	$NetBSD: citrus_utf1632.c,v 1.6 2006/03/19 01:24:09 christos Exp $	*/
 
 /*-
  * Copyright (c)2003 Citrus Project,
@@ -28,7 +28,7 @@
 
 #include <sys/cdefs.h>
 #if defined(LIBC_SCCS) && !defined(lint)
-__RCSID("$NetBSD: citrus_utf1632.c,v 1.3 2003/06/27 12:55:13 yamt Exp $");
+__RCSID("$NetBSD: citrus_utf1632.c,v 1.6 2006/03/19 01:24:09 christos Exp $");
 #endif /* LIBC_SCCS and not lint */
 
 #include <assert.h>
@@ -41,7 +41,7 @@ __RCSID("$NetBSD: citrus_utf1632.c,v 1.3 2003/06/27 12:55:13 yamt Exp $");
 #include <limits.h>
 #include <wchar.h>
 #include <sys/types.h>
-#include <sys/endian.h>
+#include <machine/endian.h>
 
 #include "citrus_namespace.h"
 #include "citrus_types.h"
@@ -173,6 +173,8 @@ refetch:
 				wc = (psenc->ch[1] |
 				      ((wchar_t)psenc->ch[0] << 8));
 				break;
+			default:
+				goto ilseq;
 			}
 			if (wc >= 0xD800 && wc <= 0xDBFF) {
 				/* surrogate high */
@@ -196,6 +198,8 @@ refetch:
 				wc |= psenc->ch[3];
 				wc |= (wchar_t)(psenc->ch[2] & 3) << 8;
 				break;
+			default:
+				goto ilseq;
 			}
 			wc += 0x10000;
 		}
@@ -214,6 +218,8 @@ refetch:
 			      ((wchar_t)psenc->ch[1] << 16) |
 			      ((wchar_t)psenc->ch[0] << 24));
 			break;
+		default:
+			goto ilseq;
 		}
 	}
 
@@ -427,6 +433,20 @@ _citrus_UTF1632_stdenc_cstowc(_UTF1632EncodingInfo * __restrict ei,
 	return (0);
 }
 
+static __inline int
+/*ARGSUSED*/
+_citrus_UTF1632_stdenc_get_state_desc_generic(_UTF1632EncodingInfo * __restrict ei,
+					      _UTF1632State * __restrict psenc,
+					      int * __restrict rstate)
+{
+
+	if (psenc->chlen == 0)
+		*rstate = _STDENC_SDGEN_INITIAL;
+	else
+		*rstate = _STDENC_SDGEN_INCOMPLETE_CHAR;
+
+	return 0;
+}
 
 /* ----------------------------------------------------------------------
  * public interface for stdenc

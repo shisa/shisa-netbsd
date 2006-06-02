@@ -1,4 +1,4 @@
-/*	$NetBSD: vndvar.h,v 1.13.2.2 2005/08/14 21:13:39 riz Exp $	*/
+/*	$NetBSD: vndvar.h,v 1.20 2006/05/14 21:42:26 elad Exp $	*/
 
 /*-
  * Copyright (c) 1996, 1997, 1998 The NetBSD Foundation, Inc.
@@ -143,21 +143,19 @@ struct vnd_ioctl {
 #ifdef _KERNEL
 
 struct vnode;
-struct ucred;
 
 /*
  * A vnode disk's state information.
  */
 struct vnd_softc {
-	int		 sc_unit;	/* logical unit number */
+	struct device    sc_dev;
 	int		 sc_flags;	/* flags */
 	size_t		 sc_size;	/* size of vnd */
 	struct vnode	*sc_vp;		/* vnode */
-	struct ucred	*sc_cred;	/* credentials */
+	kauth_cred_t	 sc_cred;	/* credentials */
 	int		 sc_maxactive;	/* max # of active requests */
-	struct bufq_state sc_tab;	/* transfer queue */
+	struct bufq_state *sc_tab;	/* transfer queue */
 	int		 sc_active;	/* number of active transfers */
-	char		 sc_xname[8];	/* XXX external name */
 	struct disk	 sc_dkdev;	/* generic disk device info */
 	struct vndgeom	 sc_geom;	/* virtual geometry */
 	struct pool	 sc_vxpool;	/* vndxfer pool */
@@ -197,6 +195,15 @@ struct vnd_comp_header
 /*
  * A simple structure for describing which vnd units are in use.
  */
+#ifdef COMPAT_30
+struct vnd_ouser {
+	int		vnu_unit;	/* which vnd unit */
+	dev_t		vnu_dev;	/* file is on this device... */
+	uint32_t	vnu_ino;	/* ...at this inode */
+};
+#define VNDIOOCGET	_IOWR('F', 2, struct vnd_ouser)	/* get list */
+#endif
+
 struct vnd_user {
 	int		vnu_unit;	/* which vnd unit */
 	dev_t		vnu_dev;	/* file is on this device... */
@@ -211,4 +218,4 @@ struct vnd_user {
  */
 #define VNDIOCSET	_IOWR('F', 0, struct vnd_ioctl)	/* enable disk */
 #define VNDIOCCLR	_IOW('F', 1, struct vnd_ioctl)	/* disable disk */
-#define VNDIOCGET	_IOWR('F', 2, struct vnd_user)	/* get list */
+#define VNDIOCGET	_IOWR('F', 3, struct vnd_user)	/* get list */

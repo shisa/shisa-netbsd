@@ -1,4 +1,4 @@
-/*	$NetBSD: clrtoeol.c,v 1.18 2003/10/05 08:26:02 jdc Exp $	*/
+/*	$NetBSD: clrtoeol.c,v 1.21 2006/02/05 17:39:52 jdc Exp $	*/
 
 /*
  * Copyright (c) 1981, 1993, 1994
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)clrtoeol.c	8.2 (Berkeley) 5/4/94";
 #else
-__RCSID("$NetBSD: clrtoeol.c,v 1.18 2003/10/05 08:26:02 jdc Exp $");
+__RCSID("$NetBSD: clrtoeol.c,v 1.21 2006/02/05 17:39:52 jdc Exp $");
 #endif
 #endif				/* not lint */
 
@@ -64,6 +64,7 @@ wclrtoeol(WINDOW *win)
 {
 	int     minx, x, y;
 	__LDATA *end, *maxx, *sp;
+	attr_t	attr;
 
 	y = win->cury;
 	x = win->curx;
@@ -80,16 +81,17 @@ wclrtoeol(WINDOW *win)
 	end = &win->lines[y]->line[win->maxx];
 	minx = -1;
 	maxx = &win->lines[y]->line[x];
+	if (__using_color && win != curscr)
+		attr = win->battr & __COLOR;
+	else
+		attr = 0;
 	for (sp = maxx; sp < end; sp++)
-		if (sp->ch != ' ' || sp->attr != 0 ||
-		    sp->bch != win->bch || sp->battr != win->battr) {
+		if (sp->ch != win->bch || sp->attr != attr) {
 			maxx = sp;
 			if (minx == -1)
 				minx = sp - win->lines[y]->line;
-			sp->ch = ' ';
-			sp->bch = win->bch;
-			sp->attr = 0;
-			sp->battr = win->battr;
+			sp->ch = win->bch;
+			sp->attr = attr;
 		}
 #ifdef DEBUG
 	__CTRACE("CLRTOEOL: minx = %d, maxx = %d, firstch = %d, lastch = %d\n",

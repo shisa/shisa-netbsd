@@ -1,4 +1,4 @@
-/* $NetBSD: pass1.c,v 1.20 2005/02/06 06:13:47 perry Exp $	 */
+/* $NetBSD: pass1.c,v 1.24 2006/03/17 15:53:46 rumble Exp $	 */
 
 /*
  * Copyright (c) 1980, 1986, 1993
@@ -49,7 +49,7 @@
 
 #include "bufcache.h"
 #include "vnode.h"
-#include "lfs.h"
+#include "lfs_user.h"
 
 #include "fsck.h"
 #include "extern.h"
@@ -70,10 +70,10 @@ struct ino_daddr {
 static int
 i_d_cmp(const void *va, const void *vb)
 {
-	struct ino_daddr *a, *b;
+	const struct ino_daddr *a, *b;
 
-	a = *((struct ino_daddr **) va);
-	b = *((struct ino_daddr **) vb);
+	a = *((const struct ino_daddr *const *) va);
+	b = *((const struct ino_daddr *const *) vb);
 
 	if (a->daddr == b->daddr) {
 		return (a->ino - b->ino);
@@ -109,8 +109,12 @@ pass1(void)
 		printf("creating sorted inode address table...\n");
 	/* Sort by daddr */
 	dins = (struct ino_daddr **) malloc(maxino * sizeof(*dins));
+	if (dins == NULL)
+		err(1, NULL);
 	for (i = 0; i < maxino; i++) {
 		dins[i] = malloc(sizeof(**dins));
+		if (dins[i] == NULL)
+			err(1, NULL);
 		dins[i]->ino = i;
 		if (i == fs->lfs_ifile)
 			dins[i]->daddr = fs->lfs_idaddr;
@@ -194,7 +198,8 @@ checkinode(ino_t inumber, struct inodesc * idesc)
 		    memcmp(dp->di_ib, zino.di_ib, NIADDR * sizeof(ufs_daddr_t)) ||
 		    dp->di_mode || dp->di_size) {
 			pwarn("mode=o%o, ifmt=o%o\n", dp->di_mode, mode);
-			pfatal("PARTIALLY ALLOCATED INODE I=%u", inumber);
+			pfatal("PARTIALLY ALLOCATED INODE I=%llu",
+			    (unsigned long long)inumber);
 			if (reply("CLEAR") == 1) {
 				vp = vget(fs, inumber);
 				clearinode(inumber);
@@ -287,8 +292,9 @@ checkinode(ino_t inumber, struct inodesc * idesc)
 	idesc->id_number = inumber;
 	(void) ckinode(VTOD(vp), idesc);
 	if (dp->di_blocks != idesc->id_entryno) {
-		pwarn("INCORRECT BLOCK COUNT I=%u (%d should be %d)",
-		    inumber, dp->di_blocks, idesc->id_entryno);
+		pwarn("INCORRECT BLOCK COUNT I=%llu (%d should be %d)",
+		    (unsigned long long)inumber, dp->di_blocks,
+		    idesc->id_entryno);
 		if (preen)
 			printf(" (CORRECTED)\n");
 		else if (reply("CORRECT") == 0)
@@ -298,7 +304,7 @@ checkinode(ino_t inumber, struct inodesc * idesc)
 	}
 	return;
 unknown:
-	pfatal("UNKNOWN FILE TYPE I=%u", inumber);
+	pfatal("UNKNOWN FILE TYPE I=%llu", (unsigned long long)inumber);
 	statemap[inumber] = FCLEAR;
 	if (reply("CLEAR") == 1) {
 		statemap[inumber] = USTATE;
@@ -320,8 +326,8 @@ pass1check(struct inodesc *idesc)
 	if ((anyout = chkrange(blkno, fragstofsb(fs, idesc->id_numfrags))) != 0) {
 		blkerror(idesc->id_number, "BAD", blkno);
 		if (badblk++ >= MAXBAD) {
-			pwarn("EXCESSIVE BAD BLKS I=%u",
-			    idesc->id_number);
+			pwarn("EXCESSIVE BAD BLKS I=%llu",
+			    (unsigned long long)idesc->id_number);
 			if (preen)
 				printf(" (SKIPPING)\n");
 			else if (reply("CONTINUE") == 0)
@@ -348,8 +354,8 @@ pass1check(struct inodesc *idesc)
 			    testbmap(blkno));
 #endif
 			if (dupblk++ >= MAXDUP) {
-				pwarn("EXCESSIVE DUP BLKS I=%u",
-				    idesc->id_number);
+				pwarn("EXCESSIVE DUP BLKS I=%llu",
+				    (unsigned long long)idesc->id_number);
 				if (preen)
 					printf(" (SKIPPING)\n");
 				else if (reply("CONTINUE") == 0)

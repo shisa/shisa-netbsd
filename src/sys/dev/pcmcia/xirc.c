@@ -1,4 +1,4 @@
-/*	$NetBSD: xirc.c,v 1.13 2005/02/27 00:27:43 perry Exp $	*/
+/*	$NetBSD: xirc.c,v 1.16 2006/03/25 23:23:26 thorpej Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2000, 2004 The NetBSD Foundation, Inc.
@@ -38,7 +38,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: xirc.c,v 1.13 2005/02/27 00:27:43 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: xirc.c,v 1.16 2006/03/25 23:23:26 thorpej Exp $");
 
 #include "opt_inet.h"
 #include "opt_ns.h"
@@ -282,9 +282,12 @@ xirc_attach(parent, self, aux)
 	sc->sc_mako_intmask = 0xee;
 
 	if (sc->sc_id & (XIMEDIA_MODEM << 8))
-		sc->sc_modem = config_found(self, "com", xirc_print);
+		/*XXXUNCONST*/
+		sc->sc_modem = config_found(self, __UNCONST("com"), xirc_print);
 	if (sc->sc_id & (XIMEDIA_ETHER << 8))
-		sc->sc_ethernet = config_found(self, "xi", xirc_print);
+		/*XXXUNCONST*/
+		sc->sc_ethernet = config_found(self, __UNCONST("xi"),
+		    xirc_print);
 
 	xirc_disable(sc, XIRC_MODEM_ENABLED|XIRC_ETHERNET_ENABLED,
 	    sc->sc_id & (XIMEDIA_MODEM|XIMEDIA_ETHER));
@@ -637,7 +640,8 @@ int
 com_xirc_enable(sc)
 	struct com_softc *sc;
 {
-	struct xirc_softc *msc = (struct xirc_softc *)sc->sc_dev.dv_parent;
+	struct xirc_softc *msc =
+	    (struct xirc_softc *)device_parent(&sc->sc_dev);
 
 	return (xirc_enable(msc, XIRC_MODEM_ENABLED, XIMEDIA_MODEM));
 }
@@ -646,7 +650,8 @@ void
 com_xirc_disable(sc)
 	struct com_softc *sc;
 {
-	struct xirc_softc *msc = (struct xirc_softc *)sc->sc_dev.dv_parent;
+	struct xirc_softc *msc =
+	    (struct xirc_softc *)device_parent(&sc->sc_dev);
 
 	xirc_disable(msc, XIRC_MODEM_ENABLED, XIMEDIA_MODEM);
 }
@@ -701,8 +706,8 @@ xi_xirc_attach(parent, self, aux)
 	sc->sc_enable = xi_xirc_enable;
 	sc->sc_disable = xi_xirc_disable;
 
-	if (!pcmcia_scan_cis(msc->sc_dev.dv_parent, xi_xirc_lan_nid_ciscallback,
-	    myla)) {
+	if (!pcmcia_scan_cis(device_parent(&msc->sc_dev),
+	    xi_xirc_lan_nid_ciscallback, myla)) {
 		aprint_error("%s: can't find MAC address\n", self->dv_xname);
 		return;
 	}
@@ -715,7 +720,8 @@ int
 xi_xirc_enable(sc)
 	struct xi_softc *sc;
 {
-	struct xirc_softc *msc = (struct xirc_softc *)sc->sc_dev.dv_parent;
+	struct xirc_softc *msc =
+	    (struct xirc_softc *)device_parent(&sc->sc_dev);
 
 	return (xirc_enable(msc, XIRC_ETHERNET_ENABLED, XIMEDIA_ETHER));
 }
@@ -724,7 +730,8 @@ void
 xi_xirc_disable(sc)
 	struct xi_softc *sc;
 {
-	struct xirc_softc *msc = (struct xirc_softc *)sc->sc_dev.dv_parent;
+	struct xirc_softc *msc =
+	    (struct xirc_softc *)device_parent(&sc->sc_dev);
 
 	xirc_disable(msc, XIRC_ETHERNET_ENABLED, XIMEDIA_ETHER);
 }

@@ -1,4 +1,4 @@
-/*	$NetBSD: names.c,v 1.17 2003/08/07 11:14:40 agc Exp $	*/
+/*	$NetBSD: names.c,v 1.19 2005/07/19 23:07:10 christos Exp $	*/
 
 /*
  * Copyright (c) 1980, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)names.c	8.1 (Berkeley) 6/6/93";
 #else
-__RCSID("$NetBSD: names.c,v 1.17 2003/08/07 11:14:40 agc Exp $");
+__RCSID("$NetBSD: names.c,v 1.19 2005/07/19 23:07:10 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -47,7 +47,6 @@ __RCSID("$NetBSD: names.c,v 1.17 2003/08/07 11:14:40 agc Exp $");
 #include "rcv.h"
 #include "extern.h"
 
-extern char *tmpdir;
 
 /*
  * Allocate a single element of a name list,
@@ -59,7 +58,7 @@ nalloc(char str[], int ntype)
 {
 	struct name *np;
 
-	np = (struct name *) salloc(sizeof *np);
+	np = salloc(sizeof *np);
 	np->n_flink = NULL;
 	np->n_blink = NULL;
 	np->n_type = ntype;
@@ -118,7 +117,7 @@ extract(char line[], int ntype)
 char *
 detract(struct name *np, int ntype)
 {
-	int s;
+	size_t s;
 	char *cp, *begin;
 	struct name *p;
 	int comma;
@@ -129,7 +128,7 @@ detract(struct name *np, int ntype)
 	ntype &= ~GCOMMA;
 	s = 0;
 	if (debug && comma)
-		fprintf(stderr, "detract asked to insert commas\n");
+		(void)fprintf(stderr, "detract asked to insert commas\n");
 	for (p = np; p != NULL; p = p->n_flink) {
 		if (ntype && (p->n_type & GMASK) != ntype)
 			continue;
@@ -213,7 +212,8 @@ outof(struct name *names, FILE *fo, struct header *hp)
 	int c, fd;
 	struct name *np, *begin;
 	time_t now;
-	char *date, *fname;
+	char *date;
+	const char *fname;
 	FILE *fout, *fin;
 	int ispipe;
 	char tempname[PATHSIZE];
@@ -244,7 +244,7 @@ outof(struct name *names, FILE *fo, struct header *hp)
 			if ((fd = mkstemp(tempname)) == -1 ||
 			    (fout = Fdopen(fd, "a")) == NULL) {
 				if (fd != -1)
-					close(fd);
+					(void)close(fd);
 				warn("%s", tempname);
 				senderr++;
 				goto cant;
@@ -258,8 +258,8 @@ outof(struct name *names, FILE *fo, struct header *hp)
 				goto cant;
 			}
 			(void)fcntl(image, F_SETFD, 1);
-			fprintf(fout, "From %s %s", myname, date);
-			puthead(hp, fout, GTO|GSUBJECT|GCC|GNL);
+			(void)fprintf(fout, "From %s %s", myname, date);
+			(void)puthead(hp, fout, GTO|GSUBJECT|GCC|GNL);
 			while ((c = getc(fo)) != EOF)
 				(void)putc(c, fout);
 			rewind(fo);
@@ -282,7 +282,7 @@ outof(struct name *names, FILE *fo, struct header *hp)
 
 		if (ispipe) {
 			int pid;
-			char *shellcmd;
+			const char *shellcmd;
 			sigset_t nset;
 
 			/*
@@ -294,10 +294,10 @@ outof(struct name *names, FILE *fo, struct header *hp)
 			 */
 			if ((shellcmd = value("SHELL")) == NULL)
 				shellcmd = _PATH_CSHELL;
-			sigemptyset(&nset);
-			sigaddset(&nset, SIGHUP);
-			sigaddset(&nset, SIGINT);
-			sigaddset(&nset, SIGQUIT);
+			(void)sigemptyset(&nset);
+			(void)sigaddset(&nset, SIGHUP);
+			(void)sigaddset(&nset, SIGINT);
+			(void)sigaddset(&nset, SIGQUIT);
 			pid = start_command(shellcmd, &nset,
 				image, -1, "-c", fname, NULL);
 			if (pid < 0) {
@@ -318,7 +318,7 @@ outof(struct name *names, FILE *fo, struct header *hp)
 			} else
 				fin = Fdopen(f, "r");
 			if (fin == NULL) {
-				fprintf(stderr, "Can't reopen image\n");
+				(void)fprintf(stderr, "Can't reopen image\n");
 				(void)Fclose(fout);
 				senderr++;
 				goto cant;
@@ -424,7 +424,7 @@ gexpand(struct name *nlist, struct grouphead *gh, int metoo, int ntype)
 	char *cp;
 
 	if (depth > MAXEXP) {
-		printf("Expanding alias to depth larger than %d\n", MAXEXP);
+		(void)printf("Expanding alias to depth larger than %d\n", MAXEXP);
 		return(nlist);
 	}
 	depth++;
@@ -477,10 +477,10 @@ cat(struct name *n1, struct name *n2)
  * Unpack the name list onto a vector of strings.
  * Return an error if the name list won't fit.
  */
-char **
+const char **
 unpack(struct name *np)
 {
-	char **ap, **begin;
+	const char **ap, **begin;
 	struct name *n;
 	int t, extra, metoo, verbose;
 
@@ -501,7 +501,7 @@ unpack(struct name *np)
 	verbose = value("verbose") != NULL;
 	if (verbose)
 		extra++;
-	begin = (char **) salloc((t + extra) * sizeof *begin);
+	begin = salloc((t + extra) * sizeof *begin);
 	ap = begin;
 	*ap++ = "send-mail";
 	*ap++ = "-i";
@@ -685,9 +685,9 @@ prettyprint(name)
 
 	np = name;
 	while (np != NULL) {
-		fprintf(stderr, "%s(%d) ", np->n_name, np->n_type);
+		(void)fprintf(stderr, "%s(%d) ", np->n_name, np->n_type);
 		np = np->n_flink;
 	}
-	fprintf(stderr, "\n");
+	(void)fprintf(stderr, "\n");
 }
 */

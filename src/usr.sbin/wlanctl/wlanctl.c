@@ -1,4 +1,4 @@
-/* $NetBSD: wlanctl.c,v 1.1 2004/07/16 03:13:51 dyoung Exp $ */
+/* $NetBSD: wlanctl.c,v 1.5 2006/05/25 02:48:09 christos Exp $ */
 /*-
  * Copyright (c) 2005 David Young.  All rights reserved.
  *
@@ -117,7 +117,9 @@ static void
 print_node_flags(u_int32_t flags)
 {
 	const static struct flagname nodeflags[] = {
-		{IEEE80211_NODE_SYSCTL_F_BSS, "bss"}
+		  {IEEE80211_NODE_SYSCTL_F_BSS, "bss"}
+		, {IEEE80211_NODE_SYSCTL_F_STA, "sta"}
+		, {IEEE80211_NODE_SYSCTL_F_SCAN, "scan"}
 	};
 	printf("\tnode flags %04x", flags);
 
@@ -192,7 +194,7 @@ dump_nodes(const char *ifname_arg, int hdr_type, struct cmdflags *cf)
 /*68*/
 #endif
 	u_int i, ifindex;
-	size_t namelen, nodes_len;
+	size_t namelen, nodes_len, totallen;
 	int name[10];
 	int *vname;
 	char ifname[IFNAMSIZ];
@@ -213,6 +215,11 @@ dump_nodes(const char *ifname_arg, int hdr_type, struct cmdflags *cf)
 		return -1;
 	}
 
+	totallen = namelen + IEEE80211_SYSCTL_NODENAMELEN;
+	if (totallen >= NELTS(name)) {
+		warnx("Internal error finding sysctl mib");
+		return -1;
+	}
 	vname = &name[namelen];
 
 	vname[IEEE80211_SYSCTL_NODENAME_IF] = ifindex;
@@ -220,16 +227,15 @@ dump_nodes(const char *ifname_arg, int hdr_type, struct cmdflags *cf)
 	vname[IEEE80211_SYSCTL_NODENAME_ARG] = 0;
 	vname[IEEE80211_SYSCTL_NODENAME_TYPE] = hdr_type;
 	vname[IEEE80211_SYSCTL_NODENAME_ELTSIZE] = sizeof(*ns);
-	vname[IEEE80211_SYSCTL_NODENAME_ELTCOUNT] = 1;
+	vname[IEEE80211_SYSCTL_NODENAME_ELTCOUNT] = INT_MAX;
 
 	/* how many? */
-	if (sysctl(name, namelen + IEEE80211_SYSCTL_NODENAMELEN,
-	    NULL, &nodes_len, NULL, 0) != 0) {
+	if (sysctl(name, totallen, NULL, &nodes_len, NULL, 0) != 0) {
 		warn("sysctl(count)");
 		return -1;
 	}
 
-	ns = (struct ieee80211_node_sysctl *)malloc(nodes_len);
+	ns = malloc(nodes_len);
 
 	if (ns == NULL) {
 		warn("malloc");
@@ -239,8 +245,7 @@ dump_nodes(const char *ifname_arg, int hdr_type, struct cmdflags *cf)
 	vname[IEEE80211_SYSCTL_NODENAME_ELTCOUNT] = nodes_len / sizeof(ns[0]);
 
 	/* Get them. */
-	if (sysctl(name, namelen + IEEE80211_SYSCTL_NODENAMELEN,
-	    ns, &nodes_len, NULL, 0) != 0) {
+	if (sysctl(name, totallen, ns, &nodes_len, NULL, 0) != 0) {
 		warn("sysctl(get)");
 		return -1;
 	}
@@ -263,7 +268,8 @@ dump_nodes(const char *ifname_arg, int hdr_type, struct cmdflags *cf)
 		print_capinfo(pns->ns_capinfo);
 
 		printf("\tbeacon-interval %d TU tsft %" PRIu64 " us\n",
-		    pns->ns_intval, le64toh(*(u_int64_t *)&pns->ns_tstamp[0]));
+		    pns->ns_intval,
+		    (u_int64_t)le64toh(*(u_int64_t *)&pns->ns_tstamp[0]));
 
 		print_rateset(&pns->ns_rates, pns->ns_txrate);
 
@@ -272,9 +278,6 @@ dump_nodes(const char *ifname_arg, int hdr_type, struct cmdflags *cf)
 
 		printf("\trssi %d txseq %d rxseq %d\n",
 		    pns->ns_rssi, pns->ns_txseq, pns->ns_rxseq);
-
-		if (pns->ns_pwrsave)
-			printf("\tpower-saving\n");
 	}
 	return 0;
 }

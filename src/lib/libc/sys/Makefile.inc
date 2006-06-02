@@ -1,20 +1,19 @@
-#	$NetBSD: Makefile.inc,v 1.156.2.1 2005/03/20 12:11:34 tron Exp $
+#	$NetBSD: Makefile.inc,v 1.166 2006/05/29 10:02:56 drochner Exp $
 #	@(#)Makefile.inc	8.3 (Berkeley) 10/24/94
 
 # sys sources
 .PATH: ${ARCHDIR}/sys ${.CURDIR}/sys
 
 # modules with non-default implementations on at least one architecture:
-SRCS+=	Ovfork.S __clone.S __vfork14.S brk.S exect.S fork.S msgctl.S pipe.S \
+SRCS+=	__clone.S __vfork14.S brk.S exect.S fork.S pipe.S \
 	getcontext.S \
-	ptrace.S sbrk.S __semctl.S shmat.S shmctl.S sigaction.S \
-	sigpending.S sigprocmask.S sigreturn.S __sigreturn14.S sigsuspend.S \
+	ptrace.S sbrk.S shmat.S \
 	syscall.S __syscall.S __clone.S cerror.S
 
-_LSRC=	Lint_Ovfork.c Lint___clone.c Lint___vfork14.c Lint_brk.c Lint_clone.c \
+_LSRC+=	Lint___clone.c Lint___vfork14.c Lint_brk.c Lint_clone.c \
 	Lint_getcontext.c \
-	Lint_exect.c Lint_fork.c Lint_pipe.c Lint_ptrace.c Lint_sbrk.c \
-	Lint_setlogin.c Lint_syscall.c Lint___syscall.c \
+	Lint_exect.c Lint_pipe.c Lint_ptrace.c Lint_sbrk.c \
+	Lint_syscall.c Lint___syscall.c \
 	LintSysNormal.c LintSysNoerr.c LintSysPseudoNoerr.c
 
 .if ${MKLINT} != "no"
@@ -28,9 +27,10 @@ SRCS+=	sigtimedwait.c sigwait.c sigwaitinfo.c statvfs.c
 
 # glue to provide compatibility between GCC 1.X and 2.X and for compat
 # with old syscall interfaces.
-SRCS+=	adjtime.c clock_settime.c ftruncate.c getdirentries.c lseek.c mmap.c \
-	msync.c ntp_adjtime.c pread.c preadv.c pwrite.c pwritev.c semctl.c \
-	settimeofday.c sigaltstack.c stat.c statfs.c swapon.c truncate.c
+SRCS+=	adjtime.c clock_settime.c ftruncate.c \
+	lseek.c mmap.c ntp_adjtime.c pread.c preadv.c pwrite.c \
+	pwritev.c settimeofday.c \
+	swapon.c truncate.c
 
 # glue to syscalls that may pass structs or unions, which cannot be
 # handled portably and easily by the syscall interface. The glue
@@ -53,9 +53,9 @@ ASM=	access.S acct.S \
 		extattr_list_link.S extattr_set_fd.S extattr_set_file.S \
 		extattr_set_link.S \
 	fchdir.S fchflags.S fchmod.S fchown.S fchroot.S \
-		fhopen.S fhstat.S fhstatvfs1.S fktrace.S \
-		flock.S fpathconf.S __fstat13.S fstatvfs1.S futimes.S \
-	__getcwd.S getdents.S getfh.S getvfsstat.S getgroups.S getitimer.S \
+		fhopen.S __fhstat30.S fhstatvfs1.S fktrace.S \
+		flock.S fpathconf.S __fstat30.S fstatvfs1.S futimes.S \
+	__getcwd.S __getdents30.S getfh.S getvfsstat.S getgroups.S getitimer.S \
 		__getlogin.S getpeername.S getpgid.S getpgrp.S \
 		getpriority.S getrlimit.S getrusage.S getsid.S getsockname.S \
 		getsockopt.S gettimeofday.S \
@@ -65,15 +65,16 @@ ASM=	access.S acct.S \
 		_ksem_post.S _ksem_trywait.S _ksem_unlink.S _ksem_wait.S \
 		_ksem_open.S \
 	lchflags.S lchmod.S lchown.S lfs_bmapv.S lfs_markv.S lfs_segclean.S \
-		lfs_segwait.S link.S listen.S __lstat13.S lutimes.S \
+		lfs_segwait.S link.S listen.S __lstat30.S lutimes.S \
 		_lwp_create.S _lwp_exit.S _lwp_self.S _lwp_wait.S \
 		_lwp_suspend.S _lwp_continue.S _lwp_wakeup.S \
 		_lwp_getprivate.S _lwp_setprivate.S \
 	madvise.S mincore.S minherit.S mkdir.S mkfifo.S mknod.S \
 		mlock.S mlockall.S mount.S mprotect.S __msgctl13.S msgget.S \
 		munlock.S munlockall.S munmap.S \
-	nfssvc.S ntp_gettime.S \
+	nfssvc.S __ntp_gettime30.S \
 	pathconf.S pmc_get_info.S pmc_control.S __posix_chown.S \
+		posix_fadvise.S \
 		__posix_fchown.S __posix_lchown.S __posix_rename.S profil.S \
 	quotactl.S \
 	rasctl.S readlink.S reboot.S recvfrom.S recvmsg.S rename.S revoke.S \
@@ -85,7 +86,7 @@ ASM=	access.S acct.S \
 		setregid.S setreuid.S setrlimit.S setsid.S setsockopt.S \
 		setuid.S __shmctl13.S shmdt.S shmget.S shutdown.S \
 		__sigaltstack14.S __sigpending14.S __sigaction_sigtramp.S \
-		__sigtimedwait.S socket.S socketpair.S __stat13.S statvfs1.S \
+		__sigtimedwait.S socket.S socketpair.S __stat30.S statvfs1.S \
 		swapctl.S symlink.S __sysctl.S \
 	timer_create.S timer_delete.S timer_gettime.S timer_getoverrun.S \
 		timer_settime.S \
@@ -125,6 +126,8 @@ ${NOERR}: ${ASMDEPS}
 ${PSEUDONOERR}: ${ASMDEPS}
 	${_MKTARGET_CREATE}
 	printf '#include "SYS.h"\nPSEUDO_NOERROR(${.PREFIX},${.PREFIX:S/_//})\n' >${.TARGET}
+	# add an _Exit alias to _exit
+	printf 'STRONG_ALIAS(${.PREFIX:S/e/E/},${.PREFIX})\n' >>${.TARGET}
 
 LintSysNormal.c: ${.CURDIR}/sys/makelintstub \
     ${DESTDIR}/usr/include/sys/syscall.h
@@ -148,7 +151,7 @@ MAN+=	accept.2 access.2 acct.2 adjtime.2 bind.2 brk.2 chdir.2 \
 	chflags.2 chmod.2 chown.2 chroot.2 clock_settime.2 clone.2 close.2 \
 	connect.2 dup.2 execve.2 _exit.2 extattr_get_file.2 \
 	fcntl.2 fdatasync.2 fhopen.2 \
-	flock.2 fork.2 fsync.2 getcontext.2 getdents.2 getdirentries.3 \
+	flock.2 fork.2 fsync.2 getcontext.2 getdents.2 \
 	getfh.2 getvfsstat.2 getgid.2 getgroups.2 \
 	getitimer.2 getlogin.2 getpeername.2 getpgrp.2 getpid.2 \
 	getpriority.2 getrlimit.2 getrusage.2 getsid.2 getsockname.2 \
@@ -161,8 +164,8 @@ MAN+=	accept.2 access.2 acct.2 adjtime.2 bind.2 brk.2 chdir.2 \
 	madvise.2 mincore.2 minherit.2 mlock.2 mlockall.2 mmap.2 mount.2 \
 	mprotect.2 msgctl.2 msgget.2 msgrcv.2 msgsnd.2 msync.2 \
 	munmap.2 nanosleep.2 nfssvc.2 ntp_adjtime.2 open.2 pathconf.2 pipe.2 \
-	pmc_control.2 poll.2 profil.2 ptrace.2 quotactl.2 rasctl.2 \
-	read.2 readlink.2 \
+	pmc_control.2 poll.2 posix_fadvise.2 profil.2 ptrace.2 quotactl.2 \
+	rasctl.2 read.2 readlink.2 \
 	reboot.2 recv.2 rename.2 revoke.2 rmdir.2 \
 	sa_register.2 sa_stacks.2 sa_enable.2 sa_setconcurrency.2 sa_yield.2 \
 	select.2 semctl.2 \

@@ -1,4 +1,4 @@
-/*	$NetBSD: ffs.c,v 1.15 2004/06/20 22:20:17 jmc Exp $	*/
+/*	$NetBSD: ffs.c,v 1.18 2006/02/18 12:39:38 dsl Exp $	*/
 
 /*-
  * Copyright (c) 2002 The NetBSD Foundation, Inc.
@@ -42,7 +42,7 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID) && !defined(__lint)
-__RCSID("$NetBSD: ffs.c,v 1.15 2004/06/20 22:20:17 jmc Exp $");
+__RCSID("$NetBSD: ffs.c,v 1.18 2006/02/18 12:39:38 dsl Exp $");
 #endif	/* !__lint */
 
 #include <sys/param.h>
@@ -69,7 +69,13 @@ __RCSID("$NetBSD: ffs.c,v 1.15 2004/06/20 22:20:17 jmc Exp $");
 #include <ufs/ufs/dir.h>
 #include <ufs/ffs/fs.h>
 #include <ufs/ffs/ffs_extern.h>
+#ifndef NO_FFS_SWAP
 #include <ufs/ufs/ufs_bswap.h>
+#else
+#define	ffs_sb_swap(fs_a, fs_b)
+#define	ffs_dinode1_swap(inode_a, inode_b)
+#define	ffs_dinode2_swap(inode_a, inode_b)
+#endif
 
 static int	ffs_read_disk_block(ib_params *, uint64_t, int, char *);
 static int	ffs_find_disk_blocks_ufs1(ib_params *, ino_t,
@@ -233,8 +239,8 @@ ffs_find_disk_blocks_ufs1(ib_params *params, ino_t ino,
 	}
 
 	if (nblk != 0) {
-		warnx("Inode %d in `%s' ran out of blocks?", ino,
-		    params->filesystem);
+		warnx("Inode %llu in `%s' ran out of blocks?",
+		    (unsigned long long)ino, params->filesystem);
 		return (0);
 	}
 
@@ -363,8 +369,8 @@ ffs_find_disk_blocks_ufs2(ib_params *params, ino_t ino,
 	}
 
 	if (nblk != 0) {
-		warnx("Inode %d in `%s' ran out of blocks?", ino,
-		    params->filesystem);
+		warnx("Inode %llu in `%s' ran out of blocks?",
+		    (unsigned long long)ino, params->filesystem);
 		return (0);
 	}
 
@@ -401,7 +407,7 @@ ffs_findstage2_ino(ib_params *params, void *_ino,
 	de = (struct direct *)&dirbuf[0];
 	ede = (struct direct *)&dirbuf[blksize];
 	while (de < ede) {
-		ino = de->d_ino;
+		ino = de->d_fileno;
 		if (params->fstype->needswap) {
 			ino = bswap32(ino);
 			de->d_reclen = bswap16(de->d_reclen);
@@ -477,6 +483,7 @@ ffs_match(ib_params *params)
 			params->fstype->blocksize = fs->fs_bsize;
 			params->fstype->sblockloc = loc;
 			break;
+#ifndef FFS_NO_SWAP
 		case FS_UFS2_MAGIC_SWAPPED:
 			is_ufs2 = 1;
 			/* FALLTHROUGH */
@@ -485,6 +492,7 @@ ffs_match(ib_params *params)
 			params->fstype->blocksize = bswap32(fs->fs_bsize);
 			params->fstype->sblockloc = loc;
 			break;
+#endif
 		default:
 			continue;
 		}

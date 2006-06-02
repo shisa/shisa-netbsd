@@ -1,4 +1,4 @@
-/*	$NetBSD: usbdi_util.h,v 1.32.2.1 2005/04/17 10:24:08 tron Exp $	*/
+/*	$NetBSD: usbdi_util.h,v 1.35 2005/12/11 12:24:01 christos Exp $	*/
 
 /*
  * Copyright (c) 1998, 2004 The NetBSD Foundation, Inc.
@@ -74,16 +74,16 @@ usbd_status	usbd_get_string_desc(usbd_device_handle dev, int sindex,
 void		usbd_delay_ms(usbd_device_handle, u_int);
 
 
-usbd_status usbd_set_config_no(usbd_device_handle dev, int no, int msg);
-usbd_status usbd_set_config_index(usbd_device_handle dev, int index, int msg);
+usbd_status usbd_set_config_no(usbd_device_handle, int, int);
+usbd_status usbd_set_config_index(usbd_device_handle, int, int);
 
-usbd_status usbd_bulk_transfer(usbd_xfer_handle xfer, usbd_pipe_handle pipe,
-			       u_int16_t flags, u_int32_t timeout, void *buf,
-			       u_int32_t *size, char *lbl);
+usbd_status usbd_bulk_transfer(usbd_xfer_handle, usbd_pipe_handle,
+			       u_int16_t, u_int32_t, void *,
+			       u_int32_t *, const char *);
 
-usbd_status usbd_intr_transfer(usbd_xfer_handle xfer, usbd_pipe_handle pipe,
- 			       u_int16_t flags, u_int32_t timeout, void *buf,
- 			       u_int32_t *size, char *lbl);
+usbd_status usbd_intr_transfer(usbd_xfer_handle, usbd_pipe_handle,
+ 			       u_int16_t, u_int32_t, void *,
+ 			       u_int32_t *, const char *);
 
 void usb_detach_wait(device_ptr_t);
 void usb_detach_wakeup(device_ptr_t);

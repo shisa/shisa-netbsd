@@ -1,4 +1,4 @@
-/*	$NetBSD: md5.h,v 1.5.2.1 2005/06/10 14:38:35 tron Exp $	*/
+/*	$NetBSD: md5.h,v 1.9 2005/12/26 18:41:36 perry Exp $	*/
 
 /*
  * This file is derived from the RSA Data Security, Inc. MD5 Message-Digest
@@ -34,12 +34,13 @@
 
 #include <sys/types.h>
 
-#define MD5_DIGEST_LENGTH 16
+#define MD5_DIGEST_LENGTH		16
+#define	MD5_DIGEST_STRING_LENGTH	33
 
 /* MD5 context. */
 typedef struct MD5Context {
-	u_int32_t state[4];	/* state (ABCD) */
-	u_int32_t count[2];	/* number of bits, modulo 2^64 (lsb first) */
+	uint32_t state[4];	/* state (ABCD) */
+	uint32_t count[2];	/* number of bits, modulo 2^64 (lsb first) */
 	unsigned char buffer[64]; /* input buffer */
 } MD5_CTX;
 

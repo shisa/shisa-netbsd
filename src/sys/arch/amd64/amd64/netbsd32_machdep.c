@@ -1,4 +1,4 @@
-/*	$NetBSD: netbsd32_machdep.c,v 1.11.10.1 2005/09/18 20:09:49 tron Exp $	*/
+/*	$NetBSD: netbsd32_machdep.c,v 1.23 2006/05/14 21:55:09 elad Exp $	*/
 
 /*
  * Copyright (c) 2001 Wasabi Systems, Inc.
@@ -36,7 +36,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: netbsd32_machdep.c,v 1.11.10.1 2005/09/18 20:09:49 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: netbsd32_machdep.c,v 1.23 2006/05/14 21:55:09 elad Exp $");
 
 #include "opt_compat_netbsd.h"
 #include "opt_execfmt.h"
@@ -54,6 +54,8 @@ __KERNEL_RCSID(0, "$NetBSD: netbsd32_machdep.c,v 1.11.10.1 2005/09/18 20:09:49 t
 #include <sys/buf.h>
 #include <sys/vnode.h>
 #include <sys/ras.h>
+#include <sys/ptrace.h>
+#include <sys/kauth.h>
 
 #include <machine/fpu.h>
 #include <machine/frame.h>
@@ -68,10 +70,8 @@ __KERNEL_RCSID(0, "$NetBSD: netbsd32_machdep.c,v 1.11.10.1 2005/09/18 20:09:49 t
 #include <compat/netbsd32/netbsd32_syscallargs.h>
 
 /* Provide a the name of the architecture we're emulating */
-char	machine_arch32[] = "i386";	
-
-int process_read_fpregs32(struct lwp *, struct fpreg32 *);
-int process_read_regs32(struct lwp *, struct reg32 *);
+const char	machine32[] = "i386";
+const char	machine_arch32[] = "i386";	
 
 extern void (osyscall_return) __P((void));
 
@@ -88,7 +88,7 @@ static int check_mcontext32(const mcontext32_t *, struct trapframe *);
  * for i386 a.out emulation (COMPAT_NETBSD32+EXEC_AOUT).
  */
 int
-cpu_exec_aout_makecmds(struct proc *p, struct exec_package *e)
+cpu_exec_aout_makecmds(struct lwp *p, struct exec_package *e)
 {
 
 	return ENOEXEC;
@@ -301,7 +301,7 @@ netbsd32_sendsig_siginfo(const ksiginfo_t *ksi, const sigset_t *mask)
 	frame.sf_signum = sig;
 	frame.sf_sip = (uint32_t)(uintptr_t)&fp->sf_si;
 	frame.sf_ucp = (uint32_t)(uintptr_t)&fp->sf_uc;
-	netbsd32_si_to_si32(&frame.sf_si, (siginfo_t *)&ksi->ksi_info);
+	netbsd32_si_to_si32(&frame.sf_si, (const siginfo_t *)&ksi->ksi_info);
 	frame.sf_uc.uc_flags = _UC_SIGMASK;
 	frame.sf_uc.uc_sigmask = *mask;
 	frame.sf_uc.uc_link = 0;
@@ -419,25 +419,28 @@ struct md_core32 {
 };
 
 int
-cpu_coredump32(struct lwp *l, struct vnode *vp, struct ucred *cred,
-	     struct core32 *chdr)
+cpu_coredump32(struct lwp *l, void *iocookie, struct core32 *chdr)
 {
 	struct md_core32 md_core;
 	struct coreseg cseg;
 	int error;
 
-	CORE_SETMAGIC(*chdr, COREMAGIC, MID_I386, 0);
-	chdr->c_hdrsize = ALIGN32(sizeof(*chdr));
-	chdr->c_seghdrsize = ALIGN32(sizeof(cseg));
-	chdr->c_cpusize = sizeof(md_core);
+	if (iocookie == NULL) {
+		CORE_SETMAGIC(*chdr, COREMAGIC, MID_I386, 0);
+		chdr->c_hdrsize = ALIGN32(sizeof(*chdr));
+		chdr->c_seghdrsize = ALIGN32(sizeof(cseg));
+		chdr->c_cpusize = sizeof(md_core);
+		chdr->c_nseg++;
+		return 0;
+	}
 
 	/* Save integer registers. */
-	error = process_read_regs32(l, &md_core.intreg);
+	error = netbsd32_process_read_regs(l, &md_core.intreg);
 	if (error)
 		return error;
 
 	/* Save floating point registers. */
-	error = process_read_fpregs32(l, &md_core.freg);
+	error = netbsd32_process_read_fpregs(l, &md_core.freg);
 	if (error)
 		return error;
 
@@ -445,25 +448,17 @@ cpu_coredump32(struct lwp *l, struct vnode *vp, struct ucred *cred,
 	cseg.c_addr = 0;
 	cseg.c_size = chdr->c_cpusize;
 
-	error = vn_rdwr(UIO_WRITE, vp, (caddr_t)&cseg, chdr->c_seghdrsize,
-	    (off_t)chdr->c_hdrsize, UIO_SYSSPACE, IO_NODELOCKED|IO_UNIT, cred,
-	    NULL, NULL);
+	error = coredump_write(iocookie, UIO_SYSSPACE, &cseg,
+	    chdr->c_seghdrsize);
 	if (error)
 		return error;
 
-	error = vn_rdwr(UIO_WRITE, vp, (caddr_t)&md_core, sizeof(md_core),
-	    (off_t)(chdr->c_hdrsize + chdr->c_seghdrsize), UIO_SYSSPACE,
-	    IO_NODELOCKED|IO_UNIT, cred, NULL, NULL);
-	if (error)
-		return error;
-
-	chdr->c_nseg++;
-	return 0;
+	return coredump_write(iocookie, UIO_SYSSPACE, &md_core,
+	    sizeof(md_core));
 }
 
-
 int
-process_read_regs32(struct lwp *l, struct reg32 *regs)
+netbsd32_process_read_regs(struct lwp *l, struct reg32 *regs)
 {
 	struct trapframe *tf = l->l_md.md_regs;
 
@@ -488,21 +483,85 @@ process_read_regs32(struct lwp *l, struct reg32 *regs)
 	return (0);
 }
 
-int
-process_read_fpregs32(struct lwp *l, struct fpreg32 *regs)
+/*
+ * XXX-cube (20060311):  This doesn't seem to work fine.
+ */
+static int
+xmm_to_s87_tag(const uint8_t *fpac, int regno, uint8_t tw)
 {
-	struct oldfsave frame;
+	static const uint8_t empty_significand[8] = { 0 };
+	int tag;
+	uint16_t exponent;
 
-	if (l->l_md.md_flags & MDP_USEDFPU) {
-		fpusave_lwp(l, 1);
-	} else {
-		memset(&frame, 0, sizeof(*regs));
-		frame.fs_control = __NetBSD_NPXCW__;
-		frame.fs_tag = 0xffff;
-		l->l_md.md_flags |= MDP_USEDFPU;
+	if (tw & (1U << regno)) {
+		exponent = fpac[8] | (fpac[9] << 8);
+		switch (exponent) {
+		case 0x7fff:
+			tag = 2;
+			break;
+
+		case 0x0000:
+			if (memcmp(empty_significand, fpac,
+				   sizeof(empty_significand)) == 0)
+				tag = 1;
+			else
+				tag = 2;
+			break;
+
+		default:
+			if ((fpac[7] & 0x80) == 0)
+				tag = 2;
+			else
+				tag = 0;
+			break;
+		}
+	} else
+		tag = 3;
+
+	return (tag);
+}
+
+int
+netbsd32_process_read_fpregs(struct lwp *l, struct fpreg32 *regs)
+{
+	struct savefpu *sf = &l->l_addr->u_pcb.pcb_savefpu;
+	struct fpreg regs64;
+	struct save87 *s87 = (struct save87 *)regs;
+	int error, i;
+
+	/*
+	 * All that stuff makes no sense in i386 code :(
+	 */
+
+	error = process_read_fpregs(l, &regs64);
+	if (error)
+		return error;
+
+	s87->sv_env.en_cw = regs64.fxstate.fx_fcw;
+	s87->sv_env.en_sw = regs64.fxstate.fx_fsw;
+	s87->sv_env.en_fip = regs64.fxstate.fx_rip >> 16; /* XXX Order? */
+	s87->sv_env.en_fcs = regs64.fxstate.fx_rip & 0xffff;
+	s87->sv_env.en_opcode = regs64.fxstate.fx_fop;
+	s87->sv_env.en_foo = regs64.fxstate.fx_rdp >> 16; /* XXX See above */
+	s87->sv_env.en_fos = regs64.fxstate.fx_rdp & 0xffff;
+
+	s87->sv_env.en_tw = 0;
+	s87->sv_ex_tw = 0;
+	for (i = 0; i < 8; i++) {
+		s87->sv_env.en_tw |=
+		    (xmm_to_s87_tag((uint8_t *)&regs64.fxstate.fx_st[i][0], i,
+		     regs64.fxstate.fx_ftw) << (i * 2));
+
+		s87->sv_ex_tw |=
+		    (xmm_to_s87_tag((uint8_t *)&regs64.fxstate.fx_st[i][0], i,
+		     sf->fp_ex_tw) << (i * 2));
+
+		memcpy(&s87->sv_ac[i].fp_bytes, &regs64.fxstate.fx_st[i][0],
+		    sizeof(s87->sv_ac[i].fp_bytes));
 	}
 
-	memcpy(regs, &frame, sizeof(*regs));
+	s87->sv_ex_sw = sf->fp_ex_sw;
+
 	return (0);
 }
 
@@ -555,7 +614,7 @@ x86_64_get_mtrr32(struct lwp *l, void *args, register_t *retval)
 	if (mtrr_funcs == NULL)
 		return ENOSYS;
 
-	error = suser(p->p_ucred, &p->p_acflag);
+	error = kauth_authorize_generic(p->p_cred, KAUTH_GENERIC_ISSUSER, &p->p_acflag);
 	if (error != 0)
 		return error;
 
@@ -622,7 +681,7 @@ x86_64_set_mtrr32(struct lwp *l, void *args, register_t *retval)
 	if (mtrr_funcs == NULL)
 		return ENOSYS;
 
-	error = suser(p->p_ucred, &p->p_acflag);
+	error = kauth_authorize_generic(p->p_cred, KAUTH_GENERIC_ISSUSER, &p->p_acflag);
 	if (error != 0)
 		return error;
 
@@ -873,8 +932,44 @@ check_mcontext32(const mcontext32_t *mcp, struct trapframe *tf)
 	return 0;
 }
 
+void
+netbsd32_cpu_upcall(struct lwp *l, int type, int nevents, int ninterrupted,
+    void *sas, void *ap, void *sp, sa_upcall_t upcall)
+{
+	struct trapframe *tf;
+	struct netbsd32_saframe *sf, frame;
+
+	tf = l->l_md.md_regs;
+
+	frame.sa_type = type;
+	frame.sa_sas = (uintptr_t)sas;
+	frame.sa_events = nevents;
+	frame.sa_interrupted = ninterrupted;
+	frame.sa_arg = (uintptr_t)ap;
+	frame.sa_ra = 0;
+
+	sf = (struct netbsd32_saframe *)sp - 1;
+	if (copyout(&frame, sf, sizeof(frame)) != 0) {
+		sigexit(l, SIGILL);
+		/* NOTREACHED */
+	}
+
+	tf->tf_rip = (uintptr_t)upcall;
+	tf->tf_rsp = (uintptr_t)sf;
+	tf->tf_rbp = 0;
+	tf->tf_gs = GSEL(GUDATA32_SEL, SEL_UPL);
+	tf->tf_fs = GSEL(GUDATA32_SEL, SEL_UPL);
+	tf->tf_es = GSEL(GUDATA32_SEL, SEL_UPL);
+	tf->tf_ds = GSEL(GUDATA32_SEL, SEL_UPL);
+	tf->tf_cs = GSEL(GUCODE32_SEL, SEL_UPL);
+	tf->tf_ss = GSEL(GUDATA32_SEL, SEL_UPL);
+	tf->tf_rflags &= ~(PSL_T|PSL_VM|PSL_AC);
+
+	l->l_md.md_flags |= MDP_IRET;
+}
+
 vaddr_t
 netbsd32_vm_default_addr(struct proc *p, vaddr_t base, vsize_t size)
 {
-	return round_page((vaddr_t)(base) + (vsize_t)MAXDSIZ32);
+	return VM_DEFAULT_ADDRESS32(base, size);
 }

@@ -1,4 +1,4 @@
-/*	$NetBSD: if_elmc_mca.c,v 1.17 2005/02/27 00:27:21 perry Exp $	*/
+/*	$NetBSD: if_elmc_mca.c,v 1.20 2006/03/29 06:58:14 thorpej Exp $	*/
 
 /*-
  * Copyright (c) 2001 The NetBSD Foundation, Inc.
@@ -46,7 +46,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_elmc_mca.c,v 1.17 2005/02/27 00:27:21 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_elmc_mca.c,v 1.20 2006/03/29 06:58:14 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -107,7 +107,7 @@ elmc_mca_match(struct device *parent, struct cfdata *cf, void *aux)
 void
 elmc_mca_attach(struct device *parent, struct device *self, void *aux)
 {
-	struct elmc_mca_softc *asc = (void *) self;
+	struct elmc_mca_softc *asc = device_private(self);
 	struct ie_softc *sc = &asc->sc_ie;
 	struct mca_attach_args *ma = aux;
 	int pos2, pos3, i, revision;
@@ -326,8 +326,8 @@ elmc_mca_copyout (sc, src, offset, size)
 	}
 
 	dribble = size % 2;
-	bus_space_write_region_2(sc->bt, sc->bh, offset, (u_int16_t *)bptr,
-				 size >> 1);
+	bus_space_write_region_2(sc->bt, sc->bh, offset,
+	    (const u_int16_t *)bptr, size >> 1);
 	if (dribble) {
 		bptr += size - 1;
 		offset += size - 1;

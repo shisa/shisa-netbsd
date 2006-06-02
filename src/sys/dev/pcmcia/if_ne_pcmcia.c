@@ -1,4 +1,4 @@
-/*	$NetBSD: if_ne_pcmcia.c,v 1.139 2005/02/27 00:27:43 perry Exp $	*/
+/*	$NetBSD: if_ne_pcmcia.c,v 1.142 2006/03/23 02:14:42 christos Exp $	*/
 
 /*
  * Copyright (c) 1997 Marc Horowitz.  All rights reserved.
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_ne_pcmcia.c,v 1.139 2005/02/27 00:27:43 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_ne_pcmcia.c,v 1.142 2006/03/23 02:14:42 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -93,7 +93,7 @@ CFATTACH_DECL(ne_pcmcia, sizeof(struct ne_pcmcia_softc),
 static const struct ne2000dev {
     int32_t manufacturer;
     int32_t product;
-    char *cis_info[4];
+    const char *cis_info[4];
     int function;
     int enet_maddr;
     unsigned char enet_vendor[3];
@@ -414,6 +414,10 @@ static const struct ne2000dev {
     { PCMCIA_VENDOR_NEXTCOM, PCMCIA_PRODUCT_NEXTCOM_NEXTHAWK,
       PCMCIA_CIS_INVALID,
       0, -1, { 0x00, 0x40, 0xb4 } },
+
+    { PCMCIA_VENDOR_BELKIN, PCMCIA_PRODUCT_BELKIN_F5D5020,
+      PCMCIA_CIS_BELKIN_F5D5020,
+      0, -1, { 0x00, 0x30, 0xbd } , NE2000DVF_AX88190 },
 
 #if 0
     /* the rest of these are stolen from the linux pcnet pcmcia device

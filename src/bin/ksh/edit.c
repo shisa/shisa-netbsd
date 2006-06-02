@@ -1,4 +1,4 @@
-/*	$NetBSD: edit.c,v 1.14 2004/07/07 19:20:09 mycroft Exp $	*/
+/*	$NetBSD: edit.c,v 1.20 2006/05/14 01:09:03 christos Exp $	*/
 
 /*
  * Command line editing - common code
@@ -7,7 +7,7 @@
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: edit.c,v 1.14 2004/07/07 19:20:09 mycroft Exp $");
+__RCSID("$NetBSD: edit.c,v 1.20 2006/05/14 01:09:03 christos Exp $");
 #endif
 
 
@@ -135,11 +135,6 @@ x_read(buf, len)
 {
 	int	i;
 
-#if defined(TIOCGWINSZ)
-	if (got_sigwinch)
-		check_sigwinch();
-#endif /* TIOCGWINSZ */
-
 	x_mode(TRUE);
 #ifdef EMACS
 	if (Flag(FEMACS) || Flag(FGMACS))
@@ -153,6 +148,11 @@ x_read(buf, len)
 #endif
 		i = -1;		/* internal error */
 	x_mode(FALSE);
+#if defined(TIOCGWINSZ)
+	if (got_sigwinch)
+		check_sigwinch();
+#endif /* TIOCGWINSZ */
+
 	return i;
 }
 
@@ -395,7 +395,7 @@ set_editmode(ed)
 	if ((rcp = ksh_strrchr_dirsep(ed)))
 		ed = ++rcp;
 	for (i = 0; i < NELEM(edit_flags); i++)
-		if (strstr(ed, options[(int) edit_flags[i]].name)) {
+		if (strstr(ed, goptions[(int) edit_flags[i]].name)) {
 			change_flag(edit_flags[i], OF_SPECIAL, 1);
 			return;
 		}
@@ -460,14 +460,12 @@ x_do_comment(buf, bsize, lenp)
 /*           Common file/command completion code for vi/emacs	             */
 
 
-static char	*add_glob ARGS((const char *str, int slen));
-static void	glob_table ARGS((const char *pat, XPtrV *wp, struct table *tp));
-static void	glob_path ARGS((int flags, const char *pat, XPtrV *wp,
-				const char *path));
+static char	*add_glob ARGS((const char *, int));
+static void	glob_table ARGS((const char *, XPtrV *, struct table *));
+static void	glob_path ARGS((int, const char *, XPtrV *, const char *));
 
 #if 0 /* not used... */
-int	x_complete_word ARGS((const char *str, int slen, int is_command,
-			      int *multiple, char **ret));
+int	x_complete_word ARGS((const char *, int, int, int *, char **));
 int
 x_complete_word(str, slen, is_command, nwordsp, ret)
 	const char *str;
@@ -504,6 +502,8 @@ x_print_expansions(nwords, words, is_command)
 	int use_copy = 0;
 	int prefix_len;
 	XPtrV l;
+
+	l.beg = NULL;
 
 	/* Check if all matches are in the same directory (in this
 	 * case, we want to omit the directory name)
@@ -619,13 +619,18 @@ x_file_glob(flags, str, slen, wordsp)
 		    || words[0][0] == '\0')
 		{
 			x_free_words(nwords, words);
+			words = NULL;
 			nwords = 0;
 		}
 	}
 	afree(toglob, ATEMP);
 
-	*wordsp = nwords ? words : (char **) 0;
-
+	if (nwords) {
+		*wordsp = words;
+	} else if (words) {
+		x_free_words(nwords, words);
+		*wordsp = NULL;
+	}
 	return nwords;
 }
 
@@ -907,7 +912,8 @@ x_longest_prefix(nwords, words)
 	prefix_len = strlen(words[0]);
 	for (i = 1; i < nwords; i++)
 		for (j = 0, p = words[i]; j < prefix_len; j++)
-			if (FILECHCONV(p[j]) != FILECHCONV(words[0][j])) {
+			if (FILECHCONV((unsigned char)p[j])
+			    != FILECHCONV((unsigned char)words[0][j])) {
 				prefix_len = j;
 				break;
 			}
@@ -982,11 +988,11 @@ glob_table(pat, wp, tp)
 }
 
 static void
-glob_path(flags, pat, wp, path)
+glob_path(flags, pat, wp, xpath)
 	int flags;
 	const char *pat;
 	XPtrV *wp;
-	const char *path;
+	const char *xpath;
 {
 	const char *sp, *p;
 	char *xp;
@@ -998,7 +1004,7 @@ glob_path(flags, pat, wp, path)
 	XString xs;
 
 	patlen = strlen(pat) + 1;
-	sp = path;
+	sp = xpath;
 	Xinit(xs, xp, patlen + 128, ATEMP);
 	while (sp) {
 		xp = Xstring(xs, xp);

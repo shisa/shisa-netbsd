@@ -1,4 +1,4 @@
-/*	$NetBSD: sigsetjmp.S,v 1.3 2002/08/17 19:54:30 thorpej Exp $	*/
+/*	$NetBSD: sigsetjmp.S,v 1.5 2005/10/16 17:26:24 christos Exp $	*/
 
 /*
  * Copyright (c) 1997 Mark Brinicombe
@@ -45,17 +45,17 @@
  * The previous signal state is restored.
  */
 
-ENTRY(sigsetjmp)
+ENTRY(__sigsetjmp14)
 	teq	r1, #0
 	beq	PIC_SYM(_C_LABEL(_setjmp), PLT)
-	b	PIC_SYM(_C_LABEL(setjmp), PLT)
+	b	PIC_SYM(_C_LABEL(__setjmp14), PLT)
 
 .L_setjmp_magic:
 	.word	_JB_MAGIC__SETJMP
 
-ENTRY(siglongjmp)
+ENTRY(__siglongjmp14)
 	ldr	r2, .L_setjmp_magic
 	ldr	r3, [r0]
 	teq	r2, r3
 	beq	PIC_SYM(_C_LABEL(_longjmp), PLT)
-	b	PIC_SYM(_C_LABEL(longjmp), PLT)
+	b	PIC_SYM(_C_LABEL(__longjmp14), PLT)

@@ -1,4 +1,4 @@
-/*	$NetBSD: algor.cc,v 1.1 2003/12/27 01:16:55 christos Exp $	*/
+/*	$NetBSD: algor.cc,v 1.3 2006/05/14 03:20:42 christos Exp $	*/
 
 /*-
  * Copyright (c) 2003 The NetBSD Foundation, Inc.
@@ -40,7 +40,7 @@
  * algor.C: Computer algorithm
  */
 #include "defs.h"
-RCSID("$NetBSD: algor.cc,v 1.1 2003/12/27 01:16:55 christos Exp $")
+RCSID("$NetBSD: algor.cc,v 1.3 2006/05/14 03:20:42 christos Exp $")
 
 #include "algor.h"
 #include "board.h"
@@ -132,12 +132,14 @@ size_t ALGOR::count_closure(size_t& y, size_t& x, int& dir, BOARD& b)
  * return the number of boxes closed in the maximum closure,
  * and the first box of the maximum closure in (x, y, dir)
  */
-int ALGOR::find_max_closure(size_t& y, size_t& x, int& dir, const BOARD& b)
+size_t ALGOR::find_max_closure(size_t& y, size_t& x, int& dir, const BOARD& b)
 {
     BOARD nb(b);
-    int tdir, maxdir = -1;
+    int maxdir = -1;
     size_t nbox, maxbox = 0;
-    size_t tx, ty, maxx = ~0, maxy = ~0;
+    size_t maxx = ~0, maxy = ~0;
+    size_t tx = 0, ty = 0;	/* XXX: GCC */
+    int tdir = 0;		/* XXX: GCC */
 
     while ((nbox = count_closure(ty, tx, tdir, nb)) != 0)
 	if (nbox > maxbox) {
@@ -237,14 +239,15 @@ int ALGOR::find_bad_turn(size_t& y, size_t& x, int& dir, BOARD& b, int last)
     return 0;
 }
 
-int ALGOR::find_min_closure1(size_t& y, size_t& x, int& dir, const BOARD& b,
-			    int last)
+size_t ALGOR::find_min_closure1(size_t& y, size_t& x, int& dir, const BOARD& b,
+    int last)
 {
     BOARD nb(b);
-    int tdir, mindir = -1, xdir, mv;
+    int tdir, mindir = -1, mv;
     // number of boxes per closure
     size_t nbox, minbox = nb.nx() * nb.ny() + 1;
     size_t tx, ty, minx = ~0, miny = ~0;
+    int xdir = 0;	/* XXX: GCC */
 
     while (find_bad_turn(ty, tx, tdir, nb, last)) {
 
@@ -275,11 +278,11 @@ int ALGOR::find_min_closure1(size_t& y, size_t& x, int& dir, const BOARD& b,
 
 // Search for the move that makes the opponent close the least number of
 // boxes; returns 1 if a move found, 0 otherwise
-int ALGOR::find_min_closure(size_t& y, size_t& x, int& dir, const BOARD& b)
+size_t ALGOR::find_min_closure(size_t& y, size_t& x, int& dir, const BOARD& b)
 {
     size_t x1, y1;
     int dir1;
-    int count = b.ny() * b.nx() + 1, count1;
+    size_t count = b.ny() * b.nx() + 1, count1;
 
     for (size_t i = 0; i < 3; i++)
 	if (count > (count1 = find_min_closure1(y1, x1, dir1, b, i))) {
@@ -289,7 +292,7 @@ int ALGOR::find_min_closure(size_t& y, size_t& x, int& dir, const BOARD& b)
 	    dir = dir1;
 	}
 
-    return (size_t) count != b.ny() * b.nx() + 1;
+    return count != b.ny() * b.nx() + 1;
 }
 
 // Return a move in (y, x, dir)

@@ -1,4 +1,4 @@
-/*	$NetBSD: clock.c,v 1.7 2004/06/29 12:01:11 kleink Exp $	*/
+/*	$NetBSD: clock.c,v 1.11 2005/12/24 22:45:36 perry Exp $	*/
 /*      $OpenBSD: clock.c,v 1.3 1997/10/13 13:42:53 pefo Exp $  */
 
 /*
@@ -33,7 +33,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: clock.c,v 1.7 2004/06/29 12:01:11 kleink Exp $");
+__KERNEL_RCSID(0, "$NetBSD: clock.c,v 1.11 2005/12/24 22:45:36 perry Exp $");
 
 #include <sys/param.h>
 #include <sys/kernel.h>
@@ -62,7 +62,7 @@ decr_intr(frame)
 	int msr;
 	int pri;
 	u_long tb;
-	long tick;
+	long decrtick;
 	int nticks;
 	extern long intrcnt[];
 
@@ -76,16 +76,10 @@ decr_intr(frame)
 	 * Based on the actual time delay since the last decrementer reload,
 	 * we arrange for earlier interrupt next time.
 	 */
-	asm ("mftb %0; mfdec %1" : "=r"(tb), "=r"(tick));
-	for (nticks = 0; tick < 0; nticks++)
-		tick += ticks_per_intr;
-	asm volatile ("mtdec %0" :: "r"(tick));
-
-	/*
-	 * lasttb is used during microtime. Set it to the virtual
-	 * start of this tick interval.
-	 */
-	lasttb = tb + tick - ticks_per_intr;
+	__asm ("mfdec %0" : "=r"(decrtick));
+	for (nticks = 0; decrtick < 0; nticks++)
+		decrtick += ticks_per_intr;
+	__asm volatile ("mtdec %0" :: "r"(decrtick));
 
 	intrcnt[CNT_CLOCK]++;
 
@@ -97,9 +91,16 @@ decr_intr(frame)
 		tickspending = 0;
 
 		/*
+		 * lasttb is used during microtime. Set it to the virtual
+		 * start of this tick interval.
+		 */
+		__asm ("mftb %0" : "=r"(tb));
+		lasttb = tb + decrtick - ticks_per_intr;
+
+		/*
 		 * Reenable interrupts
 		 */
-		asm volatile ("mfmsr %0; ori %0, %0, %1; mtmsr %0"
+		__asm volatile ("mfmsr %0; ori %0, %0, %1; mtmsr %0"
 			      : "=r"(msr) : "K"(PSL_EE));
 		
 		/*
@@ -120,8 +121,8 @@ cpu_initclocks()
 {
 	ticks_per_intr = ticks_per_sec / hz;
 	cpu_timebase = ticks_per_sec;
-	asm volatile ("mftb %0" : "=r"(lasttb));
-	asm volatile ("mtdec %0" :: "r"(ticks_per_intr));
+	__asm volatile ("mftb %0" : "=r"(lasttb));
+	__asm volatile ("mtdec %0" :: "r"(ticks_per_intr));
 }
 
 /*
@@ -135,12 +136,12 @@ microtime(tvp)
 	u_long ticks;
 	int msr, scratch;
 	
-	asm volatile ("mfmsr %0; andi. %1,%0,%2; mtmsr %1"
+	__asm volatile ("mfmsr %0; andi. %1,%0,%2; mtmsr %1"
 		      : "=r"(msr), "=r"(scratch) : "K"((u_short)~PSL_EE));
-	asm ("mftb %0" : "=r"(tb));
+	__asm ("mftb %0" : "=r"(tb));
 	ticks = (tb - lasttb) * ns_per_tick;
 	*tvp = time;
-	asm volatile ("mtmsr %0" :: "r"(msr));
+	__asm volatile ("mtmsr %0" :: "r"(msr));
 	ticks /= 1000;
 	tvp->tv_usec += ticks;
 	while (tvp->tv_usec >= 1000000) {
@@ -163,7 +164,7 @@ delay(n)
 	tb += (n * 1000 + ns_per_tick - 1) / ns_per_tick;
 	tbh = tb >> 32;
 	tbl = tb;
-	asm volatile ("1: mftbu %0; cmplw %0,%1; blt 1b; bgt 2f;"
+	__asm volatile ("1: mftbu %0; cmplw %0,%1; blt 1b; bgt 2f;"
 		      "mftb %0; cmplw %0,%2; blt 1b; 2:"
 		      : "=&r"(scratch) : "r"(tbh), "r"(tbl));
 }
@@ -212,7 +213,7 @@ inittodr(base)
                 badbase = 1;
         }
 
-        if (todr_gettime(clock_handle, (struct timeval *)&time) != 0 ||
+        if (todr_gettime(clock_handle, &time) != 0 ||
             time.tv_sec == 0) {
                 printf("WARNING: bad date in battery clock");
                 /*
@@ -249,6 +250,6 @@ resettodr()
         if (!time.tv_sec)
                 return;
 
-        if (todr_settime(clock_handle, (struct timeval *)&time) != 0)
+        if (todr_settime(clock_handle, &time) != 0)
                 printf("resettodr: failed to set time\n");
 }

@@ -1,4 +1,4 @@
-/*	$NetBSD: md.h,v 1.11 2004/06/06 06:07:01 christos Exp $	*/
+/*	$NetBSD: md.h,v 1.13 2006/02/26 10:25:53 dsl Exp $	*/
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.
@@ -70,7 +70,7 @@
  *      base etc comp games man misc text xbase xcomp xetc xfont xserver
  */
 #define SET_KERNEL_1_NAME	"kern-GENERIC"
-#define MD_SETS_VALID (SET_KERNEL | SET_SYSTEM | (SET_X11 & ~SET_X11_SERVERS))
+#define MD_SETS_VALID SET_KERNEL, SET_SYSTEM, SET_X11_NOSERVERS
 
 /*
  * Machine-specific command to write a new label to a disk.
@@ -84,10 +84,3 @@
  * On mvme68k, do what the miniroot install scripts did. 
  */
 #define DISKLABEL_CMD "disklabel -w -r"
-
-
-/*
- * Default fileystem type for floppy disks.
- * On mvme68k, if we had floppies, that would be ffs.
- */
-const char *fdtype;

@@ -1,4 +1,4 @@
-/*	$NetBSD: mbr.c,v 1.68.2.3 2005/11/21 20:42:02 tron Exp $ */
+/*	$NetBSD: mbr.c,v 1.74 2006/05/16 00:16:59 dogcow Exp $ */
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.
@@ -106,6 +106,7 @@ struct part_id {
 	{MBR_PTYPE_FAT32L,	"Windows FAT32, LBA"},
 	{MBR_PTYPE_NTFSVOL,	"NTFS volume set"},
 	{MBR_PTYPE_NTFS,	"NTFS"},
+	{MBR_PTYPE_PREP,	"PReP Boot"},
 #ifdef MBR_PTYPE_SOLARIS
 	{MBR_PTYPE_SOLARIS,	"Solaris"},
 #endif
@@ -328,7 +329,7 @@ set_mbr_type(menudesc *m, void *arg)
 	char *cp;
 	int opt = mbri->opt;
 	int type;
-	int start, sz;
+	u_int start, sz;
 	int i;
 	char numbuf[4];
 
@@ -903,8 +904,8 @@ edit_mbr_bootmenu(menudesc *m, void *arg)
 		opt = 0;
 
 	msg_prompt_win(/* XXX translate? */ "bootmenu", -1, 18, 0, 0,
-		mbri->mbrb.mbrbs_nametab[opt],
-		mbri->mbrb.mbrbs_nametab[opt],
+		(char *) mbri->mbrb.mbrbs_nametab[opt],
+		(char *) mbri->mbrb.mbrbs_nametab[opt],
 		sizeof mbri->mbrb.mbrbs_nametab[opt]);
 	if (mbri->mbrb.mbrbs_nametab[opt][0] == ' ')
 		mbri->mbrb.mbrbs_nametab[opt][0] = 0;
@@ -1205,6 +1206,33 @@ set_mbr_header(menudesc *m, void *arg)
 	m->numopts = op - opts;
 }
 
+int
+mbr_use_wholedisk(mbr_info_t *mbri)
+{
+	struct mbr_sector *mbrs = &mbri->mbr;
+	mbr_info_t *ext;
+	struct mbr_partition *part;
+
+	part = &mbrs->mbr_parts[0];
+	/* Set the partition information for full disk usage. */
+	while ((ext = mbri->extended)) {
+		mbri->extended = ext->extended;
+		free(ext);
+	}
+	memset(part, 0, MBR_PART_COUNT * sizeof *part);
+#ifdef BOOTSEL
+	memset(&mbri->mbrb, 0, sizeof mbri->mbrb);
+#endif
+	part[0].mbrp_type = MBR_PTYPE_NETBSD;
+	part[0].mbrp_size = dlsize - bsec;
+	part[0].mbrp_start = bsec;
+	part[0].mbrp_flag = MBR_PFLAG_ACTIVE;
+
+	ptstart = bsec;
+	ptsize = dlsize - bsec;
+	return 1;
+}
+
 /*
  * Let user change incore Master Boot Record partitions via menu.
  */
@@ -1251,24 +1279,7 @@ edit_mbr(mbr_info_t *mbri)
 				return 0;
 			}
 		}
-
-		/* Set the partition information for full disk usage. */
-		while ((ext = mbri->extended)) {
-			mbri->extended = ext->extended;
-			free(ext);
-		}
-		memset(part, 0, MBR_PART_COUNT * sizeof *part);
-#ifdef BOOTSEL
-		memset(&mbri->mbrb, 0, sizeof mbri->mbrb);
-#endif
-		part[0].mbrp_type = MBR_PTYPE_NETBSD;
-		part[0].mbrp_size = dlsize - bsec;
-		part[0].mbrp_start = bsec;
-		part[0].mbrp_flag = MBR_PFLAG_ACTIVE;
-
-		ptstart = bsec;
-		ptsize = dlsize - bsec;
-		return 1;
+		return(md_mbr_use_wholedisk(mbri));
 	}
 
 	mbr_menu = new_menu(NULL, NULL, 16, 0, -1, 15, 70,
@@ -1335,6 +1346,15 @@ edit_mbr(mbr_info_t *mbri)
 			if (yesno)
 				continue;
 		}
+		/* the md_check_mbr function has 3 ret codes to deal with
+		 * the different possible states. 0, 1, >1
+		 */
+		j = md_check_mbr(mbri);
+		if (j == 0)
+			return 0;
+		if (j == 1)
+			continue;
+
 		break;
 	}
 
@@ -1561,7 +1581,8 @@ write_mbr(const char *disk, mbr_info_t *mbri, int convert)
 			for (i = 0; i < MBR_PART_COUNT; i++) {
 				if (ext->mbrb.mbrbs_nametab[i][0] == 0)
 					continue;
-				if (ext->sector + pstart == mbri->bootsec)
+				if (ext->sector + mbrp->mbrp_start ==
+								mbri->bootsec)
 					mbri->mbrb.mbrbs_defkey = key;
 				key++;
 			}

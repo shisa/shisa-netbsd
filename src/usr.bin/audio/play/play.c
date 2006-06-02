@@ -1,4 +1,4 @@
-/*	$NetBSD: play.c,v 1.43.2.1 2005/07/19 21:53:12 riz Exp $	*/
+/*	$NetBSD: play.c,v 1.46 2006/05/23 01:07:16 christos Exp $	*/
 
 /*
  * Copyright (c) 1999 Matthew R. Green
@@ -30,7 +30,7 @@
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: play.c,v 1.43.2.1 2005/07/19 21:53:12 riz Exp $");
+__RCSID("$NetBSD: play.c,v 1.46 2006/05/23 01:07:16 christos Exp $");
 #endif
 
 
@@ -319,8 +319,10 @@ play_fd(file, fd)
 	if (nr < 0)
 		goto read_error;
 	if (nr == 0) {
-		if (fflag)
+		if (fflag) {
+			free(buffer);
 			return;
+		}
 		err(1, "unexpected EOF");
 	}
 	hdrlen = audioctl_write_fromhdr(buffer, nr, audiofd, &datasize, file);
@@ -374,7 +376,7 @@ audioctl_write_fromhdr(hdr, fsz, fd, datasize, file)
 	const char	*file;
 {
 	sun_audioheader	*sunhdr;
-	ssize_t	hdr_len;
+	ssize_t	hdr_len = 0;
 
 	AUDIO_INITINFO(&info);
 	sunhdr = hdr;

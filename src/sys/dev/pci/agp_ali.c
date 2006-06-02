@@ -1,4 +1,4 @@
-/*	$NetBSD: agp_ali.c,v 1.6 2005/02/27 00:27:32 perry Exp $	*/
+/*	$NetBSD: agp_ali.c,v 1.9 2006/01/16 22:59:36 christos Exp $	*/
 
 /*-
  * Copyright (c) 2000 Doug Rabson
@@ -29,7 +29,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: agp_ali.c,v 1.6 2005/02/27 00:27:32 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: agp_ali.c,v 1.9 2006/01/16 22:59:36 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/kernel.h>
@@ -63,7 +63,7 @@ static int agp_ali_unbind_page(struct agp_softc *, off_t);
 static void agp_ali_flush_tlb(struct agp_softc *);
 
 
-struct agp_methods agp_ali_methods = {
+static struct agp_methods agp_ali_methods = {
 	agp_ali_get_aperture,
 	agp_ali_set_aperture,
 	agp_ali_bind_page,
@@ -93,7 +93,7 @@ agp_ali_attach(struct device *parent, struct device *self, void *aux)
 	sc->as_chipc = asc;
 	sc->as_methods = &agp_ali_methods;
 
-	if (agp_map_aperture(pa, sc) != 0) {
+	if (agp_map_aperture(pa, sc, AGP_APBASE) != 0) {
 		aprint_error(": failed to map aperture\n");
 		free(asc, M_AGP);
 		return ENXIO;
@@ -165,7 +165,7 @@ agp_ali_detach(struct agp_softc *sc)
 
 #define M 1024*1024
 
-static u_int32_t agp_ali_table[] = {
+static const u_int32_t agp_ali_table[] = {
 	0,			/* 0 - invalid */
 	1,			/* 1 - invalid */
 	2,			/* 2 - invalid */

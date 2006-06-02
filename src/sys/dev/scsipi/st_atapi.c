@@ -1,4 +1,4 @@
-/*	$NetBSD: st_atapi.c,v 1.15 2005/02/27 00:27:48 perry Exp $ */
+/*	$NetBSD: st_atapi.c,v 1.18 2006/03/30 16:09:28 thorpej Exp $ */
 
 /*
  * Copyright (c) 2001 Manuel Bouyer.
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: st_atapi.c,v 1.15 2005/02/27 00:27:48 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: st_atapi.c,v 1.18 2006/03/30 16:09:28 thorpej Exp $");
 
 #include "opt_scsi.h"
 #include "rnd.h"
@@ -71,7 +71,7 @@ st_atapibus_match(struct device *parent, struct cfdata *match, void *aux)
 		return (0);
 
 	(void)scsipi_inqmatch(&sa->sa_inqbuf,
-	    (caddr_t)st_atapibus_patterns,
+	    st_atapibus_patterns,
 	    sizeof(st_atapibus_patterns)/sizeof(st_atapibus_patterns[0]),
 	    sizeof(st_atapibus_patterns[0]), &priority);
 	return (priority);
@@ -80,7 +80,7 @@ st_atapibus_match(struct device *parent, struct cfdata *match, void *aux)
 static void
 st_atapibus_attach(struct device *parent, struct device *self, void *aux)
 {
-	struct st_softc *st = (void *)self;
+	struct st_softc *st = device_private(self);
 	struct scsipibus_attach_args *sa = aux;
 	struct scsipi_periph *periph = sa->sa_periph;
 

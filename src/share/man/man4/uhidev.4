@@ -1,4 +1,4 @@
-.\" $NetBSD: uhidev.4,v 1.2 2001/12/29 03:06:41 augustss Exp $
+.\" $NetBSD: uhidev.4,v 1.4 2005/07/30 13:22:35 wiz Exp $
 .\"
 .\" Copyright (c) 2001 The NetBSD Foundation, Inc.
 .\" All rights reserved.
@@ -34,7 +34,7 @@
 .\" ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 .\" POSSIBILITY OF SUCH DAMAGE.
 .\"
-.Dd December 27, 2001
+.Dd July 30, 2005
 .Dt UHIDEV 4
 .Os
 .Sh NAME
@@ -42,6 +42,7 @@
 .Nd USB Human Interface Device support
 .Sh SYNOPSIS
 .Cd "uhidev* at uhub?"
+.Cd "ucycom* at uhidev? reportid ?"
 .Cd "uhid*   at uhidev? reportid ?"
 .Cd "ukbd*   at uhidev? reportid ?"
 .Cd "ums*    at uhidev? reportid ?"
@@ -58,6 +59,7 @@ kinds of devices and
 .Nm
 only dispatches data to them based on the report id.
 .Sh SEE ALSO
+.Xr ucycom 4 ,
 .Xr uhid 4 ,
 .Xr ukbd 4 ,
 .Xr ums 4 ,

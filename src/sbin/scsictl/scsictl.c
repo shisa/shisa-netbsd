@@ -1,4 +1,4 @@
-/*	$NetBSD: scsictl.c,v 1.27.2.1 2005/06/14 20:41:06 tron Exp $	*/
+/*	$NetBSD: scsictl.c,v 1.28 2005/06/02 00:13:10 lukem Exp $	*/
 
 /*-
  * Copyright (c) 1998, 2002 The NetBSD Foundation, Inc.
@@ -43,7 +43,7 @@
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: scsictl.c,v 1.27.2.1 2005/06/14 20:41:06 tron Exp $");
+__RCSID("$NetBSD: scsictl.c,v 1.28 2005/06/02 00:13:10 lukem Exp $");
 #endif
 
 

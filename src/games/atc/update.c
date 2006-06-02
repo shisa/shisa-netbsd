@@ -1,4 +1,4 @@
-/*	$NetBSD: update.c,v 1.12 2003/08/07 09:36:55 agc Exp $	*/
+/*	$NetBSD: update.c,v 1.17 2006/03/22 15:24:52 christos Exp $	*/
 
 /*-
  * Copyright (c) 1990, 1993
@@ -46,15 +46,15 @@
 #if 0
 static char sccsid[] = "@(#)update.c	8.1 (Berkeley) 5/31/93";
 #else
-__RCSID("$NetBSD: update.c,v 1.12 2003/08/07 09:36:55 agc Exp $");
+__RCSID("$NetBSD: update.c,v 1.17 2006/03/22 15:24:52 christos Exp $");
 #endif
 #endif /* not lint */
 
 #include "include.h"
 
+/* ARGSUSED */
 void
-update(dummy)
-	int dummy __attribute__((__unused__));
+update(int dummy __attribute__((__unused__)))
 {
 	int	i, dir_diff, unclean;
 	PLANE	*pp, *p1, *p2;
@@ -211,7 +211,7 @@ update(dummy)
 	 * we don't update props on odd updates.
 	 */
 	if ((rand() % sp->newplane_time) == 0)
-		addplane();
+		(void)addplane();
 
 #ifdef SYSV
 	alarm(sp->update_secs);
@@ -219,8 +219,7 @@ update(dummy)
 }
 
 const char *
-command(pp)
-	const PLANE	*pp;
+command(const PLANE *pp)
 {
 	static char	buf[50], *bp, *comm_start;
 
@@ -234,7 +233,7 @@ command(pp)
 	if (pp->altitude == 0)
 		(void)sprintf(bp, "Holding @ A%d", pp->orig_no);
 	else if (pp->new_dir >= MAXDIR || pp->new_dir < 0)
-		strcpy(bp, "Circle");
+		(void)strcpy(bp, "Circle");
 	else if (pp->new_dir != pp->dir)
 		(void)sprintf(bp, "%d", dir_deg(pp->new_dir));
 
@@ -245,13 +244,12 @@ command(pp)
 	bp = strchr(buf, '\0');
 	if (*comm_start == '\0' && 
 	    (pp->status == S_UNMARKED || pp->status == S_IGNORED))
-		strcpy(bp, "---------");
+		(void)strcpy(bp, "---------");
 	return (buf);
 }
 
 char
-name(p)
-	const PLANE	*p;
+name(const PLANE *p)
 {
 	if (p->plane_type == 0)
 		return ('A' + p->plane_no);
@@ -260,19 +258,18 @@ name(p)
 }
 
 int
-number(l)
-	char l;
+number(int l)
 {
-	if (l < 'a' && l > 'z' && l < 'A' && l > 'Z')
-		return (-1);
-	else if (l >= 'a' && l <= 'z')
+	if (islower((unsigned char)l))
 		return (l - 'a');
-	else 
+	else if (isupper((unsigned char)l))
 		return (l - 'A');
+	else
+		return (-1);
 }
 
 int
-next_plane()
+next_plane(void)
 {
 	static int	last_plane = -1;
 	PLANE		*pp;
@@ -301,12 +298,12 @@ next_plane()
 }
 
 int
-addplane()
+addplane(void)
 {
 	PLANE	p, *pp, *p1;
-	int	i, num_starts, close, rnd, rnd2, pnum;
+	int	i, num_starts, isclose, rnd, rnd2, pnum;
 
-	memset(&p, 0, sizeof (p));
+	(void)memset(&p, 0, sizeof (p));
 
 	p.status = S_MARKED;
 	p.plane_type = random() % 2;
@@ -334,13 +331,13 @@ addplane()
 			p.ypos = sp->exit[rnd2].y;
 			p.new_dir = p.dir = sp->exit[rnd2].dir;
 			p.altitude = p.new_altitude = 7;
-			close = 0;
+			isclose = 0;
 			for (p1 = air.head; p1 != NULL; p1 = p1->next)
 				if (too_close(p1, &p, 4)) {
-					close++;
+					isclose++;
 					break;
 				}
-			if (close)
+			if (isclose)
 				continue;
 		} else {
 			p.orig_type = T_AIRPORT;
@@ -363,7 +360,7 @@ addplane()
 	pp = newplane();
 	if (pp == NULL)
 		loser(NULL, "Out of memory!");
-	memcpy(pp, &p, sizeof (p));
+	(void)memcpy(pp, &p, sizeof (p));
 
 	if (pp->orig_type == T_AIRPORT)
 		append(&ground, pp);
@@ -373,9 +370,8 @@ addplane()
 	return (pp->dest_type);
 }
 
-PLANE	*
-findplane(n)
-	int	n;
+PLANE *
+findplane(int n)
 {
 	PLANE	*pp;
 
@@ -389,20 +385,18 @@ findplane(n)
 }
 
 int
-too_close(p1, p2, dist)
-	const PLANE	*p1, *p2;
-	int	 dist;
+too_close(const PLANE *p1, const PLANE *p2, int dist)
 {
 	if (ABS(p1->altitude - p2->altitude) <= dist &&
-	    ABS(p1->xpos - p2->xpos) <= dist && ABS(p1->ypos - p2->ypos) <= dist)
+	    ABS(p1->xpos - p2->xpos) <= dist && 
+	    ABS(p1->ypos - p2->ypos) <= dist)
 		return (1);
 	else
 		return (0);
 }
 
 int
-dir_deg(d)
-	int d;
+dir_deg(int d)
 {
 	switch (d) {
 	case 0: return (0);

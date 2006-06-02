@@ -1,4 +1,4 @@
-/*	$NetBSD: autoconf.c,v 1.5 2004/10/23 17:07:38 thorpej Exp $	*/
+/*	$NetBSD: autoconf.c,v 1.9 2006/02/26 05:24:52 thorpej Exp $	*/
 
 /*
  * Copyright 2002 Wasabi Systems, Inc.
@@ -36,7 +36,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.5 2004/10/23 17:07:38 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.9 2006/02/26 05:24:52 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -56,7 +56,7 @@ cpu_configure()
 
 	/* Kick off autoconfiguration. */
 	(void)splhigh();
-	if (config_rootfound("mainbus", "mainbus") == NULL)
+	if (config_rootfound("mainbus", NULL) == NULL)
 		panic("no mainbus found");
 	(void)spl0();
 }
@@ -86,8 +86,8 @@ findroot(void)
 	if ((booted_device == NULL) && netboot == 0)
 		for (dv = alldevs.tqh_first; dv != NULL;
 		     dv = dv->dv_list.tqe_next)
-			if (dv->dv_class == DV_DISK &&
-			    !strcmp(dv->dv_cfdata->cf_name, "wd"))
+			if (device_class(dv) == DV_DISK &&
+			    device_is_a(dv, "wd"))
 				    booted_device = dv;
 
 	/*
@@ -104,6 +104,6 @@ device_register(dev, aux)
 	void *aux;
 {
 	if ((booted_device == NULL) && (netboot == 1))
-		if (dev->dv_class == DV_IFNET)
+		if (device_class(dev) == DV_IFNET)
 			booted_device = dev;
 }

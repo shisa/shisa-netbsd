@@ -1,4 +1,4 @@
-/*	$NetBSD: strdup.c,v 1.1.1.2.2.2 2005/11/21 21:12:34 tron Exp $	*/
+/*	$NetBSD: strdup.c,v 1.2 2005/08/20 00:57:29 manu Exp $	*/
 
 /*	$KAME: strdup.c,v 1.2 2000/10/04 17:41:07 itojun Exp $	*/
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: extintr.c,v 1.51 2005/03/04 04:18:30 briggs Exp $	*/
+/*	$NetBSD: extintr.c,v 1.55 2005/12/24 22:45:35 perry Exp $	*/
 
 /*-
  * Copyright (c) 2000, 2001 Tsubai Masanari.
@@ -74,7 +74,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: extintr.c,v 1.51 2005/03/04 04:18:30 briggs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: extintr.c,v 1.55 2005/12/24 22:45:35 perry Exp $");
 
 #include "opt_multiprocessor.h"
 
@@ -184,13 +184,13 @@ mapirq(irq)
 /*
  * Count leading zeros.
  */
-static __inline int
+static inline int
 cntlzw(x)
 	int x;
 {
 	int a;
 
-	asm volatile ("cntlzw %0,%1" : "=r"(a) : "r"(x));
+	__asm volatile ("cntlzw %0,%1" : "=r"(a) : "r"(x));
 
 	return a;
 }
@@ -440,7 +440,7 @@ fakeintr(arg)
 
 #define	LEGAL_IRQ(x)	((x) >= 0 && (x) < NIRQ)
 
-char *
+const char *
 intr_typename(type)
 	int type;
 {
@@ -627,7 +627,7 @@ ext_intr()
 		if (int_state == oint_state) {
 			if (spincount++ > 0x80) {
 				uint32_t	stuck;
-				char		*comma="";
+				const char	*comma="";
 
 				stuck = int_state;
 				printf("Disabling stuck interrupt(s): ");
@@ -921,10 +921,10 @@ splraise(ncpl)
 	struct cpu_info *ci = curcpu();
 	int ocpl;
 
-	asm volatile("sync; eieio");	/* don't reorder.... */
+	__asm volatile("sync; eieio");	/* don't reorder.... */
 	ocpl = ci->ci_cpl;
 	ci->ci_cpl = ocpl | ncpl;
-	asm volatile("sync; eieio");	/* reorder protect */
+	__asm volatile("sync; eieio");	/* reorder protect */
 	return ocpl;
 }
 
@@ -934,11 +934,11 @@ splx(ncpl)
 {
 
 	struct cpu_info *ci = curcpu();
-	asm volatile("sync; eieio");	/* reorder protect */
+	__asm volatile("sync; eieio");	/* reorder protect */
 	ci->ci_cpl = ncpl;
 	if (ci->ci_ipending & ~ncpl)
 		do_pending_int();
-	asm volatile("sync; eieio");	/* reorder protect */
+	__asm volatile("sync; eieio");	/* reorder protect */
 }
 
 int
@@ -948,12 +948,12 @@ spllower(ncpl)
 	struct cpu_info *ci = curcpu();
 	int ocpl;
 
-	asm volatile("sync; eieio");	/* reorder protect */
+	__asm volatile("sync; eieio");	/* reorder protect */
 	ocpl = ci->ci_cpl;
 	ci->ci_cpl = ncpl;
 	if (ci->ci_ipending & ~ncpl)
 		do_pending_int();
-	asm volatile("sync; eieio");	/* reorder protect */
+	__asm volatile("sync; eieio");	/* reorder protect */
 	return ocpl;
 }
 

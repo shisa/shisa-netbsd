@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.44.4.6 2005/04/06 22:27:59 tron Exp $
+# $NetBSD: mi,v 1.50 2005/03/28 13:48:04 lukem Exp $
 ./etc/mtree/set.xbase				xbase-sys-root
 ./var/db/obsolete/xbase				xbase-sys-root
 ./var/db/obsolete/xetc				xbase-sys-root

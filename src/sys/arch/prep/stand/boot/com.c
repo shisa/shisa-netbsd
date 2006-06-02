@@ -1,4 +1,4 @@
-/*	$NetBSD: com.c,v 1.3 2003/10/06 00:04:55 he Exp $	*/
+/*	$NetBSD: com.c,v 1.5 2006/04/10 18:40:06 garbled Exp $	*/
 
 /*-
  * Copyright (c) 1993, 1994, 1995, 1996, 1997
@@ -73,8 +73,7 @@
 #define	COM_TOLERANCE	30	/* baud rate tolerance, in 0.1% units */
 
 int
-comspeed(speed)
-	long speed;
+comspeed(long speed)
 {
 #define	divrnd(n, q)	(((n)*2/(q)+1)/2)	/* divide and round off */
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: swapon.c,v 1.7 1999/03/18 04:48:03 mrg Exp $	*/
+/*	$NetBSD: swapon.c,v 1.9 2005/06/12 05:21:28 lukem Exp $	*/
 
 /*
  * Copyright (c) 1997 Matthew R. Green
@@ -28,6 +28,11 @@
  * SUCH DAMAGE.
  */
 
+#include <sys/cdefs.h>
+#if defined(LIBC_SCCS) && !defined(lint)
+__RCSID("$NetBSD: swapon.c,v 1.9 2005/06/12 05:21:28 lukem Exp $");
+#endif /* LIBC_SCCS and not lint */
+
 #include <sys/types.h>
 #include <sys/swap.h>
 #include <unistd.h>
@@ -37,5 +42,5 @@ swapon(name)
 	const char *name;
 {
 
-	return (swapctl(SWAP_ON, name, 0));
+	return (swapctl(SWAP_ON, __UNCONST(name), 0));
 }

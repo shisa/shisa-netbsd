@@ -1,4 +1,4 @@
-/*	$NetBSD: resize_lfs.c,v 1.1.2.2 2005/06/14 21:42:30 tron Exp $	*/
+/*	$NetBSD: resize_lfs.c,v 1.2 2005/06/02 01:16:06 lukem Exp $	*/
 /*-
  * Copyright (c) 2005 The NetBSD Foundation, Inc.
  * All rights reserved.

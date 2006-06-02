@@ -1,4 +1,4 @@
-/*	$NetBSD: arcbios_tty.c,v 1.8 2005/02/27 00:26:58 perry Exp $	*/
+/*	$NetBSD: arcbios_tty.c,v 1.13 2006/05/15 20:47:22 yamt Exp $	*/
 
 /*
  * Copyright (c) 1994, 1995, 1996 Carnegie-Mellon University.
@@ -28,7 +28,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: arcbios_tty.c,v 1.8 2005/02/27 00:26:58 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: arcbios_tty.c,v 1.13 2006/05/15 20:47:22 yamt Exp $");
 
 #include <sys/param.h>
 #include <sys/user.h>
@@ -40,6 +40,7 @@ __KERNEL_RCSID(0, "$NetBSD: arcbios_tty.c,v 1.8 2005/02/27 00:26:58 perry Exp $"
 #include <sys/proc.h>
 #include <sys/tty.h>
 #include <sys/termios.h>
+#include <sys/kauth.h>
 
 #include <dev/cons.h>
 
@@ -70,7 +71,7 @@ const struct cdevsw arcbios_cdevsw = {
 };
 
 int
-arcbios_ttyopen(dev_t dev, int flag, int mode, struct proc *p)
+arcbios_ttyopen(dev_t dev, int flag, int mode, struct lwp *l)
 {
 	int unit = minor(dev);
 	struct tty *tp;
@@ -101,7 +102,9 @@ arcbios_ttyopen(dev_t dev, int flag, int mode, struct proc *p)
 		ttsetwater(tp);
 
 		setuptimeout = 1;
-	} else if (tp->t_state & TS_XCLUDE && p->p_ucred->cr_uid != 0) {
+	} else if (tp->t_state & TS_XCLUDE &&
+	    kauth_authorize_generic(l->l_proc->p_cred, KAUTH_GENERIC_ISSUSER,
+	    &l->l_proc->p_acflag) != 0) {
 		splx(s);
 		return (EBUSY);
 	}
@@ -116,7 +119,7 @@ arcbios_ttyopen(dev_t dev, int flag, int mode, struct proc *p)
 }
 
 int
-arcbios_ttyclose(dev_t dev, int flag, int mode, struct proc *p)
+arcbios_ttyclose(dev_t dev, int flag, int mode, struct lwp *l)
 {
 	int unit = minor(dev);
 	struct tty *tp = arcbios_tty[unit];
@@ -144,24 +147,24 @@ arcbios_ttywrite(dev_t dev, struct uio *uio, int flag)
 }
 
 int
-arcbios_ttypoll(dev_t dev, int events, struct proc *p)
+arcbios_ttypoll(dev_t dev, int events, struct lwp *l)
 {
 	struct tty *tp = arcbios_tty[minor(dev)];
 
-	return ((*tp->t_linesw->l_poll)(tp, events, p));
+	return ((*tp->t_linesw->l_poll)(tp, events, l));
 }
 
 int
-arcbios_ttyioctl(dev_t dev, u_long cmd, caddr_t data, int flag, struct proc *p)
+arcbios_ttyioctl(dev_t dev, u_long cmd, caddr_t data, int flag, struct lwp *l)
 {
 	int unit = minor(dev);
 	struct tty *tp = arcbios_tty[unit];
 	int error;
 
-	error = (*tp->t_linesw->l_ioctl)(tp, cmd, data, flag, p);
+	error = (*tp->t_linesw->l_ioctl)(tp, cmd, data, flag, l);
 	if (error != EPASSTHROUGH)
 		return (error);
-	return (ttioctl(tp, cmd, data, flag, p));
+	return (ttioctl(tp, cmd, data, flag, l));
 }
 
 int
@@ -174,7 +177,7 @@ arcbios_tty_param(struct tty *tp, struct termios *t)
 void
 arcbios_tty_start(struct tty *tp)
 {
-	unsigned long count;
+	u_long count;
 	int s;
 
 	s = spltty();
@@ -215,7 +218,7 @@ arcbios_tty_getchar(int *cp)
 {
 	char c;
 	int32_t q;
-	unsigned long count;
+	u_long count;
 
 	q = ARCBIOS->GetReadStatus(ARCBIOS_STDIN);
 

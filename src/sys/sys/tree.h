@@ -1,4 +1,4 @@
-/*	$NetBSD: tree.h,v 1.9 2005/02/26 22:25:34 perry Exp $	*/
+/*	$NetBSD: tree.h,v 1.12 2005/12/28 15:33:47 yamt Exp $	*/
 /*	$OpenBSD: tree.h,v 1.7 2002/10/17 21:51:54 art Exp $	*/
 /*
  * Copyright 2002 Niels Provos <provos@citi.umich.edu>

@@ -1,4 +1,4 @@
-/*	$NetBSD: cacheinfo.h,v 1.3.10.1 2005/04/21 17:06:16 tron Exp $	*/
+/*	$NetBSD: cacheinfo.h,v 1.4 2005/04/16 07:45:59 yamt Exp $	*/
 
 #ifndef _X86_CACHEINFO_H_
 #define _X86_CACHEINFO_H_

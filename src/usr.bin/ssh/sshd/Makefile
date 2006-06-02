@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.25.2.1 2005/09/02 12:42:10 tron Exp $
+#	$NetBSD: Makefile,v 1.28 2006/03/20 04:03:23 christos Exp $
 
 .include <bsd.own.mk>
 
@@ -20,6 +20,12 @@ SRCS=	sshd.c auth-rhosts.c auth-passwd.c auth-rsa.c auth-rh-rsa.c \
 SRCS+= auth-pam.c
 LDADD+=	-lpam ${PAM_STATIC_LDADD}
 DPADD+=	${LIBPAM} ${PAM_STATIC_DPADD}
+
+.if ${USE_YP} != "no"
+LDADD+= -lrpcsvc
+DPADD+= ${LIBRPCSVC}
+.endif
+
 .endif
 
 .if (${USE_KERBEROS} != "no")
@@ -34,12 +40,6 @@ DPADD+= ${LIBKAFS}
 SRCS+=	auth-krb5.c auth2-krb5.c
 LDADD+=	-lkrb5 -lasn1
 DPADD+=	${LIBKRB5} ${LIBASN1}
-
-.if ${MKKERBEROS4} != "no"
-SRCS+=	auth-krb4.c radix.c
-LDADD+=	-lkrb -ldes
-DPADD+=	${LIBKRB} ${LIBDES}
-.endif
 
 LDADD+=	-lcom_err -lroken
 DPADD+=	${LIBCOM_ERR} ${LIBROKEN}

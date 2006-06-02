@@ -1,4 +1,4 @@
-/*	$NetBSD: bsddisklabel.c,v 1.34.2.2 2005/11/21 20:40:27 tron Exp $	*/
+/*	$NetBSD: bsddisklabel.c,v 1.40 2006/04/05 16:55:01 garbled Exp $	*/
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.
@@ -389,7 +389,7 @@ get_ptn_sizes(int part_start, int sectors, int no_swap)
 		/* If there is a swap partition elsewhere, don't add one here.*/		if (no_swap)
 			pi.ptn_sizes[PI_SWAP].size = 0;
 		/* If installing X increase default size of /usr */
-		if (sets_selected & SET_X11)
+		if (set_X11_selected())
 			pi.ptn_sizes[PI_USR].dflt_size += XNEEDMB;
 
 		/* Start of planning to give free space to / */
@@ -600,6 +600,22 @@ make_bsd_partitions(void)
 	bsdlabel[PART_BOOT].pi_offset = ptstart;
 	partstart += i;
 #endif
+#elif defined(PART_BOOT)
+	if (bootsize != 0) {
+		bsdlabel[PART_BOOT].pi_fstype = FS_BOOT;
+		bsdlabel[PART_BOOT].pi_size = bootsize;
+		bsdlabel[PART_BOOT].pi_offset = bootstart;
+	}
+#endif /* PART_BOOT w/o BOOT_SIZE */
+
+#if defined(PART_SYSVBFS) && defined(SYSVBFS_SIZE)
+	bsdlabel[PART_SYSVBFS].pi_offset = partstart;
+	bsdlabel[PART_SYSVBFS].pi_fstype = FS_SYSVBFS;
+	bsdlabel[PART_SYSVBFS].pi_size = SYSVBFS_SIZE;
+	bsdlabel[PART_SYSVBFS].pi_flags |= PIF_NEWFS | PIF_MOUNT;
+	strlcpy(bsdlabel[PART_SYSVBFS].pi_mount, "/stand",
+	    sizeof bsdlabel[PART_SYSVBFS].pi_mount);
+	partstart += SYSVBFS_SIZE;
 #endif
 
 #ifdef PART_REST

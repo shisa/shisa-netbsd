@@ -1,4 +1,4 @@
-/*	$NetBSD: init_main.c,v 1.244.6.4 2005/09/08 21:06:30 tron Exp $	*/
+/*	$NetBSD: init_main.c,v 1.266 2006/05/14 21:15:11 elad Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1989, 1991, 1992, 1993
@@ -71,22 +71,17 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.244.6.4 2005/09/08 21:06:30 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.266 2006/05/14 21:15:11 elad Exp $");
 
-#include "fs_nfs.h"
-#include "opt_nfsserver.h"
 #include "opt_ipsec.h"
 #include "opt_sysv.h"
-#include "opt_maxuprc.h"
 #include "opt_multiprocessor.h"
 #include "opt_pipe.h"
 #include "opt_syscall_debug.h"
-#include "opt_systrace.h"
 #include "opt_posix.h"
 #include "opt_kcont.h"
 #include "opt_verified_exec.h"
 
-#include "opencrypto.h"
 #include "rnd.h"
 
 #include <sys/param.h>
@@ -132,14 +127,8 @@ __KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.244.6.4 2005/09/08 21:06:30 tron Exp
 #ifdef P1003_1B_SEMAPHORE
 #include <sys/ksem.h>
 #endif
-#ifdef SYSTRACE
-#include <sys/systrace.h>
-#endif
 #include <sys/domain.h>
 #include <sys/namei.h>
-#if NOPENCRYPTO > 0
-#include <opencrypto/cryptodev.h>	/* XXX really the framework */
-#endif
 #if NRND > 0
 #include <sys/rnd.h>
 #endif
@@ -152,6 +141,8 @@ __KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.244.6.4 2005/09/08 21:06:30 tron Exp
 #ifdef VERIFIED_EXEC
 #include <sys/verified_exec.h>
 #endif
+#include <sys/kauth.h>
+#include <net80211/ieee80211_netbsd.h>
 
 #include <sys/syscall.h>
 #include <sys/sa.h>
@@ -171,27 +162,14 @@ __KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.244.6.4 2005/09/08 21:06:30 tron Exp
 #include <net/if.h>
 #include <net/raw_cb.h>
 
-/* Components of the first process -- never freed. */
-struct	session session0;
-struct	pgrp pgrp0;
-struct	proc proc0;
-struct	lwp lwp0;
-struct	pcred cred0;
-struct	filedesc0 filedesc0;
-struct	cwdinfo cwdi0;
-struct	plimit limit0;
-struct	pstats pstat0;
-struct	vmspace vmspace0;
-struct	sigacts sigacts0;
+extern struct proc proc0;
+extern struct lwp lwp0;
+extern struct cwdinfo cwdi0;
+
 #ifndef curlwp
 struct	lwp *curlwp = &lwp0;
 #endif
 struct	proc *initproc;
-
-int	nofile = NOFILE;
-int	maxuprc = MAXUPRC;
-int	cmask = CMASK;
-extern	struct user *proc0paddr;
 
 struct	vnode *rootvp, *swapdev_vp;
 int	boothowto;
@@ -199,13 +177,11 @@ int	cold = 1;			/* still working on startup */
 struct	timeval boottime;
 time_t	rootfstime;			/* recorded root fs time, if known */
 
-__volatile int start_init_exec;		/* semaphore for start_init() */
+volatile int start_init_exec;		/* semaphore for start_init() */
 
-static void check_console(struct proc *p);
+static void check_console(struct lwp *l);
 static void start_init(void *);
 void main(void);
-
-extern const struct emul emul_netbsd;	/* defined in kern_exec.c */
 
 /*
  * System startup; initialize the world, create process 0, mount root
@@ -220,13 +196,8 @@ main(void)
 	struct proc *p;
 	struct pdevinit *pdev;
 	int s, error;
-	u_int i;
-	rlim_t lim;
 	extern struct pdevinit pdevinit[];
 	extern void schedcpu(void *);
-#if defined(NFSSERVER) || defined(NFS)
-	extern void nfs_init(void);
-#endif
 #ifdef NVNODE_IMPLICIT
 	int usevnodes;
 #endif
@@ -246,7 +217,6 @@ main(void)
 	 * in case of early panic or other messages.
 	 */
 	consinit();
-	printf("%s", copyright);
 
 	KERNEL_LOCK_INIT();
 
@@ -279,13 +249,8 @@ main(void)
 	 * The following things must be done before autoconfiguration.
 	 */
 	evcnt_init();		/* initialize event counters */
-	tty_init();		/* initialize tty list */
 #if NRND > 0
 	rnd_init();		/* initialize RNG */
-#endif
-#if NOPENCRYPTO > 0
-	/* Initialize crypto subsystem before configuring crypto hardware. */
-	(void)crypto_init();
 #endif
 	/* Initialize the sysctl subsystem. */
 	sysctl_init();
@@ -293,87 +258,11 @@ main(void)
 	/* Initialize process and pgrp structures. */
 	procinit();
 
-#ifdef LKM
-	/* Initialize the LKM system. */
-	lkm_init();
-#endif
+	/* Initialize signal-related data structures. */
+	signal_init();
 
-	/*
-	 * Create process 0 (the swapper).
-	 */
-	p = &proc0;
-	proc0_insert(p, l, &pgrp0, &session0);
-
-	/*
-	 * Set P_NOCLDWAIT so that kernel threads are reparented to
-	 * init(8) when they exit.  init(8) can easily wait them out
-	 * for us.
-	 */
-	p->p_flag = P_SYSTEM | P_NOCLDWAIT;
-	p->p_stat = SACTIVE;
-	p->p_nice = NZERO;
-	p->p_emul = &emul_netbsd;
-#ifdef __HAVE_SYSCALL_INTERN
-	(*p->p_emul->e_syscall_intern)(p);
-#endif
-	strncpy(p->p_comm, "swapper", MAXCOMLEN);
-
-	l->l_flag = L_INMEM;
-	l->l_stat = LSONPROC;
-	p->p_nrlwps = 1;
-
-	callout_init(&l->l_tsleep_ch);
-
-	/* Create credentials. */
-	cred0.p_refcnt = 1;
-	p->p_cred = &cred0;
-	p->p_ucred = crget();
-	p->p_ucred->cr_ngroups = 1;	/* group 0 */
-
-	/* Create the file descriptor table. */
-	p->p_fd = &filedesc0.fd_fd;
-	fdinit1(&filedesc0);
-
-	/* Create the CWD info. */
-	p->p_cwdi = &cwdi0;
-	cwdi0.cwdi_cmask = cmask;
-	cwdi0.cwdi_refcnt = 1;
-	simple_lock_init(&cwdi0.cwdi_slock);
-
-	/* Create the limits structures. */
-	p->p_limit = &limit0;
-	simple_lock_init(&limit0.p_slock);
-	for (i = 0; i < sizeof(p->p_rlimit)/sizeof(p->p_rlimit[0]); i++)
-		limit0.pl_rlimit[i].rlim_cur =
-		    limit0.pl_rlimit[i].rlim_max = RLIM_INFINITY;
-
-	limit0.pl_rlimit[RLIMIT_NOFILE].rlim_max = maxfiles;
-	limit0.pl_rlimit[RLIMIT_NOFILE].rlim_cur =
-	    maxfiles < nofile ? maxfiles : nofile;
-
-	limit0.pl_rlimit[RLIMIT_NPROC].rlim_max = maxproc;
-	limit0.pl_rlimit[RLIMIT_NPROC].rlim_cur =
-	    maxproc < maxuprc ? maxproc : maxuprc;
-
-	lim = ptoa(uvmexp.free);
-	limit0.pl_rlimit[RLIMIT_RSS].rlim_max = lim;
-	limit0.pl_rlimit[RLIMIT_MEMLOCK].rlim_max = lim;
-	limit0.pl_rlimit[RLIMIT_MEMLOCK].rlim_cur = lim / 3;
-	limit0.pl_corename = defcorename;
-	limit0.p_refcnt = 1;
-
-	/*
-	 * Initialize proc0's vmspace, which uses the kernel pmap.
-	 * All kernel processes (which never have user space mappings)
-	 * share proc0's vmspace, and thus, the kernel pmap.
-	 */
-	uvmspace_init(&vmspace0, pmap_kernel(), round_page(VM_MIN_ADDRESS),
-	    trunc_page(VM_MAX_ADDRESS));
-	p->p_vmspace = &vmspace0;
-
-	l->l_addr = proc0paddr;				/* XXX */
-
-	p->p_stats = &pstat0;
+	/* Create process 0 (the swapper). */
+	proc0_init();
 
 	/*
 	 * Charge root for one process.
@@ -382,13 +271,7 @@ main(void)
 
 	rqinit();
 
-	/* Configure virtual memory system, set vm rlimits. */
-	uvm_init_limits(p);
-
 	/* Initialize the file systems. */
-#if defined(NFSSERVER) || defined(NFS)
-	nfs_init();			/* initialize server/shared data */
-#endif
 #ifdef NVNODE_IMPLICIT
 	/*
 	 * If maximum number of vnodes in namei vnode cache is not explicitly
@@ -429,6 +312,9 @@ main(void)
 	ksem_init();
 #endif
 
+	/* Initialize kauth. */
+	kauth_init();
+
 #ifdef VERIFIED_EXEC
 	  /*
 	   * Initialise the fingerprint operations vectors before
@@ -436,7 +322,7 @@ main(void)
 	   */
 	veriexec_init_fp_ops();
 #endif
-	
+
 	/* Attach pseudo-devices. */
 	for (pdev = pdevinit; pdev->pdev_attach != NULL; pdev++)
 		(*pdev->pdev_attach)(pdev->pdev_count);
@@ -463,17 +349,6 @@ main(void)
 
 	/* Initialize system accouting. */
 	acct_init();
-
-#ifdef SYSTRACE
-	systrace_init();
-#endif
-	/*
-	 * Initialize signal-related data structures, and signal state
-	 * for proc0.
-	 */
-	signal_init();
-	p->p_sigacts = &sigacts0;
-	siginit(p);
 
 	/* Kick off timeout driven events by calling first time. */
 	schedcpu(NULL);
@@ -503,7 +378,7 @@ main(void)
 	 * secondary processors, yet.
 	 */
 	while (config_pending)
-		(void) tsleep((void *)&config_pending, PWAIT, "cfpend", 0);
+		(void) tsleep(&config_pending, PWAIT, "cfpend", 0);
 
 	/*
 	 * Finalize configuration now that all real devices have been
@@ -607,7 +482,7 @@ main(void)
 	 * Okay, now we can let init(8) exec!  It's off to userland!
 	 */
 	start_init_exec = 1;
-	wakeup((void *)&start_init_exec);
+	wakeup(&start_init_exec);
 
 	/* The scheduler is an infinite loop. */
 	uvm_scheduler();
@@ -621,12 +496,12 @@ setrootfstime(time_t t)
 }
 
 static void
-check_console(struct proc *p)
+check_console(struct lwp *l)
 {
 	struct nameidata nd;
 	int error;
 
-	NDINIT(&nd, LOOKUP, FOLLOW, UIO_SYSSPACE, "/dev/console", p);
+	NDINIT(&nd, LOOKUP, FOLLOW, UIO_SYSSPACE, "/dev/console", l);
 	error = namei(&nd);
 	if (error == 0)
 		vrele(nd.ni_vp);
@@ -678,7 +553,7 @@ start_init(void *arg)
 	 * Wait for main() to tell us that it's safe to exec.
 	 */
 	while (start_init_exec == 0)
-		(void) tsleep((void *)&start_init_exec, PWAIT, "initexec", 0);
+		(void) tsleep(&start_init_exec, PWAIT, "initexec", 0);
 
 	/*
 	 * This is not the right way to do this.  We really should
@@ -686,7 +561,7 @@ start_init(void *arg)
 	 * but that's a _lot_ more work, and the benefit from this easy
 	 * hack makes up for the "good is the enemy of the best" effect.
 	 */
-	check_console(p);
+	check_console(l);
 
 	/*
 	 * Need just enough stack to hold the faked-up "execve()" arguments.
@@ -768,7 +643,7 @@ start_init(void *arg)
 #endif
 		arg0 = STACK_ALLOC(ucp, i);
 		ucp = STACK_MAX(arg0, i);
-		(void)copyout((caddr_t)path, arg0, i);
+		(void)copyout(path, arg0, i);
 
 		/*
 		 * Move out the arg pointers.
@@ -792,7 +667,7 @@ start_init(void *arg)
 		 * Now try to exec the program.  If can't for any reason
 		 * other than it doesn't exist, complain.
 		 */
-		error = sys_execve(LIST_FIRST(&p->p_lwps), &args, retval);
+		error = sys_execve(l, &args, retval);
 		if (error == 0 || error == EJUSTRETURN) {
 			KERNEL_PROC_UNLOCK(l);
 			return;

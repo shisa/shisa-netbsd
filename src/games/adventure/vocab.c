@@ -1,4 +1,4 @@
-/*	$NetBSD: vocab.c,v 1.11 2003/08/07 09:36:51 agc Exp $	*/
+/*	$NetBSD: vocab.c,v 1.13 2006/03/18 23:35:51 christos Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -39,7 +39,7 @@
 #if 0
 static char sccsid[] = "@(#)vocab.c	8.1 (Berkeley) 5/31/93";
 #else
-__RCSID("$NetBSD: vocab.c,v 1.11 2003/08/07 09:36:51 agc Exp $");
+__RCSID("$NetBSD: vocab.c,v 1.13 2006/03/18 23:35:51 christos Exp $");
 #endif
 #endif				/* not lint */
 
@@ -52,15 +52,13 @@ __RCSID("$NetBSD: vocab.c,v 1.11 2003/08/07 09:36:51 agc Exp $");
 #include "extern.h"
 
 void
-dstroy(object)
-	int     object;
+dstroy(int object)
 {
 	move(object, 0);
 }
 
 void
-juggle(object)
-	int     object;
+juggle(int object)
 {
 	int     i, j;
 
@@ -70,10 +68,8 @@ juggle(object)
 	move(object + 100, j);
 }
 
-
 void
-move(object, where)
-	int     object, where;
+move(int object, int where)
 {
 	int     from;
 
@@ -87,16 +83,14 @@ move(object, where)
 }
 
 int
-put(object, where, pval)
-	int     object, where, pval;
+put(int object, int where, int pval)
 {
 	move(object, where);
 	return (-1 - pval);
 }
 
 void
-carry(object, where)
-	int     object, where;
+carry(int object, int where)
 {
 	int     temp;
 
@@ -116,8 +110,7 @@ carry(object, where)
 
 
 void
-drop(object, where)
-	int     object, where;
+drop(int object, int where)
 {
 	if (object > 100)
 		fixed[object - 100] = where;
@@ -132,12 +125,11 @@ drop(object, where)
 	atloc[where] = object;
 }
 
+/* look up or store a word      */
+/* -2 for store, -1 for user word, >=0 for canned lookup */
+/* used for storing only        */
 int
-vocab(word, type, value)	/* look up or store a word      */
-	const char   *word;
-	int     type;		/* -2 for store, -1 for user word, >=0 for
-				 * canned lookup */
-	int     value;		/* used for storing only        */
+vocab(const char *word, int type, int value)
 {
 	int     adr;
 	const char *s;
@@ -145,7 +137,7 @@ vocab(word, type, value)	/* look up or store a word      */
 	int     hash, i;
 	struct hashtab *h;
 
-	for (hash = 0, s = word, i = 0; i < 5 && *s; i++)	/* some kind of hash    */
+	for (hash = 0, s = word, i = 0; i < 5 && *s; i++) /* some kind of hash*/
 		hash += *s++;	/* add all chars in the word    */
 	hash = (hash * 3719) & 077777;	/* pulled that one out of a hat */
 	hash %= HTSIZE;		/* put it into range of table   */
@@ -192,14 +184,15 @@ vocab(word, type, value)	/* look up or store a word      */
 		}
 
 exitloop2:			/* hashed entry does not match  */
-		if (adr + 1 == hash || (adr == HTSIZE && hash == 0))
+		if (adr + 1 == hash || hash == 0)
 			errx(1,"Hash table overflow");
 	}
 }
 
+/* print hash table             */
 void
-prht()
-{				/* print hash table             */
+prht(void)
+{	
 	int     i, j, l;
 	char   *c;
 	struct hashtab *h;

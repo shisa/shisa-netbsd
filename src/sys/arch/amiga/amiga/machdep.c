@@ -1,4 +1,4 @@
-/*	$NetBSD: machdep.c,v 1.190.14.1 2005/11/01 22:33:25 tron Exp $	*/
+/*	$NetBSD: machdep.c,v 1.195 2005/12/24 22:45:34 perry Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1990 The Regents of the University of California.
@@ -85,7 +85,7 @@
 #include "opt_panicbutton.h"
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.190.14.1 2005/11/01 22:33:25 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.195 2005/12/24 22:45:34 perry Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -198,7 +198,7 @@ extern  int   freebufspace;
 extern	u_int lowram;
 
 /* used in init_main.c */
-char	*cpu_type = "m68k";
+const char *cpu_type = "m68k";
 /* the following is used externally (sysctl_hw) */
 char	machine[] = MACHINE;	/* from <machine/param.h> */
 
@@ -293,7 +293,7 @@ cpu_startup()
 	/*
 	 * Good {morning,afternoon,evening,night}.
 	 */
-	printf(version);
+	printf("%s%s", copyright, version);
 	identifycpu();
 	format_bytes(pbuf, sizeof(pbuf), ctob(physmem));
 	printf("total memory = %s\n", pbuf);
@@ -403,7 +403,7 @@ void
 identifycpu()
 {
         /* there's alot of XXX in here... */
-	char *mach, *mmu, *fpu;
+	const char *mach, *mmu, *fpu;
 
 #ifdef M68060
 	char cpubuf[16];
@@ -430,7 +430,7 @@ identifycpu()
 	fpu = NULL;
 #ifdef M68060
 	if (machineid & AMIGA_68060) {
-		asm(".word 0x4e7a,0x0808; movl %%d0,%0" : "=d"(pcr) : : "d0");
+		__asm(".word 0x4e7a,0x0808; movl %%d0,%0" : "=d"(pcr) : : "d0");
 		sprintf(cpubuf, "68%s060 rev.%d",
 		    pcr & 0x10000 ? "LC/EC" : "", (pcr>>8)&0xff);
 		cpu_type = cpubuf;
@@ -854,7 +854,7 @@ initcpu()
 			/* ... and mark FPU as absent for identifyfpu() */
 			machineid &= ~(AMIGA_FPU40|AMIGA_68882|AMIGA_68881);
 		}
-		asm volatile ("movl %0,%%d0; .word 0x4e7b,0x0808" : :
+		__asm volatile ("movl %0,%%d0; .word 0x4e7b,0x0808" : :
 			"d"(m68060_pcr_init):"d0" );
 
 		/* bus/addrerr vectors */
@@ -1564,8 +1564,8 @@ nmihand(frame)
  * MID and proceed to new zmagic code ;-)
  */
 int
-cpu_exec_aout_makecmds(p, epp)
-	struct proc *p;
+cpu_exec_aout_makecmds(l, epp)
+	struct lwp *l;
 	struct exec_package *epp;
 {
 	int error = ENOEXEC;
@@ -1576,7 +1576,7 @@ cpu_exec_aout_makecmds(p, epp)
 #ifdef COMPAT_NOMID
 	if (!((execp->a_midmag >> 16) & 0x0fff)
 	    && execp->a_midmag == ZMAGIC)
-		return(exec_aout_prep_zmagic(p, epp));
+		return(exec_aout_prep_zmagic(l, epp));
 #endif
 	return(error);
 }

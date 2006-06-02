@@ -1,4 +1,4 @@
-/*	$NetBSD: locore.S,v 1.52 2004/01/14 14:08:40 tsutsui Exp $	*/
+/*	$NetBSD: locore.S,v 1.54 2005/12/11 12:18:06 christos Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996 Wolfgang Solfrank.
@@ -61,16 +61,6 @@
  * Globals
  */
 	.data
-/*
- * We need this symbols for vmstat.
- */
-GLOBAL(intrcnt)
-GLOBAL(eintrcnt)
-GLOBAL(intrnames)
-GLOBAL(eintrnames)
-/*
- * Real data
- */
 GLOBAL(esym)
 	.long	0			/* end of symbol table */
 GLOBAL(proc0paddr)

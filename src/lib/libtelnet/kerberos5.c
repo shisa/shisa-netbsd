@@ -1,4 +1,4 @@
-/*	$NetBSD: kerberos5.c,v 1.12.6.2 2005/07/09 22:56:58 tron Exp $	*/
+/*	$NetBSD: kerberos5.c,v 1.17 2006/03/22 16:32:39 christos Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -375,6 +375,7 @@ kerberos5_is(Authenticator * ap, unsigned char *data, int cnt)
 					    "krb5_mk_rep failed (%s)\r\n",
 					    krb5_get_err_text(telnet_context,
 					    ret));
+				krb5_free_keyblock(telnet_context, key_block);
 				return;
 			}
 			Data(ap, KRB_RESPONSE, outbuf.data, outbuf.length);
@@ -384,7 +385,7 @@ kerberos5_is(Authenticator * ap, unsigned char *data, int cnt)
 
 		if (UserNameRequested && krb5_kuserok(telnet_context,
 		    ticket->client, UserNameRequested)) {
-			Data(ap, KRB_ACCEPT, name, name ? -1 : 0);
+			Data(ap, KRB_ACCEPT, name ? name : "", name ? -1 : 0);
 			if (auth_debug_mode) {
 				printf("Kerberos5 identifies him as ``%s''\r\n",
 				    name ? name : "");
@@ -413,12 +414,11 @@ kerberos5_is(Authenticator * ap, unsigned char *data, int cnt)
 				free(msg);
 			}
 			auth_finished(ap, AUTH_REJECT);
-			krb5_free_keyblock_contents(telnet_context, key_block);
+			krb5_free_keyblock(telnet_context, key_block);
 			break;
 		}
 		auth_finished(ap, AUTH_USER);
-		krb5_free_keyblock_contents(telnet_context, key_block);
-
+		krb5_free_keyblock(telnet_context, key_block);
 		break;
 	case KRB_FORWARD:{
 			struct passwd pws, *pwd;
@@ -531,7 +531,7 @@ kerberos5_reply(Authenticator * ap, unsigned char *data, int cnt)
 			skey.length = 8;
 			skey.data = keyblock->keyvalue.data;
 			encrypt_session_key(&skey, 0);
-			krb5_free_keyblock_contents(telnet_context, keyblock);
+			krb5_free_keyblock(telnet_context, keyblock);
 			auth_finished(ap, AUTH_USER);
 			if (forward_flags & OPTS_FORWARD_CREDS)
 				kerberos5_forward(ap);

@@ -1,4 +1,4 @@
-/*	$NetBSD: usscanner.c,v 1.15 2005/02/21 00:29:08 thorpej Exp $	*/
+/*	$NetBSD: usscanner.c,v 1.18 2005/12/11 12:24:01 christos Exp $	*/
 
 /*
  * Copyright (c) 2001 The NetBSD Foundation, Inc.
@@ -54,8 +54,9 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: usscanner.c,v 1.15 2005/02/21 00:29:08 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: usscanner.c,v 1.18 2005/12/11 12:24:01 christos Exp $");
 
+#include "scsibus.h"
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/kernel.h>
@@ -174,7 +175,7 @@ USB_ATTACH(usscanner)
 	USB_ATTACH_START(usscanner, sc, uaa);
 	usbd_device_handle	dev = uaa->device;
 	usbd_interface_handle	iface;
-	char			devinfo[1024];
+	char			*devinfop;
 	usbd_status		err;
 	usb_endpoint_descriptor_t *ed;
 	u_int8_t		epcount;
@@ -182,9 +183,10 @@ USB_ATTACH(usscanner)
 
 	DPRINTFN(10,("usscanner_attach: sc=%p\n", sc));
 
-	usbd_devinfo(dev, 0, devinfo, sizeof(devinfo));
+	devinfop = usbd_devinfo_alloc(dev, 0);
 	USB_ATTACH_SETUP;
-	printf("%s: %s\n", USBDEVNAME(sc->sc_dev), devinfo);
+	printf("%s: %s\n", USBDEVNAME(sc->sc_dev), devinfop);
+	usbd_devinfo_free(devinfop);
 
 	err = usbd_set_config_no(dev, USSCANNER_CONFIG_NO, 1);
 	if (err) {
@@ -312,6 +314,7 @@ USB_ATTACH(usscanner)
 	sc->sc_adapter.adapt_max_periph = 1;
 	sc->sc_adapter.adapt_minphys = usscanner_scsipi_minphys;
 
+#if NSCSIBUS > 0
 	/*
 	 * fill in the scsipi_channel.
 	 */
@@ -330,6 +333,13 @@ USB_ATTACH(usscanner)
 	DPRINTFN(10, ("usscanner_attach: %p\n", sc->sc_udev));
 
 	USB_ATTACH_SUCCESS_RETURN;
+
+#else
+	/* No SCSI bus, just ignore it */
+	usscanner_cleanup(sc);
+	USB_ATTACH_ERROR_RETURN;
+
+#endif
 }
 
 USB_DETACH(usscanner)

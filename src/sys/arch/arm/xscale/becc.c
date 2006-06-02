@@ -1,4 +1,4 @@
-/*	$NetBSD: becc.c,v 1.8 2004/08/30 15:05:16 drochner Exp $	*/
+/*	$NetBSD: becc.c,v 1.12 2005/12/24 20:06:52 perry Exp $	*/
 
 /*
  * Copyright (c) 2002, 2003 Wasabi Systems, Inc.
@@ -41,7 +41,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: becc.c,v 1.8 2004/08/30 15:05:16 drochner Exp $");
+__KERNEL_RCSID(0, "$NetBSD: becc.c,v 1.12 2005/12/24 20:06:52 perry Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -77,7 +77,8 @@ const char *becc_revisions[] = {
  */
 struct becc_softc *becc_softc;
 
-static int becc_search(struct device *, struct cfdata *, void *);
+static int becc_search(struct device *, struct cfdata *,
+		       const int *, void *);
 static int becc_print(void *, const char *);
 
 static void becc_pci_dma_init(struct becc_softc *);
@@ -101,8 +102,8 @@ becc_attach(struct becc_softc *sc)
 	 * This allows the BECC to return the requested 4-byte word
 	 * first when filling a cache line.
 	 */
-	__asm __volatile("mrc p13, 0, %0, c1, c1, 0" : "=r" (reg));
-	__asm __volatile("mcr p13, 0, %0, c1, c1, 0" : : "r" (reg | BCUMOD_AF));
+	__asm volatile("mrc p13, 0, %0, c1, c1, 0" : "=r" (reg));
+	__asm volatile("mcr p13, 0, %0, c1, c1, 0" : : "r" (reg | BCUMOD_AF));
 
 	/*
 	 * Program the address windows of the PCI core.  Note
@@ -193,7 +194,7 @@ becc_attach(struct becc_softc *sc)
 	 * the BECC is a soft-core with a variety of peripherals, depending
 	 * on configuration.
 	 */
-	config_search(becc_search, &sc->sc_dev, NULL);
+	config_search_ia(becc_search, &sc->sc_dev, "becc", NULL);
 
 	/*
 	 * Attach the PCI bus.
@@ -218,7 +219,8 @@ becc_attach(struct becc_softc *sc)
  *	Indirect autoconfiguration glue for BECC.
  */
 static int
-becc_search(struct device *parent, struct cfdata *cf, void *aux)
+becc_search(struct device *parent, struct cfdata *cf,
+	    const int *ldesc, void *aux)
 {
 	struct becc_softc *sc = (void *) parent;
 	struct becc_attach_args ba;
@@ -332,7 +334,7 @@ becc_pcicore_read(struct becc_softc *sc, bus_addr_t reg)
 {
 	vaddr_t va = sc->sc_pci_cfg_base | (1U << BECC_IDSEL_BIT) | reg;
 
-	return (*(__volatile uint32_t *) va);
+	return (*(volatile uint32_t *) va);
 }
 
 void
@@ -340,5 +342,5 @@ becc_pcicore_write(struct becc_softc *sc, bus_addr_t reg, uint32_t val)
 {
 	vaddr_t va = sc->sc_pci_cfg_base | (1U << BECC_IDSEL_BIT) | reg;
 
-	*(__volatile uint32_t *) va = val;
+	*(volatile uint32_t *) va = val;
 }

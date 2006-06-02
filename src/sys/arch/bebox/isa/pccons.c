@@ -1,4 +1,4 @@
-/*	$NetBSD: pccons.c,v 1.33 2004/03/13 17:31:33 bjh21 Exp $	*/
+/*	$NetBSD: pccons.c,v 1.39 2006/05/14 21:55:10 elad Exp $	*/
 
 /*-
  * Copyright (c) 1998 The NetBSD Foundation, Inc.
@@ -79,7 +79,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: pccons.c,v 1.33 2004/03/13 17:31:33 bjh21 Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pccons.c,v 1.39 2006/05/14 21:55:10 elad Exp $");
 
 #include "opt_ddb.h"
 #include "opt_xserver.h"
@@ -99,6 +99,7 @@ __KERNEL_RCSID(0, "$NetBSD: pccons.c,v 1.33 2004/03/13 17:31:33 bjh21 Exp $");
 #include <sys/syslog.h>
 #include <sys/device.h>
 #include <sys/conf.h>
+#include <sys/kauth.h>
 
 #include <dev/cons.h>
 
@@ -274,7 +275,7 @@ static unsigned int addr_6845 = MONO_BASE;
 char *sget __P((void));
 #endif
 char *strans __P((u_char));
-void sput __P((u_char *, int));
+void sput __P((const u_char *, int));
 #ifdef XSERVER
 void pc_xmode_on __P((void));
 void pc_xmode_off __P((void));
@@ -301,9 +302,9 @@ void update_leds __P((void));
 #endif
 
 #if (NPCCONSKBD == 0)
-static __inline int kbd_wait_output __P((void));
-static __inline int kbd_wait_input __P((void));
-static __inline void kbd_flush_input __P((void));
+static inline int kbd_wait_output __P((void));
+static inline int kbd_wait_input __P((void));
+static inline void kbd_flush_input __P((void));
 static u_char kbc_get8042cmd __P((void));
 static int kbc_put8042cmd __P((u_char));
 #endif
@@ -324,7 +325,7 @@ void pccnpollc __P((dev_t, int));
 	{ u_char x = isa_inb(0x84); (void) x; } \
 	{ u_char x = isa_inb(0x84); (void) x; }
 
-static __inline int
+static inline int
 kbd_wait_output()
 {
 	u_int i;
@@ -337,7 +338,7 @@ kbd_wait_output()
 	return (0);
 }
 
-static __inline int
+static inline int
 kbd_wait_input()
 {
 	u_int i;
@@ -350,7 +351,7 @@ kbd_wait_input()
 	return (0);
 }
 
-static __inline void
+static inline void
 kbd_flush_input()
 {
 	u_int i;
@@ -401,9 +402,9 @@ kbc_put8042cmd(val)
  * Pass command to keyboard itself
  */
 int
-kbd_cmd(val, polling)
+kbd_cmd(val, do_polling)
 	u_char val;
-	u_char polling;
+	u_char do_polling;
 {
 	u_int retries = 3;
 	register u_int i;
@@ -413,7 +414,7 @@ kbd_cmd(val, polling)
 			return (0);
 		ack = nak = 0;
 		isa_outb(IO_KBD + KBOUTP, val);
-		if (polling)
+		if (do_polling)
 			for (i = 100000; i; i--) {
 				if (isa_inb(IO_KBD + KBSTATP) & KBS_DIB) {
 					register u_char c;
@@ -789,7 +790,7 @@ pcattach(parent, self, aux)
 		maj = cdevsw_lookup_major(&pc_cdevsw);
 
 		/* There can be only one, but it can have any unit number. */
-		cn_tab->cn_dev = makedev(maj, sc->sc_dev.dv_unit);
+		cn_tab->cn_dev = makedev(maj, device_unit(&sc->sc_dev));
 
 		printf("%s: console\n", sc->sc_dev.dv_xname);
 	}
@@ -836,10 +837,10 @@ pcconskbd_cnattach(tag, slot)
 #endif
 
 int
-pcopen(dev, flag, mode, p)
+pcopen(dev, flag, mode, l)
 	dev_t dev;
 	int flag, mode;
-	struct proc *p;
+	struct lwp *l;
 {
 	struct pc_softc *sc;
 	int unit = PCUNIT(dev);
@@ -869,7 +870,8 @@ pcopen(dev, flag, mode, p)
 		tp->t_ispeed = tp->t_ospeed = TTYDEF_SPEED;
 		pcparam(tp, &tp->t_termios);
 		ttsetwater(tp);
-	} else if (tp->t_state&TS_XCLUDE && p->p_ucred->cr_uid != 0)
+	} else if (tp->t_state&TS_XCLUDE &&
+		   kauth_authorize_generic(l->l_proc->p_cred, KAUTH_GENERIC_ISSUSER, &l->l_proc->p_acflag) != 0)
 		return (EBUSY);
 	tp->t_state |= TS_CARR_ON;
 
@@ -877,10 +879,10 @@ pcopen(dev, flag, mode, p)
 }
 
 int
-pcclose(dev, flag, mode, p)
+pcclose(dev, flag, mode, l)
 	dev_t dev;
 	int flag, mode;
-	struct proc *p;
+	struct lwp *l;
 {
 	struct pc_softc *sc = pc_cd.cd_devs[PCUNIT(dev)];
 	struct tty *tp = sc->sc_tty;
@@ -920,15 +922,15 @@ pcwrite(dev, uio, flag)
 }
 
 int
-pcpoll(dev, events, p)
+pcpoll(dev, events, l)
 	dev_t dev;
 	int events;
-	struct proc *p;
+	struct lwp *l;
 {
 	struct pc_softc *sc = pc_cd.cd_devs[PCUNIT(dev)];
 	struct tty *tp = sc->sc_tty;
  
-	return ((*tp->t_linesw->l_poll)(tp, events, p));
+	return ((*tp->t_linesw->l_poll)(tp, events, l));
 }
 
 struct tty *
@@ -995,22 +997,22 @@ pcintr(arg)
 #endif
 
 int
-pcioctl(dev, cmd, data, flag, p)
+pcioctl(dev, cmd, data, flag, l)
 	dev_t dev;
 	u_long cmd;
 	caddr_t data;
 	int flag;
-	struct proc *p;
+	struct lwp *l;
 {
 	struct pc_softc *sc = pc_cd.cd_devs[PCUNIT(dev)];
 	struct tty *tp = sc->sc_tty;
 	int error;
 
-	error = (*tp->t_linesw->l_ioctl)(tp, cmd, data, flag, p);
+	error = (*tp->t_linesw->l_ioctl)(tp, cmd, data, flag, l);
 	if (error != EPASSTHROUGH)
 		return (error);
 
-	error = ttioctl(tp, cmd, data, flag, p);
+	error = ttioctl(tp, cmd, data, flag, l);
 	if (error != EPASSTHROUGH)
 		return (error);
 
@@ -1302,8 +1304,8 @@ pcinit()
 	cursor_shape = 0x0012;
 #endif
 
-	Crtat = (u_short *)cp;
-	crtat = (u_short *)(cp + cursorat);
+	Crtat = __UNVOLATILE(cp);
+	crtat = (u_short*)(__UNVOLATILE(cp)) + cursorat;
 
 	vs.ncol = COL;
 	vs.nrow = ROW;
@@ -1319,7 +1321,8 @@ pcinit()
 }
 
 #define	wrtchar(c, at) do {\
-	char *cp = (char *)crtat; *cp++ = (c); *cp = (at); crtat++; vs.col++; \
+	char *_cp = (char *)crtat; *_cp++ = (c); *_cp = (at); crtat++; \
+	vs.col++; \
 } while (0)
 
 /* translate ANSI color codes to standard pc ones */
@@ -1360,7 +1363,7 @@ static u_char iso2ibm437[] =
  */
 void
 sput(cp, n)
-	u_char *cp;
+	const u_char *cp;
 	int n;
 {
 	u_char c, scroll = 0;

@@ -1,4 +1,4 @@
-/* $NetBSD: bufcache.c,v 1.3.2.1 2005/05/07 11:21:29 tron Exp $ */
+/* $NetBSD: bufcache.c,v 1.9 2006/04/19 15:52:58 christos Exp $ */
 /*-
  * Copyright (c) 2003 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -100,6 +100,8 @@ bufinit(int max)
 		TAILQ_INIT(&bufqueues[i]);
 	}
 	bufhash = (struct bufhash_struct *)malloc(hashmax * sizeof(*bufhash));
+	if (bufhash == NULL)
+		err(1, NULL);
 	for (i = 0; i < hashmax; i++)
 		LIST_INIT(&bufhash[i]);
 }
@@ -119,8 +121,10 @@ void bufrehash(int max)
 		;
 	newhashmask = newhashmax - 1;
 
-	/* Allocate new empty hash table */
+	/* Allocate new empty hash table, if we can */
 	np = (struct bufhash_struct *)malloc(newhashmax * sizeof(*bufhash));
+		if (np == NULL)
+			return;
 	for (i = 0; i < newhashmax; i++)
 		LIST_INIT(&np[i]);
 
@@ -163,7 +167,8 @@ buf_destroy(struct ubuf * bp)
 	bp->b_flags |= B_NEEDCOMMIT;
 	LIST_REMOVE(bp, b_vnbufs);
 	LIST_REMOVE(bp, b_hash);
-	free(bp->b_data);
+	if (!(bp->b_flags & B_DONTFREE))
+		free(bp->b_data);
 	free(bp);
 	--nbufs;
 }
@@ -245,6 +250,8 @@ getblk(struct uvnode * vp, daddr_t lbn, int size)
 			assert(!(bp->b_flags & B_DELWRI));
 			bp->b_bcount = size;
 			bp->b_data = realloc(bp->b_data, size);
+			if (bp->b_data == NULL)
+				err(1, NULL);
 			return bp;
 		}
 
@@ -275,20 +282,21 @@ getblk(struct uvnode * vp, daddr_t lbn, int size)
 			break;
 		}
 #ifdef DEBUG
-		else {
-			if (!warned) {
-				warnx("allocating more than %d buffers",
-					maxbufs);
-				++warned;
-			}
-			break;
+		else if (!warned) {
+			warnx("allocating more than %d buffers", maxbufs);
+			++warned;
 		}
 #endif
+		break;
 	}
 	++nbufs;
 	bp = (struct ubuf *) malloc(sizeof(*bp));
+	if (bp == NULL)
+		err(1, NULL);
 	memset(bp, 0, sizeof(*bp));
 	bp->b_data = malloc(size);
+	if (bp->b_data == NULL)
+		err(1, NULL);
 	memset(bp->b_data, 0, size);
 
 	bp->b_vp = vp;
@@ -348,12 +356,12 @@ brelse(struct ubuf * bp)
 
 /* Read the given block from disk, return it B_BUSY. */
 int
-bread(struct uvnode * vp, daddr_t lbn, int size, struct ucred * unused,
+bread(struct uvnode * vp, daddr_t lbn, int size, void * unused,
     struct ubuf ** bpp)
 {
 	struct ubuf *bp;
 	daddr_t daddr;
-	int error, count;
+	int error;
 
 	bp = getblk(vp, lbn, size);
 	*bpp = bp;
@@ -371,13 +379,8 @@ bread(struct uvnode * vp, daddr_t lbn, int size, struct ucred * unused,
 	error = VOP_BMAP(vp, lbn, &daddr);
 	bp->b_blkno = daddr;
 	if (daddr >= 0) {
-		count = pread(vp->v_fd, bp->b_data, bp->b_bcount,
-				dbtob((off_t) daddr));
-		if (count == bp->b_bcount) {
-			bp->b_flags |= B_DONE;
-			return 0;
-		}
-		return -1;
+		bp->b_flags |= B_READ;
+		return VOP_STRATEGY(bp);
 	}
 	memset(bp->b_data, 0, bp->b_bcount);
 	return 0;

@@ -1,4 +1,4 @@
-/*	$NetBSD: make.h,v 1.52 2004/07/15 09:01:29 yamt Exp $	*/
+/*	$NetBSD: make.h,v 1.59 2006/03/10 15:53:55 christos Exp $	*/
 
 /*
  * Copyright (c) 1988, 1989, 1990, 1993
@@ -91,12 +91,6 @@
 
 #ifdef BSD4_4
 # include <sys/cdefs.h>
-#else
-# ifndef __GNUC__
-#  ifndef __inline
-#   define __inline
-#  endif
-# endif
 #endif
 
 #if !defined(__GNUC_PREREQ__)
@@ -135,20 +129,25 @@
  *	7) the number of its children that are, as yet, unmade
  *	8) its modification time
  *	9) the modification time of its youngest child (qv. make.c)
- *	10) a list of nodes for which this is a source
- *	11) a list of nodes on which this depends
+ *	10) a list of nodes for which this is a source (parents)
+ *	11) a list of nodes on which this depends (children)
  *	12) a list of nodes that depend on this, as gleaned from the
- *	    transformation rules.
- *	13) a list of nodes of the same name created by the :: operator
- *	14) a list of nodes that must be made (if they're made) before
- *	    this node can be, but that do no enter into the datedness of
+ *	    transformation rules (iParents)
+ *	13) a list of ancestor nodes, which includes parents, iParents,
+ *	    and recursive parents of parents
+ *	14) a list of nodes of the same name created by the :: operator
+ *	15) a list of nodes that must be made (if they're made) before
+ *	    this node can be, but that do not enter into the datedness of
  *	    this node.
- *	15) a list of nodes that must be made (if they're made) after
+ *	16) a list of nodes that must be made (if they're made) before
+ *	    this node or any child of this node can be, but that do not
+ *	    enter into the datedness of this node.
+ *	17) a list of nodes that must be made (if they're made) after
  *	    this node is, but that do not depend on this node, in the
  *	    normal sense.
- *	16) a Lst of ``local'' variables that are specific to this target
+ *	18) a Lst of ``local'' variables that are specific to this target
  *	   and this target only (qv. var.c [$@ $< $?, etc.])
- *	17) a Lst of strings that are commands to be given to a shell
+ *	19) a Lst of strings that are commands to be given to a shell
  *	   to create this target.
  */
 typedef struct GNode {
@@ -195,9 +194,12 @@ typedef struct GNode {
 				 * implied source, if any */
     Lst	    	    cohorts;  	/* Other nodes for the :: operator */
     Lst             parents;   	/* Nodes that depend on this one */
+    Lst             ancestors; 	/* Parents, parents of parents, ... */
     Lst             children;  	/* Nodes on which this one depends */
     Lst	    	    successors;	/* Nodes that must be made after this one */
     Lst	    	    preds;  	/* Nodes that must be made before this one */
+    Lst	    	    recpreds;	/* Nodes that must be added to preds
+				 * recursively for all child nodes */
     int		    unmade_cohorts;/* # of unmade instances on the
 				      cohorts list */
     struct GNode    *centurion;	/* Pointer to the first instance of a ::
@@ -253,6 +255,7 @@ typedef struct GNode {
 				     * children was out-of-date */
 #define	OP_MADE		0x00000800  /* Assume the children of the node have
 				     * been already made */
+#define OP_SPECIAL	0x00001000  /* Special .BEGIN, .END, .INTERRUPT */
 #define	OP_USEBEFORE	0x00002000  /* Like .USE, only prepend commands */
 #define OP_INVISIBLE	0x00004000  /* The node is invisible to its parents.
 				     * I.e. it doesn't show up in the parents's
@@ -431,6 +434,8 @@ extern int debug;
 #define DEBUG_SHELL	0x0800
 #define DEBUG_ERROR	0x1000
 #define	DEBUG_GRAPH3	0x10000
+#define DEBUG_SCRIPT	0x20000
+#define DEBUG_PARSE	0x40000
 
 #define CONCAT(a,b)	a##b
 

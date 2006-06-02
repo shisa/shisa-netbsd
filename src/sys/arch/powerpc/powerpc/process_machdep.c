@@ -1,4 +1,4 @@
-/*	$NetBSD: process_machdep.c,v 1.18 2004/04/16 23:58:08 matt Exp $	*/
+/*	$NetBSD: process_machdep.c,v 1.21 2006/03/01 12:38:12 yamt Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996 Wolfgang Solfrank.
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: process_machdep.c,v 1.18 2004/04/16 23:58:08 matt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: process_machdep.c,v 1.21 2006/03/01 12:38:12 yamt Exp $");
 
 #include "opt_altivec.h"
 
@@ -68,7 +68,7 @@ process_read_regs(struct lwp *l, struct reg *regs)
 }
 
 int
-process_write_regs(struct lwp *l, struct reg *regs)
+process_write_regs(struct lwp *l, const struct reg *regs)
 {
 	struct trapframe * const tf = trapframe(l);
 
@@ -102,7 +102,7 @@ process_read_fpregs(struct lwp *l, struct fpreg *fpregs)
 }
 
 int
-process_write_fpregs(struct lwp *l, struct fpreg *fpregs)
+process_write_fpregs(struct lwp *l, const struct fpreg *fpregs)
 {
 	struct pcb * const pcb = &l->l_addr->u_pcb;
 
@@ -180,7 +180,7 @@ process_machdep_write_vecregs(struct lwp *l, struct vreg *vregs)
 }
 
 int
-ptrace_machdep_dorequest(struct proc *p, struct lwp *l,
+ptrace_machdep_dorequest(struct lwp *l, struct lwp *lt,
 	int req, caddr_t addr, int data)
 {
 	struct uio uio;
@@ -193,7 +193,7 @@ ptrace_machdep_dorequest(struct proc *p, struct lwp *l,
 
 	case PT_GETVECREGS:
 		/* write = 0 done above. */
-		if (!process_machdep_validvecregs(l->l_proc))
+		if (!process_machdep_validvecregs(lt->l_proc))
 			return (EINVAL);
 		iov.iov_base = addr;
 		iov.iov_len = sizeof(struct vreg);
@@ -201,10 +201,9 @@ ptrace_machdep_dorequest(struct proc *p, struct lwp *l,
 		uio.uio_iovcnt = 1;
 		uio.uio_offset = 0;
 		uio.uio_resid = sizeof(struct vreg);
-		uio.uio_segflg = UIO_USERSPACE;
 		uio.uio_rw = write ? UIO_WRITE : UIO_READ;
-		uio.uio_procp = p;
-		return process_machdep_dovecregs(p, l, &uio);
+		uio.uio_vmspace = l->l_proc->p_vmspace;
+		return process_machdep_dovecregs(l, lt, &uio);
 	}
 
 #ifdef DIAGNOSTIC
@@ -219,14 +218,14 @@ ptrace_machdep_dorequest(struct proc *p, struct lwp *l,
  */
 
 int
-process_machdep_dovecregs(struct proc *curp, struct lwp *l, struct uio *uio)
+process_machdep_dovecregs(struct lwp *curl, struct lwp *l, struct uio *uio)
 {
 	struct vreg r;
 	int error;
 	char *kv;
 	int kl;
 
-	if ((error = process_checkioperm(curp, l->l_proc)) != 0)
+	if ((error = process_checkioperm(curl, l->l_proc)) != 0)
 		return (error);
 
 	kl = sizeof(r);

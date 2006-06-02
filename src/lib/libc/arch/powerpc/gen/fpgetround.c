@@ -1,4 +1,4 @@
-/*	$NetBSD: fpgetround.c,v 1.5 2004/04/04 19:27:19 matt Exp $	*/
+/*	$NetBSD: fpgetround.c,v 1.8 2005/12/24 23:10:08 perry Exp $	*/
 
 /*
  * Copyright (c) 1999 The NetBSD Foundation, Inc.
@@ -37,6 +37,9 @@
  */
 
 #include <sys/cdefs.h>
+#if defined(LIBC_SCCS) && !defined(lint)
+__RCSID("$NetBSD: fpgetround.c,v 1.8 2005/12/24 23:10:08 perry Exp $");
+#endif /* LIBC_SCCS and not lint */
 
 #include "namespace.h"
 
@@ -56,6 +59,6 @@ fpgetround(void)
 {
 	uint64_t fpscr;
 
-	__asm__ __volatile("mffs %0" : "=f"(fpscr));
+	__asm volatile("mffs %0" : "=f"(fpscr));
 	return (((uint32_t)fpscr & ROUNDBITS) >> ROUNDSHFT);
 }

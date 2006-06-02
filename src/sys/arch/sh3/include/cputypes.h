@@ -1,4 +1,4 @@
-/*	$NetBSD: cputypes.h,v 1.7 2002/04/28 17:10:34 uch Exp $	*/
+/*	$NetBSD: cputypes.h,v 1.10 2006/01/21 00:40:36 uwe Exp $	*/
 
 /*-
  * Copyright (c) 2002 The NetBSD Foundation, Inc.
@@ -59,6 +59,10 @@
 /* SH4 series */
 #define	CPU_PRODUCT_7750	6
 #define	CPU_PRODUCT_7750S	7
+#define	CPU_PRODUCT_7750R	8
+#define	CPU_PRODUCT_7751	9
+#define	CPU_PRODUCT_7751R	10
+
 
 #ifndef _LOCORE
 extern int cpu_arch;
@@ -67,11 +71,11 @@ extern int cpu_product;
 #define	CPU_IS_SH3		(cpu_arch == CPU_ARCH_SH3)
 #define	CPU_IS_SH4		(cpu_arch == CPU_ARCH_SH4)
 #elif defined(SH3)
-#define	CPU_IS_SH3		1
-#define	CPU_IS_SH4		0
+#define	CPU_IS_SH3		(/* CONSTCOND */1)
+#define	CPU_IS_SH4		(/* CONSTCOND */0)
 #elif defined(SH4)
-#define	CPU_IS_SH3		0
-#define	CPU_IS_SH4		1
+#define	CPU_IS_SH3		(/* CONSTCOND */0)
+#define	CPU_IS_SH4		(/* CONSTCOND */1)
 #else
 #error "define SH3 and/or SH4"
 #endif

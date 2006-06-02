@@ -1,4 +1,4 @@
-/*	$NetBSD: comsat.c,v 1.32 2004/09/15 08:44:02 martin Exp $	*/
+/*	$NetBSD: comsat.c,v 1.34 2005/07/18 04:01:33 christos Exp $	*/
 
 /*
  * Copyright (c) 1980, 1993
@@ -36,7 +36,7 @@ __COPYRIGHT("@(#) Copyright (c) 1980, 1993\n\
 #if 0
 static char sccsid[] = "from: @(#)comsat.c	8.1 (Berkeley) 6/4/93";
 #else
-__RCSID("$NetBSD: comsat.c,v 1.32 2004/09/15 08:44:02 martin Exp $");
+__RCSID("$NetBSD: comsat.c,v 1.34 2005/07/18 04:01:33 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -81,19 +81,20 @@ __RCSID("$NetBSD: comsat.c,v 1.32 2004/09/15 08:44:02 martin Exp $");
 #define MAXIDLE	120
 
 static int	logging;
-static int	debug = 0;
+static int	debug;
 static char	hostname[MAXHOSTNAMELEN + 1];
 static time_t	utmpmtime;		/* last modification time for utmp/x */
 static int	nutmp;
 static struct	utmpentry *utmp = NULL;
 static time_t	lastmsgtime;
+static volatile sig_atomic_t needupdate;
 
 int main(int, char *[]);
 static void jkfprintf(FILE *, const char *, off_t, const char *);
 static void mailfor(const char *);
 static void notify(const struct utmpentry *, off_t);
 static void onalrm(int);
-static void reapchildren(int);
+static void checkutmp(void);
 
 int
 main(int argc, char *argv[])
@@ -127,24 +128,26 @@ main(int argc, char *argv[])
 	(void)time(&lastmsgtime);
 	(void)gethostname(hostname, sizeof(hostname));
 	hostname[sizeof(hostname) - 1] = '\0';
-	onalrm(0);
 	(void)signal(SIGALRM, onalrm);
 	(void)signal(SIGTTOU, SIG_IGN);
-	(void)signal(SIGCHLD, reapchildren);
+	(void)signal(SIGCHLD, SIG_IGN);
 	(void)sigemptyset(&nsigset);
 	(void)sigaddset(&nsigset, SIGALRM);
 	if (sigprocmask(SIG_SETMASK, NULL, &osigset) == -1) {
 		syslog(LOG_ERR, "sigprocmask get failed (%m)");
 		exit(1);
 	}
+	needupdate++;
 	for (;;) {
 		cc = recv(0, msgbuf, sizeof(msgbuf) - 1, 0);
 		if (cc <= 0) {
 			if (errno != EINTR)
 				sleep(1);
 			errno = 0;
+			checkutmp();
 			continue;
-		}
+		} else
+			checkutmp();
 		if (!nutmp)		/* no one has logged in yet */
 			continue;
 		if (sigprocmask(SIG_SETMASK, &nsigset, NULL) == -1) {
@@ -163,19 +166,20 @@ main(int argc, char *argv[])
 
 static void
 /*ARGSUSED*/
-reapchildren(int signo)
+onalrm(int signo)
 {
-
-	while (wait3(NULL, WNOHANG, NULL) != -1)
-		continue;
+	needupdate++;
 }
 
 static void
-/*ARGSUSED*/
-onalrm(int signo)
+checkutmp(void)
 {
 	struct stat statbf;
 	time_t newtime = 0;
+
+	if (!needupdate)
+		return;
+	needupdate = 0;
 
 	if (time(NULL) - lastmsgtime >= MAXIDLE)
 		exit(0);
@@ -239,25 +243,31 @@ notify(const struct utmpentry *ep, off_t offset)
 	struct stat stb;
 	struct termios ttybuf;
 	char tty[sizeof(_PATH_DEV) + sizeof(ep->line) + 1];
-	const char *cr;
+	const char *cr = ep->line;
 
-	(void)snprintf(tty, sizeof(tty), "%s%s", _PATH_DEV, ep->line);
-	if (strchr(tty + sizeof(_PATH_DEV) - 1, '/')) {
+	if (strncmp(cr, "pts/", 4) == 0)
+		cr += 4;
+	if (strchr(cr, '/')) {
 		/* A slash is an attempt to break security... */
-		/*
-		 * XXX but what about something like "/dev/pts/5"
-		 * that we may one day "support". ?
-		 */
-		syslog(LOG_AUTH | LOG_NOTICE, "'/' in \"%s\"", tty);
+		syslog(LOG_AUTH | LOG_NOTICE, "Unexpected `/' in `%s'",
+		    ep->line);
 		return;
 	}
-	if (stat(tty, &stb) || !(stb.st_mode & S_IEXEC)) {
+	(void)snprintf(tty, sizeof(tty), "%s%s", _PATH_DEV, ep->line);
+	if (stat(tty, &stb) == -1 || !(stb.st_mode & S_IEXEC)) {
 		dsyslog(LOG_DEBUG, "%s: wrong mode on %s", ep->name, tty);
 		return;
 	}
 	dsyslog(LOG_DEBUG, "notify %s on %s", ep->name, tty);
-	if (fork())
+	switch (fork()) {
+	case -1:
+		syslog(LOG_NOTICE, "fork failed (%m)");
 		return;
+	case 0:
+		break;
+	default:
+		return;
+	}
 	(void)signal(SIGALRM, SIG_DFL);
 	(void)alarm((u_int)30);
 	if ((tp = fopen(tty, "w")) == NULL) {

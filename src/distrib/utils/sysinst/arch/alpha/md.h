@@ -1,4 +1,4 @@
-/*	$NetBSD: md.h,v 1.19.2.1 2005/09/26 20:21:18 tron Exp $	*/
+/*	$NetBSD: md.h,v 1.21 2006/02/26 10:25:52 dsl Exp $	*/
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.
@@ -65,8 +65,3 @@
  * the hand-edited disklabel will NOT be written by MI code.
  */
 #define	DISKLABEL_CMD	"disklabel -w -r"
-
-/*
- * Default file system type for floppies.
- */
-const char *fdtype;

@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile.inc,v 1.18.6.1 2005/04/19 12:32:07 tron Exp $
+#	$NetBSD: Makefile.inc,v 1.20 2005/09/16 18:27:34 drochner Exp $
 
 SRCS+=	fabs.S 
 
@@ -16,9 +16,8 @@ SRCS+=	nanf.c
 
 SRCS+=	flt_rounds.c fpgetmask.c fpgetround.c fpgetsticky.c fpsetmask.c \
 	fpsetround.c fpsetsticky.c
-SRCS+=	_setjmp.S
-SRCS+=	setjmp.S __setjmp14.S
-SRCS+=	sigsetjmp.S __sigsetjmp14.S
+SRCS+=	__setjmp14.S
+SRCS+=	__sigsetjmp14.S
 SRCS+=	byte_swap_2.S byte_swap_4.S bswap64.c
 SRCS+=	_resumecontext.S
 

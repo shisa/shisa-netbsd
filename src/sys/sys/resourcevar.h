@@ -1,4 +1,4 @@
-/*	$NetBSD: resourcevar.h,v 1.24 2005/02/03 19:20:02 perry Exp $	*/
+/*	$NetBSD: resourcevar.h,v 1.31 2006/02/04 16:11:36 elad Exp $	*/
 
 /*
  * Copyright (c) 1991, 1993
@@ -93,16 +93,37 @@ struct uidinfo {
 	LIST_ENTRY(uidinfo) ui_hash;
 	uid_t	ui_uid;
 	long	ui_proccnt;	/* Number of processes */
+	long	ui_lockcnt;	/* Number of locks */
 	rlim_t	ui_sbsize;	/* socket buffer size */
+	struct simplelock ui_slock; /* mutex for everything */
 
 };
 #define	UIHASH(uid)	(&uihashtbl[(uid) & uihash])
+#define UILOCK(uip, s) \
+    do { \
+	s = splsoftnet(); \
+	simple_lock(&uip->ui_slock); \
+    } while (/*CONSTCOND*/0)
+#define UIUNLOCK(uip, s) \
+    do { \
+	simple_unlock(&uip->ui_slock); \
+	splx(s); \
+    } while (/*CONSTCOND*/0)
+
 extern LIST_HEAD(uihashhead, uidinfo) *uihashtbl;
 extern u_long uihash;		/* size of hash table - 1 */
 int       chgproccnt(uid_t, int);
-int       chgsbsize(uid_t, u_long *, u_long, rlim_t);
+int       chgsbsize(struct uidinfo *, u_long *, u_long, rlim_t);
+struct uidinfo *uid_find(uid_t);
 
 extern char defcorename[];
+
+extern int security_setidcore_dump;
+extern char security_setidcore_path[];
+extern uid_t security_setidcore_owner;
+extern gid_t security_setidcore_group;
+extern mode_t security_setidcore_mode;
+
 void	 addupc_intr(struct proc *, u_long);
 void	 addupc_task(struct proc *, u_long, u_int);
 void	 calcru(struct proc *, struct timeval *, struct timeval *,

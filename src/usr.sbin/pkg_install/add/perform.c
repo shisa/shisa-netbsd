@@ -1,4 +1,4 @@
-/*	$NetBSD: perform.c,v 1.107.2.6 2005/11/27 15:46:04 riz Exp $	*/
+/*	$NetBSD: perform.c,v 1.120 2006/04/24 13:36:22 dillo Exp $	*/
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -14,7 +14,7 @@
 #if 0
 static const char *rcsid = "from FreeBSD Id: perform.c,v 1.44 1997/10/13 15:03:46 jkh Exp";
 #else
-__RCSID("$NetBSD: perform.c,v 1.107.2.6 2005/11/27 15:46:04 riz Exp $");
+__RCSID("$NetBSD: perform.c,v 1.120 2006/04/24 13:36:22 dillo Exp $");
 #endif
 #endif
 
@@ -75,26 +75,6 @@ static char *Home;
 
 static lfile_head_t files;
 
-/*
- * Some systems such as OpenBSD-3.6 do not provide PRIu64.
- * Others such as AIX-4.3.2 have a broken PRIu64 which includes
- * a leading "%".
- */
-#ifdef NEED_PRI_MACRO
-#  ifdef PRIu64
-#    undef PRIu64
-#  endif
-#  if SIZEOF_INT == 8
-#    define PRIu64 "u"
-#  elif SIZEOF_LONG == 8
-#    define PRIu64 "lu"
-#  elif SIZEOF_LONG_LONG == 8
-#    define PRIu64 "llu"
-#  else
-#    error "unable to find a suitable PRIu64"
-#  endif
-#endif
-
 /* used in build information */
 enum {
 	Good,
@@ -102,6 +82,17 @@ enum {
 	Warning,
 	Fatal
 };
+
+static void
+normalise_platform(struct utsname *host_name)
+{
+#ifdef NUMERIC_VERSION_ONLY
+	size_t span;
+
+	span = strspn(host_name->release, "0123456789.");
+	host_name->release[span] = '\0';
+#endif
+}
 
 /* Read package build information */
 static int
@@ -146,6 +137,8 @@ read_buildinfo(char **buildinfo)
 			    buildinfo[BI_MACHINE_ARCH] = strdup(line);
 			else if (strcmp(key, "IGNORE_RECOMMENDED") == 0)
 			    buildinfo[BI_IGNORE_RECOMMENDED] = strdup(line);
+			else if (strcmp(key, "USE_ABI_DEPENDS") == 0)
+			    buildinfo[BI_USE_ABI_DEPENDS] = strdup(line);
 		}
 	}
 	(void) fclose(fp);
@@ -189,7 +182,7 @@ installprereq(const char *name, int *errc, int doupdate)
 
 	if (fexec_skipempty(BINDIR "/pkg_add", "-K", _pkgdb_getPKGDB_DIR(),
 			    "-s", get_verification(),
-	            doupdate ? "-u" : "",
+	            doupdate > 1 ? "-uu" : (doupdate ? "-u" : ""),
 	            Fake ? "-n" : "",
 			    NoView ? "-L" : "",
 			    View ? "-w" : "", View ? View : "",
@@ -409,6 +402,8 @@ pkg_do(const char *pkg, lpkg_head_t *pkgs)
 	} else {
 		int	status = Good;
 
+		normalise_platform(&host_uname);
+
 		/* check that we have read some values from buildinfo */
 		if (buildinfo[BI_OPSYS] == NULL) {
 			warnx("Missing operating system value from build information");
@@ -458,12 +453,15 @@ pkg_do(const char *pkg, lpkg_head_t *pkgs)
 		}
 	}
 
-	/* Check if IGNORE_RECOMMENDED was set when this package was built. */
+	/* Check if USE_ABI_DEPENDS or IGNORE_RECOMMENDED was set
+	 * when this package was built. IGNORE_RECOMMENDED is historical. */
 
-	if (buildinfo[BI_IGNORE_RECOMMENDED] != NULL &&
-	    strcasecmp(buildinfo[BI_IGNORE_RECOMMENDED], "NO") != 0) {
+	if ((buildinfo[BI_USE_ABI_DEPENDS] != NULL &&
+	    strcasecmp(buildinfo[BI_USE_ABI_DEPENDS], "YES") != 0) ||
+	    (buildinfo[BI_IGNORE_RECOMMENDED] != NULL &&
+	    strcasecmp(buildinfo[BI_IGNORE_RECOMMENDED], "NO") != 0)) {
 		warnx("%s was built", pkg);
-		warnx("\t to ignore recommended dependencies, this may cause problems!\n");
+		warnx("\tto ignore recommended ABI dependencies, this may cause problems!\n");
 	}
 
 	/*
@@ -487,6 +485,10 @@ pkg_do(const char *pkg, lpkg_head_t *pkgs)
 	 */
 	if (is_depoted_pkg) {
 		p = find_plist(&Plist, PLIST_CWD);
+		if (p == NULL) {
+			warn("no @cwd in +CONTENTS file?! aborting.");
+			goto bomb;
+		}
 		(void) strlcpy(dbdir, dirname_of(p->name), sizeof(dbdir));
 		(void) strlcpy(LogDir, p->name, sizeof(LogDir));
 	} else {
@@ -511,10 +513,10 @@ pkg_do(const char *pkg, lpkg_head_t *pkgs)
 	/* See if this package (exact version) is already registered */
 	if ((isdir(LogDir) || islinktodir(LogDir)) && !Force) {
 		if (!Automatic && is_automatic_installed(LogDir)) {
-			mark_as_automatic_installed(LogDir, 0);
-			warnx("package `%s' was already installed as "
-			      "dependency, now marked as installed manually",
-			      PkgName);
+			if (mark_as_automatic_installed(LogDir, 0) == 0)
+				warnx("package `%s' was already installed as "
+				      "dependency, now marked as installed "
+				      "manually", PkgName);
 		} else {
 			warnx("package `%s' already recorded as installed",
 			      PkgName);
@@ -744,7 +746,7 @@ ignore_replace_depends_check:
 						/* Yes, append .tgz after the version so the */
 						/* pattern can match a filename. */
 						snprintf(tmp, sizeof(tmp), "%s.tgz", p->name);
-						done = installprereq(tmp, &errc0, 1);
+						done = installprereq(tmp, &errc0, 2);
 					}
 					else if (Replace)
 					{
@@ -801,10 +803,10 @@ ignore_replace_depends_check:
 
 				if (exact != NULL) {
 					/* first try the exact name, from the @blddep */
-					done = installprereq(exact, &errc0, 0);
+					done = installprereq(exact, &errc0, (Replace > 1) ? 2 : 0);
 				}
 				if (!done) {
-					done = installprereq(p->name, &errc0, 0);
+					done = installprereq(p->name, &errc0, (Replace > 1) ? 2 : 0);
 				}
 				if (!done && !Force) {
 					errc += errc0;

@@ -1,4 +1,4 @@
-/*	$NetBSD: bw2.c,v 1.26 2005/01/22 15:36:09 chs Exp $	*/
+/*	$NetBSD: bw2.c,v 1.30 2006/03/29 04:16:48 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -47,7 +47,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: bw2.c,v 1.26 2005/01/22 15:36:09 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: bw2.c,v 1.30 2006/03/29 04:16:48 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -201,7 +201,7 @@ bw2attach(struct device *parent, struct device *self, void *args)
 	fb->fb_driver = &bw2fbdriver;
 	fb->fb_private = sc;
 	fb->fb_name  = sc->sc_dev.dv_xname;
-	fb->fb_flags = sc->sc_dev.dv_cfdata->cf_flags;
+	fb->fb_flags = device_cfdata(&sc->sc_dev)->cf_flags;
 
 	/* Set up default pixel offset.  May be changed below. */
 	pixeloffset = 0;
@@ -243,13 +243,14 @@ bw2attach(struct device *parent, struct device *self, void *args)
 	 */
 	if (fb->fb_pfour)
 		fb_pfour_setsize(fb);
-	else if (sc->sc_dev.dv_unit == 0)
+	/* XXX device_unit() abuse */
+	else if (device_unit(&sc->sc_dev) == 0)
 		fb_eeprom_setsize(fb);
 	else {
 		/* Guess based on machine ID. */
 		switch (cpu_machine_id) {
 #ifdef	_SUN3_
-		case SUN3_MACH_60:
+		case ID_SUN3_60:
 			/*
 			 * Only the model 60 can have hi-res.
 			 * Look at the "resolution" jumper.
@@ -259,7 +260,7 @@ bw2attach(struct device *parent, struct device *self, void *args)
 				goto high_res;
 			break;
 
-		case SUN3_MACH_260:
+		case ID_SUN3_260:
 			/* The Sun3/260 is ALWAYS high-resolution! */
 			/* fall through */
 		high_res:
@@ -285,7 +286,7 @@ bw2attach(struct device *parent, struct device *self, void *args)
 }
 
 int 
-bw2open(dev_t dev, int flags, int mode, struct proc *p)
+bw2open(dev_t dev, int flags, int mode, struct lwp *l)
 {
 	int unit = minor(dev);
 
@@ -295,7 +296,7 @@ bw2open(dev_t dev, int flags, int mode, struct proc *p)
 }
 
 int 
-bw2ioctl(dev_t dev, u_long cmd, caddr_t data, int flags, struct proc *p)
+bw2ioctl(dev_t dev, u_long cmd, caddr_t data, int flags, struct lwp *l)
 {
 	struct bw2_softc *sc = bwtwo_cd.cd_devs[minor(dev)];
 

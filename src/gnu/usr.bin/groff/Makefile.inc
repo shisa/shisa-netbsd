@@ -1,4 +1,4 @@
-# $NetBSD: Makefile.inc,v 1.13 2004/07/30 15:28:58 wiz Exp $
+# $NetBSD: Makefile.inc,v 1.15 2006/04/07 19:38:58 mrg Exp $
 
 # $FreeBSD: src/gnu/usr.bin/groff/Makefile.inc,v 2.7 2003/05/01 13:22:18 ru Exp $
 
@@ -65,6 +65,7 @@ localtmacdir=/usr/share/tmac
 docdir=/usr/src/contrib/groff/doc
 exampledir=XXX
 htmldocdir=XXX
+pdfdocdir=XXX
 indexext=.i
 common_words_file=/usr/share/dict/eign
 indexdir=/usr/share/dict/papers
@@ -89,8 +90,8 @@ CFLAGS+=	-DHAVE_CONFIG_H
 CFLAGS+=	-I${GROFF_DIST}/src/include -I${NETBSDSRCDIR}/gnu/usr.bin/groff/src/include
 CXXFLAGS+=	-fno-rtti -fno-exceptions
 
-# If we're using GCC3, we only need -lsupc++
-.if ${HAVE_GCC3} == "yes"
+# If we're using GCC>2, we only need -lsupc++
+.if ${HAVE_GCC} != "2"
 USE_LIBSTDCXX=	no
 .endif
 
@@ -126,6 +127,7 @@ revision=`sed -e 's/^0$$//' -e 's/^[1-9].*$$/.&/' $(GROFF_DIST)/REVISION`
 	-e "s;@DOCDIR@;$(docdir);g" \
 	-e "s;@EXAMPLEDIR@;$(exampledir);g" \
 	-e "s;@HTMLDOCDIR@;$(htmldocdir);g" \
+	-e "s;@PDFDOCDIR@;$(pdfdocdir);g" \
 	-e "s;@DEVICE@;$(DEVICE);g" \
 	-e "s;@DEFAULT_INDEX@;$(indexdir)/$(indexname);g" \
 	-e "s;@DEFAULT_INDEX_NAME@;$(indexname);g" \
@@ -142,7 +144,7 @@ revision=`sed -e 's/^0$$//' -e 's/^[1-9].*$$/.&/' $(GROFF_DIST)/REVISION`
 	-e "s;@VERSION@;$(version)$(revision);g" \
 	-e "s;@MDATE@;`${HOST_SH} ${GROFF_DIST}/mdate.sh $<`;g" \
 	-e "s;@g@;$(g);g" \
-	-e "s;@G@;`echo $(g) | tr [a-z] [A-Z]`;g" \
+	-e "s;@G@;`echo $(g) | LC_ALL=C tr [a-z] [A-Z]`;g" \
 	$< >$@
 
 .SUFFIXES: .sh .pl
@@ -153,6 +155,7 @@ revision=`sed -e 's/^0$$//' -e 's/^[1-9].*$$/.&/' $(GROFF_DIST)/REVISION`
 	sed -e "s|@BINDIR@|${BINDIR}|g" \
 	     -e "s;@FONTDIR@;$(fontdir);g" \
 	     -e 's|@GROFF_BIN_PATH_SETUP@|GROFF_RUNTIME="$${GROFF_BIN_PATH=/usr/bin}:"|g' \
+	     -e "s|@SEP@|:|" \
 	     -e "s|@VERSION@|$(version)$(revision)|" \
 	     -e "s|@g@|$(g)|g" \
 	     ${.IMPSRC} >${.TARGET}

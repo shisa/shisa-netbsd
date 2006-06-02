@@ -1,4 +1,4 @@
-/*	$NetBSD: version.h,v 1.44.2.13 2005/08/28 10:16:27 tron Exp $	*/
+/*	$NetBSD: version.h,v 1.57 2005/08/21 16:16:33 lukem Exp $	*/
 /*-
  * Copyright (c) 1999-2005 The NetBSD Foundation, Inc.
  * All rights reserved.

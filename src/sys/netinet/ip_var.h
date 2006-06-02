@@ -1,4 +1,4 @@
-/*	$NetBSD: ip_var.h,v 1.69.8.1 2005/04/13 21:34:57 tron Exp $	*/
+/*	$NetBSD: ip_var.h,v 1.77 2006/02/16 20:17:20 perry Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1993
@@ -192,7 +192,6 @@ struct ipflow {
 #define	IP_HDR_ALIGNED_P(ip)	((((vaddr_t) (ip)) & 3) == 0)
 #endif
 
-extern const struct protosw inetsw[];
 extern struct domain inetdomain;
 
 extern struct ipstat ipstat;		/* ip statistics */
@@ -250,7 +249,7 @@ void	 rip_init(void);
 void	 rip_input(struct mbuf *, ...);
 int	 rip_output(struct mbuf *, ...);
 int	 rip_usrreq(struct socket *,
-	    int, struct mbuf *, struct mbuf *, struct mbuf *, struct proc *);
+	    int, struct mbuf *, struct mbuf *, struct mbuf *, struct lwp *);
 void	ipflow_init(void);
 struct	ipflow *ipflow_reap(int);
 void	ipflow_create(const struct route *, struct mbuf *);
@@ -294,4 +293,4 @@ ip_newid(void)
 
 #endif  /* _KERNEL */
 
-#endif /* _NETINET_IP_VAR_H_ */
+#endif /* !_NETINET_IP_VAR_H_ */

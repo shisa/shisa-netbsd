@@ -1,4 +1,4 @@
-/*	$NetBSD: dump.c,v 1.20 2004/04/21 01:05:47 christos Exp $	*/
+/*	$NetBSD: dump.c,v 1.24 2005/12/11 11:30:06 christos Exp $	*/
 
 /*-
  * Copyright (c) 1988, 1993
@@ -39,7 +39,7 @@ __COPYRIGHT("@(#) Copyright (c) 1988, 1993\n\
 #if 0
 static char sccsid[] = "@(#)kdump.c	8.4 (Berkeley) 4/28/95";
 #endif
-__RCSID("$NetBSD: dump.c,v 1.20 2004/04/21 01:05:47 christos Exp $");
+__RCSID("$NetBSD: dump.c,v 1.24 2005/12/11 11:30:06 christos Exp $");
 #endif /* not lint */
 
 #include <sys/param.h>
@@ -341,19 +341,46 @@ fread_tail(void *buf, int size, int num, FILE *fp)
 void
 dumpheader(struct ktr_header *kth)
 {
-	static struct timeval prevtime;
-	struct timeval temp;
+	union timeholder {
+		struct timeval tv;
+		struct timespec ts;
+	};
+	static union timeholder prevtime;
+	union timeholder temp;
 
-	wprintf("%6d %-8.*s ", kth->ktr_pid, MAXCOMLEN, kth->ktr_comm);
-
+	wprintf("%6d ", kth->ktr_pid);
+	if (kth->ktr_version > KTRFACv0)
+		wprintf("%6d ", kth->ktr_lid);
+	wprintf("%-8.*s ", MAXCOMLEN, kth->ktr_comm);
 	if (timestamp) {
 		if (timestamp == 2) {
-			timersub(&kth->ktr_time, &prevtime, &temp);
-			prevtime = kth->ktr_time;
-		} else
-			temp = kth->ktr_time;
-		wprintf("%ld.%06ld ",
-		    (long int)temp.tv_sec, (long int)temp.tv_usec);
+			if (kth->ktr_version == KTRFACv0) {
+				if (prevtime.tv.tv_sec == 0)
+					temp.tv.tv_sec = temp.tv.tv_usec = 0;
+				else
+					timersub(&kth->ktr_tv,
+					    &prevtime.tv, &temp.tv);
+				prevtime.tv = kth->ktr_tv;
+			} else {
+				if (prevtime.ts.tv_sec == 0)
+					temp.ts.tv_sec = temp.ts.tv_nsec = 0;
+				else
+					timespecsub(&kth->ktr_time,
+					    &prevtime.ts, &temp.ts);
+				prevtime.ts = kth->ktr_time;
+			}
+		} else {
+			if (kth->ktr_version == KTRFACv0)
+				temp.tv = kth->ktr_tv;
+			else
+				temp.ts = kth->ktr_time;
+		}
+		if (kth->ktr_version == KTRFACv0)
+			wprintf("%ld.%06ld ",
+			    (long)temp.tv.tv_sec, (long)temp.tv.tv_usec);
+		else
+			wprintf("%ld.%09ld ",
+			    (long)temp.ts.tv_sec, (long)temp.ts.tv_nsec);
 	}
 }
 
@@ -427,7 +454,7 @@ syscallprint(struct ktr_header *kth)
 {
 	struct ktr_syscall *ktr = (struct ktr_syscall *)(kth + 1);
 	register_t *ap;
-	char *s;
+	const char *s;
 	int argsize;
 
 	syscallnameprint(ktr->ktr_code);
@@ -481,8 +508,8 @@ syscallprint(struct ktr_header *kth)
 	case SYS_lchmod:
 	case SYS_lchown:
 	case SYS_lutimes:
-	case SYS___stat13:
-	case SYS___lstat13:
+	case SYS___stat30:
+	case SYS___lstat30:
 	case SYS___posix_chown:
 	case SYS___posix_lchown:
 	case SYS_lchflags:
@@ -595,21 +622,21 @@ ktrsysret(struct ktr_entry *kte)
 	struct ktr_header *kth = &kte->kte_kth;
 	struct ktr_sysret *ktr = (struct ktr_sysret *)(kth + 1);
 	struct ktr_entry *genio;
-	struct ktr_entry *syscall;
+	struct ktr_entry *syscall_ent;
 
 	dumpheader(kth);
 
 	/* Print syscall name and arguments. */
-	syscall = getpendq(kth, KTR_SYSCALL, NULL);
-	if (syscall == NULL)
+	syscall_ent = getpendq(kth, KTR_SYSCALL, NULL);
+	if (syscall_ent == NULL)
 		/*
 		 * Possibilly a child of fork/vfork, or tracing of
 		 * process started during system call.
 		 */
 		syscallnameprint(ktr->ktr_code);
 	else {
-		syscallprint(&syscall->kte_kth);
-		free(syscall);
+		syscallprint(&syscall_ent->kte_kth);
+		free(syscall_ent);
 	}
 
 	/* Print return value and an error if any. */

@@ -1,4 +1,4 @@
-/*	$NetBSD: urio.c,v 1.19 2004/04/23 17:25:26 itojun Exp $	*/
+/*	$NetBSD: urio.c,v 1.23 2006/03/28 17:38:35 thorpej Exp $	*/
 
 /*
  * Copyright (c) 2000 The NetBSD Foundation, Inc.
@@ -43,7 +43,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: urio.c,v 1.19 2004/04/23 17:25:26 itojun Exp $");
+__KERNEL_RCSID(0, "$NetBSD: urio.c,v 1.23 2006/03/28 17:38:35 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -167,7 +167,7 @@ USB_ATTACH(urio)
 	USB_ATTACH_START(urio, sc, uaa);
 	usbd_device_handle	dev = uaa->device;
 	usbd_interface_handle	iface;
-	char			devinfo[1024];
+	char			*devinfop;
 	usbd_status		err;
 	usb_endpoint_descriptor_t *ed;
 	u_int8_t		epcount;
@@ -175,9 +175,10 @@ USB_ATTACH(urio)
 
 	DPRINTFN(10,("urio_attach: sc=%p\n", sc));
 
-	usbd_devinfo(dev, 0, devinfo, sizeof(devinfo));
+	devinfop = usbd_devinfo_alloc(dev, 0);
 	USB_ATTACH_SETUP;
-	printf("%s: %s\n", USBDEVNAME(sc->sc_dev), devinfo);
+	printf("%s: %s\n", USBDEVNAME(sc->sc_dev), devinfop);
+	usbd_devinfo_free(devinfop);
 
 	err = usbd_set_config_no(dev, URIO_CONFIG_NO, 1);
 	if (err) {
@@ -279,7 +280,7 @@ USB_DETACH(urio)
 #endif
 
 	/* Nuke the vnodes for any open instances (calls close). */
-	mn = self->dv_unit;
+	mn = device_unit(self);
 	vdevgone(maj, mn, mn, VCHR);
 #elif defined(__FreeBSD__)
 	/* XXX not implemented yet */
@@ -311,7 +312,7 @@ urio_activate(device_ptr_t self, enum devact act)
 #endif
 
 int
-urioopen(dev_t dev, int flag, int mode, usb_proc_ptr p)
+urioopen(dev_t dev, int flag, int mode, struct lwp *l)
 {
 	struct urio_softc *sc;
 	usbd_status err;
@@ -344,7 +345,7 @@ urioopen(dev_t dev, int flag, int mode, usb_proc_ptr p)
 }
 
 int
-urioclose(dev_t dev, int flag, int mode, usb_proc_ptr p)
+urioclose(dev_t dev, int flag, int mode, struct lwp *l)
 {
 	struct urio_softc *sc;
 	USB_GET_SC(urio, URIOUNIT(dev), sc);
@@ -486,7 +487,7 @@ uriowrite(dev_t dev, struct uio *uio, int flag)
 
 
 int
-urioioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, usb_proc_ptr p)
+urioioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, struct lwp *l)
 {
 	struct urio_softc * sc;
 	int unit = URIOUNIT(dev);
@@ -547,10 +548,9 @@ urioioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, usb_proc_ptr p)
 		uio.uio_iovcnt = 1;
 		uio.uio_resid = len;
 		uio.uio_offset = 0;
-		uio.uio_segflg = UIO_USERSPACE;
 		uio.uio_rw = req.bmRequestType & UT_READ ?
 			     UIO_READ : UIO_WRITE;
-		uio.uio_procp = p;
+		uio.uio_vmspace = l->l_proc->p_vmspace;
 		ptr = malloc(len, M_TEMP, M_WAITOK);
 		if (uio.uio_rw == UIO_WRITE) {
 			error = uiomove(ptr, len, &uio);
@@ -582,7 +582,7 @@ ret:
 
 #if defined(__OpenBSD__)
 int
-urioselect(dev_t dev, int events, usb_proc_ptr p)
+urioselect(dev_t dev, int events, struct lwp *l)
 {
 	return (0);
 }

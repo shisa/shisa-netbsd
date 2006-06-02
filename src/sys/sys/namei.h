@@ -1,4 +1,4 @@
-/*	$NetBSD: namei.h,v 1.38 2005/02/03 19:20:01 perry Exp $	*/
+/*	$NetBSD: namei.h,v 1.44 2006/05/14 21:38:18 elad Exp $	*/
 
 /*
  * Copyright (c) 1985, 1989, 1991, 1993
@@ -36,6 +36,7 @@
 
 #include <sys/queue.h>
 
+#ifdef _KERNEL
 /*
  * Encapsulation of namei parameters.
  */
@@ -51,7 +52,7 @@ struct nameidata {
 	/*
 	 * Arguments to lookup.
 	 */
-     /* struct	ucred *ni_cred;		   credentials */
+     /* kauth_cred_t ni_cred;		   credentials */
 	struct	vnode *ni_startdir;	/* starting directory */
 	struct	vnode *ni_rootdir;	/* logical root directory */
 	/*
@@ -76,8 +77,8 @@ struct nameidata {
 		 */
 		u_long	cn_nameiop;	/* namei operation */
 		u_long	cn_flags;	/* flags to namei */
-		struct	proc *cn_proc;	/* process requesting lookup */
-		struct	ucred *cn_cred;	/* credentials */
+		struct	lwp *cn_lwp;	/* lwp requesting lookup */
+		kauth_cred_t cn_cred;	/* credentials */
 		/*
 		 * Shared between lookup and commit routines.
 		 */
@@ -89,7 +90,6 @@ struct nameidata {
 	} ni_cnd;
 };
 
-#ifdef _KERNEL
 /*
  * namei operations
  */
@@ -140,13 +140,13 @@ struct nameidata {
 /*
  * Initialization of an nameidata structure.
  */
-#define NDINIT(ndp, op, flags, segflg, namep, p) { \
+#define NDINIT(ndp, op, flags, segflg, namep, l) { \
 	(ndp)->ni_cnd.cn_nameiop = op; \
 	(ndp)->ni_cnd.cn_flags = flags; \
 	(ndp)->ni_segflg = segflg; \
 	(ndp)->ni_dirp = namep; \
-	(ndp)->ni_cnd.cn_proc = p; \
-	(ndp)->ni_cnd.cn_cred = p->p_ucred; \
+	(ndp)->ni_cnd.cn_lwp = l; \
+	(ndp)->ni_cnd.cn_cred = l->l_proc->p_cred; \
 }
 #endif
 
@@ -176,10 +176,10 @@ struct	namecache {
 #include <sys/mallocvar.h>
 #include <sys/pool.h>
 
+struct mount;
+
 extern struct pool pnbuf_pool;		/* pathname buffer pool */
 extern struct pool_cache pnbuf_cache;	/* pathname buffer cache */
-
-MALLOC_DECLARE(M_NAMEI);
 
 #define	PNBUF_GET()	pool_cache_get(&pnbuf_cache, PR_WAITOK)
 #define	PNBUF_PUT(pnb)	pool_cache_put(&pnbuf_cache, (pnb))
@@ -188,23 +188,24 @@ int	namei(struct nameidata *);
 uint32_t namei_hash(const char *, const char **);
 int	lookup(struct nameidata *);
 int	relookup(struct vnode *, struct vnode **, struct componentname *);
-void cache_purge1(struct vnode *, const struct componentname *, int);
+void	cache_purge1(struct vnode *, const struct componentname *, int);
 #define	PURGE_PARENTS	1
 #define	PURGE_CHILDREN	2
 #define	cache_purge(vp)	cache_purge1((vp), NULL, PURGE_PARENTS|PURGE_CHILDREN)
-int cache_lookup(struct vnode *, struct vnode **, struct componentname *);
-int cache_lookup_raw(struct vnode *, struct vnode **, struct componentname *);
-int cache_revlookup(struct vnode *, struct vnode **, char **, char *);
-void cache_enter(struct vnode *, struct vnode *, struct componentname *);
-void nchinit(void);
-void nchreinit(void);
-struct mount;
-void cache_purgevfs(struct mount *);
-void namecache_print(struct vnode *, void (*)(const char *, ...));
+int	cache_lookup(struct vnode *, struct vnode **, struct componentname *);
+int	cache_lookup_raw(struct vnode *, struct vnode **,
+			 struct componentname *);
+int	cache_revlookup(struct vnode *, struct vnode **, char **, char *);
+void	cache_enter(struct vnode *, struct vnode *, struct componentname *);
+void	nchinit(void);
+void	nchreinit(void);
+void	cache_purgevfs(struct mount *);
+void	namecache_print(struct vnode *, void (*)(const char *, ...));
 #endif
 
 /*
  * Stats on usefulness of namei caches.
+ * XXX: should be 64-bit counters.
  */
 struct	nchstats {
 	long	ncs_goodhits;		/* hits that we can really use */

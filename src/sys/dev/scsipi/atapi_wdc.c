@@ -1,4 +1,4 @@
-/*	$NetBSD: atapi_wdc.c,v 1.92.2.1 2005/07/06 22:02:54 tron Exp $	*/
+/*	$NetBSD: atapi_wdc.c,v 1.99 2006/05/21 23:56:09 christos Exp $	*/
 
 /*
  * Copyright (c) 1998, 2001 Manuel Bouyer.
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: atapi_wdc.c,v 1.92.2.1 2005/07/06 22:02:54 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: atapi_wdc.c,v 1.99 2006/05/21 23:56:09 christos Exp $");
 
 #ifndef ATADEBUG
 #define ATADEBUG
@@ -140,7 +140,8 @@ wdc_atapibus_attach(struct atabus_softc *ata_sc)
 	chan->chan_ntargets = 2;
 	chan->chan_nluns = 1;
 
-	chp->atapibus = config_found(&ata_sc->sc_dev, chan, atapiprint);
+	chp->atapibus = config_found_ia(&ata_sc->sc_dev, "atapi", chan,
+		atapiprint);
 }
 
 static void
@@ -228,7 +229,7 @@ wdc_atapi_get_params(struct scsipi_channel *chan, int drive,
 	}
 	chp->ch_drive[drive].state = 0;
 
-	bus_space_read_1(wdr->cmd_iot, wdr->cmd_iohs[wd_status], 0);
+	(void)bus_space_read_1(wdr->cmd_iot, wdr->cmd_iohs[wd_status], 0);
 
 	/* Some ATAPI devices need a bit more time after software reset. */
 	delay(5000);
@@ -351,7 +352,7 @@ wdc_atapi_scsipi_request(struct scsipi_channel *chan, scsipi_adapter_req_t req,
 
 		ATADEBUG_PRINT(("wdc_atapi_scsipi_request %s:%d:%d\n",
 		    atac->atac_dev.dv_xname, channel, drive), DEBUG_XFERS);
-		if ((atac->atac_dev.dv_flags & DVF_ACTIVE) == 0) {
+		if (!device_is_active(&atac->atac_dev)) {
 			sc_xfer->error = XS_DRIVER_STUFFUP;
 			scsipi_done(sc_xfer);
 			return;
@@ -424,7 +425,7 @@ wdc_atapi_start(struct ata_channel *chp, struct ata_xfer *xfer)
 	struct scsipi_xfer *sc_xfer = xfer->c_cmd;
 	struct ata_drive_datas *drvp = &chp->ch_drive[xfer->c_drive];
 	int wait_flags = (sc_xfer->xs_control & XS_CTL_POLL) ? AT_POLL : 0;
-	char *errstring;
+	const char *errstring;
 
 	ATADEBUG_PRINT(("wdc_atapi_start %s:%d:%d, scsi flags 0x%x \n",
 	    atac->atac_dev.dv_xname, chp->ch_channel, drvp->drive,
@@ -433,7 +434,7 @@ wdc_atapi_start(struct ata_channel *chp, struct ata_xfer *xfer)
 		drvp->n_xfers++;
 	/* Do control operations specially. */
 	if (__predict_false(drvp->state < READY)) {
-		/* If it's not a polled command, we need the kenrel thread */
+		/* If it's not a polled command, we need the kernel thread */
 		if ((sc_xfer->xs_control & XS_CTL_POLL) == 0 &&
 		    (chp->ch_flags & ATACH_TH_RUN) == 0) {
 			chp->ch_queue->queue_freeze++;

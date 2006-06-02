@@ -1,4 +1,4 @@
-/*	$NetBSD: intr.c,v 1.21 2005/03/05 17:34:06 chs Exp $	*/
+/*	$NetBSD: intr.c,v 1.23 2005/11/27 14:01:45 yamt Exp $	*/
 
 /*-
  * Copyright (c) 1996, 1997 The NetBSD Foundation, Inc.
@@ -41,7 +41,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: intr.c,v 1.21 2005/03/05 17:34:06 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: intr.c,v 1.23 2005/11/27 14:01:45 yamt Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -112,8 +112,10 @@ void
 intr_init(void)
 {
 	extern long	intrnames;
-	char		*inames, *g_inames;
+	const char	*inames;
+	char		*g_inames;
 
+	mac68k_ipls[MAC68K_IPL_NONE] = 0;
 	mac68k_ipls[MAC68K_IPL_SOFT] = PSL_S|PSL_IPL1;
 	mac68k_ipls[MAC68K_IPL_SERIAL] = PSL_S|PSL_IPL4;
 	mac68k_ipls[MAC68K_IPL_HIGH] = PSL_S|PSL_IPL7;

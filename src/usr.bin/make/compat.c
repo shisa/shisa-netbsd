@@ -1,4 +1,4 @@
-/*	$NetBSD: compat.c,v 1.56 2005/02/16 15:11:52 christos Exp $	*/
+/*	$NetBSD: compat.c,v 1.61 2006/04/22 18:43:06 christos Exp $	*/
 
 /*
  * Copyright (c) 1988, 1989, 1990 The Regents of the University of California.
@@ -70,14 +70,14 @@
  */
 
 #ifndef MAKE_NATIVE
-static char rcsid[] = "$NetBSD: compat.c,v 1.56 2005/02/16 15:11:52 christos Exp $";
+static char rcsid[] = "$NetBSD: compat.c,v 1.61 2006/04/22 18:43:06 christos Exp $";
 #else
 #include <sys/cdefs.h>
 #ifndef lint
 #if 0
 static char sccsid[] = "@(#)compat.c	8.2 (Berkeley) 3/19/94";
 #else
-__RCSID("$NetBSD: compat.c,v 1.56 2005/02/16 15:11:52 christos Exp $");
+__RCSID("$NetBSD: compat.c,v 1.61 2006/04/22 18:43:06 christos Exp $");
 #endif
 #endif /* not lint */
 #endif
@@ -122,7 +122,6 @@ static char 	    meta[256];
 static GNode	    *curTarg = NILGNODE;
 static GNode	    *ENDNode;
 static void CompatInterrupt(int);
-static int CompatMake(ClientData, ClientData);
 
 static void
 Compat_Init(void)
@@ -176,12 +175,12 @@ CompatInterrupt(int signo)
 	if (signo == SIGINT) {
 	    gn = Targ_FindNode(".INTERRUPT", TARG_NOCREATE);
 	    if (gn != NILGNODE) {
-		Lst_ForEach(gn->commands, CompatRunCommand, (ClientData)gn);
+		Compat_Make(gn, gn);
 	    }
 	}
 
     }
-    exit (signo);
+    exit(signo);
 }
 
 /*-
@@ -216,12 +215,13 @@ CompatRunCommand(ClientData cmdp, ClientData gnp)
     ReturnStatus  retstat;    	/* Status of fork */
     LstNode 	  cmdNode;  	/* Node where current command is located */
     const char  **av;	    	/* Argument vector for thing to exec */
+    char	**mav;		/* Copy of the argument vector for freeing */
     int	    	  argc;	    	/* Number of arguments in av or 0 if not
 				 * dynamically allocated */
     Boolean 	  local;    	/* TRUE if command should be executed
 				 * locally */
-    char	  *cmd = (char *) cmdp;
-    GNode	  *gn = (GNode *) gnp;
+    char	  *cmd = (char *)cmdp;
+    GNode	  *gn = (GNode *)gnp;
 
     /*
      * Avoid clobbered variable warnings by forcing the compiler
@@ -297,7 +297,7 @@ CompatRunCommand(ClientData cmdp, ClientData gnp)
      * this one. We also print the command if -n given.
      */
     if (!silent || NoExecute(gn)) {
-	printf ("%s\n", cmd);
+	printf("%s\n", cmd);
 	fflush(stdout);
     }
 
@@ -325,16 +325,18 @@ CompatRunCommand(ClientData cmdp, ClientData gnp)
 	else
 		shargv[1] = "-c";
 	shargv[2] = cmd;
-	shargv[3] = (char *)NULL;
+	shargv[3] = NULL;
 	av = shargv;
 	argc = 0;
 	bp = NULL;
+	mav = NULL;
     } else {
 	/*
 	 * No meta-characters, so no need to exec a shell. Break the command
 	 * into words to form an argument vector we can execute.
 	 */
-	av = (const char **)brk_string(cmd, &argc, TRUE, &bp);
+	mav =  brk_string(cmd, &argc, TRUE, &bp);
+	av = (const char **)mav;
     }
 
     local = TRUE;
@@ -355,10 +357,10 @@ CompatRunCommand(ClientData cmdp, ClientData gnp)
 	execError("exec", av[0]);
 	_exit(1);
     }
-    if (bp) {
-	free(av);
+    if (mav)
+	free(mav);
+    if (bp)
 	free(bp);
-    }
     Lst_Replace(cmdNode, (ClientData) NULL);
 
     /*
@@ -391,13 +393,13 @@ CompatRunCommand(ClientData cmdp, ClientData gnp)
 			        cp++;
 			    }
 		        }
-			printf ("\n");
+			printf("\n");
 		    }
-		    printf ("*** Error code %d", status);
+		    printf("*** Error code %d", status);
 		}
 	    } else {
 		status = WTERMSIG(reason);		/* signaled */
-		printf ("*** Signal %d", status);
+		printf("*** Signal %d", status);
 	    }
 
 
@@ -409,14 +411,14 @@ CompatRunCommand(ClientData cmdp, ClientData gnp)
 			 * Abort the current target, but let others
 			 * continue.
 			 */
-			printf (" (continuing)\n");
+			printf(" (continuing)\n");
 		    }
 		} else {
 		    /*
 		     * Continue executing commands for this target.
 		     * If we return 0, this will happen...
 		     */
-		    printf (" (ignored)\n");
+		    printf(" (ignored)\n");
 		    status = 0;
 		}
 	    }
@@ -433,7 +435,7 @@ CompatRunCommand(ClientData cmdp, ClientData gnp)
 
 /*-
  *-----------------------------------------------------------------------
- * CompatMake --
+ * Compat_Make --
  *	Make a target.
  *
  * Input:
@@ -448,12 +450,14 @@ CompatRunCommand(ClientData cmdp, ClientData gnp)
  *
  *-----------------------------------------------------------------------
  */
-static int
-CompatMake(ClientData gnp, ClientData pgnp)
+int
+Compat_Make(ClientData gnp, ClientData pgnp)
 {
-    GNode *gn = (GNode *) gnp;
-    GNode *pgn = (GNode *) pgnp;
+    GNode *gn = (GNode *)gnp;
+    GNode *pgn = (GNode *)pgnp;
 
+    if (!meta[0])		/* we came here from jobs */
+	Compat_Init();
     if (gn->made == UNMADE && (gn == pgn || (pgn->type & OP_MADE) == 0)) {
 	/*
 	 * First mark ourselves to be made, then apply whatever transformations
@@ -467,7 +471,7 @@ CompatMake(ClientData gnp, ClientData pgnp)
 	gn->made = BEINGMADE;
 	if ((gn->type & OP_MADE) == 0)
 	    Suff_FindDeps(gn);
-	Lst_ForEach(gn->children, CompatMake, (ClientData)gn);
+	Lst_ForEach(gn->children, Compat_Make, (ClientData)gn);
 	if ((gn->flags & REMAKE) == 0) {
 	    gn->made = ABORTED;
 	    pgn->flags &= ~REMAKE;
@@ -505,7 +509,7 @@ CompatMake(ClientData gnp, ClientData pgnp)
 	 * to tell him/her "yes".
 	 */
 	if (queryFlag) {
-	    exit (1);
+	    exit(1);
 	}
 
 	/*
@@ -559,7 +563,7 @@ CompatMake(ClientData gnp, ClientData pgnp)
 	    pgn->flags &= ~REMAKE;
 	} else {
 	    PrintOnError("\n\nStop.");
-	    exit (1);
+	    exit(1);
 	}
     } else if (gn->made == ERROR) {
 	/*
@@ -597,7 +601,7 @@ CompatMake(ClientData gnp, ClientData pgnp)
     }
 
 cohorts:
-    Lst_ForEach(gn->cohorts, CompatMake, pgnp);
+    Lst_ForEach(gn->cohorts, Compat_Make, pgnp);
     return (0);
 }
 
@@ -639,6 +643,7 @@ Compat_Run(Lst targs)
     }
 
     ENDNode = Targ_FindNode(".END", TARG_CREATE);
+    ENDNode->type = OP_SPECIAL;
     /*
      * If the user has defined a .BEGIN target, execute the commands attached
      * to it.
@@ -646,7 +651,7 @@ Compat_Run(Lst targs)
     if (!queryFlag) {
 	gn = Targ_FindNode(".BEGIN", TARG_NOCREATE);
 	if (gn != NILGNODE) {
-	    Lst_ForEach(gn->commands, CompatRunCommand, (ClientData)gn);
+	    Compat_Make(gn, gn);
             if (gn->made == ERROR) {
                 PrintOnError("\n\nStop.");
                 exit(1);
@@ -661,8 +666,8 @@ Compat_Run(Lst targs)
     Lst_Destroy(Make_ExpandUse(targs), NOFREE);
 
     /*
-     * For each entry in the list of targets to create, call CompatMake on
-     * it to create the thing. CompatMake will leave the 'made' field of gn
+     * For each entry in the list of targets to create, call Compat_Make on
+     * it to create the thing. Compat_Make will leave the 'made' field of gn
      * in one of several states:
      *	    UPTODATE	    gn was already up-to-date
      *	    MADE  	    gn was recreated successfully
@@ -672,13 +677,13 @@ Compat_Run(Lst targs)
      */
     errors = 0;
     while (!Lst_IsEmpty (targs)) {
-	gn = (GNode *) Lst_DeQueue(targs);
-	CompatMake(gn, gn);
+	gn = (GNode *)Lst_DeQueue(targs);
+	Compat_Make(gn, gn);
 
 	if (gn->made == UPTODATE) {
-	    printf ("`%s' is up to date.\n", gn->name);
+	    printf("`%s' is up to date.\n", gn->name);
 	} else if (gn->made == ABORTED) {
-	    printf ("`%s' not remade because of errors.\n", gn->name);
+	    printf("`%s' not remade because of errors.\n", gn->name);
 	    errors += 1;
 	}
     }
@@ -687,7 +692,7 @@ Compat_Run(Lst targs)
      * If the user has defined a .END target, run its commands.
      */
     if (errors == 0) {
-	Lst_ForEach(ENDNode->commands, CompatRunCommand, (ClientData)gn);
+	Compat_Make(ENDNode, ENDNode);
 	if (gn->made == ERROR) {
 	    PrintOnError("\n\nStop.");
 	    exit(1);

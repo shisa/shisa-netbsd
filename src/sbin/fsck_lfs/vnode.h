@@ -1,4 +1,4 @@
-/* $NetBSD: vnode.h,v 1.1.6.1 2005/05/07 11:21:29 tron Exp $ */
+/* $NetBSD: vnode.h,v 1.2 2005/04/11 23:19:24 perseant Exp $ */
 /*-
  * Copyright (c) 2003 The NetBSD Foundation, Inc.
  * All rights reserved.

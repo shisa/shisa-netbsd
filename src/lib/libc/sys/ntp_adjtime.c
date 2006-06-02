@@ -1,4 +1,4 @@
-/*	$NetBSD: ntp_adjtime.c,v 1.5 2003/07/16 19:42:11 cb Exp $ */
+/*	$NetBSD: ntp_adjtime.c,v 1.7 2006/03/09 23:44:43 christos Exp $ */
 
 /*
  * Copyright (c) 2001 The NetBSD Foundation, Inc.      
@@ -31,6 +31,11 @@
  * SUCH DAMAGE.
  */
 
+#include <sys/cdefs.h>
+#if defined(LIBC_SCCS) && !defined(lint)
+__RCSID("$NetBSD: ntp_adjtime.c,v 1.7 2006/03/09 23:44:43 christos Exp $");
+#endif /* LIBC_SCCS and not lint */
+
 #include "namespace.h"
 #include <errno.h>
 #include <fcntl.h>
@@ -41,7 +46,6 @@
 #include <sys/timex.h>
 #include <sys/ioctl.h>
 #include <sys/syscall.h>
-#include <sys/systm.h>
 
 #include <sys/clockctl.h>
 
@@ -60,7 +64,7 @@ int
 ntp_adjtime(tp)
 	struct timex *tp;
 {
-	struct clockctl_ntp_adjtime_args args;
+	struct clockctl_ntp_adjtime args;
 	int error;
 	quad_t q;
 	int rv;
@@ -118,7 +122,7 @@ try_syscall:
 	 * If __clockctl_fd >=0, clockctl has already been open
 	 * and used, so we carry on using it.
 	 */
-	SCARG(&args.uas, tp) = tp;
+	args.tp = tp;
 	error = ioctl(__clockctl_fd, CLOCKCTL_NTP_ADJTIME, &args);
 
 	/*

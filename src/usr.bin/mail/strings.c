@@ -1,4 +1,4 @@
-/*	$NetBSD: strings.c,v 1.10 2003/08/07 11:14:41 agc Exp $	*/
+/*	$NetBSD: strings.c,v 1.12 2005/07/19 23:07:10 christos Exp $	*/
 
 /*
  * Copyright (c) 1980, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)strings.c	8.1 (Berkeley) 6/6/93";
 #else
-__RCSID("$NetBSD: strings.c,v 1.10 2003/08/07 11:14:41 agc Exp $");
+__RCSID("$NetBSD: strings.c,v 1.12 2005/07/19 23:07:10 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -57,8 +57,8 @@ __RCSID("$NetBSD: strings.c,v 1.10 2003/08/07 11:14:41 agc Exp $");
  * the occasional user with enormous string size requests.
  */
 
-char *
-salloc(int size)
+void *
+salloc(size_t size)
 {
 	char *t;
 	int s;

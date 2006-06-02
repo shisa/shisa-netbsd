@@ -1,12 +1,12 @@
-#	$NetBSD: Makefile,v 1.95 2005/02/20 00:52:02 manu Exp $
+#	$NetBSD: Makefile,v 1.104 2006/04/27 20:41:57 thorpej Exp $
 #	from: @(#)Makefile	5.25.1.1 (Berkeley) 5/7/91
 
 .include <bsd.own.mk>
 
 SUBDIR=	csu libc .WAIT libarch libbsdmalloc libbz2 libcompat libcrypt \
-	libcurses libedit libevent libform libintl libkvm libl libm libmagic \
-	libmenu libossaudio libpcap libpci libpmc libposix libpthread \
-	libpthread_dbg libradius libresolv librmt librpcsvc librt libterm \
+	libcurses libevent libform libintl libkvm libl libm libmagic \
+	libmenu libossaudio libpcap libpci libpmc libposix libprop libpthread \
+	libpthread_dbg libresolv librmt librpcsvc librt libterm \
 	libusbhid libutil libwrap liby libz
 
 .if (${MKSKEY} != "no")
@@ -35,13 +35,8 @@ SUBDIR+= libcrypto_rc5
 
 .if (${MKKERBEROS} != "no")
 # Heimdal Kerberos 5 libraries
-SUBDIR+= libroken libvers libcom_err libsl libss libasn1 libhdb \
-	 libkadm5srv libkadm5clnt libgssapi libkafs
+SUBDIR+= libroken libvers libcom_err libasn1
 
-.if (${MKKERBEROS4} != "no")
-# KTH Kerberos 4 libraries
-SUBDIR+= libkdb libkadm libkstream
-.endif	# MKKERBEROS4 != no
 .endif	# MKKERBEROS != no
 
 SUBDIR+=	libtelnet
@@ -57,24 +52,34 @@ SUBDIR+=	i18n_module
 # Libraries that depend upon any listed previously
 # (and those that depend upon these [and ...])
 #
+#==================== 1st library dependency barrier ====================
 SUBDIR+=	.WAIT
-SUBDIR+=	libcdk 
-.if (${MKCRYPTO} != "no")
-SUBDIR+=	libssl
-.endif
-.if (${MKKERBEROS} != "no")
-SUBDIR+=	libkrb5
-.endif
-.if (${MKKERBEROS4} != "no")
-SUBDIR+=	libkrb
-.endif
+
+SUBDIR+=	libedit		# depends on libterm
+
+SUBDIR+=	libradius	# depends on libcrypto - only if ${MKCRYPTO}
+
+SUBDIR+=	libiscsi	# depends on libpthread
 
 .if (${MKCRYPTO} != "no")
-SUBDIR+=	.WAIT libssh
+SUBDIR+=	libssl		# depends on libcrypto
+SUBDIR+=	libssh		# depends on libcrypto
+.endif
+
+.if (${MKKERBEROS} != "no")
+SUBDIR+=	libkrb5		# depends on libcrypto and more
+.endif
+
+#==================== 2nd library dependency barrier ====================
+SUBDIR+=	.WAIT
+
+.if (${MKKERBEROS} != "no")
+# Heimdal Kerberos 5 libraries depending on libkrb5 and more
+SUBDIR+=	libgssapi libhdb .WAIT libkadm5srv libkadm5clnt libkafs libsl libss
 .endif
 
 .if (${MKPAM} != "no")
-SUBDIR+=	.WAIT libpam
+SUBDIR+=	libpam		# depends on libkrb5 and more
 .endif
 
 .include <bsd.subdir.mk>

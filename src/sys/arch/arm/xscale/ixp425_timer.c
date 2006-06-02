@@ -1,4 +1,4 @@
-/*	$NetBSD: ixp425_timer.c,v 1.6 2005/02/26 12:00:52 simonb Exp $ */
+/*	$NetBSD: ixp425_timer.c,v 1.11 2006/04/10 03:36:03 simonb Exp $ */
 
 /*
  * Copyright (c) 2003
@@ -34,8 +34,9 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ixp425_timer.c,v 1.6 2005/02/26 12:00:52 simonb Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ixp425_timer.c,v 1.11 2006/04/10 03:36:03 simonb Exp $");
 
+#include "opt_ixp425.h"
 #include "opt_perfctrs.h"
 
 #include <sys/types.h>
@@ -67,13 +68,17 @@ static void *clock_ih;
 int	ixpclk_intr(void *);
 
 struct ixpclk_softc {
-        struct device           sc_dev;
-        bus_addr_t              sc_baseaddr;
-        bus_space_tag_t         sc_iot;
-        bus_space_handle_t      sc_ioh;
+	struct device		sc_dev;
+	bus_addr_t		sc_baseaddr;
+	bus_space_tag_t		sc_iot;
+	bus_space_handle_t      sc_ioh;
 };
 
+#ifndef IXP425_CLOCK_FREQ
 #define	COUNTS_PER_SEC		66666600	/* 66MHz */
+#else
+#define	COUNTS_PER_SEC		IXP425_CLOCK_FREQ
+#endif
 #define	COUNTS_PER_USEC		((COUNTS_PER_SEC / 1000000) + 1)
 
 static struct ixpclk_softc *ixpclk_sc;
@@ -91,7 +96,7 @@ CFATTACH_DECL(ixpclk, sizeof(struct ixpclk_softc),
 static int
 ixpclk_match(struct device *parent, struct cfdata *match, void *aux)
 {
-        return 2;
+	return 2;
 }
 
 static void
@@ -199,7 +204,7 @@ cpu_initclocks(void)
  *	recalculate the intervals here, but that would be a pain.
  */
 void
-setstatclockrate(int hz)
+setstatclockrate(int newhz)
 {
 
 	/*
@@ -322,7 +327,7 @@ inittodr(time_t base)
 		badbase = 0;
 
 	if (todr_handle == NULL ||
-	    todr_gettime(todr_handle, (struct timeval *)&time) != 0 ||
+	    todr_gettime(todr_handle, &time) != 0 ||
 	    time.tv_sec == 0) {
 		/*
 		 * Believe the time in the file system for lack of
@@ -368,7 +373,7 @@ resettodr(void)
 		return;
 
 	if (todr_handle != NULL &&
-	    todr_settime(todr_handle, (struct timeval *)&time) != 0)
+	    todr_settime(todr_handle, &time) != 0)
 		printf("resettodr: failed to set time\n");
 }
 

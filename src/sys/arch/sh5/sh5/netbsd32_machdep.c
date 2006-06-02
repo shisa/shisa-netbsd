@@ -1,4 +1,4 @@
-/*	$NetBSD: netbsd32_machdep.c,v 1.5.14.1 2005/09/30 08:50:32 tron Exp $	*/
+/*	$NetBSD: netbsd32_machdep.c,v 1.11 2005/12/11 12:19:02 christos Exp $	*/
 
 /*
  * Copyright 2002 Wasabi Systems, Inc.
@@ -36,7 +36,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: netbsd32_machdep.c,v 1.5.14.1 2005/09/30 08:50:32 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: netbsd32_machdep.c,v 1.11 2005/12/11 12:19:02 christos Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_compat_netbsd.h"
@@ -77,7 +77,8 @@ __KERNEL_RCSID(0, "$NetBSD: netbsd32_machdep.c,v 1.5.14.1 2005/09/30 08:50:32 tr
 
 #include <sh5/fpu.h>
 
-char	machine_arch32[] = "sh5";
+const char	machine32[] = "sh5";
+const char	machine_arch32[] = "sh5";
 
 #ifdef COMPAT_16
 int
@@ -99,11 +100,10 @@ compat_16_netbsd32___sigreturn14(struct lwp *l, void *v, register_t *retval)
 
 /*ARGSUSED*/
 int
-cpu_coredump32(struct lwp *l, struct vnode *vp,
-    struct ucred *cred, struct core32 *chdr)
+cpu_coredump32(struct lwp *l, void *cookie, struct core32 *chdr)
 {
 
-	return (0);
+	return (EFAULT);
 }
 
 int

@@ -1,4 +1,4 @@
-/*	$NetBSD: cksum.c,v 1.24.2.1 2005/09/12 12:17:35 tron Exp $	*/
+/*	$NetBSD: cksum.c,v 1.37 2006/05/07 12:22:55 hubertf Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -81,12 +81,13 @@ __COPYRIGHT("@(#) Copyright (c) 1991, 1993\n\
 #if 0
 static char sccsid[] = "@(#)cksum.c	8.2 (Berkeley) 4/28/95";
 #endif
-__RCSID("$NetBSD: cksum.c,v 1.24.2.1 2005/09/12 12:17:35 tron Exp $");
+__RCSID("$NetBSD: cksum.c,v 1.37 2006/05/07 12:22:55 hubertf Exp $");
 #endif /* not lint */
 
 #include <sys/cdefs.h>
 #include <sys/types.h>
 
+#include <ctype.h>
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -96,7 +97,7 @@ __RCSID("$NetBSD: cksum.c,v 1.24.2.1 2005/09/12 12:17:35 tron Exp $");
 #include <md2.h>
 #include <sha1.h>
 #include <crypto/sha2.h>
-#include <rmd160.h>
+#include <crypto/rmd160.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -163,12 +164,14 @@ main(int argc, char **argv)
 	int (*cfncn) (int, u_int32_t *, off_t *);
 	void (*pfncn) (char *, u_int32_t, off_t);
 	struct hash *hash;
-	int normal, i;
+	int normal, i, check_warn, do_check;
 
 	cfncn = NULL;
 	pfncn = NULL;
 	dosum = pflag = nohashstdin = 0;
 	normal = 0;
+	check_warn = 0;
+	do_check = 0;
 
 	setlocale(LC_ALL, "");
 
@@ -191,12 +194,7 @@ main(int argc, char **argv)
 		}
 	}
 
-	/*
-	 * The -1, -2, -4, -5, -6, and -m flags should be deprecated, but
-	 * are still supported in code to not break anything that might
-	 * be using them.
-	 */
-	while ((ch = getopt(argc, argv, "a:mno:ps:tx12456")) != -1)
+	while ((ch = getopt(argc, argv, "a:cno:ps:twx")) != -1)
 		switch(ch) {
 		case 'a':
 			if (hash != NULL || dosum) {
@@ -227,41 +225,8 @@ main(int argc, char **argv)
 				}
 			}
 			break;
-		case '2':
-			if (dosum) {
-				warnx("sum mutually exclusive with md2");
-				usage();
-			}
-			hash = &hashes[HASH_MD2];
-			break;
-		case '4':
-			if (dosum) {
-				warnx("sum mutually exclusive with md4");
-				usage();
-			}
-			hash = &hashes[HASH_MD4];
-			break;
-		case 'm':
-		case '5':
-			if (dosum) {
-				warnx("sum mutually exclusive with md5");
-				usage();
-			}
-			hash = &hashes[HASH_MD5];
-			break;
-		case '1':
-			if (dosum) {
-				warnx("sum mutually exclusive with sha1");
-				usage();
-			}
-			hash = &hashes[HASH_SHA1];
-			break;
-		case '6':
-			if (dosum) {
-				warnx("sum mutually exclusive with rmd160");
-				usage();
-			}
-			hash = &hashes[HASH_RMD160];
+		case 'c':
+			do_check = 1;
 			break;
 		case 'n':
 			normal = 1;
@@ -300,6 +265,9 @@ main(int argc, char **argv)
 			nohashstdin = 1;
 			hash->timetrialfunc();
 			break;
+		case 'w':
+			check_warn = 1;
+			break;
 		case 'x':
 			if (hash == NULL)
 				requirehash("-x");
@@ -313,37 +281,225 @@ main(int argc, char **argv)
 	argc -= optind;
 	argv += optind;
 
-	fd = STDIN_FILENO;
-	fn = NULL;
-	rval = 0;
-	do {
-		if (*argv) {
-			fn = *argv++;
-			if (hash != NULL) {
-				if (hash_digest_file(fn, hash, normal)) {
+	if (do_check) {
+		/*
+		 * Verify checksums
+		 */
+		FILE *f;
+		char buf[BUFSIZ];
+		char *s, *p_filename, *p_cksum;
+		int l_filename, l_cksum;
+		char filename[BUFSIZ];
+		char cksum[BUFSIZ];
+		int ok,cnt,badcnt;
+
+		rval = 0;
+		cnt = badcnt = 0;
+
+		if (argc == 0) {
+			f = fdopen(STDIN_FILENO, "r");
+		} else {
+			f = fopen(argv[0], "r");
+		}
+		if (f == NULL)
+			err(1, "Cannot read %s",
+			    argc>0?argv[0]:"stdin");
+		
+		while(fgets(buf, sizeof(buf), f) != NULL) {
+			s=strrchr(buf, '\n');
+			if (s)
+				*s = '\0';
+
+			p_cksum = p_filename = NULL;
+
+			p_filename = strchr(buf, '(');
+			if (p_filename) {
+				/*
+				 * Assume 'normal' output if there's a '('
+				 */
+				p_filename += 1;
+				normal = 0;
+
+				p_cksum = strrchr(p_filename, ')');
+				if (p_cksum == NULL) {
+					if (check_warn)
+						warnx("bogus format: %s. "
+						      "Skipping...",
+						      buf);
+					rval = 1;
+					continue;
+				}
+ 				p_cksum += 4;
+
+				l_cksum = strlen(p_cksum);
+				l_filename = p_cksum - p_filename - 4;
+					
+				/* Sanity check, and find proper hash if
+				 * it's not the same as the current program
+				 */
+				if (hash == NULL ||
+				    strncmp(buf, hash->hashname,
+					    strlen(hash->hashname)) != 0) {
+					/*
+					 * Search proper hash
+					 */
+					struct hash *nhash;
+					
+					for (nhash = hashes ;
+					     nhash->hashname != NULL;
+					     nhash++)
+						if (strncmp(buf,
+							    nhash->hashname,
+							    strlen(nhash->hashname)) == 0)
+							break;
+					
+					
+					if (nhash->hashname == NULL) {
+						if (check_warn)
+							warnx("unknown hash: %s",
+							      buf);
+						rval = 1;
+						continue;
+					} else {
+						hash = nhash;
+					}
+				}
+
+			} else {
+				if (hash) {
+					int nspaces;
+
+					/*
+					 * 'normal' output, no (ck)sum
+					 */
+					normal = 1;
+					nspaces = 1;
+					
+					p_cksum = buf;
+					p_filename = strchr(buf, ' ');
+					if (p_filename == NULL) {
+						if (check_warn)
+							warnx("no filename in %s? "
+							      "Skipping...", buf);
+						rval = 1;
+						continue;
+					}
+					while (isspace((int)*++p_filename))
+						nspaces++;
+					l_filename = strlen(p_filename);
+					l_cksum = p_filename - buf - nspaces;
+				} else {
+					/*
+					 * sum/cksum output format
+					 */
+					p_cksum = buf;
+					s=strchr(p_cksum, ' ');
+					if (s == NULL) {
+						if (check_warn)
+							warnx("bogus format: %s."
+							      " Skipping...",
+							      buf);
+						rval = 1;
+						continue;
+					}
+					l_cksum = s - p_cksum;
+
+					p_filename = strrchr(buf, ' ');
+					if (p_filename == NULL) {
+						if (check_warn)
+							warnx("no filename in %s?"
+							      " Skipping...",
+							      buf);
+						rval = 1;
+						continue;
+					}
+					p_filename++;
+					l_filename = strlen(p_filename);
+				}
+			}
+
+			strlcpy(filename, p_filename, l_filename+1);
+			strlcpy(cksum, p_cksum, l_cksum+1);
+
+			if (hash) {
+				if (access(filename, R_OK) == 0
+				    && strcmp(cksum, hash->filefunc(filename, NULL)) == 0)
+					ok = 1;
+				else
+					ok = 0;
+			} else {
+				if ((fd = open(filename, O_RDONLY, 0)) < 0) {
+					if (check_warn)
+						warn("%s", filename);
+					rval = 1;
+					ok = 0;
+				} else {
+					if (cfncn(fd, &val, &len)) 
+						ok = 0;
+					else {
+						u_int32_t should_val;
+						
+						should_val =
+						  strtoul(cksum, NULL, 10);
+						if (val == should_val)
+							ok = 1;
+						else
+							ok = 0;
+					}
+				}
+			}
+
+			if (! ok) {
+				if (hash)
+					printf("(%s) ", hash->hashname);
+				printf("%s: FAILED\n", filename);
+				badcnt++;
+			}
+			cnt++;
+
+		}
+		fclose(f);
+
+		if (badcnt > 0) 
+			rval = 1;
+		
+	} else {
+		/*
+		 * Calculate checksums
+		 */
+
+		fd = STDIN_FILENO;
+		fn = NULL;
+		rval = 0;
+		do {
+			if (*argv) {
+				fn = *argv++;
+				if (hash != NULL) {
+					if (hash_digest_file(fn, hash, normal)) {
+						warn("%s", fn);
+						rval = 1;
+					}
+					continue;
+				}
+				if ((fd = open(fn, O_RDONLY, 0)) < 0) {
 					warn("%s", fn);
 					rval = 1;
+					continue;
 				}
-				continue;
+			} else if (hash && !nohashstdin) {
+				hash->filterfunc(pflag);
 			}
-			if ((fd = open(fn, O_RDONLY, 0)) < 0) {
-				warn("%s", fn);
-				rval = 1;
-				continue;
+			
+			if (hash == NULL) {
+				if (cfncn(fd, &val, &len)) {
+					warn("%s", fn ? fn : "stdin");
+					rval = 1;
+				} else
+					pfncn(fn, val, len);
+				(void)close(fd);
 			}
-		} else if (hash && !nohashstdin) {
-			hash->filterfunc(pflag);
-		}
-
-		if (hash == NULL) {
-			if (cfncn(fd, &val, &len)) {
-				warn("%s", fn ? fn : "stdin");
-				rval = 1;
-			} else
-				pfncn(fn, val, len);
-			(void)close(fd);
-		}
-	} while (*argv);
+		} while (*argv);
+	}
 	exit(rval);
 }
 
@@ -378,8 +534,8 @@ void
 usage(void)
 {
 
-	(void)fprintf(stderr, "usage: cksum [-n] [-m | -1 | -2 | -4 | -5 | -6 | [-o 1 | 2]] [file ...]\n");
-	(void)fprintf(stderr, "       sum [file ...]\n");
+	(void)fprintf(stderr, "usage: cksum [-nw] [-a algorithm | -c file ]\n\t\t| [-o 1 | 2]] [file ...]\n");
+	(void)fprintf(stderr, "       sum [-c] [file ...]\n");
 	(void)fprintf(stderr,
 	    "       md2 [-n] [-p | -t | -x | -s string] [file ...]\n");
 	(void)fprintf(stderr,

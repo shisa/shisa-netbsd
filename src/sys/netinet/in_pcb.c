@@ -1,4 +1,4 @@
-/*	$NetBSD: in_pcb.c,v 1.98 2005/02/03 03:49:01 perry Exp $	*/
+/*	$NetBSD: in_pcb.c,v 1.102 2006/05/14 21:19:34 elad Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -98,7 +98,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: in_pcb.c,v 1.98 2005/02/03 03:49:01 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: in_pcb.c,v 1.102 2006/05/14 21:19:34 elad Exp $");
 
 #include "opt_inet.h"
 #include "opt_ipsec.h"
@@ -115,6 +115,7 @@ __KERNEL_RCSID(0, "$NetBSD: in_pcb.c,v 1.98 2005/02/03 03:49:01 perry Exp $");
 #include <sys/time.h>
 #include <sys/pool.h>
 #include <sys/proc.h>
+#include <sys/kauth.h>
 
 #include <net/if.h>
 #include <net/route.h>
@@ -266,7 +267,7 @@ in_pcbbind(void *v, struct mbuf *nam, struct proc *p)
 #ifndef IPNOPRIVPORTS
 		/* GROSS */
 		if (ntohs(lport) < IPPORT_RESERVED &&
-		    (p == 0 || suser(p->p_ucred, &p->p_acflag)))
+		    (p == 0 || kauth_authorize_generic(p->p_cred, KAUTH_GENERIC_ISSUSER, &p->p_acflag)))
 			return (EACCES);
 #endif
 #ifdef INET6
@@ -278,7 +279,7 @@ in_pcbbind(void *v, struct mbuf *nam, struct proc *p)
 		if (t6 && (reuseport & t6->in6p_socket->so_options) == 0)
 			return (EADDRINUSE);
 #endif
-		if (so->so_uid && !IN_MULTICAST(sin->sin_addr.s_addr)) {
+		if (so->so_uidinfo->ui_uid && !IN_MULTICAST(sin->sin_addr.s_addr)) {
 			t = in_pcblookup_port(table, sin->sin_addr, lport, 1);
 		/*
 		 * XXX:	investigate ramifications of loosening this
@@ -289,7 +290,7 @@ in_pcbbind(void *v, struct mbuf *nam, struct proc *p)
 			    (!in_nullhost(sin->sin_addr) ||
 			     !in_nullhost(t->inp_laddr) ||
 			     (t->inp_socket->so_options & SO_REUSEPORT) == 0)
-			    && (so->so_uid != t->inp_socket->so_uid)) {
+			    && (so->so_uidinfo->ui_uid != t->inp_socket->so_uidinfo->ui_uid)) {
 				return (EADDRINUSE);
 			}
 		}
@@ -302,34 +303,35 @@ in_pcbbind(void *v, struct mbuf *nam, struct proc *p)
 noname:
 	if (lport == 0) {
 		int	   cnt;
-		u_int16_t  min, max;
+		u_int16_t  mymin, mymax;
 		u_int16_t *lastport;
 
 		if (inp->inp_flags & INP_LOWPORT) {
 #ifndef IPNOPRIVPORTS
-			if (p == 0 || suser(p->p_ucred, &p->p_acflag))
+			if (p == 0 || kauth_authorize_generic(p->p_cred, KAUTH_GENERIC_ISSUSER,
+							&p->p_acflag))
 				return (EACCES);
 #endif
-			min = lowportmin;
-			max = lowportmax;
+			mymin = lowportmin;
+			mymax = lowportmax;
 			lastport = &table->inpt_lastlow;
 		} else {
-			min = anonportmin;
-			max = anonportmax;
+			mymin = anonportmin;
+			mymax = anonportmax;
 			lastport = &table->inpt_lastport;
 		}
-		if (min > max) {	/* sanity check */
+		if (mymin > mymax) {	/* sanity check */
 			u_int16_t swp;
 
-			swp = min;
-			min = max;
-			max = swp;
+			swp = mymin;
+			mymin = mymax;
+			mymax = swp;
 		}
 
 		lport = *lastport - 1;
-		for (cnt = max - min + 1; cnt; cnt--, lport--) {
-			if (lport < min || lport > max)
-				lport = max;
+		for (cnt = mymax - mymin + 1; cnt; cnt--, lport--) {
+			if (lport < mymin || lport > mymax)
+				lport = mymax;
 			if (!in_pcblookup_port(table, inp->inp_laddr,
 			    htons(lport), 1))
 				goto found;
@@ -357,7 +359,7 @@ noname:
  * then pick one.
  */
 int
-in_pcbconnect(void *v, struct mbuf *nam)
+in_pcbconnect(void *v, struct mbuf *nam, struct proc *p)
 {
 	struct inpcb *inp = v;
 	struct in_ifaddr *ia = NULL;
@@ -409,13 +411,13 @@ in_pcbconnect(void *v, struct mbuf *nam)
 	 * destinations.
 	 */
 	if (in_nullhost(inp->inp_laddr)) {
-		int error;
+		int xerror;
 		ifaddr = in_selectsrc(sin, &inp->inp_route,
-			inp->inp_socket->so_options, inp->inp_moptions, &error);
+		    inp->inp_socket->so_options, inp->inp_moptions, &xerror);
 		if (ifaddr == NULL) {
-			if (error == 0)
-				error = EADDRNOTAVAIL;
-			return error;
+			if (xerror == 0)
+				xerror = EADDRNOTAVAIL;
+			return xerror;
 		}
 		INADDR_TO_IA(ifaddr->sin_addr, ia);
 		if (ia == NULL)
@@ -427,15 +429,14 @@ in_pcbconnect(void *v, struct mbuf *nam)
 		return (EADDRINUSE);
 	if (in_nullhost(inp->inp_laddr)) {
 		if (inp->inp_lport == 0) {
-			error = in_pcbbind(inp, (struct mbuf *)0,
-			    (struct proc *)0);
+			error = in_pcbbind(inp, NULL, p);
 			/*
 			 * This used to ignore the return value
 			 * completely, but we need to check for
 			 * ephemeral port shortage.
-			 * XXX Should we check for other errors, too?
+			 * And attempts to request low ports if not root.
 			 */
-			if (error == EAGAIN)
+			if (error != 0)
 				return (error);
 		}
 		inp->inp_laddr = ifaddr->sin_addr;

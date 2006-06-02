@@ -1,4 +1,4 @@
-/*	$NetBSD: llc_subr.c,v 1.20 2005/02/26 22:45:10 perry Exp $	*/
+/*	$NetBSD: llc_subr.c,v 1.24 2006/05/14 21:19:34 elad Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -76,7 +76,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: llc_subr.c,v 1.20 2005/02/26 22:45:10 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: llc_subr.c,v 1.24 2006/05/14 21:19:34 elad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -100,7 +100,7 @@ __KERNEL_RCSID(0, "$NetBSD: llc_subr.c,v 1.20 2005/02/26 22:45:10 perry Exp $");
 /*
  * Frame names for diagnostic messages
  */
-char *frame_names[] = {
+const char *frame_names[] = {
 	"INFO", "RR", "RNR", "REJ", "DM", "SABME", "DISC",
 	"UA", "FRMR", "UI", "XID", "TEST", "ILLEGAL", "TIMER", "N2xT1"
 };
@@ -2331,7 +2331,7 @@ llc_newlink(dst, ifp, nlrt, nlnext, llrt)
 		llcwindow = LLC_MAX_WINDOW;
 
 	/* allocate memory for window buffer */
-	MALLOC(nlinkp->llcl_output_buffers, struct mbuf **,
+	nlinkp->llcl_output_buffers = malloc(
 	       llcwindow * sizeof(struct mbuf *), M_PCB, M_NOWAIT|M_ZERO);
 	if (nlinkp->llcl_output_buffers == 0) {
 		FREE(nlinkp, M_PCB);
@@ -2499,9 +2499,9 @@ llc_anytimersup(linkp)
 #define SAL(s) ((struct sockaddr_dl *)&(s)->llcl_addr)
 #define CHECK(l,s) if (LLC_STATEEQ(l,s)) return __STRING(s)
 
-char *timer_names[] = {"ACK", "P", "BUSY", "REJ", "AGE"};
+const char *timer_names[] = {"ACK", "P", "BUSY", "REJ", "AGE"};
 
-char *
+const char *
 llc_getstatename(linkp)
 	struct llc_linkcb *linkp;
 {

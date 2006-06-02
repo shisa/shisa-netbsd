@@ -1,4 +1,4 @@
-/* $NetBSD: trap.c,v 1.96.10.1 2005/07/30 17:55:54 tron Exp $ */
+/* $NetBSD: trap.c,v 1.109 2006/05/15 09:32:15 yamt Exp $ */
 
 /*-
  * Copyright (c) 2000, 2001 The NetBSD Foundation, Inc.
@@ -100,17 +100,17 @@
 
 #include <sys/cdefs.h>			/* RCS ID & Copyright macro defns */
 
-__KERNEL_RCSID(0, "$NetBSD: trap.c,v 1.96.10.1 2005/07/30 17:55:54 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: trap.c,v 1.109 2006/05/15 09:32:15 yamt Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
-#include <uvm/uvm_extern.h>
 #include <sys/proc.h>
 #include <sys/sa.h>
 #include <sys/savar.h>
 #include <sys/user.h>
 #include <sys/syscall.h>
 #include <sys/buf.h>
+#include <sys/kauth.h>
 
 #include <uvm/uvm_extern.h>
 
@@ -351,7 +351,7 @@ trap(const u_long a0, const u_long a1, const u_long a2, const u_long entry,
 				ksi.ksi_trap =  a0;	/* exception summary */
 				break;
 			}
-			/* FALLTHROUTH */
+			/* FALLTHROUGH */
 		case ALPHA_IF_CODE_BPT:
 		case ALPHA_IF_CODE_BUGCHK:
 			KSI_INIT_TRAP(&ksi);
@@ -500,9 +500,7 @@ do_fault:
 			}
 
 			va = trunc_page((vaddr_t)a0);
-			rv = uvm_fault(map, va,
-			    (a1 == ALPHA_MMCSR_INVALTRANS) ?
-			    VM_FAULT_INVALID : VM_FAULT_PROTECT, ftype);
+			rv = uvm_fault(map, va, ftype);
 
 			/*
 			 * If this was a stack access we keep track of the
@@ -548,10 +546,10 @@ do_fault:
 			ksi.ksi_trap = a1; /* MMCSR VALUE */
 			if (rv == ENOMEM) {
 				printf("UVM: pid %d (%s), uid %d killed: "
-				       "out of swap\n", l->l_proc->p_pid,
-				       l->l_proc->p_comm,
-				       l->l_proc->p_cred && l->l_proc->p_ucred ?
-				       l->l_proc->p_ucred->cr_uid : -1);
+				    "out of swap\n", l->l_proc->p_pid,
+				    l->l_proc->p_comm,
+				    l->l_proc->p_cred ?
+				    kauth_cred_geteuid(l->l_proc->p_cred) : -1);
 				ksi.ksi_signo = SIGKILL;
 			} else
 				ksi.ksi_signo = SIGSEGV;
@@ -690,8 +688,8 @@ ast(struct trapframe *framep)
 	uvmexp.softs++;
 	l->l_md.md_tf = framep;
 
-	if (l->l_flag & P_OWEUPC) {
-		l->l_flag &= ~P_OWEUPC;
+	if (l->l_proc->p_flag & P_OWEUPC) {
+		l->l_proc->p_flag &= ~P_OWEUPC;
 		ADDUPROF(l->l_proc);
 	}
 
@@ -735,7 +733,7 @@ static const int reg_to_framereg[32] = {
 #define	unaligned_load(storage, ptrf, mod)				\
 	if (copyin((caddr_t)va, &(storage), sizeof (storage)) != 0)	\
 		break;							\
-	signal = 0;							\
+	signo = 0;							\
 	if ((regptr = ptrf(l, reg)) != NULL)				\
 		*regptr = mod (storage);
 
@@ -746,7 +744,7 @@ static const int reg_to_framereg[32] = {
 		(storage) = 0;						\
 	if (copyout(&(storage), (caddr_t)va, sizeof (storage)) != 0)	\
 		break;							\
-	signal = 0;
+	signo = 0;
 
 #define	unaligned_load_integer(storage)					\
 	unaligned_load(storage, irp, )
@@ -912,7 +910,7 @@ unaligned_fixup(u_long va, u_long opcode, u_long reg, struct lwp *l)
 		NOFIX_ST("stl_c", 4),	NOFIX_ST("stq_c", 8),
 	};
 	const struct unaligned_fixup_data *selected_tab;
-	int doprint, dofix, dosigbus, signal;
+	int doprint, dofix, dosigbus, signo;
 	unsigned long *regptr, longdata;
 	int intdata;		/* signed to get extension when storing */
 	u_int16_t worddata;	/* unsigned to _avoid_ extension */
@@ -972,7 +970,7 @@ unaligned_fixup(u_long va, u_long opcode, u_long reg, struct lwp *l)
 	 * will be botched.  If everything works out OK,
 	 * unaligned_{load,store}_* clears the signal flag.
 	 */
-	signal = SIGSEGV;
+	signo = SIGSEGV;
 	if (dofix && selected_tab->fixable) {
 		switch (opcode) {
 		case 0x0c:			/* ldwu */
@@ -1048,14 +1046,14 @@ unaligned_fixup(u_long va, u_long opcode, u_long reg, struct lwp *l)
 	 * Force SIGBUS if requested.
 	 */
 	if (dosigbus)
-		signal = SIGBUS;
+		signo = SIGBUS;
 
 	/*
 	 * Write back USP.
 	 */
 	alpha_pal_wrusp(l->l_md.md_tf->tf_regs[FRAME_SP]);
 
-	return (signal);
+	return (signo);
 }
 
 /*
@@ -1243,8 +1241,7 @@ alpha_ucode_to_ksiginfo(u_long ucode)
  * Start a new LWP
  */
 void
-startlwp(arg)
-	void *arg;
+startlwp(void *arg)
 {
 	int err;
 	ucontext_t *uc = arg;
@@ -1258,6 +1255,7 @@ startlwp(arg)
 #endif
 	pool_put(&lwp_uc_pool, uc);
 
+	KERNEL_PROC_UNLOCK(l);
 	userret(l);
 }
 

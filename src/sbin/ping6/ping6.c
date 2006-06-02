@@ -1,4 +1,4 @@
-/*	$NetBSD: ping6.c,v 1.62 2005/02/09 14:09:46 xtraeme Exp $	*/
+/*	$NetBSD: ping6.c,v 1.69 2006/05/18 02:14:22 rpaulo Exp $	*/
 /*	$KAME: ping6.c,v 1.164 2002/11/16 14:05:37 itojun Exp $	*/
 
 /*
@@ -77,7 +77,7 @@ static char sccsid[] = "@(#)ping.c	8.1 (Berkeley) 6/5/93";
 #else
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: ping6.c,v 1.62 2005/02/09 14:09:46 xtraeme Exp $");
+__RCSID("$NetBSD: ping6.c,v 1.69 2006/05/18 02:14:22 rpaulo Exp $");
 #endif
 #endif
 
@@ -299,9 +299,7 @@ main(int argc, char *argv[])
 #endif
 	int usepktinfo = 0;
 	struct in6_pktinfo *pktinfo = NULL;
-#ifdef USE_RFC2292BIS
 	struct ip6_rthdr *rthdr = NULL;
-#endif
 #ifdef IPSEC_POLICY_IPSEC
 	char *policy_in = NULL;
 	char *policy_out = NULL;
@@ -566,12 +564,8 @@ main(int argc, char *argv[])
 	}
 
 	if (argc > 1) {
-#ifdef IPV6_RECVRTHDR	/* 2292bis */
 		rthlen = CMSG_SPACE(inet6_rth_space(IPV6_RTHDR_TYPE_0,
 		    argc - 1));
-#else  /* RFC2292 */
-		rthlen = inet6_rthdr_space(IPV6_RTHDR_TYPE_0, argc - 1);
-#endif
 		if (rthlen == 0) {
 			errx(1, "too many intermediate hops");
 			/*NOTREACHED*/
@@ -872,11 +866,8 @@ main(int argc, char *argv[])
 
 	if (argc > 1) {	/* some intermediate addrs are specified */
 		int hops, error;
-#ifdef USE_RFC2292BIS
 		int rthdrlen;
-#endif
 
-#ifdef USE_RFC2292BIS
 		rthdrlen = inet6_rth_space(IPV6_RTHDR_TYPE_0, argc - 1);
 		scmsgp->cmsg_len = CMSG_LEN(rthdrlen);
 		scmsgp->cmsg_level = IPPROTO_IPV6;
@@ -886,11 +877,6 @@ main(int argc, char *argv[])
 		    IPV6_RTHDR_TYPE_0, argc - 1);
 		if (rthdr == NULL)
 			errx(1, "can't initialize rthdr");
-#else  /* old advanced API */
-		if ((scmsgp = (struct cmsghdr *)inet6_rthdr_init(scmsgp,
-		    IPV6_RTHDR_TYPE_0)) == 0)
-			errx(1, "can't initialize rthdr");
-#endif /* USE_RFC2292BIS */
 
 		for (hops = 0; hops < argc - 1; hops++) {
 			struct addrinfo *iaip;
@@ -902,23 +888,11 @@ main(int argc, char *argv[])
 				errx(1,
 				    "bad addr family of an intermediate addr");
 
-#ifdef USE_RFC2292BIS
 			if (inet6_rth_add(rthdr,
 			    &(SIN6(iaip->ai_addr))->sin6_addr))
 				errx(1, "can't add an intermediate node");
-#else  /* old advanced API */
-			if (inet6_rthdr_add(scmsgp,
-			    &(SIN6(iaip->ai_addr))->sin6_addr,
-			    IPV6_RTHDR_LOOSE))
-				errx(1, "can't add an intermediate node");
-#endif /* USE_RFC2292BIS */
 			freeaddrinfo(iaip);
 		}
-
-#ifndef USE_RFC2292BIS
-		if (inet6_rthdr_lasthop(scmsgp, IPV6_RTHDR_LOOSE))
-			errx(1, "can't set the last flag");
-#endif
 
 		scmsgp = CMSG_NXTHDR(&smsghdr, scmsgp);
 	}
@@ -939,7 +913,6 @@ main(int argc, char *argv[])
 		src.sin6_port = ntohs(DUMMY_PORT);
 		src.sin6_scope_id = dst.sin6_scope_id;
 
-#ifdef USE_RFC2292BIS
 		if (pktinfo &&
 		    setsockopt(dummy, IPPROTO_IPV6, IPV6_PKTINFO,
 		    (void *)pktinfo, sizeof(*pktinfo)))
@@ -959,12 +932,6 @@ main(int argc, char *argv[])
 		    setsockopt(dummy, IPPROTO_IPV6, IPV6_RTHDR,
 		    (void *)rthdr, (rthdr->ip6r_len + 1) << 3))
 			err(1, "UDP setsockopt(IPV6_RTHDR)");
-#else  /* old advanced API */
-		if (smsghdr.msg_control &&
-		    setsockopt(dummy, IPPROTO_IPV6, IPV6_PKTOPTIONS,
-		    (void *)smsghdr.msg_control, smsghdr.msg_controllen))
-			err(1, "UDP setsockopt(IPV6_PKTOPTIONS)");
-#endif
 
 		if (connect(dummy, (struct sockaddr *)&src, len) < 0)
 			err(1, "UDP connect");
@@ -1362,6 +1329,8 @@ dnsdecode(const u_char **sp, const u_char *ep, const u_char *base, char *buf,
 	const u_char *comp;
 	int l;
 
+	i = 0;		/* XXXGCC -Wuninitialized [sun2] */
+
 	cp = *sp;
 	*buf = '\0';
 
@@ -1726,14 +1695,14 @@ pr_exthdrs(struct msghdr *mhdr)
 	}
 }
 
-#ifdef USE_RFC2292BIS
 void
 pr_ip6opt(void *extbuf)
 {
 	struct ip6_hbh *ext;
 	int currentlen;
 	u_int8_t type;
-	size_t extlen, len;
+	size_t extlen;
+	socklen_t len;
 	void *databuf;
 	size_t offset;
 	u_int16_t value2;
@@ -1777,17 +1746,7 @@ pr_ip6opt(void *extbuf)
 	}
 	return;
 }
-#else  /* !USE_RFC2292BIS */
-/* ARGSUSED */
-void
-pr_ip6opt(void *extbuf)
-{
-	putchar('\n');
-	return;
-}
-#endif /* USE_RFC2292BIS */
 
-#ifdef USE_RFC2292BIS
 void
 pr_rthdr(void *extbuf)
 {
@@ -1820,16 +1779,6 @@ pr_rthdr(void *extbuf)
 	return;
 
 }
-
-#else  /* !USE_RFC2292BIS */
-/* ARGSUSED */
-void
-pr_rthdr(void *extbuf)
-{
-	putchar('\n');
-	return;
-}
-#endif /* USE_RFC2292BIS */
 
 int
 pr_bitrange(u_int32_t v, int soff, int ii)
@@ -1978,7 +1927,7 @@ pr_nodeaddr(struct icmp6_nodeinfo *ni, /* ni->qtype must be NODEADDR */
 	if (nilen % (sizeof(u_int32_t) + sizeof(struct in6_addr)) == 0)
 		withttl = 1;
 	while (nilen > 0) {
-		u_int32_t ttl;
+		u_int32_t ttl = 0;
 
 		if (withttl) {
 			/* XXX: alignment? */
@@ -2160,7 +2109,7 @@ summary(void)
 		/* Only display average to microseconds */
 		double num = nreceived + nrepeats;
 		double avg = tsum / num;
-		double dev = sqrt(tsumsq / num - avg * avg);
+		double dev = sqrt((tsumsq - num * avg * avg) / (num - 1));
 		(void)printf(
 		    "round-trip min/avg/max/std-dev = %.3f/%.3f/%.3f/%.3f ms\n",
 		    tmin, avg, tmax, dev);
@@ -2401,7 +2350,7 @@ pr_icmph(struct icmp6_hdr *icp, u_char *end)
 			break;
 		}
 		if (options & F_VERBOSE) {
-			if (ni->ni_code > sizeof(nircode) / sizeof(nircode[0]))
+			if (ni->ni_code >= sizeof(nircode) / sizeof(nircode[0]))
 				printf(", invalid");
 			else
 				printf(", %s", nircode[ni->ni_code]);

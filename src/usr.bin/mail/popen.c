@@ -1,4 +1,4 @@
-/*	$NetBSD: popen.c,v 1.17 2003/08/07 11:14:40 agc Exp $	*/
+/*	$NetBSD: popen.c,v 1.19 2005/07/19 23:07:10 christos Exp $	*/
 
 /*
  * Copyright (c) 1980, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)popen.c	8.1 (Berkeley) 6/6/93";
 #else
-__RCSID("$NetBSD: popen.c,v 1.17 2003/08/07 11:14:40 agc Exp $");
+__RCSID("$NetBSD: popen.c,v 1.19 2005/07/19 23:07:10 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -68,10 +68,10 @@ static struct child *child, *child_freelist = NULL;
 static struct child *findchild(pid_t, int);
 static void delchild(struct child *);
 static pid_t file_pid(FILE *);
-static pid_t start_commandv(char *, sigset_t *, int, int, va_list);
+static pid_t start_commandv(const char *, sigset_t *, int, int, va_list);
 
 FILE *
-Fopen(char *fn, char *mode)
+Fopen(const char *fn, const char *mode)
 {
 	FILE *fp;
 
@@ -83,7 +83,7 @@ Fopen(char *fn, char *mode)
 }
 
 FILE *
-Fdopen(int fd, char *mode)
+Fdopen(int fd, const char *mode)
 {
 	FILE *fp;
 
@@ -103,7 +103,7 @@ Fclose(FILE *fp)
 }
 
 FILE *
-Popen(char *cmd, char *mode)
+Popen(const char *cmd, const char *mode)
 {
 	int p[2];
 	int myside, hisside, fd0, fd1;
@@ -123,7 +123,7 @@ Popen(char *cmd, char *mode)
 		hisside = fd0 = p[READ];
 		fd1 = -1;
 	}
-	sigemptyset(&nset);
+	(void)sigemptyset(&nset);
 	pid = start_command(value("SHELL"), &nset, fd0, fd1, "-c", cmd, NULL);
 	if (pid < 0) {
 		(void)close(p[READ]);
@@ -145,12 +145,12 @@ Pclose(FILE *ptr)
 	i = file_pid(ptr);
 	unregister_file(ptr);
 	(void)fclose(ptr);
-	sigemptyset(&nset);
-	sigaddset(&nset, SIGINT);
-	sigaddset(&nset, SIGHUP);
-	sigprocmask(SIG_BLOCK, &nset, &oset);
+	(void)sigemptyset(&nset);
+	(void)sigaddset(&nset, SIGINT);
+	(void)sigaddset(&nset, SIGHUP);
+	(void)sigprocmask(SIG_BLOCK, &nset, &oset);
 	i = wait_child(i);
-	sigprocmask(SIG_SETMASK, &oset, NULL);
+	(void)sigprocmask(SIG_SETMASK, &oset, NULL);
 	return i;
 }
 
@@ -214,7 +214,8 @@ file_pid(FILE *fp)
  * SIGINT is enabled unless it's in "nset".
  */
 static pid_t
-start_commandv(char *cmd, sigset_t *nset, int infd, int outfd, va_list args)
+start_commandv(const char *cmd, sigset_t *nset, int infd, int outfd,
+    va_list args)
 {
 	pid_t pid;
 
@@ -226,11 +227,11 @@ start_commandv(char *cmd, sigset_t *nset, int infd, int outfd, va_list args)
 		char *argv[100];
 		int i = getrawlist(cmd, argv, sizeof(argv)/ sizeof(*argv));
 
-		while ((argv[i++] = va_arg(args, char *)))
-			;
+		while ((argv[i++] = va_arg(args, char *)) != NULL)
+			continue;
 		argv[i] = NULL;
 		prepare_child(nset, infd, outfd);
-		execvp(argv[0], argv);
+		(void)execvp(argv[0], argv);
 		warn("%s", argv[0]);
 		_exit(1);
 	}
@@ -238,7 +239,7 @@ start_commandv(char *cmd, sigset_t *nset, int infd, int outfd, va_list args)
 }
 
 int
-run_command(char *cmd, sigset_t *nset, int infd, int outfd, ...)
+run_command(const char *cmd, sigset_t *nset, int infd, int outfd, ...)
 {
 	pid_t pid;
 	va_list args;
@@ -252,7 +253,7 @@ run_command(char *cmd, sigset_t *nset, int infd, int outfd, ...)
 }
 
 int
-start_command(char *cmd, sigset_t *nset, int infd, int outfd, ...)
+start_command(const char *cmd, sigset_t *nset, int infd, int outfd, ...)
 {
 	va_list args;
 	int r;
@@ -274,14 +275,14 @@ prepare_child(sigset_t *nset, int infd, int outfd)
 	 * close-on-exec.
 	 */
 	if (infd > 0) {
-		dup2(infd, 0);
+		(void)dup2(infd, 0);
 	} else if (infd != 0) {
 		/* we don't want the child stealing my stdin input */
-		close(0);
-		open(_PATH_DEVNULL, O_RDONLY, 0);
+		(void)close(0);
+		(void)open(_PATH_DEVNULL, O_RDONLY, 0);
 	}
 	if (outfd >= 0 && outfd != 1)
-		dup2(outfd, 1);
+		(void)dup2(outfd, 1);
 	if (nset == NULL)
 		return;
 	if (nset != NULL) {
@@ -291,7 +292,7 @@ prepare_child(sigset_t *nset, int infd, int outfd)
 	}
 	if (nset == NULL || !sigismember(nset, SIGINT))
 		(void)signal(SIGINT, SIG_DFL);
-	sigemptyset(&eset);
+	(void)sigemptyset(&eset);
 	(void)sigprocmask(SIG_SETMASK, &eset, NULL);
 }
 
@@ -300,7 +301,7 @@ wait_command(pid_t pid)
 {
 
 	if (wait_child(pid) < 0) {
-		puts("Fatal error in process.");
+		(void)puts("Fatal error in process.");
 		return -1;
 	}
 	return 0;
@@ -345,6 +346,7 @@ delchild(struct child *cp)
 }
 
 void
+/*ARGSUSED*/
 sigchild(int signo)
 {
 	pid_t pid;
@@ -379,9 +381,9 @@ wait_child(pid_t pid)
 	sigset_t nset, oset;
 	pid_t rv = 0;
 
-	sigemptyset(&nset);
-	sigaddset(&nset, SIGCHLD);
-	sigprocmask(SIG_BLOCK, &nset, &oset);
+	(void)sigemptyset(&nset);
+	(void)sigaddset(&nset, SIGCHLD);
+	(void)sigprocmask(SIG_BLOCK, &nset, &oset);
 	/*
 	 * If we have not already waited on the pid (via sigchild)
 	 * wait on it now.  Otherwise, use the wait status stashed
@@ -394,7 +396,7 @@ wait_child(pid_t pid)
 		wait_status = cp->status;
 	if (cp != NULL)
 		delchild(cp);
-	sigprocmask(SIG_SETMASK, &oset, NULL);
+	(void)sigprocmask(SIG_SETMASK, &oset, NULL);
 	if (rv == -1 || (WIFEXITED(wait_status) && WEXITSTATUS(wait_status)))
 		return -1;
 	else
@@ -410,14 +412,14 @@ free_child(pid_t pid)
 	struct child *cp;
 	sigset_t nset, oset;
 
-	sigemptyset(&nset);
-	sigaddset(&nset, SIGCHLD);
-	sigprocmask(SIG_BLOCK, &nset, &oset);
+	(void)sigemptyset(&nset);
+	(void)sigaddset(&nset, SIGCHLD);
+	(void)sigprocmask(SIG_BLOCK, &nset, &oset);
 	if ((cp = findchild(pid, 0)) != NULL) {
 		if (cp->done)
 			delchild(cp);
 		else
 			cp->free = 1;
 	}
-	sigprocmask(SIG_SETMASK, &oset, NULL);
+	(void)sigprocmask(SIG_SETMASK, &oset, NULL);
 }

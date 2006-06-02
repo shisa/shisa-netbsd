@@ -1,4 +1,4 @@
-/*	$NetBSD: mesh.c,v 1.21.8.1 2005/12/18 13:49:32 tron Exp $	*/
+/*	$NetBSD: mesh.c,v 1.25 2006/03/29 04:16:45 thorpej Exp $	*/
 
 /*-
  * Copyright (c) 2000	Tsubai Masanari.
@@ -33,7 +33,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mesh.c,v 1.21.8.1 2005/12/18 13:49:32 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: mesh.c,v 1.25 2006/03/29 04:16:45 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/buf.h>
@@ -133,8 +133,8 @@ struct mesh_softc {
 #define SEND_IDENTIFY	2
 #define SEND_SDTR	4
 
-static __inline int mesh_read_reg __P((struct mesh_softc *, int));
-static __inline void mesh_set_reg __P((struct mesh_softc *, int, int));
+static inline int mesh_read_reg __P((struct mesh_softc *, int));
+static inline void mesh_set_reg __P((struct mesh_softc *, int, int));
 
 int mesh_match __P((struct device *, struct cfdata *, void *));
 void mesh_attach __P((struct device *, struct device *, void *));
@@ -219,7 +219,7 @@ mesh_attach(parent, self, aux)
 	sc->sc_irq = ca->ca_intr[0];
 	sc->sc_dmareg = mapiodev(reg[2], reg[3]);
 
-	sc->sc_cfflags = self->dv_cfdata->cf_flags;
+	sc->sc_cfflags = device_cfdata(self)->cf_flags;
 	sc->sc_meshid = mesh_read_reg(sc, MESH_MESH_ID) & 0x1f;
 #if 0
 	if (sc->sc_meshid != (MESH_SIGNATURE & 0x1f) {

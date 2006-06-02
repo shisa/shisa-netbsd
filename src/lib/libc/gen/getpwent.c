@@ -1,4 +1,4 @@
-/*	$NetBSD: getpwent.c,v 1.66.2.2 2005/07/11 21:24:36 tron Exp $	*/
+/*	$NetBSD: getpwent.c,v 1.71 2006/03/19 03:05:57 christos Exp $	*/
 
 /*-
  * Copyright (c) 1997-2000, 2004-2005 The NetBSD Foundation, Inc.
@@ -95,7 +95,7 @@
 #if 0
 static char sccsid[] = "@(#)getpwent.c	8.2 (Berkeley) 4/27/95";
 #else
-__RCSID("$NetBSD: getpwent.c,v 1.66.2.2 2005/07/11 21:24:36 tron Exp $");
+__RCSID("$NetBSD: getpwent.c,v 1.71 2006/03/19 03:05:57 christos Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
@@ -195,7 +195,7 @@ _pw_opendb(DB **db)
 {
 	static int	warned;
 
-	const char	*dbfile;
+	const char	*dbfile = NULL;
 
 	_DIAGASSERT(db != NULL);
 	if (*db != NULL)					/* open *db */
@@ -1384,8 +1384,6 @@ _nis_getpwent(void *nsrv, void *nscb, va_list ap)
 	    _nis_passwdbuf, sizeof(_nis_passwdbuf), &_nis_state))
 		rv = NS_SUCCESS;
 	else {					/* dodgy entry, try again */
-		if (key)
-			free(key);
 		free(data);
 		goto next_nis_entry;
 	}

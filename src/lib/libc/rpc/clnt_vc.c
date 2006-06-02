@@ -1,4 +1,4 @@
-/*	$NetBSD: clnt_vc.c,v 1.11 2004/12/30 05:11:50 christos Exp $	*/
+/*	$NetBSD: clnt_vc.c,v 1.14 2006/04/25 18:54:51 drochner Exp $	*/
 
 /*
  * Sun RPC is a product of Sun Microsystems, Inc. and is provided for
@@ -36,7 +36,7 @@ static char *sccsid = "@(#)clnt_tcp.c 1.37 87/10/05 Copyr 1984 Sun Micro";
 static char *sccsid = "@(#)clnt_tcp.c	2.2 88/08/01 4.0 RPCSRC";
 static char sccsid[] = "@(#)clnt_vc.c 1.19 89/03/16 Copyr 1988 Sun Micro";
 #else
-__RCSID("$NetBSD: clnt_vc.c,v 1.11 2004/12/30 05:11:50 christos Exp $");
+__RCSID("$NetBSD: clnt_vc.c,v 1.14 2006/04/25 18:54:51 drochner Exp $");
 #endif
 #endif
  
@@ -85,8 +85,8 @@ __weak_alias(clnt_vc_create,_clnt_vc_create)
 
 #define MCALL_MSG_SIZE 24
 
-static enum clnt_stat clnt_vc_call __P((CLIENT *, rpcproc_t, xdrproc_t, caddr_t,
-    xdrproc_t, caddr_t, struct timeval));
+static enum clnt_stat clnt_vc_call __P((CLIENT *, rpcproc_t, xdrproc_t,
+    const char *, xdrproc_t, caddr_t, struct timeval));
 static void clnt_vc_geterr __P((CLIENT *, struct rpc_err *));
 static bool_t clnt_vc_freeres __P((CLIENT *, xdrproc_t, caddr_t));
 static void clnt_vc_abort __P((CLIENT *));
@@ -236,19 +236,21 @@ clnt_vc_create(fd, raddr, prog, vers, sendsz, recvsz)
 			rpc_createerr.cf_stat = RPC_SYSTEMERROR;
 			rpc_createerr.cf_error.re_errno = errno;
 			mutex_unlock(&clnt_fd_lock);
+			thr_sigsetmask(SIG_SETMASK, &(mask), NULL);
 			goto fooy;
 		}
 		if (connect(fd, (struct sockaddr *)raddr->buf, raddr->len) < 0){
 			rpc_createerr.cf_stat = RPC_SYSTEMERROR;
 			rpc_createerr.cf_error.re_errno = errno;
 			mutex_unlock(&clnt_fd_lock);
+			thr_sigsetmask(SIG_SETMASK, &(mask), NULL);
 			goto fooy;
 		}
 	}
 	mutex_unlock(&clnt_fd_lock);
+	thr_sigsetmask(SIG_SETMASK, &(mask), NULL);
 	if (!__rpc_fd2sockinfo(fd, &si))
 		goto fooy;
-	thr_sigsetmask(SIG_SETMASK, &(mask), NULL);
 
 	ct->ct_closeit = FALSE;
 
@@ -317,7 +319,7 @@ clnt_vc_call(h, proc, xdr_args, args_ptr, xdr_results, results_ptr, timeout)
 	CLIENT *h;
 	rpcproc_t proc;
 	xdrproc_t xdr_args;
-	caddr_t args_ptr;
+	const char *args_ptr;
 	xdrproc_t xdr_results;
 	caddr_t results_ptr;
 	struct timeval timeout;
@@ -366,7 +368,7 @@ call_again:
 	if ((! XDR_PUTBYTES(xdrs, ct->ct_u.ct_mcallc, ct->ct_mpos)) ||
 	    (! XDR_PUTINT32(xdrs, (int32_t *)&proc)) ||
 	    (! AUTH_MARSHALL(h->cl_auth, xdrs)) ||
-	    (! (*xdr_args)(xdrs, args_ptr))) {
+	    (! (*xdr_args)(xdrs, __UNCONST(args_ptr)))) {
 		if (ct->ct_error.re_status == RPC_SUCCESS)
 			ct->ct_error.re_status = RPC_CANTENCODEARGS;
 		(void)xdrrec_endofrecord(xdrs, TRUE);
@@ -679,15 +681,16 @@ read_vc(ctp, buf, len)
 {
 	struct ct_data *ct = (struct ct_data *)(void *)ctp;
 	struct pollfd fd;
-	int milliseconds = (int)((ct->ct_wait.tv_sec * 1000) +
-	    (ct->ct_wait.tv_usec / 1000));
+	struct timespec ts;
 
 	if (len == 0)
 		return (0);
+
+	TIMEVAL_TO_TIMESPEC(&ct->ct_wait, &ts);
 	fd.fd = ct->ct_fd;
 	fd.events = POLLIN;
 	for (;;) {
-		switch (poll(&fd, 1, milliseconds)) {
+		switch (pollts(&fd, 1, &ts, NULL)) {
 		case 0:
 			ct->ct_error.re_status = RPC_TIMEDOUT;
 			return (-1);

@@ -1,4 +1,4 @@
-/*	$NetBSD: options.c,v 1.37 2004/10/30 19:29:27 christos Exp $	*/
+/*	$NetBSD: options.c,v 1.40 2005/12/13 17:44:18 dsl Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -37,7 +37,7 @@
 #if 0
 static char sccsid[] = "@(#)options.c	8.2 (Berkeley) 5/4/95";
 #else
-__RCSID("$NetBSD: options.c,v 1.37 2004/10/30 19:29:27 christos Exp $");
+__RCSID("$NetBSD: options.c,v 1.40 2005/12/13 17:44:18 dsl Exp $");
 #endif
 #endif /* not lint */
 
@@ -98,6 +98,8 @@ procargs(int argc, char **argv)
 		sflag = 1;
 	if (iflag == 2 && sflag == 1 && isatty(0) && isatty(1))
 		iflag = 1;
+	if (iflag == 1 && sflag == 2)
+		iflag = 2;
 	if (mflag == 2)
 		mflag = iflag;
 	for (i = 0; i < NOPTS; i++)
@@ -219,10 +221,20 @@ minus_o(char *name, int val)
 	int i;
 
 	if (name == NULL) {
-		out1str("Current option settings\n");
-		for (i = 0; i < NOPTS; i++)
-			out1fmt("%-16s%s\n", optlist[i].name,
-				optlist[i].val ? "on" : "off");
+		if (val) {
+			out1str("Current option settings\n");
+			for (i = 0; i < NOPTS; i++) {
+				out1fmt("%-16s%s\n", optlist[i].name,
+					optlist[i].val ? "on" : "off");
+			}
+		} else {
+			out1str("set");
+			for (i = 0; i < NOPTS; i++) {
+				out1fmt(" %co %s",
+					"+-"[optlist[i].val], optlist[i].name);
+			}
+			out1str("\n");
+		}
 	} else {
 		for (i = 0; i < NOPTS; i++)
 			if (equal(name, optlist[i].name)) {
@@ -275,7 +287,8 @@ setparam(char **argv)
 	char **ap;
 	int nparam;
 
-	for (nparam = 0 ; argv[nparam] ; nparam++);
+	for (nparam = 0 ; argv[nparam] ; nparam++)
+		continue;
 	ap = newparam = ckmalloc((nparam + 1) * sizeof *ap);
 	while (*argv) {
 		*ap++ = savestr(*argv++);

@@ -1,4 +1,4 @@
-/*	$NetBSD: acpi_machdep.c,v 1.6 2004/04/10 14:17:21 kochi Exp $	*/
+/*	$NetBSD: acpi_machdep.c,v 1.9 2006/02/16 09:22:16 kochi Exp $	*/
 
 /*
  * Copyright 2001 Wasabi Systems, Inc.
@@ -40,7 +40,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: acpi_machdep.c,v 1.6 2004/04/10 14:17:21 kochi Exp $");
+__KERNEL_RCSID(0, "$NetBSD: acpi_machdep.c,v 1.9 2006/02/16 09:22:16 kochi Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -76,13 +76,13 @@ static int acpi_intrcold = 1;
 
 struct acpi_intr_defer {
 	UINT32	number;
-	OSD_HANDLER function;
+	ACPI_OSD_HANDLER function;
 	void *context;
 	void *ih;
 	LIST_ENTRY(acpi_intr_defer) list;
 };
 
-LIST_HEAD(, acpi_intr_defer) acpi_intr_deferq =
+static LIST_HEAD(, acpi_intr_defer) acpi_intr_deferq =
     LIST_HEAD_INITIALIZER(acpi_intr_deferq);
 
 ACPI_STATUS
@@ -110,7 +110,7 @@ acpi_md_OsGetRootPointer(UINT32 Flags, ACPI_POINTER *PhysicalAddress)
 
 ACPI_STATUS
 acpi_md_OsInstallInterruptHandler(UINT32 InterruptNumber,
-    OSD_HANDLER ServiceRoutine, void *Context, void **cookiep)
+    ACPI_OSD_HANDLER ServiceRoutine, void *Context, void **cookiep)
 {
 	void *ih;
 	struct pic *pic;

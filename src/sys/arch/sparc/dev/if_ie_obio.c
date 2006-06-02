@@ -1,4 +1,4 @@
-/*	$NetBSD: if_ie_obio.c,v 1.31 2004/03/15 23:51:12 pk Exp $	*/
+/*	$NetBSD: if_ie_obio.c,v 1.33 2005/11/16 00:49:03 uwe Exp $	*/
 
 /*-
  * Copyright (c) 1997 The NetBSD Foundation, Inc.
@@ -85,7 +85,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_ie_obio.c,v 1.31 2004/03/15 23:51:12 pk Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_ie_obio.c,v 1.33 2005/11/16 00:49:03 uwe Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -128,12 +128,12 @@ struct ieob {
 #define IEOB_ADBASE 0xff000000  /* KVA base addr of 24 bit address space */
 
 
-static void ie_obreset __P((struct ie_softc *, int));
-static void ie_obattend __P((struct ie_softc *, int));
-static void ie_obrun __P((struct ie_softc *));
+static void ie_obreset(struct ie_softc *, int);
+static void ie_obattend(struct ie_softc *, int);
+static void ie_obrun(struct ie_softc *);
 
-int ie_obio_match __P((struct device *, struct cfdata *, void *));
-void ie_obio_attach __P((struct device *, struct device *, void *));
+int ie_obio_match(struct device *, struct cfdata *, void *);
+void ie_obio_attach(struct device *, struct device *, void *);
 
 CFATTACH_DECL(ie_obio, sizeof(struct ie_softc),
     ie_obio_match, ie_obio_attach, NULL, NULL);
@@ -141,26 +141,25 @@ CFATTACH_DECL(ie_obio, sizeof(struct ie_softc),
 /* Supported media */
 static int media[] = {
 	IFM_ETHER | IFM_10_2,
-};      
+};
 #define NMEDIA	(sizeof(media) / sizeof(media[0]))
 
 
 /*
  * OBIO ie support routines
  */
-void
-ie_obreset(sc, what)
-	struct ie_softc *sc;
+static void
+ie_obreset(struct ie_softc *sc, int what)
 {
 	volatile struct ieob *ieo = (struct ieob *) sc->sc_reg;
+
 	ieo->obctrl = 0;
 	delay(100);			/* XXX could be shorter? */
 	ieo->obctrl = IEOB_NORSET;
 }
-void
-ie_obattend(sc, why)
-	struct ie_softc *sc;
-	int why;
+
+static void
+ie_obattend(struct ie_softc *sc, int why)
 {
 	volatile struct ieob *ieo = (struct ieob *) sc->sc_reg;
 
@@ -168,29 +167,25 @@ ie_obattend(sc, why)
 	ieo->obctrl &= ~IEOB_ATTEN;	/* down. */
 }
 
-void
-ie_obrun(sc)
-	struct ie_softc *sc;
+static void
+ie_obrun(struct ie_softc *sc)
 {
 	volatile struct ieob *ieo = (struct ieob *) sc->sc_reg;
 
 	ieo->obctrl |= (IEOB_ONAIR|IEOB_IENAB|IEOB_NORSET);
 }
 
-void ie_obio_memcopyin __P((struct ie_softc *, void *, int, size_t));
-void ie_obio_memcopyout __P((struct ie_softc *, const void *, int, size_t));
+void ie_obio_memcopyin(struct ie_softc *, void *, int, size_t);
+void ie_obio_memcopyout(struct ie_softc *, const void *, int, size_t);
 
 /*
  * Copy board memory to kernel.
  */
 void
-ie_obio_memcopyin(sc, p, offset, size)
-	struct ie_softc	*sc;
-	void *p;
-	int offset;
-	size_t size;
+ie_obio_memcopyin(struct ie_softc *sc, void *p, int offset, size_t size)
 {
 	void *addr = (void *)((u_long)sc->bh + offset);/*XXX - not MI!*/
+
 	wcopy(addr, p, size);
 }
 
@@ -198,49 +193,39 @@ ie_obio_memcopyin(sc, p, offset, size)
  * Copy from kernel space to naord memory.
  */
 void
-ie_obio_memcopyout(sc, p, offset, size)
-	struct ie_softc	*sc;
-	const void *p;
-	int offset;
-	size_t size;
+ie_obio_memcopyout(struct ie_softc *sc, const void *p, int offset, size_t size)
 {
 	void *addr = (void *)((u_long)sc->bh + offset);/*XXX - not MI!*/
+
 	wcopy(p, addr, size);
 }
 
 /* read a 16-bit value at BH offset */
-u_int16_t ie_obio_read16 __P((struct ie_softc *, int offset));
+uint16_t ie_obio_read16(struct ie_softc *, int);
 /* write a 16-bit value at BH offset */
-void ie_obio_write16 __P((struct ie_softc *, int offset, u_int16_t value));
-void ie_obio_write24 __P((struct ie_softc *, int offset, int addr));
+void ie_obio_write16(struct ie_softc *, int, uint16_t);
+void ie_obio_write24(struct ie_softc *, int, int);
 
-u_int16_t
-ie_obio_read16(sc, offset)
-	struct ie_softc *sc;
-	int offset;
+uint16_t
+ie_obio_read16(struct ie_softc *sc, int offset)
 {
-	u_int16_t v = bus_space_read_2(sc->bt, sc->bh, offset);
+	uint16_t v = bus_space_read_2(sc->bt, sc->bh, offset);
+
 	return (((v&0xff)<<8) | ((v>>8)&0xff));
 }
 
 void
-ie_obio_write16(sc, offset, v)
-	struct ie_softc *sc;	
-	int offset;
-	u_int16_t v;
+ie_obio_write16(struct ie_softc *sc, int offset, uint16_t v)
 {
 	v = (((v&0xff)<<8) | ((v>>8)&0xff));
 	bus_space_write_2(sc->bt, sc->bh, offset, v);
 }
 
 void
-ie_obio_write24(sc, offset, addr)
-	struct ie_softc *sc;	
-	int offset;
-	int addr;
+ie_obio_write24(struct ie_softc *sc, int offset, int addr)
 {
 	u_char *f = (u_char *)&addr;
-	u_int16_t v0, v1;
+	uint16_t v0, v1;
 	u_char *t;
 
 	t = (u_char *)&v0;
@@ -253,10 +238,7 @@ ie_obio_write24(sc, offset, addr)
 }
 
 int
-ie_obio_match(parent, cf, aux)
-	struct device *parent;
-	struct cfdata *cf;
-	void *aux;
+ie_obio_match(struct device *parent, struct cfdata *cf, void *aux)
 {
 	union obio_attach_args *uoba = aux;
 	struct obio4_attach_args *oba;
@@ -273,10 +255,7 @@ ie_obio_match(parent, cf, aux)
 }
 
 void
-ie_obio_attach(parent, self, aux)
-	struct device *parent;
-	struct device *self;
-	void   *aux;
+ie_obio_attach(struct device *parent, struct device *self, void *aux)
 {
 	union obio_attach_args *uoba = aux;
 	struct obio4_attach_args *oba = &uoba->uoba_oba4;
@@ -288,9 +267,9 @@ ie_obio_attach(parent, self, aux)
 	int error;
 	paddr_t pa;
 	struct intrhand *ih;
-	bus_size_t msize;
+	bus_size_t memsize;
 	u_long iebase;
-	u_int8_t myaddr[ETHER_ADDR_LEN];
+	uint8_t myaddr[ETHER_ADDR_LEN];
 
 	sc->bt = oba->oba_bustag;
 
@@ -304,7 +283,7 @@ ie_obio_attach(parent, self, aux)
 	sc->ie_bus_read16 = ie_obio_read16;
 	sc->ie_bus_write16 = ie_obio_write16;
 	sc->ie_bus_write24 = ie_obio_write24;
-	sc->sc_msize = msize = 65536; /* XXX */
+	sc->sc_msize = memsize = 65536; /* XXX */
 
 	if (bus_space_map(oba->oba_bustag, oba->oba_paddr,
 			  sizeof(struct ieob),
@@ -318,14 +297,14 @@ ie_obio_attach(parent, self, aux)
 	/*
 	 * Allocate control & buffer memory.
 	 */
-	if ((error = bus_dmamap_create(dmatag, msize, 1, msize, 0,
+	if ((error = bus_dmamap_create(dmatag, memsize, 1, memsize, 0,
 					BUS_DMA_NOWAIT|BUS_DMA_24BIT,
 					&sc->sc_dmamap)) != 0) {
 		printf("%s: DMA map create error %d\n",
 			sc->sc_dev.dv_xname, error);
 		return;
 	}
-	if ((error = bus_dmamem_alloc(dmatag, msize, 64*1024, 0,
+	if ((error = bus_dmamem_alloc(dmatag, memsize, 64*1024, 0,
 			     &seg, 1, &rseg,
 			     BUS_DMA_NOWAIT | BUS_DMA_24BIT)) != 0) {
 		printf("%s: DMA memory allocation error %d\n",
@@ -334,7 +313,7 @@ ie_obio_attach(parent, self, aux)
 	}
 
 	/* Map DMA buffer in CPU addressable space */
-	if ((error = bus_dmamem_map(dmatag, &seg, rseg, msize,
+	if ((error = bus_dmamem_map(dmatag, &seg, rseg, memsize,
 				    (caddr_t *)&sc->sc_maddr,
 				    BUS_DMA_NOWAIT|BUS_DMA_COHERENT)) != 0) {
 		printf("%s: DMA buffer map error %d\n",
@@ -345,16 +324,16 @@ ie_obio_attach(parent, self, aux)
 
 	/* Load the segment */
 	if ((error = bus_dmamap_load(dmatag, sc->sc_dmamap,
-				     sc->sc_maddr, msize, NULL,
+				     sc->sc_maddr, memsize, NULL,
 				     BUS_DMA_NOWAIT)) != 0) {
 		printf("%s: DMA buffer map load error %d\n",
 			sc->sc_dev.dv_xname, error);
-		bus_dmamem_unmap(dmatag, sc->sc_maddr, msize);
+		bus_dmamem_unmap(dmatag, sc->sc_maddr, memsize);
 		bus_dmamem_free(dmatag, &seg, rseg);
 		return;
 	}
 
-	wzero(sc->sc_maddr, msize);
+	wzero(sc->sc_maddr, memsize);
 	sc->bh = (bus_space_handle_t)(sc->sc_maddr);
 
 	/*
@@ -374,7 +353,7 @@ ie_obio_attach(parent, self, aux)
 	|---//--- ISCP-SCB-----scp-|--//- buffers -//-|... |iscp-scb-----SCP-|
 	|         |                |                  |    |             |   |
 	|         |<---PAGE_SIZE-->|                  |    |<--PAGE_SIZE-+-->|
-	|         |<------------- msize ------------->|    |       ^     |
+	|         |<------------ memsize ------------>|    |       ^     |
 	|         |                                                |     |
 	|         \@maddr                                 (last page dbl mapped)
 	|                                                                |
@@ -413,7 +392,7 @@ ie_obio_attach(parent, self, aux)
 	 * are used for buffers.
 	 */
 	sc->buf_area = PAGE_SIZE;
-	sc->buf_area_sz = msize - PAGE_SIZE;
+	sc->buf_area_sz = memsize - PAGE_SIZE;
 
 	if (i82586_proberam(sc) == 0) {
 		printf(": memory probe failed\n");

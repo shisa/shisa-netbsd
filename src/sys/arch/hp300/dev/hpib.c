@@ -1,4 +1,4 @@
-/*	$NetBSD: hpib.c,v 1.28 2005/02/19 16:31:49 tsutsui Exp $	*/
+/*	$NetBSD: hpib.c,v 1.33 2006/03/28 17:38:25 thorpej Exp $	*/
 
 /*-
  * Copyright (c) 1996, 1997 The NetBSD Foundation, Inc.
@@ -72,7 +72,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: hpib.c,v 1.28 2005/02/19 16:31:49 tsutsui Exp $");
+__KERNEL_RCSID(0, "$NetBSD: hpib.c,v 1.33 2006/03/28 17:38:25 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -96,7 +96,8 @@ CFATTACH_DECL(hpibbus, sizeof(struct hpibbus_softc),
     hpibbusmatch, hpibbusattach, NULL, NULL);
 
 static void	hpibbus_attach_children(struct hpibbus_softc *);
-static int	hpibbussearch(struct device *, struct cfdata *, void *);
+static int	hpibbussearch(struct device *, struct cfdata *,
+			      const int *, void *);
 static int	hpibbusprint(void *, const char *);
 
 static int	hpibbus_alloc(struct hpibbus_softc *, int, int);
@@ -162,13 +163,12 @@ hpibbusattach(struct device *parent, struct device *self, void *aux)
 	sc->sc_ba = ha->ha_ba;
 	*(ha->ha_softcpp) = sc;			/* XXX */
 
-	hpibreset(self->dv_unit);		/* XXX souldn't be here */
+	hpibreset(device_unit(self));		/* XXX souldn't be here */
 
 	/*
 	 * Initialize the DMA queue entry.
 	 */
-	MALLOC(sc->sc_dq, struct dmaqueue *, sizeof(struct dmaqueue),
-	    M_DEVBUF, M_NOWAIT);
+	sc->sc_dq = malloc(sizeof(struct dmaqueue), M_DEVBUF, M_NOWAIT);
 	if (sc->sc_dq == NULL) {
 		printf("%s: can't allocate DMA queue entry\n", self->dv_xname);
 		return;
@@ -196,7 +196,7 @@ hpibbus_attach_children(struct hpibbus_softc *sc)
 		 * Plotters won't identify themselves, and
 		 * get the same value as non-existent devices.
 		 */
-		ha.ha_id = hpibid(sc->sc_dev.dv_unit, slave);
+		ha.ha_id = hpibid(device_unit(&sc->sc_dev), slave);
 
 		ha.ha_slave = slave;	/* not to be modified by children */
 		ha.ha_punit = 0;	/* children modify this */
@@ -204,12 +204,13 @@ hpibbus_attach_children(struct hpibbus_softc *sc)
 		/*
 		 * Search though all configured children for this bus.
 		 */
-		(void)config_search(hpibbussearch, &sc->sc_dev, &ha);
+		config_search_ia(hpibbussearch, &sc->sc_dev, "hpibbus", &ha);
 	}
 }
 
 static int
-hpibbussearch(struct device *parent, struct cfdata *cf, void *aux)
+hpibbussearch(struct device *parent, struct cfdata *cf,
+	      const int *ldesc, void *aux)
 {
 	struct hpibbus_softc *sc = (struct hpibbus_softc *)parent;
 	struct hpibbus_attach_args *ha = aux;

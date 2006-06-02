@@ -1,4 +1,4 @@
-.\"	$NetBSD: sysctl.3,v 1.142.2.7 2005/12/06 19:52:17 riz Exp $
+.\"	$NetBSD: sysctl.3,v 1.170 2006/05/16 00:08:24 elad Exp $
 .\"
 .\" Copyright (c) 1993
 .\"	The Regents of the University of California.  All rights reserved.
@@ -29,7 +29,7 @@
 .\"
 .\"	@(#)sysctl.3	8.4 (Berkeley) 5/9/95
 .\"
-.Dd June 20, 2005
+.Dd April 26, 2006
 .Dt SYSCTL 3
 .Os
 .Sh NAME
@@ -44,8 +44,8 @@
 .In sys/param.h
 .In sys/sysctl.h
 .Ft int
-.Fn sysctl "int *name" "u_int namelen" "void *oldp" "size_t *oldlenp" \
-"void *newp" "size_t newlen"
+.Fn sysctl "const int *name" "u_int namelen" "void *oldp" "size_t *oldlenp" \
+"const void *newp" "size_t newlen"
 .Ft int
 .Fn sysctlbyname "const char *sname" "void *oldp" "size_t *oldlenp" \
 "void *newp" "size_t newlen"
@@ -235,6 +235,7 @@ listed here, and described in separate sections below.
 .It CTL\_PROC	sys/sysctl.h	Per-process
 .It CTL\_VENDOR	?	Vendor specific
 .It CTL\_EMUL	sys/sysctl.h	Emulation settings
+.It CTL\_SECURITY	sys/sysctl.h	Security settings
 .El
 .Pp
 For example, the following retrieves the maximum number of processes allowed
@@ -308,7 +309,7 @@ returns configuration information about the filesystem
 type given as a fourth level identifier.
 The remaining second level identifiers are the
 filesystem type number returned by a
-.Xr statfs 2
+.Xr statvfs 2
 call or from VFS_CONF.
 The third level identifiers available for each filesystem
 are given in the header file that defines the mount
@@ -320,34 +321,70 @@ The changeable column shows whether a process with appropriate
 privilege may change the value.
 .Bl -column "Second level nameXXXXXX" "struct disk_sysctlXXX" -offset indent
 .It Sy Second level name	Type	Changeable
+.It HW\_ALIGNBYTES	integer	no
+.It HW\_BYTEORDER	integer	no
+.It HW\_CNMAGIC	string	yes
+.It HW\_DISKNAMES	string	no
+.It HW\_DISKSTATS	struct	no
 .It HW\_MACHINE	string	no
+.It HW\_MACHINE\_ARCH	string	no
 .It HW\_MODEL	string	no
 .It HW\_NCPU	integer	no
-.It HW\_BYTEORDER	integer	no
+.It HW\_PAGESIZE	integer	no
 .It HW\_PHYSMEM	integer	no
 .It HW\_PHYSMEM64	quad	no
 .It HW\_USERMEM	integer	no
 .It HW\_USERMEM64	quad	no
-.It HW\_PAGESIZE	integer	no
-.\".It HW\_DISKNAMES	struct	no
-.\".It HW\_DISKSTATS	struct	no
-.It HW\_MACHINE\_ARCH	string	no
-.It HW\_ALIGNBYTES	integer	no
-.It HW\_DISKNAMES	string	no
-.It HW\_DISKSTATS	struct disk_sysctl	no
-.It HW\_CNMAGIC	string	yes
 .El
 .Pp
 .Bl -tag -width "123456"
+.It Li HW_ALIGNBYTES
+Alignment constraint for all possible data types.
+This shows the value
+.Dv ALIGNBYTES
+in
+.Pa /usr/include/machine/param.h ,
+at the kernel compilation time.
+.It Li HW_BYTEORDER
+The byteorder (4,321, or 1,234).
+.It Li HW_CNMAGIC
+The console magic key sequence.
+.It Li HW_DISKNAMES
+The list of (space separated) disk device and NFS mount names on the system.
+.It Li HW_IOSTATNAMES
+A space separated list of devices that will have I/O statistics
+collected on them.
+.It Li HW_IOSTATS
+Return statistical information on the NFS mounts, disk and tape
+devices on the system.
+An array of
+.Va struct io_sysctl
+structures is returned,
+whose size depends on the current number of such objects in the system.
+The third level name is the size of the
+.Va struct io_sysctl .
+The type of object can be determined by examining the
+.Va type
+element of
+.Va struct io_sysctl .
+Which can be
+.Dv IOSTAT_DISK
+(disk drive),
+.Dv IOSTAT_TAPE
+(tape drive), or
+.Dv IOSTAT_NFS
+(NFS mount).
 .It Li HW_MACHINE
 The machine class.
+.It Li HW_MACHINE_ARCH
+The machine CPU class.
 .It Li HW_MODEL
 The machine model.
 .It Li HW_NCPU
 The number of CPUs.
 .ne 1i
-.It Li HW_BYTEORDER
-The byteorder (4,321, or 1,234).
+.It Li HW_PAGESIZE
+The software page size.
 .It Li HW_PHYSMEM
 The bytes of physical memory as a 32-bit integer.
 .It Li HW_PHYSMEM64
@@ -356,29 +393,6 @@ The bytes of physical memory as a 64-bit integer.
 The bytes of non-kernel memory as a 32-bit integer.
 .It Li HW_USERMEM64
 The bytes of non-kernel memory as a 64-bit integer.
-.It Li HW_PAGESIZE
-The software page size.
-.It Li HW_MACHINE_ARCH
-The machine CPU class.
-.It Li HW_ALIGNBYTES
-Alignment constraint for all possible data types.
-This shows the value
-.Dv ALIGNBYTES
-in
-.Pa /usr/include/machine/param.h ,
-at the kernel compilation time.
-.It Li HW_DISKNAMES
-The list of (space separated) disk device names on the system.
-.It Li HW_DISKSTATS
-Return statistical information on the disk devices on the system.
-An array of
-.Va struct disk_sysctl
-structures is returned,
-whose size depends on the current number of such objects in the system.
-The third level name is the size of the
-.Va struct disk_sysctl .
-.It Li HW_CNMAGIC
-The console magic key sequence.
 .El
 .Sh CTL_KERN
 The string and integer information available for the CTL_KERN level
@@ -395,8 +409,11 @@ information.
 .It KERN\_AUTONICETIME	integer	yes
 .It KERN\_AUTONICEVAL	integer	yes
 .It KERN\_BOOTTIME	struct timeval	no
+.It KERN\_BUFQ	node	not applicable
 .It KERN\_CCPU	integer	no
 .It KERN\_CLOCKRATE	struct clockinfo	no
+.It KERN\_CONSDEV	integer	no
+.It KERN\_CP\_ID	struct	no
 .It KERN\_CP\_TIME	uint64_t[\|]	no
 .It KERN\_DEFCORENAME	string	yes
 .It KERN\_DOMAINNAME	string	yes
@@ -405,6 +422,7 @@ information.
 .It KERN\_FORKFSLEEP	integer	yes
 .It KERN\_FSCALE	integer	no
 .It KERN\_FSYNC	integer	no
+.It KERN\_HARDCLOCK\_TICKS	integer	no
 .It KERN\_HOSTID	integer	yes
 .It KERN\_HOSTNAME	string	yes
 .It KERN\_IOV\_MAX	integer	no
@@ -416,6 +434,7 @@ information.
 .It KERN\_MAPPED\_FILES	integer	no
 .It KERN\_MAXFILES	integer	yes
 .It KERN\_MAXPARTITIONS	integer	no
+.It KERN\_MAXPHYS	integer	no
 .It KERN\_MAXPROC	integer	yes
 .It KERN\_MAXPTYS	integer	yes
 .It KERN\_MAXVNODES	integer	yes
@@ -424,13 +443,14 @@ information.
 .It KERN\_MEMLOCK\_RANGE	integer	no
 .It KERN\_MEMORY\_PROTECTION	integer	no
 .It KERN\_MONOTONIC\_CLOCK	integer	no
-.It KERN\_MSGBUF	char[\|]	no
+.It KERN\_MSGBUF	integer	no
 .It KERN\_MSGBUFSIZE	integer	no
 .It KERN\_NGROUPS	integer	no
 .It KERN\_NTPTIME	struct ntptimeval	no
 .It KERN\_OSRELEASE	string	no
 .It KERN\_OSREV	integer	no
 .It KERN\_OSTYPE	string	no
+.It KERN\_PIPE	node	not applicable
 .It KERN\_POSIX1	integer	no
 .It KERN\_POSIX\_BARRIERS	integer	no
 .It KERN\_POSIX\_READER\_WRITER\_LOCKS	integer	no
@@ -453,7 +473,9 @@ information.
 .It KERN\_SYSVMSG	integer	no
 .It KERN\_SYSVSEM	integer	no
 .It KERN\_SYSVSHM	integer	no
+.It KERN\_TIMEX	struct	no
 .It KERN\_TKSTAT	node	not applicable
+.It KERN\_URANDOM	integer	no
 .It KERN\_VERIEXEC	node	not applicable
 .It KERN\_VERSION	string	no
 .It KERN\_VNODE	struct vnode	no
@@ -485,6 +507,10 @@ structure is returned.
 This structure contains the clock, statistics clock and profiling clock
 frequencies, the number of micro-seconds per hz tick, and the clock
 skew rate.
+.It Li KERN_CONSDEV
+Console device.
+.It Li KERN_CP_ID
+Mapping of CPU number to CPU id.
 .It Li KERN_CP_TIME
 Returns an array of CPUSTATES uint64_ts.
 This array contains the
@@ -507,6 +533,8 @@ and can be changed with the kernel configuration option
 ).
 .It Li KERN_DOMAINNAME
 Get or set the YP domain name.
+.It Li KERN_DUMP_ON_PANIC
+Perform a crash dump on system panic.
 .It Li KERN_DRIVERS
 Return an array of
 .Va struct kinfo_drivers
@@ -521,12 +549,10 @@ field will be set to \-1 if the driver doesn't have a block device.
 .It Li KERN_FILE
 Return the entire file table.
 The returned data consists of a single
-.Va struct filehead
+.Va struct filelist
 followed by an array of
 .Va struct file ,
 whose size depends on the current number of such objects in the system.
-.It Li KERN_FSCALE
-The kernel fixed-point scale factor.
 .It Li KERN_FORKFSLEEP
 If
 .Xr fork 2
@@ -538,10 +564,16 @@ error to process.
 Useful to keep heavily forking runaway processes in bay.
 Default zero (no sleep).
 Maximum is 20 seconds.
+.It Li KERN_FSCALE
+The kernel fixed-point scale factor.
 .It Li KERN_FSYNC
 Return 1 if the POSIX 1003.1b File Synchronization Option is available
 on this system,
 otherwise 0.
+.It Li KERN_HARDCLOCK_TICKS
+Returns the number of
+.Xr hardclock 9
+ticks.
 .It Li KERN_HOSTID
 Get or set the host id.
 .It Li KERN_HOSTNAME
@@ -582,6 +614,8 @@ otherwise 0.
 The maximum number of open files that may be open in the system.
 .It Li KERN_MAXPARTITIONS
 The maximum number of partitions allowed per disk.
+.It Li KERN_MAXPHYS
+Maximum raw I/O transfer size.
 .It Li KERN_MAXPROC
 The maximum number of simultaneous processes the system will allow.
 .It Li KERN_MAXPTYS
@@ -600,27 +634,27 @@ The changeable column shows whether a process with appropriate
 privilege may change the value.
 .Bl -column "MBUFXNMBCLUSTERSXXX" "struct integerXXX" -offset indent
 .It Sy Third level name	Type	Changeable
-.It MBUF\_MSIZE	integer	yes
-.It MBUF\_MCLBYTES	integer	yes
-.It MBUF\_NMBCLUSTERS	integer	yes
 .It MBUF\_MBLOWAT	integer	yes
+.It MBUF\_MCLBYTES	integer	yes
 .It MBUF\_MCLLOWAT	integer	yes
+.It MBUF\_MSIZE	integer	yes
+.It MBUF\_NMBCLUSTERS	integer	yes
 .El
 .Pp
 The variables are as follows:
 .Bl -tag -width "123456"
-.It Li MBUF_MSIZE
-The mbuf base size.
+.It Li MBUF_MBLOWAT
+The mbuf low water mark.
 .It Li MBUF_MCLBYTES
 The mbuf cluster size.
+.It Li MBUF_MCLLOWAT
+The mbuf cluster low water mark.
+.It Li MBUF_MSIZE
+The mbuf base size.
 .It Li MBUF_NMBCLUSTERS
 The limit on the number of mbuf clusters.
 The variable can only be increased, and only increased on machines with
-direct-mapped pool pages
-.It Li MBUF_MBLOWAT
-The mbuf low water mark.
-.It Li MBUF_MCLLOWAT
-The mbuf cluster low water mark.
+direct-mapped pool pages.
 .El
 .It Li KERN_MEMLOCK
 Returns 1 if the POSIX 1003.1b Process Memory Locking Option is available
@@ -647,8 +681,6 @@ The returned data may contain NUL bytes.
 The maximum number of characters that the kernel message buffer can hold.
 .It Li KERN_NGROUPS
 The maximum number of supplemental groups.
-.It Li KERN_NO_TRUNC
-Return 1 if file names longer than KERN_NAME_MAX are truncated.
 .It Li KERN_NTPTIME
 A
 .Va struct ntptimeval
@@ -662,8 +694,33 @@ The system release string.
 The system revision string.
 .It Li KERN_OSTYPE
 The system type string.
-.It Li KERN_PATH_MAX
-The maximum number of bytes in a pathname.
+.It Li KERN_PIPE
+Pipe settings.
+The third level names for the  integer pipe settings is detailed below.
+The changeable column shows whether a process with appropriate
+privilege may change the value.
+.Bl -column "KERNXPIPEXFOOXXX" "integerXXX" -offset indent
+.It Sy Third level name Type    Changeable
+.It KERN\_PIPE\_KVASIZ	integer	yes
+.It KERN\_PIPE\_MAXBIGPIPES	integer	yes
+.It KERN\_PIPE\_MAXKVASZ	integer	yes
+.It KERN\_PIPE\_LIMITKVA	integer	yes
+.It KERN\_PIPE\_NBIGPIPES	integer	yes
+.El
+.Pp
+The variables are as follows:
+.Bl -tag -width "123456"
+.It Li KERN_PIPE_KVASIZ
+Amount of kernel memory consumed by pipe buffers.
+.It Li KERN_PIPE_MAXBIGPIPES
+Maximum number of "big" pipes.
+.It Li KERN_PIPE_MAXKVASZ
+Maximum amount of kernel memory to be used for pipes.
+.It Li KERN_PIPE_LIMITKVA
+Limit for direct transfers via page loan.
+.It Li KERN_PIPE_NBIGPIPES
+Number of "big" pipes.
+.El
 .It Li KERN_POSIX1
 The version of ISO/IEC 9945 (POSIX 1003.1) with which the system
 attempts to comply.
@@ -719,14 +776,14 @@ The third and fourth level names are as follows:
 .Bl -column "Third level nameXXXXXX" "Fourth level is:XXXXXX" -offset indent
 .It Sy Third level name	Fourth level is:
 .It KERN\_PROC\_ALL	None
+.It KERN\_PROC\_GID	A group ID
 .It KERN\_PROC\_PID	A process ID
 .It KERN\_PROC\_PGRP	A process group
+.It KERN\_PROC\_RGID	A real group ID
+.It KERN\_PROC\_RUID	A real user ID
 .It KERN\_PROC\_SESSION	A session ID
 .It KERN\_PROC\_TTY	A tty device
 .It KERN\_PROC\_UID	A user ID
-.It KERN\_PROC\_RUID	A real user ID
-.It KERN\_PROC\_GID	A group ID
-.It KERN\_PROC\_RGID	A real group ID
 .El
 .It Li KERN_PROC2
 As for KERN_PROC, but an array of
@@ -743,8 +800,8 @@ The third level name is the process ID.
 The fourth level name is as follows:
 .Bl -column "Third level nameXXXXXX" -offset indent
 .It KERN\_PROC\_ARGV	The argv strings
-.It KERN\_PROC\_NARGV	The number of argv strings
 .It KERN\_PROC\_ENV	The environ strings
+.It KERN\_PROC\_NARGV	The number of argv strings
 .It KERN\_PROC\_NENV	The number of environ strings
 .El
 .It Li KERN_PROF
@@ -758,28 +815,29 @@ The changeable column shows whether a process with appropriate
 privilege may change the value.
 .Bl -column "GPROFXGMONPARAMXXX" "struct gmonparamXXX" -offset indent
 .It Sy Third level name	Type	Changeable
-.It GPROF\_STATE	integer	yes
 .It GPROF\_COUNT	u_short[\|]	yes
 .It GPROF\_FROMS	u_short[\|]	yes
-.It GPROF\_TOS	struct tostruct	yes
 .It GPROF\_GMONPARAM	struct gmonparam	no
+.It GPROF\_STATE	integer	yes
+.It GPROF\_TOS	struct tostruct	yes
 .El
 .Pp
 The variables are as follows:
 .Bl -tag -width "123456"
-.It Li GPROF_STATE
-Returns GMON_PROF_ON or GMON_PROF_OFF to show that profiling
-is running or stopped.
 .It Li GPROF_COUNT
 Array of statistical program counter counts.
 .It Li GPROF_FROMS
 Array indexed by program counter of call-from points.
+.It Li GPROF_GMONPARAM
+Structure giving the sizes of the above arrays.
+.It Li GPROF_STATE
+Profiling state.
+If set to GMON_PROF_ON, starts profiling.
+If set to GMON_PROF_OFF, stops profiling.
 .It Li GPROF_TOS
 Array of
 .Va struct tostruct
 describing destination of calls and their counts.
-.It Li GPROF_GMONPARAM
-Structure giving the sizes of the above arrays.
 .El
 .It Li KERN_RAWPARTITION
 The raw partition of a disk (a == 0).
@@ -792,10 +850,14 @@ The root partition on the root device (a == 0).
 Return the offset of real time clock from UTC in minutes.
 .It Li KERN_SAVED_IDS
 Returns 1 if saved set-group and saved set-user ID is available.
+.It Li KERN_SBMAX
+Maximum socket buffer size.
 .It Li KERN_SECURELVL
 The system security level.
 This level may be raised by processes with appropriate privilege.
 It may only be lowered by process 1.
+.It Li KERN_SOMAXKVA
+Maximum amount of kernel memory to be used for socket buffers.
 .It Li KERN_SYNCHRONIZED_IO
 Returns 1 if the POSIX 1003.1b Synchronized I/O Option is available
 on this system,
@@ -842,6 +904,8 @@ otherwise 0.
 Returns 1 if System V style share memory functionality is available
 on this system,
 otherwise 0.
+.It Li KERN_TIMEX
+Not available.
 .It Li KERN_TKSTAT
 Return information about the number of characters sent and received
 on ttys.
@@ -850,23 +914,25 @@ The changeable column shows whether a process
 with appropriate privilege may change the value.
 .Bl -column "KERNXTKSTATXRAWCCXXX" "struct integerXXX" -offset indent
 .It Sy Third level name	Type	Changeable
+.It KERN\_TKSTAT\_CANCC	quad	no
 .It KERN\_TKSTAT\_NIN	quad	no
 .It KERN\_TKSTAT\_NOUT	quad	no
-.It KERN\_TKSTAT\_CANCC	quad	no
 .It KERN\_TKSTAT\_RAWCC	quad	no
 .El
 .Pp
 The variables are as follows:
 .Bl -tag -width "123456"
+.It Li KERN_TKSTAT_CANCC
+The number of canonical input characters.
 .It Li KERN_TKSTAT_NIN
 The total number of input characters.
 .It Li KERN_TKSTAT_NOUT
 The total number of output characters.
-.It Li KERN_TKSTAT_CANCC
-The number of canonical input characters.
 .It Li KERN_TKSTAT_RAWCC
 The number of raw input characters.
 .El
+.It Li KERN_URND
+Random integer value.
 .It Li KERN_VERIEXEC
 Tunings for Verified Exec.
 Third level names for the veriexec variables are detailed below.
@@ -875,23 +941,28 @@ privilege may change the value or only raise it.
 Only the superuser can modify these variables.
 .Bl -column "VERIEXECXALGORITHMSXXX" "struct integerXXX" -offset indent
 .It Sy Third level name	Type	Changeable
-.It VERIEXEC\_VERBOSE	integer	yes
-.It VERIEXEC\_STRICT	integer	raise only
 .It VERIEXEC\_ALGORITHMS	string	no
 .It VERIEXEC\_COUNT	node	not applicable
+.It VERIEXEC\_STRICT	integer	raise only
+.It VERIEXEC\_VERBOSE	integer	yes
 .El
 .Pp
 The variables are as follows:
 .Bl -tag -width "123456"
-.It Li VERIEXEC_VERBOSE
-Controls the verbosity level of Verified Exec.
-If 0, only the minimal
-indication required will be given about what's happening - fingerprint
-mismatches, removal of entries from the tables, modification of a
-fingerprinted file.
-If 1, more messages will be printed (ie., when a file with a valid
-fingerprint is accessed).
-Verbose level 2 is debug mode.
+.It Li VERIEXEC_ALGORITHMS
+Returns a string with the supported algorithms in Verified Exec.
+.It Li VERIEXEC_COUNT
+Variables are added to this node as new hash tables are created to
+contain Verified Exec data for a new device.
+Each variable in the node
+will have a name in the form of
+.No dev_ Ns Aq id
+where
+.Aq id
+is the device id.
+For example, the variable for the root device may be dev_0.
+The value of this
+variable will be the amount of fingerprinted files on the device.
 .It Li VERIEXEC_STRICT
 Controls the strict level of Verified Exec.
 The strict level defines how
@@ -910,20 +981,15 @@ It will have all effects of
 strict level 2, but it will also prevent access to non-monitored files.
 Furthermore, it will prevent addition of new files to the system, and
 allow writing only to files opened before the strict level was raised.
-.It Li VERIEXEC_ALGORITHMS
-Returns a string with the supported algorithms in Verified Exec.
-.It Li VERIEXEC_COUNT
-Variables are added to this node as new hash tables are created to
-contain Verified Exec data for a new device.
-Each variable in the node
-will have a name in the form of 
-.No dev_ Ns Aq id
-where
-.Aq id
-is the device id.
-For example, the variable for the root device may be dev_0.
-The value of this
-variable will be the amount of fingerprinted files on the device.
+.It Li VERIEXEC_VERBOSE
+Controls the verbosity level of Verified Exec.
+If 0, only the minimal
+indication required will be given about what's happening - fingerprint
+mismatches, removal of entries from the tables, modification of a
+fingerprinted file.
+If 1, more messages will be printed (ie., when a file with a valid
+fingerprint is accessed).
+Verbose level 2 is debug mode.
 .El
 .It Li KERN_VERSION
 The system version string.
@@ -950,6 +1016,8 @@ The string and integer information available for the CTL_NET level
 is detailed below.
 The changeable column shows whether a process with appropriate
 privilege may change the value.
+The second and third levels are typically the protocol family and
+protocol number, though this is not always the case.
 .Bl -column "Second level nameXXXXXX" "routing messagesXXX" -offset indent
 .It Sy Second level name	Type	Changeable
 .It PF\_ROUTE	routing messages	no
@@ -984,27 +1052,34 @@ The fourth level name is the variable name.
 The currently defined protocols and names are:
 .Bl -column "Protocol name" "Variable nameXX" "integer" "yes" -offset indent
 .It Sy Protocol name	Variable name	Type	Changeable
-.It ip	forwarding	integer	yes
-.It ip	redirect	integer	yes
-.It ip	ttl	integer	yes
-.It ip	forwsrcrt	integer	yes
-.It ip	directed-broadcast	integer	yes
-.It ip	allowsrcrt	integer	yes
-.It ip	subnetsarelocal	integer	yes
-.It ip	mtudisc	integer	yes
-.It ip	anonportmin	integer	yes
-.It ip	anonportmax	integer	yes
-.It ip	mtudisctimeout	integer	yes
-.It ip	gifttl	integer	yes
-.It ip	grettl	integer	yes
-.It ip	lowportmin	integer	yes
-.It ip	lowportmax	integer	yes
-.It ip	maxfragpacket	integer	yes
-.It ip	checkinterface	integer	yes
-.It icmp	maskrepl	integer	yes
+.It arp	down	integer	yes
+.It arp	keep	integer	yes
+.It arp	prune	integer	yes
+.It arp	refresh	integer	yes
 .It icmp	errppslimit	integer	yes
+.It icmp	maskrepl	integer	yes
 .It icmp	rediraccept	integer	yes
 .It icmp	redirtimeout	integer	yes
+.It ip	allowsrcrt	integer	yes
+.It ip	anonportmax	integer	yes
+.It ip	anonportmin	integer	yes
+.It ip	checkinterface	integer	yes
+.It ip	directed-broadcast	integer	yes
+.It ip	do_loopback_cksum	integer	yes
+.It ip	forwarding	integer	yes
+.It ip	forwsrcrt	integer	yes
+.It ip	gifttl	integer	yes
+.It ip	grettl	integer	yes
+.It ip	hostzerobroadcast	integer	yes
+.It ip	lowportmin	integer	yes
+.It ip	lowportmax	integer	yes
+.It ip	maxfragpackets	integer	yes
+.It ip	mtudisc	integer	yes
+.It ip	mtudisctimeout	integer	yes
+.It ip	random_id	integer	yes
+.It ip	redirect	integer	yes
+.It ip	subnetsarelocal	integer	yes
+.It ip	ttl	integer	yes
 .It tcp	rfc1323	integer	yes
 .It tcp	sendspace	integer	yes
 .It tcp	recvspace	integer	yes
@@ -1031,55 +1106,48 @@ The currently defined protocols and names are:
 .It tcp	rstppslimit	integer	yes
 .It tcp	ident	struct	no
 .It udp	checksum	integer	yes
-.It udp	sendspace	integer	yes
+.It udp	do_loopback_cksum	integer	yes
 .It udp	recvspace	integer	yes
+.It udp	sendspace	integer	yes
 .El
 .Pp
 The variables are as follows:
 .Bl -tag -width "123456"
-.It Li ip.forwarding
-Returns 1 when IP forwarding is enabled for the host,
-meaning that the host is acting as a router.
-.It Li ip.redirect
-Returns 1 when ICMP redirects may be sent by the host.
-This option is ignored unless the host is routing IP packets,
-and should normally be enabled on all systems.
-.It Li ip.ttl
-The maximum time-to-live (hop count) value for an IP packet sourced by
-the system.
-This value applies to normal transport protocols, not to ICMP.
-.It Li ip.forwsrcrt
-Returns 1 when forwarding of source-routed packets is enabled for
-the host.
-This value may only be changed if the kernel security level is less than 1.
-.It Li ip.directed-broadcast
-Returns 1 if directed broadcast behavior is enabled for the host.
+.It Li arp.down
+Failed ARP entry lifetime.
+.It Li arp.keep
+Valid ARP entry lifetime.
+.It Li arp.prune
+ARP cache pruning interval.
+.It Li arp.refresh
+ARP entry refresh interval.
 .It Li ip.allowsrcrt
-Returns 1 if the host accepts source routed packets.
-.It Li ip.subnetsarelocal
-Returns 1 if subnets are to be considered local addresses.
-.It Li ip.mtudisc
-If set to 1, Path MTU Discovery (RFC 1191) is enabled.
-When Path MTU Discovery is enabled, the transmitted TCP segment
-size will be determined by the advertised maximum segment size
-(MSS) from the remote end, as constrained by the path MTU.
-If MTU Discovery is disabled, the transmitted segment size will
-never be greater than
-.Li tcp.mssdflt
-(the local maximum segment size).
-.It Li ip.anonportmin
-The lowest port number to use for TCP and UDP ephemeral port allocation.
-This cannot be set to less than 1024 or greater than 65535.
+If set to 1, the host accepts source routed packets.
 .It Li ip.anonportmax
 The highest port number to use for TCP and UDP ephemeral port allocation.
 This cannot be set to less than 1024 or greater than 65535, and must
 be greater than
 .Li ip.anonportmin .
-.It Li ip.mtudisctimeout
-Returns the number of seconds in which a route added by the Path MTU
-Discovery engine will time out.
-When the route times out, the Path
-MTU Discovery engine will attempt to probe a larger path MTU.
+.It Li ip.anonportmin
+The lowest port number to use for TCP and UDP ephemeral port allocation.
+This cannot be set to less than 1024 or greater than 65535.
+.It Li ip.checkinterface
+If set to non-zero, the host will reject packets addressed to it
+that arrive on an interface not bound to that address.
+Currently, this must be disabled if ipnat is used to translate the
+destination address to another local interface, or if addresses
+are added to the loopback interface instead of the interface where
+the packets for those packets are received.
+.It Li ip.directed-broadcast
+If set to 1, enables directed broadcast behavior for the host.
+.It Li ip.do_loopback_cksum
+Perform IP checksum on loopback.
+.It Li ip.forwarding
+If set to 1, enables IP forwarding for the host,
+meaning that the host is acting as a router.
+.It Li ip.forwsrcrt
+If set to 1, enables forwarding of source-routed packets for the host.
+This value may only be changed if the kernel security level is less than 1.
 .It Li ip.gifttl
 The maximum time-to-live (hop count) value for an IPv4 packet generated by
 .Xr gif 4
@@ -1088,36 +1156,57 @@ tunnel interface.
 The maximum time-to-live (hop count) value for an IPv4 packet generated by
 .Xr gre 4
 tunnel interface.
-.It Li ip.lowportmin
-The lowest port number to use for TCP and UDP reserved port allocation.
-This cannot be set to less than 0 or greater than 1024, and must
-be smaller than
-.Li ip.lowportmax .
+.It Li ip.hostzerobroadcast
+All zeroes address is broadcast address.
 .It Li ip.lowportmax
 The highest port number to use for TCP and UDP reserved port allocation.
 This cannot be set to less than 0 or greater than 1024, and must
 be greater than
 .Li ip.lowportmin .
+.It Li ip.lowportmin
+The lowest port number to use for TCP and UDP reserved port allocation.
+This cannot be set to less than 0 or greater than 1024, and must
+be smaller than
+.Li ip.lowportmax .
 .It Li ip.maxfragpackets
 The maximum number of fragmented packets the node will accept.
 0 means that the node will not accept any fragmented packets.
 \-1 means that the node will accept as many fragmented packets as it receives.
 The flag is provided basically for avoiding possible DoS attacks.
-.It Li ip.checkinterface
-If set to non-zero, the host will reject packets addressed to it
-that arrive on an interface not bound to that address.
-Currently, this must be disabled if ipnat is used to translate the
-destination address to another local interface, or if addresses
-are added to the loopback interface instead of the interface where
-the packets for those packets are received.
-.It Li icmp.maskrepl
-Returns 1 if ICMP network mask requests are to be answered.
+.It Li ip.mtudisc
+If set to 1, enables Path MTU Discovery (RFC 1191).
+When Path MTU Discovery is enabled, the transmitted TCP segment
+size will be determined by the advertised maximum segment size
+(MSS) from the remote end, as constrained by the path MTU.
+If MTU Discovery is disabled, the transmitted segment size will
+never be greater than
+.Li tcp.mssdflt
+(the local maximum segment size).
+.It Li ip.mtudisctimeout
+The number of seconds in which a route added by the Path MTU
+Discovery engine will time out.
+When the route times out, the Path
+MTU Discovery engine will attempt to probe a larger path MTU.
+.It Li ip.random_id
+Assign random ip_id values.
+.It Li ip.redirect
+If set to 1, ICMP redirects may be sent by the host.
+This option is ignored unless the host is routing IP packets,
+and should normally be enabled on all systems.
+.It Li ip.subnetsarelocal
+If set to 1, subnets are to be considered local addresses.
+.It Li ip.ttl
+The maximum time-to-live (hop count) value for an IP packet sourced by
+the system.
+This value applies to normal transport protocols, not to ICMP.
 .It Li icmp.errppslimit
 The variable specifies the maximum number of outgoing ICMP error messages,
 per second.
 ICMP error messages that exceeded the value are subject to rate limitation
 and will not go out from the node.
 Negative value disables rate limitation.
+.It Li icmp.maskrepl
+If set to 1, ICMP network mask requests are to be answered.
 .It Li icmp.rediraccept
 If set to non-zero, the host will accept ICMP redirect packets.
 Note that routers will never accept ICMP redirect packets,
@@ -1126,29 +1215,36 @@ and the variable is meaningful on IP hosts only.
 The variable specifies lifetime of routing entries generated by incoming
 ICMP redirect.
 This defaults to 600 seconds.
-.It Li tcp.rfc1323
-Returns 1 if RFC 1323 extensions to TCP are enabled.
-.It Li tcp.sendspace
-Returns the default TCP send buffer size.
-.It Li tcp.recvspace
-Returns the default TCP receive buffer size.
-.It Li tcp.mssdflt
-Returns the default maximum segment size both advertised to the peer
-and to use when either the peer does not advertise a maximum segment size to
-us during connection setup or Path MTU Discovery
-.Li ( ip.mtudisc )
-is disabled.
-Do not change this value unless you really know what you are doing.
-.It Li tcp.syn_cache_limit
-Returns the maximum number of entries allowed in the TCP compressed state
-engine.
-.It Li tcp.syn_bucket_limit
-Returns the maximum number of entries allowed per hash bucket in the TCP
-compressed state engine.
-.It Li tcp.syn_cache_interval
-Returns the TCP compressed state engine's timer interval.
+.It Li icmp.returndatabytes
+Number of bytes to return in an ICMP error message.
+.It Li tcp.ack_on_push
+If set to 1, TCP is to immediately transmit an ACK upon reception of
+a packet with PUSH set.
+This can avoid losing a round trip time in some rare situations,
+but has the caveat of potentially defeating TCP's delayed ACK algorithm.
+Use of this option is generally not recommended, but
+the variable exists in case your configuration really needs it.
+.It Li tcp.compat_42
+If set to 1, enables work-arounds for bugs in the 4.2BSD TCP implementation.
+Use of this option is not recommended, although it may be
+required in order to communicate with extremely old TCP implementations.
+.It Li tcp.cwm
+If set to 1, enables use of the Hughes/Touch/Heidemann Congestion Window
+Monitoring algorithm.
+This algorithm prevents line-rate bursts of packets that could
+otherwise occur when data begins flowing on an idle TCP connection.
+These line-rate bursts can contribute to network and router congestion.
+This can be particularly useful on World Wide Web servers
+which support HTTP/1.1, which has lingering connections.
+.It Li tcp.cwm_burstsize
+The Congestion Window Monitoring allowed burst size, in terms
+of packet count.
+.It Li tcp.delack_ticks
+Number of ticks to delay sending an ACK.
+.It Li tcp.do_loopback_cksum
+Perform TCP checksum on loopback.
 .It Li tcp.init_win
-Returns a value indicating the TCP initial congestion window.
+A value indicating the TCP initial congestion window.
 If this value is 0, an auto-tuning algorithm designed to use an initial
 window of approximately 4K bytes is in use.
 Otherwise, this value indicates a fixed number of packets.
@@ -1156,45 +1252,11 @@ Otherwise, this value indicates a fixed number of packets.
 Like
 .Li tcp.init_win ,
 but used when communicating with hosts on a local network.
-.It Li tcp.mss_ifmtu
-Returns 1 if TCP calculates the outgoing maximum segment size based on
-the MTU of the appropriate interface.
-Otherwise, it is calculated based on the greater of the MTU of the
-interface, and the largest (non-loopback) interface MTU on the system.
-.It Li tcp.sack
-TCP Selective ACKnowledgement (RFC 2018) is not implemented in
-.Nx
-at this time.
-Changing this value will have no effect.
-.It Li tcp.win_scale
-If rfc1323 is enabled, a value of 1 indicates RFC 1323 window scale options,
-for increasing the TCP window size, are enabled.
-.It Li tcp.timestamps
-If rfc1323 is enabled, a value of 1 indicates RFC 1323 time stamp options,
-used for measuring TCP round trip times, are enabled.
-.It Li tcp.compat_42
-Returns 1 if work-arounds for bugs in the 4.2BSD TCP implementation are
-enabled.
-Use of this option is not recommended, although it may be
-required in order to communicate with extremely old TCP implementations.
-.It Li tcp.cwm
-Returns 1 if use of the Hughes/Touch/Heidemann Congestion Window Monitoring
-algorithm is enabled.
-This algorithm prevents line-rate bursts of packets that could
-otherwise occur when data begins flowing on an idle TCP connection.
-These line-rate bursts can contribute to network and router congestion.
-This can be particularly useful on World Wide Web servers
-which support HTTP/1.1, which has lingering connections.
-.It Li tcp.cwm_burstsize
-Returns the Congestion Window Monitoring allowed burst size, in terms
-of packet count.
-.It Li tcp.ack_on_push
-Returns 1 if TCP is to immediately transmit an ACK upon reception of
-a packet with PUSH set.
-This can avoid losing a round trip time in some rare situations,
-but has the caveat of potentially defeating TCP's delayed ACK algorithm.
-Use of this option is generally not recommended, but
-the variable exists in case your configuration really needs it.
+.It Li tcp.keepcnt
+Number of keepalive probes sent before declaring a connection dead.
+If set to zero, there is no limit;
+keepalives will be sent until some kind of
+response is received from the peer.
 .It Li tcp.keepidle
 Time a connection must be idle before keepalives are sent (if keepalives
 are enabled for the connection).
@@ -1203,36 +1265,69 @@ See also tcp.slowhz.
 Time after a keepalive probe is sent until, in the absence of any response,
 another probe is sent.
 See also tcp.slowhz.
-.It Li tcp.keepcnt
-Number of keepalive probes sent before declaring a connection dead.
-If set to zero, there is no limit;
-keepalives will be sent until some kind of
-response is received from the peer.
-.It Li tcp.slowhz
-The units for tcp.keepidle and tcp.keepintvl; those variables are in ticks
-of a clock that ticks tcp.slowhz times per second.
-(That is, their values
-must be divided by the tcp.slowhz value to get times in seconds.)
-.It Li tcp.newreno
-Returns 1 if the use of J.
-Hoe's NewReno congestion control algorithm is enabled.
-This algorithm improves the start-up behavior of TCP connections.
 .It Li tcp.log_refused
-Returns 1 if refused TCP connections to the host will be logged.
+If set to 1, refused TCP connections to the host will be logged.
+.It Li tcp.mss_ifmtu
+If set to 1, TCP calculates the outgoing maximum segment size based on
+the MTU of the appropriate interface.
+If set to 0, it is calculated based on the greater of the MTU of the
+interface, and the largest (non-loopback) interface MTU on the system.
+.It Li tcp.mssdflt
+The default maximum segment size both advertised to the peer
+and to use when either the peer does not advertise a maximum segment size to
+us during connection setup or Path MTU Discovery
+.Li ( ip.mtudisc )
+is disabled.
+Do not change this value unless you really know what you are doing.
+.It Li tcp.newreno
+If set to 1, enables the use of J.
+Hoe's NewReno congestion control algorithm.
+This algorithm improves the start-up behavior of TCP connections.
+.It Li tcp.recvspace
+The default TCP receive buffer size.
+.It Li tcp.rfc1323
+If set to 1, enables RFC 1323 extensions to TCP.
 .It Li tcp.rstppslimit
 The variable specifies the maximum number of outgoing TCP RST packets,
 per second.
 TCP RST packet that exceeded the value are subject to rate limitation
 and will not go out from the node.
 Negative value disables rate limitation.
+.It Li tcp.sack.enable
+If set to 1, enables RFC 2018 Selective ACKnowledgement.
+.It Li tcp.sack.globalholes
+Global number of TCP SACK holes.
+.It Li tcp.sack.globalmaxholes
+Global maximum number of TCP SACK holes.
+.It Li tcp.sack.maxholes
+Maximum number of TCP SACK holes allowed per connection.
+.It Li tcp.sendspace
+The default TCP send buffer size.
+.It Li tcp.slowhz
+The units for tcp.keepidle and tcp.keepintvl; those variables are in ticks
+of a clock that ticks tcp.slowhz times per second.
+(That is, their values
+must be divided by the tcp.slowhz value to get times in seconds.)
+.It Li tcp.syn_bucket_limit
+The maximum number of entries allowed per hash bucket in the TCP
+compressed state engine.
+.It Li tcp.syn_cache_limit
+The maximum number of entries allowed in the TCP compressed state
+engine.
+.It Li tcp.timestamps
+If rfc1323 is enabled, a value of 1 indicates RFC 1323 time stamp options,
+used for measuring TCP round trip times, are enabled.
+.It Li tcp.win_scale
+If rfc1323 is enabled, a value of 1 indicates RFC 1323 window scale options,
+for increasing the TCP window size, are enabled.
 .It Li udp.checksum
-Returns 1 when UDP checksums are being computed.
+If set to 1, UDP checksums are being computed.
 Received non-zero UDP checksums are always checked.
 Disabling UDP checksums is strongly discouraged.
 .It Li udp.sendspace
-Returns the default UDP send buffer size.
+The default UDP send buffer size.
 .It Li udp.recvspace
-Returns the default UDP receive buffer size.
+The default UDP receive buffer size.
 .El
 .Pp
 For variables net.*.ipsec, please refer to
@@ -1245,50 +1340,78 @@ The fourth level name is the variable name.
 The currently defined protocols and names are:
 .Bl -column "Protocol name" "Variable nameXX" "integer" "yes" -offset indent
 .It Sy Protocol name	Variable name	Type	Changeable
-.It ip6	forwarding	integer	yes
-.It ip6	redirect	integer	yes
-.It ip6	hlim	integer	yes
-.It ip6	maxfragpackets	integer	yes
-.It ip6	accept_rtadv	integer	yes
-.It ip6	keepfaith	integer	yes
-.It ip6	log_interval	integer	yes
-.It ip6	hdrnestlimit	integer	yes
-.It ip6	dad_count	integer	yes
-.It ip6	auto_flowlabel	integer	yes
-.It ip6	defmcasthlim	integer	yes
-.It ip6	gif_hlim	integer	yes
-.It ip6	kame_version	string	no
-.It ip6	use_deprecated	integer	yes
-.It ip6	rr_prune	integer	yes
-.It ip6	v6only	integer	yes
-.It ip6	anonportmin	integer	yes
-.It ip6	anonportmax	integer	yes
-.It ip6	lowportmin	integer	yes
-.It ip6	lowportmax	integer	yes
-.It ip6	maxfrags	integer	yes
-.It icmp6	rediraccept	integer	yes
-.It icmp6	redirtimeout	integer	yes
-.It icmp6	nd6_prune	integer	yes
-.It icmp6	nd6_delay	integer	yes
-.It icmp6	nd6_umaxtries	integer	yes
-.It icmp6	nd6_mmaxtries	integer	yes
-.It icmp6	nd6_useloopback	integer	yes
-.It icmp6	nodeinfo	integer	yes
 .It icmp6	errppslimit	integer	yes
-.It icmp6	nd6_maxnudhint	integer	yes
 .It icmp6	mtudisc_hiwat	integer	yes
 .It icmp6	mtudisc_lowat	integer	yes
 .It icmp6	nd6_debug	integer	yes
-.It udp6	sendspace	integer	yes
+.It icmp6	nd6_delay	integer	yes
+.It icmp6	nd6_maxnudhint	integer	yes
+.It icmp6	nd6_mmaxtries	integer	yes
+.It icmp6	nd6_prune	integer	yes
+.It icmp6	nd6_umaxtries	integer	yes
+.It icmp6	nd6_useloopback	integer	yes
+.It icmp6	nodeinfo	integer	yes
+.It icmp6	rediraccept	integer	yes
+.It icmp6	redirtimeout	integer	yes
+.It ip6	accept_rtadv	integer	yes
+.It ip6	anonportmax	integer	yes
+.It ip6	anonportmin	integer	yes
+.It ip6	auto_flowlabel	integer	yes
+.It ip6	dad_count	integer	yes
+.It ip6	defmcasthlim	integer	yes
+.It ip6	forwarding	integer	yes
+.It ip6	gifhlim	integer	yes
+.It ip6	hlim	integer	yes
+.It ip6	hdrnestlimit	integer	yes
+.It ip6	kame_version	string	no
+.It ip6	keepfaith	integer	yes
+.It ip6	log_interval	integer	yes
+.It ip6	lowportmax	integer	yes
+.It ip6	lowportmin	integer	yes
+.It ip6	maxfragpackets	integer	yes
+.It ip6	maxfrags	integer	yes
+.It ip6	redirect	integer	yes
+.It ip6	rr_prune	integer	yes
+.It ip6	use_deprecated	integer	yes
+.It ip6	v6only	integer	yes
+.It udp6	do_loopback_cksum	integer	yes
 .It udp6	recvspace	integer	yes
+.It udp6	sendspace	integer	yes
 .El
 .Pp
 The variables are as follows:
 .Bl -tag -width "123456"
+.It Li ip6.accept_rtadv
+If set to non-zero, the node will accept ICMPv6 router advertisement packets
+and autoconfigures address prefixes and default routers.
+The node must be a host
+.Pq not a router
+for the option to be meaningful.
+.It Li ip6.anonportmax
+The highest port number to use for TCP and UDP ephemeral port allocation.
+This cannot be set to less than 1024 or greater than 65535, and must
+be greater than
+.Li ip6.anonportmin .
+.It Li ip6.anonportmin
+The lowest port number to use for TCP and UDP ephemeral port allocation.
+This cannot be set to less than 1024 or greater than 65535.
+.It Li ip6.auto_flowlabel
+On connected transport protocol packets,
+fill IPv6 flowlabel field to help intermediate routers to identify packet flows.
+.It Li ip6.dad_count
+The variable configures number of IPv6 DAD
+.Pq duplicated address detection
+probe packets.
+The packets will be generated when IPv6 interface addresses are configured.
+.It Li ip6.defmcasthlim
+The default hop limit value for an IPv6 multicast packet sourced by the node.
+This value applies to all the transport protocols on top of IPv6.
+There are APIs to override the value, as documented in
+.Xr ip6 4 .
 .It Li ip6.forwarding
-Returns 1 when IPv6 forwarding is enabled for the node,
+If set to 1, enables IPv6 forwarding for the node,
 meaning that the node is acting as a router.
-Returns 0 when IPv6 forwarding is disabled for the node,
+If set to 0, disables IPv6 forwarding for the node,
 meaning that the node is acting as a host.
 IPv6 specification defines node behavior for
 .Dq router
@@ -1298,26 +1421,20 @@ case quite differently, and changing this variable during operation
 may cause serious trouble.
 It is recommended to configure the variable at bootstrap time,
 and bootstrap time only.
-.It Li ip6.redirect
-Returns 1 when ICMPv6 redirects may be sent by the node.
-This option is ignored unless the node is routing IP packets,
-and should normally be enabled on all systems.
+.It Li ip6.gifhlim
+The maximum hop limit value for an IPv6 packet generated by
+.Xr gif 4
+tunnel interface.
+.It Li ip6.hdrnestlimit
+The number of IPv6 extension headers permitted on incoming IPv6 packets.
+If set to 0, the node will accept as many extension headers as possible.
 .It Li ip6.hlim
 The default hop limit value for an IPv6 unicast packet sourced by the node.
 This value applies to all the transport protocols on top of IPv6.
 There are APIs to override the value, as documented in
 .Xr ip6 4 .
-.It Li ip6.maxfragpackets
-The maximum number of fragmented packets the node will accept.
-0 means that the node will not accept any fragmented packets.
-\-1 means that the node will accept as many fragmented packets as it receives.
-The flag is provided basically for avoiding possible DoS attacks.
-.It Li ip6.accept_rtadv
-If set to non-zero, the node will accept ICMPv6 router advertisement packets
-and autoconfigures address prefixes and default routers.
-The node must be a host
-.Pq not a router
-for the option to be meaningful.
+.It Li ip6.kame_version
+The string identifies the version of KAME IPv6 stack implemented in the kernel.
 .It Li ip6.keepfaith
 If set to non-zero, it enables
 .Dq FAITH
@@ -1331,33 +1448,35 @@ for detail.
 The variable controls amount of logs generated by IPv6 packet
 forwarding engine, by setting interval between log output
 .Pq in seconds .
-.It Li ip6.hdrnestlimit
-The number of IPv6 extension headers permitted on incoming IPv6 packets.
-If set to 0, the node will accept as many extension headers as possible.
-.It Li ip6.dad_count
-The variable configures number of IPv6 DAD
-.Pq duplicated address detection
-probe packets.
-The packets will be generated when IPv6 interface addresses are configured.
-.It Li ip6.auto_flowlabel
-On connected transport protocol packets,
-fill IPv6 flowlabel field to help intermediate routers to identify packet flows.
-.It Li ip6.defmcasthlim
-The default hop limit value for an IPv6 multicast packet sourced by the node.
-This value applies to all the transport protocols on top of IPv6.
-There are APIs to override the value, as documented in
-.Xr ip6 4 .
-.It Li ip6.gif_hlim
-The maximum hop limit value for an IPv6 packet generated by
-.Xr gif 4
-tunnel interface.
-.It Li ip6.kame_version
-The string identifies the version of KAME IPv6 stack implemented in the kernel.
-.It Li ip6.use_deprecated
-The variable controls use of deprecated address, specified in RFC 2462 5.5.4.
+.It Li ip6.lowportmax
+The highest port number to use for TCP and UDP reserved port allocation.
+This cannot be set to less than 0 or greater than 1024, and must
+be greater than
+.Li ip6.lowportmin .
+.It Li ip6.lowportmin
+The lowest port number to use for TCP and UDP reserved port allocation.
+This cannot be set to less than 0 or greater than 1024, and must
+be smaller than
+.Li ip6.lowportmax .
+.It Li ip6.maxfragpackets
+The maximum number of fragmented packets the node will accept.
+0 means that the node will not accept any fragmented packets.
+\-1 means that the node will accept as many fragmented packets as it receives.
+The flag is provided basically for avoiding possible DoS attacks.
+.It Li ip6.maxfrags
+The maximum number of fragments the node will accept.
+0 means that the node will not accept any fragments.
+\-1 means that the node will accept as many fragments as it receives.
+The flag is provided basically for avoiding possible DoS attacks.
+.It Li ip6.redirect
+If set to 1, ICMPv6 redirects may be sent by the node.
+This option is ignored unless the node is routing IP packets,
+and should normally be enabled on all systems.
 .It Li ip6.rr_prune
 The variable specifies interval between IPv6 router renumbering prefix
 babysitting, in seconds.
+.It Li ip6.use_deprecated
+The variable controls use of deprecated address, specified in RFC 2462 5.5.4.
 .It Li ip6.v6only
 The variable specifies initial value for
 .Dv IPV6_V6ONLY
@@ -1367,90 +1486,12 @@ socket.
 Please refer to
 .Xr ip6 4
 for detail.
-.It Li ip6.anonportmin
-The lowest port number to use for TCP and UDP ephemeral port allocation.
-This cannot be set to less than 1024 or greater than 65535.
-.It Li ip6.anonportmax
-The highest port number to use for TCP and UDP ephemeral port allocation.
-This cannot be set to less than 1024 or greater than 65535, and must
-be greater than
-.Li ip6.anonportmin .
-.It Li ip6.lowportmin
-The lowest port number to use for TCP and UDP reserved port allocation.
-This cannot be set to less than 0 or greater than 1024, and must
-be smaller than
-.Li ip6.lowportmax .
-.It Li ip6.lowportmax
-The highest port number to use for TCP and UDP reserved port allocation.
-This cannot be set to less than 0 or greater than 1024, and must
-be greater than
-.Li ip6.lowportmin .
-.It Li ip6.maxfrags
-The maximum number of fragments the node will accept.
-0 means that the node will not accept any fragments.
-\-1 means that the node will accept as many fragments as it receives.
-The flag is provided basically for avoiding possible DoS attacks.
-.It Li icmp6.rediraccept
-If set to non-zero, the host will accept ICMPv6 redirect packets.
-Note that IPv6 routers will never accept ICMPv6 redirect packets,
-and the variable is meaningful on IPv6 hosts
-.Pq non-router
-only.
-.It Li icmp6.redirtimeout
-The variable specifies lifetime of routing entries generated by incoming
-ICMPv6 redirect.
-.It Li icmp6.nd6_prune
-The variable specifies interval between IPv6 neighbor cache babysitting,
-in seconds.
-.It Li icmp6.nd6_delay
-The variable specifies
-.Dv DELAY_FIRST_PROBE_TIME
-timing constant in IPv6 neighbor discovery specification
-.Pq RFC 2461 ,
-in seconds.
-.It Li icmp6.nd6_umaxtries
-The variable specifies
-.Dv MAX_UNICAST_SOLICIT
-constant in IPv6 neighbor discovery specification
-.Pq RFC 2461 .
-.It Li icmp6.nd6_mmaxtries
-The variable specifies
-.Dv MAX_MULTICAST_SOLICIT
-constant in IPv6 neighbor discovery specification
-.Pq RFC 2461 .
-.It Li icmp6.nd6_useloopback
-If set to non-zero, kernel IPv6 stack will use loopback interface for
-local traffic.
-.It Li icmp6.nodeinfo
-The variable enables responses to ICMPv6 node information queries.
-If you set the variable to 0, responses will not be generated for
-ICMPv6 node information queries.
-Since node information queries can have a security impact, it is
-possible to fine tune which responses should be answered.
-Two separate bits can be set.
-.Bl -tag -width "12345"
-.It 1
-Respond to ICMPv6 FQDN queries, e.g.
-.Li ping6 -w .
-.It 2
-Respond to ICMPv6 node addresses queries, e.g.
-.Li ping6 -a .
-.El
 .It Li icmp6.errppslimit
 The variable specifies the maximum number of outgoing ICMPv6 error messages,
 per second.
 ICMPv6 error messages that exceeded the value are subject to rate limitation
 and will not go out from the node.
 Negative value disables rate limitation.
-.It Li icmp6.nd6_maxnudhint
-IPv6 neighbor discovery permits upper layer protocols to supply reachability
-hints, to avoid unnecessary neighbor discovery exchanges.
-The variable defines the number of consecutive hints the neighbor discovery
-layer will take.
-For example, by setting the variable to 3, neighbor discovery layer
-will take 3 consecutive hints in maximum.
-After receiving 3 hints, neighbor discovery layer will perform
-normal neighbor discovery process.
 .It Li icmp6.mtudisc_hiwat
 .It Li icmp6.mtudisc_lowat
 The variables define the maximum number of routing table entries,
@@ -1471,6 +1512,67 @@ If set to non-zero, kernel IPv6 neighbor discovery code will generate
 debugging messages.
 The debug outputs are useful to diagnose IPv6 interoperability issues.
 The flag must be set to 0 for normal operation.
+.It Li icmp6.nd6_delay
+The variable specifies
+.Dv DELAY_FIRST_PROBE_TIME
+timing constant in IPv6 neighbor discovery specification
+.Pq RFC 2461 ,
+in seconds.
+.It Li icmp6.nd6_maxnudhint
+IPv6 neighbor discovery permits upper layer protocols to supply reachability
+hints, to avoid unnecessary neighbor discovery exchanges.
+The variable defines the number of consecutive hints the neighbor discovery
+layer will take.
+For example, by setting the variable to 3, neighbor discovery layer
+will take 3 consecutive hints in maximum.
+After receiving 3 hints, neighbor discovery layer will perform
+normal neighbor discovery process.
+.It Li icmp6.nd6_mmaxtries
+The variable specifies
+.Dv MAX_MULTICAST_SOLICIT
+constant in IPv6 neighbor discovery specification
+.Pq RFC 2461 .
+.It Li icmp6.nd6_prune
+The variable specifies interval between IPv6 neighbor cache babysitting,
+in seconds.
+.It Li icmp6.nd6_umaxtries
+The variable specifies
+.Dv MAX_UNICAST_SOLICIT
+constant in IPv6 neighbor discovery specification
+.Pq RFC 2461 .
+.It Li icmp6.nd6_useloopback
+If set to non-zero, kernel IPv6 stack will use loopback interface for
+local traffic.
+.It Li icmp6.nodeinfo
+The variable enables responses to ICMPv6 node information queries.
+If you set the variable to 0, responses will not be generated for
+ICMPv6 node information queries.
+Since node information queries can have a security impact, it is
+possible to fine tune which responses should be answered.
+Two separate bits can be set.
+.Bl -tag -width "12345"
+.It 1
+Respond to ICMPv6 FQDN queries, e.g.
+.Li ping6 -w .
+.It 2
+Respond to ICMPv6 node addresses queries, e.g.
+.Li ping6 -a .
+.El
+.It Li icmp6.rediraccept
+If set to non-zero, the host will accept ICMPv6 redirect packets.
+Note that IPv6 routers will never accept ICMPv6 redirect packets,
+and the variable is meaningful on IPv6 hosts
+.Pq non-router
+only.
+.It Li icmp6.redirtimeout
+The variable specifies lifetime of routing entries generated by incoming
+ICMPv6 redirect.
+.It Li udp6.do_loopback_cksum
+Perform UDP checksum on loopback.
+.It Li udp6.recvspace
+Default UDP receive buffer size.
+.It Li udp6.sendspace
+Default UDP send buffer size.
 .El
 .Pp
 We reuse net.*.tcp for
@@ -1771,8 +1873,8 @@ privilege may change the value.
 .It VM\_ANONMIN	int	yes
 .It VM\_BUFCACHE	int	yes
 .It VM\_BUFMEM	int	no
-.It VM\_BUFMEM_LOWATER	int	yes
 .It VM\_BUFMEM_HIWATER	int	yes
+.It VM\_BUFMEM_LOWATER	int	yes
 .It VM\_EXECMAX	int	yes
 .It VM\_EXECMIN	int	yes
 .It VM\_FILEMAX	int	yes
@@ -1871,6 +1973,74 @@ These MIB nodes are also available as variables from within the DDB.
 See
 .Xr ddb 4
 for more details.
+.Sh CTL_SECURITY
+The security level contains various security-related settings for
+the system. Available settings are detailed below.
+.Pp
+.Bl -tag -width "123456"
+.It Li security.curtain
+If non-zero, will filter return objects according to the user-id
+requesting information about them, preventing from users any
+access to objects they don't own.
+.Pp
+At the moment, it affects
+.Xr ps 1 ,
+.Xr netstat 1
+(for
+.Dv PF_INET ,
+.Dv PF_INET6 ,
+and
+.Dv PF_UNIX
+PCBs), and
+.Xr w 1 .
+.It Li security.pax
+Settings for PaX -- exploit mitigation features.
+.Pp
+.Bl -tag -width "123456"
+.It Li security.pax.mprotect.enable
+Enable PaX MPROTECT restrictions.
+.Pp
+These are
+.Xr mprotect 2
+restrictions to better enforce a W^X policy. The value of this
+knob must be non-zero for PaX MPROTECT to be enabled, even if a
+process is already marked with
+.Em P_PAXMPROTECT .
+.It Li security.pax.mprotect.global_protection
+Specifies the default global policy for programs without an
+explicit enable/disable flag.
+.Pp
+When non-zero, all programs will get the PaX MPROTECT restrictions,
+except those exempted with
+.Xr paxctl 1 .
+Otherwise, all programs will not get the PaX MPROTECT restrictions,
+except those specifically marked as such with
+.Xr paxctl 1.
+.El
+.It Li security.setid_core
+Settings related to set-id processes coredumps.
+By default, set-id processes do not dump core in situations where
+other processes would.
+The settings in this node allows an administrator to change this
+behavior.
+.Pp
+.Bl -tag -width "123456"
+.It Li security.setid_core.dump
+If non-zero, set-id processes will dump core.
+.It Li security.setid_core.group
+The group-id for the set-id processes' coredump.
+.It Li security.setid_core.mode
+The mode for the set-id processes' coredump.
+See
+.Xr chmod 1 .
+.It Li security.setid_core.owner
+The user-id that will be used as the owner of the set-id processes'
+coredump.
+.It Li security.setid_core.path
+The path to which set-id processes' coredumps will be saved to.
+Same syntax as kern.defcorename.
+.El
+.El
 .Sh CTL_VENDOR
 The "vendor" toplevel name is reserved to be used by vendors who wish to
 have their own private MIB tree.

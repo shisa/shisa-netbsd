@@ -1,4 +1,4 @@
-/*	$NetBSD: dma_sbus.c,v 1.24 2005/02/04 02:10:47 perry Exp $ */
+/*	$NetBSD: dma_sbus.c,v 1.28 2006/02/28 23:10:49 kleink Exp $ */
 
 /*-
  * Copyright (c) 1998 The NetBSD Foundation, Inc.
@@ -66,7 +66,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: dma_sbus.c,v 1.24 2005/02/04 02:10:47 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: dma_sbus.c,v 1.28 2006/02/28 23:10:49 kleink Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -184,7 +184,7 @@ dmaattach_sbus(parent, self, aux)
 	sc->sc_burst = (burst & SBUS_BURST_32) ? 32 :
 		       (burst & SBUS_BURST_16) ? 16 : 0;
 
-	if (strcmp(sc->sc_dev.dv_cfdata->cf_name, "ledma") == 0) {
+	if (device_is_a(&sc->sc_dev, "ledma")) {
 		char *cabletype;
 		u_int32_t csr;
 		/*
@@ -221,11 +221,11 @@ dmaattach_sbus(parent, self, aux)
 
 	/* Attach children */
 	for (node = firstchild(sa->sa_node); node; node = nextsibling(node)) {
-		struct sbus_attach_args sa;
+		struct sbus_attach_args sax;
 		sbus_setup_attach_args((struct sbus_softc *)parent,
-				       sbt, sc->sc_dmatag, node, &sa);
-		(void) config_found(&sc->sc_dev, (void *)&sa, dmaprint_sbus);
-		sbus_destroy_attach_args(&sa);
+				       sbt, sc->sc_dmatag, node, &sax);
+		(void) config_found(&sc->sc_dev, (void *)&sax, dmaprint_sbus);
+		sbus_destroy_attach_args(&sax);
 	}
 }
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: svc_dg.c,v 1.10.6.1 2005/11/21 20:15:20 tron Exp $	*/
+/*	$NetBSD: svc_dg.c,v 1.11 2005/06/09 22:13:17 yamt Exp $	*/
 
 /*
  * Sun RPC is a product of Sun Microsystems, Inc. and is provided for
@@ -44,7 +44,7 @@
 
 #include <sys/cdefs.h>
 #if defined(LIBC_SCCS) && !defined(lint)
-__RCSID("$NetBSD: svc_dg.c,v 1.10.6.1 2005/11/21 20:15:20 tron Exp $");
+__RCSID("$NetBSD: svc_dg.c,v 1.11 2005/06/09 22:13:17 yamt Exp $");
 #endif
 
 #include "namespace.h"

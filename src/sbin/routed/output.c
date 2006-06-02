@@ -1,4 +1,4 @@
-/*	$NetBSD: output.c,v 1.22 2002/11/30 04:04:23 christos Exp $	*/
+/*	$NetBSD: output.c,v 1.24 2006/03/21 21:50:44 christos Exp $	*/
 
 /*
  * Copyright (c) 1983, 1988, 1993
@@ -36,7 +36,7 @@
 #include "defs.h"
 
 #ifdef __NetBSD__
-__RCSID("$NetBSD: output.c,v 1.22 2002/11/30 04:04:23 christos Exp $");
+__RCSID("$NetBSD: output.c,v 1.24 2006/03/21 21:50:44 christos Exp $");
 #elif defined(__FreeBSD__)
 __RCSID("$FreeBSD$");
 #else
@@ -729,7 +729,7 @@ supply(struct sockaddr_in *dst,
 
 	switch (type) {
 	case OUT_MULTICAST:
-		if (ifp->int_if_flags & IFF_MULTICAST)
+		if (ifp != NULL && ifp->int_if_flags & IFF_MULTICAST)
 			v2buf.type = OUT_MULTICAST;
 		else
 			v2buf.type = NO_OUT_MULTICAST;
@@ -775,7 +775,7 @@ supply(struct sockaddr_in *dst,
 	/*  Fake a default route if asked and if there is not already
 	 * a better, real default route.
 	 */
-	if (supplier && (def_metric = ifp->int_d_metric) != 0) {
+	if (supplier && ifp && (def_metric = ifp->int_d_metric) != 0) {
 		if (0 == (rt = rtget(RIP_DEFAULT, 0))
 		    || rt->rt_metric+ws.metric >= def_metric) {
 			ws.state |= WS_ST_DEFAULT;

@@ -1,4 +1,4 @@
-/*	$NetBSD: isa_machdep.h,v 1.3.14.1 2005/04/21 17:06:16 tron Exp $	*/
+/*	$NetBSD: isa_machdep.h,v 1.4 2005/04/16 07:45:59 yamt Exp $	*/
 
 /*-
  * Copyright (c) 1996, 1997, 1998 The NetBSD Foundation, Inc.

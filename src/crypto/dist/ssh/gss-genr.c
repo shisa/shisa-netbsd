@@ -1,5 +1,5 @@
-/*	$NetBSD: gss-genr.c,v 1.1.1.1 2005/02/13 00:52:59 christos Exp $	*/
-/*	$OpenBSD: gss-genr.c,v 1.3 2003/11/21 11:57:03 djm Exp $	*/
+/*	$NetBSD: gss-genr.c,v 1.3 2006/03/20 16:36:31 elad Exp $	*/
+/*	$OpenBSD: gss-genr.c,v 1.6 2005/10/13 22:24:31 stevesk Exp $	*/
 
 /*
  * Copyright (c) 2001-2003 Simon Wilkinson. All rights reserved.
@@ -31,9 +31,7 @@
 
 #include "xmalloc.h"
 #include "bufaux.h"
-#include "compat.h"
 #include "log.h"
-#include "monitor_wrap.h"
 #include "ssh2.h"
 
 #include "ssh-gss.h"
@@ -75,12 +73,16 @@ ssh_gssapi_set_oid(Gssctxt *ctx, gss_OID oid)
 void
 ssh_gssapi_error(Gssctxt *ctxt)
 {
-	debug("%s", ssh_gssapi_last_error(ctxt, NULL, NULL));
+	char *s;
+
+	s = ssh_gssapi_last_error(ctxt, NULL, NULL);
+	debug("%s", s);
+	xfree(s);
 }
 
 char *
-ssh_gssapi_last_error(Gssctxt *ctxt,
-		      OM_uint32 *major_status, OM_uint32 *minor_status)
+ssh_gssapi_last_error(Gssctxt *ctxt, OM_uint32 *major_status,
+    OM_uint32 *minor_status)
 {
 	OM_uint32 lmin;
 	gss_buffer_desc msg = GSS_C_EMPTY_BUFFER;
@@ -234,11 +236,15 @@ ssh_gssapi_acquire_cred(Gssctxt *ctx)
 	gss_create_empty_oid_set(&status, &oidset);
 	gss_add_oid_set_member(&status, ctx->oid, &oidset);
 
-	if (gethostname(lname, MAXHOSTNAMELEN))
+	if (gethostname(lname, MAXHOSTNAMELEN)) {
+		gss_release_oid_set(&status, &oidset);
 		return (-1);
+	}
 
-	if (GSS_ERROR(ssh_gssapi_import_name(ctx, lname)))
+	if (GSS_ERROR(ssh_gssapi_import_name(ctx, lname))) {
+		gss_release_oid_set(&status, &oidset);
 		return (ctx->major);
+	}
 
 	if ((ctx->major = gss_acquire_cred(&ctx->minor,
 	    ctx->name, 0, oidset, GSS_C_ACCEPT, &ctx->creds, NULL, NULL)))
@@ -271,7 +277,8 @@ ssh_gssapi_buildmic(Buffer *b, const char *user, const char *service,
 }
 
 OM_uint32
-ssh_gssapi_server_ctx(Gssctxt **ctx, gss_OID oid) {
+ssh_gssapi_server_ctx(Gssctxt **ctx, gss_OID oid)
+{
 	if (*ctx)
 		ssh_gssapi_delete_ctx(ctx);
 	ssh_gssapi_build_ctx(ctx);

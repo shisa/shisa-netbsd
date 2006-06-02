@@ -1,4 +1,4 @@
-/*	$NetBSD: stdio.h,v 1.58.2.3 2005/05/28 13:51:31 tron Exp $	*/
+/*	$NetBSD: stdio.h,v 1.64 2006/05/10 21:09:45 mrg Exp $	*/
 
 /*-
  * Copyright (c) 1990, 1993
@@ -322,11 +322,13 @@ __END_DECLS
     (defined(_XOPEN_SOURCE) && defined(_XOPEN_SOURCE_EXTENDED)) || \
     ((_XOPEN_SOURCE - 0) >= 500) || \
     defined(_ISOC99_SOURCE) || defined(_NETBSD_SOURCE)
+__BEGIN_DECLS
 int	 snprintf(char * __restrict, size_t, const char * __restrict, ...)
 	    __attribute__((__format__(__printf__, 3, 4)));
 int	 vsnprintf(char * __restrict, size_t, const char * __restrict,
 	    _BSD_VA_LIST_)
 	    __attribute__((__format__(__printf__, 3, 0)));
+__END_DECLS
 #endif
 
 /*
@@ -389,7 +391,7 @@ int	 vfscanf(FILE * __restrict, const char * __restrict,
 int	 vsscanf(const char * __restrict, const char * __restrict,
 	    _BSD_VA_LIST_)
 	    __attribute__((__format__(__scanf__, 2, 0)));
-__const char *fmtcheck(const char *, const char *)
+const char *fmtcheck(const char *, const char *)
 	    __attribute__((__format_arg__(2)));
 __END_DECLS
 

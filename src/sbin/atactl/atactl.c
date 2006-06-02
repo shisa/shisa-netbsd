@@ -1,4 +1,4 @@
-/*	$NetBSD: atactl.c,v 1.37.2.1 2005/04/15 22:07:53 tron Exp $	*/
+/*	$NetBSD: atactl.c,v 1.42 2006/02/25 02:28:55 wiz Exp $	*/
 
 /*-
  * Copyright (c) 1998 The NetBSD Foundation, Inc.
@@ -42,7 +42,7 @@
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: atactl.c,v 1.37.2.1 2005/04/15 22:07:53 tron Exp $");
+__RCSID("$NetBSD: atactl.c,v 1.42 2006/02/25 02:28:55 wiz Exp $");
 #endif
 
 
@@ -556,7 +556,7 @@ struct {
 const char *selftest_status[] = {
 	"No error",
 	"Aborted by the host",
-	"Interruped by the host by reset",
+	"Interrupted by the host by reset",
 	"Fatal error or unknown test error",
 	"Unknown test element failed",
 	"Electrical test element failed",
@@ -641,7 +641,8 @@ print_error(void *buf)
 	}
 
 	if (erlog->data_structure_revision != 1) {
-		fprintf(stderr, "Log revision not 1");
+		fprintf(stderr, "Error log revision not 1 (found 0x%04x)\n",
+		    erlog->data_structure_revision);
 		return;
 	}
 
@@ -709,8 +710,9 @@ print_selftest(void *buf)
 		return;
 	}
 
-	if (le16toh(stlog->data_structure_revision != 1)) {
-		fprintf(stderr, "Log revision not 1");
+	if (le16toh(stlog->data_structure_revision) != 1) {
+		fprintf(stderr, "Self-test log revision not 1 (found 0x%04x)\n",
+		    le16toh(stlog->data_structure_revision));
 		return;
 	}
 
@@ -764,7 +766,7 @@ is_smart(void)
 {
 	int retval = 0;
 	struct ataparams *inqbuf;
-	char *status;
+	const char *status;
 
 	inqbuf = getataparams();
 

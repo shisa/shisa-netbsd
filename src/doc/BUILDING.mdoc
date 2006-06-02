@@ -1,4 +1,4 @@
-.\"	$NetBSD: BUILDING.mdoc,v 1.38 2005/02/15 18:41:18 reed Exp $
+.\"	$NetBSD: BUILDING.mdoc,v 1.43 2006/01/29 14:03:59 apb Exp $
 .\"
 .\" Copyright (c) 2001-2004 The NetBSD Foundation, Inc.
 .\" All rights reserved.
@@ -40,7 +40,7 @@
 .\" Toolchain prefix for commands
 .ds toolprefix nb
 .
-.Dd February 6, 2003
+.Dd January 4, 2006
 .Dt BUILDING 8
 .Os NetBSD
 .
@@ -877,6 +877,17 @@ does not install all of the required files).
 Create source sets of the source tree into
 .Sy RELEASEDIR Ns Pa /source/sets .
 .
+.It Sy syspkgs
+Create syspkgs from
+.Sy DESTDIR
+into
+.Sy RELEASEDIR/MACHINE Ns Pa /binary/syspkgs .
+Should be run after
+.Dq make distribution
+(as
+.Dq make build
+does not install all of the required files).
+.
 .It Sy release
 Do a
 .Dq make distribution ,
@@ -889,6 +900,19 @@ then package the system into a standard release layout as described by
 This requires that
 .Sy RELEASEDIR
 be set (see above).
+.
+.It iso-image
+Create a CD-ROM image in
+.Sy RELEASEDIR/MACHINE Ns Pa /installation/cdrom .
+RELEASEDIR must already have been populated by
+.Dq make release
+or equivalent.
+This requires the
+.Xr mkisofs 1
+utility, which is not part of
+.Nx ,
+but which can be installed from
+.Pa pkgsrc/sysutils/cdrtools .
 .
 .It Sy regression-tests
 Can only be run after building the regression tests in the directory
@@ -991,7 +1015,7 @@ The
 .Ar kconf
 argument is the name of a configuration file suitable
 for use by
-.Xr config 8 .
+.Xr config 1 .
 If
 .Ar kconf
 does not contain any
@@ -1033,6 +1057,14 @@ Perform
 .It Sy sourcesets
 Perform
 .Dq make sourcesets .
+.
+.It Sy syspkgs
+Perform
+.Dq make syspkgs .
+.
+.It Sy iso-image
+Perform
+.Dq make iso-image .
 .
 .El
 .
@@ -1368,7 +1400,8 @@ To disable, use
 .Sh SEE ALSO
 .Xr make 1 ,
 .Xr hier 7 ,
-.Xr release 7
+.Xr release 7 ,
+.Pa pkgsrc/sysutils/cdrtools
 .
 .Sh HISTORY
 .

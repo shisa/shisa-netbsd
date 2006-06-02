@@ -1,4 +1,4 @@
-/*	$NetBSD: gtpcivar.h,v 1.5 2003/06/12 19:18:49 scw Exp $	*/
+/*	$NetBSD: gtpcivar.h,v 1.7 2006/02/16 20:17:19 perry Exp $	*/
 
 /*
  * Copyright (c) 2002 Allegro Networks, Inc., Wasabi Systems, Inc.

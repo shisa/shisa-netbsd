@@ -1,4 +1,5 @@
-/* $NetBSD: bootxx.c,v 1.18 2004/01/06 17:01:48 matt Exp $ */
+/* $NetBSD: bootxx.c,v 1.24 2006/03/08 09:32:22 sekiya Exp $ */
+
 /*-
  * Copyright (c) 1982, 1986 The Regents of the University of California.
  * All rights reserved.
@@ -30,24 +31,24 @@
  *	@(#)boot.c	7.15 (Berkeley) 5/4/91
  */
 
-#include "sys/param.h"
-#include "sys/reboot.h"
-#include "sys/disklabel.h"
-#include "sys/exec.h"
-#include "sys/exec_elf.h"
+#include <sys/param.h>
+#include <sys/reboot.h>
+#include <sys/disklabel.h>
+#include <sys/exec.h>
+#include <sys/exec_elf.h>
 
-#include "lib/libsa/stand.h"
-#include "lib/libsa/ufs.h"
-#include "lib/libsa/cd9660.h"
-#include "lib/libsa/ustarfs.h"
+#include <lib/libsa/stand.h>
+#include <lib/libsa/ufs.h>
+#include <lib/libsa/cd9660.h>
+#include <lib/libsa/ustarfs.h>
 
-#include "lib/libkern/libkern.h"
+#include <lib/libkern/libkern.h>
 
-#include "machine/pte.h"
-#include "machine/sid.h"
-#include "machine/mtpr.h"
-#include "machine/reg.h"
-#include "machine/rpb.h"
+#include <machine/pte.h>
+#include <machine/sid.h>
+#include <machine/mtpr.h>
+#include <machine/reg.h>
+#include <machine/rpb.h>
 #include "../vax/gencons.h"
 
 #include "../mba/mbareg.h"
@@ -56,8 +57,8 @@
 #define NRSP 1 /* Kludge */
 #define NCMD 1 /* Kludge */
 
-#include "dev/mscp/mscp.h"
-#include "dev/mscp/mscpreg.h"
+#include <dev/mscp/mscp.h>
+#include <dev/mscp/mscpreg.h>
 
 #include "../boot/data.h"
 
@@ -103,7 +104,7 @@ Xmain()
 	vax_cputype = (mfpr(PR_SID) >> 24) & 0xFF;
 	moved = 0;
 	/*
-	 */ 
+	 */
 	rpb = (void *)0xf0000; /* Safe address right now */
 	bqo = (void *)0xf1000;
         if (from == FROMMV) {
@@ -130,7 +131,7 @@ Xmain()
 	if (io < 0)
 		io = open("/boot", 0);
 	if (io < 0)
-		asm("halt");
+		__asm("halt");
 
 	read(io, (void *)&hdr.aout, sizeof(hdr.aout));
 	if (N_GETMAGIC(hdr.aout) == OMAGIC && N_GETMID(hdr.aout) == MID_VAX) {
@@ -152,7 +153,7 @@ Xmain()
 			goto die;
 		vax_load_failure++;
 		entry = hdr.elf.e_entry;
-		if (hdr.elf.e_phoff != sizeof(hdr.elf)) 
+		if (hdr.elf.e_phoff != sizeof(hdr.elf))
 			goto die;
 		vax_load_failure++;
 		read(io, &ph, sizeof(ph));
@@ -165,15 +166,15 @@ Xmain()
 			read(io, &tmp, sizeof(tmp));
 			off += sizeof(tmp);
 		}
-		read(io, (void *) ph.p_paddr, ph.p_filesz);
-		memset((void *) (ph.p_paddr + ph.p_filesz), 0,
+		read(io, (void *) hdr.elf.e_entry, ph.p_filesz);
+		memset((void *) (hdr.elf.e_entry + ph.p_filesz), 0,
 		       ph.p_memsz - ph.p_filesz);
 	} else {
 		goto die;
 	}
 	hoppabort(entry);
 die:
-	asm("halt");
+	__asm("halt");
 }
 
 /*
@@ -247,7 +248,7 @@ devopen(f, fname, file)
 		initfn = rpb->iovec + bqo->unit_init;
 		if (rpb->devtyp == BDEV_UDA || rpb->devtyp == BDEV_TK) {
 			/*
-			 * This reset do not seem to be done in the 
+			 * This reset do not seem to be done in the
 			 * ROM routines, so we have to do it manually.
 			 */
 			csr = (struct udadevice *)rpb->csrphy;
@@ -342,7 +343,7 @@ hpread(int bn)
 	/*
 	 * Avoid four subroutine calls by using hardware division.
 	 */
-	asm("clrl %%r1;"
+	__asm("clrl %%r1;"
 	    "movl %3,%%r0;"
 	    "ediv %4,%%r0,%0,%1;"
 	    "movl %1,%%r0;"
@@ -370,7 +371,7 @@ static char *top = (char*)end;
 
 void *
 alloc(size)
-        unsigned size;
+        size_t size;
 {
 	void *ut = top;
 	top += size;
@@ -378,9 +379,9 @@ alloc(size)
 }
 
 void
-free(ptr, size)
+dealloc(ptr, size)
         void *ptr;
-        unsigned size;
+        size_t size;
 {
 }
 

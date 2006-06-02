@@ -1,4 +1,4 @@
-/*	$NetBSD: ata_raidvar.h,v 1.1.16.2 2005/07/21 21:21:14 tron Exp $	*/
+/*	$NetBSD: ata_raidvar.h,v 1.4 2005/12/11 12:21:14 christos Exp $	*/
 
 /*
  * Copyright (c) 2003 Wasabi Systems, Inc.

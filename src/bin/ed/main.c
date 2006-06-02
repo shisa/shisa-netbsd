@@ -1,4 +1,4 @@
-/*	$NetBSD: main.c,v 1.14 2005/02/17 16:29:26 xtraeme Exp $	*/
+/*	$NetBSD: main.c,v 1.17 2005/06/26 19:10:49 christos Exp $	*/
 
 /* main.c: This file contains the main control and user-interface routines
    for the ed line editor. */
@@ -39,7 +39,7 @@ __COPYRIGHT(
 #if 0
 static char *rcsid = "@(#)main.c,v 1.1 1994/02/01 00:34:42 alm Exp";
 #else
-__RCSID("$NetBSD: main.c,v 1.14 2005/02/17 16:29:26 xtraeme Exp $");
+__RCSID("$NetBSD: main.c,v 1.17 2005/06/26 19:10:49 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -101,10 +101,10 @@ char old_filename[MAXPATHLEN + 1] = "";	/* default filename */
 long current_addr;		/* current address in editor buffer */
 long addr_last;			/* last address in editor buffer */
 int lineno;			/* script line number */
-char *prompt;			/* command-line prompt */
-char *dps = "*";		/* default command-line prompt */
+const char *prompt;			/* command-line prompt */
+const char *dps = "*";		/* default command-line prompt */
 
-char *usage = "usage: %s [-] [-sxE] [-p string] [name]\n";
+const char *usage = "usage: %s [-] [-sxE] [-p string] [name]\n";
 
 /* ed: line editor */
 int
@@ -318,7 +318,7 @@ next_addr(void)
 			if (isdigit((unsigned char)*ibufp)) {
 				STRTOL(n, ibufp);
 				addr += (c == '-' || c == '^') ? -n : n;
-			} else if (!isspace(c))
+			} else if (!isspace((unsigned char)c))
 				addr += (c == '-' || c == '^') ? -1 : 1;
 			break;
 		case '0': case '1': case '2':
@@ -345,7 +345,7 @@ next_addr(void)
 		case '\'':
 			MUST_BE_FIRST();
 			ibufp++;
-			if ((addr = get_marked_node_addr(*ibufp++)) < 0)
+			if ((addr = get_marked_node_addr((unsigned char)*ibufp++)) < 0)
 				return ERR;
 			break;
 		case '%':
@@ -600,7 +600,7 @@ exec_command(void)
 			return ERR;
 		}
 		GET_COMMAND_SUFFIX();
-		if (mark_line_node(get_addressed_line_node(second_addr), c) < 0)
+		if (mark_line_node(get_addressed_line_node(second_addr), (unsigned char)c) < 0)
 			return ERR;
 		break;
 	case 'l':
@@ -1318,7 +1318,7 @@ has_trailing_escape(char *s, char *t)
 
 /* strip_escapes: return copy of escaped string of at most length MAXPATHLEN */
 char *
-strip_escapes(char *s)
+strip_escapes(const char *s)
 {
 	static char *file = NULL;
 	static int filesz = 0;

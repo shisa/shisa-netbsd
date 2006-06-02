@@ -1,4 +1,4 @@
-/*	$NetBSD: machdep.c,v 1.97 2005/01/22 15:36:11 chs Exp $	*/
+/*	$NetBSD: machdep.c,v 1.102 2005/12/11 12:19:27 christos Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1990, 1993
@@ -75,7 +75,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.97 2005/01/22 15:36:11 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.102 2005/12/11 12:19:27 christos Exp $");
 
 #include "opt_ddb.h"
 #include "opt_kgdb.h"
@@ -159,7 +159,7 @@ union sun3sir sun3sir;
 int	safepri = PSL_LOWIPL;
 
 u_char cpu_machine_id = 0;
-char *cpu_string = NULL;
+const char *cpu_string = NULL;
 int cpu_has_vme = 0;
 int has_iocache = 0;
 
@@ -241,7 +241,7 @@ cpu_startup(void)
 	/*
 	 * Good {morning,afternoon,evening,night}.
 	 */
-	printf(version);
+	printf("%s%s", copyright, version);
 	identifycpu();
 	initfpu();	/* also prints FPU type */
 
@@ -251,7 +251,8 @@ cpu_startup(void)
 	/*
 	 * Get scratch page for dumpsys().
 	 */
-	if ((dumppage = uvm_km_alloc(kernel_map, PAGE_SIZE)) == 0)
+	dumppage = uvm_km_alloc(kernel_map, PAGE_SIZE, 0, UVM_KMF_WIRED);
+	if (dumppage == 0)
 		panic("startup: alloc dumppage");
 
 	minaddr = 0;
@@ -283,7 +284,8 @@ cpu_startup(void)
 	 * This page is handed to pmap_enter() therefore
 	 * it has to be in the normal kernel VA range.
 	 */
-	vmmap = uvm_km_valloc_wait(kernel_map, PAGE_SIZE);
+	vmmap = uvm_km_alloc(kernel_map, PAGE_SIZE, 0,
+	    UVM_KMF_VAONLY | UVM_KMF_WAITVA);
 
 	/*
 	 * Create the DVMA maps.
@@ -359,13 +361,13 @@ identifycpu(void)
 	cpu_machine_id = machtype;
 	switch (cpu_machine_id) {
 
-	case SUN3X_MACH_80:
+	case ID_SUN3X_80:
 		cpu_string = "80";  	/* Hydra */
 		delay_divisor = 102;	/* 20 MHz */
 		cpu_has_vme = FALSE;
 		break;
 
-	case SUN3X_MACH_470:
+	case ID_SUN3X_470:
 		cpu_string = "470"; 	/* Pegasus */
 		delay_divisor = 62; 	/* 33 MHz */
 		cpu_has_vme = TRUE;
@@ -740,7 +742,7 @@ initcpu(void)
  * understand and, if so, set up the vmcmds for it.
  */
 int 
-cpu_exec_aout_makecmds(struct proc *p, struct exec_package *epp)
+cpu_exec_aout_makecmds(struct lwp *l, struct exec_package *epp)
 {
 	return ENOEXEC;
 }

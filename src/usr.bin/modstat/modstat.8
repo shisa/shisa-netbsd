@@ -1,4 +1,4 @@
-.\" $NetBSD: modstat.8,v 1.11 2003/02/14 15:59:17 grant Exp $
+.\" $NetBSD: modstat.8,v 1.14 2006/03/24 00:14:23 wiz Exp $
 .\"
 .\" Copyright (c) 1993 Christopher G. Demetriou
 .\" All rights reserved.
@@ -32,7 +32,7 @@
 .\"
 .\" <<Id: LICENSE,v 1.2 2000/06/14 15:57:33 cgd Exp>>
 .\"
-.Dd June 7, 1993
+.Dd March 23, 2006
 .Dt MODSTAT 8
 .Os
 .Sh NAME
@@ -55,6 +55,35 @@ Display the status of only the module with this ID.
 .It Fl n Ar name
 Display the status of only the module with this name.
 .El
+.Pp
+In addition to listing the currently loaded modules' name,
+the information reported by
+.Nm
+includes:
+.Pp
+.Bl -tag -column Loadaddr
+.It Li Type
+Type of module, such as
+"SYSCALL", "VFS", "DEV",
+.\" "STRMOD",
+"EXEC", "COMPAT", "MISC", or "(UNKNOWN)".
+See
+.Xr lkm 4
+for details.
+.It Li Id
+Module identification number.
+.It Li Offset
+Target table offset.
+.It Li Loadaddr
+Address the module loaded at.
+.It Li Size
+Size in kilobytes (in hex).
+.It Li Info
+Kernel address of private area.
+.It Li Rev
+Version of the module interface.
+(Not the version of the module itself.)
+.El
 .Sh EXIT STATUS
 The
 .Nm
@@ -62,7 +91,7 @@ utility exits with a status of 0 on success
 and with a nonzero status if an error occurs.
 .Sh SEE ALSO
 .Xr lkm 4 ,
-.Xr modstat 8 ,
+.Xr modload 8 ,
 .Xr modunload 8
 .Sh HISTORY
 The

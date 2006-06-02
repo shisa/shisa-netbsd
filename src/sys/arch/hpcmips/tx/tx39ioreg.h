@@ -1,4 +1,4 @@
-/*	$NetBSD: tx39ioreg.h,v 1.3 2000/10/22 10:42:32 uch Exp $ */
+/*	$NetBSD: tx39ioreg.h,v 1.5 2005/12/11 12:17:34 christos Exp $ */
 
 /*-
  * Copyright (c) 1999, 2000 The NetBSD Foundation, Inc.
@@ -199,7 +199,7 @@
  *	MFIO mapping
  */
 struct tx39io_mfio_map {
-	char *std_pin_name;
+	const char *std_pin_name;
 	int  std_type;
 #define STD_IN		1
 #define STD_OUT		2

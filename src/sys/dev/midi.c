@@ -1,4 +1,4 @@
-/*	$NetBSD: midi.c,v 1.39 2005/02/27 00:26:58 perry Exp $	*/
+/*	$NetBSD: midi.c,v 1.43 2006/03/28 17:38:29 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1998 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: midi.c,v 1.39 2005/02/27 00:26:58 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: midi.c,v 1.43 2006/03/28 17:38:29 thorpej Exp $");
 
 #include "midi.h"
 #include "sequencer.h"
@@ -80,8 +80,8 @@ int midi_wait;
 void	midi_in(void *, int);
 void	midi_out(void *);
 int	midi_start_output(struct midi_softc *, int);
-int	midi_sleep_timo(int *, char *, int);
-int	midi_sleep(int *, char *);
+int	midi_sleep_timo(int *, const char *, int);
+int	midi_sleep(int *, const char *);
 void	midi_wakeup(int *);
 void	midi_initbuf(struct midi_buffer *);
 void	midi_timeout(void *);
@@ -192,7 +192,7 @@ mididetach(struct device *self, int flags)
 	maj = cdevsw_lookup_major(&midi_cdevsw);
 
 	/* Nuke the vnodes for any open instances (calls close). */
-	mn = self->dv_unit;
+	mn = device_unit(self);
 	vdevgone(maj, mn, mn, VCHR);
 
 	return (0);
@@ -231,7 +231,7 @@ midi_initbuf(struct midi_buffer *mb)
 }
 
 int
-midi_sleep_timo(int *chan, char *label, int timo)
+midi_sleep_timo(int *chan, const char *label, int timo)
 {
 	int st;
 
@@ -250,7 +250,7 @@ midi_sleep_timo(int *chan, char *label, int timo)
 }
 
 int
-midi_sleep(int *chan, char *label)
+midi_sleep(int *chan, const char *label)
 {
 	return midi_sleep_timo(chan, label, 0);
 }
@@ -389,7 +389,7 @@ midi_out(void *addr)
 }
 
 int
-midiopen(dev_t dev, int flags, int ifmt, struct proc *p)
+midiopen(dev_t dev, int flags, int ifmt, struct lwp *l)
 {
 	struct midi_softc *sc;
 	const struct midi_hw_if *hw;
@@ -433,7 +433,7 @@ midiopen(dev_t dev, int flags, int ifmt, struct proc *p)
 }
 
 int
-midiclose(dev_t dev, int flags, int ifmt, struct proc *p)
+midiclose(dev_t dev, int flags, int ifmt, struct lwp *l)
 {
 	int unit = MIDIUNIT(dev);
 	struct midi_softc *sc = midi_cd.cd_devs[unit];
@@ -656,14 +656,14 @@ midiwrite(dev_t dev, struct uio *uio, int ioflag)
  * a write that is smaller than the MIDI buffer.
  */
 int
-midi_writebytes(int unit, u_char *buf, int cc)
+midi_writebytes(int unit, u_char *bf, int cc)
 {
 	struct midi_softc *sc = midi_cd.cd_devs[unit];
 	struct midi_buffer *mb = &sc->outbuf;
 	int n, s;
 
 	DPRINTFN(2, ("midi_writebytes: %p, unit=%d, cc=%d\n", sc, unit, cc));
-	DPRINTFN(3, ("midi_writebytes: %x %x %x\n",buf[0],buf[1],buf[2]));
+	DPRINTFN(3, ("midi_writebytes: %x %x %x\n",bf[0],bf[1],bf[2]));
 
 	if (sc->dying)
 		return EIO;
@@ -677,13 +677,13 @@ midi_writebytes(int unit, u_char *buf, int cc)
 	if (cc < n)
 		n = cc;
 	mb->used += cc;
-	memcpy(mb->inp, buf, n);
+	memcpy(mb->inp, bf, n);
 	mb->inp += n;
 	if (mb->inp >= mb->end) {
 		mb->inp = mb->start;
 		cc -= n;
 		if (cc > 0) {
-			memcpy(mb->inp, buf + n, cc);
+			memcpy(mb->inp, bf + n, cc);
 			mb->inp += cc;
 		}
 	}
@@ -692,7 +692,7 @@ midi_writebytes(int unit, u_char *buf, int cc)
 }
 
 int
-midiioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, struct proc *p)
+midiioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, struct lwp *l)
 {
 	int unit = MIDIUNIT(dev);
 	struct midi_softc *sc = midi_cd.cd_devs[unit];
@@ -714,8 +714,8 @@ midiioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, struct proc *p)
 		if (*(int *)addr) {
 			if (sc->async)
 				return EBUSY;
-			sc->async = p;
-			DPRINTF(("midi_ioctl: FIOASYNC %p\n", p));
+			sc->async = l->l_proc;
+			DPRINTF(("midi_ioctl: FIOASYNC %p\n", l->l_proc));
 		} else
 			sc->async = 0;
 		break;
@@ -737,7 +737,7 @@ midiioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, struct proc *p)
 
 	default:
 		if (hw->ioctl)
-			error = hw->ioctl(sc->hw_hdl, cmd, addr, flag, p);
+			error = hw->ioctl(sc->hw_hdl, cmd, addr, flag, l);
 		else
 			error = EINVAL;
 		break;
@@ -746,7 +746,7 @@ midiioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, struct proc *p)
 }
 
 int
-midipoll(dev_t dev, int events, struct proc *p)
+midipoll(dev_t dev, int events, struct lwp *l)
 {
 	int unit = MIDIUNIT(dev);
 	struct midi_softc *sc = midi_cd.cd_devs[unit];
@@ -756,7 +756,7 @@ midipoll(dev_t dev, int events, struct proc *p)
 	DPRINTF(("midipoll: %p events=0x%x\n", sc, events));
 
 	if (sc->dying)
-		return EIO;
+		return POLLHUP;
 
 	s = splaudio();
 
@@ -770,10 +770,10 @@ midipoll(dev_t dev, int events, struct proc *p)
 
 	if (revents == 0) {
 		if (events & (POLLIN | POLLRDNORM))
-			selrecord(p, &sc->rsel);
+			selrecord(l, &sc->rsel);
 
 		if (events & (POLLOUT | POLLWRNORM))
-			selrecord(p, &sc->wsel);
+			selrecord(l, &sc->wsel);
 	}
 
 	splx(s);

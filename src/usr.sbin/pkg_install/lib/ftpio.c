@@ -1,4 +1,4 @@
-/*	$NetBSD: ftpio.c,v 1.66.2.3 2005/11/06 13:43:17 tron Exp $	*/
+/*	$NetBSD: ftpio.c,v 1.73 2006/05/11 23:50:15 mrg Exp $	*/
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -8,7 +8,7 @@
 #include <sys/cdefs.h>
 #endif
 #ifndef lint
-__RCSID("$NetBSD: ftpio.c,v 1.66.2.3 2005/11/06 13:43:17 tron Exp $");
+__RCSID("$NetBSD: ftpio.c,v 1.73 2006/05/11 23:50:15 mrg Exp $");
 #endif
 
 /*-
@@ -217,7 +217,7 @@ expect(int fd, const char *str, int *ftprc)
 	set[0].fd = fd;
 	set[0].events = POLLIN;
 	while(!done) {
-		rc = poll(set, 1, 10*60*1000);    /* seconds until next message from tar */
+		rc = poll(set, 1, 60*60*1000);    /* seconds until next message from tar */
 		switch (rc) {
 		case -1:
 			if (errno == EINTR)
@@ -347,7 +347,7 @@ setupCoproc(const char *base)
 	int answer_pipe[2];
 	int rc1, rc2;
 	char buf[20];
-	char *argv0 = strrchr(FTP_CMD, '/');
+	char *argv0 = (char *)strrchr(FTP_CMD, '/');
 	if (argv0 == NULL)
 		argv0 = FTP_CMD;
 	else
@@ -827,6 +827,8 @@ http_expand_URL(const char *base, char *pattern)
 
 	}
 
+	fclose(fp);
+
 	/* wait for child to exit */
 	if (waitpid(pid, &state, 0) < 0) {
 		/* error has been reported by child */
@@ -1238,11 +1240,11 @@ unpackURL(const char *url, const char *dir)
 			errx(EXIT_FAILURE, "don't know how to decompress %s, sorry", pkg);
 
 		/* yes, this is gross, but needed for borken ftp(1) */
-		(void) snprintf(cmd, sizeof(cmd), "get %s \"| ( cd %s; " TAR_CMD " %s %s -%sxp -f - | tee /dev/stderr )\"\n",
+		(void) snprintf(cmd, sizeof(cmd), "get %s \"| ( cd %s; " TAR_CMD " %s %s -vvxp -f - | tee %s )\"\n",
 		    pkg, dir,
 		    decompress_cmd != NULL ? "--use-compress-program" : "",
 		    decompress_cmd != NULL ? decompress_cmd : "",
-		    Verbose? "vv" : "");
+		    Verbose ? "/dev/stderr" : "/dev/null");
 
 		rc = ftp_cmd(cmd, "\n(226|550).*\n");
 		if (rc != 226) {

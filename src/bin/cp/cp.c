@@ -1,4 +1,4 @@
-/* $NetBSD: cp.c,v 1.35 2003/09/14 19:20:18 jschauma Exp $ */
+/* $NetBSD: cp.c,v 1.41 2006/03/17 06:22:30 erh Exp $ */
 
 /*
  * Copyright (c) 1988, 1993, 1994
@@ -43,7 +43,7 @@ __COPYRIGHT(
 #if 0
 static char sccsid[] = "@(#)cp.c	8.5 (Berkeley) 4/29/95";
 #else
-__RCSID("$NetBSD: cp.c,v 1.35 2003/09/14 19:20:18 jschauma Exp $");
+__RCSID("$NetBSD: cp.c,v 1.41 2006/03/17 06:22:30 erh Exp $");
 #endif
 #endif /* not lint */
 
@@ -81,10 +81,11 @@ __RCSID("$NetBSD: cp.c,v 1.35 2003/09/14 19:20:18 jschauma Exp $");
                 *--(p).p_end = '\0';					\
 }
 
-PATH_T to = { to.p_path, "" };
+static char empty[] = "";
+PATH_T to = { to.p_path, empty };
 
 uid_t myuid;
-int Rflag, fflag, iflag, pflag, rflag, vflag; 
+int Rflag, fflag, iflag, pflag, rflag, vflag, Nflag;
 mode_t myumask;
 
 enum op { FILE_TO_FILE, FILE_TO_DIR, DIR_TO_DNE };
@@ -98,13 +99,13 @@ main(int argc, char *argv[])
 {
 	struct stat to_stat, tmp_stat;
 	enum op type;
-	int Hflag, Lflag, Pflag, ch, fts_options, r;
-	char *target;
+	int Hflag, Lflag, Pflag, ch, fts_options, r, have_trailing_slash;
+	char *target, **src;
 
 	(void)setlocale(LC_ALL, "");
 
 	Hflag = Lflag = Pflag = Rflag = 0;
-	while ((ch = getopt(argc, argv, "HLPRfiprv")) != -1) 
+	while ((ch = getopt(argc, argv, "HLNPRfiprv")) != -1) 
 		switch (ch) {
 		case 'H':
 			Hflag = 1;
@@ -113,6 +114,9 @@ main(int argc, char *argv[])
 		case 'L':
 			Lflag = 1;
 			Hflag = Pflag = 0;
+			break;
+		case 'N':
+			Nflag = 1;
 			break;
 		case 'P':
 			Pflag = 1;
@@ -141,7 +145,7 @@ main(int argc, char *argv[])
 		case '?':
 		default:
 			usage();
-			break;
+			/* NOTREACHED */
 		}
 	argc -= optind;
 	argv += optind;
@@ -184,17 +188,12 @@ main(int argc, char *argv[])
 
 	/* Save the target base in "to". */
 	target = argv[--argc];
-	if (strlen(target) > MAXPATHLEN) {
+	if (strlcpy(to.p_path, target, sizeof(to.p_path)) >= sizeof(to.p_path))
 		errx(EXIT_FAILURE, "%s: name too long", target);
-		/* NOTREACHED */
-	}
-	(void)strcpy(to.p_path, target);
 	to.p_end = to.p_path + strlen(to.p_path);
-        if (to.p_path == to.p_end) {
-		*to.p_end++ = '.';
-		*to.p_end = 0;
-	}
-        STRIP_TRAILING_SLASH(to);
+	have_trailing_slash = (to.p_end[-1] == '/');
+	if (have_trailing_slash)
+		STRIP_TRAILING_SLASH(to);
 	to.target_end = to.p_end;
 
 	/* Set end of argument list for fts(3). */
@@ -223,10 +222,8 @@ main(int argc, char *argv[])
 		/*
 		 * Case (1).  Target is not a directory.
 		 */ 
-		if (argc > 1) {
+		if (argc > 1)
 			usage();
-			exit(1);
-		}
 		/*
 		 * Need to detect the case:
 		 *	cp -R dir foo
@@ -250,11 +247,29 @@ main(int argc, char *argv[])
 				type = FILE_TO_FILE;
 		} else
 			type = FILE_TO_FILE;
+
+		if (have_trailing_slash && type == FILE_TO_FILE) {
+			if (r == -1)
+				errx(1, "directory %s does not exist",
+				     to.p_path);
+			else
+				errx(1, "%s is not a directory", to.p_path);
+		}
 	} else {
 		/*
 		 * Case (2).  Target is a directory.
 		 */
 		type = FILE_TO_DIR;
+	}
+
+	/*
+	 * make "cp -rp src/ dst" behave like "cp -rp src dst" not
+	 * like "cp -rp src/. dst"
+	 */
+	for (src = argv; *src; src++) {
+		size_t len = strlen(*src);
+		while (len-- > 1 && (*src)[len] == '/')
+			(*src)[len] = '\0';
 	}
 
 	exit(copy(argv, type, fts_options));
@@ -267,8 +282,9 @@ copy(char *argv[], enum op type, int fts_options)
 	struct stat to_stat;
 	FTS *ftsp;
 	FTSENT *curr;
-	int base, dne, nlen, rval;
-	char *p, *tmp;
+	int base, dne, rval;
+	size_t nlen;
+	char *p, *target_mid;
 
 	base = 0;	/* XXX gcc -Wuninitialized (see comment below) */
 
@@ -337,14 +353,19 @@ copy(char *argv[], enum op type, int fts_options)
 
 			p = &curr->fts_path[base];
 			nlen = curr->fts_pathlen - base;
+			target_mid = to.target_end;
+			if (*p != '/' && target_mid[-1] != '/')
+				*target_mid++ = '/';
+			*target_mid = 0;
 
-			tmp = to.target_end;
-			if (*p != '/' && *(tmp - 1) != '/')
-				*tmp++ = '/';
-			*tmp = 0;
-
-			(void)strncat(tmp, p, nlen);
-			to.p_end = tmp + nlen;
+			if (target_mid - to.p_path + nlen >= PATH_MAX) {
+				warnx("%s%s: name too long (not copied)",
+				    to.p_path, p);
+				rval = 1;
+				continue;
+			}
+			(void)strncat(target_mid, p, nlen);
+			to.p_end = target_mid + nlen;
 			*to.p_end = 0;
 			STRIP_TRAILING_SLASH(to);
 		}
@@ -467,13 +488,14 @@ copy(char *argv[], enum op type, int fts_options)
 				rval = 1;
 			break;
 		}
-		if (vflag)
+		if (vflag && !rval)
 			(void)printf("%s -> %s\n", curr->fts_path, to.p_path);
 	}
 	if (errno) {
 		err(EXIT_FAILURE, "fts_read");
 		/* NOTREACHED */
 	}
+	(void)fts_close(ftsp);
 	return (rval);
 }
 

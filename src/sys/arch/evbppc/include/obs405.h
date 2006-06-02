@@ -1,4 +1,4 @@
-/*	$NetBSD: obs405.h,v 1.4.6.1 2005/09/14 20:53:59 tron Exp $	*/
+/*	$NetBSD: obs405.h,v 1.6 2005/12/11 12:17:12 christos Exp $	*/
 
 /*
  * Copyright 2004 Shigeyuki Fukushima.

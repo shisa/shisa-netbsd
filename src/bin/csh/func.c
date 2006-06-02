@@ -1,4 +1,4 @@
-/* $NetBSD: func.c,v 1.29 2004/05/13 15:25:58 christos Exp $ */
+/* $NetBSD: func.c,v 1.31 2006/03/18 06:29:21 christos Exp $ */
 
 /*-
  * Copyright (c) 1980, 1991, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)func.c	8.1 (Berkeley) 5/31/93";
 #else
-__RCSID("$NetBSD: func.c,v 1.29 2004/05/13 15:25:58 christos Exp $");
+__RCSID("$NetBSD: func.c,v 1.31 2006/03/18 06:29:21 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -1110,7 +1110,7 @@ static const struct limits {
 
 static const struct limits *findlim(Char *);
 static RLIM_TYPE getval(const struct limits *, Char **);
-static void limtail(Char *, char *);
+static void limtail(Char *, const char *);
 static void plim(const struct limits *, Char);
 static int setlim(const struct limits *, Char, RLIM_TYPE);
 
@@ -1232,7 +1232,7 @@ getval(const struct limits *lp, Char **v)
 }
 
 static void
-limtail(Char *cp, char *str)
+limtail(Char *cp, const char *str)
 {
     while (*cp && *cp == *str)
 	cp++, str++;
@@ -1418,9 +1418,12 @@ doeval(Char **v, struct command *t)
     evalp = oevalp;
     doneinp = 0;
     didfds = odidfds;
-    (void)close(SHIN);
-    (void)close(SHOUT);
-    (void)close(SHERR);
+    if (SHIN != -1)
+	(void)close(SHIN);
+    if (SHOUT != -1)
+	(void)close(SHOUT);
+    if (SHERR != -1)
+	(void)close(SHERR);
     SHIN = dmove(saveIN, oSHIN);
     SHOUT = dmove(saveOUT, oSHOUT);
     SHERR = dmove(saveERR, oSHERR);

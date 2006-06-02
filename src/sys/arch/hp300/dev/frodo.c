@@ -1,4 +1,4 @@
-/*	$NetBSD: frodo.c,v 1.19 2005/01/02 12:03:12 tsutsui Exp $	*/
+/*	$NetBSD: frodo.c,v 1.23 2005/12/24 20:07:03 perry Exp $	*/
 
 /*-
  * Copyright (c) 1997, 1998, 1999 The NetBSD Foundation, Inc.
@@ -67,7 +67,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: frodo.c,v 1.19 2005/01/02 12:03:12 tsutsui Exp $");
+__KERNEL_RCSID(0, "$NetBSD: frodo.c,v 1.23 2005/12/24 20:07:03 perry Exp $");
 
 #define	_HP300_INTR_H_PRIVATE
 
@@ -110,7 +110,7 @@ static int	frodomatch(struct device *, struct cfdata *, void *);
 static void	frodoattach(struct device *, struct device *, void *);
 
 static int	frodoprint(void *, const char *);
-static int	frodosubmatch(struct device *, struct cfdata *, void *);
+static int	frodosubmatch(struct device *, struct cfdata *, const int *, void *);
 
 static int	frodointr(void *);
 
@@ -207,12 +207,14 @@ frodoattach(struct device *parent, struct device *self, void *aux)
 		fa.fa_base = FRODO_BASE;
 		fa.fa_offset = fd->fd_offset;
 		fa.fa_line = fd->fd_line;
-		config_found_sm(self, &fa, frodoprint, frodosubmatch);
+		config_found_sm_loc(self, "frodo", NULL, &fa, frodoprint,
+				    frodosubmatch);
 	}
 }
 
 static int
-frodosubmatch(struct device *parent, struct cfdata *cf, void *aux)
+frodosubmatch(struct device *parent, struct cfdata *cf,
+	      const int *ldesc, void *aux)
 {
 	struct frodo_attach_args *fa = aux;
 
@@ -423,7 +425,7 @@ frodo_bus_space_read_multi_sparse_1(bus_space_tag_t bst, bus_space_handle_t bsh,
     bus_size_t offset, uint8_t *addr, bus_size_t len)
 {
 
-	__asm __volatile (
+	__asm volatile (
 	"	movl	%0,%%a0		;\n"
 	"	movl	%1,%%a1		;\n"
 	"	movl	%2,%%d0		;\n"
@@ -441,7 +443,7 @@ frodo_bus_space_write_multi_sparse_1(bus_space_tag_t bst,
     bus_size_t len)
 {
 
-	__asm __volatile (
+	__asm volatile (
 	"	movl	%0,%%a0		;\n"
 	"	movl	%1,%%a1		;\n"
 	"	movl	%2,%%d0		;\n"
@@ -457,7 +459,7 @@ static void
 frodo_bus_space_read_region_sparse_1(bus_space_tag_t bst,
     bus_space_handle_t bsh, bus_size_t offset, uint8_t *addr, bus_size_t len)
 {
-	__asm __volatile (
+	__asm volatile (
 	"	movl	%0,%%a0		;\n"
 	"	movl	%1,%%a1		;\n"
 	"	movl	%2,%%d0		;\n"
@@ -476,7 +478,7 @@ frodo_bus_space_write_region_sparse_1(bus_space_tag_t bst,
     bus_size_t len)
 {
 
-	__asm __volatile (
+	__asm volatile (
 	"	movl	%0,%%a0		;\n"
 	"	movl	%1,%%a1		;\n"
 	"	movl	%2,%%d0		;\n"
@@ -493,7 +495,7 @@ static void
 frodo_bus_space_set_multi_sparse_1(bus_space_tag_t bst, bus_space_handle_t bsh,
     bus_size_t offset, uint8_t val, bus_size_t count)
 {
-	__asm __volatile (
+	__asm volatile (
 	"	movl	%0,%%a0		;\n"
 	"	movl	%1,%%d1		;\n"
 	"	movl	%2,%%d0		;\n"
@@ -510,7 +512,7 @@ frodo_bus_space_set_region_sparse_1(bus_space_tag_t bst, bus_space_handle_t bsh,
     bus_size_t offset, uint8_t val, bus_size_t count)
 {
 
-	__asm __volatile (
+	__asm volatile (
 	"	movl	%0,%%a0		;\n"
 	"	movl	%1,%%d1		;\n"
 	"	movl	%2,%%d0		;\n"

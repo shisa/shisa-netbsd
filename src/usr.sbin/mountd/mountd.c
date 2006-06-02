@@ -1,4 +1,4 @@
-/* 	$NetBSD: mountd.c,v 1.93.2.1 2005/05/07 11:21:30 tron Exp $	 */
+/* 	$NetBSD: mountd.c,v 1.106 2006/05/25 00:37:03 christos Exp $	 */
 
 /*
  * Copyright (c) 1989, 1993
@@ -47,7 +47,7 @@ __COPYRIGHT("@(#) Copyright (c) 1989, 1993\n\
 #if 0
 static char     sccsid[] = "@(#)mountd.c  8.15 (Berkeley) 5/1/95";
 #else
-__RCSID("$NetBSD: mountd.c,v 1.93.2.1 2005/05/07 11:21:30 tron Exp $");
+__RCSID("$NetBSD: mountd.c,v 1.106 2006/05/25 00:37:03 christos Exp $");
 #endif
 #endif				/* not lint */
 
@@ -72,11 +72,6 @@ __RCSID("$NetBSD: mountd.c,v 1.93.2.1 2005/05/07 11:21:30 tron Exp $");
 #include <nfs/nfs.h>
 #include <nfs/nfsmount.h>
 
-#include <ufs/ufs/ufsmount.h>
-#include <isofs/cd9660/cd9660_mount.h>
-#include <msdosfs/msdosfsmount.h>
-#include <adosfs/adosfs.h>
-
 #include <arpa/inet.h>
 
 #include <ctype.h>
@@ -94,10 +89,6 @@ __RCSID("$NetBSD: mountd.c,v 1.93.2.1 2005/05/07 11:21:30 tron Exp $");
 #include <err.h>
 #include <util.h>
 #include "pathnames.h"
-#ifdef KERBEROS
-#include <kerberosIV/krb.h>
-#include "kuid.h"
-#endif
 
 #ifdef IPSEC
 #include <netinet6/ipsec.h>
@@ -191,7 +182,7 @@ static int check_options __P((const char *, size_t, struct dirlist *));
 static int chk_host __P((struct dirlist *, struct sockaddr *, int *, int *));
 static int del_mlist __P((char *, char *, struct sockaddr *));
 static struct dirlist *dirp_search __P((struct dirlist *, char *));
-static int do_mount __P((const char *, size_t, struct exportlist *,
+static int do_nfssvc __P((const char *, size_t, struct exportlist *,
     struct grouplist *, int, struct uucred *, char *, int, struct statvfs *));
 static int do_opt __P((const char *, size_t, char **, char **,
     struct exportlist *, struct grouplist *, int *, int *, struct uucred *));
@@ -236,6 +227,7 @@ static int countones __P((struct sockaddr *));
 #ifdef ISO
 static int get_isoaddr __P((const char *, size_t, char *, struct grouplist *));
 #endif
+static void bind_resv_port __P((int, sa_family_t, in_port_t));
 static struct exportlist *exphead;
 static struct mountlist *mlhead;
 static struct grouplist *grphead;
@@ -295,6 +287,7 @@ main(argc, argv)
 	int xcreated = 0, s;
 	int c, one = 1;
 	int maxrec = RPC_MAXDATASIZE;
+	in_port_t forcedport = 0;
 #ifdef IPSEC
 	char *policy = NULL;
 #define ADDOPTS "P:"
@@ -302,7 +295,7 @@ main(argc, argv)
 #define ADDOPTS
 #endif
 
-	while ((c = getopt(argc, argv, "dNnr" ADDOPTS)) != -1)
+	while ((c = getopt(argc, argv, "dNnrp:" ADDOPTS)) != -1)
 		switch (c) {
 #ifdef IPSEC
 		case 'P':
@@ -310,6 +303,10 @@ main(argc, argv)
 				errx(1, "Invalid ipsec policy `%s'", policy);
 			break;
 #endif
+		case 'p':
+			/* A forced port "0" will dynamically allocate a port */
+			forcedport = atoi(optarg);
+			break;
 		case 'd':
 			debug = 1;
 			break;
@@ -323,9 +320,9 @@ main(argc, argv)
 		default:
 			fprintf(stderr, "usage: %s [-dNn]"
 #ifdef IPSEC
-			    " [-P ipsec policy]"
+			    " [-P policy]"
 #endif
-			    " [export_file]\n", getprogname());
+			    " [-p port] [exportsfile]\n", getprogname());
 			exit(1);
 		};
 	argc -= optind;
@@ -394,7 +391,7 @@ main(argc, argv)
 	rpc_control(RPC_SVC_CONNMAXREC_SET, &maxrec);
 
 	if (udpsock != -1 && udpconf != NULL) {
-		bindresvport(udpsock, NULL);
+		bind_resv_port(udpsock, AF_INET, forcedport);
 #ifdef IPSEC
 		if (policy)
 			ipsecsetup(AF_INET, udpsock, policy);
@@ -414,7 +411,7 @@ main(argc, argv)
 	}
 
 	if (tcpsock != -1 && tcpconf != NULL) {
-		bindresvport(tcpsock, NULL);
+		bind_resv_port(tcpsock, AF_INET, forcedport);
 #ifdef IPSEC
 		if (policy)
 			ipsecsetup(AF_INET, tcpsock, policy);
@@ -436,7 +433,7 @@ main(argc, argv)
 	}
 
 	if (udp6sock != -1 && udp6conf != NULL) {
-		bindresvport(udp6sock, NULL);
+		bind_resv_port(udp6sock, AF_INET6, forcedport);
 #ifdef IPSEC
 		if (policy)
 			ipsecsetup(AF_INET6, tcpsock, policy);
@@ -456,7 +453,7 @@ main(argc, argv)
 	}
 
 	if (tcp6sock != -1 && tcp6conf != NULL) {
-		bindresvport(tcp6sock, NULL);
+		bind_resv_port(tcp6sock, AF_INET6, forcedport);
 #ifdef IPSEC
 		if (policy)
 			ipsecsetup(AF_INET6, tcpsock, policy);
@@ -482,9 +479,6 @@ main(argc, argv)
 		exit(1);
 	}
 
-#ifdef KERBEROS
-	kuidinit();
-#endif
 	svc_run();
 	syslog(LOG_ERR, "Mountd died");
 	exit(1);
@@ -537,9 +531,6 @@ mntsrv(rqstp, transp)
 	    sizeof numerichost, NULL, 0, ninumeric) != 0)
 		strlcpy(numerichost, "?", sizeof(numerichost));
 	ai = NULL;
-#ifdef KERBEROS
-	kuidreset();
-#endif
 	ret = 0;
 	switch (rqstp->rq_proc) {
 	case NULLPROC:
@@ -587,6 +578,9 @@ mntsrv(rqstp, transp)
 		   chk_host(dp, saddr, &defset, &hostset)) ||
 		   (defset && scan_tree(ep->ex_defdir, saddr) == 0 &&
 		   scan_tree(ep->ex_dirl, saddr) == 0))) {
+			if ((hostset & DP_HOSTSET) == 0) {
+				hostset = defset;
+			}
 			if (sport >= IPPORT_RESERVED &&
 			    !(hostset & DP_NORESMNT)) {
 				syslog(LOG_NOTICE,
@@ -595,10 +589,7 @@ mntsrv(rqstp, transp)
 				svcerr_weakauth(transp);
 				goto out;
 			}
-			if (hostset & DP_HOSTSET)
-				fhr.fhr_flag = hostset;
-			else
-				fhr.fhr_flag = defset;
+			fhr.fhr_flag = hostset;
 			fhr.fhr_vers = rqstp->rq_vers;
 			/* Get the file handle */
 			(void)memset(&fhr.fhr_fh, 0, sizeof(nfsfh_t));
@@ -661,14 +652,6 @@ out:
 			syslog(LOG_ERR, "Can't send reply");
 		return;
 
-#ifdef KERBEROS
-	case MOUNTPROC_KUIDMAP:
-	case MOUNTPROC_KUIDUMAP:
-	case MOUNTPROC_KUIDPURGE:
-	case MOUNTPROC_KUIDUPURGE:
-		kuidops(rqstp, transp);
-		return;
-#endif
 
 	default:
 		svcerr_noproc(transp);
@@ -1002,38 +985,19 @@ get_exportlist(n)
 	/*
 	 * And delete exports that are in the kernel for all local
 	 * file systems.
-	 * XXX: Should know how to handle all local exportable file systems
-	 *      instead of just MOUNT_FFS.
 	 */
 	num = getmntinfo(&fsp, MNT_NOWAIT);
 	for (i = 0; i < num; i++) {
-		union {
-			struct ufs_args ua;
-			struct iso_args ia;
-			struct mfs_args ma;
-			struct msdosfs_args da;
-			struct adosfs_args aa;
-		} targs;
+		struct mountd_exports_list mel;
 
-		if (!strncmp(fsp->f_fstypename, MOUNT_MFS, MFSNAMELEN) ||
-		    !strncmp(fsp->f_fstypename, MOUNT_FFS, MFSNAMELEN) ||
-		    !strncmp(fsp->f_fstypename, MOUNT_EXT2FS, MFSNAMELEN) ||
-		    !strncmp(fsp->f_fstypename, MOUNT_LFS, MFSNAMELEN) ||
-		    !strncmp(fsp->f_fstypename, MOUNT_MSDOS, MFSNAMELEN) ||
-		    !strncmp(fsp->f_fstypename, MOUNT_ADOSFS, MFSNAMELEN) ||
-		    !strncmp(fsp->f_fstypename, MOUNT_NULL, MFSNAMELEN) ||
-		    !strncmp(fsp->f_fstypename, MOUNT_UMAP, MFSNAMELEN) ||
-		    !strncmp(fsp->f_fstypename, MOUNT_UNION, MFSNAMELEN) ||
-		    !strncmp(fsp->f_fstypename, MOUNT_CD9660, MFSNAMELEN) ||
-		    !strncmp(fsp->f_fstypename, MOUNT_NTFS, MFSNAMELEN)) {
-			bzero((char *) &targs, sizeof(targs));
-			targs.ua.fspec = NULL;
-			targs.ua.export.ex_flags = MNT_DELEXPORT;
-			if (mount(fsp->f_fstypename, fsp->f_mntonname,
-			    fsp->f_flag | MNT_UPDATE, &targs) == -1)
-				syslog(LOG_ERR, "Can't delete exports for %s",
-				    fsp->f_mntonname);
-		}
+		/* Delete all entries from the export list. */
+		mel.mel_path = fsp->f_mntonname;
+		mel.mel_nexports = 0;
+		if (nfssvc(NFSSVC_SETEXPORTSLIST, &mel) == -1 &&
+		    errno != EOPNOTSUPP)
+			syslog(LOG_ERR, "Can't delete exports for %s (%m)",
+			    fsp->f_mntonname);
+
 		fsp++;
 	}
 
@@ -1185,7 +1149,7 @@ get_exportlist(n)
 		 */
 		grp = tgrp;
 		do {
-			if (do_mount(line, lineno, ep, grp, exflags, &anon,
+			if (do_nfssvc(line, lineno, ep, grp, exflags, &anon,
 			    dirp, dirplen, &fsb))
 				goto badline;
 		} while (grp->gr_next && (grp = grp->gr_next));
@@ -1199,8 +1163,9 @@ get_exportlist(n)
 			grphead = tgrp;
 		} else {
 			hang_dirp(dirhead, NULL, ep, opt_flags);
-			free_grp(grp);
+			free_grp(tgrp);
 		}
+		tgrp = NULL;
 		dirhead = NULL;
 		if ((ep->ex_flag & EX_LINKED) == 0) {
 			ep2 = exphead;
@@ -1719,7 +1684,8 @@ do_opt(line, lineno, cpp, endcpp, ep, grp, has_hostp, exflagsp, cr)
 	struct uucred *cr;
 {
 	char *cpoptarg, *cpoptend;
-	char *cp, *endcp, *cpopt, savedc, savedc2;
+	char *cp, *cpopt, savedc, savedc2;
+	char *endcp = NULL;	/* XXX: GCC */
 	int allflag, usedarg;
 
 	cpopt = *cpp;
@@ -2005,11 +1971,10 @@ estrdup(s)
 }
 
 /*
- * Do the mount syscall with the update flag to push the export info into
- * the kernel.
+ * Do the nfssvc syscall to push the export info into the kernel.
  */
 static int
-do_mount(line, lineno, ep, grp, exflags, anoncrp, dirp, dirplen, fsb)
+do_nfssvc(line, lineno, ep, grp, exflags, anoncrp, dirp, dirplen, fsb)
 	const char *line;
 	size_t lineno;
 	struct exportlist *ep;
@@ -2024,123 +1989,87 @@ do_mount(line, lineno, ep, grp, exflags, anoncrp, dirp, dirplen, fsb)
 	struct sockaddr_storage ss;
 	struct addrinfo *ai;
 	int addrlen;
-	char *cp = NULL;
 	int done;
-	char savedc = '\0';
-	union {
-		struct ufs_args ua;
-		struct iso_args ia;
-		struct mfs_args ma;
-		struct msdosfs_args da;
-		struct adosfs_args aa;
-	} args;
+	struct export_args export;
 
-	args.ua.fspec = 0;
-	args.ua.export.ex_flags = exflags;
-	args.ua.export.ex_anon = *anoncrp;
-	args.ua.export.ex_indexfile = ep->ex_indexfile;
+	export.ex_flags = exflags;
+	export.ex_anon = *anoncrp;
+	export.ex_indexfile = ep->ex_indexfile;
 	if (grp->gr_type == GT_HOST) {
 		ai = grp->gr_ptr.gt_addrinfo;
 		addrp = ai->ai_addr;
 		addrlen = ai->ai_addrlen;
-	} else
+	} else {
 		addrp = NULL;
+		ai = NULL;	/* XXXGCC -Wuninitialized */
+		addrlen = 0;	/* XXXGCC -Wuninitialized */
+	}
 	done = FALSE;
 	while (!done) {
+		struct mountd_exports_list mel;
+
 		switch (grp->gr_type) {
 		case GT_HOST:
 			if (addrp != NULL && addrp->sa_family == AF_INET6 &&
 			    have_v6 == 0)
 				goto skip;
-			args.ua.export.ex_addr = addrp;
-			args.ua.export.ex_addrlen = addrlen;
-			args.ua.export.ex_masklen = 0;
+			export.ex_addr = addrp;
+			export.ex_addrlen = addrlen;
+			export.ex_masklen = 0;
 			break;
 		case GT_NET:
-			args.ua.export.ex_addr = (struct sockaddr *)
+			export.ex_addr = (struct sockaddr *)
 			    &grp->gr_ptr.gt_net.nt_net;
-			if (args.ua.export.ex_addr->sa_family == AF_INET6 &&
+			if (export.ex_addr->sa_family == AF_INET6 &&
 			    have_v6 == 0)
 				goto skip;
-			args.ua.export.ex_addrlen =
-			    args.ua.export.ex_addr->sa_len;
+			export.ex_addrlen = export.ex_addr->sa_len;
 			memset(&ss, 0, sizeof ss);
-			ss.ss_family = args.ua.export.ex_addr->sa_family;
-			ss.ss_len = args.ua.export.ex_addr->sa_len;
+			ss.ss_family = export.ex_addr->sa_family;
+			ss.ss_len = export.ex_addr->sa_len;
 			if (allones(&ss, grp->gr_ptr.gt_net.nt_len) != 0) {
 				syslog(LOG_ERR,
 				    "\"%s\", line %ld: Bad network flag",
 				    line, (unsigned long)lineno);
-				if (cp)
-					*cp = savedc;
 				return (1);
 			}
-			args.ua.export.ex_mask = (struct sockaddr *)&ss;
-			args.ua.export.ex_masklen = ss.ss_len;
+			export.ex_mask = (struct sockaddr *)&ss;
+			export.ex_masklen = ss.ss_len;
 			break;
 #ifdef ISO
 		case GT_ISO:
-			args.ua.export.ex_addr =
+			export.ex_addr =
 			    (struct sockaddr *) grp->gr_ptr.gt_isoaddr;
-			args.ua.export.ex_addrlen =
+			export.ex_addrlen =
 			    sizeof(struct sockaddr_iso);
-			args.ua.export.ex_masklen = 0;
+			export.ex_masklen = 0;
 			break;
 #endif				/* ISO */
 		default:
 			syslog(LOG_ERR, "\"%s\", line %ld: Bad netgroup type",
 			    line, (unsigned long)lineno);
-			if (cp)
-				*cp = savedc;
 			return (1);
 		};
 
 		/*
 		 * XXX:
-		 * Maybe I should just use the fsb->f_mntonname path instead
-		 * of looping back up the dirp to the mount point??
-		 * Also, needs to know how to export all types of local
-		 * exportable file systems and not just MOUNT_FFS.
+		 * Maybe I should just use the fsb->f_mntonname path?
 		 */
-		while (mount(fsb->f_fstypename, dirp,
-		    fsb->f_flag | MNT_UPDATE, &args) == -1) {
-			if (cp)
-				*cp-- = savedc;
-			else
-				cp = dirp + dirplen - 1;
-			if (errno == EPERM) {
-				syslog(LOG_ERR,
-		    "\"%s\", line %ld: Can't change attributes for %s to %s: %m",
-				    line, (unsigned long)lineno,
-				    dirp, (grp->gr_type == GT_HOST) ?
-				    grp->gr_ptr.gt_addrinfo->ai_canonname :
-				    (grp->gr_type == GT_NET) ?
-				    grp->gr_ptr.gt_net.nt_name :
-				    "Unknown");
-				return (1);
-			}
-			if (opt_flags & OP_ALLDIRS) {
-				syslog(LOG_ERR,
-				"\"%s\", line %ld: Could not remount %s: %m",
-				    line, (unsigned long)lineno,
-				    dirp);
-				return (1);
-			}
-			/* back up over the last component */
-			while (*cp == '/' && cp > dirp)
-				cp--;
-			while (*(cp - 1) != '/' && cp > dirp)
-				cp--;
-			if (cp == dirp) {
-				if (debug)
-					(void)fprintf(stderr, "mnt unsucc\n");
-				syslog(LOG_ERR, 
-				    "\"%s\", line %ld: Can't export %s: %m",
-				    line, (unsigned long)lineno, dirp);
-				return (1);
-			}
-			savedc = *cp;
-			*cp = '\0';
+
+		mel.mel_path = dirp;
+		mel.mel_nexports = 1;
+		mel.mel_exports = &export;
+
+		if (nfssvc(NFSSVC_SETEXPORTSLIST, &mel) != 0) {
+			syslog(LOG_ERR,
+	    "\"%s\", line %ld: Can't change attributes for %s to %s: %m",
+			    line, (unsigned long)lineno,
+			    dirp, (grp->gr_type == GT_HOST) ?
+			    grp->gr_ptr.gt_addrinfo->ai_canonname :
+			    (grp->gr_type == GT_NET) ?
+			    grp->gr_ptr.gt_net.nt_name :
+			    "Unknown");
+			return (1);
 		}
 skip:
 		if (addrp) {
@@ -2154,8 +2083,6 @@ skip:
 		} else
 			done = TRUE;
 	}
-	if (cp)
-		*cp = savedc;
 	return (0);
 }
 
@@ -2182,6 +2109,9 @@ get_net(cp, net, maskflg)
 		p = strchr(cp, '/');
 		*p = '\0';
 		prefp = p + 1;
+	} else {
+		p = NULL;	/* XXXGCC -Wuninitialized */
+		prefp = NULL;	/* XXXGCC -Wuninitialized */
 	}
 
 	if ((np = getnetbyname(cp)) != NULL) {
@@ -2314,7 +2244,8 @@ parsecred(namelist, cr)
 	char *names;
 	struct passwd *pw;
 	struct group *gr;
-	int ngroups, groups[NGROUPS + 1];
+	int ngroups;
+	gid_t groups[NGROUPS + 1];
 
 	/*
 	 * Set up the unprivileged user.
@@ -2673,4 +2604,34 @@ bad1:
 	if (cp)
 		*cp = '/';
 	return 0;
+}
+
+static void
+bind_resv_port(int sock, sa_family_t family, in_port_t port)
+{
+	struct sockaddr *sa;
+	struct sockaddr_in sasin;
+	struct sockaddr_in6 sasin6;
+
+	switch (family) {
+	case AF_INET:
+		(void)memset(&sasin, 0, sizeof(sasin));
+		sasin.sin_len = sizeof(sasin);
+		sasin.sin_family = family;
+		sasin.sin_port = htons(port);
+		sa = (struct sockaddr *)(void *)&sasin;
+		break;
+	case AF_INET6:
+		(void)memset(&sasin6, 0, sizeof(sasin6));
+		sasin6.sin6_len = sizeof(sasin6);
+		sasin6.sin6_family = family;
+		sasin6.sin6_port = htons(port);
+		sa = (struct sockaddr *)(void *)&sasin6;
+		break;
+	default:
+		syslog(LOG_ERR, "Unsupported address family %d", family);
+		return;
+	}
+	if (bindresvport_sa(sock, sa) == -1)
+		syslog(LOG_ERR, "Cannot bind to reserved port %d (%m)", port);
 }

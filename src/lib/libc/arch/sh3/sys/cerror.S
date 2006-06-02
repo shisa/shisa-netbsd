@@ -1,4 +1,4 @@
-/*	$NetBSD: cerror.S,v 1.7 2004/05/28 23:39:09 uwe Exp $	*/
+/*	$NetBSD: cerror.S,v 1.10 2006/01/06 05:14:39 uwe Exp $	*/
 
 /*-
  * Copyright (c) 1990 The Regents of the University of California.
@@ -36,7 +36,7 @@
 
 #include <machine/asm.h>
 #if defined(SYSLIBC_SCCS) && !defined(lint)
-	RCSID("$NetBSD: cerror.S,v 1.7 2004/05/28 23:39:09 uwe Exp $")
+	RCSID("$NetBSD: cerror.S,v 1.10 2006/01/06 05:14:39 uwe Exp $")
 #endif /* SYSLIBC_SCCS and not lint */
 
 #include "SYS.h"
@@ -48,28 +48,23 @@
 
 	.align	2
 cerror:
-	mov.l	L__errno, r1
+	mov.l	.L___errno, r1
+	PIC_PROLOGUE(.L_got)
 	sts.l   pr, @-sp
-#ifdef PIC
-1:	bsrf	r1
-#else
-	jsr	@r1
-#endif
-	 mov.l	r0, @-sp	! save error code
-	mov.l	@sp+, r2	! restore error code
+1:	CALL	r1
+	 mov.l	r4, @-sp	! save error code
+	mov.l	@sp+, r4
 	lds.l   @sp+, pr
-	mov.l	r2, @r0
+	PIC_EPILOGUE
+	mov.l	r4, @r0
 	mov	#-1, r1
 	rts
 	 mov	#-1, r0
 
 	.align	2
-L__errno:
-#ifdef PIC
-	.long	_C_LABEL(__errno) - (1b + 4)
-#else
-	.long	_C_LABEL(__errno)
-#endif
+.L_got:		PIC_GOT_DATUM
+.L___errno:	CALL_DATUM(_C_LABEL(__errno), 1b)
+	SET_ASENTRY_SIZE(cerror)
 
 #else /* !_REENTRANT */
 
@@ -79,16 +74,15 @@ L__errno:
 	.align	2
 cerror:
 #ifdef PIC
-	mov	r0, r2
 	mova	L_GOT, r0
 	mov.l	L_GOT, r1
 	add	r0, r1
 	mov.l	L_errno, r0
 	mov.l	@(r0, r1), r1
-	mov.l	r2, @r1
+	mov.l	r4, @r1
 #else
 	mov.l	L_errno, r1
-	mov.l	r0, @r1
+	mov.l	r4, @r1
 #endif
 	mov	#-1, r0
 	rts

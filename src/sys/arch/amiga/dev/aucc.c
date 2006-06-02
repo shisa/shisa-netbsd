@@ -1,4 +1,4 @@
-/*	$NetBSD: aucc.c,v 1.37 2005/01/15 15:19:51 kent Exp $ */
+/*	$NetBSD: aucc.c,v 1.40 2006/03/08 23:46:22 lukem Exp $ */
 
 /*
  * Copyright (c) 1999 Bernardo Innocenti
@@ -44,7 +44,7 @@
  *
  * - rely on auconv.c routines for mu-law/A-law conversions
  * - perhaps use a calibration table for better 14bit output
- * - set 31KHz AGA video mode to allow 44.1KHz even if grfcc is missing
+ * - set 31 kHz AGA video mode to allow 44.1 kHz even if grfcc is missing
  *	in the kernel
  * - 14bit output requires maximum volume
  */
@@ -53,7 +53,7 @@
 #if NAUCC > 0
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: aucc.c,v 1.37 2005/01/15 15:19:51 kent Exp $");
+__KERNEL_RCSID(0, "$NetBSD: aucc.c,v 1.40 2006/03/08 23:46:22 lukem Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -365,7 +365,7 @@ aucc_open(void *addr, int flags)
 	aucc = sc;
 	sc->sc_channelmask = 0xf;
 
-	DPRINTF(("saopen: ok -> sc=0x%p\n",sc));
+	DPRINTF(("saopen: ok -> sc=%p\n",sc));
 
 	return 0;
 }
@@ -376,7 +376,7 @@ aucc_close(void *addr)
 	struct aucc_softc *sc;
 
 	sc = addr;
-	DPRINTF(("sa_close: sc=0x%p\n", sc));
+	DPRINTF(("sa_close: sc=%p\n", sc));
 	/*
 	 * halt i/o, clear open flag, and done.
 	 */

@@ -1,4 +1,4 @@
-/*	$NetBSD: restore.c,v 1.16 2005/02/17 15:00:33 xtraeme Exp $	*/
+/*	$NetBSD: restore.c,v 1.19 2005/08/19 02:07:19 christos Exp $	*/
 
 /*
  * Copyright (c) 1983, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)restore.c	8.3 (Berkeley) 9/13/94";
 #else
-__RCSID("$NetBSD: restore.c,v 1.16 2005/02/17 15:00:33 xtraeme Exp $");
+__RCSID("$NetBSD: restore.c,v 1.19 2005/08/19 02:07:19 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -56,14 +56,14 @@ static char *keyval(int);
  * List entries on the tape.
  */
 long
-listfile(char *name, ino_t ino, int type)
+listfile(const char *name, ino_t ino, int type)
 {
 	long descend = hflag ? GOOD : FAIL;
 
 	if (TSTINO(ino, dumpmap) == 0)
 		return (descend);
 	vprintf(stdout, "%s", type == LEAF ? "leaf" : "dir ");
-	fprintf(stdout, "%10d\t%s\n", ino, name);
+	fprintf(stdout, "%10llu\t%s\n", (unsigned long long)ino, name);
 	return (descend);
 }
 
@@ -72,7 +72,7 @@ listfile(char *name, ino_t ino, int type)
  * Request that new entries be extracted.
  */
 long
-addfile(char *name, ino_t ino, int type)
+addfile(const char *name, ino_t ino, int type)
 {
 	struct entry *ep;
 	long descend = hflag ? GOOD : FAIL;
@@ -85,7 +85,8 @@ addfile(char *name, ino_t ino, int type)
 	if (ino == WINO && command == 'i' && !vflag)
 		return (descend);
 	if (!mflag) {
-		(void) snprintf(buf, sizeof(buf), "./%u", ino);
+		(void) snprintf(buf, sizeof(buf), "./%llu",
+		    (unsigned long long)ino);
 		name = buf;
 		if (type == NODE) {
 			(void) genliteraldir(name, ino);
@@ -113,7 +114,7 @@ addfile(char *name, ino_t ino, int type)
  */
 /* ARGSUSED */
 long
-deletefile(char *name, ino_t ino, int type)
+deletefile(const char *name, ino_t ino, int type)
 {
 	long descend = hflag ? GOOD : FAIL;
 	struct entry *ep;
@@ -204,7 +205,7 @@ removeoldleaves(void)
  *	Renames are done at the same time.
  */
 long
-nodeupdates(char *name, ino_t ino, int type)
+nodeupdates(const char *name, ino_t ino, int type)
 {
 	struct entry *ep, *np, *ip;
 	long descend = GOOD;
@@ -460,8 +461,8 @@ nodeupdates(char *name, ino_t ino, int type)
 	 * next incremental tape.
 	 */
 	case 0:
-		fprintf(stderr, "%s: (inode %d) not found on tape\n",
-			name, ino);
+		fprintf(stderr, "%s: (inode %llu) not found on tape\n",
+			name, (unsigned long long)ino);
 		break;
 
 	/*
@@ -589,7 +590,7 @@ removeoldnodes(void)
  * Extract new leaves.
  */
 void
-createleaves(char *symtabfile)
+createleaves(const char *symtabfile)
 {
 	struct entry *ep;
 	ino_t first;
@@ -615,7 +616,8 @@ createleaves(char *symtabfile)
 		while (first < curfile.ino) {
 			ep = lookupino(first);
 			if (ep == NULL)
-				panic("%d: bad first\n", first);
+				panic("%llu: bad first\n",
+				    (unsigned long long)first);
 			fprintf(stderr, "%s: not found on tape\n", myname(ep));
 			ep->e_flags &= ~(NEW|EXTRACT);
 			first = lowerbnd(first);
@@ -628,8 +630,9 @@ createleaves(char *symtabfile)
 		 * on the next incremental tape.
 		 */
 		if (first != curfile.ino) {
-			fprintf(stderr, "expected next file %d, got %d\n",
-				first, curfile.ino);
+			fprintf(stderr, "expected next file %llu, got %llu\n",
+			    (unsigned long long)first,
+			    (unsigned long long)curfile.ino);
 			skipfile();
 			goto next;
 		}
@@ -834,7 +837,7 @@ checkrestore(void)
  * A paranoid check that things are as they should be.
  */
 long
-verifyfile(char *name, ino_t ino, int type)
+verifyfile(const char *name, ino_t ino, int type)
 {
 	struct entry *np, *ep;
 	long descend = GOOD;
@@ -851,7 +854,7 @@ verifyfile(char *name, ino_t ino, int type)
 		if (np == ep)
 			break;
 	if (np == NULL)
-		panic("missing inumber %d\n", ino);
+		panic("missing inumber %llu\n", (unsigned long long)ino);
 	if (ep->e_type == LEAF && type != LEAF)
 		badentry(ep, "type should be LEAF");
 	return (descend);

@@ -1,4 +1,4 @@
-/*	$NetBSD: usbhid.c,v 1.28 2005/02/09 22:14:13 jdolecek Exp $	*/
+/*	$NetBSD: usbhid.c,v 1.30 2006/05/10 21:53:48 mrg Exp $	*/
 
 /*
  * Copyright (c) 2001 The NetBSD Foundation, Inc.
@@ -38,7 +38,7 @@
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: usbhid.c,v 1.28 2005/02/09 22:14:13 jdolecek Exp $");
+__RCSID("$NetBSD: usbhid.c,v 1.30 2006/05/10 21:53:48 mrg Exp $");
 #endif
 
 #include <sys/types.h>
@@ -350,6 +350,9 @@ hidmatch(u_int32_t const *collist, size_t collen, struct hid_item *item,
 	 */
 	for (colind = 0; vlactive > 0 && colind <= collen; colind++) {
 		struct usagedata cache;
+
+		cache.page_len = 0;	/* XXX gcc */
+		cache.usage_len = 0;	/* XXX gcc */
 
 		cache.isfinal = (colind == collen);
 		if (cache.isfinal)
@@ -734,7 +737,7 @@ devshow(int hidfd, report_desc_t rd, struct Susbvar *varlist, size_t vlsize,
 				NULL : repptr->buffer->ucr_data;
 
 			if (matchvar->opfunc(&hitem, matchvar, colls, collind,
-					     bufdata))
+					     bufdata) && repptr)
 				repptr->status = srs_dirty;
 		}
 	}

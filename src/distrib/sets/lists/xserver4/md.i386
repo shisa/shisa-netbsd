@@ -1,4 +1,4 @@
-# $NetBSD: md.i386,v 1.6.8.1 2005/04/06 20:40:52 tron Exp $
+# $NetBSD: md.i386,v 1.7 2005/03/18 20:45:43 tron Exp $
 ./usr/X11R6/bin/X
 ./usr/X11R6/bin/XFree86
 ./usr/X11R6/bin/Xnest

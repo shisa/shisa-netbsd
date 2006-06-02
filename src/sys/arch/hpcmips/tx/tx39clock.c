@@ -1,4 +1,4 @@
-/*	$NetBSD: tx39clock.c,v 1.16 2003/12/30 03:54:35 shin Exp $ */
+/*	$NetBSD: tx39clock.c,v 1.19 2005/12/24 23:24:00 perry Exp $ */
 
 /*-
  * Copyright (c) 1999-2002 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: tx39clock.c,v 1.16 2003/12/30 03:54:35 shin Exp $");
+__KERNEL_RCSID(0, "$NetBSD: tx39clock.c,v 1.19 2005/12/24 23:24:00 perry Exp $");
 
 #include "opt_tx39clock_debug.h"
 
@@ -98,8 +98,8 @@ void	tx39clock_cpuspeed(int *, int *);
 
 void	__tx39timer_rtcfreeze(tx_chipset_tag_t);
 void	__tx39timer_rtcreset(tx_chipset_tag_t);
-__inline__ void	__tx39timer_rtcget(struct txtime *);
-__inline__ time_t __tx39timer_rtc2sec(struct txtime *);
+inline void	__tx39timer_rtcget(struct txtime *);
+inline time_t __tx39timer_rtc2sec(struct txtime *);
 
 CFATTACH_DECL(tx39clock, sizeof(struct tx39clock_softc),
     tx39clock_match, tx39clock_attach, NULL, NULL);
@@ -150,13 +150,13 @@ tx39clock_attach(struct device *parent, struct device *self, void *aux)
  * cpuspeed ... instructions-per-microsecond
  */
 void
-tx39clock_cpuspeed(int *cpuclock, int *cpuspeed)
+tx39clock_cpuspeed(int *cpuclock, int *cpu_speed)
 {
 	struct txtime t0, t1;
 	int elapsed;
 	
 	__tx39timer_rtcget(&t0);
-	__asm__ __volatile__(
+	__asm volatile(
 		".set	noreorder;		\n\t"
 		"li	$8, 10000000;		\n"
 	"1:	nop;				\n\t"
@@ -175,7 +175,7 @@ tx39clock_cpuspeed(int *cpuclock, int *cpuspeed)
 	elapsed = t1.t_lo - t0.t_lo;
 
 	*cpuclock = (100000000 / elapsed) * TX39_RTCLOCK;
-	*cpuspeed = *cpuclock / 1000000;
+	*cpu_speed = *cpuclock / 1000000;
 }
 
 void
@@ -195,14 +195,14 @@ __tx39timer_rtcfreeze(tx_chipset_tag_t tc)
 	tx_conf_write(tc, TX39_TIMERCONTROL_REG, reg);
 }
 
-__inline__ time_t
+inline time_t
 __tx39timer_rtc2sec(struct txtime *t)
 {
 	/* This rely on RTC is 32.768kHz */
 	return ((t->t_lo >> 15) | (t->t_hi << 17));
 }
 
-__inline__ void
+inline void
 __tx39timer_rtcget(struct txtime *t)
 {
 	tx_chipset_tag_t tc;	

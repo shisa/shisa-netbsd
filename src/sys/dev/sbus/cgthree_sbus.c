@@ -1,4 +1,4 @@
-/*	$NetBSD: cgthree_sbus.c,v 1.14 2004/03/17 17:04:58 pk Exp $ */
+/*	$NetBSD: cgthree_sbus.c,v 1.17 2006/03/29 04:16:50 thorpej Exp $ */
 
 /*-
  * Copyright (c) 1998 The NetBSD Foundation, Inc.
@@ -85,7 +85,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: cgthree_sbus.c,v 1.14 2004/03/17 17:04:58 pk Exp $");
+__KERNEL_RCSID(0, "$NetBSD: cgthree_sbus.c,v 1.17 2006/03/29 04:16:50 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -152,7 +152,7 @@ cgthreeattach_sbus(parent, self, args)
 	struct fbdevice *fb = &sc->sc_fb;
 	int node = sa->sa_node;
 	int isconsole;
-	char *name;
+	const char *name;
 	bus_space_handle_t bh;
 
 	/* Remember cookies for cgthree_mmap() */
@@ -160,7 +160,7 @@ cgthreeattach_sbus(parent, self, args)
 	sc->sc_paddr = sbus_bus_addr(sa->sa_bustag, sa->sa_slot, sa->sa_offset);
 
 	fb->fb_device = &sc->sc_dev;
-	fb->fb_flags = sc->sc_dev.dv_cfdata->cf_flags & FB_USERMASK;
+	fb->fb_flags = device_cfdata(&sc->sc_dev)->cf_flags & FB_USERMASK;
 	fb->fb_type.fb_type = FBTYPE_SUN3COLOR;
 
 	fb->fb_type.fb_depth = 8;

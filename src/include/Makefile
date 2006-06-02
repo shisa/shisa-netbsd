@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.119 2004/12/14 00:23:20 nathanw Exp $
+#	$NetBSD: Makefile,v 1.123 2006/04/27 23:42:08 thorpej Exp $
 #	@(#)Makefile	8.2 (Berkeley) 1/4/94
 
 # Doing a make includes builds /usr/include
@@ -9,11 +9,12 @@ NOOBJ=		# defined
 
 INCS=	a.out.h ar.h assert.h bitstring.h bm.h cpio.h ctype.h db.h dirent.h \
 	disktab.h dlfcn.h err.h errno.h fmtmsg.h fnmatch.h fstab.h fts.h \
-	getopt.h glob.h grp.h ifaddrs.h iconv.h \
+	ftw.h getopt.h glob.h grp.h ifaddrs.h iconv.h \
 	inttypes.h iso646.h kvm.h langinfo.h libgen.h \
 	limits.h link.h link_aout.h link_elf.h locale.h \
 	login_cap.h lwp.h malloc.h math.h md2.h \
 	memory.h mntopts.h mpool.h \
+	monetary.h \
 	ndbm.h netconfig.h netdb.h netgroup.h nlist.h nl_types.h \
 	nsswitch.h paths.h pwd.h randomid.h ranlib.h re_comp.h regex.h regexp.h \
 	resolv.h res_update.h rmd160.h rmt.h sa.h sched.h search.h semaphore.h setjmp.h \
@@ -36,13 +37,14 @@ INCS+=	ieeefp.h
 
 .include <bsd.own.mk>
 
-.if ${HAVE_GCC3} == "yes"
+.if (${HAVE_GCC} > 2)
 INCS+=	stdbool.h
 .endif
 
 INCSDIR=	/usr/include
 
 SUBDIR=		rpc
+SUBDIR+=	../common/include/prop
 
 .include <bsd.prog.mk>
 .include <bsd.subdir.mk>

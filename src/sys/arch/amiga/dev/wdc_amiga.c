@@ -1,4 +1,4 @@
-/*	$NetBSD: wdc_amiga.c,v 1.24 2004/08/23 19:26:25 jandberg Exp $ */
+/*	$NetBSD: wdc_amiga.c,v 1.29 2006/03/27 19:35:33 aymeric Exp $ */
 
 /*-
  * Copyright (c) 2000, 2003 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: wdc_amiga.c,v 1.24 2004/08/23 19:26:25 jandberg Exp $");
+__KERNEL_RCSID(0, "$NetBSD: wdc_amiga.c,v 1.29 2006/03/27 19:35:33 aymeric Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -48,7 +48,7 @@ __KERNEL_RCSID(0, "$NetBSD: wdc_amiga.c,v 1.24 2004/08/23 19:26:25 jandberg Exp 
 #include <machine/cpu.h>
 #include <machine/bus.h>
 #include <machine/intr.h>
-#include <machine/bswap.h>
+#include <sys/bswap.h>
 
 #include <amiga/amiga/cia.h>
 #include <amiga/amiga/custom.h>
@@ -100,11 +100,10 @@ wdc_amiga_attach(struct device *parent, struct device *self, void *aux)
 
 	if (is_a4000()) {
 		sc->cmd_iot.base = (u_long)ztwomap(0xdd2020 + 2);
-		sc->sc_intreg = (u_char *)ztwomap(0xdd2020 + 0x1000);
+		sc->sc_intreg = (volatile u_char *)ztwomap(0xdd2020 + 0x1000);
 		sc->sc_a1200 = 0;
 	} else {
 		sc->cmd_iot.base = (u_long) ztwomap(0xda0000 + 2);
-		sc->ctl_iot.base = (u_long) ztwomap(0xda4000);
 		gayle_init();
 		sc->sc_intreg = &gayle.intreq;
 		sc->sc_a1200 = 1;
@@ -133,9 +132,7 @@ wdc_amiga_attach(struct device *parent, struct device *self, void *aux)
 		}
 	}
 
-	if (sc->sc_a1200)
-		wdr->ctl_ioh = sc->ctl_iot.base;
-	else if (bus_space_subregion(wdr->cmd_iot,
+	if (bus_space_subregion(wdr->cmd_iot,
 	    wdr->cmd_baseioh, 0x406, 1, &wdr->ctl_ioh))
 		return;
 
@@ -147,6 +144,7 @@ wdc_amiga_attach(struct device *parent, struct device *self, void *aux)
 	sc->sc_channel.ch_channel = 0;
 	sc->sc_channel.ch_atac = &sc->sc_wdcdev.sc_atac;
 	sc->sc_channel.ch_queue = &sc->sc_chqueue;
+	sc->sc_channel.ch_ndrive = 2;
 
 	wdc_init_shadow_regs(&sc->sc_channel);
 

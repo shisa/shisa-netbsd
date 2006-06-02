@@ -1,4 +1,4 @@
-/* $NetBSD: dbsym.c,v 1.7 2003/10/27 00:12:41 lukem Exp $ */
+/* $NetBSD: dbsym.c,v 1.12 2006/03/29 15:53:20 christos Exp $ */
 
 /*
  * Copyright (c) 2001 Simon Burge (for Wasabi Systems)
@@ -39,7 +39,7 @@
 __COPYRIGHT(
     "@(#) Copyright (c) 1996 Christopher G. Demetriou, 2001 Simon Burge.\
   All rights reserved.\n");
-__RCSID("$NetBSD: dbsym.c,v 1.7 2003/10/27 00:12:41 lukem Exp $");
+__RCSID("$NetBSD: dbsym.c,v 1.12 2006/03/29 15:53:20 christos Exp $");
 #endif /* not lint */
 
 #include <sys/param.h>
@@ -151,7 +151,8 @@ main(int argc, char **argv)
 	    &mappedkfile[db_symtab_symbols[X_DB_SYMTABSIZE].offset]);
 
 	if (symtabsize > symtab_space)
-		errx(1, "symbol table (%u bytes) too big for buffer (%u bytes)",
+		errx(1, "symbol table (%u bytes) too big for buffer (%u bytes)\n"
+		    "Increase options SYMTAB_SPACE in your kernel config",
 		    symtabsize, symtab_space);
 
 	if (verbose)
@@ -340,8 +341,8 @@ int
 load_symtab(bfd *abfd, int fd, char **symtab, u_int32_t *symtabsize)
 {
 	elf_ehdr ehdr;
-	Elf32_External_Shdr *s32hdr;
-	Elf64_External_Shdr *s64hdr;
+	Elf32_External_Shdr *s32hdr = NULL;
+	Elf64_External_Shdr *s64hdr = NULL;
 	void *shdr;
 	u_int32_t osymtabsize, sh_offset;
 	int elftype, e_shnum, i, sh_size;
@@ -399,22 +400,22 @@ load_symtab(bfd *abfd, int fd, char **symtab, u_int32_t *symtabsize)
 	   ? bfd_get_64(abfd, e64_hdr.e_shoff)
 	   : bfd_get_32(abfd, e32_hdr.e_shoff));
 	if (lseek(fd, e_shoff, SEEK_SET) < 0)
-		return (1);
+		goto out;
 	if (read(fd, shdr, sh_size) != sh_size)
-		return (1);
+		goto out;
 
 	for (i = 0; i < e_shnum; i++) {
 		if (SH_TYPE(i) == SHT_SYMTAB || SH_TYPE(i) == SHT_STRTAB) {
 			osymtabsize = *symtabsize;
 			*symtabsize += roundup(SH_SIZE(i), ISELF64 ? 8 : 4);
 			if ((*symtab = realloc(*symtab, *symtabsize)) == NULL)
-				return (1);
+				goto out;
 
 			if (lseek(fd, SH_OFFSET(i), SEEK_SET) < 0)
-				return (1);
+				goto out;
 			if (read(fd, *symtab + osymtabsize, SH_SIZE(i)) !=
 			    SH_SIZE(i))
-				return (1);
+				goto out;
 			if (ISELF64) {
 				bfd_put_64(abfd, osymtabsize,
 				    s64hdr[i].sh_offset);
@@ -424,6 +425,9 @@ load_symtab(bfd *abfd, int fd, char **symtab, u_int32_t *symtabsize)
 			}
 		}
 	}
+
+	if (*symtab == NULL)
+		goto out;
 
 	/*
 	 * Copy updated section headers.
@@ -446,5 +450,9 @@ load_symtab(bfd *abfd, int fd, char **symtab, u_int32_t *symtabsize)
 	}
 	memcpy(*symtab, &ehdr, sizeof(ehdr));
 
+	free(shdr);
 	return (0);
+out:
+	free(shdr);
+	return (1);
 }

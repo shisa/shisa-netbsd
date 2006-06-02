@@ -1,4 +1,4 @@
-/*	$NetBSD: automatic.c,v 1.2.2.2 2005/11/06 13:44:58 tron Exp $	*/
+/*	$NetBSD: automatic.c,v 1.2 2005/11/06 12:40:02 wiz Exp $	*/
 
 /*-
  * Copyright (c) 2005 The NetBSD Foundation, Inc.
@@ -40,7 +40,7 @@
 #include <sys/cdefs.h>
 #endif
 #ifndef lint
-__RCSID("$NetBSD: automatic.c,v 1.2.2.2 2005/11/06 13:44:58 tron Exp $");
+__RCSID("$NetBSD: automatic.c,v 1.2 2005/11/06 12:40:02 wiz Exp $");
 #endif
 
 #if HAVE_ERR_H

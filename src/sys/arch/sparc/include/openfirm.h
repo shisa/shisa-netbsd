@@ -1,4 +1,4 @@
-/*	$NetBSD: openfirm.h,v 1.3 2004/03/21 15:12:35 pk Exp $	*/
+/*	$NetBSD: openfirm.h,v 1.6 2006/03/04 02:56:21 uwe Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996 Wolfgang Solfrank.
@@ -41,7 +41,7 @@
 
 #ifdef SUN4U
 /* All cells are 8 byte slots */
-typedef u_int64_t cell_t;
+typedef uint64_t cell_t;
 #ifdef __arch64__
 #define HDL2CELL(x)	(cell_t)(u_int)(int)(x)
 #define ADR2CELL(x)	(cell_t)(x)
@@ -51,19 +51,19 @@ typedef u_int64_t cell_t;
 #endif
 #else /* SUN4U */
 /* All cells are 4 byte slots */
-typedef u_int32_t cell_t;
+typedef uint32_t cell_t;
 #define HDL2CELL(x)	(cell_t)(x)
 #define ADR2CELL(x)	(cell_t)(x)
 #endif /* SUN4U */
 
-int	OF_test(char* service);
-int	OF_test_method(int handle, char* method);
-void	OF_set_symbol_lookup (void (*s2v)(void *), void (*v2s)(void *));
-int	OF_searchprop (int node, char *prop, void *buf, int buflen);
-int	OF_mapintr(int node, int *interrupt, int validlen, int buflen);
+int	OF_test(const char *);
+int	OF_test_method(int, const char *);
+void	OF_set_symbol_lookup(void (*)(void *), void (*)(void *));
+int	OF_searchprop (int, const char *, void *, int);
+int	OF_mapintr(int, int *, int, int);
 
 void	OF_poweroff(void) __attribute__((__noreturn__));
-int	OF_interpret(char *, int, int, ...);
+int	OF_interpret(const char *, int, int, ...);
 void	OF_sym2val(void *);
 void	OF_val2sym(void *);
 

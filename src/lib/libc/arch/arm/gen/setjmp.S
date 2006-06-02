@@ -1,4 +1,4 @@
-/*	$NetBSD: setjmp.S,v 1.6 2004/08/21 11:20:10 rearnsha Exp $	*/
+/*	$NetBSD: setjmp.S,v 1.8 2005/10/16 17:26:24 christos Exp $	*/
 
 /*
  * Copyright (c) 1997 Mark Brinicombe
@@ -45,18 +45,14 @@
  * The previous signal state is restored.
  */
 
-ENTRY(setjmp)
-	/* Block all signals and retrieve the old signal mask */
-	stmfd	sp!, {r0, r14}
+ENTRY(__setjmp14)
+	/* Get the signal mask. */
+	stmfd	sp!, {r0-r2, r14}
+	add	r2, r0, #(_JB_SIGMASK * 4)
+	mov	r1, #0x00000000
 	mov	r0, #0x00000000
-
-	bl	PIC_SYM(_C_LABEL(sigblock), PLT)
-	mov	r1, r0
-
-	ldmfd	sp!, {r0, r14}
-
-	/* Store signal mask */
-	str	r1, [r0, #(25 * 4)]
+	bl	PIC_SYM(_C_LABEL(__sigprocmask14), PLT)
+	ldmfd	sp!, {r0-r2, r14}
 
 	ldr	r1, .Lsetjmp_magic
 	str	r1, [r0], #4
@@ -79,24 +75,19 @@ ENTRY(setjmp)
 	.word	_JB_MAGIC_SETJMP
 
 
-ENTRY(longjmp)
+ENTRY(__longjmp14)
 	ldr	r2, .Lsetjmp_magic
 	ldr	r3, [r0]
 	teq	r2, r3
-	bne	botch
+	bne	.Lbotch
 
-	/* Fetch signal mask */
-	ldr	r2, [r0, #(25 * 4)]
-
-	/* Set signal mask */
-	stmfd	sp!, {r0, r1, r14}
-	sub	sp, sp, #4	/* align the stack */
-
-	mov	r0, r2
-	bl	PIC_SYM(_C_LABEL(sigsetmask), PLT)
-
-	add	sp, sp, #4	/* unalign the stack */
-	ldmfd	sp!, {r0, r1, r14} 
+	/* Restore the signal mask. */
+	stmfd	sp!, {r0-r2, r14}
+	mov	r2, #0x00000000
+	add	r1, r0, #(_JB_SIGMASK * 4)
+	mov	r0, #3				/* SIG_SETMASK */
+	bl	PIC_SYM(_C_LABEL(__sigprocmask14), PLT)
+	ldmfd	sp!, {r0-r2, r14}
 
 	add	r0, r0, #4
 #ifdef SOFTFLOAT
@@ -114,7 +105,7 @@ ENTRY(longjmp)
 	/* Validate sp and r14 */
 	teq	sp, #0
 	teqne	r14, #0
-	beq	botch
+	beq	.Lbotch
 
 	/* Set return value */
 
@@ -124,7 +115,7 @@ ENTRY(longjmp)
 	RET
 
 	/* validation failed, die die die. */
-botch:
+.Lbotch:
 	bl	PIC_SYM(_C_LABEL(longjmperror), PLT)
 	bl	PIC_SYM(_C_LABEL(abort), PLT)
 	b	. - 8		/* Cannot get here */

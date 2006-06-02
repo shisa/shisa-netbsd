@@ -1,4 +1,4 @@
-/*	$NetBSD: md.c,v 1.44 2004/11/14 13:34:53 he Exp $ */
+/*	$NetBSD: md.c,v 1.47 2006/04/05 16:55:06 garbled Exp $ */
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.
@@ -81,8 +81,6 @@ struct apple_part_map_entry new_map[] =
 	{ APPLE_PART_MAP_ENTRY_MAGIC, 0, 6,4320, 0,
 	  "untitled", "Apple_Free", 0, 0, 0x37 }
 };
-
-const char *fdtype = "msdos";
 
 /*
  * Compare lexigraphically two strings
@@ -1150,10 +1148,16 @@ md_init()
 		/*
 		 * Running the SBC Installation Kernel, so enable GENERICSBC
 		 */
-		sets_selected = (sets_selected & ~SET_KERNEL) | SET_KERNEL_2;
+		set_kernel_set(SET_KERNEL_2);
         else
 		/*
 		 * Running the GENERIC Installation Kernel, so enable GENERIC
 		 */
-		sets_selected = (sets_selected & ~SET_KERNEL) | SET_KERNEL_1;
+		set_kernel_set(SET_KERNEL_1);
+}
+
+int
+md_post_extract(void)
+{
+	return 0;
 }

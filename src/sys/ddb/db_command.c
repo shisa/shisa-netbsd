@@ -1,4 +1,4 @@
-/*	$NetBSD: db_command.c,v 1.76 2004/04/27 04:03:28 atatat Exp $	*/
+/*	$NetBSD: db_command.c,v 1.88 2006/05/14 21:25:49 elad Exp $	*/
 
 /*
  * Mach Operating System
@@ -31,17 +31,19 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: db_command.c,v 1.76 2004/04/27 04:03:28 atatat Exp $");
+__KERNEL_RCSID(0, "$NetBSD: db_command.c,v 1.88 2006/05/14 21:25:49 elad Exp $");
 
 #include "opt_ddb.h"
 #include "opt_kgdb.h"
 #include "opt_inet.h"
+#include "opt_ddbparam.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/reboot.h>
 #include <sys/device.h>
 #include <sys/malloc.h>
+#include <sys/mbuf.h>
 #include <sys/namei.h>
 #include <sys/pool.h>
 #include <sys/proc.h>
@@ -98,27 +100,29 @@ db_addr_t	db_next;
  */
 static boolean_t db_ed_style = TRUE;
 
-static void	db_buf_print_cmd(db_expr_t, int, db_expr_t, char *);
+static void	db_buf_print_cmd(db_expr_t, int, db_expr_t, const char *);
 static void	db_cmd_list(const struct db_command *);
 static int	db_cmd_search(const char *, const struct db_command *,
 		    const struct db_command **);
 static void	db_command(const struct db_command **,
 		    const struct db_command *);
-static void	db_event_print_cmd(db_expr_t, int, db_expr_t, char *);
-static void	db_fncall(db_expr_t, int, db_expr_t, char *);
-static void	db_malloc_print_cmd(db_expr_t, int, db_expr_t, char *);
-static void	db_map_print_cmd(db_expr_t, int, db_expr_t, char *);
-static void	db_namecache_print_cmd(db_expr_t, int, db_expr_t, char *);
-static void	db_object_print_cmd(db_expr_t, int, db_expr_t, char *);
-static void	db_page_print_cmd(db_expr_t, int, db_expr_t, char *);
-static void	db_pool_print_cmd(db_expr_t, int, db_expr_t, char *);
-static void	db_reboot_cmd(db_expr_t, int, db_expr_t, char *);
-static void	db_sifting_cmd(db_expr_t, int, db_expr_t, char *);
-static void	db_stack_trace_cmd(db_expr_t, int, db_expr_t, char *);
-static void	db_sync_cmd(db_expr_t, int, db_expr_t, char *);
-static void	db_uvmexp_print_cmd(db_expr_t, int, db_expr_t, char *);
-static void	db_vnode_print_cmd(db_expr_t, int, db_expr_t, char *);
-static void	db_mount_print_cmd(db_expr_t, int, db_expr_t, char *);
+static void	db_event_print_cmd(db_expr_t, int, db_expr_t, const char *);
+static void	db_fncall(db_expr_t, int, db_expr_t, const char *);
+static void	db_malloc_print_cmd(db_expr_t, int, db_expr_t, const char *);
+static void	db_map_print_cmd(db_expr_t, int, db_expr_t, const char *);
+static void	db_namecache_print_cmd(db_expr_t, int, db_expr_t, const char *);
+static void	db_object_print_cmd(db_expr_t, int, db_expr_t, const char *);
+static void	db_page_print_cmd(db_expr_t, int, db_expr_t, const char *);
+static void	db_show_all_pages(db_expr_t, int, db_expr_t, const char *);
+static void	db_pool_print_cmd(db_expr_t, int, db_expr_t, const char *);
+static void	db_reboot_cmd(db_expr_t, int, db_expr_t, const char *);
+static void	db_sifting_cmd(db_expr_t, int, db_expr_t, const char *);
+static void	db_stack_trace_cmd(db_expr_t, int, db_expr_t, const char *);
+static void	db_sync_cmd(db_expr_t, int, db_expr_t, const char *);
+static void	db_uvmexp_print_cmd(db_expr_t, int, db_expr_t, const char *);
+static void	db_vnode_print_cmd(db_expr_t, int, db_expr_t, const char *);
+static void	db_mount_print_cmd(db_expr_t, int, db_expr_t, const char *);
+static void	db_mbuf_print_cmd(db_expr_t, int, db_expr_t, const char *);
 
 /*
  * 'show' commands
@@ -126,7 +130,9 @@ static void	db_mount_print_cmd(db_expr_t, int, db_expr_t, char *);
 
 static const struct db_command db_show_all_cmds[] = {
 	{ "callout",	db_show_callout,	0, NULL },
+	{ "pages",	db_show_all_pages,	0, NULL },
 	{ "procs",	db_show_all_procs,	0, NULL },
+	{ "pools",	db_show_all_pools,	0, NULL },
 	{ NULL, 	NULL, 			0, NULL }
 };
 
@@ -141,6 +147,7 @@ static const struct db_command db_show_cmds[] = {
 	{ "malloc",	db_malloc_print_cmd,	0,	NULL },
 	{ "map",	db_map_print_cmd,	0,	NULL },
 	{ "mount",	db_mount_print_cmd,	0,	NULL },
+	{ "mbuf",	db_mbuf_print_cmd,	0,	NULL },
 	{ "ncache",	db_namecache_print_cmd,	0,	NULL },
 	{ "object",	db_object_print_cmd,	0,	NULL },
 	{ "page",	db_page_print_cmd,	0,	NULL },
@@ -152,6 +159,11 @@ static const struct db_command db_show_cmds[] = {
 	{ "watches",	db_listwatch_cmd, 	0,	NULL },
 	{ NULL,		NULL,			0,	NULL }
 };
+
+/* arch/<arch>/<arch>/db_interface.c */
+#ifdef DB_MACHINE_COMMANDS
+extern const struct db_command db_machine_command_table[];
+#endif
 
 static const struct db_command db_command_table[] = {
 	{ "b",		db_breakpoint_cmd,	0,		NULL },
@@ -196,6 +208,12 @@ static const struct db_command db_command_table[] = {
 };
 
 static const struct db_command	*db_last_command = NULL;
+#if defined(DDB_COMMANDONENTER)
+char db_cmd_on_enter[DB_LINE_MAXLEN + 1] = ___STRING(DDB_COMMANDONENTER);
+#else /* defined(DDB_COMMANDONENTER) */
+char db_cmd_on_enter[DB_LINE_MAXLEN + 1] = "";
+#endif /* defined(DDB_COMMANDONENTER) */
+#define	DB_LINE_SEP	';'
 
 /*
  * Utility routine - discard tokens through end-of-line.
@@ -212,13 +230,34 @@ db_skip_to_eol(void)
 
 void
 db_error(s)
-	char *s;
+	const char *s;
 {
 
 	if (s)
 		db_printf("%s", s);
 	db_flush_lex();
 	longjmp(db_recover);
+}
+
+static void
+db_execute_commandlist(const char *cmdlist)
+{
+	const char *cmd = cmdlist;
+	const struct db_command	*dummy = NULL;
+
+	while (*cmd != '\0') {
+		const char *ep = cmd;
+
+		while (*ep != '\0' && *ep != DB_LINE_SEP) {
+			ep++;
+		}
+		db_set_line(cmd, ep);
+		db_command(&dummy, db_command_table);
+		cmd = ep;
+		if (*cmd == DB_LINE_SEP) {
+			cmd++;
+		}
+	}
 }
 
 void
@@ -238,6 +277,8 @@ db_command_loop(void)
 	savejmp = db_recover;
 	db_recover = &db_jmpbuf;
 	(void) setjmp(&db_jmpbuf);
+
+	db_execute_commandlist(db_cmd_on_enter);
 
 	while (!db_cmd_loop_done) {
 		if (db_print_position() != 0)
@@ -332,10 +373,12 @@ db_cmd_list(const struct db_command *table)
 				db_putchar('\n');
 				break;
 			}
-			w = strlen(p);
-			while (w < width) {
-				w = DB_NEXT_TAB(w);
-				db_putchar('\t');
+			if (p) {
+				w = strlen(p);
+				while (w < width) {
+					w = DB_NEXT_TAB(w);
+					db_putchar('\t');
+				}
 			}
 		}
 	}
@@ -351,8 +394,9 @@ db_command(const struct db_command **last_cmdp,
 	db_expr_t	addr, count;
 	boolean_t	have_addr = FALSE;
 	int		result;
-
 	static db_expr_t last_count = 0;
+
+	cmd = NULL;	/* XXX gcc */
 
 	t = db_read_token();
 	if ((t == tEOL) || (t == tCOMMA)) {
@@ -484,7 +528,7 @@ db_command(const struct db_command **last_cmdp,
 
 /*ARGSUSED*/
 static void
-db_map_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
+db_map_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, const char *modif)
 {
 	boolean_t full = FALSE;
 
@@ -499,7 +543,7 @@ db_map_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
 
 /*ARGSUSED*/
 static void
-db_malloc_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
+db_malloc_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, const char *modif)
 {
 
 #ifdef MALLOC_DEBUG
@@ -514,7 +558,7 @@ db_malloc_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
 
 /*ARGSUSED*/
 static void
-db_object_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
+db_object_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, const char *modif)
 {
 	boolean_t full = FALSE;
 
@@ -527,7 +571,7 @@ db_object_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
 
 /*ARGSUSED*/
 static void
-db_page_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
+db_page_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, const char *modif)
 {
 	boolean_t full = FALSE;
 
@@ -539,7 +583,15 @@ db_page_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
 
 /*ARGSUSED*/
 static void
-db_buf_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
+db_show_all_pages(db_expr_t addr, int have_addr, db_expr_t count, const char *modif)
+{
+
+	uvm_page_printall(db_printf);
+}
+
+/*ARGSUSED*/
+static void
+db_buf_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, const char *modif)
 {
 	boolean_t full = FALSE;
 
@@ -551,7 +603,7 @@ db_buf_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
 
 /*ARGSUSED*/
 static void
-db_event_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
+db_event_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, const char *modif)
 {
 	boolean_t full = FALSE;
 
@@ -563,7 +615,7 @@ db_event_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
 
 /*ARGSUSED*/
 static void
-db_vnode_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
+db_vnode_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, const char *modif)
 {
 	boolean_t full = FALSE;
 
@@ -574,7 +626,7 @@ db_vnode_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
 }
 
 static void
-db_mount_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
+db_mount_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, const char *modif)
 {
 	boolean_t full = FALSE;
 
@@ -586,7 +638,16 @@ db_mount_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
 
 /*ARGSUSED*/
 static void
-db_pool_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
+db_mbuf_print_cmd(db_expr_t addr, int have_addr, db_expr_t count,
+    const char *modif)
+{
+
+	m_print((const struct mbuf *)(intptr_t) addr, modif, db_printf);
+}
+
+/*ARGSUSED*/
+static void
+db_pool_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, const char *modif)
 {
 
 	pool_printit((struct pool *)(intptr_t) addr, modif, db_printf);
@@ -595,7 +656,7 @@ db_pool_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
 /*ARGSUSED*/
 static void
 db_namecache_print_cmd(db_expr_t addr, int have_addr, db_expr_t count,
-    char *modif)
+    const char *modif)
 {
 
 	namecache_print((struct vnode *)(intptr_t) addr, db_printf);
@@ -603,7 +664,7 @@ db_namecache_print_cmd(db_expr_t addr, int have_addr, db_expr_t count,
 
 /*ARGSUSED*/
 static void
-db_uvmexp_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
+db_uvmexp_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, const char *modif)
 {
 
 	uvmexp_print(db_printf);
@@ -615,7 +676,7 @@ db_uvmexp_print_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
  */
 /*ARGSUSED*/
 static void
-db_fncall(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
+db_fncall(db_expr_t addr, int have_addr, db_expr_t count, const char *modif)
 {
 	db_expr_t	fn_addr;
 #define	MAXARGS		11
@@ -669,7 +730,7 @@ db_fncall(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
 }
 
 static void
-db_reboot_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
+db_reboot_cmd(db_expr_t addr, int have_addr, db_expr_t count, const char *modif)
 {
 	db_expr_t bootflags;
 
@@ -690,7 +751,7 @@ db_reboot_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
 }
 
 static void
-db_sifting_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
+db_sifting_cmd(db_expr_t addr, int have_addr, db_expr_t count, const char *modif)
 {
 	int	mode, t;
 
@@ -720,9 +781,9 @@ db_sifting_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
 }
 
 static void
-db_stack_trace_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
+db_stack_trace_cmd(db_expr_t addr, int have_addr, db_expr_t count, const char *modif)
 {
-	register char *cp = modif;
+	register const char *cp = modif;
 	register char c;
 	void (*pr)(const char *, ...);
 
@@ -738,7 +799,7 @@ db_stack_trace_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
 }
 
 static void
-db_sync_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
+db_sync_cmd(db_expr_t addr, int have_addr, db_expr_t count, const char *modif)
 {
 
 	/*

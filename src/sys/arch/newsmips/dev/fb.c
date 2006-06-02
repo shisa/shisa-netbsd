@@ -1,4 +1,4 @@
-/*	$NetBSD: fb.c,v 1.19 2005/02/06 02:18:02 tsutsui Exp $	*/
+/*	$NetBSD: fb.c,v 1.22 2006/04/12 19:38:23 jmmv Exp $	*/
 
 /*-
  * Copyright (c) 2000 Tsubai Masanari.  All rights reserved.
@@ -27,7 +27,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: fb.c,v 1.19 2005/02/06 02:18:02 tsutsui Exp $");
+__KERNEL_RCSID(0, "$NetBSD: fb.c,v 1.22 2006/04/12 19:38:23 jmmv Exp $");
 
 #include <sys/param.h>
 #include <sys/device.h>
@@ -62,8 +62,8 @@ void fb_attach(struct device *, struct device *, void *);
 int fb_common_init(struct fb_devconfig *);
 int fb_is_console(void);
 
-int fb_ioctl(void *, u_long, caddr_t, int, struct proc *);
-paddr_t fb_mmap(void *, off_t, int);
+int fb_ioctl(void *, void *, u_long, caddr_t, int, struct lwp *);
+paddr_t fb_mmap(void *, void *, off_t, int);
 int fb_alloc_screen(void *, const struct wsscreen_descr *, void **, int *,
     int *, long *);
 void fb_free_screen(void *, void *);
@@ -107,7 +107,7 @@ struct wsscreen_list fb_screenlist = {
 #define NWB253_CTLREG ((u_short *)0xb8ff0000)
 #define NWB253_CRTREG ((u_short *)0xb8fe0000)
 
-static char *devname[8] = { "NWB-512", "NWB-518", "NWE-501" };	/* XXX ? */
+static const char *devname[8] = { "NWB-512", "NWB-518", "NWE-501" }; /* XXX ? */
 
 int
 fb_match(struct device *parent, struct cfdata *match, void *aux)
@@ -231,7 +231,7 @@ fb_is_console(void)
 }
 
 int
-fb_ioctl(void *v, u_long cmd, caddr_t data, int flag, struct proc *p)
+fb_ioctl(void *v, void *vs, u_long cmd, caddr_t data, int flag, struct lwp *l)
 {
 	struct fb_softc *sc = v;
 	struct fb_devconfig *dc = sc->sc_dc;
@@ -266,7 +266,7 @@ fb_ioctl(void *v, u_long cmd, caddr_t data, int flag, struct proc *p)
 }
 
 paddr_t
-fb_mmap(void *v, off_t offset, int prot)
+fb_mmap(void *v, void *vs, off_t offset, int prot)
 {
 	struct fb_softc *sc = v;
 	struct fb_devconfig *dc = sc->sc_dc;

@@ -1,4 +1,4 @@
-/*	$NetBSD: systm.h,v 1.175 2005/02/03 19:20:02 perry Exp $	*/
+/*	$NetBSD: systm.h,v 1.186 2006/03/07 13:18:20 tron Exp $	*/
 
 /*-
  * Copyright (c) 1982, 1988, 1991, 1993
@@ -75,6 +75,10 @@
 
 #include <machine/endian.h>
 
+#ifdef _KERNEL
+#include <sys/types.h>
+#endif
+
 struct clockframe;
 struct device;
 struct lwp;
@@ -83,6 +87,7 @@ struct timeval;
 struct tty;
 struct uio;
 struct vnode;
+struct vmspace;
 
 extern int securelevel;		/* system security level */
 extern const char *panicstr;	/* panic message */
@@ -94,6 +99,7 @@ extern char machine[];		/* machine type */
 extern char machine_arch[];	/* machine architecture */
 extern const char osrelease[];	/* short system version */
 extern const char ostype[];	/* system type */
+extern const char kernel_ident[];/* kernel configuration ID */
 extern const char version[];	/* system version */
 
 extern int autonicetime;        /* time (in seconds) before autoniceval */
@@ -113,6 +119,9 @@ extern dev_t rootdev;		/* root device */
 extern struct vnode *rootvp;	/* vnode equivalent to above */
 extern struct device *root_device; /* device equivalent to above */
 extern const char *rootspec;	/* how root device was specified */
+
+extern const char hexdigits[];	/* "0123456789abcdef" in subr_prf.c */
+extern const char HEXDIGITS[];	/* "0123456789ABCDEF" in subr_prf.c */
 
 /*
  * These represent the swap pseudo-device (`sw').  This device
@@ -174,7 +183,7 @@ enum hashtype {
 struct malloc_type;
 void	*hashinit(u_int, enum hashtype, struct malloc_type *, int, u_long *);
 void	hashdone(void *, struct malloc_type *);
-int	seltrue(dev_t, int, struct proc *);
+int	seltrue(dev_t, int, struct lwp *);
 int	sys_nosys(struct lwp *, void *, register_t *);
 
 
@@ -204,7 +213,7 @@ int	snprintf(char *, size_t, const char *, ...)
 void	vprintf(const char *, _BSD_VA_LIST_);
 int	vsprintf(char *, const char *, _BSD_VA_LIST_);
 int	vsnprintf(char *, size_t, const char *, _BSD_VA_LIST_);
-int	humanize_number(char *, size_t, u_int64_t, const char *, int);
+int	humanize_number(char *, size_t, uint64_t, const char *, int);
 
 void	twiddle(void);
 #endif /* _KERNEL */
@@ -218,7 +227,7 @@ void	ttyprintf(struct tty *, const char *, ...)
 
 char	*bitmask_snprintf(u_quad_t, const char *, char *, size_t);
 
-int	format_bytes(char *, size_t, u_int64_t);
+int	format_bytes(char *, size_t, uint64_t);
 
 void	tablefull(const char *, const char *);
 
@@ -236,8 +245,18 @@ int	copyoutstr(const void *, void *, size_t, size_t *);
 int	copyin(const void *, void *, size_t);
 int	copyout(const void *, void *, size_t);
 
+#ifdef _KERNEL
+typedef	int	(*copyin_t)(const void *, void *, size_t);
+typedef int	(*copyout_t)(const void *, void *, size_t);
+#endif
+
 int	copyin_proc(struct proc *, const void *, void *, size_t);
 int	copyout_proc(struct proc *, const void *, void *, size_t);
+int	copyin_vmspace(struct vmspace *, const void *, void *, size_t);
+int	copyout_vmspace(struct vmspace *, const void *, void *, size_t);
+
+int	ioctl_copyin(int ioctlflags, const void *src, void *dst, size_t len);
+int	ioctl_copyout(int ioctlflags, const void *src, void *dst, size_t len);
 
 int	subyte(void *, int);
 int	suibyte(void *, int);
@@ -338,9 +357,12 @@ void	doforkhooks(struct proc *, struct proc *);
 /*
  * kernel syscall tracing/debugging hooks.
  */
+#ifdef _KERNEL
+boolean_t trace_is_enabled(struct proc *);
 int	trace_enter(struct lwp *, register_t, register_t,
 	    const struct sysent *, void *);
 void	trace_exit(struct lwp *, register_t, void *, register_t [], int);
+#endif
 
 int	uiomove(void *, size_t, struct uio *);
 int	uiomove_frombuf(void *, size_t, struct uio *);
@@ -387,16 +409,16 @@ typedef struct cnm_state {
 
 void cn_init_magic(cnm_state_t *);
 void cn_destroy_magic(cnm_state_t *);
-int cn_set_magic(char *);
-int cn_get_magic(char *, int);
+int cn_set_magic(const char *);
+int cn_get_magic(char *, size_t);
 /* This should be called for each byte read */
 #ifndef cn_check_magic
 #define cn_check_magic(d, k, s)						\
 	do {								\
 		if (cn_isconsole(d)) {					\
-			int v = (s).cnm_magic[(s).cnm_state];		\
-			if ((k) == CNS_MAGIC_VAL(v)) {			\
-				(s).cnm_state = CNS_MAGIC_NEXT(v);	\
+			int _v = (s).cnm_magic[(s).cnm_state];		\
+			if ((k) == CNS_MAGIC_VAL(_v)) {			\
+				(s).cnm_state = CNS_MAGIC_NEXT(_v);	\
 				if ((s).cnm_state == CNS_TERM) {	\
 					cn_trap();			\
 					(s).cnm_state = 0;		\

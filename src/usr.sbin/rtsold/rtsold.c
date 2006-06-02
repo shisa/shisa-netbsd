@@ -1,4 +1,4 @@
-/*	$NetBSD: rtsold.c,v 1.29 2004/06/25 14:52:36 wiz Exp $	*/
+/*	$NetBSD: rtsold.c,v 1.32 2006/05/11 08:38:38 mrg Exp $	*/
 /*	$KAME: rtsold.c,v 1.77 2004/01/03 01:35:13 itojun Exp $	*/
 
 /*
@@ -121,7 +121,8 @@ main(int argc, char **argv)
 {
 	int s, ch, once = 0;
 	struct timeval *timeout;
-	char *argv0, *opts;
+	char *argv0;
+	const char *opts;
 	struct pollfd set[2];
 #ifdef USE_RTSOCK
 	int rtsock;
@@ -452,7 +453,7 @@ make_packet(struct ifinfo *ifinfo)
 {
 	size_t packlen = sizeof(struct nd_router_solicit), lladdroptlen = 0;
 	struct nd_router_solicit *rs;
-	char *buf;
+	u_char *buf;
 
 	if ((lladdroptlen = lladdropt_length(ifinfo->sdl)) == 0) {
 		warnmsg(LOG_INFO, __func__,
@@ -671,11 +672,11 @@ static void
 usage(char *progname)
 {
 	if (progname && progname[strlen(progname) - 1] != 'd') {
-		fprintf(stderr, "usage: rtsol [-dD] interfaces...\n");
-		fprintf(stderr, "usage: rtsol [-dD] -a\n");
+		fprintf(stderr, "usage: rtsol [-Dd] interface ...\n");
+		fprintf(stderr, "usage: rtsol [-Dd] -a\n");
 	} else {
-		fprintf(stderr, "usage: rtsold [-dDfm1] interfaces...\n");
-		fprintf(stderr, "usage: rtsold [-dDfm1] -a\n");
+		fprintf(stderr, "usage: rtsold [-1Ddfm] interface ...\n");
+		fprintf(stderr, "usage: rtsold [-1Ddfm] -a\n");
 	}
 	exit(1);
 }

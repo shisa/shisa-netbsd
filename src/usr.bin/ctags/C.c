@@ -1,4 +1,4 @@
-/*	$NetBSD: C.c,v 1.12 2005/02/17 17:29:58 xtraeme Exp $	*/
+/*	$NetBSD: C.c,v 1.15 2006/04/22 17:46:48 christos Exp $	*/
 
 /*
  * Copyright (c) 1987, 1993, 1994
@@ -38,7 +38,7 @@
 #if 0
 static char sccsid[] = "@(#)C.c	8.4 (Berkeley) 4/2/94";
 #else
-__RCSID("$NetBSD: C.c,v 1.12 2005/02/17 17:29:58 xtraeme Exp $");
+__RCSID("$NetBSD: C.c,v 1.15 2006/04/22 17:46:48 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -150,10 +150,11 @@ c_entries(void)
 		 */
 		case '(':
 			do c = getc(inf);
-			while(iswhite(c));
+			while (c != EOF && iswhite(c));
 			if (c == '*')
 				break;
-			else	ungetc(c, inf);
+			if (c != EOF)
+				ungetc(c, inf);
 			if (!level && token) {
 				int	curline;
 
@@ -208,7 +209,9 @@ c_entries(void)
 		 * reserved words.
 		 */
 		default:
-	storec:		if (!intoken(c)) {
+	storec:		if (c == EOF)
+				break;
+			if (!intoken(c)) {
 				if (sp == tok)
 					break;
 				*sp = EOS;
@@ -239,7 +242,8 @@ c_entries(void)
 				sp = tok;
 			}
 			else if (sp != tok || begtoken(c)) {
-				*sp++ = c;
+				if (sp < tok + sizeof tok)
+					*sp++ = c;
 				token = YES;
 			}
 			continue;
@@ -370,8 +374,11 @@ hash_entry(void)
 			return;
 		if (iswhite(c))
 			break;
-		*sp++ = c;
+		if (sp < tok + sizeof tok)
+			*sp++ = c;
 	}
+	if(sp >= tok + sizeof tok)
+		--sp;
 	*sp = EOS;
 	if (memcmp(tok, "define", 6))	/* only interested in #define's */
 		goto skip;
@@ -382,7 +389,8 @@ hash_entry(void)
 			break;
 	}
 	for (sp = tok;;) {		/* get next token */
-		*sp++ = c;
+		if(sp < tok + sizeof tok)
+			*sp++ = c;
 		if (GETC(==, EOF))
 			return;
 		/*
@@ -392,6 +400,8 @@ hash_entry(void)
 		if (!intoken(c))
 			break;
 	}
+	if(sp >= tok + sizeof tok)
+		--sp;
 	*sp = EOS;
 	if (dflag || c == '(') {	/* only want macros */
 		getline();

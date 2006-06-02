@@ -1,4 +1,4 @@
-/* $NetBSD: except.c,v 1.7 2003/11/30 13:22:32 bjh21 Exp $ */
+/* $NetBSD: except.c,v 1.11 2006/03/16 15:10:06 he Exp $ */
 /*-
  * Copyright (c) 1998, 1999, 2000 Ben Harris
  * All rights reserved.
@@ -31,10 +31,9 @@
 
 #include <sys/param.h>
 
-__KERNEL_RCSID(0, "$NetBSD: except.c,v 1.7 2003/11/30 13:22:32 bjh21 Exp $");
+__KERNEL_RCSID(0, "$NetBSD: except.c,v 1.11 2006/03/16 15:10:06 he Exp $");
 
 #include "opt_ddb.h"
-#include "opt_ktrace.h"
 
 #include <sys/errno.h>
 #include <sys/kernel.h>
@@ -57,10 +56,6 @@ __KERNEL_RCSID(0, "$NetBSD: except.c,v 1.7 2003/11/30 13:22:32 bjh21 Exp $");
 #ifdef DDB
 #include <ddb/db_output.h>
 #include <machine/db_machdep.h>
-#endif
-
-#ifdef KTRACE
-#include <sys/ktrace.h>
 #endif
 
 void syscall(struct trapframe *);
@@ -199,7 +194,7 @@ do_fault(struct trapframe *tf, struct lwp *l,
     struct vm_map *map, vaddr_t va, vm_prot_t atype)
 {
 	int error;
-	struct pcb *curpcb;
+	struct pcb *cur_pcb;
 
 	if (pmap_fault(map->pmap, va, atype))
 		return;
@@ -207,7 +202,7 @@ do_fault(struct trapframe *tf, struct lwp *l,
 	KASSERT(current_intr_depth == 0);
 
 	for (;;) {
-		error = uvm_fault(map, va, 0, atype);
+		error = uvm_fault(map, va, atype);
 		if (error != ENOMEM)
 			break;
 		log(LOG_WARNING, "pid %d.%d: VM shortage, sleeping\n",
@@ -218,11 +213,11 @@ do_fault(struct trapframe *tf, struct lwp *l,
 	if (error != 0) {
 		ksiginfo_t ksi;
 
-		curpcb = &l->l_addr->u_pcb;
-		if (curpcb->pcb_onfault != NULL) {
+		cur_pcb = &l->l_addr->u_pcb;
+		if (cur_pcb->pcb_onfault != NULL) {
 			tf->tf_r0 = error;
 			tf->tf_r15 = (tf->tf_r15 & ~R15_PC) |
-			    (register_t)curpcb->pcb_onfault;
+			    (register_t)cur_pcb->pcb_onfault;
 			return;
 		}
 		KSI_INIT_TRAP(&ksi);

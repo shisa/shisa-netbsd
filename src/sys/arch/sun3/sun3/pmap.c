@@ -1,4 +1,4 @@
-/*	$NetBSD: pmap.c,v 1.145.6.1 2005/06/06 12:16:46 tron Exp $	*/
+/*	$NetBSD: pmap.c,v 1.150 2006/03/15 18:12:03 drochner Exp $	*/
 
 /*-
  * Copyright (c) 1996 The NetBSD Foundation, Inc.
@@ -87,7 +87,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.145.6.1 2005/06/06 12:16:46 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.150 2006/03/15 18:12:03 drochner Exp $");
 
 #include "opt_ddb.h"
 #include "opt_pmap_debug.h"
@@ -1080,7 +1080,7 @@ pv_init(void)
 
 	/* Now allocate the whole thing. */
 	sz = m68k_round_page(sz);
-	p = (char *)uvm_km_alloc(kernel_map, sz);
+	p = (char *)uvm_km_alloc(kernel_map, sz, 0, UVM_KMF_WIRED);
 	if (p == NULL)
 		panic("pmap:pv_init: alloc failed");
 	memset(p, 0, sz);
@@ -1556,7 +1556,7 @@ pmap_bootstrap(vaddr_t nextva)
 	 * On the Sun3/50, the video frame buffer is located at
 	 * physical addres 1MB so we must step over it.
 	 */
-	if (cpu_machine_id == SUN3_MACH_50) {
+	if (cpu_machine_id == ID_SUN3_50) {
 		hole_start = m68k_trunc_page(OBMEM_BW50_ADDR);
 		hole_size  = m68k_round_page(OBMEM_BW2_SIZE);
 		if (avail_start > hole_start) {
@@ -2582,7 +2582,7 @@ _pmap_fault(struct vm_map *map, vaddr_t va, vm_prot_t ftype)
 		if (pmap_fault_reload(pmap, va, ftype))
 			return 0;
 	}
-	rv = uvm_fault(map, va, 0, ftype);
+	rv = uvm_fault(map, va, ftype);
 
 #ifdef	PMAP_DEBUG
 	if (pmap_debug & PMD_FAULT) {

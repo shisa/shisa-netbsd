@@ -1,4 +1,4 @@
-/*	$NetBSD: gnuc.h,v 1.1.1.1 2004/05/17 23:43:53 christos Exp $	*/
+/*	$NetBSD: gnuc.h,v 1.1.1.3 2005/12/21 23:11:08 christos Exp $	*/
 
 /* @(#) Header: /proj/cvs/prod/bind9/contrib/nslint-2.1a3/lbl/gnuc.h,v 1.1 2001/12/21 04:12:05 marka Exp (LBL) */
 

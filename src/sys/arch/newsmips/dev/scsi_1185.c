@@ -1,4 +1,4 @@
-/*	$NetBSD: scsi_1185.c,v 1.15 2005/02/06 02:18:02 tsutsui Exp $	*/
+/*	$NetBSD: scsi_1185.c,v 1.18 2005/12/11 12:18:24 christos Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -53,7 +53,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: scsi_1185.c,v 1.15 2005/02/06 02:18:02 tsutsui Exp $");
+__KERNEL_RCSID(0, "$NetBSD: scsi_1185.c,v 1.18 2005/12/11 12:18:24 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -110,7 +110,7 @@ __KERNEL_RCSID(0, "$NetBSD: scsi_1185.c,v 1.15 2005/02/06 02:18:02 tsutsui Exp $
 #define	splscsi splsc
 
 #if defined(__mips__) && defined(CPU_SINGLE)
-#define nops(x)		{ int i; for (i = 0; i < (x); i++) ; }
+#define nops(x)		{ int __i; for (__i = 0; __i < (x); __i++) ; }
 #define	DMAC_WAIT0	;
 #else
 #define	DMAC_WAIT0	DMAC_WAIT
@@ -168,9 +168,9 @@ extern paddr_t kvtophys(vaddr_t);
 
 #if defined(__mips__) && defined(CPU_SINGLE)
 #define dma_reset(x) {						\
-	int s = splscsi();					\
+	int __s = splscsi();					\
 	dmac_gsel = (x); dmac_cctl = DM_RST; dmac_cctl = 0;	\
-	splx(s);						\
+	splx(__s);						\
 }
 #endif
 
@@ -272,7 +272,7 @@ sc_send(struct sc_scb *scb, int chan, int ie)
 	p = (u_char *)xs->cmd;
 	if (cs->scb != NULL) {
 		printf("SCSI%d: sc_send() NOT NULL cs->sc\n", chan);
-		printf("ie=0x%x scb=0x%p cs->sc=0x%p\n", ie, scb, cs->scb);
+		printf("ie=0x%x scb=%p cs->sc=%p\n", ie, scb, cs->scb);
 		printf("cdb=");
 		for (i = 0; i < 6; i++)
 			printf(" 0x%x", *p++);

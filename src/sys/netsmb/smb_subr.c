@@ -1,4 +1,4 @@
-/*	$NetBSD: smb_subr.c,v 1.21 2005/02/26 22:39:50 perry Exp $	*/
+/*	$NetBSD: smb_subr.c,v 1.26 2006/05/14 21:20:13 elad Exp $	*/
 
 /*
  * Copyright (c) 2000-2001 Boris Popov
@@ -35,7 +35,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: smb_subr.c,v 1.21 2005/02/26 22:39:50 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: smb_subr.c,v 1.26 2006/05/14 21:20:13 elad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -49,6 +49,7 @@ __KERNEL_RCSID(0, "$NetBSD: smb_subr.c,v 1.21 2005/02/26 22:39:50 perry Exp $");
 #include <sys/signalvar.h>
 #include <sys/mbuf.h>
 #include <sys/socketvar.h>		/* for M_SONAME */
+#include <sys/kauth.h>
 
 #include <netsmb/iconv.h>
 
@@ -63,22 +64,25 @@ static MALLOC_DEFINE(M_SMBSTR, "smbstr", "SMB strings");
 MALLOC_DEFINE(M_SMBTEMP, "smbtemp", "Temp netsmb data");
 
 void
-smb_makescred(struct smb_cred *scred, struct proc *p, struct ucred *cred)
+smb_makescred(struct smb_cred *scred, struct lwp *l, kauth_cred_t cred)
 {
-	if (p) {
-		scred->scr_p = p;
-		scred->scr_cred = cred ? cred : p->p_ucred;
+	if (l) {
+		scred->scr_l = l;
+		scred->scr_cred = cred ? cred : l->l_proc->p_cred;
 	} else {
-		scred->scr_p = NULL;
+		scred->scr_l = NULL;
 		scred->scr_cred = cred ? cred : NULL;
 	}
 }
 
 int
-smb_proc_intr(struct proc *p)
+smb_proc_intr(struct lwp *l)
 {
-	if (p == NULL)
+	struct proc *p;
+
+	if (l == NULL)
 		return 0;
+	p = l->l_proc;
 	if (!sigemptyset(&p->p_sigctx.ps_siglist)
 	    && SMB_SIGMASK(p->p_sigctx.ps_siglist))
                 return EINTR;
@@ -241,7 +245,8 @@ smb_maperror(int eclass, int eno)
 		    case ERRquota:
 			return EDQUOT;
 		    case ERRnotlocked:
-			return EBUSY;
+			/* it's okay to try to unlock already unlocked file */
+			return 0;
 		    case NT_STATUS_NOTIFY_ENUM_DIR:
 			return EMSGSIZE;
 		}
@@ -298,11 +303,11 @@ smb_maperror(int eclass, int eno)
 }
 
 static int
-smb_copy_iconv(struct mbchain *mbp, const caddr_t src, caddr_t dst, size_t len)
+smb_copy_iconv(struct mbchain *mbp, const char *src, char *dst, size_t len)
 {
 	size_t outlen = len;
 
-	return iconv_conv((struct iconv_drv*)mbp->mb_udata, (const char **)(&src), &len, &dst, &outlen);
+	return iconv_conv((struct iconv_drv*)mbp->mb_udata, &src, &len, &dst, &outlen);
 }
 
 int
@@ -314,11 +319,11 @@ smb_put_dmem(struct mbchain *mbp, struct smb_vc *vcp, const char *src,
 	if (size == 0)
 		return 0;
 	if (dp == NULL) {
-		return mb_put_mem(mbp, (caddr_t)src, size, MB_MSYSTEM);
+		return mb_put_mem(mbp, (const void *)src, size, MB_MSYSTEM);
 	}
 	mbp->mb_copy = smb_copy_iconv;
 	mbp->mb_udata = dp;
-	return mb_put_mem(mbp, (caddr_t)src, size, MB_MCUSTOM);
+	return mb_put_mem(mbp, (const void *)src, size, MB_MCUSTOM);
 }
 
 int

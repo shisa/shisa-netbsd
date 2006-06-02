@@ -1,4 +1,4 @@
-/*	$NetBSD: si_sebuf.c,v 1.22 2005/01/22 15:36:10 chs Exp $	*/
+/*	$NetBSD: si_sebuf.c,v 1.24 2006/03/29 04:16:48 thorpej Exp $	*/
 
 /*-
  * Copyright (c) 1996 The NetBSD Foundation, Inc.
@@ -44,7 +44,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: si_sebuf.c,v 1.22 2005/01/22 15:36:10 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: si_sebuf.c,v 1.24 2006/03/29 04:16:48 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -173,7 +173,7 @@ se_attach(struct device *parent, struct device *self, void *args)
 {
 	struct se_softc *sc = (struct se_softc *) self;
 	struct ncr5380_softc *ncr_sc = &sc->ncr_sc;
-	struct cfdata *cf = self->dv_cfdata;
+	struct cfdata *cf = device_cfdata(self);
 	struct sebuf_attach_args *aa = args;
 	volatile struct se_regs *regs;
 	int i;

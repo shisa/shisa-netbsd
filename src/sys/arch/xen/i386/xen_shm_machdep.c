@@ -1,7 +1,7 @@
-/*      $NetBSD: xen_shm_machdep.c,v 1.5.2.5 2005/08/21 22:13:23 tron Exp $      */
+/*      $NetBSD: xen_shm_machdep.c,v 1.15 2006/05/25 21:26:20 bouyer Exp $      */
 
 /*
- * Copyright (c) 2005 Manuel Bouyer.
+ * Copyright (c) 2006 Manuel Bouyer.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -43,7 +43,6 @@
 #include <machine/hypervisor.h>
 #include <machine/xen.h>
 #include <machine/evtchn.h>
-#include <machine/ctrl_if.h>
 #include <machine/xen_shm.h>
 
 /*
@@ -65,6 +64,9 @@ u_long xen_shm_base_address_pg;
 vaddr_t xen_shm_end_address;
 
 /* Grab enouth VM space to map an entire vbd ring. */
+#ifdef XEN3
+#define BLKIF_RING_SIZE __RING_SIZE((blkif_sring_t *)0, PAGE_SIZE)
+#endif
 #define XENSHM_NPAGES (BLKIF_RING_SIZE * (BLKIF_MAX_SEGMENTS_PER_REQUEST + 1))
 
 vsize_t xen_shm_size = (XENSHM_NPAGES * PAGE_SIZE);
@@ -100,7 +102,8 @@ xen_shm_init()
 		panic("xen_shm_init can't prime pool");
 	}
 
-	xen_shm_base_address = uvm_km_valloc(kernel_map, xen_shm_size);
+	xen_shm_base_address = uvm_km_alloc(kernel_map, xen_shm_size, 0,
+	    UVM_KMF_VAONLY);
 	xen_shm_end_address = xen_shm_base_address + xen_shm_size;
 	xen_shm_base_address_pg = xen_shm_base_address >> PAGE_SHIFT;
 	if (xen_shm_base_address == 0) {
@@ -117,13 +120,24 @@ xen_shm_init()
 }
 
 int
+#ifdef XEN3
+xen_shm_map(int nentries, int domid, grant_ref_t gref, vaddr_t *vap,
+    grant_handle_t *handlep, int flags)
+#else
 xen_shm_map(paddr_t *ma, int nentries, int domid, vaddr_t *vap, int flags)
+#endif
 {
-	int i, s;
+	int s;
 	vaddr_t new_va;
 	u_long new_va_pg;
+#ifdef XEN3
+	int err;
+	gnttab_map_grant_ref_t op;
+#else
+	int i;
 	multicall_entry_t mcl[XENSHM_MAX_PAGES_PER_REQUEST];
 	int remap_prot = PG_V | PG_RW | PG_U | PG_M;
+#endif
 
 #ifdef DIAGNOSTIC
 	if (nentries > XENSHM_MAX_PAGES_PER_REQUEST) {
@@ -165,6 +179,18 @@ xen_shm_map(paddr_t *ma, int nentries, int domid, vaddr_t *vap, int flags)
 	splx(s);
 
 	new_va = new_va_pg << PAGE_SHIFT;
+#ifdef XEN3
+	op.host_addr = new_va;
+	op.dom = domid;
+	op.ref = gref;
+	op.flags = GNTMAP_host_map | ((flags & XSHM_RO) ? GNTMAP_readonly : 0);
+	err = HYPERVISOR_grant_table_op(GNTTABOP_map_grant_ref, &op, 1);
+	if (__predict_false(err))
+		panic("xen_shm_map: HYPERVISOR_grant_table_op failed");
+	if (__predict_false(op.status))
+		return op.status;
+	*handlep = op.handle;
+#else /* !XEN3 */
 	for (i = 0; i < nentries; i++, new_va_pg++) {
 		mcl[i].op = __HYPERVISOR_update_va_mapping_otherdomain;
 		mcl[i].args[0] = new_va_pg;
@@ -200,15 +226,26 @@ xen_shm_map(paddr_t *ma, int nentries, int domid, vaddr_t *vap, int flags)
 			return EINVAL;
 		}
 	}
+#endif /* !XEN3 */
 	*vap = new_va;
 	return 0;
 }
 
 void
+#ifdef XEN3
+xen_shm_unmap(vaddr_t va, int nentries, grant_handle_t handle)
+#else
 xen_shm_unmap(vaddr_t va, paddr_t *pa, int nentries, int domid)
+#endif
 {
+#ifdef XEN3
+	gnttab_unmap_grant_ref_t op;
+	int ret;
+#else
 	multicall_entry_t mcl[XENSHM_MAX_PAGES_PER_REQUEST];
-	int i, s;
+	int i;
+#endif
+	int s;
 	struct xen_shm_callback_entry *xshmc;
 
 #ifdef DIAGNOSTIC
@@ -218,6 +255,16 @@ xen_shm_unmap(vaddr_t va, paddr_t *pa, int nentries, int domid)
 	}
 #endif
 
+#ifdef XEN3
+	op.host_addr = va;
+	op.dev_bus_addr = 0;
+	op.handle = handle;
+	ret = HYPERVISOR_grant_table_op(GNTTABOP_unmap_grant_ref,
+	    &op, 1);
+	if (__predict_false(ret))
+		panic("xen_shm_unmap: unmap failed");
+	va = va >> PAGE_SHIFT;
+#else /* !XEN3 */
 	va = va >> PAGE_SHIFT;
 	for (i = 0; i < nentries; i++) {
 		mcl[i].op = __HYPERVISOR_update_va_mapping;
@@ -239,6 +286,7 @@ xen_shm_unmap(vaddr_t va, paddr_t *pa, int nentries, int domid)
 	mcl[nentries - 1].args[2] = UVMF_FLUSH_TLB;
 	if (HYPERVISOR_multicall(mcl, nentries) != 0)
 		panic("xen_shm_unmap");
+#endif /* !XEN3 */
 	s = splvm(); /* splvm is the lowest level blocking disk and net IRQ */
 	if (extent_free(xen_shm_ex, va, nentries, EX_NOWAIT) != 0)
 		panic("xen_shm_unmap: extent_free");

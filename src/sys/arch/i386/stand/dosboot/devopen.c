@@ -1,4 +1,4 @@
-/*	$NetBSD: devopen.c,v 1.7 2004/03/24 16:34:29 drochner Exp $	 */
+/*	$NetBSD: devopen.c,v 1.10 2005/12/11 12:17:48 christos Exp $	 */
 
 /*
  * Copyright (c) 1996
@@ -36,7 +36,7 @@
 #include <bootinfo.h>
 
 struct devsw devsw[] = {
-	{"disk", biosdiskstrategy, biosdiskopen, biosdiskclose, biosdiskioctl},
+	{"disk", biosdisk_strategy, biosdisk_open, biosdisk_close, biosdisk_ioctl},
 };
 int ndevs = sizeof(devsw) / sizeof(struct devsw);
 
@@ -71,7 +71,7 @@ static struct {
 };
 #define NUMBIOSDEVS (sizeof(biosdevtab) / sizeof(biosdevtab[0]))
 
-static int dev2bios __P((char *, unsigned int, int *));
+static int dev2bios(char *, unsigned int, int *);
 
 static int
 dev2bios(devname, unit, biosdev)
@@ -101,7 +101,7 @@ devopen(f, fname, file)
 {
 	char           *devname;
 	char           *fsmode;
-	unsigned int    unit, partition;
+	int             unit, partition;
 	int             biosdev;
 	int             error;
 	struct devsw   *dp;
@@ -124,7 +124,7 @@ devopen(f, fname, file)
 		strncpy(bibp.bootpath, *file, sizeof(bibp.bootpath));
 		BI_ADD(&bibp, BTINFO_BOOTPATH, sizeof(bibp));
 
-		return (biosdiskopen(f, biosdev, partition));
+		return (biosdisk_open(f, biosdev, partition));
 	} else {
 		printf("no file system\n");
 		return (ENXIO);

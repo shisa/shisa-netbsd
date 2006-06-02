@@ -1,4 +1,4 @@
-/*	$NetBSD: conf.c,v 1.3 2003/08/07 16:27:12 agc Exp $	*/
+/*	$NetBSD: conf.c,v 1.6 2005/12/11 12:17:04 christos Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1990, 1993
@@ -32,19 +32,19 @@
  */
 
 #include <sys/param.h>
-#include <stand.h>
+#include <lib/libsa/stand.h>
 
-int fdstrategy __P((void *, int, daddr_t, size_t, void *, size_t *));
-int fdopen __P((struct open_file *, ...));
-int fdclose __P((struct open_file *));
+int fdstrategy(void *, int, daddr_t, size_t, void *, size_t *);
+int fdopen(struct open_file *, ...);
+int fdclose(struct open_file *);
 
-int instrategy __P((void *, int , daddr_t, size_t, void *, size_t *));
-int inopen __P((struct open_file *, ...));
-int inclose __P((struct open_file *));
+int instrategy(void *, int, daddr_t, size_t, void *, size_t *);
+int inopen(struct open_file *, ...);
+int inclose(struct open_file *);
 
 struct devsw devsw[] = {
-	{ "fd",	fdstrategy, fdopen, fdclose, noioctl },
-	{ "in",	instrategy, inopen, inclose, noioctl },
+	{ "fd", fdstrategy, fdopen, fdclose, noioctl },
+	{ "in", instrategy, inopen, inclose, noioctl },
 };
 
-int ndevs = (sizeof (devsw) / sizeof (devsw[0]));
+int ndevs = sizeof(devsw) / sizeof(devsw[0]);

@@ -1,4 +1,4 @@
-/*	$NetBSD: loadbsd.c,v 1.31 2004/02/13 11:36:10 wiz Exp $	*/
+/*	$NetBSD: loadbsd.c,v 1.33 2005/12/24 22:45:34 perry Exp $	*/
 
 /*
  * Copyright (c) 1994 Michael L. Hitch
@@ -654,7 +654,7 @@ get_AGA(void)
 	 */
 }
 
-asm("
+__asm("
 	.text
 
 _startit:

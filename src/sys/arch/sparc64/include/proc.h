@@ -1,4 +1,4 @@
-/*	$NetBSD: proc.h,v 1.5 2005/01/02 00:14:46 christos Exp $ */
+/*	$NetBSD: proc.h,v 1.9 2005/12/11 12:19:10 christos Exp $ */
 
 /*
  * Copyright (c) 1992, 1993
@@ -47,16 +47,18 @@ struct mdlwp {
 	struct	trapframe64 *md_tf;	/* trap/syscall registers */
 	struct	fpstate64 *md_fpstate;	/* fpu state, if any; always resident */
 	struct pcb *md_pcbpaddr;	/* phys addr of the pcb */
-	u_long	md_flags;
 };
 /*
  * Machine-dependent part of the proc structure for SPARC.
  */
-/* LINTED 0 sized structure */
 struct mdproc {
+	void	(*md_syscall)(struct trapframe64 *, register_t, register_t);
+	u_long	md_flags;
 };
 
 /* md_flags */
 #define	MDP_FIXALIGN	0x1		/* Fix unaligned memory accesses */
+
+#define netbsd32_syscall_intern syscall_intern
 
 #endif /* _SPARC64_PROC_H */

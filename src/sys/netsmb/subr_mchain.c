@@ -1,4 +1,4 @@
-/*	$NetBSD: subr_mchain.c,v 1.10 2005/02/26 22:39:50 perry Exp $	*/
+/*	$NetBSD: subr_mchain.c,v 1.13 2006/03/01 12:38:32 yamt Exp $	*/
 
 /*
  * Copyright (c) 2000, 2001 Boris Popov
@@ -35,13 +35,15 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: subr_mchain.c,v 1.10 2005/02/26 22:39:50 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: subr_mchain.c,v 1.13 2006/03/01 12:38:32 yamt Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/errno.h>
 #include <sys/mbuf.h>
 #include <sys/uio.h>
+
+#include <uvm/uvm_extern.h>
 
 #include <netsmb/mchain.h>
 
@@ -252,8 +254,8 @@ int
 mb_put_mem(struct mbchain *mbp, const char *source, int size, int type)
 {
 	struct mbuf *m;
-	caddr_t dst;
-	caddr_t src;
+	char *dst;
+	const char *src;
 	int cplen, error, mleft, count;
 
 	m = mbp->mb_cur;
@@ -274,12 +276,12 @@ mb_put_mem(struct mbchain *mbp, const char *source, int size, int type)
 		dst = mtod(m, caddr_t) + m->m_len;
 		switch (type) {
 		    case MB_MCUSTOM:
-			error = mbp->mb_copy(mbp, (caddr_t)source, dst, cplen);
+			error = mbp->mb_copy(mbp, source, dst, cplen);
 			if (error)
 				return error;
 			break;
 		    case MB_MINLINE:
-			for (src = (caddr_t)source, count = cplen; count; count--)
+			for (src = source, count = cplen; count; count--)
 				*dst++ = *src++;
 			break;
 		    case MB_MSYSTEM:
@@ -329,7 +331,7 @@ mb_put_uio(struct mbchain *mbp, struct uio *uiop, int size)
 	long left;
 	int mtype, error;
 
-	mtype = (uiop->uio_segflg == UIO_SYSSPACE) ? MB_MSYSTEM : MB_MUSER;
+	mtype = VMSPACE_IS_KERNEL_P(uiop->uio_vmspace) ? MB_MSYSTEM : MB_MUSER;
 
 	while (size > 0 && uiop->uio_resid) {
 		if (uiop->uio_iovcnt <= 0 || uiop->uio_iov == NULL)
@@ -582,7 +584,7 @@ md_get_uio(struct mdchain *mdp, struct uio *uiop, int size)
 	long left;
 	int mtype, error;
 
-	mtype = (uiop->uio_segflg == UIO_SYSSPACE) ? MB_MSYSTEM : MB_MUSER;
+	mtype = VMSPACE_IS_KERNEL_P(uiop->uio_vmspace) ? MB_MSYSTEM : MB_MUSER;
 	while (size > 0 && uiop->uio_resid) {
 		if (uiop->uio_iovcnt <= 0 || uiop->uio_iov == NULL)
 			return EFBIG;

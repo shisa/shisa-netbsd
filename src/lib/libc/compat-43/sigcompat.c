@@ -1,4 +1,4 @@
-/*	$NetBSD: sigcompat.c,v 1.11 2003/08/07 16:42:40 agc Exp $	*/
+/*	$NetBSD: sigcompat.c,v 1.13 2005/12/24 21:11:16 perry Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993
@@ -34,20 +34,19 @@
 #if 0
 static char sccsid[] = "@(#)sigcompat.c	8.1 (Berkeley) 6/2/93";
 #else
-__RCSID("$NetBSD: sigcompat.c,v 1.11 2003/08/07 16:42:40 agc Exp $");
+__RCSID("$NetBSD: sigcompat.c,v 1.13 2005/12/24 21:11:16 perry Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
 #include <sys/param.h>
 #include <signal.h>
+#include <compat/sys/signal.h>
 
-static __inline void sv2sa __P((struct sigaction *, const struct sigvec *));
-static __inline void sa2sv __P((struct sigvec *, const struct sigaction *));
+static inline void sv2sa(struct sigaction *, const struct sigvec *);
+static inline void sa2sv(struct sigvec *, const struct sigaction *);
 
-static __inline void
-sv2sa(sa, sv)
-	struct sigaction *sa;
-	const struct sigvec *sv;
+static inline void
+sv2sa(struct sigaction *sa, const struct sigvec *sv)
 {
 	sigemptyset(&sa->sa_mask);
 	sa->sa_mask.__bits[0] = sv->sv_mask;
@@ -55,10 +54,8 @@ sv2sa(sa, sv)
 	sa->sa_flags = sv->sv_flags ^ SV_INTERRUPT; /* !SA_INTERRUPT */
 }
 
-static __inline void
-sa2sv(sv, sa)
-	struct sigvec *sv;
-	const struct sigaction *sa;
+static inline void
+sa2sv(struct sigvec *sv, const struct sigaction *sa)
 {
 	sv->sv_mask = sa->sa_mask.__bits[0];
 	sv->sv_handler = sa->sa_handler;
@@ -66,9 +63,7 @@ sa2sv(sv, sa)
 }
 	
 int
-sigvec(signo, nsv, osv)
-	int signo;
-	struct sigvec *nsv, *osv;
+sigvec(int signo, struct sigvec *nsv, struct sigvec *osv)
 {
 	int ret;
 	struct sigaction osa, nsa;
@@ -85,8 +80,7 @@ sigvec(signo, nsv, osv)
 }
 
 int
-sigsetmask(mask)
-	int mask;
+sigsetmask(int mask)
 {
 	sigset_t nmask, omask;
 	int n;
@@ -101,8 +95,7 @@ sigsetmask(mask)
 }
 
 int
-sigblock(mask)
-	int mask;
+sigblock(int mask)
 {
 	sigset_t nmask, omask;
 	int n;
@@ -117,8 +110,7 @@ sigblock(mask)
 }
 
 int
-sigpause(mask)
-	int mask;
+sigpause(int mask)
 {
 	sigset_t nmask;
 

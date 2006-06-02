@@ -1,4 +1,4 @@
-/* $NetBSD: if_mec.c,v 1.4 2005/01/30 19:05:56 thorpej Exp $ */
+/* $NetBSD: if_mec.c,v 1.8 2006/04/02 11:20:46 tsutsui Exp $ */
 
 /*
  * Copyright (c) 2004 Izumi Tsutsui.
@@ -64,7 +64,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_mec.c,v 1.4 2005/01/30 19:05:56 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_mec.c,v 1.8 2006/04/02 11:20:46 tsutsui Exp $");
 
 #include "opt_ddb.h"
 #include "bpfilter.h"
@@ -380,7 +380,7 @@ mec_attach(struct device *parent, struct device *self, void *aux)
 	struct mace_attach_args *maa = aux;
 	struct ifnet *ifp = &sc->sc_ethercom.ec_if;
 	uint32_t command;
-	char *macaddr;
+	const char *macaddr;
 	struct mii_softc *child;
 	bus_dma_segment_t seg;
 	int i, err, rseg;
@@ -449,7 +449,7 @@ mec_attach(struct device *parent, struct device *self, void *aux)
 
 	callout_init(&sc->sc_tick_ch);
 
-	/* get ehternet address from ARCBIOS */
+	/* get ethernet address from ARCBIOS */
 	if ((macaddr = ARCBIOS->GetEnvironmentVariable("eaddr")) == NULL) {
 		printf(": unable to get MAC address!\n");
 		goto fail_4;
@@ -546,13 +546,13 @@ mec_mii_readreg(struct device *self, int phy, int reg)
 	struct mec_softc *sc = (void *)self;
 	bus_space_tag_t st = sc->sc_st;
 	bus_space_handle_t sh = sc->sc_sh;
-	uint32_t val;
+	uint64_t val;
 	int i;
 
 	if (mec_mii_wait(sc) != 0)
 		return 0;
 
-	bus_space_write_4(st, sh, MEC_PHY_ADDRESS,
+	bus_space_write_8(st, sh, MEC_PHY_ADDRESS,
 	    (phy << MEC_PHY_ADDR_DEVSHIFT) | (reg & MEC_PHY_ADDR_REGISTER));
 	bus_space_write_8(st, sh, MEC_PHY_READ_INITIATE, 1);
 	delay(25);
@@ -560,7 +560,7 @@ mec_mii_readreg(struct device *self, int phy, int reg)
 	for (i = 0; i < 20; i++) {
 		delay(30);
 
-		val = bus_space_read_4(st, sh, MEC_PHY_DATA);
+		val = bus_space_read_8(st, sh, MEC_PHY_DATA);
 
 		if ((val & MEC_PHY_DATA_BUSY) == 0)
 			return val & MEC_PHY_DATA_VALUE;
@@ -580,12 +580,12 @@ mec_mii_writereg(struct device *self, int phy, int reg, int val)
 		return;
 	}
 
-	bus_space_write_4(st, sh, MEC_PHY_ADDRESS,
+	bus_space_write_8(st, sh, MEC_PHY_ADDRESS,
 	    (phy << MEC_PHY_ADDR_DEVSHIFT) | (reg & MEC_PHY_ADDR_REGISTER));
 
 	delay(60);
 
-	bus_space_write_4(st, sh, MEC_PHY_DATA, val & MEC_PHY_DATA_VALUE);
+	bus_space_write_8(st, sh, MEC_PHY_DATA, val & MEC_PHY_DATA_VALUE);
 
 	delay(60);
 
@@ -602,7 +602,7 @@ mec_mii_wait(struct mec_softc *sc)
 		delay(30);
 
 		s = splhigh();
-		busy = bus_space_read_4(sc->sc_st, sc->sc_sh, MEC_PHY_DATA);
+		busy = bus_space_read_8(sc->sc_st, sc->sc_sh, MEC_PHY_DATA);
 		splx(s);
 
 		if ((busy & MEC_PHY_DATA_BUSY) == 0)
@@ -762,6 +762,7 @@ mec_reset(struct mec_softc *sc)
 
 	/* reset chip */
 	bus_space_write_8(st, sh, MEC_MAC_CONTROL, MEC_MAC_CORE_RESET);
+	delay(1000);
 	bus_space_write_8(st, sh, MEC_MAC_CONTROL, 0);
 	delay(1000);
 

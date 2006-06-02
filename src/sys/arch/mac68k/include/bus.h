@@ -1,4 +1,4 @@
-/*	$NetBSD: bus.h,v 1.21 2005/01/15 16:00:59 chs Exp $	*/
+/*	$NetBSD: bus.h,v 1.24 2006/02/16 20:17:14 perry Exp $	*/
 
 /*-
  * Copyright (c) 1996, 1997, 1998 The NetBSD Foundation, Inc.

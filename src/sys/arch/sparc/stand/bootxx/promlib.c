@@ -1,4 +1,4 @@
-/*	$NetBSD: promlib.c,v 1.3 2003/02/26 17:39:08 pk Exp $ */
+/*	$NetBSD: promlib.c,v 1.7 2006/03/04 03:01:18 uwe Exp $ */
 
 /*-
  * Copyright (c) 1999 The NetBSD Foundation, Inc.
@@ -65,8 +65,8 @@
 
 static void	obp_v2_putchar __P((int));
 static int	obp_v2_seek __P((int, u_quad_t));
-static char	*obp_v0_getbootpath __P((void));
-static char	*obp_v2_getbootpath __P((void));
+static const char	*obp_v0_getbootpath __P((void));
+static const char	*obp_v2_getbootpath __P((void));
 
 /*
  * PROM entry points.
@@ -99,10 +99,10 @@ obp_v2_seek(handle, offset)
 	int handle;
 	u_quad_t offset;
 {
-	u_int32_t hi, lo;
+	uint32_t hi, lo;
 
-	lo = offset & ((u_int32_t)-1);
-	hi = (offset >> 32) & ((u_int32_t)-1);
+	lo = offset & ((uint32_t)-1);
+	hi = (offset >> 32) & ((uint32_t)-1);
 	(*obpvec->pv_v2devops.v2_seek)(handle, hi, lo);
 	return (0);
 }
@@ -114,14 +114,14 @@ obp_v2_seek(handle, offset)
  * is NULL but `*promvec->pv_v2bootargs.v2_bootargs' points to
  * "netbsd -s" or whatever.
  */
-char *
+const char *
 obp_v0_getbootpath()
 {
 	struct v0bootargs *ba = promops.po_bootcookie;
 	return (ba->ba_argv[0]);
 }
 
-char *
+const char *
 obp_v2_getbootpath()
 {
 	struct v2bootargs *ba = promops.po_bootcookie;
@@ -132,7 +132,7 @@ obp_v2_getbootpath()
 static void prom_init_oldmon __P((void));
 static void prom_init_obp __P((void));
 
-static __inline__ void
+static inline void
 prom_init_oldmon()
 {
 	struct om_vector *oldpvec = (struct om_vector *)PROM_BASE;
@@ -147,7 +147,7 @@ prom_init_oldmon()
 	promops.po_bootpath = obp_v0_getbootpath;
 }
 
-static __inline__ void
+static inline void
 prom_init_obp()
 {
 	/*

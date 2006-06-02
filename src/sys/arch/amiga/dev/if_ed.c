@@ -1,4 +1,4 @@
-/*	$NetBSD: if_ed.c,v 1.46 2004/10/30 18:08:34 thorpej Exp $ */
+/*	$NetBSD: if_ed.c,v 1.49 2006/03/29 04:16:45 thorpej Exp $ */
 
 /*
  * Device driver for National Semiconductor DS8390/WD83C690 based ethernet
@@ -19,7 +19,7 @@
 #include "opt_ns.h"
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_ed.c,v 1.46 2004/10/30 18:08:34 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_ed.c,v 1.49 2006/03/29 04:16:45 thorpej Exp $");
 
 #include "bpfilter.h"
 
@@ -206,9 +206,9 @@ ed_zbus_attach(struct device *parent, struct device *self, void *aux)
 {
 	struct ed_softc *sc = (void *)self;
 	struct zbus_args *zap = aux;
-	struct cfdata *cf = sc->sc_dev.dv_cfdata;
+	struct cfdata *cf = device_cfdata(&sc->sc_dev);
 	struct ifnet *ifp = &sc->sc_ethercom.ec_if;
-	u_char *prom;
+	volatile u_char *prom;
 	int i;
 	u_int8_t myaddr[ETHER_ADDR_LEN];
 
@@ -220,8 +220,8 @@ ed_zbus_attach(struct device *parent, struct device *self, void *aux)
 	} else {
 		sc->mem_start = (u_char *)zap->va + 0x8000;
 		sc->mem_size = 16384;
-		sc->nic_addr = (u_char *)zap->va + ASDG_NIC_BASE;
-		prom = (u_char *)sc->nic_addr + ASDG_ADDRPROM;
+		sc->nic_addr = (volatile u_char *)zap->va + ASDG_NIC_BASE;
+		prom = (volatile u_char *)sc->nic_addr + ASDG_ADDRPROM;
 	}
 	sc->cr_proto = ED_CR_RD2;
 	sc->tx_page_start = 0;

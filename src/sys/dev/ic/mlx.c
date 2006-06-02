@@ -1,4 +1,4 @@
-/*	$NetBSD: mlx.c,v 1.32.2.1 2005/08/04 18:25:16 tron Exp $	*/
+/*	$NetBSD: mlx.c,v 1.42 2006/04/14 21:06:47 christos Exp $	*/
 
 /*-
  * Copyright (c) 2001 The NetBSD Foundation, Inc.
@@ -74,7 +74,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mlx.c,v 1.32.2.1 2005/08/04 18:25:16 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: mlx.c,v 1.42 2006/04/14 21:06:47 christos Exp $");
 
 #include "ld.h"
 
@@ -133,11 +133,9 @@ static void	mlx_periodic_thread(void *);
 static int	mlx_print(void *, const char *);
 static int	mlx_rebuild(struct mlx_softc *, int, int);
 static void	mlx_shutdown(void *);
-static int	mlx_submatch(struct device *, struct cfdata *,
-			     const locdesc_t *, void *);
 static int	mlx_user_command(struct mlx_softc *, struct mlx_usercommand *);
 
-static __inline__ time_t	mlx_curtime(void);
+static inline time_t	mlx_curtime(void);
 
 dev_type_open(mlxopen);
 dev_type_close(mlxclose);
@@ -259,7 +257,7 @@ struct {
  * Return the current time in seconds - we're not particularly interested in
  * precision here.
  */
-static __inline__ time_t
+static inline time_t
 mlx_curtime(void)
 {
 	time_t rt;
@@ -536,7 +534,7 @@ static void
 mlx_describe(struct mlx_softc *mlx)
 {
 	struct mlx_cinfo *ci;
-	static char buf[80];
+	static char tbuf[80];
 	const char *model;
 	int i;
 
@@ -550,8 +548,8 @@ mlx_describe(struct mlx_softc *mlx)
 		}
 
 	if (model == NULL) {
-		snprintf(buf, sizeof(buf), " model 0x%x", ci->ci_hardware_id);
-		model = buf;
+		snprintf(tbuf, sizeof(tbuf), " model 0x%x", ci->ci_hardware_id);
+		model = tbuf;
 	}
 
 	printf("%s: DAC%s, %d channel%s, firmware %d.%02d-%c-%02d",
@@ -577,8 +575,7 @@ mlx_configure(struct mlx_softc *mlx, int waitok)
 	struct mlx_attach_args mlxa;
 	int i, nunits;
 	u_int size;
-	int help[2];
-	locdesc_t *ldesc = (void *)help; /* XXX */
+	int locs[MLXCF_NLOCS];
 
 	mlx->mlx_flags |= MLXF_RESCANNING;
 
@@ -643,11 +640,10 @@ mlx_configure(struct mlx_softc *mlx, int waitok)
 		 */
 		mlxa.mlxa_unit = i;
 
-		ldesc->len = 1;
-		ldesc->locs[MLXCF_UNIT] = i;
+		locs[MLXCF_UNIT] = i;
 
-		ms->ms_dv = config_found_sm_loc(&mlx->mlx_dv, "mlx", NULL, &mlxa, mlx_print,
-		    mlx_submatch);
+		ms->ms_dv = config_found_sm_loc(&mlx->mlx_dv, "mlx", locs,
+				&mlxa, mlx_print, config_stdsubmatch);
 		nunits += (ms->ms_dv != NULL);
 	}
 
@@ -674,21 +670,6 @@ mlx_print(void *aux, const char *pnp)
 		aprint_normal("block device at %s", pnp);
 	aprint_normal(" unit %d", mlxa->mlxa_unit);
 	return (UNCONF);
-}
-
-/*
- * Match a sub-device.
- */
-static int
-mlx_submatch(struct device *parent, struct cfdata *cf,
-	     const locdesc_t *ldesc, void *aux)
-{
-
-	if (cf->cf_loc[MLXCF_UNIT] != MLXCF_UNIT_DEFAULT &&
-	    cf->cf_loc[MLXCF_UNIT] != ldesc->locs[MLXCF_UNIT])
-		return (0);
-
-	return (config_match(parent, cf, aux));
 }
 
 /*
@@ -719,7 +700,7 @@ mlx_adjqparam(struct mlx_softc *mlx, int mpu, int slop)
 	for (i = 0; i < ld_cd.cd_ndevs; i++) {
 		if ((ld = device_lookup(&ld_cd, i)) == NULL)
 			continue;
-		if (ld->sc_dv.dv_parent != &mlx->mlx_dv)
+		if (device_parent(&ld->sc_dv) != &mlx->mlx_dv)
 			continue;
 		ldadjqparam(ld, mpu + (slop-- > 0));
 	}
@@ -730,7 +711,7 @@ mlx_adjqparam(struct mlx_softc *mlx, int mpu, int slop)
  * Accept an open operation on the control device.
  */
 int
-mlxopen(dev_t dev, int flag, int mode, struct proc *p)
+mlxopen(dev_t dev, int flag, int mode, struct lwp *l)
 {
 	struct mlx_softc *mlx;
 
@@ -749,7 +730,7 @@ mlxopen(dev_t dev, int flag, int mode, struct proc *p)
  * Accept the last close on the control device.
  */
 int
-mlxclose(dev_t dev, int flag, int mode, struct proc *p)
+mlxclose(dev_t dev, int flag, int mode, struct lwp *l)
 {
 	struct mlx_softc *mlx;
 
@@ -762,7 +743,7 @@ mlxclose(dev_t dev, int flag, int mode, struct proc *p)
  * Handle control operations.
  */
 int
-mlxioctl(dev_t dev, u_long cmd, caddr_t data, int flag, struct proc *p)
+mlxioctl(dev_t dev, u_long cmd, caddr_t data, int flag, struct lwp *l)
 {
 	struct mlx_softc *mlx;
 	struct mlx_rebuild_request *rb;
@@ -1630,11 +1611,8 @@ mlx_enquire(struct mlx_softc *mlx, int command, size_t bufsize,
 
 	/* We got an error, and we allocated a result. */
 	if (rv != 0 && result != NULL) {
-		if (handler != NULL && mc != NULL) {
-			if (mapped)
-				mlx_ccb_unmap(mlx, mc);
+		if (mc != NULL)
 			mlx_ccb_free(mlx, mc);
-		}
 		free(result, M_DEVBUF);
 		result = NULL;
 	}
@@ -1826,19 +1804,19 @@ mlx_user_command(struct mlx_softc *mlx, struct mlx_usercommand *mu)
 			goto out;
 		}
 		mapped = 1;
+		/*
+		 * If this is a passthrough SCSI command, the DCDB is packed at
+		 * the beginning of the data area.  Fix up the DCDB to point to
+		 * the correct physical address and override any bufptr
+		 * supplied by the caller since we know what it's meant to be.
+		 */
+		if (mc->mc_mbox[0] == MLX_CMD_DIRECT_CDB) {
+			dcdb = (struct mlx_dcdb *)kbuf;
+			dcdb->dcdb_physaddr = mc->mc_xfer_phys + sizeof(*dcdb);
+			mu->mu_bufptr = 8;
+		}
 	}
 
-	/*
-	 * If this is a passthrough SCSI command, the DCDB is packed at the
-	 * beginning of the data area.  Fix up the DCDB to point to the correct physical
-	 * address and override any bufptr supplied by the caller since we know
-	 * what it's meant to be.
-	 */
-	if (mc->mc_mbox[0] == MLX_CMD_DIRECT_CDB) {
-		dcdb = (struct mlx_dcdb *)kbuf;
-		dcdb->dcdb_physaddr = mc->mc_xfer_phys + sizeof(*dcdb);
-		mu->mu_bufptr = 8;
-	}
 
 	/*
 	 * If there's a data buffer, fix up the command's buffer pointer.
@@ -1867,13 +1845,12 @@ mlx_user_command(struct mlx_softc *mlx, struct mlx_usercommand *mu)
 
  out:
 	if (mc != NULL) {
+		/* Copy out status and data */
+		mu->mu_status = mc->mc_status;
 		if (mapped)
 			mlx_ccb_unmap(mlx, mc);
 		mlx_ccb_free(mlx, mc);
 	}
-
-	/* Copy out status and data */
-	mu->mu_status = mc->mc_status;
 
 	if (kbuf != NULL) {
 		if (mu->mu_datasize > 0 && (mu->mu_bufdir & MU_XFER_IN) != 0) {
@@ -2131,22 +2108,22 @@ mlx_ccb_submit(struct mlx_softc *mlx, struct mlx_ccb *mc)
 const char *
 mlx_ccb_diagnose(struct mlx_ccb *mc)
 {
-	static char buf[80];
+	static char tbuf[80];
 	int i;
 
 	for (i = 0; i < sizeof(mlx_msgs) / sizeof(mlx_msgs[0]); i++)
 		if ((mc->mc_mbox[0] == mlx_msgs[i].command ||
 		    mlx_msgs[i].command == 0) &&
 		    mc->mc_status == mlx_msgs[i].status) {
-			snprintf(buf, sizeof(buf), "%s (0x%x)",
+			snprintf(tbuf, sizeof(tbuf), "%s (0x%x)",
 			    mlx_status_msgs[mlx_msgs[i].msg], mc->mc_status);
-			return (buf);
+			return (tbuf);
 		}
 
-	snprintf(buf, sizeof(buf), "unknown response 0x%x for command 0x%x",
+	snprintf(tbuf, sizeof(tbuf), "unknown response 0x%x for command 0x%x",
 	    (int)mc->mc_status, (int)mc->mc_mbox[0]);
 
-	return (buf);
+	return (tbuf);
 }
 
 /*

@@ -1,4 +1,4 @@
-/*	$NetBSD: clock_pcctwo.c,v 1.6.4.1 2005/04/14 13:29:11 tron Exp $	*/
+/*	$NetBSD: clock_pcctwo.c,v 1.10 2006/03/29 07:07:41 thorpej Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2002 The NetBSD Foundation, Inc.
@@ -43,7 +43,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: clock_pcctwo.c,v 1.6.4.1 2005/04/14 13:29:11 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: clock_pcctwo.c,v 1.10 2006/03/29 07:07:41 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/kernel.h>
@@ -111,7 +111,7 @@ clock_pcctwo_attach(parent, self, aux)
 	struct clock_pcctwo_softc *sc;
 	struct pcctwo_attach_args *pa;
 
-	sc = clock_pcctwo_sc = (struct clock_pcctwo_softc *) self;
+	sc = clock_pcctwo_sc = device_private(self);
 	pa = aux;
 
 	if (pa->pa_ipl != CLOCK_LEVEL)
@@ -138,10 +138,10 @@ clock_pcctwo_attach(parent, self, aux)
 }
 
 void
-clock_pcctwo_initclocks(arg, proftick, stattick)
+clock_pcctwo_initclocks(arg, prof_us, stat_us)
 	void *arg;
-	int proftick;
-	int stattick;
+	int prof_us;
+	int stat_us;
 {
 	struct clock_pcctwo_softc *sc;
 
@@ -150,7 +150,7 @@ clock_pcctwo_initclocks(arg, proftick, stattick)
 	pcc2_reg_write(sys_pcctwo, PCC2REG_TIMER1_CONTROL, PCCTWO_TT_CTRL_COVF);
 	pcc2_reg_write32(sys_pcctwo, PCC2REG_TIMER1_COUNTER, 0);
 	pcc2_reg_write32(sys_pcctwo, PCC2REG_TIMER1_COMPARE,
-	    PCCTWO_US2LIM(proftick));
+	    PCCTWO_US2LIM(prof_us));
 	pcc2_reg_write(sys_pcctwo, PCC2REG_TIMER1_CONTROL,
 	    PCCTWO_TT_CTRL_CEN | PCCTWO_TT_CTRL_COC | PCCTWO_TT_CTRL_COVF);
 	pcc2_reg_write(sys_pcctwo, PCC2REG_TIMER1_ICSR, sc->sc_clock_lvl);
@@ -158,7 +158,7 @@ clock_pcctwo_initclocks(arg, proftick, stattick)
 	pcc2_reg_write(sys_pcctwo, PCC2REG_TIMER2_CONTROL, PCCTWO_TT_CTRL_COVF);
 	pcc2_reg_write32(sys_pcctwo, PCC2REG_TIMER2_COUNTER, 0);
 	pcc2_reg_write32(sys_pcctwo, PCC2REG_TIMER2_COMPARE,
-	    PCCTWO_US2LIM(stattick));
+	    PCCTWO_US2LIM(stat_us));
 	pcc2_reg_write(sys_pcctwo, PCC2REG_TIMER2_CONTROL,
 	    PCCTWO_TT_CTRL_CEN | PCCTWO_TT_CTRL_COC | PCCTWO_TT_CTRL_COVF);
 	pcc2_reg_write(sys_pcctwo, PCC2REG_TIMER2_ICSR, sc->sc_clock_lvl);

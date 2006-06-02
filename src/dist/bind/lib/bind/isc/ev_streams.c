@@ -1,4 +1,4 @@
-/*	$NetBSD: ev_streams.c,v 1.1.1.1 2004/05/17 23:44:45 christos Exp $	*/
+/*	$NetBSD: ev_streams.c,v 1.1.1.3 2005/12/21 23:15:41 christos Exp $	*/
 
 /*
  * Copyright (c) 2004 by Internet Systems Consortium, Inc. ("ISC")

@@ -1,4 +1,4 @@
-# $NetBSD: shl.elf,v 1.9.6.1 2005/04/06 21:27:51 tron Exp $
+# $NetBSD: shl.elf,v 1.10 2005/03/22 13:45:46 tron Exp $
 ./usr/X11R6/lib/X11/locale/lib/common/ximcp.so.2
 ./usr/X11R6/lib/X11/locale/lib/common/xlcDef.so.2
 ./usr/X11R6/lib/X11/locale/lib/common/xlcUTF8Load.so.2

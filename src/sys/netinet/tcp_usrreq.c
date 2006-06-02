@@ -1,4 +1,4 @@
-/*	$NetBSD: tcp_usrreq.c,v 1.100.2.2 2005/05/06 08:35:27 tron Exp $	*/
+/*	$NetBSD: tcp_usrreq.c,v 1.117 2006/05/14 21:19:34 elad Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -100,7 +100,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: tcp_usrreq.c,v 1.100.2.2 2005/05/06 08:35:27 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: tcp_usrreq.c,v 1.117 2006/05/14 21:19:34 elad Exp $");
 
 #include "opt_inet.h"
 #include "opt_ipsec.h"
@@ -120,6 +120,7 @@ __KERNEL_RCSID(0, "$NetBSD: tcp_usrreq.c,v 1.100.2.2 2005/05/06 08:35:27 tron Ex
 #include <sys/proc.h>
 #include <sys/domain.h>
 #include <sys/sysctl.h>
+#include <sys/kauth.h>
 
 #include <net/if.h>
 #include <net/route.h>
@@ -130,6 +131,7 @@ __KERNEL_RCSID(0, "$NetBSD: tcp_usrreq.c,v 1.100.2.2 2005/05/06 08:35:27 tron Ex
 #include <netinet/ip.h>
 #include <netinet/in_pcb.h>
 #include <netinet/ip_var.h>
+#include <netinet/in_offload.h>
 
 #ifdef INET6
 #ifndef INET
@@ -166,13 +168,14 @@ __KERNEL_RCSID(0, "$NetBSD: tcp_usrreq.c,v 1.100.2.2 2005/05/06 08:35:27 tron Ex
 /*ARGSUSED*/
 int
 tcp_usrreq(struct socket *so, int req,
-    struct mbuf *m, struct mbuf *nam, struct mbuf *control, struct proc *p)
+    struct mbuf *m, struct mbuf *nam, struct mbuf *control, struct lwp *l)
 {
 	struct inpcb *inp;
 #ifdef INET6
 	struct in6pcb *in6p;
 #endif
 	struct tcpcb *tp = NULL;
+	struct proc *p;
 	int s;
 	int error = 0;
 #ifdef TCP_DEBUG
@@ -180,6 +183,7 @@ tcp_usrreq(struct socket *so, int req,
 #endif
 	int family;	/* family of the socket */
 
+	p = l ? l->l_proc : NULL;
 	family = so->so_proto->pr_domain->dom_family;
 
 	if (req == PRU_CONTROL) {
@@ -384,7 +388,7 @@ tcp_usrreq(struct socket *so, int req,
 				if (error)
 					break;
 			}
-			error = in_pcbconnect(inp, nam);
+			error = in_pcbconnect(inp, nam, p);
 		}
 #endif
 #ifdef INET6
@@ -395,7 +399,7 @@ tcp_usrreq(struct socket *so, int req,
 				if (error)
 					break;
 			}
-			error = in6_pcbconnect(in6p, nam);
+			error = in6_pcbconnect(in6p, nam, p);
 			if (!error) {
 				/* mapped addr case */
 				if (IN6_IS_ADDR_V4MAPPED(&in6p->in6p_faddr))
@@ -915,7 +919,8 @@ tcp_usrclosed(struct tcpcb *tp)
 #endif
 		else
 			so = NULL;
-		soisdisconnected(so);
+		if (so)
+			soisdisconnected(so);
 		/*
 		 * If we are in FIN_WAIT_2, we arrived here because the
 		 * application did a shutdown of the send side.  Like the
@@ -1108,7 +1113,7 @@ sysctl_net_inet_tcp_ident(SYSCTLFN_ARGS)
 					   laddr, lport);
 		if (inb == NULL || (sockp = inb->inp_socket) == NULL)
 			return (ESRCH);
-		uid = sockp->so_uid;
+		uid = sockp->so_uidinfo->ui_uid;
 		if (oldp) {
 			sz = MIN(sizeof(uid), *oldlenp);
 			error = copyout(&uid, oldp, sz);
@@ -1166,8 +1171,9 @@ sysctl_net_inet_tcp_ident(SYSCTLFN_ARGS)
 	    default:
 		return (EPROTONOSUPPORT);
 	}
+	*oldlenp = sizeof(uid);
 
-	uid = sockp->so_uid;
+	uid = sockp->so_uidinfo->ui_uid;
 	if (oldp) {
 		sz = MIN(sizeof(uid), *oldlenp);
 		error = copyout(&uid, oldp, sz);
@@ -1190,14 +1196,18 @@ sysctl_inpcblist(SYSCTLFN_ARGS)
 {
 #ifdef INET
 	struct sockaddr_in *in;
-	struct inpcb *inp;
+	const struct inpcb *inp;
 #endif
 #ifdef INET6
 	struct sockaddr_in6 *in6;
-	struct in6pcb *in6p;
+	const struct in6pcb *in6p;
 #endif
-	const struct inpcbtable *pcbtbl = rnode->sysctl_data;
-	struct inpcb_hdr *inph;
+	/*
+	 * sysctl_data is const, but CIRCLEQ_FOREACH can't use a const
+	 * struct inpcbtable pointer, so we have to discard const.  :-/
+	 */
+	struct inpcbtable *pcbtbl = __UNCONST(rnode->sysctl_data);
+	const struct inpcb_hdr *inph;
 	struct tcpcb *tp;
 	struct kinfo_pcb pcb;
 	char *dp;
@@ -1208,18 +1218,23 @@ sysctl_inpcblist(SYSCTLFN_ARGS)
 	if (namelen != 4)
 		return (EINVAL);
 
+	if (oldp != NULL) {
+		    len = *oldlenp;
+		    elem_size = name[2];
+		    elem_count = name[3];
+		    if (elem_size != sizeof(pcb))
+			    return EINVAL;
+	} else {
+		    len = 0;
+		    elem_count = INT_MAX;
+		    elem_size = sizeof(pcb);
+	}
 	error = 0;
 	dp = oldp;
-	len = (oldp != NULL) ? *oldlenp : 0;
 	op = name[0];
 	arg = name[1];
-	elem_size = name[2];
-	elem_count = name[3];
-	out_size = MIN(sizeof(pcb), elem_size);
+	out_size = elem_size;
 	needed = 0;
-
-	elem_count = INT_MAX;
-	elem_size = out_size = sizeof(pcb);
 
 	if (namelen == 1 && name[0] == CTL_QUERY)
 		return (sysctl_query(SYSCTLFN_CALL(rnode)));
@@ -1229,17 +1244,21 @@ sysctl_inpcblist(SYSCTLFN_ARGS)
 
 	pf = oname[1];
 	proto = oname[2];
-	pf2 = (oldp == NULL) ? 0 : pf;
+	pf2 = (oldp != NULL) ? pf : 0;
 
 	CIRCLEQ_FOREACH(inph, &pcbtbl->inpt_queue, inph_queue) {
 #ifdef INET
-		inp = (struct inpcb *)inph;
+		inp = (const struct inpcb *)inph;
 #endif
 #ifdef INET6
-		in6p = (struct in6pcb *)inph;
+		in6p = (const struct in6pcb *)inph;
 #endif
 
 		if (inph->inph_af != pf)
+			continue;
+
+		if (CURTAIN(kauth_cred_getuid(l->l_proc->p_cred),
+			    inph->inph_socket->so_uidinfo->ui_uid)) /* XXX elad */
 			continue;
 
 		memset(&pcb, 0, sizeof(pcb));
@@ -1364,7 +1383,11 @@ static void
 sysctl_net_inet_tcp_setup2(struct sysctllog **clog, int pf, const char *pfname,
 			   const char *tcpname)
 {
-	struct sysctlnode *sack_node;
+	const struct sysctlnode *sack_node;
+#ifdef TCP_DEBUG
+	extern struct tcp_debug tcp_debug[TCP_NDEBUG];
+	extern int tcp_debx;
+#endif
 
 	sysctl_createv(clog, 0, NULL, NULL,
 		       CTLFLAG_PERMANENT,
@@ -1601,6 +1624,31 @@ sysctl_net_inet_tcp_setup2(struct sysctllog **clog, int pf, const char *pfname,
 		       SYSCTL_DESCR("Global number of TCP SACK holes"),
 		       NULL, 0, &tcp_sack_globalholes, 0,
 		       CTL_NET, pf, IPPROTO_TCP, TCPCTL_SACK, CTL_CREATE, CTL_EOL);
+
+	sysctl_createv(clog, 0, NULL, NULL,
+		       CTLFLAG_PERMANENT,
+		       CTLTYPE_STRUCT, "stats",
+		       SYSCTL_DESCR("TCP statistics"),
+		       NULL, 0, &tcpstat, sizeof(tcpstat),
+		       CTL_NET, pf, IPPROTO_TCP, TCPCTL_STATS,
+		       CTL_EOL);
+#ifdef TCP_DEBUG
+	sysctl_createv(clog, 0, NULL, NULL,
+		       CTLFLAG_PERMANENT,
+		       CTLTYPE_STRUCT, "debug",
+		       SYSCTL_DESCR("TCP sockets debug information"),
+		       NULL, 0, &tcp_debug, sizeof(tcp_debug),
+		       CTL_NET, pf, IPPROTO_TCP, TCPCTL_DEBUG,
+		       CTL_EOL);
+	sysctl_createv(clog, 0, NULL, NULL,
+		       CTLFLAG_PERMANENT,
+		       CTLTYPE_INT, "debx",
+		       SYSCTL_DESCR("Number of TCP debug sockets messages"),
+		       NULL, 0, &tcp_debx, sizeof(tcp_debx),
+		       CTL_NET, pf, IPPROTO_TCP, TCPCTL_DEBX,
+		       CTL_EOL);
+#endif
+
 }
 
 /*

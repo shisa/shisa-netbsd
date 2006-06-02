@@ -1,4 +1,4 @@
-.\" $NetBSD: sha2.3,v 1.1.2.2 2005/11/22 15:22:36 riz Exp $
+.\" $NetBSD: sha2.3,v 1.4 2005/12/26 19:40:15 perry Exp $
 .\"	$OpenBSD: sha2.3,v 1.11 2004/06/22 01:57:29 jfb Exp $
 .\"
 .\" Copyright (c) 2003, 2004 Todd C. Miller <Todd.Miller@courtesan.com>
@@ -36,18 +36,18 @@
 .Nm SHA256_Data
 .Nd calculate the NIST Secure Hash Standard (version 2)
 .Sh SYNOPSIS
-.Fd #include <sys/types.h>
-.Fd #include <sha2.h>
+.In sys/types.h
+.In sha2.h
 .Ft void
 .Fn SHA256_Init "SHA256_CTX *context"
 .Ft void
-.Fn SHA256_Update "SHA256_CTX *context" "const u_int8_t *data" "size_t len"
+.Fn SHA256_Update "SHA256_CTX *context" "const uint8_t *data" "size_t len"
 .Ft void
 .Fn SHA256_Pad "SHA256_CTX *context"
 .Ft void
-.Fn SHA256_Final "u_int8_t digest[SHA256_DIGEST_LENGTH]" "SHA256_CTX *context"
+.Fn SHA256_Final "uint8_t digest[SHA256_DIGEST_LENGTH]" "SHA256_CTX *context"
 .Ft void
-.Fn SHA256_Transform "u_int32_t state[8]" "const u_int8_t buffer[SHA256_BLOCK_LENGTH]"
+.Fn SHA256_Transform "uint32_t state[8]" "const uint8_t buffer[SHA256_BLOCK_LENGTH]"
 .Ft "char *"
 .Fn SHA256_End "SHA256_CTX *context" "char *buf"
 .Ft "char *"
@@ -55,17 +55,17 @@
 .Ft "char *"
 .Fn SHA256_FileChunk "const char *filename" "char *buf" "off_t offset" "off_t length"
 .Ft "char *"
-.Fn SHA256_Data "u_int8_t *data" "size_t len" "char *buf"
+.Fn SHA256_Data "uint8_t *data" "size_t len" "char *buf"
 .Ft void
 .Fn SHA384_Init "SHA384_CTX *context"
 .Ft void
-.Fn SHA384_Update "SHA384_CTX *context" "const u_int8_t *data" "size_t len"
+.Fn SHA384_Update "SHA384_CTX *context" "const uint8_t *data" "size_t len"
 .Ft void
 .Fn SHA384_Pad "SHA384_CTX *context"
 .Ft void
-.Fn SHA384_Final "u_int8_t digest[SHA384_DIGEST_LENGTH]" "SHA384_CTX *context"
+.Fn SHA384_Final "uint8_t digest[SHA384_DIGEST_LENGTH]" "SHA384_CTX *context"
 .Ft void
-.Fn SHA384_Transform "u_int64_t state[8]" "const u_int8_t buffer[SHA384_BLOCK_LENGTH]"
+.Fn SHA384_Transform "uint64_t state[8]" "const uint8_t buffer[SHA384_BLOCK_LENGTH]"
 .Ft "char *"
 .Fn SHA384_End "SHA384_CTX *context" "char *buf"
 .Ft "char *"
@@ -73,17 +73,17 @@
 .Ft "char *"
 .Fn SHA384_FileChunk "char *filename" "char *buf" "off_t offset" "off_t length"
 .Ft "char *"
-.Fn SHA384_Data "u_int8_t *data" "size_t len" "char *buf"
+.Fn SHA384_Data "uint8_t *data" "size_t len" "char *buf"
 .Ft void
 .Fn SHA512_Init "SHA512_CTX *context"
 .Ft void
-.Fn SHA512_Update "SHA512_CTX *context" "const u_int8_t *data" "size_t len"
+.Fn SHA512_Update "SHA512_CTX *context" "const uint8_t *data" "size_t len"
 .Ft void
 .Fn SHA512_Pad "SHA512_CTX *context"
 .Ft void
-.Fn SHA512_Final "u_int8_t digest[SHA512_DIGEST_LENGTH]" "SHA512_CTX *context"
+.Fn SHA512_Final "uint8_t digest[SHA512_DIGEST_LENGTH]" "SHA512_CTX *context"
 .Ft void
-.Fn SHA512_Transform "u_int64_t state[8]" "const u_int8_t buffer[SHA512_BLOCK_LENGTH]"
+.Fn SHA512_Transform "uint64_t state[8]" "const uint8_t buffer[SHA512_BLOCK_LENGTH]"
 .Ft "char *"
 .Fn SHA512_End "SHA512_CTX *context" "char *buf"
 .Ft "char *"
@@ -91,7 +91,7 @@
 .Ft "char *"
 .Fn SHA512_FileChunk "char *filename" "char *buf" "off_t offset" "off_t length"
 .Ft "char *"
-.Fn SHA512_Data "u_int8_t *data" "size_t len" "char *buf"
+.Fn SHA512_Data "uint8_t *data" "size_t len" "char *buf"
 .Sh DESCRIPTION
 The SHA2 functions implement the NIST Secure Hash Standard,
 FIPS PUB 180-2.
@@ -147,7 +147,7 @@ function is used by
 to hash 512-bit blocks and forms the core of the algorithm.
 Most programs should use the interface provided by
 .Fn SHA256_Init ,
-.Fn SHA256_Update
+.Fn SHA256_Update ,
 and
 .Fn SHA256_Final
 instead of calling
@@ -168,7 +168,9 @@ function calculates the digest for a file and returns the result via
 .Fn SHA256_End .
 If
 .Fn SHA256_File
-is unable to open the file, a NULL pointer is returned.
+is unable to open the file, a
+.Dv NULL
+pointer is returned.
 .Pp
 .Fn SHA256_FileChunk
 behaves like
@@ -202,13 +204,15 @@ and
 functions the
 .Ar buf
 parameter should either be a string large enough to hold the resulting digest
-(e.g.\&
+(e.g.,
 .Ev SHA256_DIGEST_STRING_LENGTH ,
-.Ev SHA384_DIGEST_STRING_LENGTH
+.Ev SHA384_DIGEST_STRING_LENGTH ,
 or
 .Ev SHA512_DIGEST_STRING_LENGTH ,
 depending on the function being used)
-or a NULL pointer.
+or a
+.Dv NULL
+pointer.
 In the latter case, space will be dynamically allocated via
 .Xr malloc 3
 and should be freed using
@@ -221,19 +225,19 @@ which is
 .Dq 0xba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad .
 .Bd -literal -offset indent
 SHA256_CTX ctx;
-u_int8_t results[SHA256_DIGEST_LENGTH];
+uint8_t results[SHA256_DIGEST_LENGTH];
 char *buf;
 int n;
 
 buf = "abc";
 n = strlen(buf);
-SHA256_Init(&ctx);
-SHA256_Update(&ctx, (u_int8_t *)buf, n);
-SHA256_Final(results, &ctx);
+SHA256_Init(\*[Am]ctx);
+SHA256_Update(\*[Am]ctx, (uint8_t *)buf, n);
+SHA256_Final(results, \*[Am]ctx);
 
 /* Print the digest as one long hex value */
 printf("0x");
-for (n = 0; n < SHA256_DIGEST_LENGTH; n++)
+for (n = 0; n \*[Lt] SHA256_DIGEST_LENGTH; n++)
 	printf("%02x", results[n]);
 putchar('\en');
 .Ed
@@ -241,7 +245,7 @@ putchar('\en');
 Alternately, the helper functions could be used in the following way:
 .Bd -literal -offset indent
 SHA256_CTX ctx;
-u_int8_t output[SHA256_DIGEST_STRING_LENGTH];
+uint8_t output[SHA256_DIGEST_STRING_LENGTH];
 char *buf = "abc";
 
 printf("0x%s\en", SHA256_Data(buf, strlen(buf), output));
@@ -275,7 +279,7 @@ helper functions are derived from code written by Poul-Henning Kamp.
 This implementation of the Secure Hash Standard has not been validated by
 NIST and as such is not in official compliance with the standard.
 .Pp
-If a message digest is to be copied to a multi-byte type (ie:
+If a message digest is to be copied to a multi-byte type (i.e.:
 an array of five 32-bit integers) it will be necessary to
 perform byte swapping on little endian machines such as the i386, alpha,
 and vax.

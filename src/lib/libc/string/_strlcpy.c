@@ -1,4 +1,4 @@
-/*	$NetBSD: _strlcpy.c,v 1.1 2002/04/17 16:23:09 kleink Exp $	*/
+/*	$NetBSD: _strlcpy.c,v 1.4 2005/09/13 01:44:10 christos Exp $	*/
 
 /*
  * Copyright (c) 1996 Christos Zoulas.  All rights reserved.
@@ -28,20 +28,21 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#include <sys/cdefs.h>
 
-#ifdef __indr_reference
+#include <sys/cdefs.h>
+#if defined(LIBC_SCCS) && !defined(lint)
+__RCSID("$NetBSD: _strlcpy.c,v 1.4 2005/09/13 01:44:10 christos Exp $");
+#endif /* LIBC_SCCS and not lint */
+
+#if defined(__indr_reference)
 __indr_reference(_strlcpy, strlcpy)
 #else
 
 #include <string.h>
-size_t	_strlcpy __P((char *, const char *, size_t));	/* XXX */
+size_t	_strlcpy(char *, const char *, size_t);
 
 size_t
-strlcpy(dst, src, siz)
-	char *dst;
-	const char *src;
-	size_t siz;
+strlcpy(char *dst, const char *src, size_t siz)
 {
 
 	return _strlcpy(dst, src, siz);

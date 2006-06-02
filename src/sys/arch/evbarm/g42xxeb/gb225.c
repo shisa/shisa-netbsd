@@ -1,4 +1,4 @@
-/*	$NetBSD: gb225.c,v 1.1 2005/02/26 10:49:53 bsh Exp $ */
+/*	$NetBSD: gb225.c,v 1.5 2006/02/23 05:37:47 thorpej Exp $ */
 
 /*
  * Copyright (c) 2002, 2003  Genetec corp.  All rights reserved.
@@ -62,7 +62,8 @@
 /* prototypes */
 static int	opio_match(struct device *, struct cfdata *, void *);
 static void	opio_attach(struct device *, struct device *, void *);
-static int 	opio_search(struct device *, struct cfdata *, void *);
+static int 	opio_search(struct device *, struct cfdata *,
+			    const int *, void *);
 static int	opio_print(void *, const char *);
 #ifdef OPIO_INTR
 static int 	opio_intr( void *arg );
@@ -173,19 +174,20 @@ opio_attach(struct device *parent, struct device *self, void *aux)
 	/*
 	 *  Attach each devices
 	 */
-	config_search(opio_search, self, NULL);
+	config_search_ia(opio_search, self, "opio", NULL);
 }
 
 int
-opio_search(struct device *parent, struct cfdata *cf, void *aux)
+opio_search(struct device *parent, struct cfdata *cf,
+	    const int *ldesc, void *aux)
 {
 	struct opio_softc *sc = (struct opio_softc *)parent;
 	struct obio_attach_args oba;
 
 	oba.oba_sc = sc;
         oba.oba_iot = sc->sc_iot;
-        oba.oba_addr = cf->cf_loc[OBIOCF_ADDR];
-        oba.oba_intr = cf->cf_loc[OBIOCF_INTR];
+        oba.oba_addr = cf->cf_loc[OPIOCF_ADDR];
+        oba.oba_intr = cf->cf_loc[OPIOCF_INTR];
 
         if (config_match(parent, cf, &oba) > 0)
                 config_attach(parent, cf, &oba, opio_print);
@@ -217,7 +219,8 @@ static int
 opio_intr( void *arg )
 {
 	struct opio_softc *sc = (struct opio_softc *)arg;
-	struct obio_softc *bsc = (struct obio_softc *)sc->sc_dev.dv_parent;
+	struct obio_softc *bsc =
+	    (struct obio_softc *)device_parent(&sc->sc_dev);
 
 	/* avoid further interrupts while debouncing */
 	obio_intr_mask(bsc, sc->sc_ih);
@@ -269,7 +272,8 @@ static void
 opio_debounce(void *arg)
 {
 	struct opio_softc *sc = arg;
-	struct obio_softc *osc = (struct obio_softc *)sc->sc_dev.dv_parent;
+	struct obio_softc *osc =
+	    (struct obio_softc *)device_parent(&sc->sc_dev);
 	bus_space_tag_t iot = sc->sc_iot;
 	bus_space_handle_t ioh = sc->sc_ioh;
 	int flag = 0;

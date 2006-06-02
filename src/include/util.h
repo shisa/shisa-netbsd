@@ -1,4 +1,4 @@
-/*	$NetBSD: util.h,v 1.34.2.1 2005/05/19 16:15:00 tron Exp $	*/
+/*	$NetBSD: util.h,v 1.40 2006/02/18 16:32:45 elad Exp $	*/
 
 /*-
  * Copyright (c) 1995
@@ -52,6 +52,10 @@
 #define	HN_GETSCALE		0x10
 #define	HN_AUTOSCALE		0x20
 
+#define	PW_POLICY_BYSTRING	0
+#define	PW_POLICY_BYPASSWD	1
+#define	PW_POLICY_BYGROUP	2
+
 __BEGIN_DECLS
 struct disklabel;
 struct iovec;
@@ -60,6 +64,8 @@ struct termios;
 struct utmp;
 struct winsize;
 struct sockaddr;
+
+typedef struct pw_policy *pw_policy_t; 
 
 pid_t		forkpty(int *, char *, struct termios *, struct winsize *);
 const char     *getbootfile(void);
@@ -94,6 +100,9 @@ const char     *pw_getprefix(void);
 void		pw_init(void);
 int		pw_lock(int);
 int		pw_mkdb(const char *, int);
+pw_policy_t	pw_policy_load(void *, int);
+int		pw_policy_test(pw_policy_t, char *);
+void		pw_policy_free(pw_policy_t);
 void		pw_prompt(void);
 int		pw_setprefix(const char *);
 int		secure_path(const char *);

@@ -1,4 +1,4 @@
-/*	$NetBSD: md.h,v 1.20 2004/11/13 11:49:08 sekiya Exp $	*/
+/*	$NetBSD: md.h,v 1.22 2006/02/26 10:25:54 dsl Exp $	*/
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.
@@ -78,13 +78,4 @@
 #define SET_KERNEL_1_NAME	"kern-GENERIC32_IP2x"
 #define SET_KERNEL_2_NAME	"kern-GENERIC32_IP3x"
 #define SET_KERNEL_3_NAME	"kern-GENERIC32_IP12"
-#define MD_SETS_SELECTED (SET_KERNEL_1 | SET_SYSTEM)
-
-/*
- * Default fileystem type for floppy disks.
- *
- * On sgimips, we don't support a dedicated floppy-disk driver, only
- * SCSI floppy drives, so we can't recognize floppies by name.
- */
-const char *fdtype;
-
+#define MD_SETS_SELECTED SET_KERNEL_1, SET_SYSTEM

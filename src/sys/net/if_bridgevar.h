@@ -1,4 +1,4 @@
-/*	$NetBSD: if_bridgevar.h,v 1.6 2005/02/26 22:45:09 perry Exp $	*/
+/*	$NetBSD: if_bridgevar.h,v 1.8 2005/12/10 23:21:38 elad Exp $	*/
 
 /*
  * Copyright 2001 Wasabi Systems, Inc.
@@ -71,6 +71,9 @@
 /*
  * Data structure and control definitions for bridge interfaces.
  */
+
+#ifndef _NET_IF_BRIDGEVAR_H_
+#define _NET_IF_BRIDGEVAR_H_
 
 #include <sys/callout.h>
 #include <sys/queue.h>
@@ -239,9 +242,9 @@ struct bridge_iflist {
 	struct bridge_timer	bif_hold_timer;
 	struct bridge_timer	bif_message_age_timer;
 	struct bridge_timer	bif_forward_delay_timer;
-	struct bstp_config_unit	bif_config_bpdu;
 	uint16_t		bif_port_id;
 	uint16_t		bif_designated_port;
+	struct bstp_config_unit	bif_config_bpdu;
 	uint8_t			bif_state;
 	uint8_t			bif_topology_change_acknowledge;
 	uint8_t			bif_config_pending;
@@ -315,3 +318,4 @@ void	bridge_enqueue(struct bridge_softc *, struct ifnet *, struct mbuf *,
 	    int);
 
 #endif /* _KERNEL */
+#endif /* !_NET_IF_BRIDGEVAR_H_ */

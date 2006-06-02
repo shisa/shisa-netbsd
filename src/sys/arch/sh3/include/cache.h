@@ -1,4 +1,4 @@
-/*	$NetBSD: cache.h,v 1.4 2002/05/09 12:30:45 uch Exp $	*/
+/*	$NetBSD: cache.h,v 1.7 2006/01/21 00:46:36 uwe Exp $	*/
 
 /*-
  * Copyright (c) 2002 The NetBSD Foundation, Inc.
@@ -43,15 +43,25 @@
  * SH4 I/D separated virtual-index physical-tag cache.
  *
  *
- *          size line-size entry way
- * SH7708   4/8K    16B     128  2/4   P0, P2, U0 write-through/back selectable
- *                                    P1 write-through
- * SH7709   4/8K    16B     128  2/4   write-through/back selectable
- * SH7709A  16K     16B     256   4    write-through/back selectable
+ *         size       line-size entry way type
+ * SH7708  4/8K       16B       128   2/4 P0,P2,U0 [1]
+ *                                        P1 [2]
+ * SH7709  4/8K       16B       128   2/4 [1]
+ * SH7709A 16K        16B       256   4   [1]
  *
- * SH7750  I$ D$ line-size entry way
- *         8K 8/16K 32B     256   1    write-through/back selectable
+ * SH7750  I$  D$     line-size entry way
+ *         8K  8/16K  32B       256   1   [1]
+ * SH7750
+ * SH7750S
+ * SH7751  I$  D$     line-size entry way
+ *         8K  8/16K  32B       256   1   [1]
+ * 
+ * SH7750R
+ * SH7751R I$  D$     line-size entry way
+ *         16K 16/32K 32B       512   2   [1]
  *
+ * [1]	write-through/back selectable
+ * [2]	write-through only
  *
  * Cache operations.
  *
@@ -175,19 +185,9 @@ extern struct sh_cache_ops sh_cache_ops;
 void sh_cache_init(void);
 void sh_cache_information(void);
 
-#if defined(SH3) && defined(SH4)
-#define	SH_HAS_VIRTUAL_ALIAS	CPU_IS_SH4
 #define	SH_HAS_UNIFIED_CACHE	CPU_IS_SH3
+#define	SH_HAS_VIRTUAL_ALIAS	CPU_IS_SH4
 #define	SH_HAS_WRITEBACK_CACHE	(!sh_cache_write_through)
-#elif defined(SH3)
-#define	SH_HAS_VIRTUAL_ALIAS	0
-#define	SH_HAS_UNIFIED_CACHE	1
-#define	SH_HAS_WRITEBACK_CACHE	(!sh_cache_write_through)
-#elif defined(SH4)
-#define	SH_HAS_VIRTUAL_ALIAS	1
-#define	SH_HAS_UNIFIED_CACHE	0
-#define	SH_HAS_WRITEBACK_CACHE	(!sh_cache_write_through)
-#endif
 
 #endif /* _KERNEL */
 #endif /* _SH3_CACHE_H_ */

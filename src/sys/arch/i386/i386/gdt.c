@@ -1,4 +1,4 @@
-/*	$NetBSD: gdt.c,v 1.32 2004/02/13 11:36:13 wiz Exp $	*/
+/*	$NetBSD: gdt.c,v 1.36 2005/12/24 20:07:10 perry Exp $	*/
 
 /*-
  * Copyright (c) 1996, 1997 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: gdt.c,v 1.32 2004/02/13 11:36:13 wiz Exp $");
+__KERNEL_RCSID(0, "$NetBSD: gdt.c,v 1.36 2005/12/24 20:07:10 perry Exp $");
 
 #include "opt_multiprocessor.h"
 
@@ -58,8 +58,8 @@ int gdt_free;		/* next free slot; terminated with GNULL_SEL */
 
 struct lock gdt_lock_store;
 
-static __inline void gdt_lock(void);
-static __inline void gdt_unlock(void);
+static inline void gdt_lock(void);
+static inline void gdt_unlock(void);
 void gdt_init(void);
 void gdt_grow(void);
 int gdt_get_slot(void);
@@ -74,14 +74,14 @@ void gdt_put_slot(int);
  * some time after the GDT is unlocked, so gdt_compact() could attempt to
  * reclaim it.
  */
-static __inline void
+static inline void
 gdt_lock()
 {
 
 	(void) lockmgr(&gdt_lock_store, LK_EXCLUSIVE, NULL);
 }
 
-static __inline void
+static inline void
 gdt_unlock()
 {
 
@@ -126,7 +126,8 @@ gdt_init()
 	gdt_free = GNULL_SEL;
 
 	old_gdt = gdt;
-	gdt = (union descriptor *)uvm_km_valloc(kernel_map, max_len);
+	gdt = (union descriptor *)uvm_km_alloc(kernel_map, max_len,
+	    0, UVM_KMF_VAONLY);
 	for (va = (vaddr_t)gdt; va < (vaddr_t)gdt + min_len; va += PAGE_SIZE) {
 		pg = uvm_pagealloc(NULL, 0, NULL, UVM_PGA_ZERO);
 		if (pg == NULL) {
@@ -154,7 +155,8 @@ gdt_alloc_cpu(struct cpu_info *ci)
 	struct vm_page *pg;
 	vaddr_t va;
 
-	ci->ci_gdt = (union descriptor *)uvm_km_valloc(kernel_map, max_len);
+	ci->ci_gdt = (union descriptor *)uvm_km_alloc(kernel_map, max_len,
+	    0, UVM_KMF_VAONLY);
 	for (va = (vaddr_t)ci->ci_gdt; va < (vaddr_t)ci->ci_gdt + min_len;
 	    va += PAGE_SIZE) {
 		while ((pg = uvm_pagealloc(NULL, 0, NULL, UVM_PGA_ZERO))
@@ -304,12 +306,12 @@ tss_free(int sel)
  * Caller must have pmap locked for both of these functions.
  */
 void
-ldt_alloc(struct pmap *pmap, union descriptor *ldt, size_t len)
+ldt_alloc(struct pmap *pmap, union descriptor *ldtp, size_t len)
 {
 	int slot;
 
 	slot = gdt_get_slot();
-	setgdt(slot, ldt, len - 1, SDT_SYSLDT, SEL_KPL, 0, 0);
+	setgdt(slot, ldtp, len - 1, SDT_SYSLDT, SEL_KPL, 0, 0);
 	pmap->pm_ldt_sel = GSEL(slot, SEL_KPL);
 }
 

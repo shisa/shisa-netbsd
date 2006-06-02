@@ -1,4 +1,4 @@
-/*	$NetBSD: extern.h,v 1.3 2003/08/07 11:16:13 agc Exp $	*/
+/*	$NetBSD: extern.h,v 1.5 2006/01/31 17:36:56 christos Exp $	*/
 
 /*
  * Copyright (c) 1993
@@ -30,6 +30,18 @@
  *
  *	@(#)extern.h	8.1 (Berkeley) 6/6/93
  */
+
+extern  int     f;			/* the opened socket */
+extern  int     trace;
+extern  int     verbose;
+extern  unsigned int     def_rexmtval;
+extern  unsigned int     rexmtval;
+extern  int     maxtimeout;
+extern	int	tsize;
+extern	int	tout;
+extern	size_t	def_blksize;
+extern	size_t	blksize;
+extern  struct	sockaddr_storage peeraddr; /* filled in by main */
 
 void	recvfile __P((int, char *, char *));
 void	sendfile __P((int, char *, char *));

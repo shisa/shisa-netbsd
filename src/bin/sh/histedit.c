@@ -1,4 +1,4 @@
-/*	$NetBSD: histedit.c,v 1.34 2003/10/27 06:19:29 lukem Exp $	*/
+/*	$NetBSD: histedit.c,v 1.39 2006/05/10 21:53:14 mrg Exp $	*/
 
 /*-
  * Copyright (c) 1993
@@ -37,7 +37,7 @@
 #if 0
 static char sccsid[] = "@(#)histedit.c	8.2 (Berkeley) 5/4/95";
 #else
-__RCSID("$NetBSD: histedit.c,v 1.34 2003/10/27 06:19:29 lukem Exp $");
+__RCSID("$NetBSD: histedit.c,v 1.39 2006/05/10 21:53:14 mrg Exp $");
 #endif
 #endif /* not lint */
 
@@ -69,6 +69,7 @@ History *hist;	/* history cookie */
 EditLine *el;	/* editline cookie */
 int displayhist;
 static FILE *el_in, *el_out;
+unsigned char _el_fn_complete(EditLine *, int);
 
 STATIC const char *fc_replace(const char *, char *, char *);
 
@@ -87,7 +88,7 @@ histedit(void)
 
 #define editing (Eflag || Vflag)
 
-	if (iflag) {
+	if (iflag == 1) {
 		if (!hist) {
 			/*
 			 * turn history on
@@ -133,6 +134,9 @@ histedit(void)
 					el_set(el, EL_HIST, history, hist);
 				el_set(el, EL_PROMPT, getprompt);
 				el_set(el, EL_SIGNAL, 1);
+				el_set(el, EL_ADDFN, "rl-complete",
+				    "ReadLine compatible completion function",
+				    _el_fn_complete);
 			} else {
 bad:
 				out2str("sh: can't initialize editing\n");
@@ -149,6 +153,8 @@ bad:
 				el_set(el, EL_EDITOR, "vi");
 			else if (Eflag)
 				el_set(el, EL_EDITOR, "emacs");
+			el_set(el, EL_BIND, "^I", 
+			    tabcomplete ? "rl-complete" : "ed-insert", NULL);
 			el_source(el, NULL);
 		}
 	} else {
@@ -245,6 +251,8 @@ histcmd(int argc, char **argv)
 	(void) &efp;
 	(void) &argc;
 	(void) &argv;
+	repl = NULL;	/* XXX gcc4 */
+	efp = NULL;	/* XXX gcc4 */
 #endif
 
 	if (hist == NULL)
@@ -330,6 +338,13 @@ histcmd(int argc, char **argv)
 		*repl++ = '\0';
 		argc--, argv++;
 	}
+
+	/*
+	 * If -s is specified, accept only one operand
+	 */
+	if (sflg && argc >= 2)
+		error("too many args");
+
 	/*
 	 * determine [first] and [last]
 	 */
@@ -415,6 +430,8 @@ histcmd(int argc, char **argv)
 					 */
 					history(hist, &he, H_ENTER, s);
 				}
+
+				break;
 			} else
 				fputs(s, efp);
 		}

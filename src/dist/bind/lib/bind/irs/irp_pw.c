@@ -1,4 +1,4 @@
-/*	$NetBSD: irp_pw.c,v 1.1.1.1 2004/05/17 23:44:43 christos Exp $	*/
+/*	$NetBSD: irp_pw.c,v 1.1.1.3 2005/12/21 23:15:33 christos Exp $	*/
 
 /*
  * Copyright (c) 2004 by Internet Systems Consortium, Inc. ("ISC")

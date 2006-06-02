@@ -1,4 +1,4 @@
-/*	$NetBSD: scandir.c,v 1.22 2003/08/07 16:42:56 agc Exp $	*/
+/*	$NetBSD: scandir.c,v 1.25 2005/09/13 01:44:09 christos Exp $	*/
 
 /*
  * Copyright (c) 1983, 1993
@@ -34,12 +34,12 @@
 #if 0
 static char sccsid[] = "@(#)scandir.c	8.3 (Berkeley) 1/2/94";
 #else
-__RCSID("$NetBSD: scandir.c,v 1.22 2003/08/07 16:42:56 agc Exp $");
+__RCSID("$NetBSD: scandir.c,v 1.25 2005/09/13 01:44:09 christos Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
 /*
- * Scan the directory dirname calling select to make a list of selected
+ * Scan the directory dirname calling selectfn to make a list of selected
  * directory entries then sort using qsort and compare routine dcomp.
  * Returns the number of entries and a pointer to a list of pointers to
  * struct dirent (through namelist). Returns -1 if there were any errors.
@@ -55,27 +55,11 @@ __RCSID("$NetBSD: scandir.c,v 1.22 2003/08/07 16:42:56 agc Exp $");
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef __weak_alias
-__weak_alias(scandir,_scandir)
-__weak_alias(alphasort,_alphasort)
-#endif
-
-/*
- * The DIRSIZ macro is the minimum record length which will hold the directory
- * entry.  This requires the amount of space in struct dirent without the
- * d_name field, plus enough space for the name and a terminating nul byte
- * (dp->d_namlen + 1), rounded up to a 4 byte boundary.
- */
-#undef DIRSIZ
-#define DIRSIZ(dp)							\
-	((sizeof(struct dirent) - sizeof(dp)->d_name) +			\
-	    (((dp)->d_namlen + 1 + 3) &~ 3))
-
 int
-scandir(dirname, namelist, select, dcomp)
+scandir(dirname, namelist, selectfn, dcomp)
 	const char *dirname;
 	struct dirent ***namelist;
-	int (*select) __P((const struct dirent *));
+	int (*selectfn) __P((const struct dirent *));
 	int (*dcomp) __P((const void *, const void *));
 {
 	struct dirent *d, *p, **names, **newnames;
@@ -102,7 +86,7 @@ scandir(dirname, namelist, select, dcomp)
 
 	nitems = 0;
 	while ((d = readdir(dirp)) != NULL) {
-		if (select != NULL && !(*select)(d))
+		if (selectfn != NULL && !(*selectfn)(d))
 			continue;	/* just selected names */
 
 		/*
@@ -123,7 +107,7 @@ scandir(dirname, namelist, select, dcomp)
 		/*
 		 * Make a minimum size copy of the data
 		 */
-		p = (struct dirent *)malloc(DIRSIZ(d));
+		p = (struct dirent *)malloc((size_t)_DIRENT_SIZE(d));
 		if (p == NULL)
 			goto bad2;
 		p->d_fileno = d->d_fileno;
@@ -146,20 +130,4 @@ bad2:
 bad:
 	closedir(dirp);
 	return (-1);
-}
-
-/*
- * Alphabetic order comparison routine for those who want it.
- */
-int
-alphasort(d1, d2)
-	const void *d1;
-	const void *d2;
-{
-
-	_DIAGASSERT(d1 != NULL);
-	_DIAGASSERT(d2 != NULL);
-
-	return (strcmp((*(const struct dirent *const *)d1)->d_name,
-	    (*(const struct dirent *const *)d2)->d_name));
 }

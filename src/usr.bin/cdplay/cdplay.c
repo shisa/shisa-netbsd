@@ -1,4 +1,4 @@
-/* 	$NetBSD: cdplay.c,v 1.29 2004/10/30 17:08:12 dsl Exp $	*/
+/* 	$NetBSD: cdplay.c,v 1.32 2006/01/12 18:15:59 garbled Exp $	*/
 
 /*
  * Copyright (c) 1999, 2000, 2001 Andrew Doran.
@@ -40,7 +40,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: cdplay.c,v 1.29 2004/10/30 17:08:12 dsl Exp $");
+__RCSID("$NetBSD: cdplay.c,v 1.32 2006/01/12 18:15:59 garbled Exp $");
 #endif /* not lint */
 
 #include <sys/types.h>
@@ -78,6 +78,7 @@ enum cmd {
 	CMD_RESUME,
 	CMD_SET,
 	CMD_SHUFFLE,
+	CMD_SINGLE,
 	CMD_SKIP,
 	CMD_STATUS,
 	CMD_STOP,
@@ -107,11 +108,21 @@ struct cmdtab {
 	{ CMD_RESUME,	"resume",  4, NULL },
 	{ CMD_SET,	"set",     2, "msf | lba" },
 	{ CMD_SHUFFLE,	"shuffle", 2, NULL },
+	{ CMD_SINGLE,	"single",  2, "[<track>]" },
 	{ CMD_SKIP,	"skip",    2, NULL },
 	{ CMD_STATUS,	"status",  3, NULL },
 	{ CMD_STOP,	"stop",    3, NULL },
 	{ CMD_VOLUME,	"volume",  1, "<l> <r>|left|right|mute|mono|stereo" },
 };
+ 
+#define IOCTL_SIMPLE(fd, ctl)	\
+	do { \
+		if ((rv = ioctl(fd, ctl)) >= 0) { \
+			close(fd); \
+			fd = -1; \
+		} else \
+			warn("ioctl(" #ctl ")"); \
+	} while (0)
 
 #define	CD_MAX_TRACK	99	/* largest 2 digit BCD number */
 
@@ -302,6 +313,7 @@ run(int cmd, const char *arg)
 {
 	int l, r, rv;
 
+	rv = 0;
 	if (cmd == CMD_QUIT) {
 		close(fd);
 		exit(EXIT_SUCCESS);
@@ -338,11 +350,7 @@ run(int cmd, const char *arg)
 		break;
 
 	case CMD_RESET:
-		if ((rv = ioctl(fd, CDIOCRESET)) >= 0) {
-			close(fd);
-			fd = -1;
-		} else
-			warn("ioctl(CDIOCRESET)");
+		IOCTL_SIMPLE(fd, CDIOCRESET);
 		return (0);
 
 	case CMD_EJECT:
@@ -350,17 +358,14 @@ run(int cmd, const char *arg)
 			run(CMD_SHUFFLE, NULL);
 		if (ioctl(fd, CDIOCALLOW) < 0)
 			warn("ioctl(CDIOCALLOW)");
-		if ((rv = ioctl(fd, CDIOCEJECT)) < 0)
-			warn("ioctl(CDIOCEJECT)");
+		IOCTL_SIMPLE(fd, CDIOCEJECT);
 		break;
 
 	case CMD_CLOSE:
 		ioctl(fd, CDIOCALLOW);
-		if ((rv = ioctl(fd, CDIOCCLOSE)) >= 0) {
-			close(fd);
-			fd = -1;
-		} else
-			warn("ioctl(CDIOCCLOSE)");
+		IOCTL_SIMPLE(fd, CDIOCCLOSE);
+		if (interactive && fd == -1)
+			opencd();
 		break;
 
 	case CMD_PLAY:
@@ -377,6 +382,11 @@ run(int cmd, const char *arg)
 		rv = skip(1, 1);
 		break;
 
+	case CMD_SINGLE:
+		if (interactive == 0)
+			errx(EXIT_FAILURE,
+			    "'single' valid only in interactive mode");
+	/*FALLTHROUGH*/
 	case CMD_SHUFFLE:
 		if (interactive == 0)
 			errx(EXIT_FAILURE,
@@ -387,7 +397,13 @@ run(int cmd, const char *arg)
 			itv_timer.it_value.tv_sec = 1;
 			itv_timer.it_value.tv_usec = 0;
 			if (setitimer(ITIMER_REAL, &itv_timer, NULL) == 0) {
-				shuffle = 1;
+				if (cmd == CMD_SHUFFLE) {
+						shuffle = 1;
+				} else {
+					while (isspace((unsigned char)*arg))
+						arg++;
+					shuffle = -atoi(arg);
+				}
 				skip(0, 1);
 			}
 		} else {
@@ -398,7 +414,10 @@ run(int cmd, const char *arg)
 			if (setitimer(ITIMER_REAL, &itv_timer, NULL) == 0)
 				shuffle = 0;
 		}
-		printf("shuffle play:\t%s\n", shuffle ? "on" : "off");
+		if (shuffle < 0)
+			printf("single track:\t%d\n", -shuffle);
+		else
+			printf("shuffle play:\t%s\n", (shuffle != 0) ? "on" : "off");
 		rv = 0;
 		break;
 
@@ -710,8 +729,8 @@ skip(int dir, int fromuser)
 	if (dir == 0) {
 		if (fromuser || (rv != CD_AS_PLAY_IN_PROGRESS &&
 		    rv != CD_AS_PLAY_PAUSED))
-			trk = h.starting_track +
-			    arc4random() % (h.ending_track - h.starting_track + 1);
+			trk = shuffle < 0 ? (-shuffle) : (h.starting_track +
+			    arc4random() % (h.ending_track - h.starting_track + 1));
 		else
 			return (0);
 	} else {
@@ -778,7 +797,10 @@ print_status(const char *arg)
 	} else
 		printf("audio status:\tno info available\n");
 
-	printf("shuffle play:\t%s\n", shuffle ? "on" : "off");
+	if (shuffle < 0)
+		printf("single track:\t%d\n", -shuffle);
+	else
+		printf("shuffle play:\t%s\n", (shuffle != 0) ? "on" : "off");
 
 	bzero(&ss, sizeof(ss));
 	ss.data = &data;

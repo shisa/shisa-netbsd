@@ -1,4 +1,4 @@
-/*	$NetBSD: machdep.h,v 1.4 2003/11/24 02:51:35 chs Exp $	*/
+/*	$NetBSD: machdep.h,v 1.6 2005/12/11 12:17:24 christos Exp $	*/
 
 /*	$OpenBSD: cpufunc.h,v 1.17 2000/05/15 17:22:40 mickey Exp $	*/
 
@@ -118,4 +118,4 @@ void hp700_led_ctl(int, int, int);
 #define hp700_led_ctl(off, on, toggle)
 #endif /* !USELEDS */
 
-#endif /* _MACHINE_CPUFUNC_H_ */
+#endif /* _KERNEL */

@@ -1,4 +1,4 @@
-/*	$NetBSD: if_ethersubr.c,v 1.120 2005/02/26 22:45:09 perry Exp $	*/
+/*	$NetBSD: if_ethersubr.c,v 1.133 2006/05/18 09:05:51 liamjfoy Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -61,7 +61,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_ethersubr.c,v 1.120 2005/02/26 22:45:09 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_ethersubr.c,v 1.133 2006/05/18 09:05:51 liamjfoy Exp $");
 
 #include "opt_inet.h"
 #include "opt_atalk.h"
@@ -78,6 +78,7 @@ __KERNEL_RCSID(0, "$NetBSD: if_ethersubr.c,v 1.120 2005/02/26 22:45:09 perry Exp
 #include "bridge.h"
 #include "bpfilter.h"
 #include "arp.h"
+#include "agr.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -90,6 +91,7 @@ __KERNEL_RCSID(0, "$NetBSD: if_ethersubr.c,v 1.120 2005/02/26 22:45:09 perry Exp
 #include <sys/ioctl.h>
 #include <sys/errno.h>
 #include <sys/syslog.h>
+#include <sys/kauth.h>
 
 #include <machine/cpu.h>
 
@@ -120,6 +122,12 @@ __KERNEL_RCSID(0, "$NetBSD: if_ethersubr.c,v 1.120 2005/02/26 22:45:09 perry Exp
 #include <net/if_pppoe.h>
 #endif
 
+#if NAGR > 0
+#include <net/agr/ieee8023_slowprotocols.h>	/* XXX */
+#include <net/agr/ieee8023ad.h>
+#include <net/agr/if_agrvar.h>
+#endif
+
 #if NBRIDGE > 0
 #include <net/if_bridgevar.h>
 #endif
@@ -141,6 +149,11 @@ __KERNEL_RCSID(0, "$NetBSD: if_ethersubr.c,v 1.120 2005/02/26 22:45:09 perry Exp
 #ifdef NS
 #include <netns/ns.h>
 #include <netns/ns_if.h>
+#endif
+
+#include "carp.h"
+#if NCARP > 0
+#include <netinet/ip_carp.h>
 #endif
 
 #ifdef IPX
@@ -176,15 +189,21 @@ extern u_char	at_org_code[3];
 extern u_char	aarp_org_code[3];
 #endif /* NETATALK */
 
+static struct timeval bigpktppslim_last;
+static int bigpktppslim = 2;	/* XXX */
+static int bigpktpps_count;
+
+
 const uint8_t etherbroadcastaddr[ETHER_ADDR_LEN] =
     { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+const uint8_t ethermulticastaddr_slowprotocols[ETHER_ADDR_LEN] =
+    { 0x01, 0x80, 0xc2, 0x00, 0x00, 0x02 };
 #define senderr(e) { error = (e); goto bad;}
 
 #define SIN(x) ((struct sockaddr_in *)x)
 
-static	int ether_output __P((struct ifnet *, struct mbuf *,
-	    struct sockaddr *, struct rtentry *));
-static	void ether_input __P((struct ifnet *, struct mbuf *));
+static	int ether_output(struct ifnet *, struct mbuf *,
+	    struct sockaddr *, struct rtentry *);
 
 /*
  * Ethernet output routine.
@@ -192,16 +211,17 @@ static	void ether_input __P((struct ifnet *, struct mbuf *));
  * Assumes that ifp is actually pointer to ethercom structure.
  */
 static int
-ether_output(struct ifnet *ifp, struct mbuf *m0, struct sockaddr *dst,
+ether_output(struct ifnet *ifp0, struct mbuf *m0, struct sockaddr *dst,
 	struct rtentry *rt0)
 {
 	u_int16_t etype = 0;
-	int s, len, error = 0, hdrcmplt = 0;
+	int error = 0, hdrcmplt = 0;
  	u_char esrc[6], edst[6];
 	struct mbuf *m = m0;
 	struct rtentry *rt;
 	struct mbuf *mcopy = (struct mbuf *)0;
 	struct ether_header *eh;
+	struct ifnet *ifp = ifp0;
 	ALTQ_DECL(struct altq_pktattr pktattr;)
 #ifdef INET
 	struct arphdr *ah;
@@ -209,11 +229,30 @@ ether_output(struct ifnet *ifp, struct mbuf *m0, struct sockaddr *dst,
 #ifdef NETATALK
 	struct at_ifaddr *aa;
 #endif /* NETATALK */
-	short mflags;
 
 #ifdef MBUFTRACE
 	m_claimm(m, ifp->if_mowner);
 #endif
+
+#if NCARP > 0
+	if (ifp->if_type == IFT_CARP) {
+		struct ifaddr *ifa;
+
+		/* loop back if this is going to the carp interface */
+		if (dst != NULL && ifp0->if_link_state == LINK_STATE_UP &&
+		    (ifa = ifa_ifwithaddr(dst)) != NULL &&
+		    ifa->ifa_ifp == ifp0)
+			return (looutput(ifp0, m, dst, rt0));
+
+		ifp = ifp->if_carpdev;
+		/* ac = (struct arpcom *)ifp; */
+
+		if ((ifp0->if_flags & (IFF_UP|IFF_RUNNING)) !=
+		    (IFF_UP|IFF_RUNNING))
+			senderr(ENETDOWN);
+	}
+#endif /* NCARP > 0 */
+
 	if ((ifp->if_flags & (IFF_UP|IFF_RUNNING)) != (IFF_UP|IFF_RUNNING))
 		senderr(ENETDOWN);
 	if ((rt = rt0) != NULL) {
@@ -254,8 +293,7 @@ ether_output(struct ifnet *ifp, struct mbuf *m0, struct sockaddr *dst,
 #ifdef INET
 	case AF_INET:
 		if (m->m_flags & M_BCAST)
-                	bcopy((caddr_t)etherbroadcastaddr, (caddr_t)edst,
-				sizeof(edst));
+                	(void)memcpy(edst, etherbroadcastaddr, sizeof(edst));
 
 		else if (m->m_flags & M_MCAST) {
 			ETHER_MAP_IP_MULTICAST(&SIN(dst)->sin_addr,
@@ -272,11 +310,13 @@ ether_output(struct ifnet *ifp, struct mbuf *m0, struct sockaddr *dst,
 	case AF_ARP:
 		ah = mtod(m, struct arphdr *);
 		if (m->m_flags & M_BCAST)
-                	bcopy((caddr_t)etherbroadcastaddr, (caddr_t)edst,
-				sizeof(edst));
-		else
-			bcopy((caddr_t)ar_tha(ah),
-				(caddr_t)edst, sizeof(edst));
+                	(void)memcpy(edst, etherbroadcastaddr, sizeof(edst));
+		else {
+			caddr_t tha = ar_tha(ah);
+
+			KASSERT(tha);
+			bcopy(tha, (caddr_t)edst, sizeof(edst));
+		}
 
 		ah->ar_hrd = htons(ARPHRD_ETHER);
 
@@ -411,8 +451,8 @@ ether_output(struct ifnet *ifp, struct mbuf *m0, struct sockaddr *dst,
 #ifdef	LLC
 /*	case AF_NSAP: */
 	case AF_CCITT: {
-		struct sockaddr_dl *sdl =
-			(struct sockaddr_dl *) rt -> rt_gateway;
+		struct sockaddr_dl *sdl = rt ? 
+			(struct sockaddr_dl *) rt -> rt_gateway : NULL;
 
 		if (sdl && sdl->sdl_family == AF_LINK
 		    && sdl->sdl_alen > 0) {
@@ -504,6 +544,13 @@ ether_output(struct ifnet *ifp, struct mbuf *m0, struct sockaddr *dst,
 	 	bcopy(LLADDR(ifp->if_sadl), (caddr_t)eh->ether_shost,
 		    sizeof(eh->ether_shost));
 
+#if NCARP > 0
+	if (ifp0 != ifp && ifp0->if_type == IFT_CARP) {
+	 	bcopy(LLADDR(ifp0->if_sadl), (caddr_t)eh->ether_shost,
+		    sizeof(eh->ether_shost));
+	}
+#endif /* NCARP > 0 */
+
 #ifdef PFIL_HOOKS
 	if ((error = pfil_run_hooks(&ifp->if_pfil, &m, ifp, PFIL_OUT)) != 0)
 		return (error);
@@ -519,6 +566,11 @@ ether_output(struct ifnet *ifp, struct mbuf *m0, struct sockaddr *dst,
 		return (bridge_output(ifp, m, NULL, NULL));
 #endif
 
+#if NCARP > 0
+	if (ifp != ifp0)
+		ifp0->if_obytes += m->m_pkthdr.len + ETHER_HDR_LEN;
+#endif /* NCARP > 0 */
+
 #ifdef ALTQ
 	/*
 	 * If ALTQ is enabled on the parent interface, do
@@ -530,26 +582,7 @@ ether_output(struct ifnet *ifp, struct mbuf *m0, struct sockaddr *dst,
 		altq_etherclassify(&ifp->if_snd, m, &pktattr);
 #endif
 
-	mflags = m->m_flags;
-	len = m->m_pkthdr.len;
-	s = splnet();
-	/*
-	 * Queue message on interface, and start output if interface
-	 * not yet active.
-	 */
-	IFQ_ENQUEUE(&ifp->if_snd, m, &pktattr, error);
-	if (error) {
-		/* mbuf is already freed */
-		splx(s);
-		return (error);
-	}
-	ifp->if_obytes += len;
-	if (mflags & M_MCAST)
-		ifp->if_omcasts++;
-	if ((ifp->if_flags & IFF_OACTIVE) == 0)
-		(*ifp->if_start)(ifp);
-	splx(s);
-	return (error);
+	return ifq_enqueue(ifp, m ALTQ_COMMA ALTQ_DECL(&pktattr));
 
 bad:
 	if (m)
@@ -655,13 +688,12 @@ altq_etherclassify(struct ifaltq *ifq, struct mbuf *m,
  * the packet is in the mbuf chain m with
  * the ether header.
  */
-static void
+void
 ether_input(struct ifnet *ifp, struct mbuf *m)
 {
 	struct ethercom *ec = (struct ethercom *) ifp;
 	struct ifqueue *inq;
 	u_int16_t etype;
-	int s;
 	struct ether_header *eh;
 #if defined (ISO) || defined (LLC) || defined(NETATALK)
 	struct llc *l;
@@ -683,8 +715,11 @@ ether_input(struct ifnet *ifp, struct mbuf *m)
 	 */
 	if (m->m_pkthdr.len >
 	    ETHER_MAX_FRAME(ifp, etype, m->m_flags & M_HASFCS)) {
-		printf("%s: discarding oversize frame (len=%d)\n",
-		    ifp->if_xname, m->m_pkthdr.len);
+		if (ppsratecheck(&bigpktppslim_last, &bigpktpps_count,
+			    bigpktppslim)) {
+			printf("%s: discarding oversize frame (len=%d)\n",
+			    ifp->if_xname, m->m_pkthdr.len);
+		}
 		m_freem(m);
 		return;
 	}
@@ -745,6 +780,14 @@ ether_input(struct ifnet *ifp, struct mbuf *m)
 	} else
 #endif /* NBRIDGE > 0 */
 	{
+
+#if NCARP > 0
+		if (ifp->if_carp && ifp->if_type != IFT_CARP &&
+		    (carp_input(m, (u_int8_t *)&eh->ether_shost,
+		    (u_int8_t *)&eh->ether_dhost, eh->ether_type) == 0)) {
+			return;
+		}
+#endif /* NCARP > 0 */
 		if ((m->m_flags & (M_BCAST|M_MCAST)) == 0 &&
 		    (ifp->if_flags & IFF_PROMISC) != 0 &&
 		    memcmp(LLADDR(ifp->if_sadl), eh->ether_dhost,
@@ -783,6 +826,15 @@ ether_input(struct ifnet *ifp, struct mbuf *m)
 		return;
 	}
 
+#if NAGR > 0
+	if (ifp->if_agrprivate &&
+	    __predict_true(etype != ETHERTYPE_SLOWPROTOCOLS)) {
+		m->m_flags &= ~M_PROMISC;
+		agr_input(ifp, m);
+		return;
+	}
+#endif /* NAGR > 0 */
+
 	/*
 	 * Handle protocols that expect to have the Ethernet header
 	 * (and possibly FCS) intact.
@@ -818,13 +870,11 @@ ether_input(struct ifnet *ifp, struct mbuf *m)
 			inq = &ppoediscinq;
 		else
 			inq = &ppoeinq;
-		s = splnet();
 		if (IF_QFULL(inq)) {
 			IF_DROP(inq);
 			m_freem(m);
 		} else
 			IF_ENQUEUE(inq, m);
-		splx(s);
 #ifndef __HAVE_GENERIC_SOFT_INTERRUPTS
 		if (!callout_pending(&pppoe_softintr))
 			callout_reset(&pppoe_softintr, 1, pppoe_softintr_handler, NULL);
@@ -833,6 +883,42 @@ ether_input(struct ifnet *ifp, struct mbuf *m)
 #endif
 		return;
 #endif /* NPPPOE > 0 */
+	case ETHERTYPE_SLOWPROTOCOLS: {
+		uint8_t subtype;
+
+#if defined(DIAGNOSTIC)
+		if (m->m_pkthdr.len < sizeof(*eh) + sizeof(subtype)) {
+			panic("ether_input: too short slow protocol packet");
+		}
+#endif
+		m_copydata(m, sizeof(*eh), sizeof(subtype), &subtype);
+		switch (subtype) {
+#if NAGR > 0
+		case SLOWPROTOCOLS_SUBTYPE_LACP:
+			if (ifp->if_agrprivate) {
+				ieee8023ad_lacp_input(ifp, m);
+				return;
+			}
+			break;
+
+		case SLOWPROTOCOLS_SUBTYPE_MARKER:
+			if (ifp->if_agrprivate) {
+				ieee8023ad_marker_input(ifp, m);
+				return;
+			}
+			break;
+#endif /* NAGR > 0 */
+		default:
+			if (subtype == 0 || subtype > 10) {
+				/* illegal value */
+				m_freem(m);
+				return;
+			}
+			/* unknown subtype */
+			break;
+		}
+		/* FALLTHROUGH */
+	}
 	default:
 		if (m->m_flags & M_PROMISC) {
 			m_freem(m);
@@ -1038,33 +1124,37 @@ ether_input(struct ifnet *ifp, struct mbuf *m)
 #endif /* ISO || LLC || NETATALK*/
 	}
 
-	s = splnet();
 	if (IF_QFULL(inq)) {
 		IF_DROP(inq);
 		m_freem(m);
 	} else
 		IF_ENQUEUE(inq, m);
-	splx(s);
 }
 
 /*
  * Convert Ethernet address to printable (loggable) representation.
  */
-static char digits[] = "0123456789abcdef";
 char *
 ether_sprintf(const u_char *ap)
 {
-	static char etherbuf[18];
-	char *cp = etherbuf;
-	int i;
+	static char etherbuf[3 * ETHER_ADDR_LEN];
+	return ether_snprintf(etherbuf, sizeof(etherbuf), ap);
+	return etherbuf;
+}
 
-	for (i = 0; i < 6; i++) {
-		*cp++ = digits[*ap >> 4];
-		*cp++ = digits[*ap++ & 0xf];
+char *
+ether_snprintf(char *buf, size_t len, const u_char *ap)
+{
+	char *cp = buf;
+	size_t i;
+
+	for (i = 0; i < len / 3; i++) {
+		*cp++ = hexdigits[*ap >> 4];
+		*cp++ = hexdigits[*ap++ & 0xf];
 		*cp++ = ':';
 	}
-	*--cp = 0;
-	return (etherbuf);
+	*--cp = '\0';
+	return buf;
 }
 
 /*

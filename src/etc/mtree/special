@@ -1,4 +1,4 @@
-#	$NetBSD: special,v 1.82.2.6 2005/10/07 11:56:16 tron Exp $
+#	$NetBSD: special,v 1.94 2006/05/30 00:40:22 christos Exp $
 #	@(#)special	8.2 (Berkeley) 1/23/94
 #
 # Hand-crafted mtree specification for the dangerous files.
@@ -74,7 +74,9 @@
 ./etc/ipf6.conf			type=file mode=0644 optional
 ./etc/ipnat.conf		type=file mode=0644 optional
 ./etc/ipsec.conf		type=file mode=0600 optional tags=nodiff
-./etc/kerberosIV		type=dir  mode=0755 ignore optional
+./etc/iscsi			type=dir  mode=0755
+./etc/iscsi/auths		type=file mode=0600
+./etc/iscsi/targets		type=file mode=0644
 ./etc/ld.so.conf		type=file mode=0644 optional
 ./etc/lkm.conf			type=file mode=0644 optional
 ./etc/localtime			type=link mode=0755
@@ -85,7 +87,6 @@
 ./etc/mail/aliases.db		type=file mode=0644 optional tags=exclude
 ./etc/mail/helpfile		type=file mode=0444
 ./etc/mail/local-host-names	type=file mode=0644 optional
-./etc/mail/sendmail.cf		type=file mode=0644
 ./etc/mail.rc			type=file mode=0644
 ./etc/mailer.conf		type=file mode=0644
 ./etc/man.conf			type=file mode=0644
@@ -100,6 +101,7 @@
 ./etc/mtree/special		type=file mode=0444
 ./etc/mtree/special.local	type=file mode=0644 optional
 ./etc/mygate			type=file mode=0644 optional
+./etc/mygate6			type=file mode=0644 optional
 ./etc/myname			type=file mode=0644 optional
 ./etc/named.conf		type=file mode=0644 optional
 ./etc/namedb			type=dir  mode=0755
@@ -111,6 +113,26 @@
 ./etc/newsyslog.conf		type=file mode=0644
 ./etc/nsswitch.conf		type=file mode=0644
 ./etc/ntp.conf			type=file mode=0644 optional
+./etc/pam.conf			type=file mode=0644 optional
+./etc/pam.d			type=dir  mode=0755
+./etc/pam.d/display_manager	type=file mode=0644
+./etc/pam.d/ftpd		type=file mode=0644
+./etc/pam.d/gdm			type=file mode=0644
+./etc/pam.d/imap		type=file mode=0644
+./etc/pam.d/kde			type=file mode=0644
+./etc/pam.d/login		type=file mode=0644
+./etc/pam.d/other		type=file mode=0644
+./etc/pam.d/passwd		type=file mode=0644
+./etc/pam.d/pop3		type=file mode=0644
+./etc/pam.d/ppp			type=file mode=0644
+./etc/pam.d/rexecd		type=file mode=0644
+./etc/pam.d/rsh			type=file mode=0644
+./etc/pam.d/sshd		type=file mode=0644
+./etc/pam.d/su			type=file mode=0644
+./etc/pam.d/system		type=file mode=0644
+./etc/pam.d/telnetd		type=file mode=0644
+./etc/pam.d/xdm			type=file mode=0644
+./etc/pam.d/xserver		type=file mode=0644
 ./etc/passwd			type=file mode=0644
 ./etc/passwd.conf		type=file mode=0644 optional
 ./etc/phones			type=file mode=0644
@@ -157,6 +179,7 @@
 ./etc/rc.d/ipmon		type=file mode=0555
 ./etc/rc.d/ipnat		type=file mode=0555
 ./etc/rc.d/ipsec		type=file mode=0555
+./etc/rc.d/iscsi_target		type=file mode=0555
 ./etc/rc.d/isdnd		type=file mode=0555
 ./etc/rc.d/kdc			type=file mode=0555
 ./etc/rc.d/ldconfig		type=file mode=0555
@@ -205,7 +228,6 @@
 ./etc/rc.d/savecore		type=file mode=0555
 ./etc/rc.d/screenblank		type=file mode=0555
 ./etc/rc.d/securelevel		type=file mode=0555
-./etc/rc.d/sendmail		type=file mode=0555
 ./etc/rc.d/sshd			type=file mode=0555
 ./etc/rc.d/swap1		type=file mode=0555
 ./etc/rc.d/swap2		type=file mode=0555
@@ -338,7 +360,6 @@
 ./var/run/utmp			type=file mode=0664 gname=utmp tags=exclude
 ./var/run/utmpx			type=file mode=0664 gname=utmp tags=exclude
 ./var/spool			type=dir  mode=0755
-./var/spool/clientmqueue	type=dir  mode=0770 uname=smmsp gname=smmsp
 ./var/spool/ftp			type=dir  mode=0755 optional
 ./var/spool/ftp/bin		type=dir  mode=0755 optional
 ./var/spool/ftp/bin/ls		type=file mode=0555 optional

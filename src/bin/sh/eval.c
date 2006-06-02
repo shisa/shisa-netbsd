@@ -1,4 +1,4 @@
-/*	$NetBSD: eval.c,v 1.81.2.1 2005/06/13 22:03:51 tron Exp $	*/
+/*	$NetBSD: eval.c,v 1.87 2006/05/13 19:47:22 christos Exp $	*/
 
 /*-
  * Copyright (c) 1993
@@ -37,7 +37,7 @@
 #if 0
 static char sccsid[] = "@(#)eval.c	8.9 (Berkeley) 6/8/95";
 #else
-__RCSID("$NetBSD: eval.c,v 1.81.2.1 2005/06/13 22:03:51 tron Exp $");
+__RCSID("$NetBSD: eval.c,v 1.87 2006/05/13 19:47:22 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -426,7 +426,7 @@ evalsubshell(union node *n, int flags)
 	expredir(n->nredir.redirect);
 	INTOFF;
 	jp = makejob(n, 1);
-	if (forkshell(jp, n, backgnd) == 0) {
+	if (forkshell(jp, n, backgnd ? FORK_BG : FORK_FG) == 0) {
 		INTON;
 		if (backgnd)
 			flags &=~ EV_TESTED;
@@ -503,11 +503,12 @@ evalpipe(union node *n)
 		pip[1] = -1;
 		if (lp->next) {
 			if (sh_pipe(pip) < 0) {
-				close(prevfd);
+				if (prevfd >= 0)
+					close(prevfd);
 				error("Pipe call failed");
 			}
 		}
-		if (forkshell(jp, lp->n, n->npipe.backgnd) == 0) {
+		if (forkshell(jp, lp->n, n->npipe.backgnd ? FORK_BG : FORK_FG) == 0) {
 			INTON;
 			if (prevfd > 0) {
 				close(0);
@@ -679,7 +680,7 @@ evalcommand(union node *cmd, int flags, struct backcmd *backcmd)
 	struct cmdentry cmdentry;
 	struct job *jp;
 	struct jmploc jmploc;
-	struct jmploc *volatile savehandler;
+	struct jmploc *volatile savehandler = NULL;
 	char *volatile savecmdname;
 	volatile struct shparam saveparam;
 	struct localvar *volatile savelocalvars;
@@ -1093,7 +1094,7 @@ prehash(union node *n)
 {
 	struct cmdentry entry;
 
-	if (n->type == NCMD && n->ncmd.args)
+	if (n && n->type == NCMD && n->ncmd.args)
 		if (goodname(n->ncmd.args->narg.text))
 			find_command(n->ncmd.args->narg.text, &entry, 0,
 				     pathval());

@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_fork.c,v 1.121.2.2 2005/05/23 19:09:56 riz Exp $	*/
+/*	$NetBSD: kern_fork.c,v 1.124 2006/05/14 21:15:11 elad Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2001, 2004 The NetBSD Foundation, Inc.
@@ -76,7 +76,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_fork.c,v 1.121.2.2 2005/05/23 19:09:56 riz Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_fork.c,v 1.124 2006/05/14 21:15:11 elad Exp $");
 
 #include "opt_ktrace.h"
 #include "opt_systrace.h"
@@ -100,6 +100,7 @@ __KERNEL_RCSID(0, "$NetBSD: kern_fork.c,v 1.121.2.2 2005/05/23 19:09:56 riz Exp 
 #include <sys/sched.h>
 #include <sys/signalvar.h>
 #include <sys/systrace.h>
+#include <sys/kauth.h>
 
 #include <sys/sa.h>
 #include <sys/syscallargs.h>
@@ -224,7 +225,7 @@ fork1(struct lwp *l1, int flags, int exitsig, void *stack, size_t stacksize,
 	 * processes, maxproc is the limit.
 	 */
 	p1 = l1->l_proc;
-	uid = p1->p_cred->p_ruid;
+	uid = kauth_cred_getuid(p1->p_cred);
 	if (__predict_false((nprocs >= maxproc - 5 && uid != 0) ||
 			    nprocs >= maxproc)) {
 		static struct timeval lasttfm;
@@ -292,18 +293,20 @@ fork1(struct lwp *l1, int flags, int exitsig, void *stack, size_t stacksize,
 	 * Duplicate sub-structures as needed.
 	 * Increase reference counts on shared objects.
 	 * The p_stats and p_sigacts substructs are set in uvm_fork().
-	 * Inherit SUGID, STOPFORK and STOPEXEC flags.
+	 * Inherit flags we want to keep.  The flags related to SIGCHLD
+	 * handling are important in order to keep a consistent behaviour
+	 * for the child after the fork.
 	 */
-	p2->p_flag = p1->p_flag & (P_SUGID | P_STOPFORK | P_STOPEXEC);
+	p2->p_flag = p1->p_flag & (P_SUGID | P_STOPFORK | P_STOPEXEC |
+	    P_NOCLDSTOP | P_NOCLDWAIT | P_CLDSIGIGN);
 	p2->p_emul = p1->p_emul;
 	p2->p_execsw = p1->p_execsw;
 
 	if (p1->p_flag & P_PROFIL)
 		startprofclock(p2);
-	p2->p_cred = pool_get(&pcred_pool, PR_WAITOK);
-	memcpy(p2->p_cred, p1->p_cred, sizeof(*p2->p_cred));
-	p2->p_cred->p_refcnt = 1;
-	crhold(p1->p_ucred);
+
+	p2->p_cred = kauth_cred_alloc();
+	kauth_cred_clone(p1->p_cred, p2->p_cred);
 
 	LIST_INIT(&p2->p_raslist);
 #if defined(__HAVE_RAS)

@@ -1,4 +1,4 @@
-/*	$NetBSD: ldapdb.c,v 1.1.1.2 2004/11/06 23:54:22 christos Exp $	*/
+/*	$NetBSD: ldapdb.c,v 1.1.1.4 2005/12/21 23:11:00 christos Exp $	*/
 
 /*
  * ldapdb.c version 1.0-beta

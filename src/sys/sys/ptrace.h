@@ -1,4 +1,4 @@
-/*	$NetBSD: ptrace.h,v 1.33 2005/02/03 19:20:02 perry Exp $	*/
+/*	$NetBSD: ptrace.h,v 1.37 2006/03/12 20:25:26 cube Exp $	*/
 
 /*-
  * Copyright (c) 1984, 1993
@@ -46,6 +46,7 @@
 #define	PT_IO		11	/* do I/O to/from the stopped process */
 #define	PT_DUMPCORE	12	/* make the child generate a core dump */
 #define	PT_LWPINFO	13	/* get info about the LWP */
+#define	PT_SYSCALL	14	/* stop on syscall entry/exit */
 #define	PT_FIRSTMACH	32	/* for machine-specific requests */
 #include <machine/ptrace.h>	/* machine-specific requests, if any */
 
@@ -81,38 +82,64 @@ struct ptrace_lwpinfo {
 
 #if defined(PT_GETREGS) || defined(PT_SETREGS)
 struct reg;
+#ifndef process_reg32
+#define process_reg32 struct reg
+#endif
+#ifndef process_reg64
+#define process_reg64 struct reg
+#endif
 #endif
 #if defined(PT_GETFPREGS) || defined(PT_SETFPREGS)
 struct fpreg;
+#ifndef process_fpreg32
+#define process_fpreg32 struct fpreg
+#endif
+#ifndef process_fpreg64
+#define process_fpreg64 struct fpreg
+#endif
 #endif
 
-int	process_doregs(struct proc *, struct lwp *, struct uio *);
-int	process_validregs(struct proc *);
+int	process_doregs(struct lwp *, struct lwp *, struct uio *);
+int	process_validregs(struct lwp *);
 
-int	process_dofpregs(struct proc *, struct lwp *, struct uio *);
-int	process_validfpregs(struct proc *);
+int	process_dofpregs(struct lwp *, struct lwp *, struct uio *);
+int	process_validfpregs(struct lwp *);
 
-int	process_domem(struct proc *, struct proc *, struct uio *);
-int	process_checkioperm(struct proc *, struct proc *);
+int	process_domem(struct lwp *, struct lwp *, struct uio *);
+int	process_checkioperm(struct lwp *, struct proc *);
+
+void	process_stoptrace(struct lwp *);
 
 void	proc_reparent(struct proc *, struct proc *);
 #ifdef PT_GETFPREGS
 int	process_read_fpregs(struct lwp *, struct fpreg *);
+#ifndef process_read_fpregs32
+#define process_read_fpregs32	process_read_fpregs
+#endif
+#ifndef process_read_fpregs64
+#define process_read_fpregs64	process_read_fpregs
+#endif
 #endif
 #ifdef PT_GETREGS
 int	process_read_regs(struct lwp *, struct reg *);
+#ifndef process_read_regs32
+#define process_read_regs32	process_read_regs
+#endif
+#ifndef process_read_regs64
+#define process_read_regs64	process_read_regs
+#endif
 #endif
 int	process_set_pc(struct lwp *, caddr_t);
 int	process_sstep(struct lwp *, int);
 #ifdef PT_SETFPREGS
-int	process_write_fpregs(struct lwp *, struct fpreg *);
+int	process_write_fpregs(struct lwp *, const struct fpreg *);
 #endif
 #ifdef PT_SETREGS
-int	process_write_regs(struct lwp *, struct reg *);
+int	process_write_regs(struct lwp *, const struct reg *);
 #endif
 
 #ifdef __HAVE_PROCFS_MACHDEP
-int	ptrace_machdep_dorequest(struct proc *, struct lwp *, int,
+int	ptrace_machdep_dorequest(struct lwp *, struct lwp *, int,
 	    caddr_t, int);
 #endif
 

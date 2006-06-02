@@ -1,4 +1,4 @@
-/*	$NetBSD: altivec.c,v 1.8 2005/02/22 02:59:46 matt Exp $	*/
+/*	$NetBSD: altivec.c,v 1.11 2005/12/24 20:07:28 perry Exp $	*/
 
 /*
  * Copyright (C) 1996 Wolfgang Solfrank.
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: altivec.c,v 1.8 2005/02/22 02:59:46 matt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: altivec.c,v 1.11 2005/12/24 20:07:28 perry Exp $");
 
 #include "opt_multiprocessor.h"
 
@@ -69,7 +69,7 @@ enable_vec(void)
 	 */
 	msr = mfmsr();
 	mtmsr((msr & ~PSL_EE) | PSL_VEC);
-	__asm __volatile ("isync");
+	__asm volatile ("isync");
 	if (ci->ci_veclwp) {
 		save_vec_cpu();
 	}
@@ -80,7 +80,7 @@ enable_vec(void)
 	 * (this needs to done before loading the user's vector registers
 	 * since we need to use a scratch vector register)
 	 */
-	__asm __volatile("vxor %2,%2,%2; lvewx %2,%0,%1; mtvscr %2" \
+	__asm volatile("vxor %2,%2,%2; lvewx %2,%0,%1; mtvscr %2" \
 	    ::	"b"(vr), "r"(offsetof(struct vreg, vscr)), "n"(0));
 
 	/*
@@ -88,7 +88,7 @@ enable_vec(void)
 	 */
 	tf->tf_xtra[TF_VRSAVE] = vr->vrsave;
 
-#define	LVX(n,vr)	__asm /*__volatile*/("lvx %2,%0,%1" \
+#define	LVX(n,vr)	__asm /*volatile*/("lvx %2,%0,%1" \
 	    ::	"b"(vr), "r"(offsetof(struct vreg, vreg[n])), "n"(n));
 
 	/*
@@ -103,7 +103,7 @@ enable_vec(void)
 	LVX(20,vr);	LVX(21,vr);	LVX(22,vr);	LVX(23,vr);
 	LVX(24,vr);	LVX(25,vr);	LVX(26,vr);	LVX(27,vr);
 	LVX(28,vr);	LVX(29,vr);	LVX(30,vr);	LVX(31,vr);
-	__asm __volatile ("isync");
+	__asm volatile ("isync");
 
 	/*
 	 * Enable AltiVec when we return to user-mode.
@@ -112,7 +112,7 @@ enable_vec(void)
 	curcpu()->ci_veclwp = l;
 	pcb->pcb_veccpu = curcpu();
 	pcb->pcb_flags |= PCB_OWNALTIVEC;
-	__asm __volatile ("sync");
+	__asm volatile ("sync");
 
 	/*
 	 * Restore MSR (turn off AltiVec)
@@ -135,7 +135,7 @@ save_vec_cpu(void)
 	 */
 	msr = mfmsr();
 	mtmsr((msr & ~PSL_EE) | PSL_VEC);
-	__asm __volatile ("isync");
+	__asm volatile ("isync");
 	l = ci->ci_veclwp;
 	if (l == NULL)
 		goto out;
@@ -143,7 +143,7 @@ save_vec_cpu(void)
 	vr = &pcb->pcb_vr;
 	tf = trapframe(l);
 
-#define	STVX(n,vr)	__asm /*__volatile*/("stvx %2,%0,%1" \
+#define	STVX(n,vr)	__asm /*volatile*/("stvx %2,%0,%1" \
 	    ::	"b"(vr), "r"(offsetof(struct vreg, vreg[n])), "n"(n));
 
 	/*
@@ -163,7 +163,7 @@ save_vec_cpu(void)
 	 * Save VSCR (this needs to be done after save the vector registers
 	 * since we need to use one as scratch).
 	 */
-	__asm __volatile("mfvscr %2; stvewx %2,%0,%1" \
+	__asm volatile("mfvscr %2; stvewx %2,%0,%1" \
 	    ::	"b"(vr), "r"(offsetof(struct vreg, vscr)), "n"(0));
 
 	/*
@@ -177,7 +177,7 @@ save_vec_cpu(void)
 	 */
 	pcb->pcb_veccpu = NULL;
 	ci->ci_veclwp = NULL;
-	__asm __volatile ("dssall; sync");
+	__asm volatile ("dssall; sync");
 
  out:
 
@@ -248,13 +248,13 @@ vzeropage(paddr_t pa)
 	uint32_t vec[7], *vp = (void *) roundup((uintptr_t) vec, 16);
 	register_t omsr, msr;
 
-	__asm __volatile("mfmsr %0" : "=r"(omsr) :);
+	__asm volatile("mfmsr %0" : "=r"(omsr) :);
 
 	/*
 	 * Turn on AltiVec, turn off interrupts.
 	 */
 	msr = (omsr & ~PSL_EE) | PSL_VEC;
-	__asm __volatile("sync; mtmsr %0; isync" :: "r"(msr));
+	__asm volatile("sync; mtmsr %0; isync" :: "r"(msr));
 
 	/*
 	 * Save the VEC register we are going to use before we disable
@@ -264,27 +264,28 @@ vzeropage(paddr_t pa)
 	__asm("vxor %0,%0,%0" :: "n"(ZERO_VEC));
 
 	/*
-	 * Turn off data relocation (DMMU off).
-	 */
-	msr &= ~PSL_DR;
-	__asm __volatile("sync; mtmsr %0; isync" :: "r"(msr));
-
-	/*
 	 * Zero the page using a single cache line.
 	 */
-	do {
-		__asm("stvx %2,%0,%1" ::  "b"(pa), "r"( 0), "n"(ZERO_VEC));
-		__asm("stvxl %2,%0,%1" :: "b"(pa), "r"(16), "n"(ZERO_VEC));
-		__asm("stvx %2,%0,%1" ::  "b"(pa), "r"(32), "n"(ZERO_VEC));
-		__asm("stvxl %2,%0,%1" :: "b"(pa), "r"(48), "n"(ZERO_VEC));
-		pa += 64;
-	} while (pa < ea);
-
-	/*
-	 * Restore data relocation (DMMU on);
-	 */
-	msr |= PSL_DR;
-	__asm __volatile("sync; mtmsr %0; isync" :: "r"(msr));
+	__asm volatile(
+	    "   sync ;"
+	    "   mfmsr  %[msr];"
+	    "   rlwinm %[msr],%[msr],0,28,26;"	/* Clear PSL_DR */
+	    "   mtmsr  %[msr];"			/* Turn off DMMU */
+	    "   isync;"
+	    "1: stvx   %[zv], %[pa], %[off0];"
+	    "   stvxl  %[zv], %[pa], %[off16];"
+	    "   stvx   %[zv], %[pa], %[off32];"
+	    "   stvxl  %[zv], %[pa], %[off48];"
+	    "   addi   %[pa], %[pa], 64;"
+	    "   cmplw  %[pa], %[ea];"
+	    "	blt+   1b;"
+	    "   ori    %[msr], %[msr], 0x10;"	/* Set PSL_DR */
+	    "   sync;"
+	    "	mtmsr  %[msr];"			/* Turn on DMMU */
+	    "   isync;"
+	    :: [msr] "r"(msr), [pa] "b"(pa), [ea] "b"(ea),
+	    [off0] "r"(0), [off16] "r"(16), [off32] "r"(32), [off48] "r"(48), 
+	    [zv] "n"(ZERO_VEC));
 
 	/*
 	 * Restore VEC register (now that we can access the stack again).
@@ -294,7 +295,7 @@ vzeropage(paddr_t pa)
 	/*
 	 * Restore old MSR (AltiVec OFF).
 	 */
-	__asm __volatile("sync; mtmsr %0; isync" :: "r"(omsr));
+	__asm volatile("sync; mtmsr %0; isync" :: "r"(omsr));
 }
 
 #define LO_VEC	16
@@ -307,13 +308,13 @@ vcopypage(paddr_t dst, paddr_t src)
 	uint32_t vec[11], *vp = (void *) roundup((uintptr_t) vec, 16);
 	register_t omsr, msr;
 
-	__asm __volatile("mfmsr %0" : "=r"(omsr) :);
+	__asm volatile("mfmsr %0" : "=r"(omsr) :);
 
 	/*
 	 * Turn on AltiVec, turn off interrupts.
 	 */
 	msr = (omsr & ~PSL_EE) | PSL_VEC;
-	__asm __volatile("sync; mtmsr %0; isync" :: "r"(msr));
+	__asm volatile("sync; mtmsr %0; isync" :: "r"(msr));
 
 	/*
 	 * Save the VEC registers we will be using before we disable
@@ -323,29 +324,31 @@ vcopypage(paddr_t dst, paddr_t src)
 	__asm("stvx %2,%1,%0" :: "b"(vp), "r"(16), "n"(HI_VEC));
 
 	/*
-	 * Turn off data relocation (DMMU off).
+	 * Copy the page using a single cache line, with DMMU
+	 * disabled.  On most PPCs, two vector registers occupy one
+	 * cache line.
 	 */
-	msr &= ~PSL_DR;
-	__asm __volatile("sync; mtmsr %0; isync" :: "r"(msr));
-
-	/*
-	 * Copy the page using a single cache line.  On most PPCs, two 
-	 * vector registers occupy one cache line.
-	 */
-	do {
-		__asm("lvx %2,%0,%1"   :: "b"(src), "r"( 0), "n"(LO_VEC));
-		__asm("stvx %2,%0,%1"  :: "b"(dst), "r"( 0), "n"(LO_VEC));
-		__asm("lvxl %2,%0,%1"  :: "b"(src), "r"(16), "n"(HI_VEC));
-		__asm("stvxl %2,%0,%1" :: "b"(dst), "r"(16), "n"(HI_VEC));
-		src += 32;
-		dst += 32;
-	} while (dst < edst);
-
-	/*
-	 * Restore data relocation (DMMU on);
-	 */
-	msr |= PSL_DR;
-	__asm __volatile("sync; mtmsr %0; isync" :: "r"(msr));
+	__asm volatile(
+	    "   sync ;"
+	    "   mfmsr  %[msr];"
+	    "   rlwinm %[msr],%[msr],0,28,26;"	/* Clear PSL_DR */
+	    "   mtmsr  %[msr];"			/* Turn off DMMU */
+	    "   isync;"
+	    "1: lvx    %[lv], %[src], %[off0];"
+	    "   stvx   %[lv], %[dst], %[off0];"
+	    "   lvxl   %[hv], %[src], %[off16];"
+	    "   stvxl  %[hv], %[dst], %[off16];"
+	    "   addi   %[src], %[src], 32;"
+	    "   addi   %[dst], %[dst], 32;"
+	    "   cmplw  %[dst], %[edst];"
+	    "	blt+   1b;"
+	    "   ori    %[msr], %[msr], 0x10;"	/* Set PSL_DR */
+	    "   sync;"
+	    "	mtmsr  %[msr];"			/* Turn on DMMU */
+	    "   isync;"
+	    :: [msr] "r"(msr), [src] "b"(src), [dst] "b"(dst),
+	    [edst] "b"(edst), [off0] "r"(0), [off16] "r"(16), 
+	    [lv] "n"(LO_VEC), [hv] "n"(HI_VEC));
 
 	/*
 	 * Restore VEC registers (now that we can access the stack again).
@@ -356,5 +359,5 @@ vcopypage(paddr_t dst, paddr_t src)
 	/*
 	 * Restore old MSR (AltiVec OFF).
 	 */
-	__asm __volatile("sync; mtmsr %0; isync" :: "r"(omsr));
+	__asm volatile("sync; mtmsr %0; isync" :: "r"(omsr));
 }

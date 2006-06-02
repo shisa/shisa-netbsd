@@ -1,4 +1,4 @@
-.\"	$NetBSD: cp.1,v 1.24 2003/08/07 09:05:02 agc Exp $
+.\"	$NetBSD: cp.1,v 1.26 2005/09/10 21:51:57 wiz Exp $
 .\"
 .\" Copyright (c) 1989, 1990, 1993, 1994
 .\"	The Regents of the University of California.  All rights reserved.
@@ -32,7 +32,7 @@
 .\"
 .\"	@(#)cp.1	8.3 (Berkeley) 4/18/94
 .\"
-.Dd December 18, 2002
+.Dd August 15, 2005
 .Dt CP 1
 .Os
 .Sh NAME
@@ -45,7 +45,7 @@
 .Op Fl H | Fl L | Fl P
 .Oc
 .Op Fl f | i
-.Op Fl pv
+.Op Fl Npv
 .Ar source_file target_file
 .Nm cp
 .Oo
@@ -53,7 +53,7 @@
 .Op Fl H | Fl L | Fl P
 .Oc
 .Op Fl f | i
-.Op Fl pv
+.Op Fl Npv
 .Ar source_file ... target_directory
 .Sh DESCRIPTION
 In the first synopsis form, the
@@ -74,31 +74,6 @@ detects an attempt to copy a file to itself, the copy will fail.
 .Pp
 The following options are available:
 .Bl -tag -width flag
-.It Fl H
-If the
-.Fl R
-option is specified, symbolic links on the command line are followed.
-(Symbolic links encountered in the tree traversal are not followed.)
-.It Fl L
-If the
-.Fl R
-option is specified, all symbolic links are followed.
-.It Fl P
-If the
-.Fl R
-option is specified, no symbolic links are followed.
-.It Fl R
-If
-.Ar source_file
-designates a directory,
-.Nm
-copies the directory and the entire subtree connected at that point.
-This option also causes symbolic links to be copied, rather than
-indirected through, and for
-.Nm
-to create special files rather than copying them as normal files.
-Created directories have the same mode as the corresponding source
-directory, unmodified by the process' umask.
 .It Fl f
 For each existing destination pathname, attempt to overwrite it.
 If permissions do not allow copy to succeed, remove it and create a new
@@ -108,6 +83,11 @@ file, without prompting for confirmation.
 option is ignored if the
 .Fl f
 option is specified.)
+.It Fl H
+If the
+.Fl R
+option is specified, symbolic links on the command line are followed.
+(Symbolic links encountered in the tree traversal are not followed.)
 .It Fl i
 Causes
 .Nm
@@ -116,6 +96,18 @@ that would overwrite an existing file.
 If the response from the standard input begins with the character
 .Sq Li y ,
 the file copy is attempted.
+.It Fl L
+If the
+.Fl R
+option is specified, all symbolic links are followed.
+.It Fl N
+When used with
+.Fl p ,
+don't copy file flags.
+.It Fl P
+If the
+.Fl R
+option is specified, no symbolic links are followed.
 .It Fl p
 Causes
 .Nm
@@ -135,6 +127,18 @@ If the source file has both its set user ID and set group ID bits on,
 and either the user ID or group ID cannot be preserved, neither
 the set user ID or set group ID bits are preserved in the copy's
 permissions.
+.It Fl R
+If
+.Ar source_file
+designates a directory,
+.Nm
+copies the directory and the entire subtree connected at that point.
+This option also causes symbolic links to be copied, rather than
+indirected through, and for
+.Nm
+to create special files rather than copying them as normal files.
+Created directories have the same mode as the corresponding source
+directory, unmodified by the process' umask.
 .It Fl v
 Cause
 .Nm
@@ -155,7 +159,7 @@ flag is specified.
 .Pp
 If the destination file does not exist, the mode of the source file is
 used as modified by the file mode creation mask
-.Pf ( Ic umask ,
+.Ic ( umask ,
 see
 .Xr csh 1 ) .
 If the source file has its set user ID bit on, that bit is removed
@@ -190,8 +194,7 @@ option is specified.
 In addition, these options override each other and the
 command's actions are determined by the last one specified.
 .Sh EXIT STATUS
-.Nm
-exits 0 on success, and \*[Gt]0 if an error occurred.
+.Ex -std cp
 .Sh COMPATIBILITY
 Historic versions of the
 .Nm

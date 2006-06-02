@@ -1,4 +1,4 @@
-/*	$NetBSD: tftp.c,v 1.20 2004/10/10 22:15:34 he Exp $	*/
+/*	$NetBSD: tftp.c,v 1.25 2006/04/09 18:45:19 christos Exp $	*/
 
 /*
  * Copyright (c) 1983, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)tftp.c	8.1 (Berkeley) 6/6/93";
 #else
-__RCSID("$NetBSD: tftp.c,v 1.20 2004/10/10 22:15:34 he Exp $");
+__RCSID("$NetBSD: tftp.c,v 1.25 2006/04/09 18:45:19 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -65,18 +65,6 @@ __RCSID("$NetBSD: tftp.c,v 1.20 2004/10/10 22:15:34 he Exp $");
 
 #include "extern.h"
 #include "tftpsubs.h"
-
-extern  struct sockaddr_storage peeraddr; /* filled in by main */
-extern  int     f;			/* the opened socket */
-extern  int     trace;
-extern  int     verbose;
-extern  int     def_rexmtval;
-extern  int     rexmtval;
-extern  int     maxtimeout;
-extern	int	tsize;
-extern	int	tout;
-extern	int	def_blksize;
-extern	int	blksize;
 
 char    ackbuf[PKTSIZE];
 int	timeout;
@@ -161,14 +149,14 @@ sendfile(fd, name, mode)
 	struct sockaddr_storage from;
 	struct stat sbuf;
 	off_t filesize=0;
-	int fromlen;
+	socklen_t fromlen;
 	FILE *file;
 	struct sockaddr_storage peer;
 	struct sockaddr_storage serv;	/* valid server port number */
 
 	startclock();		/* start stat's clock */
 	dp = r_init();		/* reset fillbuf/read-ahead code */
-	ap = (struct tftphdr *)ackbuf;
+	ap = (struct tftphdr *)(void *)ackbuf;
 	if (tsize) {
 		if (fstat(fd, &sbuf) == 0) {
 			filesize = sbuf.st_size;
@@ -180,10 +168,10 @@ sendfile(fd, name, mode)
 	convert = !strcmp(mode, "netascii");
 	block = 0;
 	amount = 0;
-	memcpy(&peer, &peeraddr, peeraddr.ss_len);
-	memset(&serv, 0, sizeof(serv));
+	(void)memcpy(&peer, &peeraddr, (size_t)peeraddr.ss_len);
+	(void)memset(&serv, 0, sizeof(serv));
 
-	signal(SIGALRM, timer);
+	(void)signal(SIGALRM, timer);
 	do {
 		if (block == 0)
 			size = makerequest(WRQ, name, dp, mode, filesize) - 4;
@@ -191,7 +179,7 @@ sendfile(fd, name, mode)
 		/*	size = read(fd, dp->th_data, SEGSIZE);	 */
 			size = readit(file, &dp, blksize, convert);
 			if (size < 0) {
-				nak(errno + 100, (struct sockaddr *)&peer);
+				nak(errno + 100, (struct sockaddr *)(void *)&peer);
 				break;
 			}
 			dp->th_opcode = htons((u_short)DATA);
@@ -202,8 +190,8 @@ sendfile(fd, name, mode)
 send_data:
 		if (trace)
 			tpacket("sent", dp, size + 4);
-		n = sendto(f, dp, size + 4, 0,
-		    (struct sockaddr *)&peer, peer.ss_len);
+		n = sendto(f, dp, (socklen_t)(size + 4), 0,
+		    (struct sockaddr *)(void *)&peer, (socklen_t)peer.ss_len);
 		if (n != size + 4) {
 			warn("sendto");
 			goto abort;
@@ -211,21 +199,21 @@ send_data:
 		if (block)
 			read_ahead(file, blksize, convert);
 		for ( ; ; ) {
-			alarm(rexmtval);
+			(void)alarm(rexmtval);
 			do {
 				fromlen = sizeof(from);
 				n = recvfrom(f, ackbuf, sizeof(ackbuf), 0,
-				    (struct sockaddr *)&from, &fromlen);
+				    (struct sockaddr *)(void *)&from, &fromlen);
 			} while (n <= 0);
-			alarm(0);
+			(void)alarm(0);
 			if (n < 0) {
 				warn("recvfrom");
 				goto abort;
 			}
 			if (!serv.ss_family)
 				serv = from;
-			else if (!cmpport((struct sockaddr *)&serv,
-			    (struct sockaddr *)&from)) {
+			else if (!cmpport((struct sockaddr *)(void *)&serv,
+			    (struct sockaddr *)(void *)&from)) {
 				warn("server port mismatch");
 				goto abort;
 			}
@@ -235,7 +223,7 @@ send_data:
 			/* should verify packet came from server */
 			ap->th_opcode = ntohs(ap->th_opcode);
 			if (ap->th_opcode == ERROR) {
-				printf("Error code %d: %s\n", ap->th_code,
+				(void)printf("Error code %d: %s\n", ap->th_code,
 					ap->th_msg);
 				goto abort;
 			}
@@ -261,7 +249,7 @@ send_data:
 				 */
 				j = synchnet(f, blksize+4);
 				if (j && trace) {
-					printf("discarded %d packets\n",
+					(void)printf("discarded %d packets\n",
 							j);
 				}
 				if (ap->th_block == (block-1)) {
@@ -282,7 +270,7 @@ send_data:
 		block++;
 	} while (size == blksize || block == 1);
 abort:
-	fclose(file);
+	(void)fclose(file);
 	stopclock();
 	if (amount > 0)
 		printstats("Sent", amount);
@@ -304,7 +292,8 @@ recvfile(fd, name, mode)
 	volatile int size, firsttrip;
 	volatile unsigned long amount;
 	struct sockaddr_storage from;
-	int fromlen, readlen;
+	socklen_t fromlen;
+	size_t readlen;
 	FILE *file;
 	volatile int convert;		/* true if converting crlf -> lf */
 	struct sockaddr_storage peer;
@@ -312,19 +301,19 @@ recvfile(fd, name, mode)
 
 	startclock();
 	dp = w_init();
-	ap = (struct tftphdr *)ackbuf;
+	ap = (struct tftphdr *)(void *)ackbuf;
 	file = fdopen(fd, "w");
 	convert = !strcmp(mode, "netascii");
 	block = 1;
 	firsttrip = 1;
 	amount = 0;
-	memcpy(&peer, &peeraddr, peeraddr.ss_len);
-	memset(&serv, 0, sizeof(serv));
+	(void)memcpy(&peer, &peeraddr, (size_t)peeraddr.ss_len);
+	(void)memset(&serv, 0, sizeof(serv));
 
-	signal(SIGALRM, timer);
+	(void)signal(SIGALRM, timer);
 	do {
 		if (firsttrip) {
-			size = makerequest(RRQ, name, ap, mode, 0);
+			size = makerequest(RRQ, name, ap, mode, (off_t)0);
 			readlen = PKTSIZE;
 			firsttrip = 0;
 		} else {
@@ -339,29 +328,31 @@ recvfile(fd, name, mode)
 send_ack:
 		if (trace)
 			tpacket("sent", ap, size);
-		if (sendto(f, ackbuf, size, 0, (struct sockaddr *)&peer,
-		    peer.ss_len) != size) {
-			alarm(0);
+		if (sendto(f, ackbuf, (socklen_t)size, 0,
+		    (struct sockaddr *)(void *)&peer,
+		    (socklen_t)peer.ss_len) != size) {
+			(void)alarm(0);
 			warn("sendto");
 			goto abort;
 		}
-		write_behind(file, convert);
+		if (write_behind(file, convert) == -1)
+			goto abort;
 		for ( ; ; ) {
-			alarm(rexmtval);
+			(void)alarm(rexmtval);
 			do  {
 				fromlen = sizeof(from);
 				n = recvfrom(f, dp, readlen, 0,
-				    (struct sockaddr *)&from, &fromlen);
+				    (struct sockaddr *)(void *)&from, &fromlen);
 			} while (n <= 0);
-			alarm(0);
+			(void)alarm(0);
 			if (n < 0) {
 				warn("recvfrom");
 				goto abort;
 			}
 			if (!serv.ss_family)
 				serv = from;
-			else if (!cmpport((struct sockaddr *)&serv,
-			    (struct sockaddr *)&from)) {
+			else if (!cmpport((struct sockaddr *)(void *)&serv,
+			    (struct sockaddr *)(void *)&from)) {
 				warn("server port mismatch");
 				goto abort;
 			}
@@ -371,7 +362,7 @@ send_ack:
 			/* should verify client address */
 			dp->th_opcode = ntohs(dp->th_opcode);
 			if (dp->th_opcode == ERROR) {
-				printf("Error code %d: %s\n", dp->th_code,
+				(void)printf("Error code %d: %s\n", dp->th_code,
 					dp->th_msg);
 				goto abort;
 			}
@@ -391,7 +382,7 @@ send_ack:
 				 */
 				j = synchnet(f, blksize);
 				if (j && trace) {
-					printf("discarded %d packets\n", j);
+					(void)printf("discarded %d packets\n", j);
 				}
 				if (dp->th_block == (block-1)) {
 					goto send_ack;	/* resend ack */
@@ -414,7 +405,7 @@ send_ack:
 	/*	size = write(fd, dp->th_data, n - 4); */
 		size = writeit(file, &dp, n - 4, convert);
 		if (size < 0) {
-			nak(errno + 100, (struct sockaddr *)&peer);
+			nak(errno + 100, (struct sockaddr *)(void *)&peer);
 			break;
 		}
 		amount += size;
@@ -422,10 +413,16 @@ send_ack:
 abort:						/* ok to ack, since user */
 	ap->th_opcode = htons((u_short)ACK);	/* has seen err msg */
 	ap->th_block = htons((u_short)block);
-	(void) sendto(f, ackbuf, 4, 0, (struct sockaddr *)&peer,
-	    peer.ss_len);
-	write_behind(file, convert);		/* flush last buffer */
-	fclose(file);
+	(void) sendto(f, ackbuf, 4, 0, (struct sockaddr *)(void *)&peer,
+	    (socklen_t)peer.ss_len);
+	/*
+	 * flush last buffer
+	 * We do not check for failure because last buffer
+	 * can be empty, thus returning an error.
+	 * XXX maybe we should fix 'write_behind' instead.
+	 */
+	(void)write_behind(file, convert);
+	(void)fclose(file);
 	stopclock();
 	if (amount > 0)
 		printstats("Received", amount);
@@ -447,37 +444,37 @@ makerequest(request, name, tp, mode, filesize)
 #else
 	cp = (void *)&tp->th_stuff;
 #endif
-	strcpy(cp, name);
+	(void)strcpy(cp, name);
 	cp += strlen(name);
 	*cp++ = '\0';
-	strcpy(cp, mode);
+	(void)strcpy(cp, mode);
 	cp += strlen(mode);
 	*cp++ = '\0';
 	if (tsize) {
-		strcpy(cp, "tsize");
+		(void)strcpy(cp, "tsize");
 		cp += strlen(cp);
 		*cp++ = '\0';
-		sprintf(cp, "%lu", (unsigned long) filesize);
+		(void)sprintf(cp, "%lu", (unsigned long) filesize);
 		cp += strlen(cp);
 		*cp++ = '\0';
 	}
 	if (tout) {
-		strcpy(cp, "timeout");
+		(void)strcpy(cp, "timeout");
 		cp += strlen(cp);
 		*cp++ = '\0';
-		sprintf(cp, "%d", rexmtval);
+		(void)sprintf(cp, "%d", rexmtval);
 		cp += strlen(cp);
 		*cp++ = '\0';
 	}
 	if (blksize != SEGSIZE) {
-		strcpy(cp, "blksize");
+		(void)strcpy(cp, "blksize");
 		cp += strlen(cp);
 		*cp++ = '\0';
-		sprintf(cp, "%d", blksize);
+		(void)sprintf(cp, "%zd", blksize);
 		cp += strlen(cp);
 		*cp++ = '\0';
 	}
-	return (cp - (char *)tp);
+	return (cp - (char *)(void *)tp);
 }
 
 const struct errmsg {
@@ -512,7 +509,7 @@ nak(error, peer)
 	int length;
 	size_t msglen;
 
-	tp = (struct tftphdr *)ackbuf;
+	tp = (struct tftphdr *)(void *)ackbuf;
 	tp->th_opcode = htons((u_short)ERROR);
 	msglen = sizeof(ackbuf) - (&tp->th_msg[0] - ackbuf);
 	for (pe = errmsgs; pe->e_code >= 0; pe++)
@@ -520,16 +517,16 @@ nak(error, peer)
 			break;
 	if (pe->e_code < 0) {
 		tp->th_code = EUNDEF;
-		strlcpy(tp->th_msg, strerror(error - 100), msglen);
+		(void)strlcpy(tp->th_msg, strerror(error - 100), msglen);
 	} else {
 		tp->th_code = htons((u_short)error);
-		strlcpy(tp->th_msg, pe->e_msg, msglen);
+		(void)strlcpy(tp->th_msg, pe->e_msg, msglen);
 	}
 	length = strlen(tp->th_msg);
 	msglen = &tp->th_msg[length + 1] - ackbuf;
 	if (trace)
 		tpacket("sent", tp, (int)msglen);
-	if (sendto(f, ackbuf, msglen, 0, peer, peer->sa_len) != msglen)
+	if (sendto(f, ackbuf, msglen, 0, peer, (socklen_t)peer->sa_len) != msglen)
 		warn("nak");
 }
 
@@ -539,16 +536,17 @@ tpacket(s, tp, n)
 	struct tftphdr *tp;
 	int n;
 {
-	static char *opcodes[] =
+	static const char *opcodes[] =
 	   { "#0", "RRQ", "WRQ", "DATA", "ACK", "ERROR", "OACK" };
-	char *cp, *file, *endp, *opt, *spc;
+	char *cp, *file, *endp, *opt = NULL;
+	const char *spc;
 	u_short op = ntohs(tp->th_opcode);
 	int i, o;
 
 	if (op < RRQ || op > OACK)
-		printf("%s opcode=%x ", s, op);
+		(void)printf("%s opcode=%x ", s, op);
 	else
-		printf("%s %s ", s, opcodes[op]);
+		(void)printf("%s %s ", s, opcodes[op]);
 	switch (op) {
 
 	case RRQ:
@@ -565,32 +563,32 @@ tpacket(s, tp, n)
 		}
 		file = cp;
 		cp = strchr(cp, '\0') + 1;
-		printf("<file=%s, mode=%s", file, cp);
+		(void)printf("<file=%s, mode=%s", file, cp);
 		cp = strchr(cp, '\0') + 1;
 		o = 0;
 		while (cp < endp) {
 			i = strlen(cp) + 1;
 			if (o) {
-				printf(", %s=%s", opt, cp);
+				(void)printf(", %s=%s", opt, cp);
 			} else {
 				opt = cp;
 			}
 			o = (o+1) % 2;
 			cp += i;
 		}
-		printf(">\n");
+		(void)printf(">\n");
 		break;
 
 	case DATA:
-		printf("<block=%d, %d bytes>\n", ntohs(tp->th_block), n - 4);
+		(void)printf("<block=%d, %d bytes>\n", ntohs(tp->th_block), n - 4);
 		break;
 
 	case ACK:
-		printf("<block=%d>\n", ntohs(tp->th_block));
+		(void)printf("<block=%d>\n", ntohs(tp->th_block));
 		break;
 
 	case ERROR:
-		printf("<code=%d, msg=%s>\n", ntohs(tp->th_code), tp->th_msg);
+		(void)printf("<code=%d, msg=%s>\n", ntohs(tp->th_code), tp->th_msg);
 		break;
 
 	case OACK:
@@ -601,12 +599,12 @@ tpacket(s, tp, n)
 		if (*endp != '\0') {	/* Shouldn't happen, but... */
 			*endp = '\0';
 		}
-		printf("<");
+		(void)printf("<");
 		spc = "";
 		while (cp < endp) {
 			i = strlen(cp) + 1;
 			if (o) {
-				printf("%s%s=%s", spc, opt, cp);
+				(void)printf("%s%s=%s", spc, opt, cp);
 				spc = ", ";
 			} else {
 				opt = cp;
@@ -614,7 +612,7 @@ tpacket(s, tp, n)
 			o = (o+1) % 2;
 			cp += i;
 		}
-		printf(">\n");
+		(void)printf(">\n");
 		break;
 	}
 }
@@ -647,20 +645,21 @@ printstats(direction, amount)
 	delta = ((tstop.tv_sec*10.)+(tstop.tv_usec/100000)) -
 		((tstart.tv_sec*10.)+(tstart.tv_usec/100000));
 	delta = delta/10.;      /* back to seconds */
-	printf("%s %ld bytes in %.1f seconds", direction, amount, delta);
+	(void)printf("%s %ld bytes in %.1f seconds", direction, amount, delta);
 	if (verbose)
-		printf(" [%.0f bits/sec]", (amount*8.)/delta);
-	putchar('\n');
+		(void)printf(" [%.0f bits/sec]", (amount*8.)/delta);
+	(void)putchar('\n');
 }
 
 static void
+/*ARGSUSED*/
 timer(sig)
 	int sig;
 {
 
 	timeout += rexmtval;
 	if (timeout >= maxtimeout) {
-		printf("Transfer timed out.\n");
+		(void)printf("Transfer timed out.\n");
 		longjmp(toplevel, -1);
 	}
 	longjmp(timeoutbuf, 1);
@@ -673,9 +672,9 @@ cmpport(sa, sb)
 {
 	char a[NI_MAXSERV], b[NI_MAXSERV];
 
-	if (getnameinfo(sa, sa->sa_len, NULL, 0, a, sizeof(a), NI_NUMERICSERV))
+	if (getnameinfo(sa, (socklen_t)sa->sa_len, NULL, 0, a, sizeof(a), NI_NUMERICSERV))
 		return 0;
-	if (getnameinfo(sb, sb->sa_len, NULL, 0, b, sizeof(b), NI_NUMERICSERV))
+	if (getnameinfo(sb, (socklen_t)sb->sa_len, NULL, 0, b, sizeof(b), NI_NUMERICSERV))
 		return 0;
 	if (strcmp(a, b) != 0)
 		return 0;

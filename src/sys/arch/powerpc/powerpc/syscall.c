@@ -1,4 +1,4 @@
-/*	$NetBSD: syscall.c,v 1.23 2003/10/31 03:28:13 simonb Exp $	*/
+/*	$NetBSD: syscall.c,v 1.30 2006/03/07 03:32:05 thorpej Exp $	*/
 
 /*
  * Copyright (C) 2002 Matt Thomas
@@ -34,7 +34,6 @@
 
 #include "opt_altivec.h"
 #include "opt_ktrace.h"
-#include "opt_systrace.h"
 #include "opt_multiprocessor.h"
 /* DO NOT INCLUDE opt_compat_XXX.h */
 /* If needed, they will be included by file that includes this one */
@@ -48,9 +47,6 @@
 #include <sys/savar.h>
 #ifdef KTRACE
 #include <sys/ktrace.h>
-#endif
-#ifdef SYSTRACE
-#include <sys/systrace.h>
 #endif
 
 #include <uvm/uvm_extern.h>
@@ -69,7 +65,7 @@
 #define EMULNAME(x)	(x)
 #define EMULNAMEU(x)	(x)
 
-__KERNEL_RCSID(0, "$NetBSD: syscall.c,v 1.23 2003/10/31 03:28:13 simonb Exp $");
+__KERNEL_RCSID(0, "$NetBSD: syscall.c,v 1.30 2006/03/07 03:32:05 thorpej Exp $");
 
 void
 child_return(void *arg)
@@ -91,7 +87,7 @@ child_return(void *arg)
 #ifdef	KTRACE
 	if (KTRPOINT(p, KTR_SYSRET)) {
 		KERNEL_PROC_LOCK(l);
-		ktrsysret(p, SYS_fork, 0, 0);
+		ktrsysret(l, SYS_fork, 0, 0);
 		KERNEL_PROC_UNLOCK(l);
 	}
 #endif
@@ -159,7 +155,7 @@ EMULNAME(syscall_plain)(struct trapframe *frame)
 		       argsize - n * sizeof(register_t));
 		KERNEL_PROC_UNLOCK(l);
 		if (error)
-			goto syscall_bad;
+			goto bad;
 		params = args;
 	}
 
@@ -175,7 +171,6 @@ EMULNAME(syscall_plain)(struct trapframe *frame)
 	if ((callp->sy_flags & SYCALL_MPSAFE) == 0) {
 		KERNEL_PROC_UNLOCK(l);
 	}
-
 	switch (error) {
 	case 0:
 		frame->fixreg[FIRSTARG] = rval[0];
@@ -201,7 +196,7 @@ EMULNAME(syscall_plain)(struct trapframe *frame)
 		/* nothing to do */
 		break;
 	default:
-syscall_bad:
+	bad:
 		if (p->p_emul->e_errno)
 			error = p->p_emul->e_errno[error];
 		frame->fixreg[FIRSTARG] = error;
@@ -211,7 +206,6 @@ syscall_bad:
 	userret(l, frame);
 }
 
-#if defined(KTRACE) || defined(SYSTRACE)
 static void EMULNAME(syscall_fancy)(struct trapframe *);
 
 void
@@ -273,17 +267,18 @@ EMULNAME(syscall_fancy)(struct trapframe *frame)
 		       args + n,
 		       argsize - n * sizeof(register_t));
 		if (error)
-			goto syscall_bad;
+			goto bad;
 		params = args;
 	}
 
 	if ((error = trace_enter(l, code, realcode, callp - code, params)) != 0)
-		goto syscall_bad;
+		goto out;
 
 	rval[0] = 0;
 	rval[1] = 0;
 
 	error = (*callp->sy_call)(l, params, rval);
+out:
 	switch (error) {
 	case 0:
 		frame->fixreg[FIRSTARG] = rval[0];
@@ -309,7 +304,7 @@ EMULNAME(syscall_fancy)(struct trapframe *frame)
 		/* nothing to do */
 		break;
 	default:
-syscall_bad:
+	bad:
 		if (p->p_emul->e_errno)
 			error = p->p_emul->e_errno[error];
 		frame->fixreg[FIRSTARG] = error;
@@ -320,24 +315,15 @@ syscall_bad:
 	trace_exit(l, realcode, params, rval, error);
 	userret(l, frame);
 }
-#endif /* KTRACE || SYSTRACE */
 
 void EMULNAME(syscall_intern)(struct proc *);
 
 void
 EMULNAME(syscall_intern)(struct proc *p)
 {
-#ifdef KTRACE
-	if (p->p_traceflag & (KTRFAC_SYSCALL | KTRFAC_SYSRET)) {
+
+	if (trace_is_enabled(p))
 		p->p_md.md_syscall = EMULNAME(syscall_fancy);
-		return;
-	}
-#endif
-#ifdef SYSTRACE
-	if (ISSET(p->p_flag, P_SYSTRACE)) {
-		p->p_md.md_syscall = EMULNAME(syscall_fancy);
-		return;
-	} 
-#endif
-	p->p_md.md_syscall = EMULNAME(syscall_plain);
+	else
+		p->p_md.md_syscall = EMULNAME(syscall_plain);
 }

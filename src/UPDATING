@@ -1,4 +1,4 @@
-$NetBSD: UPDATING,v 1.135.2.2 2005/09/15 21:05:48 tron Exp $
+$NetBSD: UPDATING,v 1.145 2006/01/31 22:54:22 martin Exp $
 
 This file (UPDATING) is intended to be a brief reference to recent
 changes that might cause problems in the build process, and a guide for
@@ -16,16 +16,55 @@ See also: BUILDING, build.sh, Makefile.
 Recent changes:
 ^^^^^^^^^^^^^^^
 
+20060131:
+	the protocol between the sparc64 bootloader (ofwboot) and
+	the kernel was changed. Before installing a new kernel,
+	you need to update ofwboot. After a full build, just copy
+	/usr/mdec/ofwboot to /, or do a rebuild of
+	src/sys/arch/sparc/stand/ofwboot and install the result to /.
+
+20050917:
+	arch/*/conf/std.* was changed to include conf/std, which
+	contains MI options previously enabled by default.
+	If you have kernel config files which doesn't include
+	arch/*/conf/std.*, you need to edit them to include conf/std
+	to get the previous configuration.
+
 20050830:
 	named.conf was moved from /etc/namedb to /etc.
 	postinstall(8) migrates this during interactive use.
 	Users of MKUPDATE=yes will need to manually rectify
 	this in their DESTDIR.
 
+20050825:
+	Some data structures in sys/device.h, related to interface
+	attributes and locator names, were changed. config(1) was
+	modified to emit the new data structures.
+	Thus usr.bin/config must be updated (and run on the kernel
+	configuration file) before a new kernel can be built.
+
+20050531:
+	genassym.sh(8) was moved to genassym(1). You need to either build
+	tools first or install the version of genassym from /usr/bin before
+	you can build a kernel again.
+
+20050520:
+	Because a kernfs bug which xentools relies on was fixed,
+	xentools up to xentools20-2.0.3nb4 won't work with new kernel.
+
 20050417:
 	postinstall(8) was moved from /etc to /usr/sbin and made part
 	of the "base" set, to make it easier to invoke after an
 	upgrade.
+
+20050325:
+	pcppi(4) was separated in two devices, adding attimer(4).  Be sure
+	to add a config line for an attimer(4) device in your kernel
+	configuration, or you won't be able to set the pitch of the beep
+	with wsconsctl.  Depending on the default value for the pitch, you
+	might even not hear any more beep.  Also, it is advised to attach both
+	devices the same way (i.e., both on isa or both on acpi) or the
+	pcppi(4) device may fail to find the attimer(4) one.
 
 20050211:
 	Fixes to tools/Makefile.gnuhost may cause UPDATE=1 builds in
@@ -781,19 +820,15 @@ cd $NETBSDSRCDIR && make cleandir
 
 Critical utilities:
 ^^^^^^^^^^^^^^^^^^^
-	gnu/usr.bin/egcs
 	usr.bin/compile_et
 	usr.bin/make
 	usr.bin/yacc
 	usr.bin/lex
 	usr.bin/xlint
-	usr.sbin/config
+	usr.bin/config
 
 Other problems and possible solutions:
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Symptom:Unreasonable compiler errors.
-Fix:	Rebuild gnu/usr.bin/egcs
-
 Symptom:Complaints involving a Makefile.
 Fix:	Rebuild usr.bin/make:
 	cd usr.bin/make && make && make install
@@ -804,7 +839,7 @@ Fix:	Make sure .mk files are up to date.
 	cd share/mk && make install
 
 Symptom:Kernel `config' fails to configure any kernel, including GENERIC.
-Fix:	Rebuild usr.sbin/config
+Fix:	Rebuild usr.bin/config
 
 Symptom:
 Fix:	Rebuild usr.bin/yacc
@@ -830,7 +865,7 @@ Fix:	Build and install usr.bin/mklocale
 Symptom:undefined reference to `__assert13' or `__unsetenv13'
 Fix:    Rebuild and install lib/libc
 
-Symptom:usr.sbin/config fails to build.
+Symptom:usr.bin/config fails to build.
 Fix:	Try building with -DMAKE_BOOTSTRAP added to CFLAGS in Makefile.
 
 Symptom:undefined reference to `getprogname' or `setprogname'

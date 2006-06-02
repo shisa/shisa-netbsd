@@ -1,11 +1,11 @@
 #!/bin/sh
 #
-# $NetBSD: dhclient-script,v 1.6 2004/10/04 12:54:06 grant Exp $
+# $NetBSD: dhclient-script,v 1.9 2005/07/16 08:41:27 rtr Exp $
 
 ENTERHOOKS=/etc/dhclient-enter-hooks
 EXITHOOKS=/etc/dhclient-exit-hooks
 RESOLV=/etc/resolv.conf
-SIGNATURE="# Created by dhclient at: "
+SIGNATURE="# Created by dhclient"
 
 make_resolv_conf() {
 	if [ ! -z "$new_domain_name_servers" ]; then
@@ -21,7 +21,7 @@ make_resolv_conf() {
 				break
 			done < $RESOLV
 		fi
-		echo "$SIGNATURE$(date)" > $RESOLV
+		echo "$SIGNATURE" > $RESOLV
 		if [ ! -z "$new_domain_name" ]
 		then
 			echo search $new_domain_name >> $RESOLV
@@ -63,7 +63,7 @@ add_new_routes() {
 
 	set -- $new_static_routes
 	while [ $# -gt 1 ]; do
-		route add $0 $1
+		route add $1 $2
 		shift; shift
 	done
 }
@@ -128,6 +128,7 @@ fi
 
 case "$reason" in
 MEDIUM)
+	test -z "$medium" && exit_with_hooks 0
 	eval "ifconfig $interface $medium"
 	eval "ifconfig $interface inet -alias 0.0.0.0 $medium" >/dev/null 2>&1
 

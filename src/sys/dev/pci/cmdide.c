@@ -1,4 +1,4 @@
-/*	$NetBSD: cmdide.c,v 1.18 2005/02/27 00:27:32 perry Exp $	*/
+/*	$NetBSD: cmdide.c,v 1.23 2006/02/07 20:37:24 bouyer Exp $	*/
 
 /*
  * Copyright (c) 1999, 2000, 2001 Manuel Bouyer.
@@ -28,6 +28,9 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+
+#include <sys/cdefs.h>
+__KERNEL_RCSID(0, "$NetBSD: cmdide.c,v 1.23 2006/02/07 20:37:24 bouyer Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -173,6 +176,7 @@ cmd_channel_map(struct pci_attach_args *pa, struct pciide_softc *sc,
 		    sc->sc_wdcdev.sc_atac.atac_dev.dv_xname, cp->name);
 		    return;
 	}
+	cp->ata_channel.ch_ndrive = 2;
 
 	aprint_normal("%s: %s channel %s to %s mode\n",
 	    sc->sc_wdcdev.sc_atac.atac_dev.dv_xname, cp->name,
@@ -525,6 +529,7 @@ cmd680_channel_map(struct pci_attach_args *pa, struct pciide_softc *sc,
 		    sc->sc_wdcdev.sc_atac.atac_dev.dv_xname, cp->name);
 		    return;
 	}
+	cp->ata_channel.ch_ndrive = 2;
 
 	/* XXX */
 	reg = 0xa2 + channel * 16;
@@ -601,14 +606,14 @@ cmd680_setup_channel(struct ata_channel *chp)
 			off = 0xa8 + chp->ch_channel * 16 + drive * 2;
 			val = dma_tbl[drvp->DMA_mode];
 			pciide_pci_write(pc, pa, off, val & 0xff);
-			pciide_pci_write(pc, pa, off, val >> 8);
+			pciide_pci_write(pc, pa, off+1, val >> 8);
 			idedma_ctl |= IDEDMA_CTL_DRV_DMA(drive);
 		} else {
 			mode |= 0x01 << (drive * 4);
 			off = 0xa4 + chp->ch_channel * 16 + drive * 2;
 			val = pio_tbl[drvp->PIO_mode];
 			pciide_pci_write(pc, pa, off, val & 0xff);
-			pciide_pci_write(pc, pa, off, val >> 8);
+			pciide_pci_write(pc, pa, off+1, val >> 8);
 		}
 	}
 

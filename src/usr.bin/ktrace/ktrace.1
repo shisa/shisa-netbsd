@@ -1,4 +1,4 @@
-.\"	$NetBSD: ktrace.1,v 1.28 2004/06/24 15:59:13 wiz Exp $
+.\"	$NetBSD: ktrace.1,v 1.32 2006/02/07 06:39:47 skrll Exp $
 .\"
 .\" Copyright (c) 1990, 1993
 .\"	The Regents of the University of California.  All rights reserved.
@@ -29,7 +29,7 @@
 .\"
 .\"	@(#)ktrace.1	8.1 (Berkeley) 6/6/93
 .\"
-.Dd June 24, 2004
+.Dd February 7, 2006
 .Dt KTRACE 1
 .Os
 .Sh NAME
@@ -62,6 +62,7 @@
 .Op Fl m Ar maxdata
 .Op Fl o Ar outfile
 .Op Fl t Ar trstr
+.Op Fl v Ar vers
 command
 .Sh DESCRIPTION
 .Nm
@@ -193,6 +194,8 @@ trace Mach messages when running Mach binaries with COMPAT_MACH
 trace namei translations
 .It Cm s
 trace signal processing
+.It Cm U
+trace scheduler activations upcall data
 .It Cm u
 trace user data
 .It Cm v
@@ -200,7 +203,7 @@ trace exec environment
 .It Cm w
 trace context switches
 .It Cm +
-trace the default set of trace points (c, e, i, l, m, n, s, u)
+trace the default set of trace points (c, e, i, l, m, n, s, U, u)
 .It Cm -
 do not trace following trace points
 .El
@@ -212,6 +215,13 @@ default "netbsd".
 Execute
 .Ar command
 with the specified trace flags.
+.It Fl v Ar version
+Determines the
+.Ar version
+of the file generated.
+Version 0 is the compatible ktrace format, and
+version 1 is the new format with lwp IDs and nanosecond (instead of
+microsecond) timestamps.
 .El
 .Pp
 The

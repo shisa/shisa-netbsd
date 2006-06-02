@@ -1,4 +1,4 @@
-/*	$NetBSD: systrace.c,v 1.28 2004/01/21 22:50:56 kleink Exp $	*/
+/*	$NetBSD: systrace.c,v 1.33 2006/05/10 21:53:14 mrg Exp $	*/
 /*	$OpenBSD: systrace.c,v 1.32 2002/08/05 23:27:53 provos Exp $	*/
 /*
  * Copyright 2002 Niels Provos <provos@citi.umich.edu>
@@ -68,7 +68,7 @@ int cradle = 0;			 /* Set if we are running in cradle mode */
 char cwd[MAXPATHLEN];		/* Current working directory */
 char home[MAXPATHLEN];		/* Home directory of user */
 char username[LOGIN_NAME_MAX];	/* Username: predicate match and expansion */
-char *guipath = _PATH_XSYSTRACE; /* Path to GUI executable */
+const char *guipath = _PATH_XSYSTRACE; /* Path to GUI executable */
 char dirpath[MAXPATHLEN];
 
 static void child_handler(int);
@@ -84,12 +84,12 @@ systrace_parameters(void)
 	iamroot = getuid() == 0;
 
 	/* Find out current username. */
-	if ((pw = getpwuid(uid)) == NULL)
+	if ((pw = getpwuid(uid)) == NULL) {
 		snprintf(username, sizeof(username), "uid %u", uid);
-	else
-		snprintf(username, sizeof(username), "%s", pw->pw_name);
-
-	strlcpy(home, pw->pw_dir, sizeof(home));
+	} else {
+		strlcpy(username, pw->pw_name, sizeof(username));
+		strlcpy(home, pw->pw_dir, sizeof(home));
+	}
 
 	/* Determine current working directory for filtering */
 	if (getcwd(cwd, sizeof(cwd)) == NULL)
@@ -112,7 +112,8 @@ make_output(char *output, size_t outlen, const char *binname,
     struct intercept_replace *repl)
 {
 	struct intercept_translate *tl;
-	char *p, *line;
+	char *p;
+	const char *line;
 	int size;
 
 	snprintf(output, outlen,
@@ -162,6 +163,8 @@ trans_cb(int fd, pid_t pid, int policynr,
 	char output[_POSIX2_LINE_MAX];
 	pid_t ppid;
 	int dolog = 0;
+
+	ipid = NULL;	/* XXXGCC -Wuninitialized [dreamcast] */
 
 	action = ICPOLICY_PERMIT;
 
@@ -268,6 +271,8 @@ gen_cb(int fd, pid_t pid, int policynr, const char *name, int code,
 	short action = ICPOLICY_PERMIT;
 	short future;
 	int len, off, dolog = 0;
+
+	ipid = NULL;	/* XXXGCC -Wuninitialized [dreamcast] */
 
 	if (policynr == -1)
 		goto out;
@@ -424,14 +429,15 @@ usage(void)
 }
 
 int
-requestor_start(char *path, int docradle)
+requestor_start(const char *path, int docradle)
 {
 	char *argv[3];
 	int pair[2];
 	pid_t pid;
+	static char mC[] = "-C";
 
-	argv[0] = path;
-	argv[1] = docradle ? "-C" : NULL;
+	argv[0] = __UNCONST(path);
+	argv[1] = docradle ? mC : NULL;
 	argv[2] = NULL;
 
 	if (!docradle && socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == -1)
@@ -478,7 +484,7 @@ requestor_start(char *path, int docradle)
 
 
 static void
-cradle_setup(char *pathtogui)
+cradle_setup(const char *pathtogui)
 {
 	struct stat sb;
 	char cradlepath[MAXPATHLEN], cradleuipath[MAXPATHLEN];
@@ -568,6 +574,9 @@ main(int argc, char **argv)
 	int setcredentials = 0;
 	uid_t cr_uid;
 	gid_t cr_gid;
+
+	cr_uid = 0;	/* XXX gcc */
+	cr_gid = 0;	/* XXX gcc */
 
 	tv_wait.tv_sec = 60;
 	tv_wait.tv_usec = 0;

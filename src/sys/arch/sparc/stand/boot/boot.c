@@ -1,4 +1,4 @@
-/*	$NetBSD: boot.c,v 1.19.10.1 2005/04/28 11:06:03 tron Exp $ */
+/*	$NetBSD: boot.c,v 1.22 2005/12/11 12:19:08 christos Exp $ */
 
 /*-
  * Copyright (c) 1982, 1986, 1990, 1993
@@ -47,7 +47,7 @@
 
 extern void	prom_patch __P((void));	/* prompatch.c */
 
-static int	bootoptions __P((char *));
+static int	bootoptions __P((const char *));
 
 int	boothowto;
 int	debug;
@@ -87,7 +87,7 @@ char *kernels[] = {
 
 int
 bootoptions(ap)
-	char *ap;
+	const char *ap;
 {
 	int v = 0;
 	if (ap == NULL || *ap++ != '-')
@@ -235,7 +235,8 @@ int
 main()
 {
 	int	error, i;
-	char	kernel[MAX_PROM_PATH], *k;
+	char	kernel[MAX_PROM_PATH];
+	const char *k;
 	u_long	marks[MARK_MAX], bootinfo;
 	struct btinfo_symtab bi_sym;
 	void	*arg;

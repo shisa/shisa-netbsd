@@ -1,3 +1,3 @@
-/*       $NetBSD: types.h,v 1.22 2002/07/20 11:52:22 mrg Exp $        */
+/*       $NetBSD: types.h,v 1.25 2005/12/11 12:19:10 christos Exp $        */
 
 #include <sparc/types.h>

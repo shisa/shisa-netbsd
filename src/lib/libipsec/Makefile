@@ -1,4 +1,4 @@
-# $NetBSD: Makefile,v 1.13.2.2 2005/11/21 21:12:29 tron Exp $
+# $NetBSD: Makefile,v 1.16 2005/12/16 16:25:07 jmc Exp $
 
 USE_SHLIBDIR=	yes
 WARNS=	0	# Will be fixed later

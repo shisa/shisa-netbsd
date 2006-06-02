@@ -1,4 +1,4 @@
-/*	$NetBSD: getprotobynumber_r.c,v 1.2.6.1 2005/04/21 16:59:02 tron Exp $	*/
+/*	$NetBSD: getprotobynumber_r.c,v 1.3 2005/04/18 19:39:45 kleink Exp $	*/
 
 /*
  * Copyright (c) 1983, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)getproto.c	8.1 (Berkeley) 6/4/93";
 #else
-__RCSID("$NetBSD: getprotobynumber_r.c,v 1.2.6.1 2005/04/21 16:59:02 tron Exp $");
+__RCSID("$NetBSD: getprotobynumber_r.c,v 1.3 2005/04/18 19:39:45 kleink Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 

@@ -1,4 +1,4 @@
-# $NetBSD: Makefile,v 1.7 2002/05/21 23:35:18 itojun Exp $
+# $NetBSD: Makefile,v 1.10 2006/05/11 08:35:47 mrg Exp $
 
 .include <bsd.own.mk>
 
@@ -7,8 +7,8 @@ SRCS=	rtadvd.c rrenum.c advcap.c if.c config.c timer.c dump.c
 
 CPPFLAGS+=-DINET6
 MAN=	rtadvd.8 rtadvd.conf.5
-LDADD+=	-lcompat -lutil
-DPADD+=	${LIBCOMPAT} ${LIBUTIL}
+LDADD+=	-lutil
+DPADD+=	${LIBUTIL}
 
 .if ${MKSHARE} != "no"
 FILESDIR=	/usr/share/examples/rtadvd
@@ -16,3 +16,7 @@ FILES=	rtadvd.conf
 .endif
 
 .include <bsd.prog.mk>
+
+.if (${HAVE_GCC} == 4)
+COPTS.dump.c=-fno-strict-aliasing
+.endif

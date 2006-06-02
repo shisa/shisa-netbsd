@@ -1,4 +1,4 @@
-/*	$NetBSD: iavc_pci.c,v 1.2.16.1 2005/05/11 18:14:31 tron Exp $	*/
+/*	$NetBSD: iavc_pci.c,v 1.4 2005/12/11 12:22:49 christos Exp $	*/
 
 /*
  * Copyright (c) 2001-2003 Cubical Solutions Ltd.
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: iavc_pci.c,v 1.2.16.1 2005/05/11 18:14:31 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: iavc_pci.c,v 1.4 2005/12/11 12:22:49 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/kernel.h>

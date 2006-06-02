@@ -1,7 +1,7 @@
-/*	$NetBSD: eslvar.h,v 1.6 2005/01/15 15:19:52 kent Exp $	*/
+/*	$NetBSD: eslvar.h,v 1.8 2005/12/11 12:23:23 christos Exp $	*/
 
 /*
- * Copyright (c) 2001 Jared D. McNeill <jmcneill@invisible.yi.org>
+ * Copyright (c) 2001 Jared D. McNeill <jmcneill@invisible.ca>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without

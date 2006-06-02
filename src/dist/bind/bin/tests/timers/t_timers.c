@@ -1,4 +1,4 @@
-/*	$NetBSD: t_timers.c,v 1.1.1.2 2004/11/06 23:54:09 christos Exp $	*/
+/*	$NetBSD: t_timers.c,v 1.1.1.4 2005/12/21 23:09:31 christos Exp $	*/
 
 /*
  * Copyright (C) 2004  Internet Systems Consortium, Inc. ("ISC")

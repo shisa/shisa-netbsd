@@ -1,4 +1,4 @@
-/*	$NetBSD: ofdev.c,v 1.6 2004/11/13 08:13:58 grant Exp $	*/
+/*	$NetBSD: ofdev.c,v 1.11 2006/05/11 00:48:44 mrg Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996 Wolfgang Solfrank.
@@ -50,6 +50,8 @@
 #include <dev/sun/disklabel.h>
 #include <dev/raidframe/raidframevar.h>
 
+#include <machine/promlib.h>
+
 #include "ofdev.h"
 
 extern char bootdev[];
@@ -70,7 +72,7 @@ filename(str, ppart)
 	char savec;
 	int dhandle;
 	char devtype[16];
-	
+
 	lp = str;
 	devtype[0] = 0;
 	*ppart = 0;
@@ -80,9 +82,9 @@ filename(str, ppart)
 		savec = *cp;
 		*cp = 0;
 		/* ...look whether there is a device with this name */
-		dhandle = OF_finddevice(str);
+		dhandle = prom_finddevice(str);
 #ifdef NOTDEF_DEBUG
-		printf("filename: OF_finddevice(%s) returned %x\n",
+		printf("filename: prom_finddevice(%s) returned %x\n",
 		       str, dhandle);
 #endif
 		*cp = savec;
@@ -117,7 +119,7 @@ filename(str, ppart)
 			printf("filename: found %s\n",lp);
 #endif
 			return lp;
-		} else if (OF_getprop(dhandle, "device_type", devtype, sizeof devtype) < 0)
+		} else if (_prom_getprop(dhandle, "device_type", devtype, sizeof devtype) < 0)
 			devtype[0] = 0;
 	}
 #ifdef NOTDEF_DEBUG
@@ -138,30 +140,30 @@ strategy(devdata, rw, blk, size, buf, rsize)
 	struct of_dev *dev = devdata;
 	u_quad_t pos;
 	int n;
-	
+
 	if (rw != F_READ)
 		return EPERM;
 	if (dev->type != OFDEV_DISK)
 		panic("strategy");
-	
+
 #ifdef NON_DEBUG
-	printf("strategy: block %lx, partition offset %lx, blksz %lx\n", 
+	printf("strategy: block %lx, partition offset %lx, blksz %lx\n",
 	       (long)blk, (long)dev->partoff, (long)dev->bsize);
-	printf("strategy: seek position should be: %lx\n", 
+	printf("strategy: seek position should be: %lx\n",
 	       (long)((blk + dev->partoff) * dev->bsize));
 #endif
 	pos = (u_quad_t)(blk + dev->partoff) * dev->bsize;
-	
+
 	for (;;) {
 #ifdef NON_DEBUG
 		printf("strategy: seeking to %lx\n", (long)pos);
 #endif
-		if (OF_seek(dev->handle, pos) < 0)
+		if (prom_seek(dev->handle, pos) < 0)
 			break;
 #ifdef NON_DEBUG
 		printf("strategy: reading %lx at %p\n", (long)size, buf);
 #endif
-		n = OF_read(dev->handle, buf, size);
+		n = prom_read(dev->handle, buf, size);
 		if (n == -2)
 			continue;
 		if (n < 0)
@@ -178,38 +180,31 @@ devclose(of)
 {
 	struct of_dev *op = of->f_devdata;
 
-#ifdef NETBOOT	
+#ifdef NETBOOT
 	if (op->type == OFDEV_NET)
 		net_close(op);
 #endif
-	OF_close(op->handle);
+	prom_close(op->handle);
 	op->handle = -1;
 }
 
-static struct devsw devsw[1] = {
+static struct devsw ofdevsw[1] = {
 	"OpenFirmware",
 	strategy,
 	(int (*)__P((struct open_file *, ...)))nodev,
 	devclose,
 	noioctl
 };
-int ndevs = sizeof devsw / sizeof devsw[0];
+int ndevs = sizeof ofdevsw / sizeof ofdevsw[0];
 
 #ifdef SPARC_BOOT_UFS
-static struct fs_ops file_system_ufs = {
-	ufs_open, ufs_close, ufs_read, ufs_write, ufs_seek, ufs_stat
-};
+static struct fs_ops file_system_ufs = FS_OPS(ufs);
 #endif
 #ifdef SPARC_BOOT_HSFS
-static struct fs_ops file_system_cd9660 = {
-	cd9660_open, cd9660_close, cd9660_read, cd9660_write, cd9660_seek,
-	    cd9660_stat
-};
+static struct fs_ops file_system_cd9660 = FS_OPS(cd9660);
 #endif
 #ifdef NETBOOT
-static struct fs_ops file_system_nfs = {
-	nfs_open, nfs_close, nfs_read, nfs_write, nfs_seek, nfs_stat
-};
+static struct fs_ops file_system_nfs = FS_OPS(nfs);
 #endif
 
 struct fs_ops file_system[3];
@@ -227,7 +222,7 @@ get_long(p)
 	const void *p;
 {
 	const unsigned char *cp = p;
-	
+
 	return cp[0] | (cp[1] << 8) | (cp[2] << 16) | (cp[3] << 24);
 }
 /************************************************************************
@@ -354,7 +349,7 @@ search_label(devp, off, buf, lp, off0)
 	struct disklabel *dlp;
 	struct sun_disklabel *slp;
 	int error;
-	
+
 	/* minimal requirements for archtypal disk label */
 	if (lp->d_secperunit == 0)
 		lp->d_secperunit = 0x1fffffff;
@@ -435,18 +430,18 @@ devopen(of, name, file)
 #ifdef NOTDEF_DEBUG
 	printf("devopen: trying %s\n", fname);
 #endif
-	if ((handle = OF_finddevice(fname)) == -1)
+	if ((handle = prom_finddevice(fname)) == -1)
 		return ENOENT;
 #ifdef NOTDEF_DEBUG
 	printf("devopen: found %s\n", fname);
 #endif
-	if (OF_getprop(handle, "name", buf, sizeof buf) < 0)
+	if (_prom_getprop(handle, "name", buf, sizeof buf) < 0)
 		return ENXIO;
 #ifdef NOTDEF_DEBUG
 	printf("devopen: %s is called %s\n", fname, buf);
 #endif
 	floppyboot = !strcmp(buf, "floppy");
-	if (OF_getprop(handle, "device_type", buf, sizeof buf) < 0)
+	if (_prom_getprop(handle, "device_type", buf, sizeof buf) < 0)
 		return ENXIO;
 #ifdef NOTDEF_DEBUG
 	printf("devopen: %s is a %s device\n", fname, buf);
@@ -454,7 +449,7 @@ devopen(of, name, file)
 #ifdef NOTDEF_DEBUG
 	printf("devopen: opening %s\n", fname);
 #endif
-	if ((handle = OF_open(fname)) == -1) {
+	if ((handle = prom_open(fname)) == -1) {
 #ifdef NOTDEF_DEBUG
 		printf("devopen: open of %s failed\n", fname);
 #endif
@@ -479,7 +474,7 @@ devopen(of, name, file)
 			if (errmsg) printf("devopen: getdisklabel returned %s\n", errmsg);
 			/* Else try MBR partitions */
 			errmsg = search_label(&ofdev, 0, buf, &label, 0);
-			if (errmsg) { 
+			if (errmsg) {
 				printf("devopen: search_label returned %s\n", errmsg);
 				error = ERDLAB;
 			}
@@ -508,8 +503,8 @@ devopen(of, name, file)
 #endif
 			}
 		}
-		
-		of->f_dev = devsw;
+
+		of->f_dev = ofdevsw;
 		of->f_devdata = &ofdev;
 #ifdef SPARC_BOOT_UFS
 		bcopy(&file_system_ufs, &file_system[nfsys++], sizeof file_system[0]);
@@ -526,7 +521,7 @@ devopen(of, name, file)
 #ifdef NETBOOT
 	if (!strcmp(buf, "network")) {
 		ofdev.type = OFDEV_NET;
-		of->f_dev = devsw;
+		of->f_dev = ofdevsw;
 		of->f_devdata = &ofdev;
 		bcopy(&file_system_nfs, file_system, sizeof file_system[0]);
 		nfsys = 1;
@@ -540,7 +535,7 @@ bad:
 #ifdef NOTDEF_DEBUG
 	printf("devopen: error %d, cannot open device\n", error);
 #endif
-	OF_close(handle);
+	prom_close(handle);
 	ofdev.handle = -1;
 	return error;
 }

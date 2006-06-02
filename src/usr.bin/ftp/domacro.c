@@ -1,4 +1,4 @@
-/*	$NetBSD: domacro.c,v 1.20.6.1 2005/07/24 10:32:37 tron Exp $	*/
+/*	$NetBSD: domacro.c,v 1.21 2005/06/29 02:31:19 christos Exp $	*/
 
 /*
  * Copyright (c) 1985, 1993, 1994
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)domacro.c	8.3 (Berkeley) 4/2/94";
 #else
-__RCSID("$NetBSD: domacro.c,v 1.20.6.1 2005/07/24 10:32:37 tron Exp $");
+__RCSID("$NetBSD: domacro.c,v 1.21 2005/06/29 02:31:19 christos Exp $");
 #endif
 #endif /* not lint */
 

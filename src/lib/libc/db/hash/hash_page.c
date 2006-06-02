@@ -1,4 +1,4 @@
-/*	$NetBSD: hash_page.c,v 1.16 2003/08/07 16:42:43 agc Exp $	*/
+/*	$NetBSD: hash_page.c,v 1.18 2006/03/26 02:00:37 rtr Exp $	*/
 
 /*-
  * Copyright (c) 1990, 1993, 1994
@@ -37,7 +37,7 @@
 #if 0
 static char sccsid[] = "@(#)hash_page.c	8.7 (Berkeley) 8/16/94";
 #else
-__RCSID("$NetBSD: hash_page.c,v 1.16 2003/08/07 16:42:43 agc Exp $");
+__RCSID("$NetBSD: hash_page.c,v 1.18 2006/03/26 02:00:37 rtr Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
@@ -68,6 +68,7 @@ __RCSID("$NetBSD: hash_page.c,v 1.16 2003/08/07 16:42:43 agc Exp $");
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <paths.h>
 #ifdef DEBUG
 #include <assert.h>
 #endif
@@ -857,8 +858,7 @@ __free_ovflpage(hashp, obufp)
 	 * that has already had overflow pages allocated off it, and we
 	 * failed to read it from the file.
 	 */
-	if (!freep)
-		assert(0);
+	assert(freep != NULL);
 #endif
 	CLRBIT(freep, free_bit);
 #ifdef DEBUG2
@@ -878,7 +878,17 @@ open_temp(hashp)
 	HTAB *hashp;
 {
 	sigset_t set, oset;
-	char namestr[] = "_hashXXXXXX";
+	char *envtmp;
+	char namestr[PATH_MAX];
+
+	if (issetugid())
+		envtmp = NULL;
+	else
+		envtmp = getenv("TMPDIR");
+
+	if (-1 == snprintf(namestr, sizeof(namestr), "%s/_hashXXXXXX",
+	    envtmp ? envtmp : _PATH_TMP))
+		return -1;
 
 	/* Block signals; make sure file goes away at process exit. */
 	(void)sigfillset(&set);

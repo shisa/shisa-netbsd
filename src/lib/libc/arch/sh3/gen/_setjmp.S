@@ -1,4 +1,4 @@
-/*	$NetBSD: _setjmp.S,v 1.2 2003/08/07 16:42:19 agc Exp $	*/
+/*	$NetBSD: _setjmp.S,v 1.7 2006/01/05 02:04:41 uwe Exp $	*/
 
 /*-
  * Copyright (c) 1990 The Regents of the University of California.
@@ -35,8 +35,10 @@
  */
 
 #include <machine/asm.h>
+#include <machine/setjmp.h>
+
 #if defined(LIBC_SCCS)
-	RCSID("$NetBSD: _setjmp.S,v 1.2 2003/08/07 16:42:19 agc Exp $")
+	RCSID("$NetBSD: _setjmp.S,v 1.7 2006/01/05 02:04:41 uwe Exp $")
 #endif
 
 /*
@@ -50,9 +52,9 @@
  */
 
 ENTRY(_setjmp)
-	add	#4*10, r4
+	add	#((_JB_HAS_MASK + 1) * 4), r4
 	mov	#0, r0
-	mov.l	r0, @-r4
+	mov.l	r0, @-r4		/* no saved signal mask */
 	mov.l	r15, @-r4
 	mov.l	r14, @-r4
 	mov.l	r13, @-r4
@@ -63,7 +65,8 @@ ENTRY(_setjmp)
 	mov.l	r8, @-r4
 	sts.l	pr, @-r4
 	rts
-	xor	r0, r0
+	 xor	r0, r0
+	SET_ENTRY_SIZE(_setjmp)
 
 ENTRY(_longjmp)
 	lds.l	@r4+, pr
@@ -82,4 +85,5 @@ ENTRY(_longjmp)
 	add	#1, r0
 .L0:
 	rts
-	nop
+	 nop
+	SET_ENTRY_SIZE(_longjmp)

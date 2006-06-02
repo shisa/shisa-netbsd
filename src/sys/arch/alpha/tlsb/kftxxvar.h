@@ -1,4 +1,4 @@
-/* $NetBSD: kftxxvar.h,v 1.3 1997/04/06 20:08:38 cgd Exp $ */
+/* $NetBSD: kftxxvar.h,v 1.5 2005/12/11 12:16:21 christos Exp $ */
 
 /*
  * Copyright (c) 1997 by Matthew Jacob
@@ -38,7 +38,7 @@
  * The structure used to attach devices to the TurboLaser.
  */
 struct kft_dev_attach_args {
-	char *		ka_name;	/*  name */
+	const char	*ka_name;	/*  name */
 	int		ka_node;	/* node number */
 	u_int16_t	ka_dtype;	/* device type */
 	u_int16_t	ka_hosenum;	/* hose number */

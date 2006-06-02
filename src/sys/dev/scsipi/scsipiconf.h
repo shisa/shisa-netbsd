@@ -1,4 +1,4 @@
-/*	$NetBSD: scsipiconf.h,v 1.97 2005/02/27 00:27:48 perry Exp $	*/
+/*	$NetBSD: scsipiconf.h,v 1.103 2006/02/16 20:17:19 perry Exp $	*/
 
 /*-
  * Copyright (c) 1998, 1999, 2000, 2004 The NetBSD Foundation, Inc.
@@ -500,7 +500,7 @@ struct scsipi_xfer {
 	TAILQ_ENTRY(scsipi_xfer) device_q;  /* device's pending xfers */
 	struct callout xs_callout;	/* callout for adapter use */
 	int	xs_control;		/* control flags */
-	__volatile int xs_status;	/* status flags */
+	volatile int xs_status;	/* status flags */
 	struct scsipi_periph *xs_periph;/* peripherial doing the xfer */
 	int	xs_retries;		/* the number of times to retry */
 	int	xs_requeuecnt;		/* number of requeues */
@@ -533,6 +533,11 @@ struct scsipi_xfer {
 
 	struct	scsipi_generic cmdstore
 	    __attribute__ ((aligned (4)));/* stash the command in here */
+
+#ifdef __hppa__
+	/* XXX temp hack until we fix the memory corruption bug */
+	u_int8_t pad[32];
+#endif
 };
 
 /*
@@ -591,9 +596,9 @@ struct scsipi_xfer {
 struct scsipi_inquiry_pattern {
 	u_int8_t type;
 	boolean removable;
-	char *vendor;
-	char *product;
-	char *revision;
+	const char *vendor;
+	const char *product;
+	const char *revision;
 };
 
 /*
@@ -628,10 +633,10 @@ void	scsipi_init(void);
 int	scsipi_command(struct scsipi_periph *, struct scsipi_generic *, int,
 	    u_char *, int, int, int, struct buf *, int);
 void	scsipi_create_completion_thread(void *);
-caddr_t	scsipi_inqmatch(struct scsipi_inquiry_pattern *, caddr_t,
-	    int, int, int *);
+const void *scsipi_inqmatch(struct scsipi_inquiry_pattern *, const void *,
+	    size_t, size_t, int *);
 const char *scsipi_dtype(int);
-void	scsipi_strvis(u_char *, int, u_char *, int);
+void	scsipi_strvis(u_char *, int, const u_char *, int);
 int	scsipi_execute_xs(struct scsipi_xfer *);
 u_int64_t scsipi_size(struct scsipi_periph *, int);
 int	scsipi_test_unit_ready(struct scsipi_periph *, int);
@@ -665,7 +670,7 @@ int	scsipi_thread_call_callback(struct scsipi_channel *,
 void	scsipi_async_event(struct scsipi_channel *,
 	    scsipi_async_event_t, void *);
 int	scsipi_do_ioctl(struct scsipi_periph *, dev_t, u_long, caddr_t,
-	    int, struct proc *);
+	    int, struct lwp *);
 
 void	scsipi_print_xfer_mode(struct scsipi_periph *);
 void	scsipi_set_xfer_mode(struct scsipi_channel *, int, int);

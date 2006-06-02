@@ -1,4 +1,4 @@
-/*	$NetBSD: getservbyport.c,v 1.10.2.1 2005/04/21 16:59:09 tron Exp $	*/
+/*	$NetBSD: getservbyport.c,v 1.11 2005/04/18 19:39:45 kleink Exp $	*/
 
 /*-
  * Copyright (c) 2004 The NetBSD Foundation, Inc.
@@ -38,7 +38,7 @@
 
 #include <sys/cdefs.h>
 #if defined(LIBC_SCCS) && !defined(lint)
-__RCSID("$NetBSD: getservbyport.c,v 1.10.2.1 2005/04/21 16:59:09 tron Exp $");
+__RCSID("$NetBSD: getservbyport.c,v 1.11 2005/04/18 19:39:45 kleink Exp $");
 #endif /* LIBC_SCCS and not lint */
 
 #include "namespace.h"

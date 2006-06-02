@@ -1,4 +1,4 @@
-/*	$NetBSD: promlib.c,v 1.12 2005/01/22 15:36:09 chs Exp $	*/
+/*	$NetBSD: promlib.c,v 1.15 2005/12/24 22:45:40 perry Exp $	*/
 
 /*-
  * Copyright (c) 1996 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: promlib.c,v 1.12 2005/01/22 15:36:09 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: promlib.c,v 1.15 2005/12/24 22:45:40 perry Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -307,7 +307,7 @@ prom_abort(void)
 	 * Already setup "trap #14" in prom_init().
 	 */
 
-	asm(" trap #14 ; _sunmon_continued: nop");
+	__asm(" trap #14 ; _sunmon_continued: nop");
 
 	/* We have continued from a PROM abort! */
 
@@ -335,7 +335,7 @@ prom_halt(void)
  * Caller must pass a string that is in our data segment.
  */
 void 
-prom_boot(char *bs)
+prom_boot(const char *bs)
 {
 	_mode_monitor(&sunmon_kernel_state, 1);
 	(*romVectorPtr->reBoot)(bs);

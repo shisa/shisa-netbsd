@@ -37,7 +37,7 @@
  * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGES.
  *
- * $Id: aic7xxxvar.h,v 1.47.2.1 2005/11/29 10:23:14 tron Exp $
+ * $Id: aic7xxxvar.h,v 1.53 2006/05/11 01:02:15 mrg Exp $
  *
  * $FreeBSD: /repoman/r/ncvs/src/sys/dev/aic7xxx/aic7xxx.h,v 1.44 2003/01/20 20:44:55 gibbs Exp $
  */
@@ -171,8 +171,8 @@ struct seeprom_descriptor;
 	((scsiid) & OID)
 #define SCSIID_CHANNEL(ahc, scsiid) \
 	((((ahc)->features & AHC_TWIN) != 0) \
-        ? ((((scsiid) & TWIN_CHNLB) != 0) ? 'B' : 'A') \
-       : 'A')
+	? ((((scsiid) & TWIN_CHNLB) != 0) ? 'B' : 'A') \
+	: 'A')
 #define	SCB_IS_SCSIBUS_B(ahc, scb) \
 	(SCSIID_CHANNEL(ahc, (scb)->hscb->scsiid) == 'B')
 #define	SCB_GET_OUR_ID(scb) \
@@ -190,7 +190,7 @@ struct seeprom_descriptor;
 #ifdef AHC_DEBUG
 #define SCB_IS_SILENT(scb)					\
 	((ahc_debug & AHC_SHOW_MASKED_ERRORS) == 0		\
-      && (((scb)->flags & SCB_SILENT) != 0))
+	&& (((scb)->flags & SCB_SILENT) != 0))
 #else
 #define SCB_IS_SILENT(scb)					\
 	(((scb)->flags & SCB_SILENT) != 0)
@@ -225,7 +225,7 @@ struct seeprom_descriptor;
  * The maximum transfer per S/G segment.
  * Limited by MAXPHYS or a 24-bit counter.
  */
-#define AHC_MAXTRANSFER_SIZE	 MIN(MAXPHYS,0x00ffffff)
+#define AHC_MAXTRANSFER_SIZE	MIN(MAXPHYS,0x00ffffff)
 
 /*
  * The maximum amount of SCB storage in hardware on a controller.
@@ -415,8 +415,7 @@ typedef enum {
 	AHC_USEDEFAULTS	      = 0x004,  /*
 					 * For cards without an seeprom
 					 * or a BIOS to initialize the chip's
-					 * SRAM, we use the default target
-					 * settings.
+					 * SRAM, we use the default settings.
 					 */
 	AHC_SEQUENCER_DEBUG   = 0x008,
 	AHC_SHARED_SRAM	      = 0x010,
@@ -455,7 +454,14 @@ typedef enum {
 	AHC_LSCBS_ENABLED     = 0x2000000, /* 64Byte SCBs enabled */
 	AHC_SCB_CONFIG_USED   = 0x4000000, /* No SEEPROM but SCB2 had info. */
 	AHC_NO_BIOS_INIT      = 0x8000000, /* No BIOS left over settings. */
-	AHC_DISABLE_PCI_PERR  = 0x10000000
+	AHC_DISABLE_PCI_PERR  = 0x10000000,
+	AHC_USETARGETDEFAULTS = 0x20000000 /* 
+					    * For cards without an seeprom but
+					    * with BIOS which initializes chip's
+					    * SRAM with some conservative target
+					    * settings, we use the default
+					    * SCSI target settings.
+					    */
 } ahc_flag;
 
 /************************* Hardware  SCB Definition ***************************/
@@ -854,7 +860,7 @@ struct ahc_syncrate {
 #define		ST_SXFR	   0x010	/* Rate Single Transition Only */
 #define		DT_SXFR	   0x040	/* Rate Double Transition Only */
 	uint8_t period; /* Period to send to SCSI target */
-	char *rate;
+	const char *rate;
 };
 
 /* Safe and valid period for async negotiations. */
@@ -877,9 +883,9 @@ struct ahc_syncrate {
  * to parity errors in each phase table.
  */
 struct ahc_phase_table_entry {
-        uint8_t phase;
-        uint8_t mesg_out; /* Message response to parity errors */
-	char *phasemsg;
+	uint8_t phase;
+	uint8_t mesg_out; /* Message response to parity errors */
+	const char *phasemsg;
 };
 
 /************************** Serial EEPROM Format ******************************/
@@ -1229,11 +1235,9 @@ typedef int (ahc_device_setup_t)(struct ahc_softc *);
 struct ahc_pci_identity {
 	uint64_t		 full_id;
 	uint64_t		 id_mask;
-	char			*name;
+	const char		*name;
 	ahc_device_setup_t	*setup;
 };
-extern struct ahc_pci_identity ahc_pci_ident_table [];
-extern const u_int ahc_num_pci_devs;
 
 /***************************** VL/EISA Declarations ***************************/
 struct aic7770_identity {
@@ -1253,12 +1257,6 @@ extern const int ahc_num_aic7770_devs;
 u_int			ahc_index_busy_tcl(struct ahc_softc *, u_int);
 void			ahc_unbusy_tcl(struct ahc_softc *, u_int);
 void			ahc_busy_tcl(struct ahc_softc *, u_int, u_int);
-
-/***************************** PCI Front End *********************************/
-const struct ahc_pci_identity	*ahc_find_pci_device(pcireg_t, pcireg_t, u_int);
-int			 ahc_pci_config(struct ahc_softc *,
-			    struct ahc_pci_identity *);
-int			 ahc_pci_test_register_access(struct ahc_softc *);
 
 /*************************** EISA/VL Front End ********************************/
 struct aic7770_identity *aic7770_find_device(uint32_t);
@@ -1291,7 +1289,6 @@ int			 ahc_reset(struct ahc_softc *);
 void			 ahc_shutdown(void *);
 
 /*************************** Interrupt Services *******************************/
-void			ahc_pci_intr(struct ahc_softc *);
 void			ahc_clear_intstat(struct ahc_softc *);
 void			ahc_run_qoutfifo(struct ahc_softc *);
 #ifdef AHC_TARGET_MODE

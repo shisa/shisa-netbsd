@@ -1,4 +1,4 @@
-/*	$NetBSD: sunscpal.c,v 1.17 2005/02/27 00:27:02 perry Exp $	*/
+/*	$NetBSD: sunscpal.c,v 1.20 2005/12/24 20:27:30 perry Exp $	*/
 
 /*
  * Copyright (c) 2001 Matthew Fredette
@@ -76,7 +76,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: sunscpal.c,v 1.17 2005/02/27 00:27:02 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: sunscpal.c,v 1.20 2005/12/24 20:27:30 perry Exp $");
 
 #include "opt_ddb.h"
 
@@ -163,7 +163,7 @@ void	sunscpal_show_state(void);
 
 #endif	/* SUNSCPAL_DEBUG */
 
-static char *
+static const char *
 phase_names[8] = {
 	"DATA_OUT",
 	"DATA_IN",
@@ -201,12 +201,12 @@ int sunscpal_wait_phase_timo = 1000 * 10 * 300;	/* 5 min. */
 int sunscpal_wait_req_timo = 1000 * 50;	/* X2 = 100 mS. */
 int sunscpal_wait_nrq_timo = 1000 * 25;	/* X2 =  50 mS. */
 
-static __inline int sunscpal_wait_req(struct sunscpal_softc *);
-static __inline int sunscpal_wait_not_req(struct sunscpal_softc *);
-static __inline void sunscpal_sched_msgout(struct sunscpal_softc *, int);
+static inline int sunscpal_wait_req(struct sunscpal_softc *);
+static inline int sunscpal_wait_not_req(struct sunscpal_softc *);
+static inline void sunscpal_sched_msgout(struct sunscpal_softc *, int);
 
 /* Return zero on success. */
-static __inline int sunscpal_wait_req(sc)
+static inline int sunscpal_wait_req(sc)
 	struct sunscpal_softc *sc;
 {
 	int timo = sunscpal_wait_req_timo;
@@ -223,7 +223,7 @@ static __inline int sunscpal_wait_req(sc)
 }
 
 /* Return zero on success. */
-static __inline int sunscpal_wait_not_req(sc)
+static inline int sunscpal_wait_not_req(sc)
 	struct sunscpal_softc *sc;
 {
 	int timo = sunscpal_wait_nrq_timo;
@@ -416,7 +416,7 @@ out:
 }
 
 /* Ask the target for a MSG_OUT phase. */
-static __inline void
+static inline void
 sunscpal_sched_msgout(sc, msg_code)
 	struct sunscpal_softc *sc;
 	int msg_code;

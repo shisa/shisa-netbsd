@@ -59,8 +59,10 @@
 #ifndef HEADER_RC4_H
 #define HEADER_RC4_H
 
-#include <sys/types.h>
-#define RC4_INT u_int32_t
+#include <openssl/opensslconf.h> /* OPENSSL_NO_RC4, RC4_INT */
+#ifdef OPENSSL_NO_RC4
+#error RC4 is disabled.
+#endif
 
 #ifdef  __cplusplus
 extern "C" {

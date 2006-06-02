@@ -1,4 +1,4 @@
-/*	$NetBSD: pam_skey.c,v 1.1.2.1 2005/03/21 23:04:08 tron Exp $	*/
+/*	$NetBSD: pam_skey.c,v 1.2 2005/03/20 16:48:47 christos Exp $	*/
 
 /*-
  * Copyright (c) 2005 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: pam_skey.c,v 1.1.2.1 2005/03/21 23:04:08 tron Exp $");
+__RCSID("$NetBSD: pam_skey.c,v 1.2 2005/03/20 16:48:47 christos Exp $");
 
 #include <sys/types.h>
 #include <string.h>

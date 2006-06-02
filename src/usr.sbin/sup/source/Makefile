@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.21 2003/04/03 20:32:41 christos Exp $
+#	$NetBSD: Makefile,v 1.24 2006/04/02 01:39:48 christos Exp $
 # Copyright (c) 1992,1991 Carnegie Mellon University
 # All Rights Reserved.
 # 
@@ -51,6 +51,7 @@
 SITE1			!= uname -s | tr '[a-z]' '[A-Z]'
 SITE2			=$(shell uname -s | tr '[a-z]' '[A-Z]')
 SITE			= ${SITE1}${SITE2}
+TARDIR			= sup-0.0
 
 LINUX_DEFINES		= -UMACH -DVAR_TMP -DHAS_DAEMON -DHAS_POSIX_DIR
 NETBSD_DEFINES		= -UMACH -DVAR_TMP -DHAS_DAEMON -DHAS_POSIX_DIR \
@@ -66,9 +67,10 @@ NON_MACH_DEFINES	= -UMACH
 
 
 #INSTALLATION PARAMETERS
-NETBSD_BINDIR		= /usr/local/sbin
-NETBSD_MAN1		= /usr/local/man/man1
-NETBSD_MAN8		= /usr/local/man/man8
+PREFIX		       ?= /usr/local/
+NETBSD_BINDIR		= ${PREFIX}/sbin
+NETBSD_MAN1		= ${PREFIX}/man/man1
+NETBSD_MAN8		= ${PREFIX}/man/man8
 
 CFLAGS			= ${DEFS} -O -I.
 
@@ -76,7 +78,7 @@ SUPCL			= supcmain.o supcvers.o supcparse.o supcname.o \
 			  supcmisc.o supcmeat.o
 SUPS			= scm.o scmio.o stree.o log.o supmsg.o netcrypt.o
 EXTRA			= atoo.o errmsg.o expand.o ffilecopy.o filecopy.o \
-			  nxtarg.o path.o quit.o read_line.o run.o salloc.o \
+			  nxtarg.o path.o quit.o read_line.o run.o estrdup.o \
 			  skipto.o vprintf.o
 
 
@@ -100,18 +102,18 @@ SOLARIS_LIBS		= -lsocket -lnsl
 SUNOS_LIBS		= 
 
 DEFS			= -UCMUCS -UCMU  ${${SITE}_DEFINES}
-LIBS			= ${EXTRALIBS} ${${SITE}_LIBS}
+LIBS			= ${EXTRALIBS}
 
 all: ${PROGRAMS}
 
 sup: ${sup_OFILES} ${LIBS}
-	${CC} ${CFLAGS} -o sup ${sup_OFILES} ${LIBS} ${LIBS}
+	${CC} ${CFLAGS} -o sup ${sup_OFILES} ${LIBS} ${${SITE}_LIBS}
 
 supfilesrv: ${supfilesrv_OFILES} ${supfilesrv_LIBS}
-	${CC} ${CFLAGS} -o supfilesrv ${supfilesrv_OFILES} ${supfilesrv_LIBS} ${LIBS}
+	${CC} ${CFLAGS} -o supfilesrv ${supfilesrv_OFILES} ${supfilesrv_LIBS} ${LIBS} ${${SITE}_LIBS}
 
 supscan:  ${supscan_OFILES} ${LIBS}
-	${CC} ${CFLAGS} -o supscan ${supscan_OFILES} ${LIBS}
+	${CC} ${CFLAGS} -o supscan ${supscan_OFILES} ${LIBS} ${${SITE}_LIBS}
 
 libextra.a: ${EXTRA}
 	ar r libextra.a $?
@@ -128,6 +130,13 @@ install: ${PROGRAMS}
 netcrypt.c:
 	@echo "[ Using netcryptvoid.c ]"
 	cp netcryptvoid.c netcrypt.c
+
+tar:
+	mkdir ${TARDIR} ${TARDIR}/sys
+	cp -p *.[ch18] Makefile ${TARDIR}
+	cp -p sys/*.h ${TARDIR}/sys
+	tar -czf ${TARDIR}.tar.gz ${TARDIR}
+	rm -fr ${TARDIR}
 
 read_line.o: supextern.h
 scan.o:	sup.h

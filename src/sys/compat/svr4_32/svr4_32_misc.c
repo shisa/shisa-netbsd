@@ -1,4 +1,4 @@
-/*	$NetBSD: svr4_32_misc.c,v 1.30.2.1 2005/10/01 10:39:27 tron Exp $	 */
+/*	$NetBSD: svr4_32_misc.c,v 1.35 2006/03/01 12:38:12 yamt Exp $	 */
 
 /*-
  * Copyright (c) 1994 The NetBSD Foundation, Inc.
@@ -44,7 +44,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: svr4_32_misc.c,v 1.30.2.1 2005/10/01 10:39:27 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: svr4_32_misc.c,v 1.35 2006/03/01 12:38:12 yamt Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -104,7 +104,7 @@ __KERNEL_RCSID(0, "$NetBSD: svr4_32_misc.c,v 1.30.2.1 2005/10/01 10:39:27 tron E
 
 static int svr4_to_bsd_mmap_flags __P((int));
 
-static __inline clock_t timeval_to_clock_t __P((struct timeval *));
+static inline clock_t timeval_to_clock_t __P((struct timeval *));
 static int svr4_32_setinfo	__P((struct proc *, int, svr4_32_siginfo_tp));
 
 struct svr4_32_hrtcntl_args;
@@ -217,7 +217,7 @@ svr4_32_sys_execve(p, v, retval)
 	sg = stackgap_init(p, 0);
 
 	SCARG(&ap, path) = (const char *)(u_long)SCARG(uap, path);
-	CHECK_ALT_EXIST(p, &sg, SCARG(&ap, path));
+	CHECK_ALT_EXIST(l, &sg, SCARG(&ap, path));
 	SCARG(&ap, argp) = (char **)(u_long)SCARG(uap, argp);
 	SCARG(&ap, envp) = (char **)(u_long)SCARG(uap, envp);
 
@@ -265,7 +265,7 @@ svr4_32_sys_getdents64(l, v, retval)
 	struct proc *p = l->l_proc;
 	struct dirent *bdp;
 	struct vnode *vp;
-	caddr_t inp, buf;	/* BSD-format */
+	caddr_t inp, sbuf;	/* BSD-format */
 	int len, reclen;	/* BSD-format */
 	caddr_t outp;		/* SVR4-format */
 	int resid, svr4_32_reclen;	/* SVR4-format */
@@ -294,19 +294,18 @@ svr4_32_sys_getdents64(l, v, retval)
 	}
 
 	buflen = min(MAXBSIZE, SCARG(uap, nbytes));
-	buf = malloc(buflen, M_TEMP, M_WAITOK);
+	sbuf = malloc(buflen, M_TEMP, M_WAITOK);
 	vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);
 	off = fp->f_offset;
 again:
-	aiov.iov_base = buf;
+	aiov.iov_base = sbuf;
 	aiov.iov_len = buflen;
 	auio.uio_iov = &aiov;
 	auio.uio_iovcnt = 1;
 	auio.uio_rw = UIO_READ;
-	auio.uio_segflg = UIO_SYSSPACE;
-	auio.uio_procp = NULL;
 	auio.uio_resid = buflen;
 	auio.uio_offset = off;
+	UIO_SETUP_SYSSPACE(&auio);
 	/*
          * First we read into the malloc'ed buffer, then
          * we massage it into user space, one record at a time.
@@ -316,7 +315,7 @@ again:
 	if (error)
 		goto out;
 
-	inp = buf;
+	inp = sbuf;
 	outp = (char *)(u_long) SCARG(uap, dp);
 	resid = SCARG(uap, nbytes);
 	if ((len = buflen - auio.uio_resid) == 0)
@@ -374,9 +373,9 @@ out:
 	VOP_UNLOCK(vp, 0);
 	if (cookiebuf)
 		free(cookiebuf, M_TEMP);
-	free(buf, M_TEMP);
+	free(sbuf, M_TEMP);
  out1:
-	FILE_UNUSE(fp, p);
+	FILE_UNUSE(fp, l);
 	return error;
 }
 
@@ -391,7 +390,7 @@ svr4_32_sys_getdents(l, v, retval)
 	struct proc *p = l->l_proc;
 	struct dirent *bdp;
 	struct vnode *vp;
-	caddr_t inp, buf;	/* BSD-format */
+	caddr_t inp, sbuf;	/* BSD-format */
 	int len, reclen;	/* BSD-format */
 	caddr_t outp;		/* SVR4-format */
 	int resid, svr4_reclen;	/* SVR4-format */
@@ -420,19 +419,18 @@ svr4_32_sys_getdents(l, v, retval)
 	}
 
 	buflen = min(MAXBSIZE, SCARG(uap, nbytes));
-	buf = malloc(buflen, M_TEMP, M_WAITOK);
+	sbuf = malloc(buflen, M_TEMP, M_WAITOK);
 	vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);
 	off = fp->f_offset;
 again:
-	aiov.iov_base = buf;
+	aiov.iov_base = sbuf;
 	aiov.iov_len = buflen;
 	auio.uio_iov = &aiov;
 	auio.uio_iovcnt = 1;
 	auio.uio_rw = UIO_READ;
-	auio.uio_segflg = UIO_SYSSPACE;
-	auio.uio_procp = NULL;
 	auio.uio_resid = buflen;
 	auio.uio_offset = off;
+	UIO_SETUP_SYSSPACE(&auio);
 	/*
          * First we read into the malloc'ed buffer, then
          * we massage it into user space, one record at a time.
@@ -442,7 +440,7 @@ again:
 	if (error)
 		goto out;
 
-	inp = buf;
+	inp = sbuf;
 	outp = (caddr_t)(u_long)SCARG(uap, buf);
 	resid = SCARG(uap, nbytes);
 	if ((len = buflen - auio.uio_resid) == 0)
@@ -501,9 +499,9 @@ out:
 	VOP_UNLOCK(vp, 0);
 	if (cookiebuf)
 		free(cookiebuf, M_TEMP);
-	free(buf, M_TEMP);
+	free(sbuf, M_TEMP);
  out1:
-	FILE_UNUSE(fp, p);
+	FILE_UNUSE(fp, l);
 	return error;
 }
 
@@ -610,7 +608,7 @@ svr4_32_mknod(l, retval, path, mode, dev)
 {
 	caddr_t sg = stackgap_init(l->l_proc, 0);
 
-	CHECK_ALT_CREAT(l->l_proc, &sg, path);
+	CHECK_ALT_CREAT(l, &sg, path);
 
 	if (S_ISFIFO(mode)) {
 		struct sys_mkfifo_args ap;
@@ -843,7 +841,7 @@ svr4_32_sys_break(l, v, retval)
 }
 
 
-static __inline clock_t
+static inline clock_t
 timeval_to_clock_t(tv)
 	struct timeval *tv;
 {
@@ -1316,7 +1314,7 @@ svr4_32_sys_statvfs(l, v, retval)
 	int error;
 
 	SCARG(&fs_args, path) = (caddr_t)(u_long)SCARG(uap, path);
-	CHECK_ALT_EXIST(p, &sg, SCARG(&fs_args, path));
+	CHECK_ALT_EXIST(l, &sg, SCARG(&fs_args, path));
 	SCARG(&fs_args, buf) = fs;
 	SCARG(&fs_args, flags) = ST_WAIT;
 
@@ -1379,7 +1377,7 @@ svr4_32_sys_statvfs64(l, v, retval)
 	int error;
 
 	SCARG(&fs_args, path) = (caddr_t)(u_long)SCARG(uap, path);
-	CHECK_ALT_EXIST(p, &sg, SCARG(&fs_args, path));
+	CHECK_ALT_EXIST(l, &sg, SCARG(&fs_args, path));
 	SCARG(&fs_args, buf) = fs;
 	SCARG(&fs_args, flags) = ST_WAIT;
 
@@ -1608,13 +1606,12 @@ svr4_32_sys_resolvepath(l, v, retval)
 	register_t *retval;
 {
 	struct svr4_32_sys_resolvepath_args *uap = v;
-	struct proc *p = l->l_proc;
 	struct nameidata nd;
 	int error;
 	size_t len;
 
 	NDINIT(&nd, LOOKUP, NOFOLLOW | SAVENAME, UIO_USERSPACE,
-	    (const char *)(u_long)SCARG(uap, path), p);
+	    (const char *)(u_long)SCARG(uap, path), l);
 
 	if ((error = namei(&nd)) != 0)
 		return error;

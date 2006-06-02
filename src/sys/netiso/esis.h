@@ -1,4 +1,4 @@
-/*	$NetBSD: esis.h,v 1.16 2004/04/20 02:13:26 matt Exp $	*/
+/*	$NetBSD: esis.h,v 1.19 2005/12/11 12:25:12 christos Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -57,6 +57,9 @@ SOFTWARE.
 /*
  * ARGO Project, Computer Sciences Dept., University of Wisconsin - Madison
  */
+
+#ifndef _NETISO_ESIS_H_
+#define _NETISO_ESIS_H_
 
 #include <machine/endian.h>
 
@@ -127,7 +130,7 @@ struct sockaddr_dl;
 
 void esis_init (void);
 int esis_usrreq (struct socket *, int, struct mbuf *, struct mbuf *,
-		     struct mbuf *, struct proc *);
+		     struct mbuf *, struct lwp *);
 void esis_input (struct mbuf *, ...);
 void esis_rdoutput (struct snpa_hdr *, struct mbuf *, struct clnp_optidx *,
 			struct iso_addr *, struct rtentry *);
@@ -137,9 +140,11 @@ void esis_eshinput (struct mbuf *, struct snpa_hdr *);
 void esis_ishinput (struct mbuf *, struct snpa_hdr *);
 void esis_rdinput (struct mbuf *, struct snpa_hdr *);
 void esis_config (void *);
-void esis_shoutput (struct ifnet *, int, int, caddr_t, int,
+void esis_shoutput (struct ifnet *, int, int, const void *, int,
 	               struct iso_addr *);
 void isis_input (struct mbuf *, ...);
 int isis_output (struct mbuf *, ...);
 void *esis_ctlinput (int, struct sockaddr *, void *);
 #endif /* _KERNEL */
+
+#endif /* !_NETISO_ESIS_H_ */

@@ -1,4 +1,4 @@
-/*	$NetBSD: md.c,v 1.18 2004/08/14 16:06:40 dsl Exp $	*/
+/*	$NetBSD: md.c,v 1.20 2006/04/05 16:55:05 garbled Exp $	*/
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.
@@ -57,8 +57,6 @@ void backtowin(void);
 
 static int
 filecore_checksum(u_char *bootblock);
-
-const char *fdtype = "msdos";
 
 /*
  * static int filecore_checksum(u_char *bootblock)
@@ -348,4 +346,10 @@ md_pre_update(void)
 void
 md_init(void)
 {
+}
+
+int
+md_post_extract(void)
+{
+	return 0;
 }

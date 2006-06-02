@@ -1,4 +1,4 @@
-/*	$NetBSD: if_media.h,v 1.42 2004/11/11 20:34:30 dsl Exp $	*/
+/*	$NetBSD: if_media.h,v 1.45 2006/05/18 09:05:51 liamjfoy Exp $	*/
 
 /*-
  * Copyright (c) 1998, 2000, 2001 The NetBSD Foundation, Inc.
@@ -231,10 +231,15 @@ u_quad_t	ifmedia_baudrate(int);
 #define	IFM_IEEE80211_TURBO	 0x00000800	/* Operate in Turbo mode */
 
 /* operating mode for multi-mode devices */
-#define	IFM_IEEE80211_11A	0x00010000	/* 5Ghz, OFDM mode */
+#define	IFM_IEEE80211_11A	0x00010000	/* 5 GHz, OFDM mode */
 #define	IFM_IEEE80211_11B	0x00020000	/* Direct Sequence mode */
-#define	IFM_IEEE80211_11G	0x00030000	/* 2Ghz, CCK mode */
-#define	IFM_IEEE80211_FH	0x00040000	/* 2Ghz, GFSK mode */
+#define	IFM_IEEE80211_11G	0x00030000	/* 2 GHz, CCK mode */
+#define	IFM_IEEE80211_FH	0x00040000	/* 2 GHz, GFSK mode */
+
+/*
+ * Common Access Redundancy Protocol
+ */
+#define	IFM_CARP		0x000000c0
 
 /*
  * Shared media sub-types
@@ -332,6 +337,7 @@ struct ifmedia_description {
 	{ IFM_TOKEN,			"token" },			\
 	{ IFM_FDDI,			"FDDI" },			\
 	{ IFM_IEEE80211,		"IEEE802.11" },			\
+	{ IFM_CARP,			"CARP" },			\
 	{ 0, NULL },							\
 }
 
@@ -575,6 +581,9 @@ struct ifmedia_status_description {
 	{ IFM_IEEE80211,	IFM_AVALID,	IFM_ACTIVE,		\
 	  { "no network", "active" } },					\
 									\
+	{ IFM_CARP,		IFM_AVALID,	IFM_ACTIVE,		\
+	    { "backup", "master" } },					\
+									\
 	{ 0,			0,		0,			\
 	  { NULL, NULL } },						\
 }
@@ -591,4 +600,4 @@ int get_media_options(int, const char *, char **);
 int lookup_media_word(struct ifmedia_description *, int, const char *);
 #endif /* _KERNEL */
 
-#endif	/* _NET_IF_MEDIA_H_ */
+#endif /* !_NET_IF_MEDIA_H_ */

@@ -1,4 +1,4 @@
-/*	$NetBSD: pathnames.h,v 1.14 2004/05/07 00:04:40 ross Exp $	*/
+/*	$NetBSD: pathnames.h,v 1.16 2005/06/24 04:33:25 lukem Exp $	*/
 
 /*
  * Copyright (c) 1990, 1993

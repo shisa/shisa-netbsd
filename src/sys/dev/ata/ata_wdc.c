@@ -1,4 +1,4 @@
-/*	$NetBSD: ata_wdc.c,v 1.79.2.1 2005/07/06 22:03:02 tron Exp $	*/
+/*	$NetBSD: ata_wdc.c,v 1.83 2005/12/11 12:21:14 christos Exp $	*/
 
 /*
  * Copyright (c) 1998, 2001, 2003 Manuel Bouyer.
@@ -66,7 +66,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ata_wdc.c,v 1.79.2.1 2005/07/06 22:03:02 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ata_wdc.c,v 1.83 2005/12/11 12:21:14 christos Exp $");
 
 #ifndef ATADEBUG
 #define ATADEBUG
@@ -183,7 +183,7 @@ wdc_ata_bio_start(struct ata_channel *chp, struct ata_xfer *xfer)
 	struct ata_bio *ata_bio = xfer->c_cmd;
 	struct ata_drive_datas *drvp = &chp->ch_drive[xfer->c_drive];
 	int wait_flags = (xfer->c_flags & C_POLL) ? AT_POLL : 0;
-	char *errstring;
+	const char *errstring;
 
 	ATADEBUG_PRINT(("wdc_ata_bio_start %s:%d:%d\n",
 	    atac->atac_dev.dv_xname, chp->ch_channel, xfer->c_drive),
@@ -196,7 +196,7 @@ wdc_ata_bio_start(struct ata_channel *chp, struct ata_xfer *xfer)
 		 * state if the device is currently busy, but we can assume
 		 * that we never get to this point if that's the case.
 		 */
-		/* If it's not a polled command, we need the kenrel thread */
+		/* If it's not a polled command, we need the kernel thread */
 		if ((xfer->c_flags & C_POLL) == 0 &&
 		    (chp->ch_flags & ATACH_TH_RUN) == 0) {
 			chp->ch_queue->queue_freeze++;

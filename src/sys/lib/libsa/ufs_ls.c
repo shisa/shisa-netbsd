@@ -1,4 +1,4 @@
-/*	$NetBSD: ufs_ls.c,v 1.9 2005/02/26 22:58:57 perry Exp $	 */
+/*	$NetBSD: ufs_ls.c,v 1.13 2006/01/25 18:27:23 christos Exp $	 */
 
 /*
  * Copyright (c) 1993
@@ -65,10 +65,12 @@
 
 #define NELEM(x) (sizeof (x) / sizeof(*x))
 
+
+typedef uint32_t ino32_t;
 typedef struct entry_t entry_t;
 struct entry_t {
 	entry_t	*e_next;
-	ino_t	e_ino;
+	ino32_t	e_ino;
 	uint8_t	e_type;
 	char	e_name[1];
 };
@@ -107,8 +109,10 @@ fn_match(const char *fname, const char *pattern)
 
 	if (pc != '*')
 		return 0;
-	/* Too hard (and unnecessary really) too check for "*?name" etc....
-	   "**" will look for a '*' and "*?" a '?' */
+	/*
+	 * Too hard (and unnecessary really) too check for "*?name" etc....
+	 * "**" will look for a '*' and "*?" a '?'
+	 */
 	pc = *pattern++;
 	if (!pc)
 		return 1;
@@ -145,7 +149,7 @@ ufs_ls(const char *path)
 			memcpy(p, path, size);
 			p[size] = 0;
 			fd = open(p, 0);
-			free(p, size + 1);
+			dealloc(p, size + 1);
 		} else {
 			fd = open("", 0);
 			fname = path;
@@ -217,7 +221,7 @@ ufs_ls(const char *path)
 			printf("%d: %s (%s)\n",
 				n->e_ino, n->e_name, typestr[n->e_type]);
 			names = n->e_next;
-			free(n, 0);
+			dealloc(n, 0);
 		} while (names);
 	} else {
 		printf( "%s not found\n", path );

@@ -1,4 +1,4 @@
-/*	$NetBSD: proposal.c,v 1.1.1.2.2.3 2005/11/21 21:12:30 tron Exp $	*/
+/*	$NetBSD: proposal.c,v 1.6 2005/11/21 14:20:29 manu Exp $	*/
 
 /* Id: proposal.c,v 1.13.8.5 2005/07/28 05:05:52 manubsd Exp */
 

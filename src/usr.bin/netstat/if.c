@@ -1,4 +1,4 @@
-/*	$NetBSD: if.c,v 1.58 2004/11/16 05:59:32 itojun Exp $	*/
+/*	$NetBSD: if.c,v 1.60 2006/05/28 16:51:40 elad Exp $	*/
 
 /*
  * Copyright (c) 1983, 1988, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "from: @(#)if.c	8.2 (Berkeley) 2/21/94";
 #else
-__RCSID("$NetBSD: if.c,v 1.58 2004/11/16 05:59:32 itojun Exp $");
+__RCSID("$NetBSD: if.c,v 1.60 2006/05/28 16:51:40 elad Exp $");
 #endif
 #endif /* not lint */
 
@@ -54,6 +54,7 @@ __RCSID("$NetBSD: if.c,v 1.58 2004/11/16 05:59:32 itojun Exp $");
 #include <netiso/iso_var.h>
 #include <arpa/inet.h>
 
+#include <kvm.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -198,10 +199,10 @@ intpr(interval, ifnetaddr, pfunc)
 				 */
 				in = inet_makeaddr(ifaddr.in.ia_subnet,
 					INADDR_ANY);
-				cp = netname(in.s_addr,
+				cp = netname4(in.s_addr,
 					ifaddr.in.ia_subnetmask);
 #else
-				cp = netname(ifaddr.in.ia_subnet,
+				cp = netname4(ifaddr.in.ia_subnet,
 					ifaddr.in.ia_subnetmask);
 #endif
 				if (vflag)
@@ -209,7 +210,7 @@ intpr(interval, ifnetaddr, pfunc)
 				else
 					n = 13;
 				printf("%-*.*s ", n, n, cp);
-				cp = routename(sin->sin_addr.s_addr);
+				cp = routename4(sin->sin_addr.s_addr);
 				if (vflag)
 					n = strlen(cp) < 17 ? 17 : strlen(cp);
 				else
@@ -225,7 +226,7 @@ intpr(interval, ifnetaddr, pfunc)
 						kread(multiaddr, (char *)&inm,
 						   sizeof inm);
 						printf("\n%25s %-17.17s ", "",
-						   routename(
+						   routename4(
 						      inm.inm_addr.s_addr));
 						multiaddr =
 						   (u_long)inm.inm_list.le_next;
@@ -248,7 +249,7 @@ intpr(interval, ifnetaddr, pfunc)
 				}
 #endif
 				cp = netname6(&ifaddr.in6.ia_addr,
-					&ifaddr.in6.ia_prefixmask.sin6_addr);
+					&ifaddr.in6.ia_prefixmask);
 				if (vflag)
 					n = strlen(cp) < 13 ? 13 : strlen(cp);
 				else

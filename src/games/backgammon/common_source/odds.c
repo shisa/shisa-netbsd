@@ -1,4 +1,4 @@
-/*	$NetBSD: odds.c,v 1.5 2003/08/07 09:36:57 agc Exp $	*/
+/*	$NetBSD: odds.c,v 1.7 2006/03/22 04:22:05 christos Exp $	*/
 
 /*
  * Copyright (c) 1980, 1993
@@ -34,15 +34,14 @@
 #if 0
 static char sccsid[] = "@(#)odds.c	8.1 (Berkeley) 5/31/93";
 #else
-__RCSID("$NetBSD: odds.c,v 1.5 2003/08/07 09:36:57 agc Exp $");
+__RCSID("$NetBSD: odds.c,v 1.7 2006/03/22 04:22:05 christos Exp $");
 #endif
 #endif /* not lint */
 
 #include "back.h"
 
 void
-odds(r1, r2, val)
-	int     r1, r2, val;
+odds(int r1, int r2, int val)
 {
 	int     i, j;
 
@@ -66,7 +65,7 @@ odds(r1, r2, val)
 }
 
 int
-count()
+count(void)
 {
 	int     i;
 	int     j;
@@ -80,8 +79,7 @@ count()
 }
 
 int
-canhit(i, c)
-	int     i, c;
+canhit(int i, int c)
 {
 	int     j, k, b;
 	int     a, diff, place, addon, menstuck;
@@ -101,7 +99,7 @@ canhit(i, c)
 		if (board[j] * a > 0) {
 			diff = abs(j - i);
 			addon = place + ((board[j] * a > 2 || j == b) ? 5 : 0);
-			if ((j == b && menstuck == 1) &&
+			if ((j == b && menstuck == 1) ||
 			    (j != b && menstuck == 0))
 				for (k = 1; k < diff; k++)
 					if (k < 7 && diff - k < 7 &&

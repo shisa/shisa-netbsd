@@ -1,4 +1,4 @@
-/*	$NetBSD: file.c,v 1.73.2.2 2005/11/27 15:46:04 riz Exp $	*/
+/*	$NetBSD: file.c,v 1.78 2006/05/11 23:50:15 mrg Exp $	*/
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -17,7 +17,7 @@
 #if 0
 static const char *rcsid = "from FreeBSD Id: file.c,v 1.29 1997/10/08 07:47:54 charnier Exp";
 #else
-__RCSID("$NetBSD: file.c,v 1.73.2.2 2005/11/27 15:46:04 riz Exp $");
+__RCSID("$NetBSD: file.c,v 1.78 2006/05/11 23:50:15 mrg Exp $");
 #endif
 #endif
 
@@ -553,7 +553,7 @@ move_files(const char *dir, const char *pattern, const char *to)
 {
 	char	fpath[MaxPathSize];
 	glob_t	globbed;
-	int	i;
+	size_t	i;
 
 	(void) snprintf(fpath, sizeof(fpath), "%s/%s", dir, pattern);
 	if ((i=glob(fpath, GLOB_NOSORT, NULL, &globbed)) != 0) {
@@ -651,7 +651,7 @@ unpack(const char *pkg, const lfile_head_t *filesp)
 	} else
 		decompress_cmd = GZIP_CMD;
 
-	up_argv[i] = strrchr(TAR_CMD, '/');
+	up_argv[i] = (char *)strrchr(TAR_CMD, '/');
 	if (up_argv[i] == NULL)
 		up_argv[i] = TAR_CMD;
 	else
@@ -676,7 +676,7 @@ unpack(const char *pkg, const lfile_head_t *filesp)
 		printf("\n");
 	}
 
-	result = pfcexec(NULL, (const char **)up_argv);
+	result = pfcexec(NULL, TAR_CMD, (const char **)up_argv);
 	free(up_argv);
 	if (result != 0) {
 		warnx("extract of %s failed", pkg);

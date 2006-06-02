@@ -1,4 +1,4 @@
-/*      $NetBSD: if_atmsubr.c,v 1.34 2005/02/26 22:45:09 perry Exp $       */
+/*      $NetBSD: if_atmsubr.c,v 1.37 2005/12/11 23:05:24 thorpej Exp $       */
 
 /*
  *
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_atmsubr.c,v 1.34 2005/02/26 22:45:09 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_atmsubr.c,v 1.37 2005/12/11 23:05:24 thorpej Exp $");
 
 #include "opt_inet.h"
 #include "opt_gateway.h"
@@ -98,14 +98,11 @@ __KERNEL_RCSID(0, "$NetBSD: if_atmsubr.c,v 1.34 2005/02/26 22:45:09 perry Exp $"
  */
 
 int
-atm_output(ifp, m0, dst, rt0)
-	struct ifnet *ifp;
-	struct mbuf *m0;
-	struct sockaddr *dst;
-	struct rtentry *rt0;
+atm_output(struct ifnet *ifp, struct mbuf *m0, struct sockaddr *dst,
+    struct rtentry *rt0)
 {
 	u_int16_t etype = 0;			/* if using LLC/SNAP */
-	int s, error = 0, sz, len;
+	int error = 0, sz;
 	struct atm_pseudohdr atmdst, *ad;
 	struct mbuf *m = m0;
 	struct rtentry *rt;
@@ -223,23 +220,7 @@ atm_output(ifp, m0, dst, rt0)
 		}
 	}
 
-	/*
-	 * Queue message on interface, and start output if interface
-	 * not yet active.
-	 */
-
-	len = m->m_pkthdr.len;
-	s = splnet();
-	IFQ_ENQUEUE(&ifp->if_snd, m, &pktattr, error);
-	if (error) {
-		splx(s);
-		return (error);
-	}
-	ifp->if_obytes += len;
-	if ((ifp->if_flags & IFF_OACTIVE) == 0)
-		(*ifp->if_start)(ifp);
-	splx(s);
-	return (error);
+	return ifq_enqueue(ifp, m ALTQ_COMMA ALTQ_DECL(&pktattr));
 
 bad:
 	if (m)
@@ -252,11 +233,8 @@ bad:
  * the packet is in the mbuf chain m.
  */
 void
-atm_input(ifp, ah, m, rxhand)
-	struct ifnet *ifp;
-	struct atm_pseudohdr *ah;
-	struct mbuf *m;
-	void *rxhand;
+atm_input(struct ifnet *ifp, struct atm_pseudohdr *ah, struct mbuf *m,
+    void *rxhand)
 {
 	struct ifqueue *inq;
 	u_int16_t etype = ETHERTYPE_IP; /* default */
@@ -342,8 +320,7 @@ atm_input(ifp, ah, m, rxhand)
  * Perform common duties while attaching to interface list
  */
 void
-atm_ifattach(ifp)
-	struct ifnet *ifp;
+atm_ifattach(struct ifnet *ifp)
 {
 
 	ifp->if_type = IFT_ATM;
@@ -370,7 +347,7 @@ static int pvc_max_number = 16;	/* max number of PVCs */
 static int pvc_number = 0;	/* pvc unit number */
 
 struct ifnet *
-pvcsif_alloc()
+pvcsif_alloc(void)
 {
 	struct pvcsif *pvcsif;
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: pthread_attr.c,v 1.4.2.1 2005/09/27 20:23:04 tron Exp $	*/
+/*	$NetBSD: pthread_attr.c,v 1.5 2005/09/21 15:27:14 tv Exp $	*/
 
 /*-
  * Copyright (c) 2001,2002,2003 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: pthread_attr.c,v 1.4.2.1 2005/09/27 20:23:04 tron Exp $");
+__RCSID("$NetBSD: pthread_attr.c,v 1.5 2005/09/21 15:27:14 tv Exp $");
 
 #include <errno.h>
 #include <stdio.h>

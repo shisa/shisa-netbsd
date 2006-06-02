@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.8.8.1 2005/04/06 20:41:10 tron Exp $
+# $NetBSD: mi,v 1.9 2005/03/18 20:45:42 tron Exp $
 ./usr/X11R6/bin/bdftruncate.pl		xcomp-obsolete obsolete
 ./usr/X11R6/bin/ccmakedep
 ./usr/X11R6/bin/cleanlinks

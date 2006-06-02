@@ -1,4 +1,4 @@
-/*	$NetBSD: rnd.c,v 1.46.2.1 2005/12/15 20:03:00 tron Exp $	*/
+/*	$NetBSD: rnd.c,v 1.51 2006/05/14 21:42:26 elad Exp $	*/
 
 /*-
  * Copyright (c) 1997 The NetBSD Foundation, Inc.
@@ -38,7 +38,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: rnd.c,v 1.46.2.1 2005/12/15 20:03:00 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: rnd.c,v 1.51 2006/05/14 21:42:26 elad Exp $");
 
 #include <sys/param.h>
 #include <sys/ioctl.h>
@@ -54,6 +54,7 @@ __KERNEL_RCSID(0, "$NetBSD: rnd.c,v 1.46.2.1 2005/12/15 20:03:00 tron Exp $");
 #include <sys/rnd.h>
 #include <sys/vnode.h>
 #include <sys/pool.h>
+#include <sys/kauth.h>
 
 #ifdef __HAVE_CPU_COUNTER
 #include <machine/cpu_counter.h>
@@ -340,7 +341,7 @@ rnd_init(void)
 }
 
 int
-rndopen(dev_t dev, int flags, int ifmt, struct proc *p)
+rndopen(dev_t dev, int flags, int ifmt, struct lwp *l)
 {
 
 	if (rnd_ready == 0)
@@ -355,7 +356,7 @@ rndopen(dev_t dev, int flags, int ifmt, struct proc *p)
 int
 rndread(dev_t dev, struct uio *uio, int ioflag)
 {
-	u_int8_t *buf;
+	u_int8_t *bf;
 	u_int32_t entcnt, mode, n, nread;
 	int ret, s;
 
@@ -380,7 +381,7 @@ rndread(dev_t dev, struct uio *uio, int ioflag)
 
 	ret = 0;
 
-	buf = malloc(RND_TEMP_BUFFER_SIZE, M_TEMP, M_WAITOK);
+	bf = malloc(RND_TEMP_BUFFER_SIZE, M_TEMP, M_WAITOK);
 
 	while (uio->uio_resid > 0) {
 		n = min(RND_TEMP_BUFFER_SIZE, uio->uio_resid);
@@ -425,27 +426,27 @@ rndread(dev_t dev, struct uio *uio, int ioflag)
 				goto out;
 		}
 
-		nread = rnd_extract_data(buf, n, mode);
+		nread = rnd_extract_data(bf, n, mode);
 
 		/*
 		 * Copy (possibly partial) data to the user.
 		 * If an error occurs, or this is a partial
 		 * read, bail out.
 		 */
-		ret = uiomove((caddr_t)buf, nread, uio);
+		ret = uiomove((caddr_t)bf, nread, uio);
 		if (ret != 0 || nread != n)
 			goto out;
 	}
 
 out:
-	free(buf, M_TEMP);
+	free(bf, M_TEMP);
 	return (ret);
 }
 
 int
 rndwrite(dev_t dev, struct uio *uio, int ioflag)
 {
-	u_int8_t *buf;
+	u_int8_t *bf;
 	int n, ret, s;
 
 	DPRINTF(RND_DEBUG_WRITE,
@@ -456,12 +457,12 @@ rndwrite(dev_t dev, struct uio *uio, int ioflag)
 
 	ret = 0;
 
-	buf = malloc(RND_TEMP_BUFFER_SIZE, M_TEMP, M_WAITOK);
+	bf = malloc(RND_TEMP_BUFFER_SIZE, M_TEMP, M_WAITOK);
 
 	while (uio->uio_resid > 0) {
 		n = min(RND_TEMP_BUFFER_SIZE, uio->uio_resid);
 
-		ret = uiomove((caddr_t)buf, n, uio);
+		ret = uiomove((caddr_t)bf, n, uio);
 		if (ret != 0)
 			break;
 
@@ -469,18 +470,18 @@ rndwrite(dev_t dev, struct uio *uio, int ioflag)
 		 * Mix in the bytes.
 		 */
 		s = splsoftclock();
-		rndpool_add_data(&rnd_pool, buf, n, 0);
+		rndpool_add_data(&rnd_pool, bf, n, 0);
 		splx(s);
 
 		DPRINTF(RND_DEBUG_WRITE, ("Random: Copied in %d bytes\n", n));
 	}
 
-	free(buf, M_TEMP);
+	free(bf, M_TEMP);
 	return (ret);
 }
 
 int
-rndioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, struct proc *p)
+rndioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, struct lwp *l)
 {
 	rndsource_element_t *rse;
 	rndstat_t *rst;
@@ -488,9 +489,11 @@ rndioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, struct proc *p)
 	rndctl_t *rctl;
 	rnddata_t *rnddata;
 	u_int32_t count, start;
+	struct proc *p;
 	int ret, s;
 
 	ret = 0;
+	p = l->l_proc;
 
 	switch (cmd) {
 
@@ -509,7 +512,7 @@ rndioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, struct proc *p)
 		break;
 
 	case RNDGETPOOLSTAT:
-		if ((ret = suser(p->p_ucred, &p->p_acflag)) != 0)
+		if ((ret = kauth_authorize_generic(p->p_cred, KAUTH_GENERIC_ISSUSER, &p->p_acflag)) != 0)
 			return (ret);
 
 		s = splsoftclock();
@@ -518,7 +521,7 @@ rndioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, struct proc *p)
 		break;
 
 	case RNDGETSRCNUM:
-		if ((ret = suser(p->p_ucred, &p->p_acflag)) != 0)
+		if ((ret = kauth_authorize_generic(p->p_cred, KAUTH_GENERIC_ISSUSER, &p->p_acflag)) != 0)
 			return (ret);
 
 		rst = (rndstat_t *)addr;
@@ -561,7 +564,7 @@ rndioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, struct proc *p)
 		break;
 
 	case RNDGETSRCNAME:
-		if ((ret = suser(p->p_ucred, &p->p_acflag)) != 0)
+		if ((ret = kauth_authorize_generic(p->p_cred, KAUTH_GENERIC_ISSUSER, &p->p_acflag)) != 0)
 			return (ret);
 
 		/*
@@ -584,7 +587,7 @@ rndioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, struct proc *p)
 		break;
 
 	case RNDCTL:
-		if ((ret = suser(p->p_ucred, &p->p_acflag)) != 0)
+		if ((ret = kauth_authorize_generic(p->p_cred, KAUTH_GENERIC_ISSUSER, &p->p_acflag)) != 0)
 			return (ret);
 
 		/*
@@ -628,7 +631,7 @@ rndioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, struct proc *p)
 		break;
 
 	case RNDADDDATA:
-		if ((ret = suser(p->p_ucred, &p->p_acflag)) != 0)
+		if ((ret = kauth_authorize_generic(p->p_cred, KAUTH_GENERIC_ISSUSER, &p->p_acflag)) != 0)
 			return (ret);
 
 		rnddata = (rnddata_t *)addr;
@@ -650,7 +653,7 @@ rndioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, struct proc *p)
 }
 
 int
-rndpoll(dev_t dev, int events, struct proc *p)
+rndpoll(dev_t dev, int events, struct lwp *l)
 {
 	u_int32_t entcnt;
 	int revents, s;
@@ -684,7 +687,7 @@ rndpoll(dev_t dev, int events, struct proc *p)
 	if (entcnt >= RND_ENTROPY_THRESHOLD * 8)
 		revents |= events & (POLLIN | POLLRDNORM);
 	else
-		selrecord(p, &rnd_selq);
+		selrecord(l, &rnd_selq);
 
 	return (revents);
 }
@@ -904,12 +907,6 @@ rnd_add_uint32(rndsource_element_t *rs, u_int32_t val)
 	rnd_sample_t *state;
 	u_int32_t ts;
 	int s;
-
-	/*
-	 * If we are not collecting any data at all, just return.
-	 */
-	if (rs == NULL)
-		return;
 
 	rst = &rs->data;
 

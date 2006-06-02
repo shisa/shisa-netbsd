@@ -1,4 +1,4 @@
-/*	$NetBSD: uvm_io.c,v 1.19 2005/01/01 21:00:06 yamt Exp $	*/
+/*	$NetBSD: uvm_io.c,v 1.23 2005/12/20 08:25:58 skrll Exp $	*/
 
 /*
  *
@@ -39,7 +39,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: uvm_io.c,v 1.19 2005/01/01 21:00:06 yamt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: uvm_io.c,v 1.23 2005/12/20 08:25:58 skrll Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -62,9 +62,7 @@ __KERNEL_RCSID(0, "$NetBSD: uvm_io.c,v 1.19 2005/01/01 21:00:06 yamt Exp $");
  */
 
 int
-uvm_io(map, uio)
-	struct vm_map *map;
-	struct uio *uio;
+uvm_io(struct vm_map *map, struct uio *uio)
 {
 	vaddr_t baseva, endva, pageoffset, kva;
 	vsize_t chunksz, togo, sz;
@@ -131,11 +129,8 @@ uvm_io(map, uio)
 		if (sz > togo)
 			sz = togo;
 		error = uiomove((caddr_t) (kva + pageoffset), sz, uio);
-		if (error)
-			break;
 		togo -= sz;
 		baseva += chunksz;
-
 
 		/*
 		 * step 4: unmap the area of kernel memory
@@ -143,10 +138,13 @@ uvm_io(map, uio)
 
 		vm_map_lock(kernel_map);
 		uvm_unmap_remove(kernel_map, kva, kva + chunksz, &dead_entries,
-		    NULL);
+		    NULL, 0);
 		vm_map_unlock(kernel_map);
 		if (dead_entries != NULL)
 			uvm_unmap_detach(dead_entries, AMAP_REFALL);
+
+		if (error)
+			break;
 	}
 	return (error);
 }

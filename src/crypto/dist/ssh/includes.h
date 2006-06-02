@@ -1,5 +1,5 @@
-/*	$NetBSD: includes.h,v 1.9 2005/02/13 18:14:04 christos Exp $	*/
-/*	$OpenBSD: includes.h,v 1.18 2004/06/13 15:03:02 djm Exp $	*/
+/*	$NetBSD: includes.h,v 1.12 2006/02/13 16:49:33 christos Exp $	*/
+/*	$OpenBSD: includes.h,v 1.22 2006/01/01 08:59:27 stevesk Exp $	*/
 
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
@@ -22,7 +22,7 @@ static /**/const char *const rcsid[] = { (const char *)rcsid, "\100(#)" msg }
 
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <sys/select.h>
+#include <sys/queue.h>
 #include <sys/param.h>
 #include <sys/ioctl.h>
 #include <sys/endian.h>
@@ -60,6 +60,7 @@ static /**/const char *const rcsid[] = { (const char *)rcsid, "\100(#)" msg }
 # include <security/pam_appl.h>
 #endif
 
+#include "namespace.h"
 #include "version.h"
 
 #include "random.h"
@@ -68,6 +69,12 @@ static /**/const char *const rcsid[] = { (const char *)rcsid, "\100(#)" msg }
  * Define this to use pipes instead of socketpairs for communicating with the
  * client program.  Socketpairs do not seem to work on all systems.
  */
+#ifndef __NetBSD__
+/*
+ * silly programs such as bash, check fd=0 to be a socket in order to execute
+ * .bashrc. Make it so.
+ */
 #define USE_PIPES 1
+#endif
 
 #endif				/* INCLUDES_H */

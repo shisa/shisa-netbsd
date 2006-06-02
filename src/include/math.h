@@ -1,4 +1,4 @@
-/*	$NetBSD: math.h,v 1.40 2005/02/03 04:39:32 perry Exp $	*/
+/*	$NetBSD: math.h,v 1.44 2006/03/25 16:41:11 xtraeme Exp $	*/
 
 /*
  * ====================================================
@@ -59,7 +59,7 @@ union __long_double_u {
  * ANSI/POSIX
  */
 /* 7.12#3 HUGE_VAL, HUGELF, HUGE_VALL */
-extern __const union __double_u __infinity;
+extern const union __double_u __infinity;
 #define HUGE_VAL	__infinity.__val
 
 /*
@@ -72,10 +72,10 @@ extern __const union __double_u __infinity;
     ((_XOPEN_SOURCE  - 0) >= 600) || \
     defined(_ISOC99_SOURCE) || defined(_NETBSD_SOURCE)
 /* 7.12#3 HUGE_VAL, HUGELF, HUGE_VALL */
-extern __const union __float_u __infinityf;
+extern const union __float_u __infinityf;
 #define	HUGE_VALF	__infinityf.__val
 
-extern __const union __long_double_u __infinityl;
+extern const union __long_double_u __infinityl;
 #define	HUGE_VALL	__infinityl.__val
 
 /* 7.12#4 INFINITY */
@@ -87,7 +87,7 @@ extern __const union __long_double_u __infinityl;
 
 /* 7.12#5 NAN: a quiet NaN, if supported */
 #ifdef __HAVE_NANF
-extern __const union __float_u __nanf;
+extern const union __float_u __nanf;
 #define	NAN		__nanf.__val
 #endif /* __HAVE_NANF */
 
@@ -193,6 +193,7 @@ double	exp(double);
 double	frexp(double, int *);
 double	ldexp(double, int);
 double	log(double);
+double	log2(double);
 double	log10(double);
 double	modf(double, double *);
 
@@ -282,6 +283,7 @@ float	frexpf(float, int *);
 int	ilogbf(float);
 float	ldexpf(float, int);
 float	logf(float);
+float	log2f(float);
 float	log10f(float);
 float	log1pf(float);
 float	logbf(float);
@@ -309,6 +311,8 @@ float	floorf(float);
 float	rintf(float);
 double	round(double);
 float	roundf(float);
+double	trunc(double);
+float	truncf(float);
 long int	lrint(double);
 long int	lrintf(float);
 /* LONGLONG */
@@ -330,6 +334,9 @@ float	remainderf(float, float);
 /* 7.2.11 manipulation */
 
 float	copysignf(float, float);
+double	nan(const char *);
+float	nanf(const char *);
+long double	nanl(const char *);
 float	nextafterf(float, float);
 
 

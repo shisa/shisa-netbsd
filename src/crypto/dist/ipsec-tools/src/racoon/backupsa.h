@@ -1,4 +1,4 @@
-/*	$NetBSD: backupsa.h,v 1.1.1.2.2.2 2005/11/21 21:12:30 tron Exp $	*/
+/*	$NetBSD: backupsa.h,v 1.3 2005/11/21 14:20:28 manu Exp $	*/
 
 /* Id: backupsa.h,v 1.3 2004/06/11 16:00:15 ludvigm Exp */
 

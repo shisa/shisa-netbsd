@@ -1,4 +1,4 @@
-/*	$NetBSD: zs.c,v 1.32 2005/01/24 21:39:15 matt Exp $	*/
+/*	$NetBSD: zs.c,v 1.35 2005/12/24 20:07:15 perry Exp $	*/
 
 /*
  * Copyright (c) 1996, 1998 Bill Studenmund
@@ -54,7 +54,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: zs.c,v 1.32 2005/01/24 21:39:15 matt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: zs.c,v 1.35 2005/12/24 20:07:15 perry Exp $");
 
 #include "opt_ddb.h"
 #include "opt_kgdb.h"
@@ -559,7 +559,7 @@ zs_dma_setup(struct zs_chanstate *cs, caddr_t pa, int len)
 	DBDMA_BUILD(cmdp, DBDMA_CMD_STOP, 0, 0, 0,
 		DBDMA_INT_NEVER, DBDMA_WAIT_NEVER, DBDMA_BRANCH_NEVER);
 
-	__asm __volatile("eieio");
+	__asm volatile("eieio");
 
 	dbdma_start(zsc->zsc_txdmareg[ch], zsc->zsc_txdmacmd[ch]);
 }
@@ -971,7 +971,7 @@ zscngetc(dev_t dev)
 	int c;
 
 	if (zc) {
-		c = zs_getc((void *)zc);
+		c = zs_getc(__UNVOLATILE(zc));
 	} else {
 		char ch = 0;
 		OF_read(stdin, &ch, 1);
@@ -989,7 +989,7 @@ zscnputc(dev_t dev, int c)
 	volatile struct zschan *zc = zs_conschan;
 
 	if (zc) {
-		zs_putc((void *)zc, c);
+		zs_putc(__UNVOLATILE(zc), c);
 	} else {
 		char ch = c;
 		OF_write(stdout, &ch, 1);

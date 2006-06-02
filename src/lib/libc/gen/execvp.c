@@ -1,4 +1,4 @@
-/*	$NetBSD: execvp.c,v 1.24 2003/08/07 16:42:47 agc Exp $	*/
+/*	$NetBSD: execvp.c,v 1.26 2005/11/29 03:11:59 christos Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)exec.c	8.1 (Berkeley) 6/4/93";
 #else
-__RCSID("$NetBSD: execvp.c,v 1.24 2003/08/07 16:42:47 agc Exp $");
+__RCSID("$NetBSD: execvp.c,v 1.26 2005/11/29 03:11:59 christos Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
@@ -73,6 +73,7 @@ execvp(const char *name, char * const *argv)
 		errno = ENOENT;
 		goto done;
 	}
+	ln = strlen(name);
 	/* If it's an absolute or relative path name, it's easy. */
 	if (strchr(name, '/')) {
 		bp = name;
@@ -85,7 +86,6 @@ execvp(const char *name, char * const *argv)
 	if (!(path = getenv("PATH")))
 		path = _PATH_DEFPATH;
 
-	ln = strlen(name);
 	do {
 		/* Find the end of this path element. */
 		for (p = path; *path != 0 && *path != ':'; path++)
@@ -132,8 +132,7 @@ retry:		(void)execve(bp, argv, environ);
 			memp[0] = _PATH_BSHELL;
 			memp[1] = bp;
 			(void)memcpy(&memp[2], &argv[1], cnt * sizeof(*memp));
-			(void)execve(_PATH_BSHELL, (char * const *)memp,
-			    environ);
+			(void)execve(_PATH_BSHELL, __UNCONST(memp), environ);
 			goto done;
 		case ETXTBSY:
 			if (etxtbsy < 3)

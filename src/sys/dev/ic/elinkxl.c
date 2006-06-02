@@ -1,4 +1,4 @@
-/*	$NetBSD: elinkxl.c,v 1.79.2.2 2005/10/28 19:46:55 jmc Exp $	*/
+/*	$NetBSD: elinkxl.c,v 1.88 2006/05/21 23:56:09 christos Exp $	*/
 
 /*-
  * Copyright (c) 1998 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: elinkxl.c,v 1.79.2.2 2005/10/28 19:46:55 jmc Exp $");
+__KERNEL_RCSID(0, "$NetBSD: elinkxl.c,v 1.88 2006/05/21 23:56:09 christos Exp $");
 
 #include "bpfilter.h"
 #include "rnd.h"
@@ -439,8 +439,10 @@ ex_config(sc)
 	 * The 3c90xB has hardware IPv4/TCPv4/UDPv4 checksum support.
 	 */
 	if (sc->ex_conf & EX_CONF_90XB)
-		sc->sc_ethercom.ec_if.if_capabilities |= IFCAP_CSUM_IPv4 |
-		    IFCAP_CSUM_TCPv4 | IFCAP_CSUM_UDPv4;
+		sc->sc_ethercom.ec_if.if_capabilities |=
+		    IFCAP_CSUM_IPv4_Tx | IFCAP_CSUM_IPv4_Rx |
+		    IFCAP_CSUM_TCPv4_Tx | IFCAP_CSUM_TCPv4_Rx |
+		    IFCAP_CSUM_UDPv4_Tx | IFCAP_CSUM_UDPv4_Rx;
 
 	if_attach(ifp);
 	ether_ifattach(ifp, macaddr);
@@ -1117,7 +1119,7 @@ ex_start(ifp)
 		}
 
 		bus_dmamap_sync(sc->sc_dmat, sc->sc_dpd_dmamap,
-		    ((caddr_t)dpd - (caddr_t)sc->sc_dpd),
+		    ((const char *)(intptr_t)dpd - (const char *)sc->sc_dpd),
 		    sizeof (struct ex_dpd),
 		    BUS_DMASYNC_PREREAD|BUS_DMASYNC_PREWRITE);
 
@@ -1130,7 +1132,7 @@ ex_start(ifp)
 		 */
 		if (sc->tx_head != NULL) {
 			prevdpd = sc->tx_tail->tx_dpd;
-			offset = ((caddr_t)prevdpd - (caddr_t)sc->sc_dpd);
+			offset = ((const char *)(intptr_t)prevdpd - (const char *)sc->sc_dpd);
 			bus_dmamap_sync(sc->sc_dmat, sc->sc_dpd_dmamap,
 			    offset, sizeof (struct ex_dpd),
 			    BUS_DMASYNC_POSTREAD|BUS_DMASYNC_POSTWRITE);
@@ -1182,7 +1184,7 @@ ex_intr(arg)
 	struct ifnet *ifp = &sc->sc_ethercom.ec_if;
 
 	if ((ifp->if_flags & IFF_RUNNING) == 0 ||
-	    (sc->sc_dev.dv_flags & DVF_ACTIVE) == 0)
+	    !device_is_active(&sc->sc_dev))
 		return (0);
 
 	for (;;) {
@@ -1453,18 +1455,18 @@ ex_getstats(sc)
 	 * Upper byte counters are latched from reading the totals, so
 	 * they don't need to be read if we don't need their values.
 	 */
-	bus_space_read_2(iot, ioh, RX_TOTAL_OK);
-	bus_space_read_2(iot, ioh, TX_TOTAL_OK);
+	(void)bus_space_read_2(iot, ioh, RX_TOTAL_OK);
+	(void)bus_space_read_2(iot, ioh, TX_TOTAL_OK);
 
 	/*
 	 * Clear the following to avoid stats overflow interrupts
 	 */
-	bus_space_read_1(iot, ioh, TX_DEFERRALS);
-	bus_space_read_1(iot, ioh, TX_AFTER_1_COLLISION);
-	bus_space_read_1(iot, ioh, TX_NO_SQE);
-	bus_space_read_1(iot, ioh, TX_CD_LOST);
+	(void)bus_space_read_1(iot, ioh, TX_DEFERRALS);
+	(void)bus_space_read_1(iot, ioh, TX_AFTER_1_COLLISION);
+	(void)bus_space_read_1(iot, ioh, TX_NO_SQE);
+	(void)bus_space_read_1(iot, ioh, TX_CD_LOST);
 	GO_WINDOW(4);
-	bus_space_read_1(iot, ioh, ELINK_W4_BADSSD);
+	(void)bus_space_read_1(iot, ioh, ELINK_W4_BADSSD);
 	GO_WINDOW(1);
 }
 
@@ -1491,7 +1493,7 @@ ex_tick(arg)
 	struct ex_softc *sc = arg;
 	int s;
 
-	if ((sc->sc_dev.dv_flags & DVF_ACTIVE) == 0)
+	if (!device_is_active(&sc->sc_dev))
 		return;
 
 	s = splnet();

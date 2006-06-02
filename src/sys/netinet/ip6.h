@@ -1,4 +1,4 @@
-/*	$NetBSD: ip6.h,v 1.18 2004/07/09 09:15:02 itojun Exp $	*/
+/*	$NetBSD: ip6.h,v 1.21 2006/05/05 00:03:22 rpaulo Exp $	*/
 /*	$KAME: ip6.h,v 1.45 2003/06/05 04:46:38 keiichi Exp $	*/
 
 /*
@@ -154,7 +154,7 @@ struct ip6_dest {
 #define IP6OPT_NSAP_ADDR	0xC3	/* 11 0 00011 */
 #define IP6OPT_TUNNEL_LIMIT	0x04	/* 00 0 00100 */
 #define IP6OPT_RTALERT		0x05	/* 00 0 00101 (KAME definition) */
-#define IP6OPT_ROUTER_ALERT	0x05	/* (2292bis def, recommended) */
+#define IP6OPT_ROUTER_ALERT	0x05	/* (RFC3542 def, recommended) */
 
 #define IP6OPT_RTALERT_LEN	4
 #define IP6OPT_RTALERT_MLD	0	/* Datagram contains an MLD message */
@@ -280,16 +280,16 @@ struct ip6_frag {
  */
 #define IP6_EXTHDR_GET(val, typ, m, off, len) \
 do {									\
-	struct mbuf *t;							\
-	int tmp;							\
+	struct mbuf *_t;						\
+	int _tmp;							\
 	if ((m)->m_len >= (off) + (len))				\
 		(val) = (typ)(mtod((m), caddr_t) + (off));		\
 	else {								\
-		t = m_pulldown((m), (off), (len), &tmp);		\
-		if (t) {						\
-			if (t->m_len < tmp + (len))			\
+		_t = m_pulldown((m), (off), (len), &_tmp);		\
+		if (_t) {						\
+			if (_t->m_len < _tmp + (len))			\
 				panic("m_pulldown malfunction");	\
-			(val) = (typ)(mtod(t, caddr_t) + tmp);		\
+			(val) = (typ)(mtod(_t, caddr_t) + _tmp);	\
 		} else {						\
 			(val) = (typ)NULL;				\
 			(m) = NULL;					\
@@ -299,15 +299,15 @@ do {									\
 
 #define IP6_EXTHDR_GET0(val, typ, m, off, len) \
 do {									\
-	struct mbuf *t;							\
+	struct mbuf *_t;						\
 	if ((off) == 0 && (m)->m_len >= len)				\
 		(val) = (typ)mtod((m), caddr_t);			\
 	else {								\
-		t = m_pulldown((m), (off), (len), NULL);		\
-		if (t) {						\
-			if (t->m_len < (len))				\
+		_t = m_pulldown((m), (off), (len), NULL);		\
+		if (_t) {						\
+			if (_t->m_len < (len))				\
 				panic("m_pulldown malfunction");	\
-			(val) = (typ)mtod(t, caddr_t);			\
+			(val) = (typ)mtod(_t, caddr_t);			\
 		} else {						\
 			(val) = (typ)NULL;				\
 			(m) = NULL;					\
@@ -316,4 +316,4 @@ do {									\
 } while (/*CONSTCOND*/ 0)
 #endif /*_KERNEL*/
 
-#endif /* not _NETINET_IP6_H_ */
+#endif /* !_NETINET_IP6_H_ */

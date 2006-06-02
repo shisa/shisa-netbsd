@@ -1,18 +1,16 @@
 #! /bin/sh
 #
-#	$NetBSD: makesrctars,v 1.18.2.2 2005/10/21 17:44:57 riz Exp $
+#	$NetBSD: makesrctars,v 1.31 2006/03/08 19:18:04 hubertf Exp $
 #
 # makesrctars srcdir setdir
 #	Create source tarballs in setdir from the source under srcdir.
 #
 
-prog=${0##*/}
+prog="${0##*/}"
+rundir="$(dirname "$0")" # ${0%/*} isn't good enough when there's no "/"
+. "${rundir}/sets.subr"
 
 # set defaults
-: ${CKSUM:=cksum}
-: ${MTREE:=/usr/sbin/mtree}
-: ${PAX:=pax}
-
 xsrcdir=
 
 GZIP=-9
@@ -35,10 +33,10 @@ USAGE
 while getopts N:x: ch; do
 	case ${ch} in
 	x)
-		xsrcdir=${OPTARG}
+		xsrcdir="${OPTARG}"
 		;;
 	N)
-		PASSWD=${OPTARG}
+		PASSWD="${OPTARG}"
 		;;
 	*)
 		usage
@@ -50,9 +48,9 @@ shift $((${OPTIND} - 1))
 if [ $# -ne 2 ]; then
 	usage
 fi
-srcdir=$1
-setdir=$2
-: ${PASSWD:=${srcdir}/etc}
+srcdir="$1"
+setdir="$2"
+: ${PASSWD:="${srcdir}/etc"}
 
 if [ ! -d "${setdir}" ]; then
 	echo "${setdir} is not a directory"
@@ -61,30 +59,32 @@ fi
 
 makeset()
 {(
-	set=$1.tgz
+	set="${1}.tgz"
 	shift
-	dir=$1
+	dir="$1"
 	shift
+	intmp="/tmp/in$$"
 	echo "Creating ${set}"
 	if [ "${dir}" != "." ]; then
-		cd $dir
+		cd "${dir}"
 		srcprefix="${srcprefix}/${dir}"
 	fi
 	# Gets rid of any obj dirs and things below it 
-	echo "obj" > /tmp/in$$
-	egrep=$*
-	if [ "$egrep" = "" ]; then
+	echo "obj" > "${intmp}"
+	egrep="$*"
+	if [ "${egrep}" = "" ]; then
 		egrep='.'
 	fi
 	set -f
-	${MTREE} -c -X /tmp/in$$ | ${MTREE} -C -k type | \
-		egrep -v 'type=link' | egrep $egrep | \
-		sed -e 's:type=file:& mode=0664:' \
+	${MTREE} -c -X "${intmp}" | ${MTREE} -C -k type | \
+		${EGREP} -v 'type=link' | ${EGREP} ${egrep} | \
+		${SED} -e 's:type=file:& mode=0664:' \
 			-e 's:type=dir:& mode=0775:' \
-			-e 's:$: uname=root gname=wsrc:' | \
-		${PAX} -M -N ${PASSWD} -w -d -s'|^\.|'${srcprefix}'|' | \
-		gzip > "${setdir}/${set}"
-	rm -f /tmp/in$$
+			-e 's:$: uname=root gname=wsrc:' \
+			-e '/^\.\/build.sh /s:\(mode\)=[0-9]*:\1=0775:' | \
+		${PAX} -M -N "${PASSWD}" -w -d -s'|^\.|'"${srcprefix}"'|' | \
+		${GZIP_CMD} > "${setdir}/${set}"
+	rm -f "${intmp}"
 )}
 
 
@@ -99,12 +99,11 @@ fi
 srcprefix=usr/src
 export setdir MTREE PAX CKSUM GZIP PASSWD srcprefix
 
-makeset src . \
-    -v '^\.\/gnu|^\.\/share|^\.\/sys|^\.\/contrib\.sys|^\.\/usr\.bin\/config'
+makeset src . -v '^\.\/gnu|^\.\/share|^\.\/sys|^\.\/usr\.bin\/config'
 
 makeset gnusrc gnu
 
-makeset syssrc . -e '^\..type=dir|^\.\/sys|^\.\/contrib.type=dir|^\.\/contrib\/sys|^\.\/usr\.sbin.type=dir|^\.\/usr\.sbin\/config'
+makeset syssrc . -e '^\..type=dir|^\.\/sys|^\.\/usr\.bin.type=dir|^\.\/usr\.bin\/config'
 
 makeset sharesrc share
 
@@ -122,10 +121,11 @@ fi
 
 
 echo "Creating checksum files"
-(cd ${setdir}
+(cd "${setdir}"
 	${CKSUM} -o1 *.tgz > BSDSUM
 	${CKSUM}     *.tgz > CKSUM
-	${CKSUM} -m  *.tgz > MD5
+	${CKSUM} -a md5  *.tgz > MD5
 	${CKSUM} -o2 *.tgz > SYSVSUM
+	${CKSUM} -a sha512 *.tgz > SHA512
 )
 exit 0

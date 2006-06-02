@@ -1,4 +1,4 @@
-/*	$NetBSD: st_scsi.c,v 1.21 2005/02/27 00:27:48 perry Exp $ */
+/*	$NetBSD: st_scsi.c,v 1.24 2006/03/30 16:09:28 thorpej Exp $ */
 
 /*-
  * Copyright (c) 1998, 2004 The NetBSD Foundation, Inc.
@@ -57,7 +57,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: st_scsi.c,v 1.21 2005/02/27 00:27:48 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: st_scsi.c,v 1.24 2006/03/30 16:09:28 thorpej Exp $");
 
 #include "opt_scsi.h"
 #include "rnd.h"
@@ -100,7 +100,7 @@ st_scsibus_match(struct device *parent, struct cfdata *match, void *aux)
 		return (0);
 
 	(void)scsipi_inqmatch(&sa->sa_inqbuf,
-	    (caddr_t)st_scsibus_patterns,
+	    st_scsibus_patterns,
 	    sizeof(st_scsibus_patterns)/sizeof(st_scsibus_patterns[0]),
 	    sizeof(st_scsibus_patterns[0]), &priority);
 	return (priority);
@@ -109,7 +109,7 @@ st_scsibus_match(struct device *parent, struct cfdata *match, void *aux)
 static void
 st_scsibus_attach(struct device *parent, struct device *self, void *aux)
 {
-	struct st_softc *st = (void *)self;
+	struct st_softc *st = device_private(self);
 
 	st->ops = st_scsibus_ops;
 	stattach(parent, st, aux);

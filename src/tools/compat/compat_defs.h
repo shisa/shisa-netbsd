@@ -1,4 +1,4 @@
-/*	$NetBSD: compat_defs.h,v 1.45 2004/12/11 09:34:08 jmc Exp $	*/
+/*	$NetBSD: compat_defs.h,v 1.52 2006/02/14 04:59:33 dyoung Exp $	*/
 
 #ifndef	__NETBSD_COMPAT_DEFS_H__
 #define	__NETBSD_COMPAT_DEFS_H__
@@ -115,7 +115,17 @@ struct passwd;
 /* Dirent support. */
 
 #if HAVE_DIRENT_H
-# include <dirent.h>
+# if defined(__linux__) && defined(__USE_BSD)
+#  undef __USE_BSD
+#  include <dirent.h>
+#  define __USE_BSD 1
+#  undef d_fileno
+# else
+#  include <dirent.h>
+#  if defined(__DARWIN_UNIX03)
+#   undef d_fileno
+#  endif
+# endif
 # define NAMLEN(dirent) (strlen((dirent)->d_name))
 #else
 # define dirent direct
@@ -268,19 +278,19 @@ int lchown(const char *, uid_t, gid_t);
 #define __nbcompat_bswap64(x)	(((u_int64_t)bswap32((x)) << 32) | \
 				 ((u_int64_t)bswap32((x) >> 32)))
 
-#if !HAVE_BSWAP16
+#if ! HAVE_DECL_BSWAP16
 #ifdef bswap16
 #undef bswap16
 #endif
 #define bswap16(x)	__nbcompat_bswap16(x)
 #endif
-#if !HAVE_BSWAP32
+#if ! HAVE_DECL_BSWAP32
 #ifdef bswap32
 #undef bswap32
 #endif
 #define bswap32(x)	__nbcompat_bswap32(x)
 #endif
-#if !HAVE_BSWAP64
+#if ! HAVE_DECL_BSWAP64
 #ifdef bswap64
 #undef bswap64
 #endif
@@ -360,7 +370,7 @@ size_t strlcpy(char *, const char *, size_t);
 char *strsep(char **, const char *);
 #endif
 
-#if !HAVE_STRSUFTOLL
+#if !HAVE_DECL_STRSUFTOLL
 long long strsuftoll(const char *, const char *, long long, long long);
 long long strsuftollx(const char *, const char *,
 			long long, long long, char *, size_t);
@@ -488,6 +498,9 @@ void *setmode(const char *);
 #ifndef _PATH_DEFTAPE
 #define _PATH_DEFTAPE "/dev/nrst0"
 #endif
+#ifndef _PATH_VI
+#define _PATH_VI "/usr/bin/vi"
+#endif
 
 /* <stdarg.h> */
 
@@ -499,6 +512,14 @@ void *setmode(const char *);
 
 #if !defined(SIZE_MAX) && defined(SIZE_T_MAX)
 #define SIZE_MAX SIZE_T_MAX
+#endif
+
+#ifndef UINT8_MAX
+#define UINT8_MAX 0xffU
+#endif
+
+#ifndef UINT16_MAX
+#define UINT16_MAX 0xffffU
 #endif
 
 #ifndef UINT32_MAX
@@ -543,60 +564,60 @@ int	 cgetustr(char *, const char *, char **);
 /* <sys/endian.h> */
 
 #if WORDS_BIGENDIAN
-#if !HAVE_HTOBE16
+#if !HAVE_DECL_HTOBE16
 #define htobe16(x)	(x)
 #endif
-#if !HAVE_HTOBE32
+#if !HAVE_DECL_HTOBE32
 #define htobe32(x)	(x)
 #endif
-#if !HAVE_HTOBE64
+#if !HAVE_DECL_HTOBE64
 #define htobe64(x)	(x)
 #endif
-#if !HAVE_HTOLE16
+#if !HAVE_DECL_HTOLE16
 #define htole16(x)	bswap16((u_int16_t)(x))
 #endif
-#if !HAVE_HTOLE32
+#if !HAVE_DECL_HTOLE32
 #define htole32(x)	bswap32((u_int32_t)(x))
 #endif
-#if !HAVE_HTOLE64
+#if !HAVE_DECL_HTOLE64
 #define htole64(x)	bswap64((u_int64_t)(x))
 #endif
 #else
-#if !HAVE_HTOBE16
+#if !HAVE_DECL_HTOBE16
 #define htobe16(x)	bswap16((u_int16_t)(x))
 #endif
-#if !HAVE_HTOBE32
+#if !HAVE_DECL_HTOBE32
 #define htobe32(x)	bswap32((u_int32_t)(x))
 #endif
-#if !HAVE_HTOBE64
+#if !HAVE_DECL_HTOBE64
 #define htobe64(x)	bswap64((u_int64_t)(x))
 #endif
-#if !HAVE_HTOLE16
+#if !HAVE_DECL_HTOLE16
 #define htole16(x)	(x)
 #endif
-#if !HAVE_HTOLE32
+#if !HAVE_DECL_HTOLE32
 #define htole32(x)	(x)
 #endif
-#if !HAVE_HTOLE64
+#if !HAVE_DECL_HTOLE64
 #define htole64(x)	(x)
 #endif
 #endif
-#if !HAVE_BE16TOH
+#if !HAVE_DECL_BE16TOH
 #define be16toh(x)	htobe16(x)
 #endif
-#if !HAVE_BE32TOH
+#if !HAVE_DECL_BE32TOH
 #define be32toh(x)	htobe32(x)
 #endif
-#if !HAVE_BE64TOH
+#if !HAVE_DECL_BE64TOH
 #define be64toh(x)	htobe64(x)
 #endif
-#if !HAVE_LE16TOH
+#if !HAVE_DECL_LE16TOH
 #define le16toh(x)	htole16(x)
 #endif
-#if !HAVE_LE32TOH
+#if !HAVE_DECL_LE32TOH
 #define le32toh(x)	htole32(x)
 #endif
-#if !HAVE_LE64TOH
+#if !HAVE_DECL_LE64TOH
 #define le64toh(x)	htole64(x)
 #endif
 

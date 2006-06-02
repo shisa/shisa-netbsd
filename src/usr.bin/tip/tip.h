@@ -1,4 +1,4 @@
-/*	$NetBSD: tip.h,v 1.16 2004/04/23 22:11:44 christos Exp $	*/
+/*	$NetBSD: tip.h,v 1.27 2006/04/03 16:13:34 tls Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993
@@ -79,8 +79,8 @@ char	*HO;			/* host name */
 long	BR;			/* line speed for conversation */
 long	FS;			/* frame size for transfers */
 
-int	DU;			/* this host is dialed up */
-int	HW;			/* this device is hardwired, see hunt.c */
+long	DU;			/* this host is dialed up */
+long	HW;			/* this device is hardwired, see hunt.c */
 char	*ES;			/* escape character */
 char	*EX;			/* exceptions */
 char	*FO;			/* force (literal next) char*/
@@ -90,7 +90,7 @@ char	*PR;			/* remote prompt */
 long	DL;			/* line delay for file transfers to remote */
 long	CL;			/* char delay for file transfers to remote */
 long	ET;			/* echocheck timeout */
-int	HD;			/* this host is half duplex - do local echo */
+long	HD;			/* this host is half duplex - do local echo */
 char	DC;			/* this host is directly connected. */
 
 /*
@@ -99,12 +99,12 @@ char	DC;			/* this host is directly connected. */
 typedef
 	struct {
 		const char *v_name;	/* whose name is it */
-		char	v_type;		/* for interpreting set's */
-		char	v_access;	/* protection of touchy ones */
+		uint8_t v_type;		/* for interpreting set's */
+		uint8_t v_access;	/* protection of touchy ones */
 		const char *v_abrev;	/* possible abreviation */
-		char *v_value;		/* casted to a union later */
+		void *v_value;		/* casted to a union later */
 				/*
-				 * XXX:	this assumes that the storage space 
+				 * XXX:	this assumes that the storage space
 				 *	of a pointer >= that of a long
 				 */
 	}
@@ -137,9 +137,9 @@ typedef
 typedef
 	struct {
 		const char *acu_name;
-		int	(*acu_dialer) __P((char *, char *));
-		void	(*acu_disconnect) __P((void));
-		void	(*acu_abort) __P((void));
+		int	(*acu_dialer)(char *, char *);
+		void	(*acu_disconnect)(void);
+		void	(*acu_abort)(void);
 	}
 	acu_t;
 
@@ -154,15 +154,15 @@ typedef
 
 #define value(v)	vtable[v].v_value
 
-#define	number(v)	((long)(v))
-#define	boolean(v)	((short)(long)(v))
-#define	character(v)	((char)(long)(v))
-#define	address(v)	((long *)(v))
+#define	number(v)	((int)(intptr_t)(v))
+#define	boolean(v)	((short)(intptr_t)(v))
+#define	character(v)	((char)(intptr_t)(v))
+#define	address(v)	((long *)(intptr_t)(v))
 
-#define	setnumber(v,n)		do { (v) = (char *)(long)(n); } while (0)
-#define	setboolean(v,n)		do { (v) = (char *)(long)(n); } while (0)
-#define	setcharacter(v,n)	do { (v) = (char *)(long)(n); } while (0)
-#define	setaddress(v,n)		do { (v) = (char *)(n); } while (0)
+#define	setnumber(v,n)		do { (v) = (char *)(intptr_t)(n); } while (/*CONSTCOND*/0)
+#define	setboolean(v,n)		do { (v) = (char *)(intptr_t)(n); } while (/*CONSTCOND*/0)
+#define	setcharacter(v,n)	do { (v) = (char *)(intptr_t)(n); } while (/*CONSTCOND*/0)
+#define	setaddress(v,n)		do { (v) = (char *)(intptr_t)(n); } while (/*CONSTCOND*/0)
 
 /*
  * Escape command table definitions --
@@ -175,7 +175,7 @@ typedef
 		char	e_char;			/* char to match on */
 		char	e_flags;		/* experimental, privileged */
 		const char *e_help;		/* help string */
-		void 	(*e_func) __P((char));	/* command */
+		void 	(*e_func)(char);	/* command */
 	}
 	esctable_t;
 
@@ -185,11 +185,6 @@ typedef
 
 extern int	vflag;		/* verbose during reading of .tiprc file */
 extern value_t	vtable[];	/* variable table */
-
-#ifndef ACULOG
-#define logent(a, b, c, d)
-#define loginit()
-#endif
 
 /*
  * Definition of indices into variable table so
@@ -209,28 +204,28 @@ extern value_t	vtable[];	/* variable table */
 #define FORCE		8
 #define FRAMESIZE	9
 #define HOST		10
-#define LOG		11
-#define PHONES		12
-#define PROMPT		13
-#define RAISE		14
-#define RAISECHAR	15
-#define RECORD		16
-#define REMOTE		17
-#define SCRIPT		18
-#define TABEXPAND	19
-#define VERBOSE		20
-#define SHELL		21
-#define HOME		22
-#define ECHOCHECK	23
-#define DISCONNECT	24
-#define TAND		25
-#define LDELAY		26
-#define CDELAY		27
-#define ETIMEOUT	28
-#define RAWFTP		29
-#define HALFDUPLEX	30
-#define	LECHO		31
-#define	PARITY		32
+#define PHONES		11
+#define PROMPT		12
+#define RAISE		13
+#define RAISECHAR	14
+#define RECORD		15
+#define REMOTE		16
+#define SCRIPT		17
+#define TABEXPAND	18
+#define VERBOSE		19
+#define SHELL		20
+#define HOME		21
+#define ECHOCHECK	22
+#define DISCONNECT	23
+#define TAND		24
+#define LDELAY		25
+#define CDELAY		26
+#define ETIMEOUT	27
+#define RAWFTP		28
+#define HALFDUPLEX	29
+#define	LECHO		30
+#define	PARITY		31
+#define	HARDWAREFLOW	32
 
 struct termios	term;		/* current mode of terminal */
 struct termios	defterm;	/* initial mode of terminal */
@@ -238,6 +233,7 @@ struct termios	defchars;	/* current mode with initial chars */
 
 FILE	*fscript;		/* FILE for scripting */
 
+int	attndes[2];		/* coprocess wakeup channel */
 int	fildes[2];		/* file transfer synchronization channel */
 int	repdes[2];		/* read process synchronization channel */
 int	FD;			/* open file descriptor to remote host */
@@ -260,7 +256,6 @@ char	fname[80];		/* file name buffer for ~< */
 char	copyname[80];		/* file name buffer for ~> */
 char	ccc;			/* synchronization character */
 char	ch;			/* for tipout */
-char	*uucplock;		/* name of lock file for uucp's */
 
 int	odisc;				/* initial tty line discipline */
 extern	int disc;			/* current tty discpline */
@@ -269,85 +264,78 @@ extern acu_t		acutable[];
 extern esctable_t	etable[];
 extern unsigned char	evenpartab[];
 
-void	alrmtimeout __P((int));
-int	any __P((char, const char *));
-void	chdirectory __P((char));
-void	cleanup __P((int));
-const char   *connect __P((void));
-void	consh __P((char));
-char   *ctrl __P((char));
-int	cumain __P((int, char **));
-void	cu_put __P((char));
-void	cu_take __P((char));
-void	daemon_uid __P((void));
-void	disconnect __P((const char *));
-char   *expand __P((char *));
-void	finish __P((char));
-void	genbrk __P((char));
-void	getfl __P((char));
-char   *getremote __P((char *));
-void	help __P((char));
-int	hunt __P((char *));
-char   *interp __P((const char *));
-void	logent __P((const char *, const char *, const char *, const char *));
-void	loginit __P((void));
-void	pipefile __P((char));
-void	pipeout __P((char));
-int	prompt __P((const char *, char *, size_t));
-void	xpwrite __P((int, char *, int));
-void	raw __P((void));
-void	send __P((char));
-void	sendfile __P((char));
-void	setparity __P((const char *));
-void	setscript __P((void));
-void	shell __P((char));
-void	shell_uid __P((void));
-int	speed __P((int));
-void	suspend __P((char));
-void	tandem __P((const char *));
-void	tipabort __P((const char *));
-void	tipout __P((void));
-void	ttysetup __P((int));
-void	unraw __P((void));
-void	user_uid __P((void));
-int	uu_lock __P((char *));	
-int	uu_unlock __P((char *));	
-void	variable __P((char));
-void	vinit __P((void));
-char   *vinterp __P((char *, char));
-void	vlex __P((char *));
-int	vstring __P((const char *, char *));
+void	alrmtimeout(int);
+int	any(char, const char *);
+void	chdirectory(char);
+void	cleanup(int);
+const char   *connect(void);
+void	consh(char);
+char   *ctrl(char);
+void	cumain(int, char **);
+void	cu_put(char);
+void	cu_take(char);
+void	disconnect(const char *);
+char   *expand(char *);
+void	finish(char);
+void	genbrk(char);
+void	getfl(char);
+char   *getremote(char *);
+void	hardwareflow(const char *);
+void	help(char);
+int	hunt(char *);
+char   *interp(const char *);
+void	pipefile(char);
+void	pipeout(char);
+int	prompt(const char *, char *, size_t);
+void	xpwrite(int, char *, size_t);
+void	raw(void);
+void	sendchar(char);
+void	sendfile(char);
+void	setparity(const char *);
+void	setscript(void);
+void	shell(char);
+void	suspend(char);
+void	tandem(const char *);
+void	tipabort(const char *);
+void	tipout(void);
+int	ttysetup(speed_t);
+void	unraw(void);
+void	variable(char);
+void	vinit(void);
+char   *vinterp(char *, char);
+void	vlex(char *);
+int	vstring(const char *, char *);
 
-void	biz22_abort __P((void));
-void	biz22_disconnect __P((void));
-int	biz22f_dialer __P((char *, char *));
-int	biz22w_dialer __P((char *, char *));
-void	biz31_abort __P((void));
-void	biz31_disconnect __P((void));
-int	biz31f_dialer __P((char *, char *));
-int	biz31w_dialer __P((char *, char *));
-void	cour_abort __P((void));
-int	cour_dialer __P((char *, char *));
-void	cour_disconnect __P((void));
-int	df02_dialer __P((char *, char *));
-int	df03_dialer __P((char *, char *));
-void	df_abort __P((void));
-void	df_disconnect __P((void));
-void	dn_abort __P((void));
-int	dn_dialer __P((char *, char *));
-void	dn_disconnect __P((void));
-void	hay_abort __P((void));
-int	hay_dialer __P((char *, char *));
-void	hay_disconnect __P((void));
-void	t3000_abort __P((void));
-int	t3000_dialer __P((char *, char *));
-void	t3000_disconnect __P((void));
-void	v3451_abort __P((void));
-int	v3451_dialer __P((char *, char *));
-void	v3451_disconnect __P((void));
-void	v831_abort __P((void));
-int	v831_dialer __P((char *, char *));
-void	v831_disconnect __P((void));
-void	ven_abort __P((void));
-int	ven_dialer __P((char *, char *));
-void	ven_disconnect __P((void));
+void	biz22_abort(void);
+void	biz22_disconnect(void);
+int	biz22f_dialer(char *, char *);
+int	biz22w_dialer(char *, char *);
+void	biz31_abort(void);
+void	biz31_disconnect(void);
+int	biz31f_dialer(char *, char *);
+int	biz31w_dialer(char *, char *);
+void	cour_abort(void);
+int	cour_dialer(char *, char *);
+void	cour_disconnect(void);
+int	df02_dialer(char *, char *);
+int	df03_dialer(char *, char *);
+void	df_abort(void);
+void	df_disconnect(void);
+void	dn_abort(void);
+int	dn_dialer(char *, char *);
+void	dn_disconnect(void);
+void	hay_abort(void);
+int	hay_dialer(char *, char *);
+void	hay_disconnect(void);
+void	t3000_abort(void);
+int	t3000_dialer(char *, char *);
+void	t3000_disconnect(void);
+void	v3451_abort(void);
+int	v3451_dialer(char *, char *);
+void	v3451_disconnect(void);
+void	v831_abort(void);
+int	v831_dialer(char *, char *);
+void	v831_disconnect(void);
+void	ven_abort(void);
+int	ven_dialer(char *, char *);
+void	ven_disconnect(void);

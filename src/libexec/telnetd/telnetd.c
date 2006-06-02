@@ -1,4 +1,4 @@
-/*	$NetBSD: telnetd.c,v 1.46.2.2 2005/06/27 09:20:13 tron Exp $	*/
+/*	$NetBSD: telnetd.c,v 1.50 2006/05/09 20:18:07 mrg Exp $	*/
 
 /*
  * Copyright (C) 1997 and 1998 WIDE Project.
@@ -65,7 +65,7 @@ __COPYRIGHT("@(#) Copyright (c) 1989, 1993\n\
 #if 0
 static char sccsid[] = "@(#)telnetd.c	8.4 (Berkeley) 5/30/95";
 #else
-__RCSID("$NetBSD: telnetd.c,v 1.46.2.2 2005/06/27 09:20:13 tron Exp $");
+__RCSID("$NetBSD: telnetd.c,v 1.50 2006/05/09 20:18:07 mrg Exp $");
 #endif
 #endif /* not lint */
 
@@ -116,7 +116,7 @@ char	ptyibuf2[BUFSIZ];
 int	hostinfo = 1;			/* do we print login banner? */
 
 
-int debug = 0;
+static int debug = 0;
 int keepalive = 1;
 char *gettyname = "default";
 char *progname;
@@ -165,7 +165,8 @@ struct sockaddr_storage from;
 int
 main(int argc, char *argv[])
 {
-	int on = 1, fromlen;
+	socklen_t fromlen;
+	int on = 1;
 	int ch;
 #if	defined(IPPROTO_IP) && defined(IP_TOS)
 	int tos = -1;
@@ -357,7 +358,8 @@ main(int argc, char *argv[])
 	argv += optind;
 
 	if (debug) {
-	    int s, ns, foo, error;
+	    int s, ns, error;
+	    socklen_t foo;
 	    char *service = "telnet";
 	    struct addrinfo hints, *res;
 

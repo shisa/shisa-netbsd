@@ -1,4 +1,4 @@
-/*	$NetBSD: files.c,v 1.23 2004/02/15 11:52:12 jdolecek Exp $	*/
+/*	$NetBSD: files.c,v 1.25 2006/05/11 19:16:42 mrg Exp $	*/
 
 /*-
  * Copyright (c) 2000-2003 The NetBSD Foundation, Inc.
@@ -72,7 +72,7 @@
 #include "fsort.h"
 
 #ifndef lint
-__RCSID("$NetBSD: files.c,v 1.23 2004/02/15 11:52:12 jdolecek Exp $");
+__RCSID("$NetBSD: files.c,v 1.25 2006/05/11 19:16:42 mrg Exp $");
 __SCCSID("@(#)files.c	8.1 (Berkeley) 6/6/93");
 #endif /* not lint */
 
@@ -171,6 +171,8 @@ makeline(flno, top, filelist, nfiles, recbuf, bufend, dummy2)
 	static int filenum = 0, overflow = 0;
 	static FILE *fp = 0;
 	int c;
+
+	c = 0;		/* XXXGCC -Wuninitialized [pmppc] */
 
 	pos = (char *) recbuf->data;
 	if (overflow) {
@@ -312,15 +314,15 @@ seq(fp, line, key)
 	FILE *fp;
 	DBT *key, *line;
 {
-	static char *buf, flag = 1;
-	char *end, *pos;
+	static u_char *buf, flag = 1;
+	u_char *end, *pos;
 	int c;
 	u_char *nlinebuf;
 
 	if (flag) {
 		/* one-time initialization */
 		flag = 0;
-		buf = (char *) linebuf;
+		buf = linebuf;
 		line->data = buf;
 	}
 	end = buf + linebuf_size;
@@ -340,7 +342,7 @@ seq(fp, line, key)
 		
 			end = linebuf + linebuf_size;
 			pos = linebuf + (pos - buf);
-			line->data = buf = (char *)linebuf;
+			line->data = buf = linebuf;
 			continue;
 		}
 	}

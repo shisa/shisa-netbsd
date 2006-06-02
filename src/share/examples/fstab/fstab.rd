@@ -1,4 +1,4 @@
-#	$NetBSD: fstab.rd,v 1.1.8.1 2005/04/04 17:30:53 tron Exp $
+#	$NetBSD: fstab.rd,v 1.4 2005/05/06 08:41:00 hubertf Exp $
 #
 # Sample fstab file for hp300 rd(4) disks.
 #

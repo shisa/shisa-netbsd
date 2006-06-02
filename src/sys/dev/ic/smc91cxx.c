@@ -1,4 +1,4 @@
-/*	$NetBSD: smc91cxx.c,v 1.51 2005/02/27 00:27:02 perry Exp $	*/
+/*	$NetBSD: smc91cxx.c,v 1.55 2006/02/20 16:50:37 thorpej Exp $	*/
 
 /*-
  * Copyright (c) 1997 The NetBSD Foundation, Inc.
@@ -78,7 +78,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: smc91cxx.c,v 1.51 2005/02/27 00:27:02 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: smc91cxx.c,v 1.55 2006/02/20 16:50:37 thorpej Exp $");
 
 #include "opt_inet.h"
 #include "opt_ccitt.h"
@@ -220,8 +220,8 @@ void	smc91cxx_stop(struct smc91cxx_softc *);
 void	smc91cxx_watchdog(struct ifnet *);
 int	smc91cxx_ioctl(struct ifnet *, u_long, caddr_t);
 
-static __inline int ether_cmp(void *, void *);
-static __inline int
+static inline int ether_cmp(void *, void *);
+static inline int
 ether_cmp(va, vb)
 	void *va, *vb;
 {
@@ -737,8 +737,7 @@ smc91cxx_start(ifp)
 	 * and the status word (set to zeros).
 	 */
 	bus_space_write_2(bst, bsh, DATA_REG_W, 0);
-	bus_space_write_1(bst, bsh, DATA_REG_B, (length + 6) & 0xff);
-	bus_space_write_1(bst, bsh, DATA_REG_B, ((length + 6) >> 8) & 0xff);
+	bus_space_write_2(bst, bsh, DATA_REG_W, (length + 6) & 0x7ff);
 
 	/*
 	 * Get the packet from the kernel.  This will include the Ethernet
@@ -896,7 +895,7 @@ smc91cxx_intr(arg)
 	u_int16_t packetno, tx_status, card_stats;
 
 	if ((sc->sc_flags & SMC_FLAGS_ENABLED) == 0 ||
-	    (sc->sc_dev.dv_flags & DVF_ACTIVE) == 0)
+	    !device_is_active(&sc->sc_dev))
 		return (0);
 
 	SMC_SELECT_BANK(sc, 2);
@@ -1613,7 +1612,7 @@ smc91cxx_tick(arg)
 		panic("smc91cxx_tick");
 #endif
 
-	if ((sc->sc_dev.dv_flags & DVF_ACTIVE) == 0)
+	if (!device_is_active(&sc->sc_dev))
 		return;
 
 	s = splnet();

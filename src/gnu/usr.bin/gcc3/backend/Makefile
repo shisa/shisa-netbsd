@@ -1,9 +1,6 @@
-#	$NetBSD: Makefile,v 1.17 2005/02/11 14:58:41 jmc Exp $
+#	$NetBSD: Makefile,v 1.19 2006/05/08 14:42:22 tsutsui Exp $
 
-NOLINKLIB=	# defined
-NOLINT=		# defined
-NOPIC=		# defined
-NOPROFILE=	# defined
+MKPRIVATELIB=	yes
 
 LIB=		backend
 
@@ -45,7 +42,7 @@ CPPFLAGS.insn-conditions.c=	-DGENERATOR_FILE
 CPPFLAGS.print-rtl1.c=		-DGENERATOR_FILE
 
 # XXX
-.if ${MACHINE_ARCH} == "m68k" || ${MACHINE_ARCH} == "m68000"
+.if ${MACHINE_ARCH} == "m68000"
 COPTS.ra-colorize.c=		-O0
 .endif
 

@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile.inc,v 1.1.8.1 2005/11/28 15:48:12 tron Exp $
+#	$NetBSD: Makefile.inc,v 1.2 2005/11/23 08:22:54 tsutsui Exp $
 #
 #	etc.cobalt/Makefile.inc -- cobalt-specific etc Makefile targets
 #

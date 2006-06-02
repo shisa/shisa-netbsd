@@ -1,4 +1,4 @@
-/* $NetBSD: lapic.c,v 1.11 2005/01/13 00:08:22 fvdl Exp $ */
+/* $NetBSD: lapic.c,v 1.15 2006/01/04 00:15:50 rpaulo Exp $ */
 
 /*-
  * Copyright (c) 2000 The NetBSD Foundation, Inc.
@@ -39,7 +39,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: lapic.c,v 1.11 2005/01/13 00:08:22 fvdl Exp $");
+__KERNEL_RCSID(0, "$NetBSD: lapic.c,v 1.15 2006/01/04 00:15:50 rpaulo Exp $");
 
 #include "opt_ddb.h"
 #include "opt_multiprocessor.h"
@@ -70,11 +70,11 @@ __KERNEL_RCSID(0, "$NetBSD: lapic.c,v 1.11 2005/01/13 00:08:22 fvdl Exp $");
 #include <machine/i82489reg.h>
 #include <machine/i82489var.h>
 
-void		lapic_delay __P((int));
-void		lapic_microtime __P((struct timeval *));
-static u_int32_t lapic_gettick __P((void));
-void		lapic_clockintr __P((void *, struct intrframe));
-static void 	lapic_map __P((paddr_t));
+void		lapic_delay(int);
+void		lapic_microtime(struct timeval *);
+static u_int32_t lapic_gettick(void);
+void		lapic_clockintr(void *, struct intrframe);
+static void 	lapic_map(paddr_t);
 
 static void lapic_hwmask(struct pic *, int);
 static void lapic_hwunmask(struct pic *, int);
@@ -292,9 +292,9 @@ lapic_initclocks()
 	i82489_writereg (LAPIC_LVTT, LAPIC_LVTT_TM|LAPIC_TIMER_VECTOR);
 }
 
-extern int gettick __P((void));	/* XXX put in header file */
+extern int gettick(void);	/* XXX put in header file */
 extern int rtclock_tval; /* XXX put in header file */
-extern void (*initclock_func) __P((void)); /* XXX put in header file */
+extern void (*initclock_func)(void); /* XXX put in header file */
 
 /*
  * Calibrate the local apic count-down timer (which is running at
@@ -410,7 +410,7 @@ lapic_calibrate_timer(ci)
 void lapic_delay(usec)
 	int usec;
 {
-	int32_t tick, otick;
+	int32_t xtick, otick;
 	int64_t deltat;		/* XXX may want to be 64bit */
 
 	otick = lapic_gettick();
@@ -423,12 +423,12 @@ void lapic_delay(usec)
 		deltat = (lapic_frac_cycle_per_usec * usec) >> 32;
 
 	while (deltat > 0) {
-		tick = lapic_gettick();
-		if (tick > otick)
-			deltat -= lapic_tval - (tick - otick);
+		xtick = lapic_gettick();
+		if (xtick > otick)
+			deltat -= lapic_tval - (xtick - otick);
 		else
-			deltat -= otick - tick;
-		otick = tick;
+			deltat -= otick - xtick;
+		otick = xtick;
 
 		x86_pause();
 	}
@@ -438,9 +438,9 @@ void lapic_delay(usec)
  * XXX the following belong mostly or partly elsewhere..
  */
 
-static __inline void i82489_icr_wait(void);
+static inline void i82489_icr_wait(void);
 
-static __inline void
+static inline void
 i82489_icr_wait()
 {
 #ifdef DIAGNOSTIC

@@ -1,4 +1,4 @@
-/* $NetBSD: pass6.c,v 1.3.6.1 2005/05/07 11:21:29 tron Exp $	 */
+/* $NetBSD: pass6.c,v 1.11 2006/04/17 19:05:16 perseant Exp $	 */
 
 /*-
  * Copyright (c) 2003 The NetBSD Foundation, Inc.
@@ -57,7 +57,7 @@
 
 #include "bufcache.h"
 #include "vnode.h"
-#include "lfs.h"
+#include "lfs_user.h"
 #include "segwrite.h"
 
 #include "fsck.h"
@@ -66,7 +66,6 @@
 
 extern u_int32_t cksum(void *, size_t);
 extern u_int32_t lfs_sb_cksum(struct dlfs *);
-int extend_ifile(void);
 
 extern ufs_daddr_t badblk;
 extern SEGUSE *seg_table;
@@ -90,7 +89,7 @@ rfw_update_single(struct uvnode *vp, daddr_t lbn, ufs_daddr_t ndaddr, int size)
 	struct inode *ip;
 	daddr_t daddr, ooff;
 	int num, error;
-	int i, bb, osize, obb;
+	int i, bb, osize = 0, obb = 0;
 	u_int32_t oldsn, sn;
 
 	ip = VTOI(vp);
@@ -166,7 +165,7 @@ rfw_update_single(struct uvnode *vp, daddr_t lbn, ufs_daddr_t ndaddr, int size)
 		setbmap(daddr + i);
 
 	/* Check bfree accounting as well */
-	if (daddr < 0) {
+	if (daddr <= 0) {
 		fs->lfs_bfree -= btofsb(fs, size);
 	} else if (size != osize) {
 		fs->lfs_bfree -= (bb - obb);
@@ -277,8 +276,8 @@ pass6check(struct inodesc * idesc)
 	if (anyout) {
 		blkerror(idesc->id_number, "BAD", idesc->id_blkno);
 		if (badblk++ >= MAXBAD) {
-			pwarn("EXCESSIVE BAD BLKS I=%u",
-			      idesc->id_number);
+			pwarn("EXCESSIVE BAD BLKS I=%llu",
+			    (unsigned long long)idesc->id_number);
 			if (preen)
 				pwarn(" (SKIPPING)\n");
 			else if (reply("CONTINUE") == 0)
@@ -288,60 +287,6 @@ pass6check(struct inodesc * idesc)
 	}
 
 	return pass1check(idesc);
-}
-
-/*
- * Add a new block to the Ifile, to accommodate future file creations.
- */
-int
-extend_ifile(void)
-{
-	struct uvnode *vp;
-	struct inode *ip;
-	IFILE *ifp;
-	IFILE_V1 *ifp_v1;
-	struct ubuf *bp, *cbp;
-	daddr_t i, blkno, max;
-	ino_t oldlast;
-	CLEANERINFO *cip;
-
-	vp = fs->lfs_ivnode;
-	ip = VTOI(vp);
-	blkno = lblkno(fs, ip->i_ffs1_size);
-
-	bp = getblk(vp, blkno, fs->lfs_bsize);	/* XXX VOP_BALLOC() */
-	ip->i_ffs1_size += fs->lfs_bsize;
-	
-	i = (blkno - fs->lfs_segtabsz - fs->lfs_cleansz) *
-		fs->lfs_ifpb;
-	LFS_GET_HEADFREE(fs, cip, cbp, &oldlast);
-	LFS_PUT_HEADFREE(fs, cip, cbp, i);
-	max = i + fs->lfs_ifpb;
-	reset_maxino(max);
-	fs->lfs_bfree -= btofsb(fs, fs->lfs_bsize);
-
-	if (fs->lfs_version == 1) {
-		for (ifp_v1 = (IFILE_V1 *)bp->b_data; i < max; ++ifp_v1) {
-			ifp_v1->if_version = 1;
-			ifp_v1->if_daddr = LFS_UNUSED_DADDR;
-			ifp_v1->if_nextfree = ++i;
-		}
-		ifp_v1--;
-		ifp_v1->if_nextfree = oldlast;
-	} else {
-		for (ifp = (IFILE *)bp->b_data; i < max; ++ifp) {
-			ifp->if_version = 1;
-			ifp->if_daddr = LFS_UNUSED_DADDR;
-			ifp->if_nextfree = ++i;
-		}
-		ifp--;
-		ifp->if_nextfree = oldlast;
-	}
-	LFS_PUT_TAILFREE(fs, cip, cbp, max - 1);
-
-	LFS_BWRITE_LOG(bp);
-
-	return 0;
 }
 
 /*
@@ -389,8 +334,12 @@ alloc_inode(ino_t thisino, ufs_daddr_t daddr)
 	SEGUSE *sup;
 	struct ubuf *bp;
 
-	while (thisino >= maxino)
-		extend_ifile();
+	while (thisino >= maxino) {
+		extend_ifile(fs);
+		reset_maxino(((VTOI(fs->lfs_ivnode)->i_ffs1_size >>
+			       fs->lfs_bsize) - fs->lfs_segtabsz -
+			      fs->lfs_cleansz) * fs->lfs_ifpb);
+	}
 
 	LFS_IENTRY(ifp, fs, thisino, bp);
 	nextfree = ifp->if_nextfree;
@@ -402,7 +351,10 @@ alloc_inode(ino_t thisino, ufs_daddr_t daddr)
 		fs->lfs_freehd = nextfree;
 		sbdirty();
 		if (nextfree == 0) {
-			extend_ifile();
+			extend_ifile(fs);
+			reset_maxino(((VTOI(fs->lfs_ivnode)->i_ffs1_size >>
+				       fs->lfs_bsize) - fs->lfs_segtabsz -
+				      fs->lfs_cleansz) * fs->lfs_ifpb);
 		}
 	} else {
 		/* Search the free list for this inode */
@@ -472,7 +424,7 @@ pass6(void)
 		pwarn("could roll forward from %" PRIx32 " to %" PRIx32 "\n",
 			fs->lfs_offset, lastgood);
 
-	if (!preen && reply("roll forward") == 0)
+	if (!preen && reply("ROLL FORWARD") == 0)
 		return;
 	/*
 	 * Pass 1: find inode blocks.  We ignore the Ifile inode but accept
@@ -549,7 +501,7 @@ pass6(void)
 				if (dp->di_nlink < 0 ||
 				    dp->di_u.inumber < 0 ||
 				    dp->di_size < 0) {
-					pwarn("bad inode at %" PRIx32 "\n",
+					pwarn("BAD INODE AT 0x%" PRIx32 "\n",
 						ibdaddr);
 					brelse(ibp);
 					brelse(bp);

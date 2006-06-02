@@ -1,4 +1,4 @@
-/*	$NetBSD: if_x25subr.c,v 1.34 2004/04/18 19:11:39 matt Exp $	*/
+/*	$NetBSD: if_x25subr.c,v 1.37 2006/05/12 01:25:44 mrg Exp $	*/
 
 /*
  * Copyright (c) 1990, 1993
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_x25subr.c,v 1.34 2004/04/18 19:11:39 matt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_x25subr.c,v 1.37 2006/05/12 01:25:44 mrg Exp $");
 
 #include "opt_inet.h"
 #include "opt_iso.h"
@@ -451,7 +451,8 @@ x25_rtrequest(cmd, rt, info)
 	 */
 	if (x25_dgram_sockmask == 0) {
 		x25_dgram_sockmask =
-			SA(rn_addmask((caddr_t) & x25_dgmask, 0, 4)->rn_key);
+			/*XXXUNCONST*/
+			SA(__UNCONST(rn_addmask(&x25_dgmask, 0, 4)->rn_key));
 	}
 	if (rt->rt_flags & RTF_GATEWAY) {
 		if (rt->rt_llinfo)
@@ -608,6 +609,8 @@ x25_dg_rtinit(dst, ia, af)
 	struct rtentry *rt;
 	struct in_addr  my_addr;
 	static struct sockaddr_in sin = {sizeof(sin), AF_INET};
+
+	memset(&my_addr, 0, sizeof my_addr);	/* XXX gcc */
 
 	if (ia->ia_ifp->if_type == IFT_X25DDN && af == AF_INET) {
 		/*

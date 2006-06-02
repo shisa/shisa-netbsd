@@ -1,4 +1,4 @@
-/*	$NetBSD: pwhash.c,v 1.12 2005/01/12 05:45:23 christos Exp $	*/
+/*	$NetBSD: pwhash.c,v 1.14 2006/03/05 08:50:58 christos Exp $	*/
 /*	$OpenBSD: encrypt.c,v 1.16 2002/02/16 21:27:45 millert Exp $	*/
 
 /*
@@ -28,7 +28,7 @@
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: pwhash.c,v 1.12 2005/01/12 05:45:23 christos Exp $");
+__RCSID("$NetBSD: pwhash.c,v 1.14 2006/03/05 08:50:58 christos Exp $");
 #endif
 
 #include <sys/types.h>
@@ -104,15 +104,15 @@ print_passwd(char *string, int operation, const char *extra)
 		break;
 
 	case DO_MD5:
-		error = pw_gensalt(buf, _PASSWORD_LEN, "md5", NULL);
+		error = pw_gensalt(buf, _PASSWORD_LEN, "md5", extra);
 		break;
 
 	case DO_SHA1:
-		error = pw_gensalt(buf, _PASSWORD_LEN, "sha1", NULL);
+		error = pw_gensalt(buf, _PASSWORD_LEN, "sha1", extra);
 		break;
 
 	case DO_BLF:
-		error = pw_gensalt(buf, _PASSWORD_LEN, "blowfish", NULL);
+		error = pw_gensalt(buf, _PASSWORD_LEN, "blowfish", extra);
 		break;
 
 	case DO_DES:
@@ -139,7 +139,7 @@ main(int argc, char **argv)
 	int opt;
 	int operation = -1;
 	int prompt = 0;
-	const char *extra;	/* Store salt or number of rounds */
+	const char *extra = NULL;	/* Store salt or number of rounds */
 
 	setprogname(argv[0]);
 

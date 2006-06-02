@@ -1,4 +1,4 @@
-/*	$NetBSD: des.h,v 1.4 2003/07/24 14:16:30 itojun Exp $	*/
+/*	$NetBSD: des.h,v 1.7 2006/03/20 21:31:08 christos Exp $	*/
 
 /* crypto/des/des.h */
 /* Copyright (C) 1995-1997 Eric Young (eay@cryptsoft.com)
@@ -77,21 +77,10 @@ typedef /* const */ unsigned char const_des_cblock[8];
 /* With "const", gcc 2.8.1 on Solaris thinks that des_cblock *
  * and const_des_cblock * are incompatible pointer types. */
 
-typedef struct des_ks_struct
-	{
-	union	{
-		des_cblock cblock;
-		/* make sure things are correct size on machines with
-		 * 8 byte longs */
-		DES_LONG deslong[2];
-		} ks;
-#if 0
-	int weak_key;
-#endif
-	} des_key_schedule[16];
-
 #define DES_KEY_SZ 	8	/*(sizeof(des_cblock))*/
 #define DES_SCHEDULE_SZ 128	/*(sizeof(des_key_schedule))*/
+
+typedef DES_LONG des_key_schedule[DES_SCHEDULE_SZ / sizeof(DES_LONG)];
 
 #define DES_ENCRYPT	1
 #define DES_DECRYPT	0

@@ -1,4 +1,4 @@
-/*	$NetBSD: mdreloc.c,v 1.23 2003/07/24 10:12:30 skrll Exp $	*/
+/*	$NetBSD: mdreloc.c,v 1.27 2006/05/20 23:38:27 dan Exp $	*/
 
 /*
  * Copyright (c) 2001 Wasabi Systems, Inc.
@@ -66,6 +66,11 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <sys/cdefs.h>
+#ifndef lint
+__RCSID("$NetBSD: mdreloc.c,v 1.27 2006/05/20 23:38:27 dan Exp $");
+#endif /* not lint */
+
 #include <sys/types.h>
 #include <sys/mman.h>
 #include <err.h>
@@ -84,6 +89,8 @@
 void _rtld_bind_start(void);
 void _rtld_relocate_nonplt_self(Elf_Dyn *, Elf_Addr);
 caddr_t _rtld_bind(const Obj_Entry *, Elf_Word);
+static inline int _rtld_relocate_plt_object(const Obj_Entry *,
+    const Elf_Rela *, Elf_Addr *);
 
 void
 _rtld_setup_pltgot(const Obj_Entry *obj)
@@ -248,10 +255,9 @@ _rtld_relocate_plt_lazy(const Obj_Entry *obj)
 	return 0;
 }
 
-caddr_t
-_rtld_bind(const Obj_Entry *obj, Elf_Word reloff)
+static inline int
+_rtld_relocate_plt_object(const Obj_Entry *obj, const Elf_Rela *rela, Elf_Addr *tp)
 {
-	const Elf_Rela *rela = obj->pltrela + reloff;
 	Elf_Addr *where = (Elf_Addr *)(obj->relocbase + rela->r_offset);
 	Elf_Addr new_value;
 	const Elf_Sym  *def;
@@ -261,7 +267,7 @@ _rtld_bind(const Obj_Entry *obj, Elf_Word reloff)
 
 	def = _rtld_find_symdef(ELF_R_SYM(rela->r_info), obj, &defobj, true);
 	if (def == NULL)
-		_rtld_die();
+		return -1;
 
 	new_value = (Elf_Addr)(defobj->relocbase + def->st_value +
 	    rela->r_addend);
@@ -270,5 +276,36 @@ _rtld_bind(const Obj_Entry *obj, Elf_Word reloff)
 	if (*where != new_value)
 		*where = new_value;
 
-	return (caddr_t)(new_value - rela->r_addend);
+	if (tp)
+		*tp = new_value - rela->r_addend;
+
+	return 0;
+}
+
+caddr_t
+_rtld_bind(const Obj_Entry *obj, Elf_Word reloff)
+{
+	const Elf_Rela *rela = obj->pltrela + reloff;
+	Elf_Addr new_value;
+	int err;
+
+	new_value = 0; /* XXX GCC4 */
+
+	err = _rtld_relocate_plt_object(obj, rela, &new_value);
+	if (err)
+		_rtld_die();
+
+	return (caddr_t)new_value;
+}
+
+int
+_rtld_relocate_plt_objects(const Obj_Entry *obj)
+{
+	const Elf_Rela *rela;
+
+	for (rela = obj->pltrela; rela < obj->pltrelalim; rela++)
+		if (_rtld_relocate_plt_object(obj, rela, NULL) < 0)
+			return -1;
+
+	return 0;
 }

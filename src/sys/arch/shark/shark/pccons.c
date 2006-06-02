@@ -1,4 +1,4 @@
-/*      $NetBSD: pccons.c,v 1.20 2005/01/05 10:25:43 tsutsui Exp $       */
+/*      $NetBSD: pccons.c,v 1.25 2006/05/14 21:56:33 elad Exp $       */
 
 /*
  * Copyright 1997
@@ -135,7 +135,7 @@
 */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: pccons.c,v 1.20 2005/01/05 10:25:43 tsutsui Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pccons.c,v 1.25 2006/05/14 21:56:33 elad Exp $");
 
 #include "opt_ddb.h"
 #include "opt_xserver.h"
@@ -154,6 +154,7 @@ __KERNEL_RCSID(0, "$NetBSD: pccons.c,v 1.20 2005/01/05 10:25:43 tsutsui Exp $");
 #include <sys/syslog.h>
 #include <sys/device.h>
 #include <sys/conf.h>
+#include <sys/kauth.h>
 #include <machine/kerndebug.h>
 
 #include <uvm/uvm_extern.h>
@@ -311,7 +312,7 @@ void                   pcattach            __P((struct device *,
 int                    pcintr              __P((void *));
 char                   *sget               __P((struct pc_softc *));
 void                   sput                __P((struct pc_softc *,
-                                                u_char *, 
+                                                const u_char *, 
                                                 int,
                                                 u_char));
 void                   pcstart             __P((struct tty *));
@@ -603,7 +604,7 @@ kbd_init(bus_space_tag_t     iot,
 **
 **  IMPLICIT INPUTS:
 **
-**     addr_6845    -  Base adddress of the video registers 
+**     addr_6845    -  Base address of the video registers 
 **
 **  IMPLICIT OUTPUTS:
 **
@@ -651,7 +652,7 @@ set_cursor_shape(struct pc_softc *sc)
 **
 **  IMPLICIT INPUTS:
 **
-**     addr_6845    -  Base adddress of the video registers 
+**     addr_6845    -  Base address of the video registers 
 **
 **  IMPLICIT OUTPUTS:
 **
@@ -1151,14 +1152,14 @@ int
 pcopen(dev_t       dev, 
        int         flag, 
        int         mode, 
-       struct proc *p)
+       struct lwp *l)
 {
     struct pc_softc *sc;
     int unit = PCUNIT(dev);
     struct tty *tp;
     
     KERN_DEBUG( pcdebug, KERN_DEBUG_INFO, ("pcopen by process %d\n",
-                                           p->p_pid));
+                                           l->l_proc->p_pid));
     /*
     ** Sanity check the minor device number we have been instructed
     ** to open and set up our softc structure pointer. 
@@ -1207,7 +1208,8 @@ pcopen(dev_t       dev,
         pcparam(tp, &tp->t_termios);
         ttsetwater(tp);
     } 
-    else if ( tp->t_state & TS_XCLUDE && p->p_ucred->cr_uid != 0 )
+    else if ( tp->t_state & TS_XCLUDE &&
+	     kauth_authorize_generic(l->l_proc->p_cred, KAUTH_GENERIC_ISSUSER, &l->l_proc->p_acflag) != 0 )
     {
         /*
         ** Don't allow the open if the tty has been set up 
@@ -1240,7 +1242,7 @@ pcopen(dev_t       dev,
 **     dev  - Device identifier consisting of major and minor numbers.
 **     flag - Not used.
 **     mode - Not used.
-**     p    - Not used. 
+**     l    - Not used. 
 **
 **  IMPLICIT INPUTS:
 **
@@ -1263,7 +1265,7 @@ int
 pcclose(dev_t       dev, 
         int         flag, 
         int         mode, 
-        struct proc *p)
+        struct lwp *l)
 {
     /* 
     ** Set up our pointers to the softc and tty structures.
@@ -1391,7 +1393,7 @@ pcwrite(dev_t      dev,
 **      
 **      dev    - Device identifier consisting of major and minor numbers.
 **      events - Events to poll for
-**      p      - The process performing the poll
+**      l      - The lwp performing the poll
 **
 **  IMPLICIT INPUTS:
 **
@@ -1415,12 +1417,12 @@ pcwrite(dev_t      dev,
 int
 pcpoll(dev_t       dev, 
        int         events,
-       struct proc *p)
+       struct lwp *l)
 {
     struct pc_softc *sc = pc_cd.cd_devs[PCUNIT(dev)];
     struct tty      *tp = sc->sc_tty;
     
-    return ((*tp->t_linesw->l_poll)(tp, events, p));
+    return ((*tp->t_linesw->l_poll)(tp, events, l));
 } /* End pcpoll() */
 
 
@@ -1571,7 +1573,7 @@ pcintr(void *arg)
 ** 
 **     data - user data
 **     flag - Not used by us but passed to line discipline and ttioctl
-**     p    - pointer to proc structure of user.
+**     l    - pointer to lwp structure of user.
 **     
 **  IMPLICIT INPUTS:
 **
@@ -1601,7 +1603,7 @@ pcioctl(dev_t       dev,
         u_long      cmd, 
         caddr_t     data, 
         int         flag, 
-        struct proc *p)
+        struct lwp *l)
 {
     struct pc_softc *sc = pc_cd.cd_devs[PCUNIT(dev)];
     struct tty      *tp = sc->sc_tty;
@@ -1615,13 +1617,13 @@ pcioctl(dev_t       dev,
     ** we don't need to to do anything. Error == EPASSTHROUGH means the line
     ** discipline doesn't handle this sort of operation. 
     */
-    error = (*tp->t_linesw->l_ioctl)(tp, cmd, data, flag, p);
+    error = (*tp->t_linesw->l_ioctl)(tp, cmd, data, flag, l);
     if (error == EPASSTHROUGH)
     {
         /* Try the common tty ioctl routine to see if it recognises the
         ** request.  
         */
-        error = ttioctl(tp, cmd, data, flag, p);
+        error = ttioctl(tp, cmd, data, flag, l);
         if (error == EPASSTHROUGH)
         {
             /* Ok must be something specific to our device, 
@@ -2378,10 +2380,10 @@ pcparam(struct tty     *tp,
 */
 #define wrtchar(sc, c, at) \
 do { \
-    char *cp = (char *)crtat; \
+    char *__cp = (char *)crtat; \
 \
-    *cp++    = (c); \
-    *cp      = (at); \
+    *__cp++    = (c); \
+    *__cp      = (at); \
     crtat++; sc->vs.col++; \
 } while (0)
 
@@ -2427,7 +2429,7 @@ static char bgansitopc[] = {
 */
 void
 sput(struct pc_softc   *sc,
-     u_char            *cp, 
+     const u_char      *cp, 
      int               n,
      u_char            nowait)
 {
@@ -2439,7 +2441,7 @@ sput(struct pc_softc   *sc,
     /* Initialise the display if not done already */
     if (crtat == 0) 
     {
-        u_short volatile *cp;
+        u_short volatile *cp2;
 #ifdef DOESNT_ALWAYS_DO_THE_RIGHT_THING
         u_short was;
 #endif
@@ -2453,19 +2455,19 @@ sput(struct pc_softc   *sc,
         ** we operate in color mode otherwise
         ** mono.
         */
-        cp = (void *)((u_long)(CGA_BUF) + vam_mem_data);
+        cp2 = (void *)((u_long)(CGA_BUF) + vam_mem_data);
 #ifdef DOESNT_ALWAYS_DO_THE_RIGHT_THING
-        was = *cp;              /* save whatever is at CGA_BUF */
-        *cp = (u_short) 0xA55A;
-        if (*cp != 0xA55A) 
+        was = *cp2;              /* save whatever is at CGA_BUF */
+        *cp2 = (u_short) 0xA55A;
+        if (*cp2 != 0xA55A) 
         {
-            cp = (void *)((u_long)(MONO_BUF) + vam_mem_data);
+            cp2 = (void *)((u_long)(MONO_BUF) + vam_mem_data);
             addr_6845 = MONO_BASE;
             sc->vs.color = 0;
         } 
         else 
         {
-            *cp = was;          /* restore previous contents of CGA_BUF */
+            *cp2 = was;          /* restore previous contents of CGA_BUF */
             addr_6845 = CGA_BASE;
             sc->vs.color = 1;
         }
@@ -2484,8 +2486,8 @@ sput(struct pc_softc   *sc,
         cursor_shape = 0x0012;
 #endif
         /* Save cursor locations */
-        Crtat = (u_short *)cp;
-        crtat = (u_short *)(cp + cursorat);
+        Crtat = __UNVOLATILE(cp2);
+        crtat = __UNVOLATILE(cp2 + cursorat);
         
         /* Set up screen size and colours */
         sc->vs.ncol = COL;

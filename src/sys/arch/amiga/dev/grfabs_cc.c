@@ -1,4 +1,4 @@
-/*	$NetBSD: grfabs_cc.c,v 1.25 2004/02/24 15:05:54 wiz Exp $ */
+/*	$NetBSD: grfabs_cc.c,v 1.28 2006/03/08 23:46:22 lukem Exp $ */
 
 /*
  * Copyright (c) 1994 Christian E. Hopps
@@ -38,7 +38,7 @@
 #include "opt_amigaccgrf.h"
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: grfabs_cc.c,v 1.25 2004/02/24 15:05:54 wiz Exp $");
+__KERNEL_RCSID(0, "$NetBSD: grfabs_cc.c,v 1.28 2006/03/08 23:46:22 lukem Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -55,7 +55,7 @@ __KERNEL_RCSID(0, "$NetBSD: grfabs_cc.c,v 1.25 2004/02/24 15:05:54 wiz Exp $");
 
 monitor_t *m_this;
 mdata_t *m_this_data;
-char   *monitor_name = "CCMONITOR";
+const char *monitor_name = "CCMONITOR";
 monitor_t monitor;
 mdata_t monitor_data;
 cop_t  *null_mode_copper_list;
@@ -1506,7 +1506,7 @@ cc_init_ntsc_a2024(void)
 		bzero(a24_this, sizeof(dmode_t));
 		bzero(a24_this_data, sizeof(dmdata_t));
 
-		a24_this->name = "ntsc: A2024 15khz";
+		a24_this->name = "ntsc: A2024 15 kHz";
 		a24_this->nominal_size.width = 1024;
 		a24_this->nominal_size.height = 800;
 		a24_this_data->max_size.width = 1024;
@@ -2984,7 +2984,7 @@ cc_init_pal_a2024(void)
 		bzero(p24_this, sizeof(dmode_t));
 		bzero(p24_this_data, sizeof(dmdata_t));
 
-		p24_this->name = "pal: A2024 15khz";
+		p24_this->name = "pal: A2024 15 kHz";
 		p24_this->nominal_size.width = 1024;
 		p24_this->nominal_size.height = 1024;
 		p24_this_data->max_size.width = 1024;

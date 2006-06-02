@@ -1,4 +1,4 @@
-/* $NetBSD: if_atw_cardbus.c,v 1.11 2005/02/27 00:26:59 perry Exp $ */
+/* $NetBSD: if_atw_cardbus.c,v 1.14 2006/03/29 06:22:38 thorpej Exp $ */
 
 /*-
  * Copyright (c) 1999, 2000, 2003 The NetBSD Foundation, Inc.
@@ -43,7 +43,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_atw_cardbus.c,v 1.11 2005/02/27 00:26:59 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_atw_cardbus.c,v 1.14 2006/03/29 06:22:38 thorpej Exp $");
 
 #include "opt_inet.h"
 #include "opt_ns.h"
@@ -66,7 +66,7 @@ __KERNEL_RCSID(0, "$NetBSD: if_atw_cardbus.c,v 1.11 2005/02/27 00:26:59 perry Ex
 #include <net/if_media.h>
 #include <net/if_ether.h>
 
-#include <net80211/ieee80211_compat.h>
+#include <net80211/ieee80211_netbsd.h>
 #include <net80211/ieee80211_radiotap.h>
 #include <net80211/ieee80211_var.h>
 
@@ -181,7 +181,7 @@ atw_cardbus_match(struct device *parent, struct cfdata *match, void *aux)
 void
 atw_cardbus_attach(struct device *parent, struct device *self, void *aux)
 {
-	struct atw_cardbus_softc *csc = (void *)self;
+	struct atw_cardbus_softc *csc = device_private(self);
 	struct atw_softc *sc = &csc->sc_atw;
 	struct cardbus_attach_args *ca = aux;
 	cardbus_devfunc_t ct = ca->ca_ct;
@@ -301,7 +301,7 @@ atw_cardbus_intr_ack(struct atw_softc *sc)
 int
 atw_cardbus_detach(struct device *self, int flags)
 {
-	struct atw_cardbus_softc *csc = (void *)self;
+	struct atw_cardbus_softc *csc = device_private(self);
 	struct atw_softc *sc = &csc->sc_atw;
 	struct cardbus_devfunc *ct = csc->sc_ct;
 	int rv;

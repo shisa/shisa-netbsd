@@ -1,4 +1,4 @@
-/*	$NetBSD: modload.c,v 1.49 2004/10/27 19:36:31 peter Exp $	*/
+/*	$NetBSD: modload.c,v 1.51 2005/06/27 01:00:05 christos Exp $	*/
 
 /*
  * Copyright (c) 1993 Terrence R. Lambert.
@@ -34,7 +34,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: modload.c,v 1.49 2004/10/27 19:36:31 peter Exp $");
+__RCSID("$NetBSD: modload.c,v 1.51 2005/06/27 01:00:05 christos Exp $");
 #endif /* not lint */
 
 #include <sys/param.h>
@@ -244,10 +244,10 @@ int
 main(int argc, char **argv)
 {
 	int c;
-	char *kname = NULL;
-	char *entry = DFLT_ENTRY;
+	const char *kname = NULL;
+	const char *entry = DFLT_ENTRY;
 	char *post = NULL;
-	char *ldscript = NULL;
+	const char *ldscript = NULL;
 	char *modobj;
 	char modout[MAXPATHLEN], *p;
 	struct stat stb;
@@ -339,13 +339,15 @@ main(int argc, char **argv)
 		 * Try <modobj>_init if entry is DFLT_ENTRY.
 		 */
 		if (strcmp(entry, DFLT_ENTRY) == 0) {
+			char *nentry;
 			if ((p = strrchr(modout, '/')))
 				p++;
 			else
 				p = modout;
-			asprintf(&entry, "%s%s", p, DFLT_ENTRYEXT);
-			if (!entry)
+			asprintf(&nentry, "%s%s", p, DFLT_ENTRYEXT);
+			if (!nentry)
 				err(1, "malloc");
+			entry = nentry;
 			if (verify_entry(entry, modobj))
 				errx(1, "entry point _%s not found in %s",
 				    entry, modobj);
@@ -512,12 +514,12 @@ main(int argc, char **argv)
 			int cmajor = LKM_CHAR_MAJOR(sbuf.offset);
 			(void)snprintf(arg3, sizeof(arg3), "%d", cmajor);
 			(void)snprintf(arg4, sizeof(arg4), "%d", bmajor);
-			execl(post, post, id, type, arg3, arg4, 0);
+			execl(post, post, id, type, arg3, arg4, NULL);
 		} else {
 			char arg3[16];
 			(void)snprintf(arg3, sizeof(arg3), "%ld",
 			    (long)sbuf.offset);
-			execl(post, post, id, type, arg3, 0);
+			execl(post, post, id, type, arg3, NULL);
 		}
 		err(16, "can't exec `%s'", post);
 	}

@@ -1,4 +1,4 @@
-/*	$NetBSD: sunos_exec.c,v 1.46.2.1 2005/09/18 20:09:49 tron Exp $	*/
+/*	$NetBSD: sunos_exec.c,v 1.50 2005/12/11 12:20:23 christos Exp $	*/
 
 /*
  * Copyright (c) 1993 Theo de Raadt
@@ -28,7 +28,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: sunos_exec.c,v 1.46.2.1 2005/09/18 20:09:49 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: sunos_exec.c,v 1.50 2005/12/11 12:20:23 christos Exp $");
 
 #if defined(_KERNEL_OPT)
 #include "opt_syscall_debug.h"
@@ -45,7 +45,10 @@ __KERNEL_RCSID(0, "$NetBSD: sunos_exec.c,v 1.46.2.1 2005/09/18 20:09:49 tron Exp
 #include <uvm/uvm_extern.h>
 
 #include <compat/sunos/sunos.h>
+#include <compat/sunos/sunos_exec.h>
 #include <compat/sunos/sunos_syscall.h>
+
+#include <machine/sunos_machdep.h>
 
 extern int nsunos_sysent;
 extern struct sysent sunos_sysent[];
@@ -53,9 +56,7 @@ extern struct sysent sunos_sysent[];
 extern const char * const sunos_syscallnames[];
 #endif
 extern char sunos_sigcode[], sunos_esigcode[];
-#ifdef __HAVE_SYSCALL_INTERN
-void sunos_syscall_intern __P((struct proc *));
-#else
+#ifndef __HAVE_SYSCALL_INTERN
 void syscall __P((void));
 #endif
 

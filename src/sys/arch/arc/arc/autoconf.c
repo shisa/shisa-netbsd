@@ -1,4 +1,4 @@
-/*	$NetBSD: autoconf.c,v 1.23 2005/01/22 07:35:33 tsutsui Exp $	*/
+/*	$NetBSD: autoconf.c,v 1.29 2006/03/26 04:36:41 thorpej Exp $	*/
 /*	$OpenBSD: autoconf.c,v 1.9 1997/05/18 13:45:20 pefo Exp $	*/
 
 /*
@@ -88,7 +88,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.23 2005/01/22 07:35:33 tsutsui Exp $");
+__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.29 2006/03/26 04:36:41 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -106,13 +106,13 @@ __KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.23 2005/01/22 07:35:33 tsutsui Exp $"
 #include <dev/scsipi/scsiconf.h>
 
 struct bootdev_data {
-	char	*dev_type;
+	const char *dev_type;
 	int	bus;
 	int	unit;
 	int	partition;
 };
 
-int getpno(char **, int *);
+int getpno(const char **, int *);
 
 /*
  * The following several variables are related to
@@ -132,7 +132,7 @@ cpu_configure(void)
 	softintr_init();
 
 	(void)splhigh();	/* To be really sure.. */
-	if (config_rootfound("mainbus", "mainbus") == NULL)
+	if (config_rootfound("mainbus", NULL) == NULL)
 		panic("no mainbus found");
 
 	/* Configuration is finished, turn on interrupts. */
@@ -154,8 +154,8 @@ cpu_rootconf(void)
 }
 
 struct devmap {
-	char *attachment;
-	char *dev;
+	const char *attachment;
+	const char *dev;
 };
 
 /*
@@ -164,7 +164,7 @@ struct devmap {
  * (beware for empty scsi id's...)
  */
 void
-makebootdev(char *cp)
+makebootdev(const char *cp)
 {
 	int ok, junk;
 	static struct devmap devmap[] = {
@@ -218,10 +218,10 @@ makebootdev(char *cp)
 }
 
 int
-getpno(char **cp, int *np)
+getpno(const char **cp, int *np)
 {
 	int val = 0;
-	char *s = *cp;
+	const char *s = *cp;
 	int got = 0;
 
 	*np = 0;
@@ -250,9 +250,7 @@ void
 device_register(struct device *dev, void *aux)
 {
 	struct bootdev_data *b = bootdev_data;
-	struct device *parent = dev->dv_parent;
-	struct cfdata *cf = dev->dv_cfdata;
-	const char *name = cf->cf_name;
+	struct device *parent = device_parent(dev);
 
 	static int found = 0, initted = 0, scsiboot = 0;
 	static struct device *scsibusdev = NULL;
@@ -268,8 +266,9 @@ device_register(struct device *dev, void *aux)
 		initted = 1;
 	}
 
-	if (scsiboot && strcmp(name, "scsibus") == 0) {
-		if (dev->dv_unit == b->bus) {
+	if (scsiboot && device_is_a(dev, "scsibus")) {
+		/* XXX device_unit() abuse */
+		if (device_unit(dev) == b->bus) {
 			scsibusdev = dev;
 #if 0
 			printf("\nscsibus = %s\n", dev->dv_xname);
@@ -278,10 +277,10 @@ device_register(struct device *dev, void *aux)
 		return;
 	}
 
-	if (strcmp(b->dev_type, name) != 0)
+	if (!device_is_a(dev, b->dev_type))
 		return;
 
-	if (strcmp(name, "sd") == 0) {
+	if (device_is_a(dev, "sd")) {
 		struct scsipibus_attach_args *sa = aux;
 
 		if (scsiboot && scsibusdev && parent == scsibusdev &&
@@ -294,7 +293,8 @@ device_register(struct device *dev, void *aux)
 		}
 		return;
 	}
-	if (dev->dv_unit == b->unit) {
+	/* XXX device_unit() abuse */
+	if (device_unit(dev) == b->unit) {
 		booted_device = dev;
 #if 0
 		printf("\nbooted_device = %s\n", dev->dv_xname);

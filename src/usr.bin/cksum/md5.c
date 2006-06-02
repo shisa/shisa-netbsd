@@ -1,4 +1,4 @@
-/*	$NetBSD: md5.c,v 1.8.2.1 2005/09/12 12:17:35 tron Exp $	*/
+/*	$NetBSD: md5.c,v 1.9 2005/08/24 19:44:45 elad Exp $	*/
 
 /*
  * MDDRIVER.C - test driver for MD2, MD4 and MD5
@@ -23,7 +23,7 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID) && !defined(lint)
-__RCSID("$NetBSD: md5.c,v 1.8.2.1 2005/09/12 12:17:35 tron Exp $");
+__RCSID("$NetBSD: md5.c,v 1.9 2005/08/24 19:44:45 elad Exp $");
 #endif /* not lint */
 
 #include <sys/types.h>

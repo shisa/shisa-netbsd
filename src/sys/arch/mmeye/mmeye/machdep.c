@@ -1,4 +1,4 @@
-/*	$NetBSD: machdep.c,v 1.35 2004/03/24 15:34:50 atatat Exp $	*/
+/*	$NetBSD: machdep.c,v 1.38 2005/12/24 20:07:19 perry Exp $	*/
 
 /*-
  * Copyright (c) 1996, 1997, 1998 The NetBSD Foundation, Inc.
@@ -72,7 +72,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.35 2004/03/24 15:34:50 atatat Exp $");
+__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.38 2005/12/24 20:07:19 perry Exp $");
 
 #include "opt_ddb.h"
 #include "opt_memsize.h"
@@ -110,7 +110,7 @@ char machine[] = MACHINE;		/* mmeye */
 char machine_arch[] = MACHINE_ARCH;	/* sh3eb */
 
 void initSH3 __P((void *));
-void LoadAndReset __P((char *));
+void LoadAndReset __P((const char *));
 void XLoadAndReset __P((char *));
 void consinit __P((void));
 void sh3_cache_on __P((void));
@@ -139,14 +139,14 @@ cpu_startup()
 static int
 sysctl_machdep_loadandreset(SYSCTLFN_ARGS)
 {
-	char *osimage;
+	const char *osimage;
 	int error;
 
-	error = sysctl_lookup(SYSCTLFN_CALL(rnode));
+	error = sysctl_lookup(SYSCTLFN_CALL(__UNCONST(rnode)));
 	if (error || newp == NULL)
 		return (error);
 
-	osimage = (char *)(*(u_long *)newp);
+	osimage = (const char *)(*(const u_long *)newp);
 	LoadAndReset(osimage);
 	/* not reach here */
 	return (0);
@@ -269,7 +269,7 @@ initSH3(void *pc)	/* XXX return address */
 	 * XXX We can't return here, because we change stack pointer.
 	 *     So jump to return address directly.
 	 */
-	__asm __volatile (
+	__asm volatile (
 		"jmp	@%0;"
 		"mov	%1, r15"
 		:: "r"(pc),"r"(lwp0.l_md.md_pcb->pcb_sf.sf_r7_bank));
@@ -444,11 +444,11 @@ sh3_cache_on(void)
 
 void
 LoadAndReset(osimage)
-	char *osimage;
+	const char *osimage;
 {
 	void *buf_addr;
 	u_long size;
-	u_long *src;
+	const u_long *src;
 	u_long *dest;
 	u_long csum = 0;
 	u_long csum2 = 0;
@@ -459,8 +459,8 @@ LoadAndReset(osimage)
 	printf("LoadAndReset: copy start\n");
 	buf_addr = (void *)OSIMAGE_BUF_ADDR;
 
-	size = *(u_long *)osimage;
-	src = (u_long *)osimage;
+	size = *(const u_long *)osimage;
+	src = (const u_long *)osimage;
 	dest = buf_addr;
 
 	size = (size + sizeof(u_long) * 2 + 3) >> 2;

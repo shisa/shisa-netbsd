@@ -1,4 +1,4 @@
-/*	$NetBSD: disklabel_dkcksum.c,v 1.3.6.1 2005/05/19 16:14:48 tron Exp $	*/
+/*	$NetBSD: disklabel_dkcksum.c,v 1.4 2005/05/15 21:01:34 thorpej Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)dkcksum.c	8.1 (Berkeley) 6/5/93";
 #else
-__RCSID("$NetBSD: disklabel_dkcksum.c,v 1.3.6.1 2005/05/19 16:14:48 tron Exp $");
+__RCSID("$NetBSD: disklabel_dkcksum.c,v 1.4 2005/05/15 21:01:34 thorpej Exp $");
 #endif
 #endif /* not lint */
 

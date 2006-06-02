@@ -1,4 +1,4 @@
-/*	$NetBSD: db_disasm.c,v 1.10 2003/07/15 03:36:08 lukem Exp $ */
+/*	$NetBSD: db_disasm.c,v 1.13 2006/02/25 02:28:57 wiz Exp $ */
 
 /*
  * Copyright (c) 1994 David S. Miller, davem@nadzieja.rutgers.edu
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: db_disasm.c,v 1.10 2003/07/15 03:36:08 lukem Exp $");
+__KERNEL_RCSID(0, "$NetBSD: db_disasm.c,v 1.13 2006/02/25 02:28:57 wiz Exp $");
 
 #include <sys/param.h>
 #include <machine/db_machdep.h>
@@ -62,7 +62,7 @@ __KERNEL_RCSID(0, "$NetBSD: db_disasm.c,v 1.10 2003/07/15 03:36:08 lukem Exp $")
  *
  * There are 5 different fields that can be used to identify which
  * operation is encoded into a particular 32-bit insn. There are 3
- * formats for instuctions, which one being used is determined by
+ * formats for instructions, which one being used is determined by
  * bits 30-31 of the insn. Here are the bit fields and their names:
  *
  * 1100 0000 0000 0000 0000 0000 0000 0000 op field, determines format
@@ -116,18 +116,18 @@ __KERNEL_RCSID(0, "$NetBSD: db_disasm.c,v 1.10 2003/07/15 03:36:08 lukem Exp $")
 
 struct sparc_insn {
 	  unsigned int match;
-	  char* name;
-	  char* format;
+	  const char* name;
+	  const char* format;
 };
 
-char* regs[] = {
+const char* regs[] = {
 	"g0", "g1", "g2", "g3", "g4", "g5", "g6", "g7",
 	"o0", "o1", "o2", "o3", "o4", "o5", "sp", "o7",
 	"l0", "l1", "l2", "l3", "l4", "l5", "l6", "l7",
 	"i0", "i1", "i2", "i3", "i4", "i5", "fp", "i7"
 };
 
-char* priv_regs[] = {
+const char* priv_regs[] = {
 	"tpc", "tnpc", "tstate", "tt", "tick", "tba", "pstate", "tl",
 	"pil", "cwp", "cansave", "canrestore", "cleanwin", "otherwin",
 	"wstate", "fq",
@@ -135,18 +135,18 @@ char* priv_regs[] = {
 	"", "", "", "", "", "", "", "ver"
 };
 
-char* state_regs[] = {
+const char* state_regs[] = {
 	"y", "", "ccr", "asi", "tick", "pc", "fprs", "asr",
 	"", "", "", "", "", "", "", "",
 	"pcr", "pic", "dcr", "gsr", "set_softint", "clr_softint", "softint", "tick_cmpr", "",
 	"", "", "", "", "", "", "", ""
 };
 
-char* ccodes[] = {
+const char* ccodes[] = {
 	"fcc0", "fcc1", "fcc2", "fcc3", "icc", "", "xcc", ""
 };
 
-char* prefetch[] = {
+const char* prefetch[] = {
 	"n_reads", "one_read", "n_writes", "one_write", "page"
 };
 
@@ -884,7 +884,7 @@ db_disasm(loc, altfmt)
 
 	unsigned int insn, you_lose, bitmask;
 	int matchp;
-	char* f_ptr, *cp;
+	const char *f_ptr, *cp;
 
 	you_lose = 0;
 	matchp = 0;

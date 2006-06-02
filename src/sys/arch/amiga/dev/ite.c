@@ -1,4 +1,4 @@
-/*	$NetBSD: ite.c,v 1.69 2005/03/02 08:14:26 chs Exp $ */
+/*	$NetBSD: ite.c,v 1.73 2006/05/14 21:55:09 elad Exp $ */
 
 /*
  * Copyright (c) 1990 The Regents of the University of California.
@@ -83,7 +83,7 @@
 #include "opt_ddb.h"
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ite.c,v 1.69 2005/03/02 08:14:26 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ite.c,v 1.73 2006/05/14 21:55:09 elad Exp $");
 
 #include <sys/param.h>
 #include <sys/kernel.h>
@@ -97,6 +97,7 @@ __KERNEL_RCSID(0, "$NetBSD: ite.c,v 1.69 2005/03/02 08:14:26 chs Exp $");
 #include <sys/callout.h>
 #include <sys/proc.h>
 #include <dev/cons.h>
+#include <sys/kauth.h>
 #include <amiga/amiga/cc.h>
 #include <amiga/amiga/color.h>	/* DEBUG */
 #include <amiga/amiga/custom.h>	/* DEBUG */
@@ -163,7 +164,7 @@ void init_bell(void);
 void ite_bell(void);
 void itecnpollc(dev_t, int);
 static void repeat_handler(void *);
-inline static void ite_sendstr(char *);
+inline static void ite_sendstr(const char *);
 static void alignment_display(struct ite_softc *);
 inline static void snap_cury(struct ite_softc *);
 inline static void ite_dnchar(struct ite_softc *, int);
@@ -441,7 +442,7 @@ iteinit(dev_t dev)
 }
 
 int
-iteopen(dev_t dev, int mode, int devtype, struct proc *p)
+iteopen(dev_t dev, int mode, int devtype, struct lwp *l)
 {
 	struct ite_softc *ip;
 	struct tty *tp;
@@ -464,7 +465,7 @@ iteopen(dev_t dev, int mode, int devtype, struct proc *p)
 	} else
 		tp = ip->tp;
 	if ((tp->t_state & (TS_ISOPEN | TS_XCLUDE)) == (TS_ISOPEN | TS_XCLUDE)
-	    && p->p_ucred->cr_uid != 0)
+	    && kauth_authorize_generic(l->l_proc->p_cred, KAUTH_GENERIC_ISSUSER, &l->l_proc->p_acflag) != 0)
 		return (EBUSY);
 	if ((ip->flags & ITE_ACTIVE) == 0) {
 		ite_on(dev, 0);
@@ -502,7 +503,7 @@ bad:
 }
 
 int
-iteclose(dev_t dev, int flag, int mode, struct proc *p)
+iteclose(dev_t dev, int flag, int mode, struct lwp *l)
 {
 	struct tty *tp;
 
@@ -538,14 +539,14 @@ itewrite(dev_t dev, struct uio *uio, int flag)
 }
 
 int
-itepoll(dev_t dev, int events, struct proc *p)
+itepoll(dev_t dev, int events, struct lwp *l)
 {
 	struct tty *tp;
 
 	tp = getitesp(dev)->tp;
 
 	KDASSERT(tp);
-	return ((*tp->t_linesw->l_poll)(tp, events, p));
+	return ((*tp->t_linesw->l_poll)(tp, events, l));
 }
 
 struct tty *
@@ -555,7 +556,7 @@ itetty(dev_t dev)
 }
 
 int
-iteioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, struct proc *p)
+iteioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, struct lwp *l)
 {
 	struct iterepeat *irp;
 	struct ite_softc *ip;
@@ -568,10 +569,10 @@ iteioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, struct proc *p)
 
 	KDASSERT(tp);
 
-	error = tp->t_linesw->l_ioctl(tp, cmd, addr, flag, p);
+	error = tp->t_linesw->l_ioctl(tp, cmd, addr, flag, l);
 	if (error != EPASSTHROUGH)
 		return (error);
-	error = ttioctl(tp, cmd, addr, flag, p);
+	error = ttioctl(tp, cmd, addr, flag, l);
 	if (error != EPASSTHROUGH)
 		return (error);
 
@@ -618,7 +619,7 @@ iteioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, struct proc *p)
 #if NGRFCC > 0
 	/* XXX */
 	if (minor(dev) == 0) {
-		error = ite_grf_ioctl(ip, cmd, addr, flag, p);
+		error = ite_grf_ioctl(ip, cmd, addr, flag, l);
 		if (error >= 0)
 			return (error);
 	}
@@ -1004,7 +1005,7 @@ ite_filter(u_char c, enum caller caller)
 		    0x3c /* . */, 0x43 /* e */, 0x5a /* ( */, 0x5b /* ) */,
 		    0x5c /* / */, 0x5d /* * */
 		};
-		static char *out = "pqrstuvwxymlnMPQRS";
+		static const char *out = "pqrstuvwxymlnMPQRS";
 		char *cp = strchr(in, c);
 
 		/*
@@ -1054,7 +1055,7 @@ ite_filter(u_char c, enum caller caller)
 
 /* helper functions, makes the code below more readable */
 inline static void
-ite_sendstr(char *str)
+ite_sendstr(const char *str)
 {
 	struct tty *kbd_tty;
 
@@ -1928,69 +1929,69 @@ iteputchar(register int c, struct ite_softc *ip)
 				return;
 			case 'm':
 				/* big attribute setter/resetter */
-				{ char *cp;
+				{ char *_cp;
 				*ip->ap = 0;
 				/* kludge to make CSIm work (== CSI0m) */
 				if (ip->ap == ip->argbuf)
 					ip->ap++;
-				for (cp = ip->argbuf; cp < ip->ap;) {
-					switch (*cp) {
+				for (_cp = ip->argbuf; _cp < ip->ap;) {
+					switch (*_cp) {
 					case 0:
 					case '0':
 						clr_attr(ip, ATTR_ALL);
-						cp++;
+						_cp++;
 						break;
 
 					case '1':
 						set_attr(ip, ATTR_BOLD);
-						cp++;
+						_cp++;
 						break;
 
 					case '2':
-						switch (cp[1]) {
+						switch (_cp[1]) {
 						case '2':
 							clr_attr(ip, ATTR_BOLD);
-							cp += 2;
+							_cp += 2;
 							break;
 
 						case '4':
 							clr_attr(ip, ATTR_UL);
-							cp += 2;
+							_cp += 2;
 							break;
 
 						case '5':
 							clr_attr(ip, ATTR_BLINK);
-							cp += 2;
+							_cp += 2;
 							break;
 
 						case '7':
 							clr_attr(ip, ATTR_INV);
-							cp += 2;
+							_cp += 2;
 							break;
 
 						default:
-							cp++;
+							_cp++;
 							break;
 						}
 						break;
 
 					case '4':
 						set_attr(ip, ATTR_UL);
-						cp++;
+						_cp++;
 						break;
 
 					case '5':
 						set_attr(ip, ATTR_BLINK);
-						cp++;
+						_cp++;
 						break;
 
 					case '7':
 						set_attr(ip, ATTR_INV);
-						cp++;
+						_cp++;
 						break;
 
 					default:
-						cp++;
+						_cp++;
 						break;
 					}
 				}

@@ -1,4 +1,4 @@
-/*	$NetBSD: hunt.c,v 1.10 2003/08/07 11:16:17 agc Exp $	*/
+/*	$NetBSD: hunt.c,v 1.15 2006/04/30 23:34:50 christos Exp $	*/
 
 /*
  * Copyright (c) 1983, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)hunt.c	8.1 (Berkeley) 6/6/93";
 #endif
-__RCSID("$NetBSD: hunt.c,v 1.10 2003/08/07 11:16:17 agc Exp $");
+__RCSID("$NetBSD: hunt.c,v 1.15 2006/04/30 23:34:50 christos Exp $");
 #endif /* not lint */
 
 #include "tip.h"
@@ -42,11 +42,11 @@ __RCSID("$NetBSD: hunt.c,v 1.10 2003/08/07 11:16:17 agc Exp $");
 static	jmp_buf deadline;
 static	int deadfl;
 
-void	dead __P((int));
+void	dead(int);
 
 void
-dead(dummy)
-	int dummy;
+/*ARGSUSED*/
+dead(int dummy)
 {
 
 	deadfl = 1;
@@ -54,8 +54,7 @@ dead(dummy)
 }
 
 int
-hunt(name)
-	char *name;
+hunt(char *name)
 {
 	char *cp;
 	sig_t f;
@@ -63,9 +62,6 @@ hunt(name)
 	f = signal(SIGALRM, dead);
 	while ((cp = getremote(name)) != NULL) {
 		deadfl = 0;
-		uucplock = strrchr(cp, '/')+1;
-		if (uu_lock(uucplock) < 0)
-			continue;
 		/*
 		 * Straight through call units, such as the BIZCOMP,
 		 * VADIC and the DF, must indicate they're hardwired in
@@ -81,11 +77,16 @@ hunt(name)
 		}
 		alarm(0);
 		if (FD < 0) {
-			perror(cp);
+			warn(cp);
 			deadfl = 1;
-		}
-		if (!deadfl) {
+		} else if (!deadfl) {
 			struct termios cntrl;
+
+			if (flock(FD, (LOCK_EX|LOCK_NB)) != 0) {
+				close(FD);
+				FD = -1;
+				continue;
+			}
 
 			tcgetattr(FD, &cntrl);
 			if (!DC)
@@ -95,7 +96,6 @@ hunt(name)
 			signal(SIGALRM, SIG_DFL);
 			return (cp != NULL);
 		}
-		(void)uu_unlock(uucplock);
 	}
 	signal(SIGALRM, f);
 	return (deadfl ? -1 : cp != NULL);

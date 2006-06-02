@@ -1,4 +1,4 @@
-/*	$NetBSD: identcpu.c,v 1.17.2.2 2005/07/18 20:48:58 riz Exp $	*/
+/*	$NetBSD: identcpu.c,v 1.32 2006/05/29 17:35:41 rpaulo Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2000, 2001 The NetBSD Foundation, Inc.
@@ -37,10 +37,11 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: identcpu.c,v 1.17.2.2 2005/07/18 20:48:58 riz Exp $");
+__KERNEL_RCSID(0, "$NetBSD: identcpu.c,v 1.32 2006/05/29 17:35:41 rpaulo Exp $");
 
 #include "opt_cputype.h"
 #include "opt_enhanced_speedstep.h"
+#include "opt_powernow_k7.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -67,6 +68,7 @@ intel_cpuid_cache_info[] = {
 
 	{ CAI_ICACHE,   0x06,  4,        8 * 1024, 32 },
 	{ CAI_ICACHE,   0x08,  4,       16 * 1024, 32 },
+	{ CAI_ICACHE,   0x30,  8,       32 * 1024, 64 },
 	{ CAI_DCACHE,   0x0a,  2,        8 * 1024, 32 },
 	{ CAI_DCACHE,   0x0c,  4,       16 * 1024, 32 },
 	{ CAI_L2CACHE,  0x40,  0,               0,  0, "not present" },
@@ -77,6 +79,7 @@ intel_cpuid_cache_info[] = {
 	{ CAI_L2CACHE,  0x45,  4, 2 * 1024 * 1024, 32 },
 	{ CAI_DCACHE,   0x66,  4,        8 * 1024, 64 },
 	{ CAI_DCACHE,   0x67,  4,       16 * 1024, 64 },
+	{ CAI_DCACHE,   0x2c,  8,       32 * 1024, 64 },
 	{ CAI_DCACHE,   0x68,  4,  	32 * 1024, 64 },
 	{ CAI_ICACHE,   0x70,  8,       12 * 1024, 64, "12K uOp cache"},
 	{ CAI_ICACHE,   0x71,  8,       16 * 1024, 64, "16K uOp cache"},
@@ -85,6 +88,7 @@ intel_cpuid_cache_info[] = {
 	{ CAI_L2CACHE,  0x7a,  8,      256 * 1024, 64 },
 	{ CAI_L2CACHE,  0x7b,  8,      512 * 1024, 64 },
 	{ CAI_L2CACHE,  0x7c,  8, 1 * 1024 * 1024, 64 },
+	{ CAI_L2CACHE,  0x7d,  8, 2 * 1024 * 1024, 64 },
 	{ CAI_L2CACHE,  0x82,  8,      256 * 1024, 32 },
 	{ CAI_L2CACHE,  0x83,  8,      512 * 1024, 32 },
 	{ CAI_L2CACHE,  0x84,  8, 1 * 1024 * 1024, 32 },
@@ -143,14 +147,14 @@ static const char *intel_family6_name(struct cpu_info *);
 
 static void transmeta_cpu_info(struct cpu_info *);
 
-static __inline u_char
+static inline u_char
 cyrix_read_reg(u_char reg)
 {
 	outb(0x22, reg);
 	return inb(0x23);
 }
 
-static __inline void
+static inline void
 cyrix_write_reg(u_char reg, u_char data)
 {
 	outb(0x22, reg);
@@ -550,7 +554,7 @@ disable_tsc(struct cpu_info *ci)
 {
 	if (cpu_feature & CPUID_TSC) {
 		cpu_feature &= ~CPUID_TSC;
-		printf("WARNING: broken TSC disabled\n");
+		aprint_error("WARNING: broken TSC disabled\n");
 	}
 }
 
@@ -723,9 +727,9 @@ cpu_probe_base_features(struct cpu_info *ci)
 	const struct x86_cache_info *cai;
 	u_int descs[4];
 	int iterations, i, j;
-	u_int8_t desc;
-	u_int32_t dummy1, dummy2, miscbytes;
-	u_int32_t brand[12];
+	uint8_t desc;
+	uint32_t dummy1, dummy2, miscbytes;
+	uint32_t brand[12];
 
 	if (ci->ci_cpuid_level < 0)
 		return;
@@ -810,15 +814,15 @@ void
 cpu_probe_features(struct cpu_info *ci)
 {
 	const struct cpu_cpuid_nameclass *cpup = NULL;
-	int i, max, family;
+	int i, xmax, family;
 
 	cpu_probe_base_features(ci);
 
 	if (ci->ci_cpuid_level < 1)
 		return;
 
-	max = sizeof (i386_cpuid_cpus) / sizeof (i386_cpuid_cpus[0]);
-	for (i = 0; i < max; i++) {
+	xmax = sizeof (i386_cpuid_cpus) / sizeof (i386_cpuid_cpus[0]);
+	for (i = 0; i < xmax; i++) {
 		if (!strncmp((char *)ci->ci_vendor,
 		    i386_cpuid_cpus[i].cpu_id, 12)) {
 			cpup = &i386_cpuid_cpus[i];
@@ -845,8 +849,8 @@ cpu_probe_features(struct cpu_info *ci)
 void
 intel_family_new_probe(struct cpu_info *ci)
 {
-	u_int32_t lfunc;
-	u_int32_t descs[4];
+	uint32_t lfunc;
+	uint32_t descs[4];
 
 	CPUID(0x80000000, lfunc, descs[1], descs[2], descs[3]);
 
@@ -862,8 +866,8 @@ intel_family_new_probe(struct cpu_info *ci)
 void
 amd_family6_probe(struct cpu_info *ci)
 {
-	u_int32_t lfunc;
-	u_int32_t descs[4];
+	uint32_t lfunc;
+	uint32_t descs[4];
 	char *p;
 	int i;
 
@@ -876,6 +880,10 @@ amd_family6_probe(struct cpu_info *ci)
 		CPUID(0x80000001, descs[0], descs[1], descs[2], descs[3]);
 		ci->ci_feature_flags |= descs[3];
 	}
+
+#ifdef POWERNOW_K7
+	pnowk7_probe(ci);
+#endif
 
 	if (*cpu_brand_string == '\0')
 		return;
@@ -931,11 +939,11 @@ amd_family5_setup(struct cpu_info *ci)
 #define	LONGRUN_MODE_MAX		0x04
 
 union msrinfo {
-	u_int64_t	msr;
-	u_int32_t	regs[2];
+	uint64_t	msr;
+	uint32_t	regs[2];
 };
 
-u_int32_t longrun_modes[LONGRUN_MODE_MAX][3] = {
+uint32_t longrun_modes[LONGRUN_MODE_MAX][3] = {
 	/*  MSR low, MSR high, flags bit0 */
 	{	  0,	  0,		0},	/* LONGRUN_MODE_MINFREQUENCY */
 	{	  0,	100,		0},	/* LONGRUN_MODE_ECONOMY */
@@ -1038,11 +1046,13 @@ transmeta_cpu_info(struct cpu_info *ci)
 {
 	u_int eax, ebx, ecx, edx, nreg = 0;
 
+	/* XXX aprint_verbose()? */
+
 	CPUID(0x80860000, eax, ebx, ecx, edx);
 	nreg = eax;
 	if (nreg >= 0x80860001) {
 		CPUID(0x80860001, eax, ebx, ecx, edx);
-		printf("%s: Processor revision %u.%u.%u.%u\n",
+		aprint_normal("%s: Processor revision %u.%u.%u.%u\n",
 		    ci->ci_dev->dv_xname,
 		    (ebx >> 24) & 0xff,
 		    (ebx >> 16) & 0xff,
@@ -1051,7 +1061,7 @@ transmeta_cpu_info(struct cpu_info *ci)
 	}
 	if (nreg >= 0x80860002) {
 		CPUID(0x80860002, eax, ebx, ecx, edx);
-		printf("%s: Code Morphing Software Rev: %u.%u.%u-%u-%u\n",
+		aprint_normal("%s: Code Morphing Software Rev: %u.%u.%u-%u-%u\n",
 		    ci->ci_dev->dv_xname, (ebx >> 24) & 0xff,
 		    (ebx >> 16) & 0xff,
 		    (ebx >> 8) & 0xff,
@@ -1077,14 +1087,14 @@ transmeta_cpu_info(struct cpu_info *ci)
 			    info.regs[i].ecx, info.regs[i].edx);
 		}
 		info.text[64] = 0;
-		printf("%s: %s\n", ci->ci_dev->dv_xname, info.text);
+		aprint_normal("%s: %s\n", ci->ci_dev->dv_xname, info.text);
 	}
 
 	if (nreg >= 0x80860007) {
 		crusoe_longrun = tmx86_get_longrun_mode();
 		tmx86_get_longrun_status(&crusoe_frequency,
 		    &crusoe_voltage, &crusoe_percentage);
-		printf("%s: LongRun mode: %d  <%dMHz %dmV %d%%>\n",
+		aprint_normal("%s: LongRun mode: %d  <%dMHz %dmV %d%%>\n",
 		    ci->ci_dev->dv_xname,
 		    crusoe_longrun, crusoe_frequency, crusoe_voltage,
 		    crusoe_percentage);
@@ -1110,13 +1120,13 @@ void
 identifycpu(struct cpu_info *ci)
 {
 	const char *name, *modifier, *vendorname, *brand = "";
-	int class = CPUCLASS_386, vendor, i, max;
+	int class = CPUCLASS_386, vendor, i, xmax;
 	int modif, family, model;
 	const struct cpu_cpuid_nameclass *cpup = NULL;
 	const struct cpu_cpuid_family *cpufam;
 	char *cpuname = ci->ci_dev->dv_xname;
 	char buf[1024];
-	char *feature_str[3];
+	const char *feature_str[3];
 
 	if (ci->ci_cpuid_level == -1) {
 #ifdef DIAGNOSTIC
@@ -1132,14 +1142,14 @@ identifycpu(struct cpu_info *ci)
 		ci->ci_info = i386_nocpuid_cpus[cpu].cpu_info;
 		modifier = "";
 	} else {
-		max = sizeof (i386_cpuid_cpus) / sizeof (i386_cpuid_cpus[0]);
+		xmax = sizeof (i386_cpuid_cpus) / sizeof (i386_cpuid_cpus[0]);
 		modif = (ci->ci_signature >> 12) & 0x3;
 		family = CPUID2FAMILY(ci->ci_signature);
 		if (family < CPU_MINFAMILY)
 			panic("identifycpu: strange family value");
 		model = CPUID2MODEL(ci->ci_signature);
 
-		for (i = 0; i < max; i++) {
+		for (i = 0; i < xmax; i++) {
 			if (!strncmp((char *)ci->ci_vendor,
 			    i386_cpuid_cpus[i].cpu_id, 12)) {
 				cpup = &i386_cpuid_cpus[i];
@@ -1153,8 +1163,8 @@ identifycpu(struct cpu_info *ci)
 				vendorname = (char *)&ci->ci_vendor[0];
 			else
 				vendorname = "Unknown";
-			if (family > CPU_MAXFAMILY)
-				family = CPU_MAXFAMILY;
+			if (family >= CPU_MAXFAMILY)
+				family = CPU_MINFAMILY;
 			class = family - 3;
 			modifier = "";
 			name = "";
@@ -1221,7 +1231,7 @@ identifycpu(struct cpu_info *ci)
 	 * XXX this needs to run on the CPU being probed..
 	 */
 	if (ci->ci_feature_flags & CPUID_TSC) {
-		u_int64_t last_tsc;
+		uint64_t last_tsc;
 
 		last_tsc = rdtsc();
 		delay(100000);
@@ -1236,14 +1246,15 @@ identifycpu(struct cpu_info *ci)
 	    *name ? " " : "", name,
 	    *brand ? " " : "", brand,
 	    classnames[class]);
-	printf("%s: %s", cpuname, cpu_model);
+	aprint_normal("%s: %s", cpuname, cpu_model);
 
 	if (ci->ci_tsc_freq != 0)
-		printf(", %qd.%02qd MHz", (ci->ci_tsc_freq + 4999) / 1000000,
+		aprint_normal(", %qd.%02qd MHz",
+		    (ci->ci_tsc_freq + 4999) / 1000000,
 		    ((ci->ci_tsc_freq + 4999) / 10000) % 100);
 	if (ci->ci_signature != 0)
-		printf(", id 0x%x", ci->ci_signature);
-	printf("\n");
+		aprint_normal(", id 0x%x", ci->ci_signature);
+	aprint_normal("\n");
 
 	if (ci->ci_info)
 		(*ci->ci_info)(ci);
@@ -1262,34 +1273,34 @@ identifycpu(struct cpu_info *ci)
 		if ((ci->ci_feature_flags & CPUID_MASK1) != 0) {
 			bitmask_snprintf(ci->ci_feature_flags,
 			    feature_str[0], buf, sizeof(buf));
-			printf("%s: features %s\n", cpuname, buf);
+			aprint_verbose("%s: features %s\n", cpuname, buf);
 		}
 		if ((ci->ci_feature_flags & CPUID_MASK2) != 0) {
 			bitmask_snprintf(ci->ci_feature_flags,
 			    feature_str[1], buf, sizeof(buf));
-			printf("%s: features %s\n", cpuname, buf);
+			aprint_verbose("%s: features %s\n", cpuname, buf);
 		}
 		if ((ci->ci_feature_flags & CPUID_MASK3) != 0) {
 			bitmask_snprintf(ci->ci_feature_flags,
 			    feature_str[2], buf, sizeof(buf));
-			printf("%s: features %s\n", cpuname, buf);
+			aprint_verbose("%s: features %s\n", cpuname, buf);
 		}
 	}
 
 	if (ci->ci_feature2_flags) {
 		bitmask_snprintf(ci->ci_feature2_flags,
 		    CPUID2_FLAGS, buf, sizeof(buf));
-		printf("%s: features2 %s\n", cpuname, buf);
+		aprint_verbose("%s: features2 %s\n", cpuname, buf);
 	}
 
 	if (ci->ci_feature3_flags) {
 		bitmask_snprintf(ci->ci_feature3_flags,
 			CPUID_FLAGS4, buf, sizeof(buf));
-		printf("%s: features3 %s\n", cpuname, buf);
+		aprint_verbose("%s: features3 %s\n", cpuname, buf);
 	}
 
 	if (*cpu_brand_string != '\0')
-		printf("%s: \"%s\"\n", cpuname, cpu_brand_string);
+		aprint_normal("%s: \"%s\"\n", cpuname, cpu_brand_string);
 
 	x86_print_cacheinfo(ci);
 
@@ -1297,18 +1308,27 @@ identifycpu(struct cpu_info *ci)
 		if (rdmsr(MSR_MISC_ENABLE) & (1 << 3)) {
 			if ((cpu_feature2 & CPUID2_TM2) &&
 			    (rdmsr(MSR_THERM2_CTL) & (1 << 16)))
-				printf("%s: using thermal monitor 2\n",
+				aprint_normal("%s: using thermal monitor 2\n",
 				    cpuname);
 			else
-				printf("%s: using thermal monitor 1\n",
+				aprint_normal("%s: using thermal monitor 1\n",
 				    cpuname);
-		} else
-			printf("%s: running without thermal monitor!\n",
+		} else {
+			aprint_normal("%s: enabling thermal monitor 1 ... ",
 			    cpuname);
+			wrmsr(MSR_MISC_ENABLE, rdmsr(MSR_MISC_ENABLE) | (1<<3));
+			if (rdmsr(MSR_MISC_ENABLE) & (1 << 3)) {
+				aprint_normal("enabled.\n");
+			} else {
+				aprint_normal("failed!\n");
+				aprint_error("%s: failed to enable thermal "
+				    "monitoring!\n", cpuname);
+			}
+		}
 	}
 
 	if (ci->ci_cpuid_level >= 3 && (ci->ci_feature_flags & CPUID_PN)) {
-		printf("%s: serial number %04X-%04X-%04X-%04X-%04X-%04X\n",
+		aprint_verbose("%s: serial number %04X-%04X-%04X-%04X-%04X-%04X\n",
 		    cpuname,
 		    ci->ci_cpu_serial[0] / 65536, ci->ci_cpu_serial[0] % 65536,
 		    ci->ci_cpu_serial[1] / 65536, ci->ci_cpu_serial[1] % 65536,
@@ -1325,34 +1345,34 @@ identifycpu(struct cpu_info *ci)
 #endif
 #ifndef I686_CPU
 	case CPUCLASS_686:
-		printf(n_support, "Pentium Pro");
+		aprint_error(n_support, "Pentium Pro");
 #ifdef I586_CPU
-		printf(n_lower, "i586");
+		aprint_error(n_lower, "i586");
 		cpu_class = CPUCLASS_586;
 		break;
 #endif
 #endif
 #ifndef I586_CPU
 	case CPUCLASS_586:
-		printf(n_support, "Pentium");
+		aprint_error(n_support, "Pentium");
 #ifdef I486_CPU
-		printf(n_lower, "i486");
+		aprint_error(n_lower, "i486");
 		cpu_class = CPUCLASS_486;
 		break;
 #endif
 #endif
 #ifndef I486_CPU
 	case CPUCLASS_486:
-		printf(n_support, "i486");
+		aprint_error(n_support, "i486");
 #ifdef I386_CPU
-		printf(n_lower, "i386");
+		aprint_error(n_lower, "i386");
 		cpu_class = CPUCLASS_386;
 		break;
 #endif
 #endif
 #ifndef I386_CPU
 	case CPUCLASS_386:
-		printf(n_support, "i386");
+		aprint_error(n_support, "i386");
 		panic("no appropriate CPU class available");
 #endif
 	default:
@@ -1386,12 +1406,12 @@ identifycpu(struct cpu_info *ci)
 
 	if (cpu == CPU_486DLC) {
 #ifndef CYRIX_CACHE_WORKS
-		printf("WARNING: CYRIX 486DLC CACHE UNCHANGED.\n");
+		aprint_error("WARNING: CYRIX 486DLC CACHE UNCHANGED.\n");
 #else
 #ifndef CYRIX_CACHE_REALLY_WORKS
-		printf("WARNING: CYRIX 486DLC CACHE ENABLED IN HOLD-FLUSH MODE.\n");
+		aprint_error("WARNING: CYRIX 486DLC CACHE ENABLED IN HOLD-FLUSH MODE.\n");
 #else
-		printf("WARNING: CYRIX 486DLC CACHE ENABLED.\n");
+		aprint_error("WARNING: CYRIX 486DLC CACHE ENABLED.\n");
 #endif
 #endif
 	}
@@ -1407,12 +1427,10 @@ identifycpu(struct cpu_info *ci)
 		 * If we have SSE/SSE2, enable XMM exceptions, and
 		 * notify userland.
 		 */
-		if (cpu_feature & (CPUID_SSE|CPUID_SSE2)) {
-			if (cpu_feature & CPUID_SSE)
-				i386_has_sse = 1;
-			if (cpu_feature & CPUID_SSE2)
-				i386_has_sse2 = 1;
-		}
+		if (cpu_feature & CPUID_SSE)
+			i386_has_sse = 1;
+		if (cpu_feature & CPUID_SSE2)
+			i386_has_sse2 = 1;
 	} else
 		i386_use_fxsave = 0;
 #endif /* I686_CPU */
@@ -1422,9 +1440,13 @@ identifycpu(struct cpu_info *ci)
 		if (rdmsr(MSR_MISC_ENABLE) & (1 << 16))
 			est_init(ci);
 		else
-			printf("%s: Enhanced SpeedStep disabled by BIOS\n",
+			aprint_normal("%s: Enhanced SpeedStep disabled by BIOS\n",
 			    cpuname);
 	}
 #endif /* ENHANCED_SPEEDSTEP */
+
+#ifdef POWERNOW_K7
+	pnowk7_init(ci);
+#endif /* POWERNOW_k7 */
 
 }

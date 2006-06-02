@@ -1,4 +1,4 @@
-/*	$NetBSD: search.h,v 1.16.2.2 2005/08/04 17:35:05 tron Exp $	*/
+/*	$NetBSD: search.h,v 1.18 2005/07/06 15:47:15 drochner Exp $	*/
 
 /*
  * Written by J.T. Conklin <jtc@NetBSD.org>

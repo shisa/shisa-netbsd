@@ -1,4 +1,4 @@
-/*	$NetBSD: mainbus.c,v 1.24 2005/01/31 18:22:24 jkunz Exp $	*/
+/*	$NetBSD: mainbus.c,v 1.32 2006/03/01 12:38:11 yamt Exp $	*/
 
 /*-
  * Copyright (c) 2001, 2002 The NetBSD Foundation, Inc.
@@ -70,7 +70,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mainbus.c,v 1.24 2005/01/31 18:22:24 jkunz Exp $");
+__KERNEL_RCSID(0, "$NetBSD: mainbus.c,v 1.32 2006/03/01 12:38:11 yamt Exp $");
 
 #include "locators.h"
 #include "opt_power_switch.h"
@@ -178,7 +178,7 @@ int mbus_dmamem_map(void *, bus_dma_segment_t *, int, size_t, caddr_t *, int);
 void mbus_dmamem_unmap(void *, caddr_t, size_t);
 paddr_t mbus_dmamem_mmap(void *, bus_dma_segment_t *, int, off_t, int, int);
 int _bus_dmamap_load_buffer(bus_dma_tag_t t, bus_dmamap_t map, void *buf,
-    bus_size_t buflen, struct proc *p, int flags, paddr_t *lastaddrp, 
+    bus_size_t buflen, struct vmspace *vm, int flags, paddr_t *lastaddrp, 
     int *segp, int first);
 
 int
@@ -619,65 +619,89 @@ void mbus_wrm_8(void *v, bus_space_handle_t h, bus_size_t o, const u_int64_t *a,
 void
 mbus_rr_1(void *v, bus_space_handle_t h, bus_size_t o, u_int8_t *a, bus_size_t c)
 {
+	volatile u_int8_t *p;
+
 	h += o;
+	p = (void *)h;
 	while (c--)
-		*(a++) = *((volatile u_int8_t *)h)++;
+		*a++ = *p++;
 }
 
 void
 mbus_rr_2(void *v, bus_space_handle_t h, bus_size_t o, u_int16_t *a, bus_size_t c)
 {
+	volatile u_int16_t *p;
+
 	h += o;
+	p = (void *)h;
 	while (c--)
-		*(a++) = *((volatile u_int16_t *)h)++;
+		*a++ = *p++;
 }
 
 void
 mbus_rr_4(void *v, bus_space_handle_t h, bus_size_t o, u_int32_t *a, bus_size_t c)
 {
+	volatile u_int32_t *p;
+
 	h += o;
+	p = (void *)h;
 	while (c--)
-		*(a++) = *((volatile u_int32_t *)h)++;
+		*a++ = *p++;
 }
 
 void
 mbus_rr_8(void *v, bus_space_handle_t h, bus_size_t o, u_int64_t *a, bus_size_t c)
 {
+	volatile u_int64_t *p;
+
 	h += o;
+	p = (void *)h;
 	while (c--)
-		*(a++) = *((volatile u_int64_t *)h)++;
+		*a++ = *p++;
 }
 
 void
 mbus_wr_1(void *v, bus_space_handle_t h, bus_size_t o, const u_int8_t *a, bus_size_t c)
 {
+	volatile u_int8_t *p;
+
 	h += o;
+	p = (void *)h;
 	while (c--)
-		*((volatile u_int8_t *)h)++ = *(a++);
+		*p++ = *a++;
 }
 
 void
 mbus_wr_2(void *v, bus_space_handle_t h, bus_size_t o, const u_int16_t *a, bus_size_t c)
 {
+	volatile u_int16_t *p;
+
 	h += o;
+	p = (void *)h;
 	while (c--)
-		*((volatile u_int16_t *)h)++ = *(a++);
+		*p++ = *a++;
 }
 
 void
 mbus_wr_4(void *v, bus_space_handle_t h, bus_size_t o, const u_int32_t *a, bus_size_t c)
 {
+	volatile u_int32_t *p;
+
 	h += o;
+	p = (void *)h;
 	while (c--)
-		*((volatile u_int32_t *)h)++ = *(a++);
+		*p++ = *a++;
 }
 
 void
 mbus_wr_8(void *v, bus_space_handle_t h, bus_size_t o, const u_int64_t *a, bus_size_t c)
 {
+	volatile u_int64_t *p;
+
 	h += o;
+	p = (void *)h;
 	while (c--)
-		*((volatile u_int64_t *)h)++ = *(a++);
+		*p++ = *a++;
 }
 
 void mbus_rrr_2(void *, bus_space_handle_t, bus_size_t, u_int16_t *, bus_size_t);
@@ -691,77 +715,101 @@ void mbus_wrr_8(void *, bus_space_handle_t, bus_size_t, const u_int64_t *, bus_s
 void
 mbus_sr_1(void *v, bus_space_handle_t h, bus_size_t o, u_int8_t vv, bus_size_t c)
 {
+	volatile u_int8_t *p;
+
 	h += o;
+	p = (void *)h;
 	while (c--)
-		*((volatile u_int8_t *)h)++ = vv;
+		*p++ = vv;
 }
 
 void
 mbus_sr_2(void *v, bus_space_handle_t h, bus_size_t o, u_int16_t vv, bus_size_t c)
 {
+	volatile u_int16_t *p;
+
 	h += o;
+	p = (void *)h;
 	while (c--)
-		*((volatile u_int16_t *)h)++ = vv;
+		*p++ = vv;
 }
 
 void
 mbus_sr_4(void *v, bus_space_handle_t h, bus_size_t o, u_int32_t vv, bus_size_t c)
 {
+	volatile u_int32_t *p;
+
 	h += o;
+	p = (void *)h;
 	while (c--)
-		*((volatile u_int32_t *)h)++ = vv;
+		*p++ = vv;
 }
 
 void
 mbus_sr_8(void *v, bus_space_handle_t h, bus_size_t o, u_int64_t vv, bus_size_t c)
 {
+	volatile u_int64_t *p;
+
 	h += o;
+	p = (void *)h;
 	while (c--)
-		*((volatile u_int64_t *)h)++ = vv;
+		*p++ = vv;
 }
 
 void
 mbus_cp_1(void *v, bus_space_handle_t h1, bus_size_t o1,
 	  bus_space_handle_t h2, bus_size_t o2, bus_size_t c)
 {
+	volatile u_int8_t *p1, *p2;
+
 	h1 += o1;
 	h2 += o2;
+	p1 = (void *)h1;
+	p2 = (void *)h2;
 	while (c--)
-		*((volatile u_int8_t *)h1)++ =
-			*((volatile u_int8_t *)h2)++;
+		*p1++ = *p2++;
 }
 
 void
 mbus_cp_2(void *v, bus_space_handle_t h1, bus_size_t o1,
 	  bus_space_handle_t h2, bus_size_t o2, bus_size_t c)
 {
+	volatile u_int16_t *p1, *p2;
+
 	h1 += o1;
 	h2 += o2;
+	p1 = (void *)h1;
+	p2 = (void *)h2;
 	while (c--)
-		*((volatile u_int16_t *)h1)++ =
-			*((volatile u_int16_t *)h2)++;
+		*p1++ = *p2++;
 }
 
 void
 mbus_cp_4(void *v, bus_space_handle_t h1, bus_size_t o1,
 	  bus_space_handle_t h2, bus_size_t o2, bus_size_t c)
 {
+	volatile u_int32_t *p1, *p2;
+
 	h1 += o1;
 	h2 += o2;
+	p1 = (void *)h1;
+	p2 = (void *)h2;
 	while (c--)
-		*((volatile u_int32_t *)h1)++ =
-			*((volatile u_int32_t *)h2)++;
+		*p1++ = *p2++;
 }
 
 void
 mbus_cp_8(void *v, bus_space_handle_t h1, bus_size_t o1,
 	  bus_space_handle_t h2, bus_size_t o2, bus_size_t c)
 {
+	volatile u_int64_t *p1, *p2;
+
 	h1 += o1;
 	h2 += o2;
+	p1 = (void *)h1;
+	p2 = (void *)h2;
 	while (c--)
-		*((volatile u_int64_t *)h1)++ =
-			*((volatile u_int64_t *)h2)++;
+		*p1++ = *p2++;
 }
 
 
@@ -857,6 +905,7 @@ mbus_dmamap_load(void *v, bus_dmamap_t map, void *buf, bus_size_t buflen,
 {
 	vaddr_t lastaddr;
 	int seg, error;
+	struct vmspace *vm;
 
 	/*
 	 * Make sure that on error condition we return "no valid mappings".
@@ -867,8 +916,14 @@ mbus_dmamap_load(void *v, bus_dmamap_t map, void *buf, bus_size_t buflen,
 	if (buflen > map->_dm_size)
 		return (EINVAL);
 
+	if (p != NULL) {
+		vm = p->p_vmspace;
+	} else {
+		vm = vmspace_kernel();
+	}
+
 	seg = 0;
-	error = _bus_dmamap_load_buffer(NULL, map, buf, buflen, p, flags,
+	error = _bus_dmamap_load_buffer(NULL, map, buf, buflen, vm, flags,
 	    &lastaddr, &seg, 1);
 	if (error == 0) {
 		map->dm_mapsize = buflen;
@@ -909,7 +964,7 @@ mbus_dmamap_load_mbuf(void *v, bus_dmamap_t map, struct mbuf *m0,
 		if (m->m_len == 0)
 			continue;
 		error = _bus_dmamap_load_buffer(NULL, map, m->m_data, m->m_len,
-		    NULL, flags, &lastaddr, &seg, first);
+		    vmspace_kernel(), flags, &lastaddr, &seg, first);
 		first = 0;
 	}
 	if (error == 0) {
@@ -929,7 +984,6 @@ mbus_dmamap_load_uio(void *v, bus_dmamap_t map, struct uio *uio,
 	vaddr_t lastaddr;
 	int seg, i, error, first;
 	bus_size_t minlen, resid;
-	struct proc *p = NULL;
 	struct iovec *iov;
 	caddr_t addr;
 
@@ -941,14 +995,6 @@ mbus_dmamap_load_uio(void *v, bus_dmamap_t map, struct uio *uio,
 
 	resid = uio->uio_resid;
 	iov = uio->uio_iov;
-
-	if (uio->uio_segflg == UIO_USERSPACE) {
-		p = uio->uio_procp;
-#ifdef DIAGNOSTIC
-		if (p == NULL)
-			panic("_bus_dmamap_load_uio: USERSPACE but no proc");
-#endif
-	}
 
 	first = 1;
 	seg = 0;
@@ -962,7 +1008,7 @@ mbus_dmamap_load_uio(void *v, bus_dmamap_t map, struct uio *uio,
 		addr = (caddr_t)iov[i].iov_base;
 
 		error = _bus_dmamap_load_buffer(NULL, map, addr, minlen,
-		    p, flags, &lastaddr, &seg, first);
+		    uio->uio_vmspace, flags, &lastaddr, &seg, first);
 		first = 0;
 
 		resid -= minlen;
@@ -1238,6 +1284,8 @@ mbus_dmamem_map(void *v, bus_dma_segment_t *segs, int nsegs, size_t size,
 	struct pglist *pglist;
 	vaddr_t va;
 	paddr_t pa;
+	const uvm_flag_t kmflags =
+	    (flags & BUS_DMA_NOWAIT) != 0 ? UVM_KMF_NOWAIT : 0;
 
 	size = round_page(size);
 
@@ -1250,7 +1298,7 @@ mbus_dmamem_map(void *v, bus_dma_segment_t *segs, int nsegs, size_t size,
 	}
 
 	/* Get a chunk of kernel virtual space. */
-	va = uvm_km_valloc(kernel_map, size);
+	va = uvm_km_alloc(kernel_map, size, 0, UVM_KMF_VAONLY | kmflags);
 	if (va == 0)
 		return (ENOMEM);
 
@@ -1292,7 +1340,9 @@ mbus_dmamem_unmap(void *v, caddr_t kva, size_t size)
 		return;
 
 	size = round_page(size);
-	uvm_unmap(kernel_map, (vaddr_t)kva, (vaddr_t)kva + size);
+	pmap_kremove((vaddr_t)kva, size);
+	pmap_update(pmap_kernel());
+	uvm_km_free(kernel_map, (vaddr_t)kva, size, UVM_KMF_VAONLY);
 }
 
 /*
@@ -1329,7 +1379,7 @@ mbus_dmamem_mmap(void *v, bus_dma_segment_t *segs, int nsegs,
 
 int
 _bus_dmamap_load_buffer(bus_dma_tag_t t, bus_dmamap_t map, void *buf,
-    bus_size_t buflen, struct proc *p, int flags, paddr_t *lastaddrp, 
+    bus_size_t buflen, struct vmspace *vm, int flags, paddr_t *lastaddrp, 
     int *segp, int first)
 {
 	bus_size_t sgsize;
@@ -1338,10 +1388,7 @@ _bus_dmamap_load_buffer(bus_dma_tag_t t, bus_dmamap_t map, void *buf,
 	int seg;
 	pmap_t pmap;
 
-	if (p != NULL)
-		pmap = p->p_vmspace->vm_map.pmap;
-	else
-		pmap = pmap_kernel();
+	pmap = vm_map_pmap(&vm->vm_map);
 
 	lastaddr = *lastaddrp;
 	bmask  = ~(map->_dm_boundary - 1);
@@ -1451,7 +1498,7 @@ mb_module_callback(struct device *self, struct confargs *ca)
 	if (ca->ca_type.iodc_type == HPPA_TYPE_NPROC ||
 	    ca->ca_type.iodc_type == HPPA_TYPE_MEMORY)
 		return;
-	config_found_sm(self, ca, mbprint, mbsubmatch);
+	config_found_sm_loc(self, "mainbus", NULL, ca, mbprint, mbsubmatch);
 }
 
 static void
@@ -1460,7 +1507,8 @@ mb_cpu_mem_callback(struct device *self, struct confargs *ca)
 	if ((ca->ca_type.iodc_type == HPPA_TYPE_NPROC ||
 	     ca->ca_type.iodc_type == HPPA_TYPE_MEMORY) &&
 	    ca->ca_hpa != pdc_hpa.hpa)
-		config_found_sm(self, ca, mbprint, mbsubmatch);
+		config_found_sm_loc(self, "mainbus", NULL, ca, mbprint,
+				    mbsubmatch);
 }
 
 void
@@ -1652,7 +1700,8 @@ mbprint(void *aux, const char *pnp)
 }
 
 int
-mbsubmatch(struct device *parent, struct cfdata *cf, void *aux)
+mbsubmatch(struct device *parent, struct cfdata *cf,
+	   const int *ldesc, void *aux)
 {
 	struct confargs *ca = aux;
 	int ret;

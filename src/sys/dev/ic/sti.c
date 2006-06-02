@@ -1,4 +1,4 @@
-/* $NetBSD: sti.c,v 1.3 2005/02/27 00:27:02 perry Exp $ */
+/* $NetBSD: sti.c,v 1.6 2006/04/12 19:38:23 jmmv Exp $ */
 
 /*	$OpenBSD: sti.c,v 1.35 2003/12/16 06:07:13 mickey Exp $	*/
 
@@ -35,7 +35,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: sti.c,v 1.3 2005/02/27 00:27:02 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: sti.c,v 1.6 2006/04/12 19:38:23 jmmv Exp $");
 
 #include "wsdisplay.h"
 
@@ -74,8 +74,8 @@ struct wsdisplay_emulops sti_emulops = {
 	sti_alloc_attr
 };
 
-int sti_ioctl(void *, u_long, caddr_t, int, struct proc *);
-paddr_t sti_mmap(void *, off_t, int);
+int sti_ioctl(void *, void *, u_long, caddr_t, int, struct lwp *);
+paddr_t sti_mmap(void *, void *, off_t, int);
 int sti_alloc_screen(void *, const struct wsscreen_descr *,
 	void **, int *, int *, long *);
 	void sti_free_screen(void *, void *);
@@ -214,7 +214,8 @@ sti_attach_common(struct sti_softc *sc)
 	size = dd->dd_pacode[i] - dd->dd_pacode[STI_BEGIN];
 	if (sc->sc_devtype == STI_DEVTYPE1)
 		size = (size + 3) / 4;
-	if (!(sc->sc_code = uvm_km_alloc1(kernel_map, round_page(size), 0))) {
+	if (!(sc->sc_code = uvm_km_alloc(kernel_map, round_page(size), 0,
+	    UVM_KMF_WIRED))) {
 		printf(": cannot allocate %u bytes for code\n", size);
 		return;
 	}
@@ -255,7 +256,8 @@ sti_attach_common(struct sti_softc *sc)
 	if ((error = uvm_map_protect(kernel_map, sc->sc_code,
 	    sc->sc_code + round_page(size), UVM_PROT_RX, FALSE))) {
 		printf(": uvm_map_protect failed (%d)\n", error);
-		uvm_km_free(kernel_map, sc->sc_code, round_page(size));
+		uvm_km_free(kernel_map, sc->sc_code, round_page(size),
+		    UVM_KMF_WIRED);
 		return;
 	}
 
@@ -580,7 +582,7 @@ sti_setcment(struct sti_softc *sc, u_int i, u_char r, u_char g, u_char b)
 }
 
 int
-sti_ioctl(void *v, u_long cmd, caddr_t data, int flag, struct proc *p)
+sti_ioctl(void *v, void *vs, u_long cmd, caddr_t data, int flag, struct lwp *l)
 {
 	struct sti_softc *sc = v;
 	struct wsdisplay_fbinfo *wdf;
@@ -681,7 +683,7 @@ sti_ioctl(void *v, u_long cmd, caddr_t data, int flag, struct proc *p)
 }
 
 paddr_t
-sti_mmap(void *v, off_t offset, int prot)
+sti_mmap(void *v, void *vs, off_t offset, int prot)
 {
 	/* XXX not finished */
 	return -1;

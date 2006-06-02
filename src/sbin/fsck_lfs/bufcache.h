@@ -1,4 +1,4 @@
-/*	$NetBSD: bufcache.h,v 1.3.2.1 2005/05/07 11:21:29 tron Exp $	*/
+/*	$NetBSD: bufcache.h,v 1.7 2006/05/03 15:04:51 yamt Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2000 The NetBSD Foundation, Inc.
@@ -107,8 +107,13 @@ struct ubuf {
 #define	B_INVAL		0x00002000	/* Does not contain valid info. */
 #define	B_LOCKED	0x00004000	/* Locked in core (not reusable). */
 #define	B_READ		0x00100000	/* Read buffer. */
+#define	B_DONTFREE	0x00010000	/* b_data not managed by bufcache */
 
 LIST_HEAD(bufhash_struct, ubuf);
+
+#if !defined(NOCRED)
+#define	NOCRED	((void *)-1)	/* dummy; not actually used */
+#endif /* !defined(NOCRED) */
 
 void bufinit(int);
 void bufrehash(int);
@@ -119,6 +124,6 @@ struct ubuf *incore(struct uvnode *, int);
 struct ubuf *getblk(struct uvnode *, daddr_t, int);
 void bwrite(struct ubuf *);
 void brelse(struct ubuf *);
-int bread(struct uvnode *, daddr_t, int, struct ucred *, struct ubuf **);
+int bread(struct uvnode *, daddr_t, int, void *, struct ubuf **);
 void reassignbuf(struct ubuf *, struct uvnode *);
 void dump_free_lists(void);

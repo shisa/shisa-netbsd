@@ -1,4 +1,4 @@
-/*	$NetBSD: wdcvar.h,v 1.82.2.1 2005/08/18 20:02:40 tron Exp $	*/
+/*	$NetBSD: wdcvar.h,v 1.84 2005/12/11 12:21:29 christos Exp $	*/
 
 /*-
  * Copyright (c) 1998, 2003, 2004 The NetBSD Foundation, Inc.

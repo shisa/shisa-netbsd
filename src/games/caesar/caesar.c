@@ -1,4 +1,4 @@
-/*	$NetBSD: caesar.c,v 1.14 2004/01/27 20:30:29 jsm Exp $	*/
+/*	$NetBSD: caesar.c,v 1.21 2005/11/19 18:01:42 christos Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993
@@ -11,6 +11,7 @@
  *	Stan King, John Eldridge, based on algorithm suggested by
  *	Bob Morris
  * 29-Sep-82
+ *      Roland Illig, 2005
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -47,115 +48,171 @@ __COPYRIGHT("@(#) Copyright (c) 1989, 1993\n\
 #if 0
 static char sccsid[] = "@(#)caesar.c	8.1 (Berkeley) 5/31/93";
 #else
-__RCSID("$NetBSD: caesar.c,v 1.14 2004/01/27 20:30:29 jsm Exp $");
+__RCSID("$NetBSD: caesar.c,v 1.21 2005/11/19 18:01:42 christos Exp $");
 #endif
 #endif /* not lint */
 
-#include <ctype.h>
 #include <err.h>
 #include <errno.h>
+#include <limits.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <unistd.h>
 
-#define	LINELENGTH	2048
-#define	ROTATE(ch, perm) \
-	isupper(ch) ? ('A' + (ch - 'A' + perm) % 26) : \
-	    islower(ch) ? ('a' + (ch - 'a' + perm) % 26) : ch
+#define NCHARS			(1 << CHAR_BIT)
+#define LETTERS			(26)
 
 /*
  * letter frequencies (taken from some unix(tm) documentation)
  * (unix is a trademark of Bell Laboratories)
  */
-double stdf[26] = {
+static const unsigned char upper[LETTERS] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+static const unsigned char lower[LETTERS] = "abcdefghijklmnopqrstuvwxyz";
+static double stdf[LETTERS] = {
 	7.97, 1.35, 3.61, 4.78, 12.37, 2.01, 1.46, 4.49, 6.39, 0.04,
 	0.42, 3.81, 2.69, 5.92,  6.96, 2.91, 0.08, 6.63, 8.77, 9.68,
-	2.62, 0.81, 1.88, 0.23,  2.07, 0.06,
+	2.62, 0.81, 1.88, 0.23,  2.07, 0.06
 };
 
+static unsigned char rottbl[NCHARS];
 
-int	main(int, char *[]);
-void	printit(const char *) __attribute__((__noreturn__));
 
-int
-main(argc, argv)
-	int argc;
-	char **argv;
+static void
+init_rottbl(int rot)
 {
-	int ch, i, nread;
+	size_t i;
+
+	rot %= LETTERS;		/* prevent integer overflow */
+
+	for (i = 0; i < NCHARS; i++)
+		rottbl[i] = (unsigned char)i;
+
+	for (i = 0; i < LETTERS; i++)
+		rottbl[upper[i]] = upper[(i + rot) % LETTERS];
+
+	for (i = 0; i < LETTERS; i++)
+		rottbl[lower[i]] = lower[(i + rot) % LETTERS];
+}
+
+static void
+print_file(void)
+{
+	int ch;
+
+	while ((ch = getchar()) != EOF) {
+		if (putchar(rottbl[ch]) == EOF) {
+			err(EXIT_FAILURE, "<stdout>");
+			/* NOTREACHED */
+		}
+	}
+}
+
+static void
+print_array(const unsigned char *a, size_t len)
+{
+	size_t i;
+
+	for (i = 0; i < len; i++) {
+		if (putchar(rottbl[a[i]]) == EOF) {
+			err(EXIT_FAILURE, "<stdout>");
+			/* NOTREACHED */
+		}
+	}
+}
+
+static int
+get_rotation(const char *arg)
+{
+	long rot;
+	char *endp;
+
+	errno = 0;
+	rot = strtol(arg, &endp, 10);
+	if (errno == 0 && (arg[0] == '\0' || *endp != '\0'))
+		errno = EINVAL;
+	if (errno == 0 && (rot < 0 || rot > INT_MAX))
+		errno = ERANGE;
+	if (errno)
+		err(EXIT_FAILURE, "Bad rotation value `%s'", arg);
+	return (int)rot;
+}
+
+static void
+guess_and_rotate(void)
+{
+	unsigned char inbuf[2048];
+	unsigned int obs[NCHARS];
+	size_t i, nread;
 	double dot, winnerdot;
-	char *inbuf;
-	int obs[26], try, winner;
-
-	/* revoke setgid privileges */
-	setgid(getgid());
-
-	winnerdot = 0;
-	if (argc > 1)
-		printit(argv[1]);
-
-	if (!(inbuf = malloc(LINELENGTH)))
-		err(1, NULL);
+	int try, winner;
+	int ch;
 
 	/* adjust frequency table to weight low probs REAL low */
-	for (i = 0; i < 26; ++i)
-		stdf[i] = log(stdf[i]) + log(26.0 / 100.0);
+	for (i = 0; i < LETTERS; i++)
+		stdf[i] = log(stdf[i]) + log(LETTERS / 100.0);
 
 	/* zero out observation table */
-	memset(obs, 0, 26 * sizeof(int));
+	(void)memset(obs, 0, sizeof(obs));
 
-	if ((nread = read(STDIN_FILENO, inbuf, LINELENGTH)) < 0)
-		err(1, "reading from stdin");
-	for (i = nread; i--;) {
-		ch = inbuf[i];
-		if (islower(ch))
-			++obs[ch - 'a'];
-		else if (isupper(ch))
-			++obs[ch - 'A'];
+	for (nread = 0; nread < sizeof(inbuf); nread++) {
+		if ((ch = getchar()) == EOF)
+			break;
+		inbuf[nread] = (unsigned char) ch;
 	}
+
+	for (i = 0; i < nread; i++)
+		obs[inbuf[i]]++;
 
 	/*
 	 * now "dot" the freqs with the observed letter freqs
 	 * and keep track of best fit
 	 */
-	for (try = winner = 0; try < 26; ++try) { /* += 13) { */
-		dot = 0;
-		for (i = 0; i < 26; i++)
-			dot += obs[i] * stdf[(i + try) % 26];
-		/* initialize winning score */
-		if (try == 0)
-			winnerdot = dot;
-		if (dot > winnerdot) {
+	winner = 0;
+	winnerdot = 0.0;
+	for (try = 0; try < LETTERS; try++) {
+		dot = 0.0;
+		for (i = 0; i < LETTERS; i++)
+			dot += (obs[upper[i]] + obs[lower[i]])
+			     * stdf[(i + try) % LETTERS];
+
+		if (try == 0 || dot > winnerdot) {
 			/* got a new winner! */
 			winner = try;
 			winnerdot = dot;
 		}
 	}
 
-	for (;;) {
-		for (i = 0; i < nread; ++i) {
-			ch = inbuf[i];
-			putchar(ROTATE(ch, winner));
-		}
-		if (nread < LINELENGTH)
-			break;
-		if ((nread = read(STDIN_FILENO, inbuf, LINELENGTH)) < 0)
-			err(1, "reading from stdin");
-	}
-	exit(0);
+	init_rottbl(winner);
+	print_array(inbuf, nread);
+	print_file();
 }
 
-void
-printit(arg)
-	const char *arg;
+int
+main(int argc, char **argv)
 {
-	int ch, rot;
 
-	if ((rot = atoi(arg)) < 0)
-		errx(1, "bad rotation value.");
-	while ((ch = getchar()) != EOF)
-		putchar(ROTATE(ch, rot));
-	exit(0);
+	if (argc == 1) {
+		guess_and_rotate();
+	} else if (argc == 2) {
+		init_rottbl(get_rotation(argv[1]));
+		print_file();
+	} else {
+		(void)fprintf(stderr, "usage: caesar [rotation]\n");
+		exit(EXIT_FAILURE);
+		/* NOTREACHED */
+	}
+
+	if (ferror(stdin)) {
+		errx(EXIT_FAILURE, "<stdin>");
+		/* NOTREACHED */
+	}
+
+	(void)fflush(stdout);
+	if (ferror(stdout)) {
+		errx(EXIT_FAILURE, "<stdout>");
+		/* NOTREACHED */
+	}
+
+	return 0;
 }

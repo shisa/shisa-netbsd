@@ -1,4 +1,4 @@
-/*	$NetBSD: reverse.c,v 1.16 2004/02/16 21:57:04 itojun Exp $	*/
+/*	$NetBSD: reverse.c,v 1.19 2006/04/09 19:39:17 christos Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -37,7 +37,7 @@
 #if 0
 static char sccsid[] = "@(#)reverse.c	8.1 (Berkeley) 6/6/93";
 #endif
-__RCSID("$NetBSD: reverse.c,v 1.16 2004/02/16 21:57:04 itojun Exp $");
+__RCSID("$NetBSD: reverse.c,v 1.19 2006/04/09 19:39:17 christos Exp $");
 #endif /* not lint */
 
 #include <sys/param.h>
@@ -177,11 +177,22 @@ r_buf(FILE *fp)
 		 * linked list.  If out of memory, toss the LRU block and
 		 * keep going.
 		 */
-		if (enomem || (tl = malloc(sizeof(BF))) == NULL ||
+		if (enomem) {
+			if (!mark) {
+				errno = ENOMEM;
+				err(1, NULL);
+			}
+			tl = tl->next;
+			enomem += tl->len;
+		} else if ((tl = malloc(sizeof(BF))) == NULL ||
 		    (tl->l = malloc(BSZ)) == NULL) {
-			if (!mark)
-				err(1, "%s", strerror(errno));
-			tl = enomem ? tl->next : mark;
+			if (tl)
+				free(tl);
+			if (!mark) {
+				errno = ENOMEM;
+				err(1, NULL);
+			}
+			tl = mark;
 			enomem += tl->len;
 		} else if (mark) {
 			tl->next = mark;
@@ -194,6 +205,7 @@ r_buf(FILE *fp)
 		}
 
 		/* Fill the block with input data. */
+		ch = 0;
 		for (p = tl->l, len = 0;
 		    len < BSZ && (ch = getc(fp)) != EOF; ++len)
 			*p++ = ch;

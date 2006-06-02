@@ -1,4 +1,4 @@
-/*	$NetBSD: ibcs2_syscall.c,v 1.26 2004/02/13 18:57:19 drochner Exp $	*/
+/*	$NetBSD: ibcs2_syscall.c,v 1.33 2006/03/07 07:21:50 thorpej Exp $	*/
 
 /*-
  * Copyright (c) 1998, 2000 The NetBSD Foundation, Inc.
@@ -37,13 +37,10 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ibcs2_syscall.c,v 1.26 2004/02/13 18:57:19 drochner Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ibcs2_syscall.c,v 1.33 2006/03/07 07:21:50 thorpej Exp $");
 
 #if defined(_KERNEL_OPT)
-#include "opt_syscall_debug.h"
 #include "opt_vm86.h"
-#include "opt_ktrace.h"
-#include "opt_systrace.h"
 #endif
 
 #include <sys/param.h>
@@ -52,12 +49,6 @@ __KERNEL_RCSID(0, "$NetBSD: ibcs2_syscall.c,v 1.26 2004/02/13 18:57:19 drochner 
 #include <sys/savar.h>
 #include <sys/user.h>
 #include <sys/signal.h>
-#ifdef KTRACE
-#include <sys/ktrace.h>
-#endif
-#ifdef SYSTRACE
-#include <sys/systrace.h>
-#endif
 #include <sys/syscall.h>
 
 #include <uvm/uvm_extern.h>
@@ -76,22 +67,13 @@ void ibcs2_syscall_fancy(struct trapframe *);
 extern struct sysent ibcs2_sysent[];
 
 void
-ibcs2_syscall_intern(p)
-	struct proc *p;
+ibcs2_syscall_intern(struct proc *p)
 {
-#ifdef KTRACE
-	if (p->p_traceflag & (KTRFAC_SYSCALL | KTRFAC_SYSRET)) {
+
+	if (trace_is_enabled(p))
 		p->p_md.md_syscall = ibcs2_syscall_fancy;
-		return;
-	}
-#endif
-#ifdef SYSTRACE
-	if (ISSET(p->p_flag, P_SYSTRACE)) {
-		p->p_md.md_syscall = ibcs2_syscall_fancy;
-		return;
-	} 
-#endif
-	p->p_md.md_syscall = ibcs2_syscall_plain;
+	else
+		p->p_md.md_syscall = ibcs2_syscall_plain;
 }
 
 /*
@@ -140,10 +122,6 @@ ibcs2_syscall_plain(frame)
 			goto bad;
 	}
 
-#ifdef SYSCALL_DEBUG
-	scdebug_call(l, code, args);
-#endif /* SYSCALL_DEBUG */
-
 	rval[0] = 0;
 	rval[1] = 0;
 
@@ -176,9 +154,6 @@ ibcs2_syscall_plain(frame)
 		break;
 	}
 
-#ifdef SYSCALL_DEBUG
-	scdebug_ret(l, code, error, rval);
-#endif /* SYSCALL_DEBUG */
 	userret(l);
 }
 
@@ -229,16 +204,14 @@ ibcs2_syscall_fancy(frame)
 	}
 
 	KERNEL_PROC_LOCK(l);
-	if ((error = trace_enter(l, code, code, NULL, args)) != 0) {
-		KERNEL_PROC_UNLOCK(l);
-		goto bad;
-	}
+	if ((error = trace_enter(l, code, code, NULL, args)) != 0)
+		goto out;
 
 	rval[0] = 0;
 	rval[1] = 0;
 	error = (*callp->sy_call)(l, args, rval);
+out:
 	KERNEL_PROC_UNLOCK(l);
-	
 	switch (error) {
 	case 0:
 		frame->tf_eax = rval[0];

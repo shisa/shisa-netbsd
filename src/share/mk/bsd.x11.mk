@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.x11.mk,v 1.45.2.4 2005/04/12 09:32:01 tron Exp $
+#	$NetBSD: bsd.x11.mk,v 1.53 2006/04/17 12:50:51 uwe Exp $
 
 .include <bsd.init.mk>
 
@@ -45,13 +45,12 @@ X11FLAGS.SERVER=	-DSHAPE -DXKB -DLBX -DXAPPGROUP -DXCSECURITY \
 
 #	 OS_DEFINES
 X11FLAGS.OS_DEFINES=	-DDDXOSINIT -DSERVER_LOCK -DDDXOSFATALERROR \
-			-DDDXOSVERRORF -DDDXTIME
+			-DDDXOSVERRORF -DDDXTIME -DUSB_HID
 
 .if !(${MACHINE} == "acorn32"	|| \
     ${MACHINE} == "alpha"	|| \
     ${MACHINE} == "amiga"	|| \
     ${MACHINE} == "pmax"	|| \
-    ${MACHINE} == "sparc"	|| \
     ${MACHINE} == "sun3"	|| \
     ${MACHINE} == "vax")
 #	EXT_DEFINES
@@ -73,8 +72,10 @@ X11FLAGS.EXTENSION+=	-D__GLX_ALIGN64
     ${MACHINE} == "cats"	|| \
     ${MACHINE} == "i386"	|| \
     ${MACHINE} == "macppc"	|| \
+    ${MACHINE} == "netwinder"	|| \
     ${MACHINE} == "sgimips"	|| \
-    ${MACHINE} == "sparc64"
+    ${MACHINE} == "sparc64"	|| \
+    ${MACHINE} == "sparc"
 #	LOADABLE
 X11FLAGS.LOADABLE=	-DXFree86LOADER -DIN_MODULE -DXFree86Module \
 			-fno-merge-constants
@@ -144,7 +145,7 @@ appdefsinstall:: .PHONY ${APPDEFS:@S@${DESTDIR}${X11LIBDIR}/app-defaults/${S:T:R
 
 __appdefinstall: .USE
 	${INSTALL_FILE} -o ${BINOWN} -g ${BINGRP} -m ${NONBINMODE} \
-	    ${SYSPKGTAG} ${.ALLSRC} ${.TARGET}
+	    ${.ALLSRC} ${.TARGET}
 
 .for S in ${APPDEFS:O:u}
 ${DESTDIR}${X11LIBDIR}/app-defaults/${S:T:R}: ${S} __appdefinstall

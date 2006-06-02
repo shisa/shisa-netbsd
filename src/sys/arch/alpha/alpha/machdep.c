@@ -1,4 +1,4 @@
-/* $NetBSD: machdep.c,v 1.283.10.1 2005/07/30 17:56:02 tron Exp $ */
+/* $NetBSD: machdep.c,v 1.288 2005/12/11 12:16:10 christos Exp $ */
 
 /*-
  * Copyright (c) 1998, 1999, 2000 The NetBSD Foundation, Inc.
@@ -75,7 +75,7 @@
 
 #include <sys/cdefs.h>			/* RCS ID & Copyright macro defns */
 
-__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.283.10.1 2005/07/30 17:56:02 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.288 2005/12/11 12:16:10 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -834,7 +834,7 @@ cpu_startup()
 	/*
 	 * Good {morning,afternoon,evening,night}.
 	 */
-	printf(version);
+	printf("%s%s", copyright, version);
 	identifycpu();
 	format_bytes(pbuf, sizeof(pbuf), ptoa(totalphysmem));
 	printf("total memory = %s\n", pbuf);
@@ -1854,8 +1854,8 @@ cpu_exec_ecoff_setregs(l, epp, stack)
  *
  */
 int
-cpu_exec_ecoff_probe(p, epp)
-	struct proc *p;
+cpu_exec_ecoff_probe(l, epp)
+	struct lwp *l;
 	struct exec_package *epp;
 {
 	struct ecoff_exechdr *execp = (struct ecoff_exechdr *)epp->ep_hdr;
@@ -1921,7 +1921,7 @@ dot_conv(x)
 	for (i = 0;; ++i) {
 		if (i && (i & 3) == 0)
 			*--xc = '.';
-		*--xc = "0123456789abcdef"[x & 0xf];
+		*--xc = hexdigits[x & 0xf];
 		x >>= 4;
 		if (x == 0)
 			break;
@@ -1988,7 +1988,7 @@ cpu_setmcontext(l, mcp, flags)
 		    (gr[_REG_PS] & ALPHA_PSL_USERCLR) != 0)
 			return (EINVAL);
 
-		regtoframe((struct reg *)gr, l->l_md.md_tf);
+		regtoframe((const struct reg *)gr, l->l_md.md_tf);
 		if (l == curlwp)
 			alpha_pal_wrusp(gr[_REG_SP]);
 		else

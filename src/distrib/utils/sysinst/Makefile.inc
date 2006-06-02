@@ -1,6 +1,8 @@
-#	$NetBSD: Makefile.inc,v 1.39.2.1 2005/09/19 21:10:50 tron Exp $
+#	$NetBSD: Makefile.inc,v 1.44 2006/05/17 05:24:25 mrg Exp $
 #
 # Makefile for sysinst
+
+COPTS += -Os
 
 PROG=		sysinst
 NOMAN=		# defined
@@ -22,8 +24,8 @@ LANGUAGES?=	de en es fr pl
 MSG_MD?=	msg.md.${SYSINSTLANG}
 MENUS_MD?=	menus.md.${SYSINSTLANG}
 
-.include <bsd.sys.mk>		# for HOST_SH
 .include <bsd.own.mk>		# for mk.conf
+.include <bsd.sys.mk>		# for HOST_SH
 .include "${NETBSDSRCDIR}/distrib/common/Makefile.distrib"
 
 _MKSHTARGET_CREATE?=	${_MKSHMSG_CREATE} ${.CURDIR:T}/${.TARGET}
@@ -41,6 +43,9 @@ CPPFLAGS+=	-I. -I${.CURDIR}/../.. -I${.CURDIR} \
 CPPFLAGS+=-DINET6
 .endif
 
+.if ${HAVE_GCC} == 4
+COPTS.label.c+=	-Wno-pointer-sign
+.endif
 
 # Host to ftp from.  Default:
 #	"ftp.NetBSD.org"
@@ -110,12 +115,18 @@ menus.def: menus.mi ${MENUS_MD} msgtouch
 	sed "s/@@VERSION@@/${DISTRIBVER}/" ${.ALLSRC} | \
 	awk -f ${UNIF_AWK} -v defines="${MD_OPTIONS}" > ${.TARGET}
 
+sysinstmsgs.fmtcnt: msg.mi.${SYSINSTLANG} ${MSG_MD} msgtouch msg_defs.h
+	${_MKTARGET_CREATE}
+	sed "s/@@VERSION@@/${DISTRIBVER}/" ${.ALLSRC:M*.${SYSINSTLANG}} | \
+	awk -f ${UNIF_AWK} -v defines="${MD_OPTIONS}" | \
+	${HOST_SH} ${MSG_XLAT_SH} -c > ${.TARGET}
+
 .for LANG in ${LANGUAGES:N${SYSINSTLANG}}
-sysinstmsgs.${LANG}: msg.mi.${LANG} ${MSG_MD:S/.${SYSINSTLANG}$/.${LANG}/} msgtouch msg_defs.h
+sysinstmsgs.${LANG}: msg.mi.${LANG} ${MSG_MD:S/.${SYSINSTLANG}$/.${LANG}/} msgtouch msg_defs.h sysinstmsgs.fmtcnt
 	${_MKTARGET_CREATE}
 	sed "s/@@VERSION@@/${DISTRIBVER}/" ${.ALLSRC:M*.${LANG}} | \
 	awk -f ${UNIF_AWK} -v defines="${MD_OPTIONS}" | \
-	${HOST_SH} ${MSG_XLAT_SH} > ${.TARGET}
+	${HOST_SH} ${MSG_XLAT_SH} -f sysinstmsgs.fmtcnt > ${.TARGET}
 
 DPSRCS+=	sysinstmsgs.${LANG}
 .endfor

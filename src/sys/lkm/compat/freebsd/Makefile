@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.16.2.2 2005/09/13 20:51:07 tron Exp $
+#	$NetBSD: Makefile,v 1.19 2005/12/11 12:24:47 christos Exp $
 
 COMPAT_UTIL_OVERRIDE=	freebsd
 .include "../Makefile.inc"

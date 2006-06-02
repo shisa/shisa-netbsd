@@ -1,4 +1,4 @@
-/*	$NetBSD: pthread_sleep.c,v 1.6.2.1 2005/04/21 18:52:58 tron Exp $ */
+/*	$NetBSD: pthread_sleep.c,v 1.7 2005/04/19 16:38:57 nathanw Exp $ */
 
 /*-
  * Copyright (c) 2003 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: pthread_sleep.c,v 1.6.2.1 2005/04/21 18:52:58 tron Exp $");
+__RCSID("$NetBSD: pthread_sleep.c,v 1.7 2005/04/19 16:38:57 nathanw Exp $");
 
 #include <errno.h>
 #include <limits.h>

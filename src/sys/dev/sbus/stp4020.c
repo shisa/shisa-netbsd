@@ -1,4 +1,4 @@
-/*	$NetBSD: stp4020.c,v 1.43 2005/02/27 00:27:48 perry Exp $ */
+/*	$NetBSD: stp4020.c,v 1.48 2006/03/29 04:16:50 thorpej Exp $ */
 
 /*-
  * Copyright (c) 1998 The NetBSD Foundation, Inc.
@@ -41,7 +41,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: stp4020.c,v 1.43 2005/02/27 00:27:48 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: stp4020.c,v 1.48 2006/03/29 04:16:50 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -139,7 +139,7 @@ static int	stp4020match(struct device *, struct cfdata *, void *);
 static void	stp4020attach(struct device *, struct device *, void *);
 static int	stp4020_intr(void *);
 static void	stp4020_map_window(struct stp4020_socket *h, int win, int speed);
-static void	stp4020_calc_speed(int bus_speed, int ns, int *length, int *delay);
+static void	stp4020_calc_speed(int bus_speed, int ns, int *length, int *cmd_delay);
 static void	stp4020_intr_dispatch(void *arg);
 
 CFATTACH_DECL(nell, sizeof(struct stp4020_softc),
@@ -154,7 +154,7 @@ static void	stp4020_wr_sockctl(struct stp4020_socket *, int, int);
 static int	stp4020_rd_winctl(struct stp4020_socket *, int, int);
 static void	stp4020_wr_winctl(struct stp4020_socket *, int, int, int);
 
-void	stp4020_delay(unsigned int);
+void	stp4020_delay(struct stp4020_softc *sc, unsigned int);
 void	stp4020_attach_socket(struct stp4020_socket *, int);
 void	stp4020_create_event_thread(void *);
 void	stp4020_event_thread(void *);
@@ -207,7 +207,7 @@ static struct pcmcia_chip_functions stp4020_functions = {
 };
 
 
-static __inline__ int
+static inline int
 stp4020_rd_sockctl(h, idx)
 	struct stp4020_socket *h;
 	int idx;
@@ -216,7 +216,7 @@ stp4020_rd_sockctl(h, idx)
 	return (bus_space_read_2(h->tag, h->regs, o));
 }
 
-static __inline__ void
+static inline void
 stp4020_wr_sockctl(h, idx, v)
 	struct stp4020_socket *h;
 	int idx;
@@ -226,7 +226,7 @@ stp4020_wr_sockctl(h, idx, v)
 	bus_space_write_2(h->tag, h->regs, o, v);
 }
 
-static __inline__ int
+static inline int
 stp4020_rd_winctl(h, win, idx)
 	struct stp4020_socket *h;
 	int win;
@@ -237,7 +237,7 @@ stp4020_rd_winctl(h, win, idx)
 	return (bus_space_read_2(h->tag, h->regs, o));
 }
 
-static __inline__ void
+static inline void
 stp4020_wr_winctl(h, win, idx, v)
 	struct stp4020_socket *h;
 	int win;
@@ -371,7 +371,7 @@ stp4020attach(parent, self, aux)
 	bus_space_handle_t bh;
 
 	/* lsb of our config flags decides which interrupt we use */
-	sbus_intno = sc->sc_dev.dv_cfdata->cf_flags & 1;
+	sbus_intno = device_cfdata(&sc->sc_dev)->cf_flags & 1;
 
 	/* Transfer bus tags */
 #ifdef SUN4U
@@ -589,7 +589,7 @@ stp4020_event_thread(arg)
 		s = splhigh();
 		if ((e = SIMPLEQ_FIRST(&sc->events)) == NULL) {
 			splx(s);
-			(void)tsleep(&sc->events, PWAIT, "pcicev", 0);
+			(void)tsleep(&sc->events, PWAIT, "nellevt", 0);
 			continue;
 		}
 		SIMPLEQ_REMOVE_HEAD(&sc->events, se_q);
@@ -785,7 +785,7 @@ stp4020_intr(arg)
  * values for the CMDLNG and CMDDLAY registers.
  */
 static void
-stp4020_calc_speed(int bus_speed, int ns, int *length, int *delay)
+stp4020_calc_speed(int bus_speed, int ns, int *length, int *cmd_delay)
 {
 	int result;
 
@@ -801,13 +801,13 @@ stp4020_calc_speed(int bus_speed, int ns, int *length, int *delay)
 	*length = result;
 
 	/* the sbus frequency range is limited, so we can keep this simple */
-	*delay = ns <= STP4020_MEM_SPEED_MIN? 1 : 2;
+	*cmd_delay = ns <= STP4020_MEM_SPEED_MIN? 1 : 2;
 }
 
 static void
 stp4020_map_window(struct stp4020_socket *h, int win, int speed)
 {
-	int v, length, delay;
+	int v, length, cmd_delay;
 
 	/*
 	 * According to the PC Card standard 300ns access timing should be
@@ -815,13 +815,13 @@ stp4020_map_window(struct stp4020_socket *h, int win, int speed)
 	 * seem to propagate timing information, so we use that
 	 * everywhere.
 	 */
-	stp4020_calc_speed(speed, (win==STP_WIN_ATTR)? 300 : 100, &length, &delay);
+	stp4020_calc_speed(speed, (win==STP_WIN_ATTR)? 300 : 100, &length, &cmd_delay);
 
 	/*
 	 * Fill in the Address Space Select and Base Address
 	 * fields of this windows control register 0.
 	 */
-	v = ((delay << STP4020_WCR0_CMDDLY_S)&STP4020_WCR0_CMDDLY_M)
+	v = ((cmd_delay << STP4020_WCR0_CMDDLY_S)&STP4020_WCR0_CMDDLY_M)
 	    | ((length << STP4020_WCR0_CMDLNG_S)&STP4020_WCR0_CMDLNG_M);
 	switch (win) {
 	case STP_WIN_ATTR:
@@ -968,7 +968,7 @@ stp4020_chip_socket_enable(pch)
 	 * wait 300ms until power fails (Tpf).  Then, wait 100ms since
 	 * we are changing Vcc (Toff).
 	 */
-	stp4020_delay((300 + 100) * 1000);
+	stp4020_delay(h->sc, 300 + 100);
 
 	/* Power up the socket */
 	v = STP4020_ICR1_MSTPWR;
@@ -978,7 +978,7 @@ stp4020_chip_socket_enable(pch)
 	 * wait 100ms until power raise (Tpr) and 20ms to become
 	 * stable (Tsu(Vcc)).
 	 */
-	stp4020_delay((100 + 20) * 1000);
+	stp4020_delay(h->sc, 100 + 20);
 
 	v |= STP4020_ICR1_PCIFOE|STP4020_ICR1_VPP1_VCC;
 	stp4020_wr_sockctl(h, STP4020_ICR1_IDX, v);
@@ -996,7 +996,7 @@ stp4020_chip_socket_enable(pch)
 	stp4020_wr_sockctl(h, STP4020_ICR0_IDX, v);
 
 	/* wait 20ms as per pc card standard (r2.01) section 4.3.6 */
-	stp4020_delay(20000);
+	stp4020_delay(h->sc, 20);
 
 	/* Wait for the chip to finish initializing (5 seconds max) */
 	for (i = 10000; i > 0; i--) {
@@ -1068,7 +1068,7 @@ stp4020_chip_socket_disable(pch)
 	/*
 	 * wait 300ms until power fails (Tpf).
 	 */
-	stp4020_delay(300 * 1000);
+	stp4020_delay(h->sc, 300);
 }
 
 void *
@@ -1110,13 +1110,11 @@ stp4020_chip_intr_disestablish(pch, ih)
  * XXX - assumes a context
  */
 void
-stp4020_delay(ms)
+stp4020_delay(sc, ms)
+	struct stp4020_softc *sc;
 	unsigned int ms;
 {
-	unsigned int ticks;
-
-	/* Convert to ticks */
-	ticks = (ms * hz ) / 1000000;
+	unsigned int ticks = mstohz(ms);
 
 	if (cold || ticks == 0) {
 		delay(ms);
@@ -1127,7 +1125,7 @@ stp4020_delay(ms)
 	if (ticks > 60*hz)
 		panic("stp4020: preposterous delay: %u", ticks);
 #endif
-	tsleep(&ticks, 0, "stp4020_delay", ticks);
+	tsleep(sc, 0, "nelldel", ticks);
 }
 
 #ifdef STP4020_DEBUG

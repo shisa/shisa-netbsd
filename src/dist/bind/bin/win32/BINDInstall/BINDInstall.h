@@ -1,4 +1,4 @@
-/*	$NetBSD: BINDInstall.h,v 1.1.1.1 2004/05/17 23:43:38 christos Exp $	*/
+/*	$NetBSD: BINDInstall.h,v 1.1.1.3 2005/12/21 23:09:33 christos Exp $	*/
 
 /*
  * Portions Copyright (C) 2004  Internet Systems Consortium, Inc. ("ISC")

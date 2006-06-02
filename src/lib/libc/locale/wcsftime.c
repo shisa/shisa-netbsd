@@ -1,4 +1,4 @@
-/*	 $NetBSD: wcsftime.c,v 1.1.2.1 2005/04/06 13:39:12 tron Exp $	*/
+/*	 $NetBSD: wcsftime.c,v 1.1 2005/03/30 03:47:12 christos Exp $	*/
 /*-
  * Copyright (c) 2002 Tim J. Robbins
  * All rights reserved.
@@ -30,7 +30,7 @@
 #if 0
 __FBSDID("$FreeBSD: src/lib/libc/locale/wcsftime.c,v 1.4 2004/04/07 09:47:56 tjr Exp $");
 #else
-__RCSID("$NetBSD: wcsftime.c,v 1.1.2.1 2005/04/06 13:39:12 tron Exp $");
+__RCSID("$NetBSD: wcsftime.c,v 1.1 2005/03/30 03:47:12 christos Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 

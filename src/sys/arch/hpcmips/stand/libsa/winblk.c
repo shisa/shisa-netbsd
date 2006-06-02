@@ -1,4 +1,4 @@
-/*	$NetBSD: winblk.c,v 1.5 2003/10/08 04:25:44 lukem Exp $	*/
+/*	$NetBSD: winblk.c,v 1.7 2006/01/25 18:28:26 christos Exp $	*/
 
 /*-
  * Copyright (c) 1999 Shin Takemura.
@@ -289,7 +289,7 @@ winblkopen(struct open_file *f, ...)
 
       end:
 	if (error && ctx) {
-		free(ctx, sizeof(*ctx));
+		dealloc(ctx, sizeof(*ctx));
 		f->f_devdata = NULL;
 	}
 	return (error);
@@ -301,7 +301,7 @@ winblkclose(f)
 {
 	struct winblk *ctx = f->f_devdata;
 
-	free(ctx, sizeof(*ctx));
+	dealloc(ctx, sizeof(*ctx));
 
 	f->f_devdata = NULL;
 	return (0);

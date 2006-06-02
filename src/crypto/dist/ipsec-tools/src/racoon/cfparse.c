@@ -1,4 +1,4 @@
-/*	$NetBSD: cfparse.c,v 1.2.2.1 2005/11/21 21:12:30 tron Exp $	*/
+/*	$NetBSD: cfparse.c,v 1.2 2005/11/21 14:20:28 manu Exp $	*/
 
 
 /*  A Bison parser, made from ./cfparse.y

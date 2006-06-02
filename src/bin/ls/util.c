@@ -1,4 +1,4 @@
-/*	$NetBSD: util.c,v 1.27 2003/09/22 02:43:20 jschauma Exp $	*/
+/*	$NetBSD: util.c,v 1.29 2006/04/08 22:28:06 jschauma Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993, 1994
@@ -37,7 +37,7 @@
 #if 0
 static char sccsid[] = "@(#)util.c	8.5 (Berkeley) 4/28/95";
 #else
-__RCSID("$NetBSD: util.c,v 1.27 2003/09/22 02:43:20 jschauma Exp $");
+__RCSID("$NetBSD: util.c,v 1.29 2006/04/08 22:28:06 jschauma Exp $");
 #endif
 #endif /* not lint */
 
@@ -63,7 +63,7 @@ safe_print(const char *src)
 	char *name;
 	int flags;
 
-	flags = VIS_NL | VIS_OCTAL;
+	flags = VIS_NL | VIS_OCTAL | VIS_WHITE;
 	if (f_octal_escape)
 		flags |= VIS_CSTYLE;
 
@@ -103,7 +103,8 @@ usage(void)
 {
 
 	(void)fprintf(stderr,
-	    "usage: ls [-AaBbCcdFfgikLlmnopqRrSsTtuWwx1] [file ...]\n");
+	    "usage: %s [-AaBbCcdFfghikLlmnopqRrSsTtuWwx1] [file ...]\n",
+	    getprogname());
 	exit(EXIT_FAILURE);
 	/* NOTREACHED */
 }

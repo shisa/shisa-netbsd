@@ -1,4 +1,4 @@
-/*	$NetBSD: svc_generic.c,v 1.7 2003/09/09 03:56:40 itojun Exp $	*/
+/*	$NetBSD: svc_generic.c,v 1.9 2006/03/19 02:56:48 christos Exp $	*/
 
 /*
  * Sun RPC is a product of Sun Microsystems, Inc. and is provided for
@@ -40,7 +40,7 @@
 #if 0
 static char sccsid[] = "@(#)svc_generic.c 1.21 89/02/28 Copyr 1988 Sun Micro";
 #else
-__RCSID("$NetBSD: svc_generic.c,v 1.7 2003/09/09 03:56:40 itojun Exp $");
+__RCSID("$NetBSD: svc_generic.c,v 1.9 2006/03/19 02:56:48 christos Exp $");
 #endif
 #endif
 
@@ -175,8 +175,7 @@ svc_tp_create(dispatch, prognum, versnum, nconf)
 	if (xprt == NULL) {
 		return (NULL);
 	}
-	/*LINTED const castaway*/
-	(void) rpcb_unset(prognum, versnum, (struct netconfig *) nconf);
+	(void) rpcb_unset(prognum, versnum, __UNCONST(nconf));
 	if (svc_reg(xprt, prognum, versnum, dispatch, nconf) == FALSE) {
 		warnx(
 		"svc_tp_create: Could not register prog %u vers %u on %s",
@@ -313,10 +312,5 @@ svc_tli_create(fd, nconf, bindaddr, sendsz, recvsz)
 freedata:
 	if (madefd)
 		(void) close(fd);
-	if (xprt) {
-		if (!madefd) /* so that svc_destroy doesnt close fd */
-			xprt->xp_fd = RPC_ANYFD;
-		SVC_DESTROY(xprt);
-	}
 	return (NULL);
 }

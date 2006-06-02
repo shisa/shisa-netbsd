@@ -1,4 +1,4 @@
-/* $NetBSD: s3c2410_extint.c,v 1.2 2003/09/24 11:57:45 mycroft Exp $ */
+/* $NetBSD: s3c2410_extint.c,v 1.7 2006/02/23 05:37:46 thorpej Exp $ */
 
 /*
  * Copyright (c) 2003  Genetec corporation.  All rights reserved.
@@ -39,7 +39,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: s3c2410_extint.c,v 1.2 2003/09/24 11:57:45 mycroft Exp $");
+__KERNEL_RCSID(0, "$NetBSD: s3c2410_extint.c,v 1.7 2006/02/23 05:37:46 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -94,13 +94,14 @@ static struct	ssextio_softc *ssextio_softc = NULL;
 /* prototypes */
 static int	ssextio_match(struct device *, struct cfdata *, void *);
 static void	ssextio_attach(struct device *, struct device *, void *);
-static int 	ssextio_search(struct device *, struct cfdata *, void *);
+static int 	ssextio_search(struct device *, struct cfdata *,
+			       const int *, void *);
 static int	ssextio_print(void *, const char *);
 
 static int	ssextio_cascaded_intr(void *);
 static void	ssextio_softintr(void *);
 
-static __inline void
+static inline void
 update_hw_mask(void)
 {
 	bus_space_write_4(ssextio_softc->sc_iot, ssextio_softc->sc_ioh,
@@ -163,14 +164,15 @@ ssextio_attach(struct device *parent, struct device *self, void *aux)
 	/*
 	 *  Attach each devices
 	 */
-	config_search(ssextio_search, self, NULL);
+	config_search_ia(ssextio_search, self, "ssextio", NULL);
 }
 
 static int
-ssextio_search(struct device *parent, struct cfdata *cf, void *aux)
+ssextio_search(struct device *parent, struct cfdata *cf,
+	       const int *ldesc, void *aux)
 {
 	struct ssextio_softc *sc = (struct ssextio_softc *)parent;
-	struct s3c24x0_softc *cpuc =(struct s3c24x0_softc *)sc->sc_dev.dv_parent;
+	struct s3c24x0_softc *cpuc =(struct s3c24x0_softc *) device_parent(&sc->sc_dev);
 	struct s3c2xx0_attach_args sa;
 
 	sa.sa_sc = sc;

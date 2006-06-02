@@ -1,4 +1,4 @@
-/*	$NetBSD: io.c,v 1.15 2003/09/19 10:01:53 itojun Exp $	*/
+/*	$NetBSD: io.c,v 1.20 2006/05/18 18:42:59 mrg Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -39,7 +39,7 @@
 #if 0
 static char sccsid[] = "@(#)io.c	8.1 (Berkeley) 5/31/93";
 #else
-__RCSID("$NetBSD: io.c,v 1.15 2003/09/19 10:01:53 itojun Exp $");
+__RCSID("$NetBSD: io.c,v 1.20 2006/05/18 18:42:59 mrg Exp $");
 #endif
 #endif /* not lint */
 
@@ -53,22 +53,24 @@ __RCSID("$NetBSD: io.c,v 1.15 2003/09/19 10:01:53 itojun Exp $");
 #include "extern.h"
 
 
+/* get command from user        */
+/* no prompt, usually           */
 void
-getin(wrd1, wrd2)		/* get command from user        */
-	char  **wrd1, **wrd2;	/* no prompt, usually           */
+getin(char **wrd1, char **wrd2)
 {
 	char   *s;
 	static char wd1buf[MAXSTR], wd2buf[MAXSTR];
-	int     first, numch;
+	int     first, numch, c;
 
 	*wrd1 = wd1buf;				/* return ptr to internal str */
 	*wrd2 = wd2buf;
 	wd2buf[0] = 0;				/* in case it isn't set here */
 	for (s = wd1buf, first = 1, numch = 0;;) {
-		if ((*s = getchar()) >= 'A' && *s <= 'Z')
+		c = getchar();
+		if ((*s = (char)c) >= 'A' && *s <= 'Z')
 			*s = *s - ('A' - 'a');
 		/* convert to upper case */
-		switch (*s) {			/* start reading from user */
+		switch (c) {			/* start reading from user */
 		case '\n':
 			*s = 0;
 			return;
@@ -100,9 +102,9 @@ getin(wrd1, wrd2)		/* get command from user        */
 	}
 }
 
+/* confirm with rspeak          */
 int
-yes(x, y, z)			/* confirm with rspeak          */
-	int     x, y, z;
+yes(int x, int y, int z)
 {
 	int     result = TRUE;	/* pacify gcc */
 	int    ch;
@@ -128,9 +130,9 @@ yes(x, y, z)			/* confirm with rspeak          */
 	return (result);
 }
 
+/* confirm with mspeak          */
 int
-yesm(x, y, z)			/* confirm with mspeak          */
-	int     x, y, z;
+yesm(int x, int y, int z)
 {
 	int     result = TRUE;	/* pacify gcc */
 	int    ch;
@@ -164,12 +166,13 @@ int     outsw = 0;		/* putting stuff to data file?  */
 const char    iotape[] = "Ax3F'\003tt$8h\315qer*h\017nGKrX\207:!l";
 const char   *tape = iotape;		/* pointer to encryption tape   */
 
+/* next virtual char, bump adr  */
 int
-next()
-{				/* next virtual char, bump adr  */
+next(void)
+{	
 	int     ch;
 
-	ch = (*inptr ^ random()) & 0xFF;	/* Decrypt input data           */
+	ch = (*inptr ^ random()) & 0xFF;	/* Decrypt input data  */
 	if (outsw) {		/* putting data in tmp file     */
 		if (*tape == 0)
 			tape = iotape;	/* rewind encryption tape       */
@@ -181,9 +184,10 @@ next()
 
 char    breakch;		/* tell which char ended rnum   */
 
+/* "read" data from virtual file */
 void
-rdata()
-{				/* "read" data from virtual file */
+rdata(void)
+{	
 	int     sect;
 	char    ch;
 
@@ -257,10 +261,10 @@ rdata()
 
 char    nbf[12];
 
-
+/* read initial location num    */
 int
-rnum()
-{				/* read initial location num    */
+rnum(void)
+{	
 	char   *s;
 	tape = iotape;		/* restart encryption tape      */
 	for (s = nbf, *s = 0;; s++)
@@ -275,9 +279,9 @@ rnum()
 
 char   *seekhere;
 
+/* read description-format msgs */
 void
-rdesc(sect)			/* read description-format msgs */
-	int     sect;
+rdesc(int sect)
 {
 	int     locc;
 	char   *seekstart, *maystart;
@@ -286,8 +290,9 @@ rdesc(sect)			/* read description-format msgs */
 	outsw = 1;		/* these msgs go into tmp file  */
 	for (oldloc = -1, seekstart = seekhere;;) {
 		maystart = inptr;	/* maybe starting new entry     */
-		if ((locc = rnum()) != oldloc && oldloc >= 0	/* finished msg */
-		    && !(sect == 5 && (locc == 0 || locc >= 100))) {	/* unless sect 5 */
+		if ((locc = rnum()) != oldloc && oldloc >= 0 /* finished msg */
+  		    /* unless sect 5 */
+		    && !(sect == 5 && (locc == 0 || locc >= 100))) {
 			switch (sect) {	/* now put it into right table  */
 			case 1:/* long descriptions            */
 				ltext[oldloc].seekadr = seekhere;
@@ -329,7 +334,7 @@ rdesc(sect)			/* read description-format msgs */
 			return;
 		}
 		if (sect != 5 || (locc > 0 && locc < 100)) {
-			if (oldloc != locc)	/* starting a new message       */
+			if (oldloc != locc)	/* starting a new message */
 				seekstart = maystart;
 			oldloc = locc;
 		}
@@ -337,9 +342,10 @@ rdesc(sect)			/* read description-format msgs */
 	}
 }
 
+/* read travel table            */
 void
-rtrav()
-{				/* read travel table            */
+rtrav(void)
+{	
 	int     locc;
 	struct travlist *t = NULL;
 	char   *s;
@@ -347,7 +353,8 @@ rtrav()
 	int     len, m, n, entries = 0;
 
 	for (oldloc = -1;;) {	/* get another line             */
-		if ((locc = rnum()) != oldloc && oldloc >= 0) {	/* end of entry */
+		/* end of entry */		
+		if ((locc = rnum()) != oldloc && oldloc >= 0 && t) {
 			t->next = 0;	/* terminate the old entry      */
 			/* printf("%d:%d entries\n",oldloc,entries);       */
 			/* twrite(oldloc);                                 */
@@ -355,8 +362,8 @@ rtrav()
 		if (locc == -1)
 			return;
 		if (locc != oldloc) {	/* getting a new entry         */
-			t = travel[locc] = (struct travlist *) malloc(sizeof(struct travlist));
-			if ( t == NULL)
+			t = travel[locc] = calloc(1, sizeof(*t));
+			if (t == NULL)
 				err(1, NULL);
 			/* printf("New travel list for %d\n",locc);        */
 			entries = 0;
@@ -373,27 +380,30 @@ rtrav()
 			n = atoi(buf);	/* newloc mod 1000 = newloc     */
 		} else {	/* a long integer               */
 			n = atoi(buf + len - 3);
-			buf[len - 3] = 0;	/* terminate newloc/1000        */
+			buf[len - 3] = 0;	/* terminate newloc/1000  */
 			m = atoi(buf);
 		}
 		while (breakch != LF) {	/* only do one line at a time   */
+			if (t == NULL)
+				abort();
 			if (entries++) {
-				t = t->next = (struct travlist *) malloc(sizeof(struct travlist));
-				if (t == NULL)
+				t->next = calloc(1, sizeof(*t));
+				if (t->next == NULL)
 					err(1, NULL);
+				t = t->next;
 			}
-			t->tverb = rnum();	/* get verb from the file       */
+			t->tverb = rnum();	/* get verb from the file */
 			t->tloc = n;	/* table entry mod 1000         */
-			t->conditions = m;	/* table entry / 1000           */
-			/* printf("entry %d for %d\n",entries,locc);       */
+			t->conditions = m;	/* table entry / 1000   */
+			/* printf("entry %d for %d\n",entries,locc);    */
 		}
 	}
 }
 #ifdef DEBUG
 
+/* travel options from this loc */
 void
-twrite(loq)			/* travel options from this loc */
-	int     loq;
+twrite(int loq)
 {
 	struct travlist *t;
 	printf("If");
@@ -413,17 +423,18 @@ twrite(loq)			/* travel options from this loc */
 }
 #endif				/* DEBUG */
 
+/* read the vocabulary          */
 void
-rvoc()
+rvoc(void)
 {
-	char   *s;		/* read the vocabulary          */
-	int     index;
+	char   *s;
+	int     idx;
 	char    buf[6];
 	for (;;) {
-		index = rnum();
-		if (index < 0)
+		idx = rnum();
+		if (idx < 0)
 			break;
-		for (s = buf, *s = 0;; s++)	/* get the word                 */
+		for (s = buf, *s = 0;; s++)	/* get the word  */
 			if ((*s = next()) == TAB || *s == '\n' || *s == LF
 			    || *s == ' ')
 				break;
@@ -431,16 +442,16 @@ rvoc()
 		if (*s != '\n' && *s != LF)
 			FLUSHLF;/* can be comments    */
 		*s = 0;
-		/* printf("\"%s\"=%d\n",buf,index); */
-		vocab(buf, -2, index);
+		/* printf("\"%s\"=%d\n",buf,idx); */
+		vocab(buf, -2, idx);
 	}
 /*	prht();	*/
 }
 
-
+/* initial object locations     */
 void
-rlocs()
-{				/* initial object locations     */
+rlocs(void)
+{	
 	for (;;) {
 		if ((obj = rnum()) < 0)
 			break;
@@ -452,9 +463,10 @@ rlocs()
 	}
 }
 
+/* default verb messages        */
 void
-rdflt()
-{				/* default verb messages        */
+rdflt(void)
+{	
 	for (;;) {
 		if ((verb = rnum()) < 0)
 			break;
@@ -462,15 +474,19 @@ rdflt()
 	}
 }
 
+/* liquid assets &c: cond bits  */
 void
-rliq()
-{				/* liquid assets &c: cond bits  */
+rliq(void)
+{	
 	int     bitnum;
 	for (;;) {		/* read new bit list            */
 		if ((bitnum = rnum()) < 0)
 			break;
 		for (;;) {	/* read locs for bits           */
-			cond[rnum()] |= setbit[bitnum];
+			int n = rnum();
+			if (n < 0)
+				break;
+			cond[n] |= setbit[bitnum];
 			if (breakch == LF)
 				break;
 		}
@@ -478,7 +494,7 @@ rliq()
 }
 
 void
-rhints()
+rhints(void)
 {
 	int     hintnum, i;
 	hntmax = 0;
@@ -494,8 +510,7 @@ rhints()
 
 
 void
-rspeak(msg)
-	int     msg;
+rspeak(int msg)
 {
 	if (msg != 0)
 		speak(&rtext[msg]);
@@ -503,27 +518,25 @@ rspeak(msg)
 
 
 void
-mspeak(msg)
-	int     msg;
+mspeak(int msg)
 {
 	if (msg != 0)
 		speak(&mtext[msg]);
 }
 
 
+/* read, decrypt, and print a message (not ptext)      */
+/* msg is a pointer to seek address and length of mess */
 void
-speak(msg)			/* read, decrypt, and print a message (not
-				 * ptext)      */
-	const struct text *msg;	/* msg is a pointer to seek address and length
-				 * of mess */
+speak(const struct text *msg)
 {
 	char   *s, nonfirst;
 
 	s = msg->seekadr;
 	nonfirst = 0;
-	while (s - msg->seekadr < msg->txtlen) {	/* read a line at a time */
+	while (s - msg->seekadr < msg->txtlen) { /* read a line at a time */
 		tape = iotape;	/* restart decryption tape      */
-		while ((*s++ ^ *tape++) != TAB);	/* read past loc num       */
+		while ((*s++ ^ *tape++) != TAB); /* read past loc num       */
 		/* assume tape is longer than location number           */
 		/* plus the lookahead put together                    */
 		if ((*s ^ *tape) == '>' &&
@@ -536,20 +549,18 @@ speak(msg)			/* read, decrypt, and print a message (not
 			if (*tape == 0)
 				tape = iotape;	/* rewind decryp tape */
 			putchar(*s ^ *tape);
-		} while ((*s++ ^ *tape++) != LF);	/* better end with LF   */
+		} while ((*s++ ^ *tape++) != LF); /* better end with LF   */
 	}
 }
 
-
+/* read, decrypt and print a ptext message  */
+/* msg is the number of all the p msgs for this place  */
+/* assumes object 1 doesn't have prop 1, obj 2 no prop 2 &c */
 void
-pspeak(m, skip)			/* read, decrypt an print a ptext message              */
-	int     m;		/* msg is the number of all the p msgs for
-				 * this place  */
-	int     skip;		/* assumes object 1 doesn't have prop 1, obj 2
-				 * no prop 2 &c */
+pspeak(int m, int skip)
 {
 	char   *s, nonfirst;
-	char   *numst, save;
+	char   *numst;
 	struct text *msg;
 	char   *tbuf;
 
@@ -562,10 +573,10 @@ pspeak(m, skip)			/* read, decrypt an print a ptext message              */
 	nonfirst = 0;
 	while (s - tbuf < msg->txtlen) {	/* read line at a time */
 		tape = iotape;	/* restart decryption tape      */
-		for (numst = s; (*s ^= *tape++) != TAB; s++);	/* get number  */
+		for (numst = s; (*s ^= *tape++) != TAB; s++); /* get number  */
 
-		save = *s;	/* Temporarily trash the string (cringe) */
-		*s++ = 0;	/* decrypting number within the string          */
+				/* Temporarily trash the string (cringe) */
+		*s++ = 0;	/* decrypting number within the string   */
 
 		if (atoi(numst) != 100 * skip && skip >= 0) {
 			while ((*s++ ^ *tape++) != LF)	/* flush the line    */
@@ -582,7 +593,7 @@ pspeak(m, skip)			/* read, decrypt an print a ptext message              */
 			if (*tape == 0)
 				tape = iotape;
 			putchar(*s ^ *tape);
-		} while ((*s++ ^ *tape++) != LF);	/* better end with LF   */
+		} while ((*s++ ^ *tape++) != LF); /* better end with LF   */
 		if (skip < 0)
 			break;
 	}

@@ -1,4 +1,4 @@
-/*	$NetBSD: atavar.h,v 1.67.2.1 2005/05/27 23:10:52 riz Exp $	*/
+/*	$NetBSD: atavar.h,v 1.71 2005/12/24 20:27:29 perry Exp $	*/
 
 /*
  * Copyright (c) 1998, 2001 Manuel Bouyer.
@@ -49,7 +49,7 @@
  * commands are queued in a list.
  */
 struct ata_xfer {
-	__volatile u_int c_flags;	/* command state flags */
+	volatile u_int c_flags;	/* command state flags */
 
 	/* Channel and drive that are to process the request. */
 	struct ata_channel *c_chp;
@@ -326,7 +326,7 @@ struct ata_channel {
 #define ATACH_IRQ_WAIT 0x10	/* controller is waiting for irq */
 #define ATACH_DMA_WAIT 0x20	/* controller is waiting for DMA */
 #define	ATACH_DISABLED 0x80	/* channel is disabled */
-#define ATACH_TH_RUN   0x100	/* the kenrel thread is working */
+#define ATACH_TH_RUN   0x100	/* the kernel thread is working */
 #define ATACH_TH_RESET 0x200	/* someone ask the thread to reset */
 	u_int8_t ch_status;	/* copy of status register */
 	u_int8_t ch_error;	/* copy of error register */

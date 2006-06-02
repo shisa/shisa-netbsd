@@ -1,4 +1,4 @@
-/*	$NetBSD: esp.c,v 1.39 2005/03/05 17:40:56 chs Exp $	*/
+/*	$NetBSD: esp.c,v 1.44 2006/03/08 23:46:23 lukem Exp $	*/
 
 /*
  * Copyright (c) 1997 Jason R. Thorpe.
@@ -77,7 +77,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: esp.c,v 1.39 2005/03/05 17:40:56 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: esp.c,v 1.44 2006/03/08 23:46:23 lukem Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -138,8 +138,8 @@ void	esp_intr(void *);
 void	esp_dualbus_intr(void *);
 static struct esp_softc		*esp0, *esp1;
 
-static __inline__ int esp_dafb_have_dreq(struct esp_softc *);
-static __inline__ int esp_iosb_have_dreq(struct esp_softc *);
+static inline int esp_dafb_have_dreq(struct esp_softc *);
+static inline int esp_iosb_have_dreq(struct esp_softc *);
 int (*esp_have_dreq)(struct esp_softc *);
 
 struct ncr53c9x_glue esp_glue = {
@@ -269,7 +269,7 @@ espattach(struct device *parent, struct device *self, void *aux)
 
 	sc->sc_id = 7;
 
-	/* gimme Mhz */
+	/* gimme MHz */
 	sc->sc_freq /= 1000000;
 
 	/*
@@ -582,13 +582,13 @@ esp_quick_dma_setup(struct ncr53c9x_softc *sc, caddr_t *addr, size_t *len,
 	return 0;
 }
 
-static __inline__ int
+static inline int
 esp_dafb_have_dreq(struct esp_softc *esc)
 {
 	return (*(volatile u_int32_t *)(esc->sc_bsh.base) & 0x200);
 }
 
-static __inline__ int
+static inline int
 esp_iosb_have_dreq(struct esp_softc *esc)
 {
 	return (via2_reg(vIFR) & V2IF_SCSIDRQ);
@@ -731,7 +731,7 @@ restart_dmago:
 	len &= ~1;
 
 	statreg = esc->sc_reg + NCR_STAT * 16;
-	pdma = (u_int16_t *) (esc->sc_reg + 0x100);
+	pdma = (volatile u_int16_t *) (esc->sc_reg + 0x100);
 
 	/*
 	 * These loops are unrolled into assembly for two reasons:
@@ -744,7 +744,7 @@ restart_dmago:
 	if (esc->sc_datain == 0) {
 		/* while (cnt32--) { 16 instances of *pdma = *addr++; } */
 		/* while (cnt2--) { *pdma = *addr++; } */
-		__asm __volatile (
+		__asm volatile (
 			"	movl %1, %%a2	\n"
 			"	movl %2, %%a3	\n"
 			"	movw %3, %%d2	\n"
@@ -773,8 +773,8 @@ restart_dmago:
 			: "0" (addr), "g" (pdma), "g" (cnt32), "g" (cnt2)
 			: "a2", "a3", "d2");
 		if (esc->sc_pad) {
-			unsigned char	*c;
-			c = (unsigned char *) addr;
+			volatile unsigned char	*c;
+			c = (volatile unsigned char *) addr;
 			/* Wait for DREQ */
 			while (!esp_have_dreq(esc)) {
 				if (*statreg & 0x80) {
@@ -782,12 +782,12 @@ restart_dmago:
 					goto gotintr;
 				}
 			}
-			*(unsigned char *)pdma = *c;
+			*(volatile unsigned char *)pdma = *c;
 		}
 	} else {
 		/* while (cnt32--) { 16 instances of *addr++ = *pdma; } */
 		/* while (cnt2--) { *addr++ = *pdma; } */
-		__asm __volatile (
+		__asm volatile (
 			"	movl %1, %%a2	\n"
 			"	movl %2, %%a3	\n"
 			"	movw %3, %%d2	\n"
@@ -816,8 +816,8 @@ restart_dmago:
 			: "0" (addr), "g" (pdma), "g" (cnt32), "g" (cnt2)
 			: "a2", "a3", "d2");
 		if (esc->sc_pad) {
-			unsigned char	*c;
-			c = (unsigned char *) addr;
+			volatile unsigned char	*c;
+			c = (volatile unsigned char *) addr;
 			/* Wait for DREQ */
 			while (!esp_have_dreq(esc)) {
 				if (*statreg & 0x80) {
@@ -825,7 +825,7 @@ restart_dmago:
 					goto gotintr;
 				}
 			}
-			*c = *(unsigned char *)pdma;
+			*c = *(volatile unsigned char *)pdma;
 		}
 	}
 

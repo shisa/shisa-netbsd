@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.55 2004/05/19 23:37:41 abs Exp $
+#	$NetBSD: Makefile,v 1.59 2006/05/12 03:29:11 mrg Exp $
 
 LIB=	sa
 NOPIC=	# defined
@@ -17,7 +17,7 @@ CPPFLAGS=	-I${SADIR} ${SACPPFLAGS} ${SAMISCCPPFLAGS} \
 .PATH.c: ${SADIR}
 
 # stand routines
-SRCS+=	alloc.c bcmp.c bcopy.c bzero.c errno.c exit.c exec.c files.c \
+SRCS+=	alloc.c bcopy.c bzero.c errno.c exit.c exec.c files.c \
 	getfile.c gets.c globals.c memcmp.c memcpy.c memmove.c memset.c \
 	panic.c printf.c qsort.c snprintf.c sprintf.c strerror.c subr_prf.c \
 	twiddle.c vsprintf.c checkpasswd.c
@@ -37,7 +37,7 @@ SRCS+=	loadfile.c loadfile_aout.c loadfile_ecoff.c loadfile_elf32.c \
 
 .if (${SA_INCLUDE_NET} == "yes")
 # network routines
-SRCS+=	arp.c ether.c ether_sprintf.c in_cksum.c net.c netif.c rpc.c udp.c
+SRCS+=	arp.c ether.c ether_sprintf.c ip_cksum.c net.c netif.c rpc.c udp.c
 
 # network info services:
 SRCS+=	bootp.c rarp.c bootparam.c
@@ -60,3 +60,7 @@ lib${LIB}.o:: ${OBJS}
 	@echo building standard ${LIB} library
 	@rm -f lib${LIB}.o
 	@${LD} -r -o lib${LIB}.o `lorder ${OBJS} | tsort`
+
+.if ${HAVE_GCC} == 4
+CPPFLAGS+=	-Wno-pointer-sign
+.endif

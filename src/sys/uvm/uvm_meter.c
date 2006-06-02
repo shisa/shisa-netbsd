@@ -1,4 +1,4 @@
-/*	$NetBSD: uvm_meter.c,v 1.33 2004/10/10 09:57:31 yamt Exp $	*/
+/*	$NetBSD: uvm_meter.c,v 1.39 2005/12/21 12:23:44 yamt Exp $	*/
 
 /*
  * Copyright (c) 1997 Charles D. Cranor and Washington University.
@@ -41,7 +41,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: uvm_meter.c,v 1.33 2004/10/10 09:57:31 yamt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: uvm_meter.c,v 1.39 2005/12/21 12:23:44 yamt Exp $");
 
 #include <sys/param.h>
 #include <sys/proc.h>
@@ -62,7 +62,7 @@ struct loadavg averunnable;
  * 5 second intervals.
  */
 
-static fixpt_t cexp[3] = {
+static const fixpt_t cexp[3] = {
 	0.9200444146293232 * FSCALE,	/* exp(-1/12) */
 	0.9834714538216174 * FSCALE,	/* exp(-1/60) */
 	0.9944598480048967 * FSCALE,	/* exp(-1/180) */
@@ -79,7 +79,7 @@ static void uvm_total(struct vmtotal *);
  * uvm_meter: calculate load average and wake up the swapper (if needed)
  */
 void
-uvm_meter()
+uvm_meter(void)
 {
 	if ((time.tv_sec % 5) == 0)
 		uvm_loadav(&averunnable);
@@ -92,8 +92,7 @@ uvm_meter()
  * 1, 5, and 15 minute internvals.
  */
 static void
-uvm_loadav(avg)
-	struct loadavg *avg;
+uvm_loadav(struct loadavg *avg)
 {
 	int i, nrun;
 	struct lwp *l;
@@ -179,9 +178,6 @@ sysctl_vm_uvmexp2(SYSCTLFN_ARGS)
 	u.swpginuse = uvmexp.swpginuse;
 	u.swpgonly = uvmexp.swpgonly;
 	u.nswget = uvmexp.nswget;
-	u.nanon = uvmexp.nanon;
-	u.nanonneeded = uvmexp.nanonneeded;
-	u.nfreeanon = uvmexp.nfreeanon;
 	u.faults = uvmexp.faults;
 	u.traps = uvmexp.traps;
 	u.intrs = uvmexp.intrs;
@@ -304,6 +300,34 @@ sysctl_vm_updateminmax(SYSCTLFN_ARGS)
 }
 
 /*
+ * sysctl helper routine for uvm_pctparam.
+ */
+static int
+sysctl_uvmpctparam(SYSCTLFN_ARGS)
+{
+	int t, error;
+	struct sysctlnode node;
+	struct uvm_pctparam *pct;
+
+	pct = rnode->sysctl_data;
+	t = pct->pct_pct;
+
+	node = *rnode;
+	node.sysctl_data = &t;
+	t = *(int*)rnode->sysctl_data;
+	error = sysctl_lookup(SYSCTLFN_CALL(&node));
+	if (error || newp == NULL)
+		return error;
+
+	if (t < 0 || t > 100)
+		return EINVAL;
+
+	uvm_pctparam_set(pct, t);
+
+	return (0);
+}
+
+/*
  * uvm_sysctl: sysctl hook into UVM system.
  */
 SYSCTL_SETUP(sysctl_vm_setup, "sysctl vm subtree setup")
@@ -411,14 +435,20 @@ SYSCTL_SETUP(sysctl_vm_setup, "sysctl vm subtree setup")
 		       SYSCTL_DESCR("Whether try to zero pages in idle loop"),
 		       NULL, 0, &vm_page_zero_enable, 0,
 		       CTL_VM, CTL_CREATE, CTL_EOL);
+	sysctl_createv(clog, 0, NULL, NULL,
+		       CTLFLAG_PERMANENT|CTLFLAG_READWRITE,
+		       CTLTYPE_INT, "inactivepct",
+		       SYSCTL_DESCR("Percentage of inactive queue of "
+				    "the entire (active + inactive) queue"),
+		       sysctl_uvmpctparam, 0, &uvmexp.inactivepct, 0,
+		       CTL_VM, CTL_CREATE, CTL_EOL);
 }
 
 /*
  * uvm_total: calculate the current state of the system.
  */
 static void
-uvm_total(totalp)
-	struct vmtotal *totalp;
+uvm_total(struct vmtotal *totalp)
 {
 	struct lwp *l;
 #if 0
@@ -470,7 +500,7 @@ uvm_total(totalp)
 		 */
 #if 0
 		/*
-		 * XXXCDC: BOGUS!  rethink this.   in the mean time
+		 * XXXCDC: BOGUS!  rethink this.  in the mean time
 		 * don't do it.
 		 */
 		paging = 0;
@@ -500,4 +530,12 @@ uvm_total(totalp)
 	totalp->t_avmshr = 0;		/* XXX */
 	totalp->t_rmshr = 0;		/* XXX */
 	totalp->t_armshr = 0;		/* XXX */
+}
+
+void
+uvm_pctparam_set(struct uvm_pctparam *pct, int val)
+{
+
+	pct->pct_pct = val;
+	pct->pct_scaled = val * UVM_PCTPARAM_SCALE / 100;
 }

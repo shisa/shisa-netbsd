@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile.xen,v 1.5 2004/06/21 18:20:09 jmc Exp $
+#	$NetBSD: Makefile.xen,v 1.18 2006/05/28 14:00:13 pavel Exp $
 #	NetBSD: Makefile.i386,v 1.132 2003/07/05 16:56:10 simonb Exp 
 
 # Makefile for NetBSD
@@ -28,7 +28,8 @@ NEED_OWN_INSTALL_TARGET?=no
 ## (1) port identification
 ##
 XEN=		$S/arch/xen
-GENASSYM=	${XEN}/${XEN_BUILD}/genassym.cf
+I386=		$S/arch/i386
+GENASSYM_CONF=	${XEN}/${XEN_BUILD}/genassym.cf
 
 ##
 ## (2) compile settings
@@ -47,8 +48,17 @@ KERN_AS=	obj
 ##
 MD_OBJS=	locore.o spl.o vector.o
 MD_CFILES=
-MD_SFILES=	${XEN}/${XEN_BUILD}/locore.S ${XEN}/${XEN_BUILD}/spl.S \
+MD_SFILES=	${XEN}/${XEN_BUILD}/locore.S \
+		${XEN}/${XEN_BUILD}/spl.S \
 		${XEN}/${XEN_BUILD}/vector.S
+
+.if ${MACHINE_ARCH} == i386
+MD_OBJS+=	copy.o
+MD_SFILES+=	${I386}/i386/copy.S
+
+copy.o: ${I386}/i386/copy.S assym.h
+	${NORMAL_S}
+.endif
 
 locore.o: ${XEN}/${XEN_BUILD}/locore.S assym.h
 	${NORMAL_S}
@@ -59,6 +69,7 @@ spl.o: ${XEN}/${XEN_BUILD}/spl.S assym.h
 vector.o: ${XEN}/${XEN_BUILD}/vector.S assym.h
 	${NORMAL_S}
 
+.ifndef noBEGIN
 .if !make(obj) && !make(clean) && !make(cleandir)
 .BEGIN:
 .for A in ${XEN_MACHINE_ARCHS}
@@ -69,6 +80,7 @@ vector.o: ${XEN}/${XEN_BUILD}/vector.S assym.h
 	mkdir xen-ma
 	ln -s ../${XEN_BUILD} xen-ma/machine
 .endif
+.endif
 
 ##
 ## (5) link settings
@@ -76,7 +88,7 @@ vector.o: ${XEN}/${XEN_BUILD}/vector.S assym.h
 TEXTADDR?=	c0100000
 LINKFLAGS_NORMAL=	-X
 .if (${OBJECT_FMT} == "ELF")
-KERN_LDSCRIPT?=	kern.ldscript
+KERN_LDSCRIPT?=	kern.ldscript.Xen
 LINKFORMAT=	-T $S/arch/${XEN_BUILD}/conf/${KERN_LDSCRIPT}
 .else
 LINKFORMAT=	-z
@@ -110,6 +122,9 @@ clock.o: config_time.h
 %LOAD
 
 %RULES
+
+## Include rules for Atheros WLAN
+.include "$S/contrib/dev/ath/netbsd/Makefile.ath.inc"
 
 ##
 ## (9) port independent kernel machinery

@@ -1,4 +1,4 @@
-/*	$NetBSD: tty.c,v 1.21 2004/08/13 12:10:39 mycroft Exp $	*/
+/*	$NetBSD: tty.c,v 1.25 2006/03/18 09:09:41 christos Exp $	*/
 
 /*-
  * Copyright (c) 1992, 1993
@@ -37,7 +37,7 @@
 #if 0
 static char sccsid[] = "@(#)tty.c	8.1 (Berkeley) 6/4/93";
 #else
-__RCSID("$NetBSD: tty.c,v 1.21 2004/08/13 12:10:39 mycroft Exp $");
+__RCSID("$NetBSD: tty.c,v 1.25 2006/03/18 09:09:41 christos Exp $");
 #endif
 #endif /* not lint && not SCCSID */
 
@@ -50,7 +50,7 @@ __RCSID("$NetBSD: tty.c,v 1.21 2004/08/13 12:10:39 mycroft Exp $");
 
 typedef struct ttymodes_t {
 	const char *m_name;
-	u_int m_value;
+	unsigned int m_value;
 	int m_type;
 }          ttymodes_t;
 
@@ -529,8 +529,11 @@ tty_setup(EditLine *el)
 #endif /* DEBUG_TTY */
 			return (-1);
 		}
-	} else
+	}
+#ifdef notdef
+	else
 		tty__setchar(&el->el_tty.t_ex, el->el_tty.t_c[EX_IO]);
+#endif
 
 	el->el_tty.t_ed.c_iflag &= ~el->el_tty.t_t[ED_IO][MD_INP].t_clrmask;
 	el->el_tty.t_ed.c_iflag |= el->el_tty.t_t[ED_IO][MD_INP].t_setmask;
@@ -1200,10 +1203,14 @@ tty_stty(EditLine *el, int argc __attribute__((__unused__)), const char **argv)
 				st = len =
 				    strlen(el->el_tty.t_t[z][m->m_type].t_name);
 			}
-			x = (el->el_tty.t_t[z][i].t_setmask & m->m_value)
-			    ?  '+' : '\0';
-			x = (el->el_tty.t_t[z][i].t_clrmask & m->m_value)
-			    ? '-' : x;
+			if (i != -1) {
+			    x = (el->el_tty.t_t[z][i].t_setmask & m->m_value)
+				?  '+' : '\0';
+			    x = (el->el_tty.t_t[z][i].t_clrmask & m->m_value)
+				? '-' : x;
+			} else {
+			    x = '\0';
+			}
 
 			if (x != '\0' || aflag) {
 
@@ -1228,7 +1235,7 @@ tty_stty(EditLine *el, int argc __attribute__((__unused__)), const char **argv)
 		return (0);
 	}
 	while (argv && (s = *argv++)) {
-		char *p;
+		const char *p;
 		switch (*s) {
 		case '+':
 		case '-':
@@ -1239,10 +1246,10 @@ tty_stty(EditLine *el, int argc __attribute__((__unused__)), const char **argv)
 			break;
 		}
 		d = s;
-		if ((p = strchr(s, '=')) != NULL)
-			*p++ = '\0';
+		p = strchr(s, '=');
 		for (m = ttymodes; m->m_name; m++)
-			if (strcmp(m->m_name, d) == 0 &&
+			if ((p ? strncmp(m->m_name, d, (size_t)(p - d)) :
+			    strcmp(m->m_name, d)) == 0 &&
 			    (p == NULL || m->m_type == MD_CHAR))
 				break;
 
@@ -1253,7 +1260,7 @@ tty_stty(EditLine *el, int argc __attribute__((__unused__)), const char **argv)
 		}
 		if (p) {
 			int c = ffs((int)m->m_value);
-			int v = *p ? parse__escape((const char **const) &p) :
+			int v = *++p ? parse__escape((const char **) &p) :
 			    el->el_tty.t_vdisable;
 			assert(c-- != 0);
 			c = tty__getcharindex(c);

@@ -1,4 +1,4 @@
-/* $NetBSD: style,v 1.31 2005/02/03 00:27:55 christos Exp $ */
+/* $NetBSD: style,v 1.37 2006/02/25 11:07:19 wiz Exp $ */
 
 /*
  * The revision control tag appears first, with a blank line after it.
@@ -29,7 +29,7 @@
 #include <sys/cdefs.h>
 __COPYRIGHT("@(#) Copyright (c) 2000\n\
 	The NetBSD Foundation, inc. All rights reserved.\n");
-__RCSID("$NetBSD: style,v 1.31 2005/02/03 00:27:55 christos Exp $");
+__RCSID("$NetBSD: style,v 1.37 2006/02/25 11:07:19 wiz Exp $");
 
 /*
  * VERY important single-line comments look like this.
@@ -84,6 +84,7 @@ __RCSID("$NetBSD: style,v 1.31 2005/02/03 00:27:55 christos Exp $");
  */
 #include <assert.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -170,6 +171,9 @@ typedef struct BAR {
 	int level;
 } BAR;
 
+/* C99 uintN_t is preferred over u_intN_t. */
+uint32_t zero;
+
 /*
  * All major routines should have a comment briefly describing what
  * they do.  The comment before the "main" routine should describe
@@ -190,12 +194,15 @@ main(int argc, char *argv[])
 	setprogname(argv[0]);
 
 	/*
-	 * For consistency, getopt should be used to parse options.  Options
-	 * should be sorted in the getopt call and the switch statement, unless
-	 * parts of the switch cascade.  Elements in a switch statement that
-	 * cascade should have a FALLTHROUGH comment.  Numerical arguments
-	 * should be checked for accuracy.  Code that cannot be reached should
-	 * have a NOTREACHED comment.
+	 * For consistency, getopt should be used to parse options.
+	 * Options should be sorted in the getopt call and the switch
+	 * statement, unless parts of the switch cascade.  For the
+	 * sorting order, see the usage() example below.  Don't forget
+	 * to add option descriptions to the usage and the manpage.
+	 * Elements in a switch statement that cascade should have a
+	 * FALLTHROUGH comment.  Numerical arguments should be checked
+	 * for accuracy.  Code that cannot be reached should have a
+	 * NOTREACHED comment.
 	 */
 	while ((ch = getopt(argc, argv, "abn")) != -1) {
 		switch (ch) {		/* Indent the switch. */
@@ -306,7 +313,6 @@ function(int a1, int a2, float fl, int a4)
 	 *
 	 * DO NOT initialize variables in the declarations.
 	 */
-	extern uint32_t zero;
 	extern u_char one;
 	extern char two;
 	struct foo three, *four;
@@ -364,9 +370,25 @@ dirinfo(const char *p, struct stat *sb, struct dirent *de, struct statfs *sf,
 		err(1, "Unable to stat %s", p);
 
 	/*
-	 * To printf 64 bit quantities, use %ll and cast to (long long).
+	 * To printf quantities that might be larger that "long", include
+	 * <inttypes.h>, cast quantities to intmax_t or uintmax_t and use
+	 * PRI?MAX constants, which may be found in <machine/int_fmtio.h>.
 	 */
-	(void)printf("The size of %s is %lld\n", p, (long long)sb->st_size);
+	(void)printf("The size of %s is %" PRIdMAX " (%#" PRIxMAX ")\n", p,
+	    (intmax_t)sb->st_size, (uintmax_t)sb->st_size);
+
+	/*
+	 * To printf quantities of known bit-width, use the corresponding
+	 * defines (generally only done within NetBSD for quantities that
+	 * exceed 32-bits).
+	 */
+	(void)printf("%s uses %" PRId64 " blocks and has flags %#" PRIx32 "\n",
+	    p, sb->st_blocks, sb->st_flags);
+
+	/*
+	 * There are similar constants that should be used with the *scanf(3)
+	 * family of functions: SCN?MAX, SCN?64, etc.
+	 */
 }
 
 /*
@@ -397,20 +419,22 @@ usage(void)
 	 * Use snprintf(3) or strlcpy(3)/strlcat(3) instead of sprintf(3);
 	 * again to avoid stupid bugs.
 	 *
-	 * Usage statements should look like the manual pages.  Options w/o
-	 * operands come first, in alphabetical order inside a single set of
-	 * braces.  Followed by options with operands, in alphabetical order,
-	 * each in braces.  Followed by required arguments in the order they
-	 * are specified, followed by optional arguments in the order they
-	 * are specified.  A bar (`|') separates either/or options/arguments,
-	 * and multiple options/arguments which are specified together are
-	 * placed in a single set of braces.
+	 * Usage statements should look like the manual pages.
+	 * Options w/o operands come first, in alphabetical order
+	 * inside a single set of braces, upper case before lower case
+	 * (AaBbCc...).  Next are options with operands, in the same
+	 * order, each in braces.  Then required arguments in the
+	 * order they are specified, followed by optional arguments in
+	 * the order they are specified.  A bar (`|') separates
+	 * either/or options/arguments, and multiple options/arguments
+	 * which are specified together are placed in a single set of
+	 * braces.
 	 *
 	 * Use getprogname() instead of hardcoding the program name.
 	 *
-	 * "usage: f [-ade] [-b b_arg] [-m m_arg] req1 req2 [opt1 [opt2]]\n"
+	 * "usage: f [-aDde] [-b b_arg] [-m m_arg] req1 req2 [opt1 [opt2]]\n"
 	 * "usage: f [-a | -b] [-c [-de] [-n number]]\n"
 	 */
 	(void)fprintf(stderr, "usage: %s [-ab]\n", getprogname());
-	exit(1);
+	exit(EXIT_FAILURE);
 }

@@ -1,4 +1,4 @@
-/*	$NetBSD: alpha.c,v 1.15 2003/10/27 00:12:44 lukem Exp $	*/
+/*	$NetBSD: alpha.c,v 1.17 2006/03/18 11:08:19 dsl Exp $	*/
 
 /*-
  * Copyright (c) 2002 The NetBSD Foundation, Inc.
@@ -102,7 +102,7 @@
 
 #include <sys/cdefs.h>
 #if !defined(__lint)
-__RCSID("$NetBSD: alpha.c,v 1.15 2003/10/27 00:12:44 lukem Exp $");
+__RCSID("$NetBSD: alpha.c,v 1.17 2006/03/18 11:08:19 dsl Exp $");
 #endif	/* !__lint */
 
 #include <sys/param.h>
@@ -125,8 +125,14 @@ static void	sun_bootstrap(ib_params *, struct alpha_boot_block * const);
 static void	check_sparc(const struct alpha_boot_block * const,
 			    const char *);
 
+static int alpha_clearboot(ib_params *);
+static int alpha_setboot(ib_params *);
 
-int
+struct ib_mach ib_mach_alpha =
+	{ "alpha", alpha_setboot, alpha_clearboot, no_editboot,
+		IB_STAGE1START | IB_ALPHASUM | IB_APPEND | IB_SUNSUM };
+
+static int
 alpha_clearboot(ib_params *params)
 {
 	struct alpha_boot_block	bb;
@@ -201,7 +207,7 @@ alpha_clearboot(ib_params *params)
 	return (1);
 }
 
-int
+static int
 alpha_setboot(ib_params *params)
 {
 	struct alpha_boot_block	bb;
@@ -240,10 +246,10 @@ alpha_setboot(ib_params *params)
 	rv = pread(params->s1fd, bootstrapbuf, params->s1stat.st_size, 0);
 	if (rv == -1) {
 		warn("Reading `%s'", params->stage1);
-		return (0);
+		goto done;
 	} else if (rv != params->s1stat.st_size) {
 		warnx("Reading `%s': short read", params->stage1);
-		return (0);
+		goto done;
 	}
 
 	rv = pread(params->fsfd, &bb, sizeof(bb), ALPHA_BOOT_BLOCK_OFFSET);

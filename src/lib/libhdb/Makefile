@@ -1,4 +1,4 @@
-# $NetBSD: Makefile,v 1.18 2005/01/10 03:11:17 lukem Exp $
+# $NetBSD: Makefile,v 1.20 2006/05/11 23:16:28 mrg Exp $
 
 NOLINT=		# defined
 
@@ -10,6 +10,10 @@ DIST=		${NETBSDSRCDIR}/crypto/dist
 WARNS?=		1
 
 LIB=		hdb
+
+LIBDPLIBS=	krb5	${.CURDIR}/../libkrb5 \
+		asn1	${.CURDIR}/../libasn1 \
+		roken	${.CURDIR}/../libroken
 
 .if ${USETOOLS} != "yes"
 COMPILEETOBJ!=		cd ${NETBSDSRCDIR}/lib/libcom_err/compile_et && ${PRINTOBJDIR}
@@ -66,6 +70,12 @@ CPPFLAGS+= -I.					\
 
 .if (${USE_INET6} != "no")
 CPPFLAGS+=-DHAVE_IPV6
+.endif
+
+.if ${HAVE_GCC} == 4
+.for f in mkey
+COPTS.${f}.c+=  -Wno-pointer-sign
+.endfor
 .endif
 
 ${gen_files} hdb_asn1.h: asn1_files

@@ -1,4 +1,4 @@
-/*	$NetBSD: getpwent.c,v 1.7.6.2 2005/04/08 13:40:24 tron Exp $	*/
+/*	$NetBSD: getpwent.c,v 1.9 2005/03/31 12:56:49 he Exp $	*/
 
 /*
  * Copyright (c) 1987, 1988, 1989, 1993, 1994, 1995

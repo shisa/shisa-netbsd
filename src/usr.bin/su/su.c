@@ -1,4 +1,4 @@
-/*	$NetBSD: su.c,v 1.64.2.1 2005/07/09 23:03:11 tron Exp $	*/
+/*	$NetBSD: su.c,v 1.65 2005/07/05 20:15:13 kleink Exp $	*/
 
 /*
  * Copyright (c) 1988 The Regents of the University of California.
@@ -40,7 +40,7 @@ __COPYRIGHT(
 #if 0
 static char sccsid[] = "@(#)su.c	8.3 (Berkeley) 4/2/94";*/
 #else
-__RCSID("$NetBSD: su.c,v 1.64.2.1 2005/07/09 23:03:11 tron Exp $");
+__RCSID("$NetBSD: su.c,v 1.65 2005/07/05 20:15:13 kleink Exp $");
 #endif
 #endif /* not lint */
 

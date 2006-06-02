@@ -1,4 +1,4 @@
-/*	$NetBSD: displayq.c,v 1.27 2004/10/30 08:44:25 dsl Exp $	*/
+/*	$NetBSD: displayq.c,v 1.32 2006/03/21 22:47:26 christos Exp $	*/
 
 /*
  * Copyright (c) 1983, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)displayq.c	8.4 (Berkeley) 4/28/95";
 #else
-__RCSID("$NetBSD: displayq.c,v 1.27 2004/10/30 08:44:25 dsl Exp $");
+__RCSID("$NetBSD: displayq.c,v 1.32 2006/03/21 22:47:26 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -73,7 +73,7 @@ extern uid_t	uid, euid;
 
 static int	col;		/* column on screen */
 static char	current[MAXPATHLEN]; /* current file being printed */
-static char	file[MAXPATHLEN]; /* print file name */
+static char	fname[MAXPATHLEN]; /* print file name */
 static int	first;		/* first file in ``files'' column? */
 static int	garbage;	/* # of garbage cf files */
 static int	lflag;		/* long output option */
@@ -103,25 +103,7 @@ displayq(int format)
 	lflag = format;
 	totsize = 0;
 	rank = -1;
-	if ((i = cgetent(&bp, printcapdb, printer)) == -2)
-		fatal("can't open printer description file");
-	else if (i == -1)
-		fatal("unknown printer");
-	else if (i == -3)
-		fatal("potential reference loop detected in printcap file");
-	if (cgetstr(bp, DEFLP, &LP) < 0)
-		LP = _PATH_DEFDEVLP;
-	if (cgetstr(bp, "rp", &RP) < 0)
-		RP = DEFLP;
-	if (cgetstr(bp, "sd", &SD) < 0)
-		SD = _PATH_DEFSPOOL;
-	if (cgetstr(bp,"lo", &LO) < 0)
-		LO = DEFLOCK;
-	if (cgetstr(bp, "st", &ST) < 0)
-		ST = DEFSTAT;
-	cgetstr(bp, "rm", &RM);
-	if ((cp = checkremote()) != NULL)
-		printf("Warning: %s\n", cp);
+	getprintcap(printer);
 
 	/*
 	 * Print out local queue
@@ -220,10 +202,9 @@ displayq(int format)
 		for (i = 0; i < nitems; i++) {
 			q = queue[i];
 			inform(q->q_name);
-			free(q);
 		}
-		free(queue);
 	}
+	freeq(queue, nitems);
 	if (!remote) {
 		if (nitems == 0)
 			puts("no entries");
@@ -253,7 +234,7 @@ displayq(int format)
 		(void)strlcpy(cp, user[i], ecp - cp);
 	}
 	(void)strlcat(line, "\n", sizeof(line));
-	fd = getport(RM, 0);
+	fd = getport(RM);
 	if (fd < 0) {
 		if (from != host)
 			printf("%s: ", host);
@@ -312,7 +293,7 @@ header(void)
 }
 
 void
-inform(char *cf)
+inform(const char *cf)
 {
 	int j;
 	FILE *cfp;
@@ -356,14 +337,14 @@ inform(char *cf)
 		default: /* some format specifer and file name? */
 			if (line[0] < 'a' || line[0] > 'z')
 				continue;
-			if (j == 0 || strcmp(file, line+1) != 0) {
-				(void)strlcpy(file, line+1, sizeof(file));
+			if (j == 0 || strcmp(fname, line+1) != 0) {
+				(void)strlcpy(fname, line+1, sizeof(fname));
 			}
 			j++;
 			continue;
 		case 'N':
-			show(line+1, file, j);
-			file[0] = '\0';
+			show(line + 1, fname, j);
+			fname[0] = '\0';
 			j = 0;
 		}
 	}
@@ -376,10 +357,11 @@ inform(char *cf)
 }
 
 int
-inlist(char *name, char *file)
+inlist(const char *name, const char *file)
 {
 	int *r, n;
-	char **u, *cp;
+	char **u;
+	const char *cp;
 
 	if (users == 0 && requests == 0)
 		return(1);
@@ -401,7 +383,7 @@ inlist(char *name, char *file)
 }
 
 void
-show(char *nfile, char *file, int copies)
+show(const char *nfile, const char *file, int copies)
 {
 	if (strcmp(nfile, " ") == 0)
 		nfile = "(standard input)";
@@ -425,7 +407,7 @@ blankfill(int n)
  * Give the abbreviated dump of the file names
  */
 void
-dump(char *nfile, char *file, int copies)
+dump(const char *nfile, const char *file, int copies)
 {
 	short n, fill;
 	struct stat lbuf;
@@ -458,7 +440,7 @@ dump(char *nfile, char *file, int copies)
  * Print the long info about the file
  */
 void
-ldump(char *nfile, char *file, int copies)
+ldump(const char *nfile, const char *file, int copies)
 {
 	struct stat lbuf;
 
@@ -482,7 +464,7 @@ void
 prank(int n)
 {
 	char rline[100];
-	static char *r[] = {
+	static const char *r[] = {
 		"th", "st", "nd", "rd", "th", "th", "th", "th", "th", "th"
 	};
 

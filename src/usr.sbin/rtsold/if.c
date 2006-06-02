@@ -1,4 +1,4 @@
-/*	$NetBSD: if.c,v 1.13 2004/01/03 01:40:31 itojun Exp $	*/
+/*	$NetBSD: if.c,v 1.15 2006/03/18 21:41:23 dan Exp $	*/
 /*	$KAME: if.c,v 1.18 2002/05/31 10:10:03 itojun Exp $	*/
 
 /*
@@ -269,14 +269,16 @@ if_nametosdl(char *name)
 			}
 		}
 	}
-	if (next == lim) {
+	if (next == lim || sdl == NULL) {
 		/* search failed */
 		free(buf);
 		return(NULL);
 	}
 
-	if ((ret_sdl = malloc(sdl->sdl_len)) == NULL)
+	if ((ret_sdl = malloc(sdl->sdl_len)) == NULL) {
+		free(buf);
 		return(NULL);
+	}
 	memcpy((caddr_t)ret_sdl, (caddr_t)sdl, sdl->sdl_len);
 
 	free(buf);

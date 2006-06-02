@@ -1,4 +1,4 @@
-/*	$NetBSD: linux_syscall.c,v 1.11 2004/08/01 14:19:00 jdolecek Exp $	*/
+/*	$NetBSD: linux_syscall.c,v 1.18 2006/03/07 07:21:50 thorpej Exp $	*/
 
 /*-
  * Copyright (c) 2000, 2003 The NetBSD Foundation, Inc.
@@ -74,13 +74,9 @@
  * ARMLinux emulation: syscall entry handling
  */
 
-#include "opt_ktrace.h"
-#include "opt_systrace.h"
-#include "opt_syscall_debug.h"
-
 #include <sys/param.h>
 
-__KERNEL_RCSID(0, "$NetBSD: linux_syscall.c,v 1.11 2004/08/01 14:19:00 jdolecek Exp $");
+__KERNEL_RCSID(0, "$NetBSD: linux_syscall.c,v 1.18 2006/03/07 07:21:50 thorpej Exp $");
 
 #include <sys/device.h>
 #include <sys/errno.h>
@@ -89,12 +85,6 @@ __KERNEL_RCSID(0, "$NetBSD: linux_syscall.c,v 1.11 2004/08/01 14:19:00 jdolecek 
 #include <sys/signalvar.h>
 #include <sys/systm.h>
 #include <sys/user.h>
-#ifdef KTRACE
-#include <sys/ktrace.h>
-#endif
-#ifdef SYSTRACE
-#include <sys/systrace.h>
-#endif
 
 #include <uvm/uvm_extern.h>
 
@@ -117,19 +107,11 @@ void linux_syscall_fancy(struct trapframe *, struct lwp *, u_int32_t);
 void
 linux_syscall_intern(struct proc *p)
 {
-#ifdef KTRACE
-	if (p->p_traceflag & (KTRFAC_SYSCALL | KTRFAC_SYSRET)) {
+
+	if (trace_is_enabled(p))
 		p->p_md.md_syscall = linux_syscall_fancy;
-		return;
-	}
-#endif
-#ifdef SYSTRACE
-	if (p->p_flag & P_SYSTRACE) {
-		p->p_md.md_syscall = linux_syscall_fancy;
-		return;
-	}
-#endif
-	p->p_md.md_syscall = linux_syscall_plain;
+	else
+		p->p_md.md_syscall = linux_syscall_plain;
 }
 
 void
@@ -200,12 +182,12 @@ linux_syscall_fancy(trapframe_t *frame, struct lwp *l, u_int32_t insn)
 	nargs = callp->sy_argsize / sizeof(register_t);
 
 	if ((error = trace_enter(l, code, code, NULL, args)) != 0)
-		goto bad;
+		goto out;
 
 	rval[0] = 0;
 	rval[1] = 0;
 	error = (*callp->sy_call)(l, args, rval);
-
+out:
 	switch (error) {
 	case 0:
 		frame->tf_r0 = rval[0];
@@ -221,7 +203,6 @@ linux_syscall_fancy(trapframe_t *frame, struct lwp *l, u_int32_t insn)
 		break;
 
 	default:
-	bad:
 		error = native_to_linux_errno[error];
 		frame->tf_r0 = error;
 		break;

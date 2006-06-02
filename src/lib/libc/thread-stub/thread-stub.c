@@ -1,4 +1,4 @@
-/*	$NetBSD: thread-stub.c,v 1.12 2004/12/14 00:21:40 nathanw Exp $	*/
+/*	$NetBSD: thread-stub.c,v 1.14 2005/11/29 03:12:00 christos Exp $	*/
 
 /*-
  * Copyright (c) 2003 The NetBSD Foundation, Inc.
@@ -35,6 +35,11 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+
+#include <sys/cdefs.h>
+#if defined(LIBC_SCCS) && !defined(lint)
+__RCSID("$NetBSD: thread-stub.c,v 1.14 2005/11/29 03:12:00 christos Exp $");
+#endif /* LIBC_SCCS and not lint */
 
 /*
  * Stubs for thread operations, for use when threads are not used by
@@ -297,8 +302,7 @@ int
 __libc_thr_setspecific_stub(thread_key_t k, const void *v)
 {
 
-	/* LINTED cast away const */
-	__libc_tsd[k].tsd_val = (void *) v;
+	__libc_tsd[k].tsd_val = __UNCONST(v);
 
 	return (0);
 }

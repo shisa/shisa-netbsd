@@ -1,4 +1,4 @@
-/*	$NetBSD: mainbus.c,v 1.8 2004/08/30 15:05:16 drochner Exp $	*/
+/*	$NetBSD: mainbus.c,v 1.11 2006/02/16 10:56:58 kochi Exp $	*/
 
 /*
  * Copyright (c) 1996 Christopher G. Demetriou.  All rights reserved.
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mainbus.c,v 1.8 2004/08/30 15:05:16 drochner Exp $");
+__KERNEL_RCSID(0, "$NetBSD: mainbus.c,v 1.11 2006/02/16 10:56:58 kochi Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -59,7 +59,6 @@ __KERNEL_RCSID(0, "$NetBSD: mainbus.c,v 1.8 2004/08/30 15:05:16 drochner Exp $")
 
 #if NACPI > 0
 #include <dev/acpi/acpivar.h>
-#include <dev/acpi/acpi_madt.h>
 #endif
 
 /*
@@ -202,7 +201,6 @@ mainbus_attach(parent, self, aux)
 
 #if NACPI > 0
 	if (acpi_present) {
-		mba.mba_acpi.aa_busname = "acpi";
 		mba.mba_acpi.aa_iot = X86_BUS_SPACE_IO;
 		mba.mba_acpi.aa_memt = X86_BUS_SPACE_MEM;
 		mba.mba_acpi.aa_pc = NULL;
@@ -211,7 +209,7 @@ mainbus_attach(parent, self, aux)
 		    PCI_FLAGS_MRL_OKAY | PCI_FLAGS_MRM_OKAY |
 		    PCI_FLAGS_MWI_OKAY;
 		mba.mba_acpi.aa_ic = &x86_isa_chipset;
-		config_found_ia(self, "acpibus", &mba.mba_acpi, mainbus_print);
+		config_found_ia(self, "acpibus", &mba.mba_acpi, 0);
 	}
 #endif
 

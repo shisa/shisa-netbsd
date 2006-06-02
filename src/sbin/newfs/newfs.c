@@ -1,4 +1,4 @@
-/*	$NetBSD: newfs.c,v 1.85 2004/11/15 12:21:29 he Exp $	*/
+/*	$NetBSD: newfs.c,v 1.91 2006/05/04 19:46:10 christos Exp $	*/
 
 /*
  * Copyright (c) 1983, 1989, 1993, 1994
@@ -78,7 +78,7 @@ __COPYRIGHT("@(#) Copyright (c) 1983, 1989, 1993, 1994\n\
 #if 0
 static char sccsid[] = "@(#)newfs.c	8.13 (Berkeley) 5/1/95";
 #else
-__RCSID("$NetBSD: newfs.c,v 1.85 2004/11/15 12:21:29 he Exp $");
+__RCSID("$NetBSD: newfs.c,v 1.91 2006/05/04 19:46:10 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -188,6 +188,7 @@ int main(int, char *[]);
 int	mfs;			/* run as the memory based filesystem */
 int	Nflag;			/* run without writing file system */
 int	Oflag = 1;		/* format as an 4.3BSD file system */
+int	verbosity;		/* amount of printf() output */
 int64_t	fssize;			/* file system size */
 int	sectorsize;		/* bytes/sector */
 int	fsize = 0;		/* fragment size */
@@ -201,7 +202,7 @@ int	maxcontig = 0;		/* max contiguous blocks to allocate */
 int	maxbpg;			/* maximum blocks per file in a cyl group */
 int	avgfilesize = AVFILESIZ;/* expected average file size */
 int	avgfpdir = AFPDIR;	/* expected number of files per directory */
-int	mntflags = MNT_ASYNC;	/* flags to be passed to mount */
+int	mntflags = 0;		/* flags to be passed to mount */
 u_long	memleft;		/* virtual memory available */
 caddr_t	membase;		/* start address of memory based filesystem */
 int	needswap;		/* Filesystem not in native byte order */
@@ -237,10 +238,12 @@ main(int argc, char *argv[])
 	mode_t mfsmode = 01777;	/* default mode for a /tmp-type directory */
 	uid_t mfsuid = 0;	/* user root */
 	gid_t mfsgid = 0;	/* group wheel */
+	mntoptparse_t mo;
 
 	cp = NULL;
 	fsi = fso = -1;
 	Fflag = Iflag = Zflag = 0;
+	verbosity = -1;
 	if (strstr(getprogname(), "mfs")) {
 		mfs = 1;
 	} else {
@@ -253,8 +256,8 @@ main(int argc, char *argv[])
 	}
 
 	opstring = mfs ?
-	    "NT:a:b:d:e:f:g:h:i:m:n:o:p:s:u:" :
-	    "B:FINO:S:T:Za:b:d:e:f:g:h:i:l:m:n:o:p:r:s:u:v:";
+	    "NT:V:a:b:d:e:f:g:h:i:m:n:o:p:s:u:" :
+	    "B:FINO:S:T:V:Za:b:d:e:f:g:h:i:l:m:n:o:r:s:v:";
 	while ((ch = getopt(argc, argv, opstring)) != -1)
 		switch (ch) {
 		case 'B':
@@ -277,19 +280,28 @@ main(int argc, char *argv[])
 			break;
 		case 'N':
 			Nflag = 1;
+			if (verbosity == -1)
+				verbosity = 3;
 			break;
 		case 'O':
 			Oflag = strsuftoi64("format", optarg, 0, 2, NULL);
 			break;
 		case 'S':
+			/* XXX: non-512 byte sectors almost certainly don't work. */
 			sectorsize = strsuftoi64("sector size",
-			    optarg, 1, INT_MAX, NULL);
+			    optarg, 512, 65536, NULL);
+			if (sectorsize & (sectorsize - 1))
+				errx(1, "sector size `%s' is not a power of 2.",
+				    optarg);
 			break;
 #ifdef COMPAT
 		case 'T':
 			disktype = optarg;
 			break;
 #endif
+		case 'V':
+			verbosity = strsuftoi64("verbose", optarg, 0, 4, NULL);
+			break;
 		case 'Z':
 			Zflag = 1;
 			break;
@@ -339,9 +351,12 @@ main(int argc, char *argv[])
 			    optarg, 1, INT_MAX, NULL);
 			break;
 		case 'o':
-			if (mfs)
-				getmntopts(optarg, mopts, &mntflags, 0);
-			else {
+			if (mfs) {
+				mo = getmntopts(optarg, mopts, &mntflags, 0);
+				if (mo == NULL)
+					err(1, "getmntopts");
+				freemntopts(mo);
+			} else {
 				if (strcmp(optarg, "space") == 0)
 					opt = FS_OPTSPACE;
 				else if (strcmp(optarg, "time") == 0)
@@ -353,21 +368,17 @@ main(int argc, char *argv[])
 			}
 			break;
 		case 'p':
-			if (mfs) {
-				if ((mfsmode = strtol(optarg, NULL, 8)) <= 0)
-					errx(1, "bad mode `%s'", optarg);
-			} else
-				errx(1, "unknown option 'p'");
+			/* mfs only */
+			if ((mfsmode = strtol(optarg, NULL, 8)) <= 0)
+				errx(1, "bad mode `%s'", optarg);
 			break;
 		case 's':
 			fssize = strsuftoi64("file system size",
 			    optarg, INT64_MIN, INT64_MAX, &byte_sized);
 			break;
 		case 'u':
-			if (mfs)
-				mfsuid = mfs_user(optarg);
-			else
-				errx(1, "deprecated option 'u'");
+			/* mfs only */
+			mfsuid = mfs_user(optarg);
 			break;
 		case 'v':
 			appleufs_volname = optarg;
@@ -384,11 +395,17 @@ main(int argc, char *argv[])
 	argc -= optind;
 	argv += optind;
 
+	if (verbosity == -1)
+		/* Default to not showing CG info if mfs */
+		verbosity = mfs ? 0 : 3;
+
 #ifdef MFS
 	/* This is enough to get through the correct kernel code paths */
 	memset(&args, 0, sizeof args);
 	args.fspec = mountfromname;
 	if (mntflags & (MNT_GETARGS | MNT_UPDATE)) {
+		if ((mntflags & MNT_GETARGS) == 0)
+			mntflags |= MNT_ASYNC;
 		if (mount(MOUNT_MFS, argv[1], mntflags, &args) < 0)
 			err(1, "mount `%s' failed", argv[1]);
 		if (mntflags & MNT_GETARGS)
@@ -514,8 +531,9 @@ main(int argc, char *argv[])
 	}
 
 	if (pp != NULL && fssize > pp->p_size)
-		errx(1, "maximum file system size on `%s' is %d sectors",
-		    special, pp->p_size);
+		errx(1, "size %" PRIu64 " exceeds maximum file system size on "
+		    "`%s' of %u sectors",
+		    fssize, special, pp->p_size);
 
 	/* XXXLUKEM: only ftruncate() regular files ? (dsl: or at all?) */
 	if (Fflag && fso != -1
@@ -538,9 +556,10 @@ main(int argc, char *argv[])
 			err(1, "can't malloc buffer of %d",
 			bufsize);
 		bufrem = fssize * sectorsize;
-		printf(
-    "Creating file system image in `%s', size %lld bytes, in %d byte chunks.\n",
-		    special, (long long)bufrem, bufsize);
+		if (verbosity > 0)
+			printf( "Creating file system image in `%s', "
+			    "size %lld bytes, in %d byte chunks.\n",
+			    special, (long long)bufrem, bufsize);
 		while (bufrem > 0) {
 			i = write(fso, buf, MIN(bufsize, bufrem));
 			if (i == -1)
@@ -674,14 +693,9 @@ main(int argc, char *argv[])
 		(void) close(2);
 		(void) chdir("/");
 
-		args.export.ex_root = -2;
-		if (mntflags & MNT_RDONLY)
-			args.export.ex_flags = MNT_EXRDONLY;
-		else
-			args.export.ex_flags = 0;
 		args.base = membase;
 		args.size = fssize * sectorsize;
-		if (mount(MOUNT_MFS, argv[1], mntflags, &args) < 0)
+		if (mount(MOUNT_MFS, argv[1], mntflags | MNT_ASYNC, &args) < 0)
 			exit(errno); /* parent prints message */
 	}
 #endif
@@ -855,6 +869,7 @@ struct help_strings {
 #ifdef COMPAT
 	{ NEWFS,	"-T disktype\tdisk type" },
 #endif
+	{ BOTH,		"-V verbose\toutput verbosity: 0 ==> none, 4 ==> max" },
 	{ NEWFS,	"-Z \t\tpre-zero the image file" },
 	{ BOTH,		"-a maxcontig\tmaximum contiguous blocks" },
 	{ BOTH,		"-b bsize\tblock size" },

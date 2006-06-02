@@ -1,4 +1,4 @@
-/*	$NetBSD: locore.S,v 1.13 2004/03/25 18:33:17 drochner Exp $	*/
+/*	$NetBSD: locore.S,v 1.18 2006/05/14 21:55:09 elad Exp $	*/
 
 /*
  * Copyright-o-rama!
@@ -746,8 +746,8 @@ NENTRY(switch_error3)
 #endif /* DIAGNOSTIC */
 
 /*
- * int cpu_switch(struct proc *)
- * Find a runnable process and switch to it.  Wait if necessary.  If the new
+ * int cpu_switch(struct lwp *)
+ * Find a runnable lwp and switch to it.  Wait if necessary.  If the new
  * lwp is the same as the old one, we short-circuit the context save and
  * restore.
  */
@@ -776,9 +776,9 @@ ENTRY(cpu_switch)
 	 *
 	 * Registers:
 	 *   %rax - queue head, scratch, then zero
-	 *   %r8 - queue number
+	 *   %r8  - queue number
 	 *   %ecx - cached value of whichqs
-	 *   %rdx - next process in queue
+	 *   %rdx - next lwp in queue
 	 *   %r13 - old lwp
 	 *   %r12 - new lwp
 	 */
@@ -1069,8 +1069,7 @@ ENTRY(cpu_switchto)
  * Switch to proc0's saved context and deallocate the address space and kernel
  * stack for p.  Then jump into cpu_switch(), as if we were in proc0 all along.
  */
-	.globl	_C_LABEL(lwp0),_C_LABEL(uvmspace_free),_C_LABEL(kernel_map)
-	.globl	_C_LABEL(uvm_km_free),_C_LABEL(tss_free)
+	.globl	_C_LABEL(lwp0)
 ENTRY(switch_exit)
 #ifdef MULTIPROCESSOR
 	movq	CPUVAR(IDLE_PCB),%r8

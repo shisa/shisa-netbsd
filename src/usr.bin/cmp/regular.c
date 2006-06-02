@@ -1,4 +1,4 @@
-/*	$NetBSD: regular.c,v 1.15 2005/03/07 07:51:42 dsl Exp $	*/
+/*	$NetBSD: regular.c,v 1.18 2005/04/11 10:39:06 enami Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993, 1994
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)regular.c	8.3 (Berkeley) 4/2/94";
 #else
-__RCSID("$NetBSD: regular.c,v 1.15 2005/03/07 07:51:42 dsl Exp $");
+__RCSID("$NetBSD: regular.c,v 1.18 2005/04/11 10:39:06 enami Exp $");
 #endif
 #endif /* not lint */
 
@@ -52,7 +52,7 @@ __RCSID("$NetBSD: regular.c,v 1.15 2005/03/07 07:51:42 dsl Exp $");
 
 void
 c_regular(int fd1, char *file1, off_t skip1, off_t len1,
-	int fd2, char *file2, off_t skip2, off_t len2)
+    int fd2, char *file2, off_t skip2, off_t len2)
 {
 	u_char ch, *p1, *p2;
 	off_t byte, length, line;
@@ -69,31 +69,34 @@ c_regular(int fd1, char *file1, off_t skip1, off_t len1,
 		eofmsg(file2);
 	len2 -= skip2;
 
+	byte = line = 1;
 	dfound = 0;
 	length = MIN(len1, len2);
 	for (blk_sz = 1024 * 1024; length != 0; length -= blk_sz) {
 		if (blk_sz > length)
 			blk_sz = length;
-		p1 = mmap(NULL, blk_sz, PROT_READ, MAP_FILE|MAP_SHARED, fd1, skip1);
+		p1 = mmap(NULL, blk_sz, PROT_READ, MAP_FILE|MAP_SHARED,
+		    fd1, skip1);
 		if (p1 == MAP_FAILED)
 			goto mmap_failed;
 
-		p2 = mmap(NULL, blk_sz, PROT_READ, MAP_FILE|MAP_SHARED, fd2, skip2);
+		p2 = mmap(NULL, blk_sz, PROT_READ, MAP_FILE|MAP_SHARED,
+		    fd2, skip2);
 		if (p2 == MAP_FAILED) {
 			munmap(p1, blk_sz);
 			goto mmap_failed;
 		}
 
 		blk_cnt = blk_sz;
-		for (byte = line = 1; blk_cnt--; ++p1, ++p2, ++byte) {
+		for (; blk_cnt--; ++p1, ++p2, ++byte) {
 			if ((ch = *p1) != *p2) {
 				if (!lflag) {
 					diffmsg(file1, file2, byte, line);
 					/* NOTREACHED */
 				}
 				dfound = 1;
-				(void)printf("%6lld %3o %3o\n", (long long)byte,
-					    ch, *p2);
+				(void)printf("%6lld %3o %3o\n",
+				    (long long)byte, ch, *p2);
 			}
 			if (ch == '\n')
 				++line;
@@ -105,7 +108,7 @@ c_regular(int fd1, char *file1, off_t skip1, off_t len1,
 	}
 
 	if (len1 != len2)
-		eofmsg (len1 > len2 ? file2 : file1);
+		eofmsg(len1 > len2 ? file2 : file1);
 	if (dfound)
 		exit(DIFF_EXIT);
 	return;

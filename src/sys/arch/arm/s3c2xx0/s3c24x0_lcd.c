@@ -1,4 +1,4 @@
-/* $NetBSD: s3c24x0_lcd.c,v 1.1 2004/02/14 07:12:50 bsh Exp $ */
+/* $NetBSD: s3c24x0_lcd.c,v 1.4 2006/04/15 17:00:11 jmmv Exp $ */
 
 /*
  * Copyright (c) 2004  Genetec Corporation.  All rights reserved.
@@ -34,7 +34,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: s3c24x0_lcd.c,v 1.1 2004/02/14 07:12:50 bsh Exp $");
+__KERNEL_RCSID(0, "$NetBSD: s3c24x0_lcd.c,v 1.4 2006/04/15 17:00:11 jmmv Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -522,8 +522,8 @@ s3c24x0_lcd_alloc_screen(void *v, const struct wsscreen_descr *_type,
 {
 	struct s3c24x0_lcd_softc *sc = v;
 	struct s3c24x0_lcd_screen *scr;
-	struct s3c24x0_wsscreen_descr *type =
-	    (struct s3c24x0_wsscreen_descr *)_type;
+	const struct s3c24x0_wsscreen_descr *type =
+	    (const struct s3c24x0_wsscreen_descr *)_type;
 
 	int width, height;
 
@@ -617,7 +617,8 @@ s3c24x0_lcd_free_screen(void *v, void *cookie)
 }
 
 int
-s3c24x0_lcd_ioctl(void *v, u_long cmd, caddr_t data, int flag, struct proc *p)
+s3c24x0_lcd_ioctl(void *v, void *vs, u_long cmd, caddr_t data, int flag,
+    struct lwp *l)
 {
 	struct s3c24x0_lcd_softc *sc = v;
 	struct wsdisplay_fbinfo *wsdisp_info;
@@ -675,7 +676,7 @@ s3c24x0_lcd_ioctl(void *v, u_long cmd, caddr_t data, int flag, struct proc *p)
 }
 
 paddr_t
-s3c24x0_lcd_mmap(void *v, off_t offset, int prot)
+s3c24x0_lcd_mmap(void *v, void *vs, off_t offset, int prot)
 {
 	struct s3c24x0_lcd_softc *sc = v;
 	struct s3c24x0_lcd_screen *screen = sc->active;  /* ??? */

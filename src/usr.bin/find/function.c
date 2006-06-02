@@ -1,4 +1,4 @@
-/*	$NetBSD: function.c,v 1.49 2004/12/28 05:11:07 atatat Exp $	*/
+/*	$NetBSD: function.c,v 1.54 2006/05/10 21:53:20 mrg Exp $	*/
 
 /*-
  * Copyright (c) 1990, 1993
@@ -37,7 +37,7 @@
 #if 0
 static char sccsid[] = "from: @(#)function.c	8.10 (Berkeley) 5/4/95";
 #else
-__RCSID("$NetBSD: function.c,v 1.49 2004/12/28 05:11:07 atatat Exp $");
+__RCSID("$NetBSD: function.c,v 1.54 2006/05/10 21:53:20 mrg Exp $");
 #endif
 #endif /* not lint */
 
@@ -87,7 +87,9 @@ static	int64_t	find_parsenum __P((PLAN *, char *, char *, char *));
 	int	f_empty __P((PLAN *, FTSENT *));
 	int	f_exec __P((PLAN *, FTSENT *));
 	int	f_execdir __P((PLAN *, FTSENT *));
+	int	f_false __P((PLAN *, FTSENT *));
 	int	f_flags __P((PLAN *, FTSENT *));
+	int	f_fprint __P((PLAN *, FTSENT *));
 	int	f_fstype __P((PLAN *, FTSENT *));
 	int	f_group __P((PLAN *, FTSENT *));
 	int	f_iname __P((PLAN *, FTSENT *));
@@ -645,6 +647,50 @@ c_execdir(argvp, isok)
 	*argvp = argv + 1;
 	return (new);
 }
+
+PLAN *
+c_exit(argvp, isok)
+	char ***argvp;
+	int isok;
+{
+	char *arg = **argvp;
+	PLAN *new;
+
+	/* not technically true, but otherwise '-print' is implied */
+	isoutput = 1;
+
+	new = palloc(N_EXIT, f_always_true);
+
+	if (arg) {
+		(*argvp)++;
+		new->exit_val = find_parsenum(new, "-exit", arg, NULL);
+	} else
+		new->exit_val = 0;
+
+	return (new);
+}
+
+
+/*
+ * -false function
+ */
+int
+f_false(plan, entry)
+	PLAN *plan;
+	FTSENT *entry;
+{
+
+	return (0);
+}
+ 
+PLAN *
+c_false(argvp, isok)
+	char ***argvp;
+	int isok;
+{
+	return (palloc(N_FALSE, f_false));
+}
+
  
 /*
  * -flags [-]flags functions --
@@ -708,6 +754,43 @@ c_follow(argvp, isok)
 	return (palloc(N_FOLLOW, f_always_true));
 }
  
+/* -fprint functions --
+ *
+ *	Causes the current pathame to be written to the defined output file.
+ */
+int
+f_fprint(plan, entry)
+	PLAN *plan;
+	FTSENT *entry;
+{
+
+	if (-1 == fprintf(plan->fprint_file, "%s\n", entry->fts_path))
+		warn("fprintf");
+
+	return(1);
+
+	/* no descriptors are closed; they will be closed by
+	   operating system when this find command exits.  */
+}
+ 
+PLAN *
+c_fprint(argvp, isok)
+	char ***argvp;
+	int isok;
+{
+	PLAN *new;
+
+	isoutput = 1; /* do not assume -print */
+
+	new = palloc(N_FPRINT, f_fprint);
+
+	if (NULL == (new->fprint_file = fopen(**argvp, "w")))
+		err(1, "-fprint: %s: cannot create file", **argvp);
+
+	(*argvp)++;
+	return (new);
+}
+
 /*
  * -fstype functions --
  *
@@ -724,6 +807,8 @@ f_fstype(plan, entry)
 	static short val;
 	static char fstype[MFSNAMELEN];
 	char *p, save[2];
+
+	memset(&save, 0, sizeof save);	/* XXX gcc */
 
 	/* Only check when we cross mount point. */
 	if (first || curdev != entry->fts_statp->st_dev) {
@@ -1274,7 +1359,7 @@ c_perm(argvp, isok)
 	}
 
 	if ((set = setmode(perm)) == NULL)
-		err(1, "-perm: %s: illegal mode string", perm);
+		err(1, "-perm: Cannot set file mode `%s'", perm);
 
 	new->m_data = getmode(set, 0);
 	free(set);

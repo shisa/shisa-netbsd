@@ -1,4 +1,4 @@
-/*	$NetBSD: mainbus.c,v 1.9 2004/08/28 13:33:31 tsutsui Exp $	*/
+/*	$NetBSD: mainbus.c,v 1.15 2006/04/06 11:50:19 tsutsui Exp $	*/
 
 /*
  * Copyright (c) 2000 Soren S. Jorvang.  All rights reserved.
@@ -26,7 +26,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mainbus.c,v 1.9 2004/08/28 13:33:31 tsutsui Exp $");
+__KERNEL_RCSID(0, "$NetBSD: mainbus.c,v 1.15 2006/04/06 11:50:19 tsutsui Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -40,28 +40,24 @@ __KERNEL_RCSID(0, "$NetBSD: mainbus.c,v 1.9 2004/08/28 13:33:31 tsutsui Exp $");
 
 static int	mainbus_match(struct device *, struct cfdata *, void *);
 static void	mainbus_attach(struct device *, struct device *, void *);
-static int	mainbus_search(struct device *, struct cfdata *, void *);
+static int	mainbus_search(struct device *, struct cfdata *,
+			       const int *, void *);
 int		mainbus_print(void *, const char *);
 
 CFATTACH_DECL(mainbus, sizeof(struct device),
     mainbus_match, mainbus_attach, NULL, NULL);
 
 static int
-mainbus_match(parent, match, aux)
-	struct device *parent;
-	struct cfdata *match;
-	void *aux;
+mainbus_match(struct device *parent, struct cfdata *match, void *aux)
 {
+
 	return 1;
 }
 
 static void
-mainbus_attach(parent, self, aux)
-	struct device *parent;
-	struct device *self;
-	void *aux;
+mainbus_attach(struct device *parent, struct device *self, void *aux)
 {
-	struct mainbus_attach_args *ma = aux;
+	struct mainbus_attach_args ma;
 
 	/*
 	 * XXX Check for Qube/RaQ 1 vs. 2.
@@ -69,21 +65,18 @@ mainbus_attach(parent, self, aux)
 
 	printf("\n");
 
-	config_search(mainbus_search, self, ma);
+	config_search_ia(mainbus_search, self, "mainbus", &ma);
 }
 
 static int
-mainbus_search(parent, cf, aux)
-	struct device *parent;
-	struct cfdata *cf;
-	void *aux;
+mainbus_search(struct device *parent, struct cfdata *cf, const int *ldesc,
+    void *aux)
 {
 	struct mainbus_attach_args *ma = aux;
 
 	do {
 		ma->ma_addr = cf->cf_loc[MAINBUSCF_ADDR];
 		ma->ma_iot = 0;
-		ma->ma_ioh = MIPS_PHYS_TO_KSEG1(ma->ma_addr);
 		ma->ma_level = cf->cf_loc[MAINBUSCF_LEVEL];
 		if (config_match(parent, cf, ma) > 0)
 			config_attach(parent, cf, ma, mainbus_print);
@@ -93,9 +86,7 @@ mainbus_search(parent, cf, aux)
 }
 
 int
-mainbus_print(aux, pnp)
-	void *aux;
-	const char *pnp;
+mainbus_print(void *aux, const char *pnp)
 {
 	struct mainbus_attach_args *ma = aux;
 

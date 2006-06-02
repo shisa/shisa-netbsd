@@ -1,26 +1,18 @@
-#	$NetBSD: Makefile,v 1.54 2005/01/20 16:39:23 xtraeme Exp $
+#	$NetBSD: Makefile,v 1.58 2005/10/19 21:22:21 dsl Exp $
 #	@(#)Makefile	8.2 (Berkeley) 3/17/94
 
 PROG=	disklabel
-SRCS=	disklabel.c dkcksum.c interact.c printlabel.c
+SRCS=	main.c dkcksum.c interact.c printlabel.c
 MAN=	disklabel.5 disklabel.8
-LDADD+= -lutil
+.if (${HOSTPROG:U} == "")
 DPADD+= ${LIBUTIL}
-
-.if (${MACHINE} == "hp300") || (${MACHINE} == "vax") \
-	|| (${MACHINE} == "arm32") || (${MACHINE} == "hp700")
-CPPFLAGS+= -DNUMBOOT=1
+LDADD+= -lutil
 .endif
 
 # these have additional requirements on the alignment of a partition
 .if (${MACHINE} == "sparc") || (${MACHINE} == "sparc64") \
 	|| (${MACHINE} == "sun3")
 CPPFLAGS+= -DSTRICT_CYLINDER_ALIGNMENT
-.endif
-
-.if (${MACHINE} == "alpha") || (${MACHINE} == "x68k") || (${MACHINE} == "hp700")
-# preserve the non-disklabel portions of the first 8KB of the disk
-CPPFLAGS+= -DSAVEBOOTAREA
 .endif
 
 .if ( 0 \
@@ -43,8 +35,6 @@ CPPFLAGS+= -DSAVEBOOTAREA
     )
 # use MBR partition info
 CPPFLAGS+= -DUSE_MBR
-# preserve the non-disklabel portions of the first 8KB of the disk
-CPPFLAGS+= -DSAVEBOOTAREA
 # recognize old MBR partition ID for a while
 CPPFLAGS+= -DCOMPAT_386BSD_MBRPART
 .endif

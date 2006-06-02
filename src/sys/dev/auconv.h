@@ -1,4 +1,4 @@
-/*	$NetBSD: auconv.h,v 1.12.8.1 2005/07/02 16:33:42 tron Exp $	*/
+/*	$NetBSD: auconv.h,v 1.14 2005/12/11 12:20:53 christos Exp $	*/
 
 /*-
  * Copyright (c) 1997 The NetBSD Foundation, Inc.

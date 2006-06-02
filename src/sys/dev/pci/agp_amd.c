@@ -1,4 +1,4 @@
-/*	$NetBSD: agp_amd.c,v 1.11 2005/02/27 00:27:32 perry Exp $	*/
+/*	$NetBSD: agp_amd.c,v 1.15 2006/04/11 16:19:39 rpaulo Exp $	*/
 
 /*-
  * Copyright (c) 2000 Doug Rabson
@@ -29,7 +29,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: agp_amd.c,v 1.11 2005/02/27 00:27:32 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: agp_amd.c,v 1.15 2006/04/11 16:19:39 rpaulo Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -81,7 +81,7 @@ static int agp_amd_unbind_page(struct agp_softc *, off_t);
 static void agp_amd_flush_tlb(struct agp_softc *);
 
 
-struct agp_methods agp_amd_methods = {
+static struct agp_methods agp_amd_methods = {
 	agp_amd_get_aperture,
 	agp_amd_set_aperture,
 	agp_amd_bind_page,
@@ -190,10 +190,11 @@ agp_amd_attach(struct device *parent, struct device *self, void *aux)
 	if (error != 0) {
 		aprint_error(": can't map AGP registers\n");
 		agp_generic_detach(sc);
+		free(asc, M_AGP);
 		return error;
 	}
 
-	if (agp_map_aperture(pa, sc) != 0) {
+	if (agp_map_aperture(pa, sc, AGP_APBASE) != 0) {
 		aprint_error(": can't map aperture\n");
 		agp_generic_detach(sc);
 		free(asc, M_AGP);

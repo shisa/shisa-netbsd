@@ -1,4 +1,4 @@
-/*	$NetBSD: pciidevar.h,v 1.30 2005/02/27 00:27:33 perry Exp $	*/
+/*	$NetBSD: pciidevar.h,v 1.33 2006/03/06 18:35:24 bouyer Exp $	*/
 
 /*
  * Copyright (c) 1998 Christopher G. Demetriou.  All rights reserved.
@@ -108,7 +108,10 @@ struct pciide_softc {
 	/* for SiS */
 	u_int8_t sis_type;
 
-	/* For Silicon Image SATALink, Artisea SATA and Promise SATA */
+	/*
+	 * For Silicon Image SATALink, Serverworks SATA, Artisea SATA
+	 * and Promise SATA
+	 */
 	bus_space_tag_t sc_ba5_st;
 	bus_space_handle_t sc_ba5_sh;
 	int sc_ba5_en;
@@ -167,11 +170,11 @@ struct pciide_product_desc {
 
 
 /* inlines for reading/writing 8-bit PCI registers */
-static __inline u_int8_t pciide_pci_read(pci_chipset_tag_t, pcitag_t, int);
-static __inline void pciide_pci_write(pci_chipset_tag_t, pcitag_t,
+static inline u_int8_t pciide_pci_read(pci_chipset_tag_t, pcitag_t, int);
+static inline void pciide_pci_write(pci_chipset_tag_t, pcitag_t,
 					   int, u_int8_t);
 
-static __inline u_int8_t
+static inline u_int8_t
 pciide_pci_read(pc, pa, reg)
 	pci_chipset_tag_t pc;
 	pcitag_t pa;
@@ -182,7 +185,7 @@ pciide_pci_read(pc, pa, reg)
 	    ((reg & 0x03) * 8) & 0xff);
 }
 
-static __inline void
+static inline void
 pciide_pci_write(pc, pa, reg, val)
 	pci_chipset_tag_t pc;
 	pcitag_t pa;

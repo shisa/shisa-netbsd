@@ -1,4 +1,4 @@
-/*	$NetBSD: esp.c,v 1.49 2005/01/19 01:58:21 chs Exp $	*/
+/*	$NetBSD: esp.c,v 1.52 2006/03/08 23:46:23 lukem Exp $	*/
 
 /*-
  * Copyright (c) 1997, 1998 The NetBSD Foundation, Inc.
@@ -82,7 +82,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: esp.c,v 1.49 2005/01/19 01:58:21 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: esp.c,v 1.52 2006/03/08 23:46:23 lukem Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -190,7 +190,7 @@ struct ncr53c9x_glue esp_glue = {
 };
 
 #ifdef ESP_DEBUG
-#define XCHR(x) "0123456789abcdef"[(x) & 0xf]
+#define XCHR(x) hexdigits[(x) & 0xf]
 static void
 esp_hex_dump(unsigned char *pkt, size_t len)
 {
@@ -307,7 +307,7 @@ espattach_intio(struct device *parent, struct device *self, void *aux)
 	}
 
 	sc->sc_id = 7;
-	sc->sc_freq = 20;							/* Mhz */
+	sc->sc_freq = 20;	/* MHz */
 
 	/*
 	 * Set up glue for MI code early; we use some of it here.

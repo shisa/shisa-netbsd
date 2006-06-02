@@ -1,4 +1,4 @@
-/*	$NetBSD: cgsix.c,v 1.22.2.1 2005/06/08 11:54:12 tron Exp $ */
+/*	$NetBSD: cgsix.c,v 1.31 2006/04/15 17:48:24 jmmv Exp $ */
 
 /*-
  * Copyright (c) 1998 The NetBSD Foundation, Inc.
@@ -85,7 +85,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: cgsix.c,v 1.22.2.1 2005/06/08 11:54:12 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: cgsix.c,v 1.31 2006/04/15 17:48:24 jmmv Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -160,8 +160,8 @@ struct wsscreen_descr cgsix_defaultscreen = {
 	WSSCREEN_WSCOLORS	/* capabilities */
 };
 
-static int 	cgsix_ioctl(void *, u_long, caddr_t, int, struct proc *);
-static paddr_t	cgsix_mmap(void *, off_t, int);
+static int 	cgsix_ioctl(void *, void *, u_long, caddr_t, int, struct lwp *);
+static paddr_t	cgsix_mmap(void *, void *, off_t, int);
 void		cgsix_init_screen(struct cgsix_softc *, struct cg6_screen *, 
 			int, long *);
 
@@ -192,8 +192,6 @@ struct wsdisplay_accessops cgsix_accessops = {
 	cgsix_show_screen,
 	NULL, 	/* load_font */
 	NULL,	/* pollc */
-	NULL,	/* getwschar */
-	NULL,	/* putwschar */
 	NULL	/* scroll */
 };
 
@@ -328,7 +326,7 @@ static void cg6_ras_copyrows(void *, int, int, int);
 static void cg6_ras_copycols(void *, int, int, int, int);
 static void cg6_ras_erasecols(void *, int, int, int, long int);
 static void cg6_ras_eraserows(void *, int, int, long int);
-#ifdef RASTERCONSOLE
+#if defined(RASTERCONSOLE) && defined(CG6_BLIT_CURSOR)
 static void cg6_ras_do_cursor(struct rasops_info *);
 #endif
 static void
@@ -589,7 +587,7 @@ cg6_ras_eraserows(void *cookie, int row, int n, long int attr)
 #endif
 }
 
-#ifdef RASTERCONSOLE
+#if defined(RASTERCONSOLE) && defined(CG6_BLIT_CURSOR)
 /*
  * Really want something more like fg^bg here, but that would be more
  * or less impossible to migrate to colors.  So we hope there's
@@ -599,21 +597,21 @@ cg6_ras_eraserows(void *cookie, int row, int n, long int attr)
 static void
 cg6_ras_do_cursor(struct rasops_info *ri)
 {
-	struct cg6_screen *scr=ri->ri_hw;
-	struct cgsix_softc *sc=scr->sc;
+	struct cg6_screen *scr = ri->ri_hw;
+	struct cgsix_softc *sc = scr->sc;
 	int row, col;
 	
 	row = ri->ri_crow * ri->ri_font->fontheight;
 	col = ri->ri_ccol * ri->ri_font->fontwidth;
-	cg6_invert(sc, ri->ri_yorigin + row,ri->ri_xorigin + 
-	    col, ri->ri_font->fontwidth, ri->ri_font->fontheight);
+	cg6_invert(sc, ri->ri_xorigin + col,ri->ri_yorigin + 
+	    row, ri->ri_font->fontwidth, ri->ri_font->fontheight);
 }
 #endif	/* RASTERCONSOLE */
 
 #endif	/* (NWSDISPLAY > 0) || defined(RASTERCONSOLE) */
 
 void
-cg6attach(struct cgsix_softc *sc, char *name, int isconsole)
+cg6attach(struct cgsix_softc *sc, const char *name, int isconsole)
 {
 	struct fbdevice *fb = &sc->sc_fb;
 #if NWSDISPLAY > 0
@@ -662,16 +660,22 @@ cg6attach(struct cgsix_softc *sc, char *name, int isconsole)
 			sc->sc_fb.fb_rinfo.ri_ops.copycols = cg6_ras_copycols;
 			sc->sc_fb.fb_rinfo.ri_ops.erasecols = cg6_ras_erasecols;
 			sc->sc_fb.fb_rinfo.ri_ops.eraserows = cg6_ras_eraserows;
+#ifdef CG6_BLIT_CURSOR
 			sc->sc_fb.fb_rinfo.ri_do_cursor = cg6_ras_do_cursor;
+#endif
 			cg6_ras_init(sc);
 		}
 #endif
 	}
+	printf("\n");
 
 	fb_attach(&sc->sc_fb, isconsole);
 	sc->sc_width = fb->fb_type.fb_width;
 	sc->sc_stride = fb->fb_type.fb_width;
 	sc->sc_height = fb->fb_type.fb_height;
+
+	printf("%s: framebuffer size: %d MB\n", sc->sc_dev.dv_xname, 
+	    sc->sc_ramsize >> 20);
 
 #if NWSDISPLAY
 	/* setup rasops and so on for wsdisplay */
@@ -683,33 +687,49 @@ cg6attach(struct cgsix_softc *sc, char *name, int isconsole)
 	LIST_INIT(&sc->screens);
 	sc->active = NULL;
 	sc->currenttype = &cgsix_defaultscreen;
-	callout_init(&sc->switch_callout);
+	callout_init(&sc->switch_callout);	
 
-	cgsix_init_screen(sc, &cg6_console_screen, 1, &defattr);
-	cg6_console_screen.active = 1;
-	sc->active = &cg6_console_screen;
-
-	cgsix_defaultscreen.nrows = ri->ri_rows;
-	cgsix_defaultscreen.ncols = ri->ri_cols;
-	cgsix_defaultscreen.textops = &ri->ri_ops;
-	cgsix_defaultscreen.capabilities = ri->ri_caps;
-
-	cg6_setup_palette(sc);
-
-	if (isconsole) {
-		wsdisplay_cnattach(&cgsix_defaultscreen, ri, 0, 0, defattr);
+	if(isconsole) {
+		/* we mess with cg6_console_screen only once */
+		cgsix_init_screen(sc, &cg6_console_screen, 1, &defattr);
+		cgsix_defaultscreen.textops = &ri->ri_ops;
+		cgsix_defaultscreen.capabilities = ri->ri_caps;
+		cgsix_defaultscreen.nrows = ri->ri_rows;
+		cgsix_defaultscreen.ncols = ri->ri_cols;
+		cg6_console_screen.active = 1;
+		sc->active = &cg6_console_screen;
+		wsdisplay_cnattach(&cgsix_defaultscreen, ri, 0, 0, defattr);	
+	} else {
+		/* 
+		 * we're not the console so we just clear the screen and don't 
+		 * set up any sort of text display
+		 */
+		if (cgsix_defaultscreen.textops == NULL) {
+			/* 
+			 * ugly, but...
+			 * we want the console settings to win, so we only
+			 * touch anything when we find an untouched screen
+			 * definition. In this case we fill it from fb to
+			 * avoid problems in case no cgsix is the console
+			 */
+			ri = &sc->sc_fb.fb_rinfo;
+			cgsix_defaultscreen.textops = &ri->ri_ops;
+			cgsix_defaultscreen.capabilities = ri->ri_caps;
+			cgsix_defaultscreen.nrows = ri->ri_rows;
+			cgsix_defaultscreen.ncols = ri->ri_cols;
+		}
+		sc->active = NULL;
+		cgsix_clearscreen(sc);
 	}
 
-	aa.console = isconsole;
+	cg6_setup_palette(sc);
+	
 	aa.scrdata = &cgsix_screenlist;
+	aa.console = isconsole;
 	aa.accessops = &cgsix_accessops;
 	aa.accesscookie = sc;
-	printf("\n");
-	printf("%s: framebuffer size: %d MB\n", sc->sc_dev.dv_xname, 
-	    sc->sc_ramsize >> 20);
 	config_found(&sc->sc_dev, &aa, wsemuldisplaydevprint);
 #else
-	printf("\n");
 	bt_initcmap(&sc->sc_cmap, 256);	
 	cg6_loadcmap(sc, 0, 256);
 	
@@ -719,7 +739,7 @@ cg6attach(struct cgsix_softc *sc, char *name, int isconsole)
 
 
 int
-cgsixopen(dev_t dev, int flags, int mode, struct proc *p)
+cgsixopen(dev_t dev, int flags, int mode, struct lwp *l)
 {
 	int unit = minor(dev);
 
@@ -729,7 +749,7 @@ cgsixopen(dev_t dev, int flags, int mode, struct proc *p)
 }
 
 int
-cgsixclose(dev_t dev, int flags, int mode, struct proc *p)
+cgsixclose(dev_t dev, int flags, int mode, struct lwp *l)
 {
 	struct cgsix_softc *sc = cgsix_cd.cd_devs[minor(dev)];
 
@@ -748,7 +768,7 @@ cgsixclose(dev_t dev, int flags, int mode, struct proc *p)
 }
 
 int
-cgsixioctl(dev_t dev, u_long cmd, caddr_t data, int flags, struct proc *p)
+cgsixioctl(dev_t dev, u_long cmd, caddr_t data, int flags, struct lwp *l)
 {
 	struct cgsix_softc *sc = cgsix_cd.cd_devs[minor(dev)];
 	union cursor_cmap tcm;
@@ -917,7 +937,7 @@ cgsixioctl(dev_t dev, u_long cmd, caddr_t data, int flags, struct proc *p)
 	default:
 #ifdef DEBUG
 		log(LOG_NOTICE, "cgsixioctl(0x%lx) (%s[%d])\n", cmd,
-		    p->p_comm, p->p_pid);
+		    l->l_proc->p_comm, l->l_proc->p_pid);
 #endif
 		return ENOTTY;
 	}
@@ -1160,7 +1180,8 @@ cg6_setup_palette(struct cgsix_softc *sc)
 }
 
 int
-cgsix_ioctl(void *v, u_long cmd, caddr_t data, int flag, struct proc *p)
+cgsix_ioctl(void *v, void *vs, u_long cmd, caddr_t data, int flag,
+	struct lwp *l)
 {
 	/* we'll probably need to add more stuff here */
 	struct cgsix_softc *sc = v;
@@ -1218,7 +1239,7 @@ cgsix_ioctl(void *v, u_long cmd, caddr_t data, int flag, struct proc *p)
 }
 
 paddr_t
-cgsix_mmap(void *v, off_t offset, int prot)
+cgsix_mmap(void *v, void *vs, off_t offset, int prot)
 {
 	struct cgsix_softc *sc = v;
 	if(offset<sc->sc_ramsize) {
@@ -1676,8 +1697,8 @@ cg6_invert(struct cgsix_softc *sc, int x, int y, int wi, int he)
 	fbc->fbc_alu = CG6_ALU_FLIP;
 	fbc->fbc_arecty = y;
 	fbc->fbc_arectx = x;
-	fbc->fbc_arecty = y+he - 1;
-	fbc->fbc_arectx = x+wi - 1;
+	fbc->fbc_arecty = y + he - 1;
+	fbc->fbc_arectx = x + wi - 1;
 	CG6_DRAW_WAIT(fbc);
 }
 

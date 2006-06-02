@@ -1,4 +1,4 @@
-/*	$NetBSD: apm.c,v 1.84 2004/08/30 15:05:17 drochner Exp $ */
+/*	$NetBSD: apm.c,v 1.90 2006/02/19 19:54:23 thorpej Exp $ */
 
 /*-
  * Copyright (c) 1996, 1997 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: apm.c,v 1.84 2004/08/30 15:05:17 drochner Exp $");
+__KERNEL_RCSID(0, "$NetBSD: apm.c,v 1.90 2006/02/19 19:54:23 thorpej Exp $");
 
 #include "apm.h"
 #if NAPM > 1
@@ -248,7 +248,7 @@ static int apm_spl;		/* saved spl while suspended */
 
 #ifdef APMDEBUG
 int	apmcall_debug(int, struct bioscallregs *, int);
-static	void acallpr(int, char *, struct bioscallregs *);
+static	void acallpr(int, const char *, struct bioscallregs *);
 
 /* bitmask defns for printing apm call args/results */
 #define ACPF_AX		0x00000001
@@ -274,7 +274,7 @@ static	void acallpr(int, char *, struct bioscallregs *);
 #define ACPF_EFLAGS 	0x00100000
 
 struct acallinfo {
-	char *name;
+	const char *name;
 	int inflag;
 	int outflag;
 };
@@ -302,7 +302,7 @@ static struct acallinfo aci[] = {
   { "timer_reqs", ACPF_BX|ACPF_CX, ACPF_CX },
 };
 
-static void acallpr(int flag, char *tag, struct bioscallregs *b) {
+static void acallpr(int flag, const char *tag, struct bioscallregs *b) {
   if (!flag) return;
   printf("%s ", tag);
   if (flag & ACPF_AX) 		printf("ax=%#x ", b->AX);
@@ -336,7 +336,7 @@ apmcall_debug(func, regs, line)
 {
 	int rv;
 	int print = (apmdebug & APMDEBUG_APMCALLS) != 0;
-	char *name;
+	const char *name;
 	int inf;
 	int outf = 0; /* XXX: gcc */
 		
@@ -636,7 +636,7 @@ apm_event_handle(sc, regs)
 {
 	int error, retval;
 	struct bioscallregs nregs;
-	char *code;
+	const char *code;
 
 	retval = 1;		/* assume we are going to make progress */
 
@@ -986,22 +986,24 @@ apm_set_ver(self)
 		apm_minver = 0;
 	}
 ok:
-	printf("Power Management spec V%d.%d", apm_majver, apm_minver);
+	aprint_normal("%s: Power Management spec V%d.%d", self->sc_dev.dv_xname,
+	    apm_majver, apm_minver);
 	apm_inited = 1;
 	if (apminfo.apm_detail & APM_IDLE_SLOWS) {
 #ifdef DIAGNOSTIC
 		/* not relevant often */
-		printf(" (slowidle)");
+		aprint_verbose(" (slowidle)");
 #endif
 		/* leave apm_do_idle at its user-configured setting */
 	} else
 		apm_do_idle = 0;
 #ifdef DIAGNOSTIC
 	if (apminfo.apm_detail & APM_BIOS_PM_DISABLED)
-		printf(" (BIOS mgmt disabled)");
+		aprint_verbose(" (BIOS mgmt disabled)");
 	if (apminfo.apm_detail & APM_BIOS_PM_DISENGAGED)
-		printf(" (BIOS managing devices)");
+		aprint_verbose(" (BIOS managing devices)");
 #endif
+	aprint_normal("\n");
 }
 
 static int
@@ -1130,7 +1132,8 @@ apmattach(parent, self, aux)
 	char bits[128];
 #endif
 
-	printf(": ");
+	aprint_naive(": Power management\n");
+	aprint_normal(": Advanced Power Management BIOS\n");
 
 	memset(&regs, 0, sizeof(struct bioscallregs));
 	regs.AX = APM_BIOS_FN(APM_INSTALLATION_CHECK);
@@ -1138,7 +1141,8 @@ apmattach(parent, self, aux)
 #ifdef APM_USE_KVM86
 	res = kvm86_bioscall_simple(APM_SYSTEM_BIOS, &regs);
 	if (res) {
-		printf("apm_attach: kvm86 error\n");
+		aprint_error("%s: kvm86 error (APM_INSTALLATION_CHECK)\n",
+		    apmsc->sc_dev.dv_xname);
 		goto bail_disconnected;
 	}
 #else
@@ -1159,7 +1163,8 @@ apmattach(parent, self, aux)
 #ifdef APM_USE_KVM86
 	res = kvm86_bioscall_simple(APM_SYSTEM_BIOS, &regs);
 	if (res) {
-		printf("apm_attach: kvm86 error\n");
+		printf("%s: kvm86 error (APM_DISCONNECT)\n",
+		    apmsc->sc_dev.dv_xname);
 		goto bail_disconnected;
 	}
 #else
@@ -1169,7 +1174,8 @@ apmattach(parent, self, aux)
 	DPRINTF(APMDEBUG_ATTACH, ("\n%s: ", apmsc->sc_dev.dv_xname));
 
 	if ((apminfo.apm_detail & APM_32BIT_SUPPORTED) == 0) {
-		printf("no 32-bit APM support");
+		aprint_error("%s: no 32-bit APM support\n",
+		    apmsc->sc_dev.dv_xname);
 		goto bail_disconnected;
 	}
 
@@ -1182,7 +1188,8 @@ apmattach(parent, self, aux)
 #ifdef APM_USE_KVM86
 	res = kvm86_bioscall_simple(APM_SYSTEM_BIOS, &regs);
 	if (res) {
-		printf("apm_attach: kvm86 error\n");
+		aprint_error("%s: kvm86 error (APM_32BIT_CONNECT)\n",
+		    apmsc->sc_dev.dv_xname);
 		goto bail_disconnected;
 	}
 #else
@@ -1281,7 +1288,8 @@ apmattach(parent, self, aux)
 	    apminfo.apm_code32_seg_base >= IOM_END) {
 		DPRINTF(APMDEBUG_ATTACH, ("code32 segment starts outside ISA hole [%x]\n%s: ",
 		    apminfo.apm_code32_seg_base, apmsc->sc_dev.dv_xname));
-		printf("bogus 32-bit code segment start");
+		aprint_error("%s: bogus 32-bit code segment start\n",
+		    apmsc->sc_dev.dv_xname);
 		goto bail;
 	} 
 	if (apminfo.apm_code32_seg_base +
@@ -1291,7 +1299,8 @@ apmattach(parent, self, aux)
 		    apminfo.apm_code32_seg_base + apminfo.apm_code32_seg_len - 1,
 		    apmsc->sc_dev.dv_xname));
 #if 0
-		printf("bogus 32-bit code segment size");
+		aprint_error("%s: bogus 32-bit code segment size\n",
+		    apmsc->sc_dev.dv_xname);
 		goto bail;
 #else
 		apminfo.apm_code32_seg_len =
@@ -1302,7 +1311,8 @@ apmattach(parent, self, aux)
 	    apminfo.apm_code16_seg_base >= IOM_END) {
 		DPRINTF(APMDEBUG_ATTACH, ("code16 segment starts outside ISA hole [%x]\n%s: ",
 		    apminfo.apm_code16_seg_base, apmsc->sc_dev.dv_xname));
-		printf("bogus 16-bit code segment start");
+		aprint_error("%s: bogus 16-bit code segment start\n",
+		    apmsc->sc_dev.dv_xname);
 		goto bail;
 	}
 	if (apminfo.apm_code16_seg_base +
@@ -1316,7 +1326,8 @@ apmattach(parent, self, aux)
 		 * give up since we may have to trash the
 		 * 32bit segment length otherwise.
 		 */
-		printf("bogus 16-bit code segment size");
+		aprint_error("%s: bogus 16-bit code segment size\n",
+		    apmsc->sc_dev.dv_xname);
 		goto bail;
 	}
 	/*
@@ -1376,7 +1387,8 @@ apmattach(parent, self, aux)
 		    apminfo.apm_data_seg_base,
 		    apminfo.apm_data_seg_base + apminfo.apm_data_seg_len,
 		    apmsc->sc_dev.dv_xname));
-		printf("data segment unavailable");
+		aprint_error("%s: data segment unavailable\n",
+		    apmsc->sc_dev.dv_xname);
 		goto bail;
 	}
 
@@ -1427,7 +1439,8 @@ apmattach(parent, self, aux)
 		if (_x86_memio_map(X86_BUS_SPACE_MEM,
 		    apminfo.apm_data_seg_base,
 		    apminfo.apm_data_seg_len, 0, &memh)) {
-			printf("couldn't map data segment");
+			aprint_error("%s: couldn't map data segment\n",
+			    apmsc->sc_dev.dv_xname);
 			goto bail;
 		}
 		DPRINTF(APMDEBUG_ATTACH,
@@ -1462,7 +1475,6 @@ apmattach(parent, self, aux)
 	    apmsc->sc_dev.dv_xname));
 
 	apm_set_ver(apmsc);		/* prints version info */
-	printf("\n");
 	if (apm_minver >= 2)
 		apm_get_capabilities(&regs);
 
@@ -1533,7 +1545,8 @@ bail:
 	DPRINTF(APMDEBUG_ATTACH, ("\n%s: ", apmsc->sc_dev.dv_xname));
 	DPRINTF_BIOSRETURN(regs, bits);
 bail_disconnected:
-	printf("\n%s: kernel APM support disabled\n", apmsc->sc_dev.dv_xname);
+	aprint_normal("%s: kernel APM support disabled\n",
+	    apmsc->sc_dev.dv_xname);
 }
 
 void
@@ -1590,10 +1603,10 @@ apm_thread(arg)
 }
 
 int
-apmopen(dev, flag, mode, p)
+apmopen(dev, flag, mode, l)
 	dev_t dev;
 	int flag, mode;
-	struct proc *p;
+	struct lwp *l;
 {
 	int unit = APMUNIT(dev);
 	int ctl = APMDEV(dev);
@@ -1610,7 +1623,7 @@ apmopen(dev, flag, mode, p)
 		return ENXIO;
 	
 	DPRINTF(APMDEBUG_DEVICE,
-	    ("apmopen: pid %d flag %x mode %x\n", p->p_pid, flag, mode));
+	    ("apmopen: pid %d flag %x mode %x\n", l->l_proc->p_pid, flag, mode));
 
 	APM_LOCK(sc);
 	switch (ctl) {
@@ -1642,16 +1655,16 @@ apmopen(dev, flag, mode, p)
 }
 
 int
-apmclose(dev, flag, mode, p)
+apmclose(dev, flag, mode, l)
 	dev_t dev;
 	int flag, mode;
-	struct proc *p;
+	struct lwp *l;
 {
 	struct apm_softc *sc = apm_cd.cd_devs[APMUNIT(dev)];
 	int ctl = APMDEV(dev);
 
 	DPRINTF(APMDEBUG_DEVICE,
-	    ("apmclose: pid %d flag %x mode %x\n", p->p_pid, flag, mode));
+	    ("apmclose: pid %d flag %x mode %x\n", l->l_proc->p_pid, flag, mode));
 
 	APM_LOCK(sc);
 	switch (ctl) {
@@ -1671,12 +1684,12 @@ apmclose(dev, flag, mode, p)
 }
 
 int
-apmioctl(dev, cmd, data, flag, p)
+apmioctl(dev, cmd, data, flag, l)
 	dev_t dev;
 	u_long cmd;
 	caddr_t data;
 	int flag;
-	struct proc *p;
+	struct lwp *l;
 {
 	struct apm_softc *sc = apm_cd.cd_devs[APMUNIT(dev)];
 	struct apm_power_info *powerp;
@@ -1796,10 +1809,10 @@ apmioctl(dev, cmd, data, flag, p)
 }
 
 int
-apmpoll(dev, events, p)
+apmpoll(dev, events, l)
 	dev_t dev;
 	int events;
-	struct proc *p;
+	struct lwp *l;
 {
 	struct apm_softc *sc = apm_cd.cd_devs[APMUNIT(dev)];
 	int revents = 0;
@@ -1809,7 +1822,7 @@ apmpoll(dev, events, p)
 		if (sc->event_count)
 			revents |= events & (POLLIN | POLLRDNORM);
 		else
-			selrecord(p, &sc->sc_rsel);
+			selrecord(l, &sc->sc_rsel);
 	}
 	APM_UNLOCK(sc);
 

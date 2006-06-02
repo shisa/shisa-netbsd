@@ -1,4 +1,4 @@
-.\"	$NetBSD: printf.3,v 1.38 2003/09/08 17:54:32 wiz Exp $
+.\"	$NetBSD: printf.3,v 1.42 2006/03/19 10:46:21 wiz Exp $
 .\"
 .\" Copyright (c) 1990, 1991, 1993
 .\"	The Regents of the University of California.  All rights reserved.
@@ -33,7 +33,7 @@
 .\"
 .\"     @(#)printf.3	8.1 (Berkeley) 6/4/93
 .\"
-.Dd May 11, 2003
+.Dd March 17, 2006
 .Dt PRINTF 3
 .Os
 .Sh NAME
@@ -129,9 +129,18 @@ This pointer should be passed to
 .Xr free 3
 to release the allocated storage when it is no longer needed.
 If sufficient space cannot be allocated, these functions
-will return -1 and set
+will return \-1 and set
 .Fa ret
-to be a NULL pointer.
+to be a
+.Dv NULL
+pointer.
+Please note that these functions are not standardized, and not all
+implementations can be assumed to set the
+.Fa ret
+argument to
+.Dv NULL
+on error.
+It is more portable to check for a return value of \-1 instead.
 .Pp
 .Fn snprintf
 and
@@ -151,7 +160,9 @@ If
 .Fa size
 is zero, nothing is written and
 .Fa str
-may be a NULL pointer.
+may be a
+.Dv NULL
+pointer.
 .Pp
 .Fn sprintf
 and
@@ -373,11 +384,29 @@ conversion corresponds to a pointer to a
 .Em long int
 argument.
 .It
-The optional character
-.Cm q ,
-or alternatively two consecutive
+Two optional consecutive
 .Cm l
 (ell) characters,
+specifying that a following
+.Cm d ,
+.Cm i ,
+.Cm o ,
+.Cm u ,
+.Cm x ,
+or
+.Cm X
+conversion corresponds to a
+.Em long long
+or
+.Em unsigned long long
+argument, or that a following
+.Cm n
+conversion corresponds to a pointer to a
+.Em long long
+argument.
+.It
+The optional character
+.Cm q ,
 specifying that a following
 .Cm d ,
 .Cm i ,
@@ -395,6 +424,9 @@ argument, or that a following
 conversion corresponds to a pointer to a
 .Em quad_t
 argument.
+The
+.Cm q
+modifier is a BSD extension and should not be used in portable programs.
 .It
 The optional character
 .Cm t ,
@@ -813,6 +845,17 @@ If you use positional arguments you must ensure that all parameters, up to the
 last positionally specified parameter, are used in the format string.
 This allows for the format string to be parsed for this information.
 Failure to do this will mean your code is non-portable and liable to fail.
+.Pp
+In this implementation, passing a
+.Dv NULL
+.Vt char *
+argument to the
+.Cm %s
+format specifier will output
+.Em "(null)"
+instead of crashing.
+Programs that depend on this behavior are non-portable and may crash
+on other systems or in the future.
 .Sh BUGS
 The conversion formats
 .Cm \&%D ,

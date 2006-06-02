@@ -1,4 +1,4 @@
-#	$NetBSD: protocols,v 1.13 2004/06/10 10:06:51 kleink Exp $
+#	$NetBSD: protocols,v 1.15 2006/05/18 09:05:49 liamjfoy Exp $
 #
 # Internet (IP) protocols
 #
@@ -117,7 +117,7 @@ ipcomp	108	IPCOMP		# IP Payload Compression Protocol
 snp	109	SNP		# Sitara Networks Protocol
 compaq-peer	110	Compaq-Peer	# Compaq Peer Protocol
 ipx-in-ip	111	IPX-in-IP	# IPX in IP
-vrrp	112	VRRP		# Virtual Router Redundancy Protocol
+carp	112	CARP	vrrp	# Virtual Router Redundancy Protocol
 pgm	113	PGM		# PGM Reliable Transport Protocol
 #	114			# any 0-hop protocol
 l2tp	115	L2TP		# Layer Two Tunneling Protocol
@@ -139,5 +139,9 @@ sps	130	SPS		# Secure Packet Shield
 pipe	131	PIPE		# Private IP Encapsulation within IP
 sctp	132	SCTP		# Stream Control Transmission Protocol
 fc	133	FC		# Fibre Channel
-#	134-254			# Unassigned
+rsvp-e2e-ignore	134	RSVP-E2E-IGNORE
+mobility-header	135	MOBILITY-HEADER	# Mobility Header
+udplite		136	UDPLite
+mpls-in-ip	137     MPLS-in-IP	# MPLS in IP
+#	138-254			# Unassigned
 #	255			# Reserved

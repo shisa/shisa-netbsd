@@ -1,4 +1,4 @@
-/*	$NetBSD: logger.c,v 1.1.1.2.2.2 2005/11/21 21:12:30 tron Exp $	*/
+/*	$NetBSD: logger.c,v 1.3 2005/11/21 14:20:29 manu Exp $	*/
 
 /*	$KAME: logger.c,v 1.9 2002/09/03 14:37:03 itojun Exp $	*/
 

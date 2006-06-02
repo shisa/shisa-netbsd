@@ -1,4 +1,4 @@
-/*	$NetBSD: talkd.h,v 1.8 2003/08/07 09:44:13 agc Exp $	*/
+/*	$NetBSD: talkd.h,v 1.10 2005/12/26 19:01:47 perry Exp $	*/
 
 /*
  * Copyright (c) 1983, 1993
@@ -53,6 +53,14 @@
  */
 
 /*
+ * 4.3 compat sockaddr
+ */
+struct talkd_sockaddr {
+	uint16_t	sa_family;	/* address family */
+	char		sa_data[14];	/* up to 14 bytes of direct address */
+};
+
+/*
  * Client->server request message format.
  */
 typedef struct {
@@ -60,9 +68,9 @@ typedef struct {
 	u_char	  type;			/* request type, see below */
 	u_char	  answer;		/* not used */
 	u_char	  pad;
-	u_int32_t id_num;		/* message id */
-	struct	  osockaddr addr;	/* old (4.3) style */
-	struct	  osockaddr ctl_addr;	/* old (4.3) style */
+	uint32_t id_num;		/* message id */
+	struct	  talkd_sockaddr addr;	/* old (4.3) style */
+	struct	  talkd_sockaddr ctl_addr;/* old (4.3) style */
 	int32_t	  pid;			/* caller's process id */
 #define	NAME_SIZE	12
 	char	  l_name[NAME_SIZE];	/* caller's name */
@@ -79,8 +87,8 @@ typedef struct {
 	u_char	  type;		/* type of request message, see below */
 	u_char	  answer;	/* respose to request message, see below */
 	u_char	  pad;
-	u_int32_t id_num;	/* message id */
-	struct	  osockaddr addr; /* address for establishing conversation */
+	uint32_t id_num;	/* message id */
+	struct	  talkd_sockaddr addr; /* address for establishing conversation */
 } CTL_RESPONSE;
 
 #define	TALK_VERSION	1		/* protocol version */

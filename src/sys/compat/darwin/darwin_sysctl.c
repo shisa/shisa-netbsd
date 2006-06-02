@@ -1,4 +1,4 @@
-/*	$NetBSD: darwin_sysctl.c,v 1.34 2005/02/26 23:10:18 perry Exp $ */
+/*	$NetBSD: darwin_sysctl.c,v 1.41 2006/05/15 00:05:16 christos Exp $ */
 
 /*-
  * Copyright (c) 2002 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: darwin_sysctl.c,v 1.34 2005/02/26 23:10:18 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: darwin_sysctl.c,v 1.41 2006/05/15 00:05:16 christos Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -51,12 +51,16 @@ __KERNEL_RCSID(0, "$NetBSD: darwin_sysctl.c,v 1.34 2005/02/26 23:10:18 perry Exp
 #include <sys/sysctl.h>
 #include <sys/sa.h>
 #include <sys/tty.h>
+#include <sys/kauth.h>
 
 #include <sys/syscallargs.h>
 
 #include <uvm/uvm_extern.h>
 
 #include <miscfs/specfs/specdev.h>
+
+#include <compat/sys/signal.h>
+#include <compat/sys/signalvar.h>
 
 #include <compat/mach/mach_types.h>
 #include <compat/mach/mach_vm.h>
@@ -73,7 +77,7 @@ pid_t darwin_init_pid = 0;
 int darwin_ioframebuffer_unit = 0;
 int darwin_ioframebuffer_screen = 0;
 int darwin_iohidsystem_mux = 0;
-static char *darwin_sysctl_hw_machine = "Power Macintosh";
+static const char *darwin_sysctl_hw_machine = "Power Macintosh";
 
 static int darwin_sysctl_dokproc(SYSCTLFN_PROTO);
 static void darwin_fill_kproc(struct proc *, struct darwin_kinfo_proc *);
@@ -110,7 +114,7 @@ darwin_sysctl_redispatch(SYSCTLFN_ARGS)
  */
 SYSCTL_SETUP(sysctl_darwin_emul_setup, "darwin emulated sysctl tree setup")
 {
-	struct sysctlnode *_root = &darwin_sysctl_root;
+	const struct sysctlnode *_root = &darwin_sysctl_root;
 
 	sysctl_createv(clog, 0, &_root, NULL,
 		       CTLFLAG_PERMANENT,
@@ -254,7 +258,8 @@ SYSCTL_SETUP(sysctl_darwin_emul_setup, "darwin emulated sysctl tree setup")
 	sysctl_createv(clog, 0, &_root, NULL,
 		       CTLFLAG_PERMANENT,
 		       CTLTYPE_STRING, "machine", NULL,
-		       NULL, 0, darwin_sysctl_hw_machine, 0,
+		       /*XXXUNCONST*/
+		       NULL, 0, __UNCONST(darwin_sysctl_hw_machine), 0,
 		       DARWIN_CTL_HW, DARWIN_HW_MACHINE, CTL_EOL);
 	sysctl_createv(clog, 0, &_root, NULL,
 		       CTLFLAG_PERMANENT,
@@ -696,12 +701,12 @@ again:
 			break;
 
 		case DARWIN_KERN_PROC_UID:
-			if (p->p_ucred->cr_uid != (uid_t)arg)
+			if (kauth_cred_geteuid(p->p_cred) != (uid_t)arg)
 				continue;
 			break;
 
 		case DARWIN_KERN_PROC_RUID:
-			if (p->p_cred->p_ruid != (uid_t)arg)
+			if (kauth_cred_getuid(p->p_cred) != (uid_t)arg)
 				continue;
 			break;
 
@@ -809,16 +814,17 @@ darwin_fill_kproc(p, dkp)
 	/* (ptr) */ de->e_paddr = (struct darwin_proc *)p;
 	/* (ptr) */ de->e_sess =
 	    (struct darwin_session *)p->p_session;
-	de->e_pcred.pc_ruid = p->p_cred->p_ruid;
-	de->e_pcred.pc_svuid = p->p_cred->p_svuid;
-	de->e_pcred.pc_rgid = p->p_cred->p_rgid;
-	de->e_pcred.pc_svgid = p->p_cred->p_svgid;
-	de->e_pcred.pc_refcnt = p->p_cred->p_refcnt;
-	de->e_ucred.cr_ref = p->p_ucred->cr_ref;
-	de->e_ucred.cr_uid = p->p_ucred->cr_uid;
-	de->e_ucred.cr_ngroups = p->p_ucred->cr_ngroups;
-	(void)memcpy(de->e_ucred.cr_groups,
-	    p->p_ucred->cr_groups, sizeof(gid_t) * DARWIN_NGROUPS);
+	de->e_pcred.pc_ruid = kauth_cred_getuid(p->p_cred);
+	de->e_pcred.pc_svuid = kauth_cred_getsvuid(p->p_cred);
+	de->e_pcred.pc_rgid = kauth_cred_getgid(p->p_cred);
+	de->e_pcred.pc_svgid = kauth_cred_getsvgid(p->p_cred);
+	de->e_pcred.pc_refcnt = kauth_cred_getrefcnt(p->p_cred);
+	/* XXX elad ? de->e_ucred.cr_ref = p->p_ucred->cr_ref; */
+	/* XXX elad ? de->e_ucred.cr_ref = kauth_cred_getrefcnt(p->p_cred); */
+	de->e_ucred.cr_uid = kauth_cred_geteuid(p->p_cred);
+	de->e_ucred.cr_ngroups = kauth_cred_ngroups(p->p_cred);
+	kauth_cred_getgroups(p->p_cred, de->e_ucred.cr_groups,
+	    sizeof(de->e_ucred.cr_groups) / sizeof(de->e_ucred.cr_groups[0]));
 	de->e_vm.vm_refcnt = p->p_vmspace->vm_refcnt;
 	de->e_vm.vm_rssize = p->p_vmspace->vm_rssize;
 	de->e_vm.vm_swrss = p->p_vmspace->vm_swrss;
@@ -926,9 +932,9 @@ darwin_sysctl_procargs(SYSCTLFN_ARGS)
 		return (EINVAL);
 
 	/* only root or same user change look at the environment */
-	if (up->p_ucred->cr_uid != 0) {
-		if (up->p_cred->p_ruid != p->p_cred->p_ruid ||
-		    up->p_cred->p_ruid != p->p_cred->p_svuid)
+	if (kauth_cred_geteuid(up->p_cred) != 0) {
+		if (kauth_cred_getuid(up->p_cred) != kauth_cred_getuid(p->p_cred) ||
+		    kauth_cred_getuid(up->p_cred) != kauth_cred_getsvuid(p->p_cred))
 			return (EPERM);
 	}
 
@@ -985,9 +991,8 @@ darwin_sysctl_procargs(SYSCTLFN_ARGS)
 	auio.uio_iovcnt = 1;
 	auio.uio_offset = (vaddr_t)p->p_psstr;
 	auio.uio_resid = sizeof(pss);
-	auio.uio_segflg = UIO_SYSSPACE;
 	auio.uio_rw = UIO_READ;
-	auio.uio_procp = NULL;
+	UIO_SETUP_SYSSPACE(&auio);
 	if ((error = uvm_io(&p->p_vmspace->vm_map, &auio)) != 0)
 		goto done;
 
@@ -1006,9 +1011,8 @@ darwin_sysctl_procargs(SYSCTLFN_ARGS)
 	auio.uio_iov = &aiov;
 	auio.uio_iovcnt = 1;
 	auio.uio_resid = sizeof(argv);
-	auio.uio_segflg = UIO_SYSSPACE;
 	auio.uio_rw = UIO_READ;
-	auio.uio_procp = NULL;
+	UIO_SETUP_SYSSPACE(&auio);
 	if ((error = uvm_io(&p->p_vmspace->vm_map, &auio)) != 0)
 		goto done;
 
@@ -1028,9 +1032,8 @@ darwin_sysctl_procargs(SYSCTLFN_ARGS)
 		auio.uio_offset = argv + len;
 		xlen = PAGE_SIZE - ((argv + len) & PAGE_MASK);
 		auio.uio_resid = xlen;
-		auio.uio_segflg = UIO_SYSSPACE;
 		auio.uio_rw = UIO_READ;
-		auio.uio_procp = NULL;
+		UIO_SETUP_SYSSPACE(&auio);
 		error = uvm_io(&p->p_vmspace->vm_map, &auio);
 		if (error)
 			goto done;
@@ -1090,9 +1093,8 @@ darwin_sysctl_procargs(SYSCTLFN_ARGS)
 		auio.uio_offset = argv + len;
 		xlen = PAGE_SIZE - ((argv + len) & PAGE_MASK);
 		auio.uio_resid = xlen;
-		auio.uio_segflg = UIO_SYSSPACE;
 		auio.uio_rw = UIO_READ;
-		auio.uio_procp = NULL;
+		UIO_SETUP_SYSSPACE(&auio);
 		error = uvm_io(&p->p_vmspace->vm_map, &auio);
 		if (error)
 			goto done;

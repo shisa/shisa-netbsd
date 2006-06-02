@@ -1,4 +1,4 @@
-/*	$NetBSD: mtrace.c,v 1.35 2004/10/30 14:31:45 dsl Exp $	*/
+/*	$NetBSD: mtrace.c,v 1.37 2006/05/09 20:18:09 mrg Exp $	*/
 
 /*
  * mtrace.c
@@ -52,7 +52,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: mtrace.c,v 1.35 2004/10/30 14:31:45 dsl Exp $");
+__RCSID("$NetBSD: mtrace.c,v 1.37 2006/05/09 20:18:09 mrg Exp $");
 #endif
 
 #include <sys/types.h>
@@ -398,7 +398,8 @@ send_recv(u_int32_t dst, int type, int code, int tries, struct resp_buf *save)
     int ipdatalen, iphdrlen, igmpdatalen;
     u_int32_t local, group;
     int datalen;
-    int count, recvlen, dummy = 0;
+    int count, recvlen;
+    socklen_t dummy;
     int len;
     int i;
 
@@ -413,7 +414,7 @@ send_recv(u_int32_t dst, int type, int code, int tries, struct resp_buf *save)
     else local = INADDR_ANY;
 
     /*
-     * If the reply address was not explictly specified, start off
+     * If the reply address was not explicitly specified, start off
      * with the unicast address of this host.  Then, if there is no
      * response after trying half the tries with unicast, switch to
      * the standard multicast reply address.  If the TTL was also not
@@ -621,7 +622,8 @@ passive_mode(void)
     struct igmp *igmp;
     struct tr_resp *r;
     int ipdatalen, iphdrlen, igmpdatalen;
-    int len, recvlen, dummy = 0;
+    int len, recvlen;
+    socklen_t dummy;
     u_int32_t smask;
 
     if (raddr) {
@@ -1141,7 +1143,7 @@ main(int argc, char **argv)
 {
     int udp;
     struct sockaddr_in addr;
-    int addrlen = sizeof(addr);
+    socklen_t addrlen = sizeof(addr);
     int recvlen;
     struct timeval tv;
     struct resp_buf *prev, *new;

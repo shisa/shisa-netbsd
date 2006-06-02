@@ -1,4 +1,4 @@
-/* $NetBSD: if_pppoe.h,v 1.5 2003/11/28 08:56:48 keihan Exp $ */
+/* $NetBSD: if_pppoe.h,v 1.8 2005/12/10 23:21:38 elad Exp $ */
 
 /*-
  * Copyright (c) 2002 The NetBSD Foundation, Inc.
@@ -36,12 +36,15 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifndef _NET_IF_PPPOE_H_
+#define _NET_IF_PPPOE_H_
+
 struct pppoediscparms {
 	char	ifname[IFNAMSIZ];	/* pppoe interface name */
 	char	eth_ifname[IFNAMSIZ];	/* external ethernet interface name */
-	char	*ac_name;		/* access concentrator name (or NULL) */
+	const char *ac_name;		/* access concentrator name (or NULL) */
 	size_t	ac_name_len;		/* on write: length of buffer for ac_name */
-	char	*service_name;		/* service name (or NULL) */
+	const char *service_name;	/* service name (or NULL) */
 	size_t	service_name_len;	/* on write: length of buffer for service name */
 };
 
@@ -66,14 +69,6 @@ struct pppoeconnectionstate {
 
 #define PPPOEGETSESSION	_IOWR('i', 112, struct pppoeconnectionstate)
 
-struct pppoeidletimeoutcfg {
-	char	ifname[IFNAMSIZ];	/* pppoe interface name */
-	u_long	idle_timeout;		/* idle timeout in seconds */
-};
-
-#define	PPPOEGETIDLETIMEOUT	_IOWR('i', 113, struct pppoeidletimeoutcfg)
-#define	PPPOESETIDLETIMEOUT	_IOW('i', 114, struct pppoeidletimeoutcfg)
-
 #ifdef _KERNEL
 
 extern struct ifqueue ppoediscinq;
@@ -86,5 +81,6 @@ extern struct callout pppoe_softintr;		/* callout (poor mans softint) */
 extern void pppoe_softintr_handler(void*);	/* handler function */
 #endif
 
-#endif	/* _KERNEL */
+#endif /* _KERNEL */
+#endif /* !_NET_IF_PPPOE_H_ */
 

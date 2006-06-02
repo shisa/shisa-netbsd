@@ -1,4 +1,4 @@
-/*	$NetBSD: ntptime.c,v 1.2 2003/12/04 16:23:38 drochner Exp $	*/
+/*	$NetBSD: ntptime.c,v 1.4 2006/03/18 08:09:03 kardel Exp $	*/
 
 /*
  * NTP test program
@@ -403,8 +403,8 @@ sprintb(
 	else
 	    (void)sprintf(buf, "0x%x", v);
 	cp = buf + strlen(buf);
-	bits++;
 	if (bits) {
+		bits++;
 		*cp++ = ' ';
 		*cp++ = '(';
 		while ((i = *bits++) != 0) {
@@ -435,7 +435,7 @@ timex_state(
 {
 	static char buf[32];
 
-	if (s >= 0 && s <= sizeof(timex_states) / sizeof(timex_states[0]))
+	if (s >= 0 && s < sizeof(timex_states) / sizeof(timex_states[0]))
 	    return (timex_states[s]);
 	sprintf(buf, "TIME-#%d", s);
 	return (buf);

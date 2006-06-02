@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile.inc,v 1.11.2.3 2005/10/06 11:45:26 tron Exp $
+#	$NetBSD: Makefile.inc,v 1.14 2005/10/04 16:11:15 martin Exp $
 #
 #	etc.sgimips/Makefile.inc -- sgimips-specific etc Makefile targets
 #

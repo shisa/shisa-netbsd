@@ -1,4 +1,4 @@
-/* $NetBSD: autoconf.c,v 1.41 2004/10/23 17:07:38 thorpej Exp $ */
+/* $NetBSD: autoconf.c,v 1.43 2005/12/11 12:16:10 christos Exp $ */
 
 /*
  * Copyright (c) 1992, 1993
@@ -42,7 +42,7 @@
 
 #include <sys/cdefs.h>			/* RCS ID & Copyright macro defns */
 
-__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.41 2004/10/23 17:07:38 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.43 2005/12/11 12:16:10 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -83,7 +83,7 @@ cpu_configure()
 	 * during autoconfig.
 	 */
 	(void)alpha_pal_swpipl(ALPHA_PSL_IPL_HIGH);
-	if (config_rootfound("mainbus", "mainbus") == NULL)
+	if (config_rootfound("mainbus", NULL) == NULL)
 		panic("no mainbus found");
 	(void)spl0();
 

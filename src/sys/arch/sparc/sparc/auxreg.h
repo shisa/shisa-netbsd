@@ -1,4 +1,4 @@
-/*	$NetBSD: auxreg.h,v 1.9 2003/08/07 16:29:44 agc Exp $ */
+/*	$NetBSD: auxreg.h,v 1.12 2005/11/16 03:00:23 uwe Exp $ */
 
 /*
  * Copyright (c) 1992, 1993
@@ -56,7 +56,11 @@
 #define	AUXIO4M_MB1	0xc0		/* must be set on write? */
 #define	AUXIO4M_FHD	0x20		/* floppy: high density (unreliable?)*/
 #define	AUXIO4M_LTE	0x08		/* link-test enable */
+					/* power up modem in SPARCbook 3GX */
+
 #define	AUXIO4M_MMX	0x04		/* Monitor/Mouse MUX; what is it? */
+					/* power up DBRI in SPARCbook 3GX */
+
 #define	AUXIO4M_FTC	0x02		/* floppy: drives Terminal Count pin */
 #define	AUXIO4M_LED	0x01		/* front panel LED */
 
@@ -119,6 +123,5 @@
 #ifndef _LOCORE
 volatile u_char *auxio_reg;	/* Copy of AUXIO_REG */
 u_char auxio_regval;
-unsigned int auxregbisc __P((int, int));
+unsigned int auxregbisc(int, int);
 #endif
-

@@ -1,4 +1,4 @@
-/*	$NetBSD: autoconf.c,v 1.83 2004/12/14 02:32:03 chs Exp $	*/
+/*	$NetBSD: autoconf.c,v 1.88 2006/03/29 04:16:48 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1994 Ludd, University of Lule}, Sweden.
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.83 2004/12/14 02:32:03 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.88 2006/03/29 04:16:48 thorpej Exp $");
 
 #include "opt_compat_netbsd.h"
 
@@ -181,7 +181,7 @@ CFATTACH_DECL(mainbus, sizeof(struct device),
 #include "ry.h"
 
 static int ubtest(void *);
-static int jmfr(char *, struct device *, int);
+static int jmfr(const char *, struct device *, int);
 static int booted_qe(struct device *, void *);
 static int booted_qt(struct device *, void *);
 static int booted_le(struct device *, void *);
@@ -253,11 +253,11 @@ device_register(struct device *dev, void *aux)
  * Simple checks. Return 1 on fail.
  */
 int
-jmfr(char *n, struct device *dev, int nr)
+jmfr(const char *n, struct device *dev, int nr)
 {
 	if (rpb.devtyp != nr)
 		return 1;
-	return strcmp(n, dev->dv_cfdata->cf_name);
+	return !device_is_a(dev, n);
 }
 
 #include <dev/qbus/ubavar.h>
@@ -356,13 +356,13 @@ booted_sd(struct device *dev, void *aux)
 	    sa->sa_periph->periph_lun != (rpb.unit % 100))
 		return 0; /* Wrong unit */
 
-	ppdev = dev->dv_parent->dv_parent;
+	ppdev = device_parent(device_parent(dev));
 
 	/* VS3100 NCR 53C80 (si) & VS4000 NCR 53C94 (asc) */
 	if ((jmfr("si",  ppdev, BDEV_SD) == 0 ||	/* new name */
 	     jmfr("asc", ppdev, BDEV_SD) == 0 ||
 	     jmfr("asc", ppdev, BDEV_SDN) == 0) &&
-	    (ppdev->dv_cfdata->cf_loc[VSBUSCF_CSR] == rpb.csrphy))
+	    (device_cfdata(ppdev)->cf_loc[VSBUSCF_CSR] == rpb.csrphy))
 			return 1;
 
 	return 0; /* Where did we come from??? */
@@ -396,7 +396,7 @@ int
 booted_ra(struct device *dev, void *aux)
 {
 	struct drive_attach_args *da = aux;
-	struct mscp_softc *pdev = (void *)dev->dv_parent;
+	struct mscp_softc *pdev = (void *)device_parent(dev);
 	paddr_t ioaddr;
 
 	if (jmfr("ra", dev, BDEV_UDA))

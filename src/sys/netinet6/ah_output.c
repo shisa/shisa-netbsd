@@ -1,4 +1,4 @@
-/*	$NetBSD: ah_output.c,v 1.24 2003/09/07 15:59:36 itojun Exp $	*/
+/*	$NetBSD: ah_output.c,v 1.27 2006/05/14 05:30:31 christos Exp $	*/
 /*	$KAME: ah_output.c,v 1.31 2001/07/26 06:53:15 jinmei Exp $	*/
 
 /*
@@ -35,7 +35,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ah_output.c,v 1.24 2003/09/07 15:59:36 itojun Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ah_output.c,v 1.27 2006/05/14 05:30:31 christos Exp $");
 
 #include "opt_inet.h"
 
@@ -156,11 +156,10 @@ ah4_output(m, isr)
 	struct in_addr dst;
 	struct in_addr *finaldst;
 	int error;
+	dst.s_addr = 0;		/* XXX: GCC */
 
 	/* sanity checks */
 	if ((sav->flags & SADB_X_EXT_OLD) == 0 && !sav->replay) {
-		struct ip *ip;
-
 		ip = mtod(m, struct ip *);
 		ipseclog((LOG_DEBUG, "ah4_output: internal error: "
 			"sav->replay is null: %x->%x, SPI=%u\n",

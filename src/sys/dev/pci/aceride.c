@@ -1,4 +1,4 @@
-/*	$NetBSD: aceride.c,v 1.14.2.3 2005/08/18 20:07:26 tron Exp $	*/
+/*	$NetBSD: aceride.c,v 1.19 2005/12/11 12:22:48 christos Exp $	*/
 
 /*
  * Copyright (c) 1999, 2000, 2001 Manuel Bouyer.
@@ -28,6 +28,9 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+
+#include <sys/cdefs.h>
+__KERNEL_RCSID(0, "$NetBSD: aceride.c,v 1.19 2005/12/11 12:22:48 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>

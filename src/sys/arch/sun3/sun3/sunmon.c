@@ -1,4 +1,4 @@
-/*	$NetBSD: sunmon.c,v 1.14 2005/01/22 15:36:10 chs Exp $	*/
+/*	$NetBSD: sunmon.c,v 1.17 2005/12/24 22:45:40 perry Exp $	*/
 
 /*-
  * Copyright (c) 1996 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: sunmon.c,v 1.14 2005/01/22 15:36:10 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: sunmon.c,v 1.17 2005/12/24 22:45:40 perry Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -115,7 +115,7 @@ sunmon_abort(void)
 	 * Already setup "trap #14" in sunmon_init().
 	 */
 
-	asm(" trap #14 ; _sunmon_continued: nop");
+	__asm(" trap #14 ; _sunmon_continued: nop");
 
 	/* We have continued from a PROM abort! */
 #ifdef	_SUN3X_
@@ -138,7 +138,7 @@ sunmon_halt(void)
 	 * SunOS uses the "abort" function when you halt (bug work-around?)
 	 * so we might as well do the same.
 	 */
-	asm(" trap #14"); /* mon_exit_to_mon() provokes PROM monitor bug */
+	__asm(" trap #14"); /* mon_exit_to_mon() provokes PROM monitor bug */
 #endif
 	mon_exit_to_mon();
 	/*NOTREACHED*/
@@ -148,7 +148,7 @@ sunmon_halt(void)
  * Caller must pass a string that is in our data segment.
  */
 void 
-sunmon_reboot(char *bs)
+sunmon_reboot(const char *bs)
 {
 
 	(void) splhigh();

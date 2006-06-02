@@ -1,4 +1,4 @@
-/*	$NetBSD: if_de.c,v 1.113 2005/02/27 00:27:32 perry Exp $	*/
+/*	$NetBSD: if_de.c,v 1.120 2006/05/15 12:48:52 christos Exp $	*/
 
 /*-
  * Copyright (c) 1994-1997 Matt Thomas (matt@3am-software.com)
@@ -37,7 +37,7 @@
  *   board which support 21040, 21041, or 21140 (mostly).
  */
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_de.c,v 1.113 2005/02/27 00:27:32 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_de.c,v 1.120 2006/05/15 12:48:52 christos Exp $");
 
 #define	TULIP_HDR_DATA
 
@@ -147,6 +147,7 @@ __KERNEL_RCSID(0, "$NetBSD: if_de.c,v 1.113 2005/02/27 00:27:32 perry Exp $");
 #include <machine/intr.h>
 #include <dev/pci/pcireg.h>
 #include <dev/pci/pcivar.h>
+#include <dev/pci/pcidevs.h>
 #include <dev/ic/dc21040reg.h>
 #define	DEVAR_INCLUDE	"dev/pci/if_devar.h"
 #endif /* __NetBSD__ */
@@ -1644,7 +1645,7 @@ tulip_null_media_poll(
 #endif
 }
 
-__inline__ static void
+inline static void
 tulip_21140_mediainit(
     tulip_softc_t * const sc,
     tulip_media_info_t * const mip,
@@ -2483,7 +2484,8 @@ tulip_srom_decode(
     unsigned idx1, idx2, idx3;
 
     const tulip_srom_header_t *shp = (tulip_srom_header_t *) &sc->tulip_rombuf[0];
-    const tulip_srom_adapter_info_t *saip = (tulip_srom_adapter_info_t *) (shp + 1);
+    const tulip_srom_adapter_info_t *saip =
+	    (const tulip_srom_adapter_info_t *) (shp + 1);
     tulip_srom_media_t srom_media;
     tulip_media_info_t *mi = sc->tulip_mediainfo;
     const u_int8_t *dp;
@@ -2504,7 +2506,7 @@ tulip_srom_decode(
     /*
      * Save the hardware address.
      */
-    memcpy((caddr_t) sc->tulip_enaddr, (caddr_t) shp->sh_ieee802_address,
+    memcpy((caddr_t) sc->tulip_enaddr, shp->sh_ieee802_address,
 	ETHER_ADDR_LEN);
     /*
      * If this is a multiple port card, add the adapter index to the last
@@ -3068,7 +3070,7 @@ tulip_read_macaddr(
      */
     for (idx = 0; tulip_vendors[idx].vendor_identify_nic != NULL; idx++) {
 	if (memcmp((caddr_t) sc->tulip_enaddr,
-		 (caddr_t) tulip_vendors[idx].vendor_oui, 3) == 0) {
+		 tulip_vendors[idx].vendor_oui, 3) == 0) {
 	    (*tulip_vendors[idx].vendor_identify_nic)(sc);
 	    break;
 	}
@@ -4326,7 +4328,7 @@ tulip_txput(
     TULIP_PERFSTART(txput)
     tulip_ringinfo_t * const ri = &sc->tulip_txinfo;
     tulip_desc_t *eop, *nextout;
-    int segcnt, free;
+    int segcnt, freedescs;
     u_int32_t d_status;
 #if defined(TULIP_BUS_DMA) && !defined(TULIP_BUS_DMA_NOTX)
     bus_dmamap_t map;
@@ -4370,7 +4372,7 @@ tulip_txput(
     d_status = 0;
     eop = nextout = ri->ri_nextout;
     segcnt = 0;
-    free = ri->ri_free;
+    freedescs = ri->ri_free;
 
 #if defined(TULIP_BUS_DMA) && !defined(TULIP_BUS_DMA_NOTX)
     /*
@@ -4380,7 +4382,7 @@ tulip_txput(
 #if defined(TULIP_DEBUG)
 	sc->tulip_dbg.dbg_no_txmaps++;
 #endif
-	free += tulip_tx_intr(sc);
+	freedescs += tulip_tx_intr(sc);
     }
     if (sc->tulip_txmaps_free > 0) {
 	map = sc->tulip_txmaps[sc->tulip_txmaps_free-1];
@@ -4417,11 +4419,11 @@ tulip_txput(
 	    goto finish;
 	}
     }
-    if ((free -= (map->dm_nsegs + 1) / 2) <= 0
+    if ((freedescs -= (map->dm_nsegs + 1) / 2) <= 0
 	    /*
 	     * See if there's any unclaimed space in the transmit ring.
 	     */
-	    && (free += tulip_tx_intr(sc)) <= 0) {
+	    && (freedescs += tulip_tx_intr(sc)) <= 0) {
 	/*
 	 * There's no more room but since nothing
 	 * has been committed at this point, just
@@ -4490,12 +4492,12 @@ tulip_txput(
 		goto again;
 	    }
 	    if (segcnt & 1) {
-		if (--free == 0) {
+		if (--freedescs == 0) {
 		    /*
 		     * See if there's any unclaimed space in the
 		     * transmit ring.
 		     */
-		    if ((free += tulip_tx_intr(sc)) == 0) {
+		    if ((freedescs += tulip_tx_intr(sc)) == 0) {
 			/*
 			 * There's no more room but since nothing
 			 * has been committed at this point, just
@@ -4591,7 +4593,7 @@ tulip_txput(
      * This advances the ring for us.
      */
     ri->ri_nextout = nextout;
-    ri->ri_free = free;
+    ri->ri_free = freedescs;
 
     TULIP_PERFEND(txput);
 
@@ -5435,6 +5437,7 @@ tulip_pci_match(
     id = pci_inl(pa, PCI_VENDOR_ID);
     if (PCI_VENDORID(id) != DEC_VENDORID)
 	return 0;
+
     id = PCI_CHIPID(id);
     if (id != CHIPID_21040 && id != CHIPID_21041
 	    && id != CHIPID_21140 && id != CHIPID_21142)
@@ -5577,6 +5580,10 @@ tulip_pci_probe(
 {
     struct pci_attach_args *pa = (struct pci_attach_args *) aux;
 
+    /* Don't match lmc cards */
+    if (PCI_VENDOR(pci_conf_read(pa->pa_pc, pa->pa_tag,
+	PCI_SUBSYS_ID_REG)) == PCI_VENDOR_LMC)
+	return 0;
     if (PCI_VENDORID(pa->pa_id) != DEC_VENDORID)
 	return 0;
     if (PCI_CHIPID(pa->pa_id) == CHIPID_21040

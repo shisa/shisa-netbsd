@@ -1,4 +1,4 @@
-/*	$NetBSD: if_ecosubr.c,v 1.15 2005/02/26 22:45:09 perry Exp $	*/
+/*	$NetBSD: if_ecosubr.c,v 1.20 2006/04/22 04:58:49 simonb Exp $	*/
 
 /*-
  * Copyright (c) 2001 Ben Harris
@@ -58,16 +58,13 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_ecosubr.c,v 1.15 2005/02/26 22:45:09 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_ecosubr.c,v 1.20 2006/04/22 04:58:49 simonb Exp $");
 
 #include "bpfilter.h"
 #include "opt_inet.h"
 #include "opt_pfil_hooks.h"
 
 #include <sys/param.h>
-
-__KERNEL_RCSID(0, "$NetBSD: if_ecosubr.c,v 1.15 2005/02/26 22:45:09 perry Exp $");
-
 #include <sys/errno.h>
 #include <sys/kernel.h>
 #include <sys/socket.h>
@@ -92,8 +89,6 @@ __KERNEL_RCSID(0, "$NetBSD: if_ecosubr.c,v 1.15 2005/02/26 22:45:09 perry Exp $"
 #include <netinet/in.h>
 #include <netinet/in_var.h>
 #endif
-
-#define ECO_MAUX_RETRYPARMS 0
 
 struct eco_retryparms {
 	int	erp_delay;
@@ -137,8 +132,7 @@ eco_ifattach(struct ifnet *ifp, const u_int8_t *lla)
 	if_alloc_sadl(ifp);
 	memcpy(LLADDR(ifp->if_sadl), lla, ifp->if_addrlen);
 
-	/* XXX cast safe? */
-	ifp->if_broadcastaddr = (u_int8_t *)eco_broadcastaddr;
+	ifp->if_broadcastaddr = eco_broadcastaddr;
 
 	LIST_INIT(&ec->ec_retries);
 
@@ -175,12 +169,11 @@ eco_output(struct ifnet *ifp, struct mbuf *m0, struct sockaddr *dst,
     struct rtentry *rt0)
 {
 	struct eco_header ehdr, *eh;
-	int error, s;
+	int error;
 	struct mbuf *m = m0, *mcopy = NULL;
 	struct rtentry *rt;
 	int hdrcmplt;
-	size_t len;
-	int delay, count;
+	int retry_delay, retry_count;
 	struct m_tag *mtag;
 	struct eco_retryparms *erp;
 #ifdef INET
@@ -231,8 +224,8 @@ eco_output(struct ifnet *ifp, struct mbuf *m0, struct sockaddr *dst,
 	IFQ_CLASSIFY(&ifp->if_snd, m, dst->sa_family, &pktattr);
 
 	hdrcmplt = 0;
-	delay = hz / 16;
-	count = 16;
+	retry_delay = hz / 16;
+	retry_count = 16;
 	switch (dst->sa_family) {
 #ifdef INET
 	case AF_INET:
@@ -275,7 +268,7 @@ eco_output(struct ifnet *ifp, struct mbuf *m0, struct sockaddr *dst,
 		MGETHDR(m1, M_DONTWAIT, MT_DATA);
 		if (m1 == NULL)
 			senderr(ENOBUFS);
-		M_COPY_PKTHDR(m1, m);
+		M_MOVE_PKTHDR(m1, m);
 		m1->m_len = sizeof(*ecah);
 		m1->m_pkthdr.len = m1->m_len;
 		MH_ALIGN(m1, m1->m_len);
@@ -323,8 +316,8 @@ eco_output(struct ifnet *ifp, struct mbuf *m0, struct sockaddr *dst,
 		if (mtag == NULL)
 			senderr(ENOBUFS);
 		erp = (struct eco_retryparms *)(mtag + 1);
-		erp->erp_delay = delay;
-		erp->erp_count = count;
+		erp->erp_delay = retry_delay;
+		erp->erp_count = retry_count;
 	}
 
 #ifdef PFIL_HOOKS
@@ -334,23 +327,7 @@ eco_output(struct ifnet *ifp, struct mbuf *m0, struct sockaddr *dst,
 		return (0);
 #endif
 
-	/*
-	 * Queue message on interface, and start output if interface
-	 * not yet active.
-	 */
-
-	len = m->m_pkthdr.len;
-	s = splnet();
-	IFQ_ENQUEUE(&ifp->if_snd, m, &pktattr, error);
-	if (error) {
-		splx(s);
-		return (error);
-	}
-	ifp->if_obytes += len;
-	if ((ifp->if_flags & IFF_OACTIVE) == 0)
-		(*ifp->if_start)(ifp);
-	splx(s);
-	return (error);
+	return ifq_enqueue(ifp, m ALTQ_COMMA ALTQ_DECL(&pktattr));
 
 bad:
 	if (m)
@@ -430,7 +407,7 @@ eco_input(struct ifnet *ifp, struct mbuf *m)
 	       		MGETHDR(m1, M_DONTWAIT, MT_DATA);
 			if (m1 == NULL)
 				goto drop;
-			M_COPY_PKTHDR(m1, m);
+			M_MOVE_PKTHDR(m1, m);
 			m1->m_len = sizeof(*ah) + 2*sizeof(struct in_addr) +
 			    2*ifp->if_data.ifi_addrlen;
 			m1->m_pkthdr.len = m1->m_len;
@@ -843,7 +820,7 @@ eco_sprintf(const u_int8_t *ea)
  * Econet retry handling.
  */
 static void
-eco_defer(struct ifnet *ifp, struct mbuf *m, int delay)
+eco_defer(struct ifnet *ifp, struct mbuf *m, int retry_delay)
 {
 	struct ecocom *ec = (struct ecocom *)ifp;
 	struct eco_retry *er;
@@ -860,7 +837,7 @@ eco_defer(struct ifnet *ifp, struct mbuf *m, int delay)
 	s = splnet();
 	LIST_INSERT_HEAD(&ec->ec_retries, er, er_link);
 	splx(s);
-	callout_reset(&er->er_callout, delay, eco_retry, er);
+	callout_reset(&er->er_callout, retry_delay, eco_retry, er);
 }
 
 static void
@@ -882,22 +859,10 @@ eco_retry(void *arg)
 	struct eco_retry *er = arg;
 	struct mbuf *m;
 	struct ifnet *ifp;
-	int s, error, len;
 
 	ifp = er->er_ifp;
 	m = er->er_packet;
-	len = m->m_pkthdr.len;
 	LIST_REMOVE(er, er_link);
-	s = splnet();
-	IFQ_ENQUEUE(&ifp->if_snd, m, NULL, error);
-	if (error) {
-		splx(s);
-		/* XXX should defer again? */
-		m_freem(m);
-	}
-	ifp->if_obytes += len;
-	if ((ifp->if_flags & IFF_OACTIVE) == 0)
-		(*ifp->if_start)(ifp);
-	splx(s);
+	(void)ifq_enqueue(ifp, m ALTQ_COMMA ALTQ_DECL(NULL));
 	FREE(er, M_TEMP);
 }

@@ -1,4 +1,4 @@
-/*	$NetBSD: rpcb_clnt.c,v 1.15 2003/10/21 00:07:17 fvdl Exp $	*/
+/*	$NetBSD: rpcb_clnt.c,v 1.21 2006/03/19 03:00:49 christos Exp $	*/
 
 /*
  * Sun RPC is a product of Sun Microsystems, Inc. and is provided for
@@ -39,7 +39,7 @@
 #if 0
 static char sccsid[] = "@(#)rpcb_clnt.c 1.30 89/06/21 Copyr 1988 Sun Micro";
 #else
-__RCSID("$NetBSD: rpcb_clnt.c,v 1.15 2003/10/21 00:07:17 fvdl Exp $");
+__RCSID("$NetBSD: rpcb_clnt.c,v 1.21 2006/03/19 03:00:49 christos Exp $");
 #endif
 #endif
 
@@ -249,11 +249,21 @@ add_cache(host, netid, taddr, uaddr)
 	ad_cache->ac_taddr = (struct netbuf *)malloc(sizeof (struct netbuf));
 	if (!ad_cache->ac_host || !ad_cache->ac_netid || !ad_cache->ac_taddr ||
 		(uaddr && !ad_cache->ac_uaddr)) {
-		return;
+		goto out;
 	}
 	ad_cache->ac_taddr->len = ad_cache->ac_taddr->maxlen = taddr->len;
 	ad_cache->ac_taddr->buf = (char *) malloc(taddr->len);
 	if (ad_cache->ac_taddr->buf == NULL) {
+out:
+		if (ad_cache->ac_host)
+			free(ad_cache->ac_host);
+		if (ad_cache->ac_netid)
+			free(ad_cache->ac_netid);
+		if (ad_cache->ac_uaddr)
+			free(ad_cache->ac_uaddr);
+		if (ad_cache->ac_taddr)
+			free(ad_cache->ac_taddr);
+		free(ad_cache);
 		return;
 	}
 	memcpy(ad_cache->ac_taddr->buf, taddr->buf, taddr->len);
@@ -326,6 +336,7 @@ getclnthandle(host, nconf, targaddr)
 /* VARIABLES PROTECTED BY rpcbaddr_cache_lock:  ad_cache */
 
 	/* Get the address of the rpcbind.  Check cache first */
+	client = NULL;
 	addr_to_delete.len = 0;
 	rwlock_rdlock(&rpcbaddr_cache_lock);
 	ad_cache = check_cache(host, nconf->nc_netid);
@@ -437,7 +448,7 @@ local_rpcb()
 {
 	CLIENT *client;
 	static struct netconfig *loopnconf;
-	static char *hostname;
+	static const char *hostname;
 #ifdef _REENTRANT
 	extern mutex_t loopnconf_lock;
 #endif
@@ -560,9 +571,7 @@ rpcb_set(program, version, nconf, address)
 	}
 
 	/* convert to universal */
-	/*LINTED const castaway*/
-	parms.r_addr = taddr2uaddr((struct netconfig *) nconf,
-				   (struct netbuf *)address);
+	parms.r_addr = taddr2uaddr(__UNCONST(nconf), __UNCONST(address));
 	if (!parms.r_addr) {
 		CLNT_DESTROY(client);
 		rpc_createerr.cf_stat = RPC_N2AXLATEFAILURE;
@@ -615,11 +624,9 @@ rpcb_unset(program, version, nconf)
 	if (nconf)
 		parms.r_netid = nconf->nc_netid;
 	else {
-		/*LINTED const castaway*/
-		parms.r_netid = (char *) &nullstring[0]; /* unsets  all */
+		parms.r_netid = __UNCONST(&nullstring[0]); /* unsets  all */
 	}
-	/*LINTED const castaway*/
-	parms.r_addr = (char *) &nullstring[0];
+	parms.r_addr = __UNCONST(&nullstring[0]);
 	(void) snprintf(uidbuf, sizeof uidbuf, "%d", geteuid());
 	parms.r_owner = uidbuf;
 
@@ -793,8 +800,7 @@ try_rpcbind:
 	 */
 	parms.r_prog = program;
 	parms.r_vers = version;
-	/*LINTED const castaway*/
-	parms.r_owner = (char *) &nullstring[0];	/* not needed; */
+	parms.r_owner = __UNCONST(&nullstring[0]);	/* not needed; */
 							/* just for xdring */
 	parms.r_netid = nconf->nc_netid; /* not really needed */
 
@@ -854,8 +860,8 @@ try_rpcbind:
 		 * contact it in case it can help it connect back with us
 		 */
 		if (parms.r_addr == NULL) {
-			/*LINTED const castaway*/
-			parms.r_addr = (char *) &nullstring[0]; /* for XDRing */
+			/* for XDRing */
+			parms.r_addr = __UNCONST(&nullstring[0]); 
 		}
 		clnt_st = CLNT_CALL(client, (rpcproc_t)RPCBPROC_GETADDRLIST,
 		    (xdrproc_t) xdr_rpcb, (char *)(void *)&parms,
@@ -912,10 +918,8 @@ regular_rpcbind:
 			goto error;
 		}
 	}
-	if (parms.r_addr == NULL) {
-		/*LINTED const castaway*/
-		parms.r_addr = (char *) &nullstring[0];
-	}
+	if (parms.r_addr == NULL)
+		parms.r_addr = __UNCONST(&nullstring[0]);
 
 	/* First try from start_vers and then version 3 (RPCBVERS) */
 	for (vers = start_vers;  vers >= RPCBVERS; vers--) {
@@ -962,11 +966,6 @@ regular_rpcbind:
 			clnt_geterr(client, &rpc_createerr.cf_error);
 			goto error;
 		}
-	}
-
-	if ((address == NULL) || (address->len == 0)) {
-		rpc_createerr.cf_stat = RPC_PROGNOTREGISTERED;
-		clnt_geterr(client, &rpc_createerr.cf_error);
 	}
 
 error:
@@ -1097,7 +1096,8 @@ rpcb_rmtcall(nconf, host, prog, vers, proc, xdrargs, argsp,
 	rpcvers_t vers;
 	rpcproc_t proc;			/* Remote proc identifiers */
 	xdrproc_t xdrargs, xdrres;	/* XDR routines */
-	caddr_t argsp, resp;		/* Argument and Result */
+	const char *argsp;		/* Argument */
+	caddr_t resp;			/* Result */
 	struct timeval tout;		/* Timeout value for this call */
 	const struct netbuf *addr_ptr;	/* Preallocated netbuf address */
 {
@@ -1107,12 +1107,13 @@ rpcb_rmtcall(nconf, host, prog, vers, proc, xdrargs, argsp,
 	struct r_rpcb_rmtcallres r;
 	rpcvers_t rpcb_vers;
 
+	stat = RPC_FAILED;	/* XXXGCC -Wuninitialized [dreamcast] */
+
 	client = getclnthandle(host, nconf, NULL);
 	if (client == NULL) {
 		return (RPC_FAILED);
 	}
-	/*LINTED const castaway*/
-	CLNT_CONTROL(client, CLSET_RETRY_TIMEOUT, (char *)(void *)&rmttimeout);
+	CLNT_CONTROL(client, CLSET_RETRY_TIMEOUT, __UNCONST(&rmttimeout));
 	a.prog = prog;
 	a.vers = vers;
 	a.proc = proc;
@@ -1129,12 +1130,10 @@ rpcb_rmtcall(nconf, host, prog, vers, proc, xdrargs, argsp,
 		    (xdrproc_t) xdr_rpcb_rmtcallres, (char *)(void *)&r, tout);
 		if ((stat == RPC_SUCCESS) && (addr_ptr != NULL)) {
 			struct netbuf *na;
-			/*LINTED const castaway*/
-			na = uaddr2taddr((struct netconfig *) nconf, r.addr);
+			na = uaddr2taddr(__UNCONST(nconf), r.addr);
 			if (!na) {
 				stat = RPC_N2AXLATEFAILURE;
-				/*LINTED const castaway*/
-				((struct netbuf *) addr_ptr)->len = 0;
+				((struct netbuf *)__UNCONST(addr_ptr))->len = 0;
 				goto error;
 			}
 			if (na->len > addr_ptr->maxlen) {
@@ -1142,13 +1141,11 @@ rpcb_rmtcall(nconf, host, prog, vers, proc, xdrargs, argsp,
 				stat = RPC_FAILED; /* XXX A better error no */
 				free(na->buf);
 				free(na);
-				/*LINTED const castaway*/
-				((struct netbuf *) addr_ptr)->len = 0;
+				((struct netbuf *)__UNCONST(addr_ptr))->len = 0;
 				goto error;
 			}
 			memcpy(addr_ptr->buf, na->buf, (size_t)na->len);
-			/*LINTED const castaway*/
-			((struct netbuf *)addr_ptr)->len = na->len;
+			((struct netbuf *)__UNCONST(addr_ptr))->len = na->len;
 			free(na->buf);
 			free(na);
 			break;

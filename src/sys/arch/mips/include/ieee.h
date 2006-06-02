@@ -1,4 +1,4 @@
-/*	$NetBSD: ieee.h,v 1.3.14.1 2005/04/19 12:31:03 tron Exp $ */
+/*	$NetBSD: ieee.h,v 1.5 2005/12/11 12:18:09 christos Exp $ */
 
 #include <sys/ieee754.h>
 

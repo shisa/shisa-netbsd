@@ -1,4 +1,4 @@
-/*	$NetBSD: mfp.c,v 1.14 2005/01/18 07:12:15 chs Exp $	*/
+/*	$NetBSD: mfp.c,v 1.17 2005/12/24 22:45:40 perry Exp $	*/
 
 /*-
  * Copyright (c) 1998 NetBSD Foundation, Inc.
@@ -42,7 +42,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mfp.c,v 1.14 2005/01/18 07:12:15 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: mfp.c,v 1.17 2005/12/24 22:45:40 perry Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -115,9 +115,9 @@ mfp_attach(struct device *parent, struct device *self, void *aux)
 			panic ("IO map for MFP corruption??");
 #endif
 		bus_space_map(ia->ia_bst, ia->ia_addr, 0x2000, 0, &sc->sc_bht);
-		config_found (self, "kbd", NULL);
-		config_found (self, "clock", NULL);
-		config_found (self, "pow", NULL);
+		config_found (self, __UNCONST("kbd"), NULL);
+		config_found (self, __UNCONST("clock"), NULL);
+		config_found (self, __UNCONST("pow"), NULL);
 	} else {
 		/*
 		 * Called from config_console;
@@ -188,9 +188,9 @@ mfp_wait_for_hsync(void)
 {
 	/* wait for CRT HSYNC */
 	while (mfp_get_gpip() & MFP_GPIP_HSYNC)
-		asm("nop");
+		__asm("nop");
 	while (!(mfp_get_gpip() & MFP_GPIP_HSYNC))
-		asm("nop");
+		__asm("nop");
 }
 
 /*
@@ -211,6 +211,6 @@ int
 mfp_receive_usart(void)
 {
 	while (!(mfp_get_rsr() & MFP_RSR_BF))
-		asm("nop");
+		__asm("nop");
 	return mfp_get_udr();
 }

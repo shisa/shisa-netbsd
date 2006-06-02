@@ -1,4 +1,4 @@
-/*	$NetBSD: ttycom.h,v 1.16 2005/02/21 22:43:07 heas Exp $	*/
+/*	$NetBSD: ttycom.h,v 1.18 2005/12/11 12:25:21 christos Exp $	*/
 
 /*-
  * Copyright (c) 1982, 1986, 1990, 1993, 1994
@@ -160,6 +160,5 @@ typedef char linedn_t[TTLINEDNAMELEN];
 #define	PPPDISC		5		/* ppp discipline */
 #define	STRIPDISC	6		/* metricom wireless IP discipline */
 #define	HDLCDISC	9		/* HDLC discipline */
-#define	IRFRAMEDISC	10		/* IrDA frame discipline */
 
 #endif /* !_SYS_TTYCOM_H_ */

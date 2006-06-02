@@ -1,4 +1,4 @@
-/*	$NetBSD: clnp.h,v 1.18 2004/04/21 23:18:10 matt Exp $	*/
+/*	$NetBSD: clnp.h,v 1.21 2005/12/11 12:25:12 christos Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993, 1994
@@ -54,8 +54,8 @@ SOFTWARE.
 
 ******************************************************************/
 
-#ifndef _NETISO_CLNP_H
-#define _NETISO_CLNP_H
+#ifndef _NETISO_CLNP_H_
+#define _NETISO_CLNP_H_
 
 /*
  * ARGO Project, Computer Sciences Dept., University of Wisconsin - Madison
@@ -514,7 +514,7 @@ void rclnp_input (struct mbuf *, ...);
 int rclnp_output (struct mbuf *, ...);
 int rclnp_ctloutput (int, struct socket *, int, int, struct mbuf **);
 int clnp_usrreq (struct socket *, int, struct mbuf *, struct mbuf *,
-		     struct mbuf *, struct proc *);
+		     struct mbuf *, struct lwp *);
 
 /* clnp_subr.c */
 struct mbuf    *clnp_data_ck (struct mbuf *, int);
@@ -531,7 +531,7 @@ int clnp_srcroute (struct mbuf *, struct clnp_optidx *, struct route_iso *,
 		       struct iso_addr *);
 int clnp_echoreply (struct mbuf *, int, struct sockaddr_iso *,
 		        struct sockaddr_iso *, struct clnp_optidx *);
-int clnp_badmtu (struct ifnet *, struct rtentry *, int, char *);
+int clnp_badmtu (struct ifnet *, struct rtentry *, int, const char *);
 void clnp_ypocb  (caddr_t, caddr_t, u_int);
 
 /* clnp_timer.c */
@@ -545,4 +545,4 @@ struct troll    trollctl;
 
 #endif /* _KERNEL */
 
-#endif /* !_NETISO_CLNP_H */
+#endif /* !_NETISO_CLNP_H_ */

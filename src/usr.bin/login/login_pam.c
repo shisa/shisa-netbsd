@@ -1,4 +1,4 @@
-/*     $NetBSD: login_pam.c,v 1.4.2.4 2005/07/09 22:42:12 tron Exp $       */
+/*     $NetBSD: login_pam.c,v 1.17 2006/04/17 16:29:44 christos Exp $       */
 
 /*-
  * Copyright (c) 1980, 1987, 1988, 1991, 1993, 1994
@@ -40,7 +40,7 @@ __COPYRIGHT(
 #if 0
 static char sccsid[] = "@(#)login.c	8.4 (Berkeley) 4/2/94";
 #endif
-__RCSID("$NetBSD: login_pam.c,v 1.4.2.4 2005/07/09 22:42:12 tron Exp $");
+__RCSID("$NetBSD: login_pam.c,v 1.17 2006/04/17 16:29:44 christos Exp $");
 #endif /* not lint */
 
 /*
@@ -108,7 +108,8 @@ u_int	timeout = 300;
 
 struct	passwd *pwd, pwres;
 char	pwbuf[1024];
-struct	group *gr;
+struct	group grs, *grp;
+char	grbuf[1024];
 int	failures, have_ss;
 char	term[64], *envinit[1], *hostname, *username, *tty, *nested;
 struct timeval now;
@@ -121,9 +122,8 @@ main(int argc, char *argv[])
 {
 	extern char **environ;
 	struct stat st;
-	int ask, ch, cnt, fflag, hflag, pflag, sflag, quietlog, rootlogin;
+	int ask, ch, cnt, fflag, pflag, quietlog, rootlogin;
 	int auth_passed;
-	int Fflag;
 	uid_t uid, saved_uid;
 	gid_t saved_gid, saved_gids[NGROUPS_MAX];
 	int nsaved_gids;
@@ -137,8 +137,7 @@ main(int argc, char *argv[])
 	login_cap_t *lc = NULL;
 	pam_handle_t *pamh = NULL;
 	int pam_err;
-	void *oint;
-	void *oabrt;
+	sig_t oint, oabrt, oquit, oalrm;
 	const void *newuser;
 	int pam_silent = PAM_SILENT;
 	pid_t xpid, pid;
@@ -151,10 +150,12 @@ main(int argc, char *argv[])
 	nested = NULL;
 	need_chpass = require_chpass = 0;
 
-	(void)signal(SIGALRM, timedout);
+	oabrt = signal(SIGABRT, SIG_IGN);
+	oalrm = signal(SIGALRM, timedout);
+	oint = signal(SIGINT, SIG_IGN);
+	oquit = signal(SIGQUIT, SIG_IGN);
+
 	(void)alarm(timeout);
-	(void)signal(SIGQUIT, SIG_IGN);
-	(void)signal(SIGINT, SIG_IGN);
 	(void)setpriority(PRIO_PROCESS, 0, 0);
 
 	openlog("login", 0, LOG_AUTH);
@@ -166,7 +167,6 @@ main(int argc, char *argv[])
 	 *    login so that it may be placed in utmp/utmpx and wtmp/wtmpx
 	 * -a in addition to -h, a server my supply -a to pass the actual
 	 *    server address.
-	 * -s is used to force use of S/Key or equivalent.
 	 */
 	domain = NULL;
 	if (gethostname(localhost, sizeof(localhost)) < 0)
@@ -175,10 +175,10 @@ main(int argc, char *argv[])
 		domain = strchr(localhost, '.');
 	localhost[sizeof(localhost) - 1] = '\0';
 
-	Fflag = fflag = hflag = pflag = sflag = 0;
+	fflag = pflag = 0;
 	have_ss = 0;
 	uid = getuid();
-	while ((ch = getopt(argc, argv, "a:Ffh:ps")) != -1)
+	while ((ch = getopt(argc, argv, "a:fh:p")) != -1)
 		switch (ch) {
 		case 'a':
 			if (uid) {
@@ -191,9 +191,6 @@ main(int argc, char *argv[])
 			    sizeof(struct sockaddr_storage), "%a", (void *)&ss);
 #endif
 			break;
-		case 'F':
-			Fflag = 1;
-			/* FALLTHROUGH */
 		case 'f':
 			fflag = 1;
 			break;
@@ -202,7 +199,6 @@ main(int argc, char *argv[])
 				errno = EPERM;
 				err(EXIT_FAILURE, "-h option");
 			}
-			hflag = 1;
 			if (domain && (p = strchr(optarg, '.')) != NULL &&
 			    strcasecmp(p, domain) == 0)
 				*p = '\0';
@@ -210,9 +206,6 @@ main(int argc, char *argv[])
 			break;
 		case 'p':
 			pflag = 1;
-			break;
-		case 's':
-			sflag = 1;
 			break;
 		default:
 		case '?':
@@ -388,6 +381,12 @@ main(int argc, char *argv[])
 					PAM_END("pam_chauthtok");
 				break;
 
+			case PAM_AUTH_ERR:
+			case PAM_USER_UNKNOWN:
+			case PAM_MAXTRIES:
+				auth_passed = 0;
+				break;
+
 			default:
 				PAM_END("pam_acct_mgmt");
 				break;
@@ -415,17 +414,21 @@ skip_auth:
 		if (pwd && auth_passed)
 			break;
 
-		(void)printf("Login incorrect\n");
+		(void)printf("Login incorrect or refused on this terminal.\n");
 		failures++;
 		cnt++;
-		/* we allow 10 tries, but after 3 we start backing off */
+		/*
+		 * We allow login_retries tries, but after login_backoff
+		 * we start backing off.  These default to 10 and 3
+		 * respectively.
+		 */
 		if (cnt > login_backoff) {
 			if (cnt >= login_retries) {
 				badlogin(username);
 				pam_end(pamh, PAM_SUCCESS);
 				sleepexit(EXIT_FAILURE);
 			}
-			sleep((u_int)((cnt - 3) * 5));
+			sleep((u_int)((cnt - login_backoff) * 5));
 		}
 	}
 
@@ -468,7 +471,7 @@ skip_auth:
 
 	if (!quietlog) {
 		quietlog = access(_PATH_HUSHLOGIN, F_OK) == 0;
-		pam_silent = 0;
+		pam_silent = quietlog ? PAM_SILENT : 0;
 	}
 
 	/* regain special privileges */
@@ -476,8 +479,9 @@ skip_auth:
 	setgroups(nsaved_gids, saved_gids);
 	seteuid(saved_uid);
 
+	(void)getgrnam_r(TTYGRPNAME, &grs, grbuf, sizeof(grbuf), &grp);
 	(void)chown(ttyn, pwd->pw_uid,
-	    (gr = getgrnam(TTYGRPNAME)) ? gr->gr_gid : pwd->pw_gid);
+	    (grp != NULL) ? grp->gr_gid : pwd->pw_gid);
 
 	if (ttyaction(ttyn, "login", pwd->pw_name))
 		(void)printf("Warning: ttyaction failed.\n");
@@ -525,11 +529,8 @@ skip_auth:
 	/*
 	 * Fork because we need to call pam_closesession as root.
 	 * Make sure signals cannot kill the parent.
-	 * This is copied from crontab(8), which has to
-         * cope with a similar situation.
+	 * This has been handled in the begining of main.
 	 */
-	oint = signal(SIGINT, SIG_IGN);
-	oabrt = signal(SIGABRT, SIG_IGN);
 
 	switch(pid = fork()) {
 	case -1:
@@ -571,8 +572,10 @@ skip_auth:
 			exit(EXIT_FAILURE);
 		}
 		
-		(void)signal(SIGINT, oint);
 		(void)signal(SIGABRT, oabrt);
+		(void)signal(SIGALRM, oalrm);
+		(void)signal(SIGINT, oint);
+		(void)signal(SIGQUIT, oquit);
 		if ((pam_err = pam_close_session(pamh, 0)) != PAM_SUCCESS) {
 			syslog(LOG_ERR, "pam_close_session: %s",
 			    pam_strerror(pamh, pam_err));
@@ -670,14 +673,16 @@ skip_auth:
 
 	login_close(lc);
 
-	(void)signal(SIGALRM, SIG_DFL);
-	(void)signal(SIGQUIT, SIG_DFL);
-	(void)signal(SIGINT, SIG_DFL);
-	(void)signal(SIGTSTP, SIG_IGN);
 
 	tbuf[0] = '-';
 	(void)strlcpy(tbuf + 1, (p = strrchr(pwd->pw_shell, '/')) ?
 	    p + 1 : pwd->pw_shell, sizeof(tbuf) - 1);
+
+	(void)signal(SIGABRT, oabrt);
+	(void)signal(SIGALRM, oalrm);
+	(void)signal(SIGINT, oint);
+	(void)signal(SIGQUIT, oquit);
+	(void)signal(SIGTSTP, SIG_IGN);
 
 	execlp(pwd->pw_shell, tbuf, NULL);
 	err(EXIT_FAILURE, "%s", pwd->pw_shell);
@@ -774,7 +779,8 @@ update_db(int quietlog)
 	}
 	if (hostname != NULL && have_ss == 0) {
 		socklen_t len = sizeof(ss);
-		(void)getpeername(STDIN_FILENO, (struct sockaddr *)&ss, &len);
+		have_ss = getpeername(STDIN_FILENO, (struct sockaddr *)&ss,
+		    &len) != -1;
 	}
 	(void)gettimeofday(&now, NULL);
 }
@@ -833,13 +839,14 @@ decode_ss(const char *arg)
 
 	(void)memcpy(&ss, ssp, sizeof(ss));
 	have_ss = 1;
+	free(ssp);
 }
 
 void
 usage(void)
 {
 	(void)fprintf(stderr,
-	    "Usage: %s [-Ffps] [-a address] [-h hostname] [username]\n",
+	    "Usage: %s [-fp] [-a address] [-h hostname] [username]\n",
 	    getprogname());
 	exit(EXIT_FAILURE);
 }

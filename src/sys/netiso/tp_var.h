@@ -1,4 +1,4 @@
-/*	$NetBSD: tp_var.h,v 1.9 2005/02/26 22:39:49 perry Exp $	*/
+/*	$NetBSD: tp_var.h,v 1.12 2005/12/11 12:25:12 christos Exp $	*/
 
 /*-
  * Copyright (c) 1995 The NetBSD Foundation, Inc.
@@ -35,6 +35,9 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+
+#ifndef _NETISO_TP_VAR_H_
+#define _NETISO_TP_VAR_H_
 
 #ifdef _KERNEL
 struct isopcb;
@@ -157,7 +160,6 @@ void tp0_stash  (struct tp_pcb *, struct tp_event *);
 void tp0_openflow (struct tp_pcb *);
 int tp_setup_perf (struct tp_pcb *);
 void dump_addr   (struct sockaddr *);
-void Dump_buf    (caddr_t, int);
 
 /* tp_timer.c */
 void tp_timerinit (void);
@@ -174,12 +176,12 @@ void tp_cuntimeout (struct tp_pcb *, int);
 void tpTrace    (struct tp_pcb *, u_int, u_int, u_int, u_int, u_int, u_int);
 
 /* tp_usrreq.c */
-void dump_mbuf  (struct mbuf *, char *);
+void dump_mbuf  (struct mbuf *, const char *);
 int tp_rcvoob   (struct tp_pcb *, struct socket *, struct mbuf *,
 		     int *, int);
 int tp_sendoob  (struct tp_pcb *, struct socket *, struct mbuf *, int *);
 int tp_usrreq   (struct socket *, int, struct mbuf *, struct mbuf *,
-		     struct mbuf *, struct proc *);
+		     struct mbuf *, struct lwp *);
 void tp_ltrace   (struct socket *, struct uio *);
 int tp_confirm  (struct tp_pcb *);
 int tp_snd_control (struct mbuf *, struct socket *, struct mbuf **);
@@ -197,3 +199,5 @@ int find_error_reason (struct x25_packet *);
 #endif
 
 #endif
+
+#endif /* !_NETISO_TP_VAR_H_ */

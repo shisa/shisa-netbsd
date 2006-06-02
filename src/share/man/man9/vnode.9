@@ -1,6 +1,6 @@
-.\"     $NetBSD: vnode.9,v 1.26 2005/01/01 04:06:48 wiz Exp $
+.\"     $NetBSD: vnode.9,v 1.32 2006/03/03 13:38:29 rumble Exp $
 .\"
-.\" Copyright (c) 2001 The NetBSD Foundation, Inc.
+.\" Copyright (c) 2001, 2005, 2006 The NetBSD Foundation, Inc.
 .\" All rights reserved.
 .\"
 .\" This code is derived from software contributed to The NetBSD Foundation
@@ -34,7 +34,7 @@
 .\" ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 .\" POSSIBILITY OF SUCH DAMAGE.
 .\"
-.Dd December 31, 2004
+.Dd March 2, 2006
 .Dt VNODE 9
 .Os
 .Sh NAME
@@ -95,11 +95,11 @@
 .Ft void
 .Fn ungetnewvnode "struct vnode *vp"
 .Ft int
-.Fn vrecycle "struct vnode *vp" "struct simplelock *inter_lkp" "struct proc *p"
+.Fn vrecycle "struct vnode *vp" "struct simplelock *inter_lkp" "struct lwp *l"
 .Ft void
 .Fn vgone "struct vnode *vp"
 .Ft void
-.Fn vgonel "struct vnode *vp"
+.Fn vgonel "struct vnode *vp" "struct lwp *l"
 .Ft int
 .Fn vflush "struct mount *mp" "struct vnode *skipvp" "int flags"
 .Ft int
@@ -119,7 +119,7 @@
 .Ft void
 .Fn vflushbuf "struct vnode *vp" "int sync"
 .Ft int
-.Fn vinvalbuf "struct vnode *vp" "int flags" "struct ucred *cred" "struct proc *p" "int slpflag" "int slptimeo"
+.Fn vinvalbuf "struct vnode *vp" "int flags" "struct ucred *cred" "struct lwp *l" "int slpflag" "int slptimeo"
 .Ft int
 .Fn vtruncbuf "struct vnode *vp" "daddr_t lbn" "int slpflag" "int slptimeo"
 .Ft void
@@ -200,7 +200,7 @@ contains the data maintained by the virtual memory system.
 For compatibility with code written before the integration of
 .Xr uvm 9
 into
-.Nx
+.Nx ,
 C-preprocessor directives are used to alias the members of
 .Em v_uobj .
 .Pp
@@ -213,13 +213,19 @@ Valid flags are:
 This vnode is the root of its file system.
 .It VTEXT
 This vnode is a pure text prototype.
-.It VEXECMAP
-This vnode has executable mappings.
 .It VSYSTEM
-This vnode being used by kernel; only used to skip quota files in
+This vnode is being used by the kernel; only used to skip quota files in
 .Fn vflush .
 .It VISTTY
 This vnode represents a tty; used when reading dead vnodes.
+.It VEXECMAP
+This vnode has executable mappings.
+.It VWRITEMAP
+This vnode might have PROT_WRITE user mappings.
+.It VWRITEMAPDIRTY
+This vnode might have dirty pages due to VWRITEMAP
+.It VLOCKSWORK
+This vnode's file system supports locking.
 .It VXLOCK
 This vnode is currently locked to change underlying type.
 .It VXWANT
@@ -235,12 +241,14 @@ This flag is used exclusively by LFS.
 This vnode is on a layered file system.
 .It VONWORKLST
 This vnode is on syncer work-list.
+.It VFREEING
+This vnode is being freed.
 .El
 .Pp
 The VXLOCK flag is used to prevent multiple processes from entering
 the vnode reclamation code.
 It is also used as a flag to indicate that reclamation is in progress.
-The VXWANT flag is set by threads that wish to be awaken when
+The VXWANT flag is set by threads that wish to be awakened when
 reclamation is finished.
 Before
 .Em v_flag
@@ -343,7 +351,7 @@ When a valid vnode which is on the freelist is used again, the user
 must call
 .Fn vget
 to increment the reference count and retrieve it from the freelist.
-When a user wants a new vnode for another file
+When a user wants a new vnode for another file,
 .Fn getnewvnode
 is invoked to remove a vnode from the freelist and initialize it for
 the new file.
@@ -436,6 +444,14 @@ virtual file system
 overlay file system
 .It VT_SMBFS
 SMB file system
+.It VT_PTYFS
+pseudo-terminal device file system
+.It VT_TMPFS
+efficient memory file system
+.It VT_UDF
+universal disk format file system
+.It VT_SYSVBFS
+systemV boot file system
 .El
 .Pp
 All vnode locking operations use
@@ -570,7 +586,7 @@ Unlock vnode
 .Fa vp
 and decrement its
 .Em v_usecount .
-Depending of the reference counts, move the vnode to the holdlist or
+Depending on the reference counts, move the vnode to the holdlist or
 the freelist.
 This operation is functionally equivalent to calling
 .Xr VOP_UNLOCK 9
@@ -638,7 +654,7 @@ This function is needed for
 .Xr VFS_VGET 9
 which may need to push back a vnode in case of a locking race
 condition.
-.It Fn vrecycle "vp" "inter_lkp" "p"
+.It Fn vrecycle "vp" "inter_lkp" "l"
 Recycle the unused vnode
 .Fa vp
 to the front of the freelist.
@@ -648,7 +664,7 @@ is a null operation if the reference count is greater than zero.
 Eliminate all activity associated with the unlocked vnode
 .Fa vp
 in preparation for recycling.
-.It Fn vgonel "vp"
+.It Fn vgonel "vp" "p"
 Eliminate all activity associated with the locked vnode
 .Fa vp
 in preparation for recycling.
@@ -724,11 +740,11 @@ will sleep until
 is zero and
 .Em vp-\*[Gt]v_dirtyblkhd
 is empty.
-.It Fn vinvalbuf "vp" "flags" "cred" "p" "slpflag" "slptimeo"
+.It Fn vinvalbuf "vp" "flags" "cred" "l" "slpflag" "slptimeo"
 Flush out and invalidate all buffers associated with locked vnode
 .Fa vp .
 The argument
-.Fa p
+.Fa l
 and
 .Fa cred
 specified the calling process and its credentials.

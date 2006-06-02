@@ -1,4 +1,4 @@
-/*	$NetBSD: util.c,v 1.9 2002/09/23 12:48:10 mycroft Exp $	*/
+/*	$NetBSD: util.c,v 1.12 2006/05/25 02:37:38 christos Exp $	*/
 
 /*-
  * Copyright (c) 2000 The NetBSD Foundation, Inc.
@@ -41,6 +41,7 @@
 #include <sys/queue.h>
 #include <net/if.h>
 #include <netinet/in.h>
+#include <assert.h>
 #include <ifaddrs.h>
 #include <poll.h>
 #include <rpc/rpc.h>
@@ -121,6 +122,11 @@ addrmerge(struct netbuf *caller, char *serv_uaddr, char *clnt_uaddr,
 	struct netconfig *nconf;
 	struct sockaddr *clnt = caller->buf;
 	char *ret = NULL;
+
+#ifdef INET6
+	servsin6 = ifsin6 = newsin6 = NULL;	/* XXXGCC -Wuninitialized */
+#endif
+	servsin = newsin = NULL;		/* XXXGCC -Wuninitialized */
 
 #ifdef ND_DEBUG
 	if (debugging)
@@ -275,6 +281,7 @@ found:
 		break;				
 #ifdef INET6
 	case AF_INET6:
+		assert(newsin6);
 		memcpy(newsin6, ifsin6, clnt_sa->sa_len);
 		newsin6->sin6_port = servsin6->sin6_port;
 		tbuf.maxlen = sizeof (struct sockaddr_storage);

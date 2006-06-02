@@ -1,4 +1,4 @@
-/*	$NetBSD: geodeide.c,v 1.8.2.2 2005/07/12 11:39:44 tron Exp $	*/
+/*	$NetBSD: geodeide.c,v 1.11 2005/12/11 12:22:49 christos Exp $	*/
 
 /*
  * Copyright (c) 2004 Manuel Bouyer.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: geodeide.c,v 1.8.2.2 2005/07/12 11:39:44 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: geodeide.c,v 1.11 2005/12/11 12:22:49 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>

@@ -1,4 +1,4 @@
-/*	$NetBSD: autoconf.c,v 1.62 2005/01/15 16:00:59 chs Exp $	*/
+/*	$NetBSD: autoconf.c,v 1.65 2006/03/28 17:38:25 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -49,7 +49,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.62 2005/01/15 16:00:59 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.65 2006/03/28 17:38:25 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -83,7 +83,7 @@ cpu_configure(void)
 	mrg_init();		/* Init Mac ROM Glue */
 	startrtclock();		/* start before ADB attached */
 
-	if (config_rootfound("mainbus", "mainbus") == NULL)
+	if (config_rootfound("mainbus", NULL) == NULL)
 		panic("No mainbus found!");
 
 	(void)spl0();
@@ -179,7 +179,7 @@ extern	struct cfdriver		scsibus_cd;
 				if (periph != NULL) {
 					sc_dev = (struct device *)
 							periph->periph_dev;
-					return sc_dev->dv_unit;
+					return device_unit(sc_dev);
 				}
 			}
 		}
@@ -195,7 +195,7 @@ extern	struct cfdriver		scsibus_cd;
 		    target, lun);
 		if (periph != NULL) {
 			sc_dev = (struct device *) periph->periph_dev;
-			return sc_dev->dv_unit;
+			return device_unit(sc_dev);
 		}
 	}
 	return -1;

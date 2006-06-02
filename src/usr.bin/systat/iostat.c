@@ -1,4 +1,4 @@
-/*	$NetBSD: iostat.c,v 1.32 2005/02/26 22:28:23 dsl Exp $	*/
+/*	$NetBSD: iostat.c,v 1.36 2006/04/14 13:14:06 blymn Exp $	*/
 
 /*
  * Copyright (c) 1980, 1992, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)iostat.c	8.1 (Berkeley) 6/6/93";
 #endif
-__RCSID("$NetBSD: iostat.c,v 1.32 2005/02/26 22:28:23 dsl Exp $");
+__RCSID("$NetBSD: iostat.c,v 1.36 2006/04/14 13:14:06 blymn Exp $");
 #endif /* not lint */
 
 #include <sys/param.h>
@@ -43,7 +43,7 @@ __RCSID("$NetBSD: iostat.c,v 1.32 2005/02/26 22:28:23 dsl Exp $");
 
 #include "systat.h"
 #include "extern.h"
-#include "dkstats.h"
+#include "drvstats.h"
 
 static  int linesperregion;
 static  double etime;
@@ -80,8 +80,9 @@ int
 initiostat(void)
 {
 
-	dkinit(1);
-	dkreadstats();
+	drvinit(1);
+	cpureadstats();
+	drvreadstats();
 	return(1);
 }
 
@@ -89,9 +90,10 @@ void
 fetchiostat(void)
 {
 
-	if (dk_ndrive == 0)
-		return;
-	dkreadstats();
+	cpureadstats();
+
+	if (ndrive != 0)
+		drvreadstats();
 }
 
 #define	INSET	14
@@ -101,7 +103,7 @@ labeliostat(void)
 {
 	int row;
 
-	if (dk_ndrive == 0) {
+	if (ndrive == 0) {
 		error("No drives defined.");
 		return;
 	}
@@ -127,9 +129,10 @@ numlabels(int row)
 
 #define COLWIDTH	(9 + secs * 5 + 1 + read_write * 9 + 1)
 #define DRIVESPERLINE	((getmaxx(wnd) + 1) / COLWIDTH)
-	for (ndrives = 0, i = 0; i < dk_ndrive; i++)
-		if (cur.dk_select[i])
+	for (ndrives = 0, i = 0; i < ndrive; i++)
+		if (cur.select[i])
 			ndrives++;
+
 	regions = howmany(ndrives, DRIVESPERLINE);
 	/*
 	 * Deduct -regions for blank line after each scrolling region.
@@ -142,14 +145,16 @@ numlabels(int row)
 	if (linesperregion < 3)
 		linesperregion = 3;
 	col = 0;
-	for (i = 0; i < dk_ndrive; i++)
-		if (cur.dk_select[i]) {
+	for (i = 0; i < ndrive; i++)
+		if (cur.select[i]) {
 			if (col + COLWIDTH - 1 > getmaxx(wnd)) {
 				col = 0, row += linesperregion + 1;
 				if (row > getmaxy(wnd) - (linesperregion))
 					break;
 			}
-			mvwprintw(wnd, row, col + 5, "%s", cur.dk_name[i]);
+
+			mvwprintw(wnd, row, col + 5, "%s", cur.name[i]);
+
 			if (read_write)
 				mvwprintw(wnd, row, col + 11 + secs * 5,
 				    "(write)");
@@ -174,12 +179,12 @@ barlabels(int row)
 	mvwaddstr(wnd, row++, INSET,
 	    "/0   /10  /20  /30  /40  /50  /60  /70  /80  /90  /100");
 	linesperregion = 2 + secs + (read_write ? 2 : 0);
-	for (i = 0; i < dk_ndrive; i++)
-		if (cur.dk_select[i]) {
+	for (i = 0; i < ndrive; i++) {
+		if (cur.select[i]) {
 			if (row > getmaxy(wnd) - linesperregion)
 				break;
 			mvwprintw(wnd, row++, 0, "%7.7s  kBps|",
-			    cur.dk_name[i]);
+			    cur.name[i]);
 			mvwaddstr(wnd, row++, 0, "          tps|");
 			if (read_write) {
 				mvwprintw(wnd, row++, 0, " (write) kBps|");
@@ -188,6 +193,8 @@ barlabels(int row)
 			if (secs)
 				mvwaddstr(wnd, row++, 0, "         msec|");
 		}
+	}
+
 	return (row);
 }
 
@@ -196,9 +203,10 @@ showiostat(void)
 {
 	int i, row, col;
 
-	if (dk_ndrive == 0)
+	if (ndrive == 0)
 		return;
-	dkswap();
+	cpuswap();
+	drvswap();
 
 	etime = cur.cp_etime;
 	row = 1;
@@ -210,8 +218,8 @@ showiostat(void)
 		stat1(row++, i);
 	if (!numbers) {
 		row += 2;
-		for (i = 0; i < dk_ndrive; i++)
-			if (cur.dk_select[i]) {
+		for (i = 0; i < ndrive; i++)
+			if (cur.select[i]) {
 				if (row > getmaxy(wnd) - linesperregion)
 					break;
 				row = stats(row, INSET, i);
@@ -223,8 +231,8 @@ showiostat(void)
 	wdeleteln(wnd);
 	wmove(wnd, row + 3, 0);
 	winsertln(wnd);
-	for (i = 0; i < dk_ndrive; i++)
-		if (cur.dk_select[i]) {
+	for (i = 0; i < ndrive; i++)
+		if (cur.select[i]) {
 			if (col + COLWIDTH - 1 > getmaxx(wnd)) {
 				col = 0, row += linesperregion + 1;
 				if (row > getmaxy(wnd) - (linesperregion + 1))
@@ -246,16 +254,16 @@ stats(int row, int col, int dn)
 	uint64_t rxfer;
 
 	/* time busy in disk activity */
-	atime = (double)cur.dk_time[dn].tv_sec +
-		((double)cur.dk_time[dn].tv_usec / (double)1000000);
+	atime = (double)cur.time[dn].tv_sec +
+		((double)cur.time[dn].tv_usec / (double)1000000);
 
 	/* # of k transferred */
-	rwords = cur.dk_rbytes[dn] / 1024.0;
-	wwords = cur.dk_wbytes[dn] / 1024.0;
-	rxfer = cur.dk_rxfer[dn];
+	rwords = cur.rbytes[dn] / 1024.0;
+	wwords = cur.wbytes[dn] / 1024.0;
+	rxfer = cur.rxfer[dn];
 	if (!read_write) {
-		rwords = wwords;
-		rxfer += cur.dk_wxfer[dn];
+		rwords += wwords;
+		rxfer += cur.wxfer[dn];
 	}
 	if (numbers) {
 		mvwprintw(wnd, row, col, "%5.0f%4.0f",
@@ -264,7 +272,7 @@ stats(int row, int col, int dn)
 			wprintw(wnd, "%5.1f", atime / etime);
 		if (read_write)
 			wprintw(wnd, " %5.0f%4.0f",
-			    wwords / etime, cur.dk_wxfer[dn] / etime);
+			    wwords / etime, cur.wxfer[dn] / etime);
 		return (row);
 	}
 
@@ -276,7 +284,7 @@ stats(int row, int col, int dn)
 		wmove(wnd, row++, col);
 		histogram(wwords / etime, 50, 0.5);
 		wmove(wnd, row++, col);
-		histogram(cur.dk_wxfer[dn] / etime, 50, 0.5);
+		histogram(cur.wxfer[dn] / etime, 50, 0.5);
 	}
 
 	if (secs) {

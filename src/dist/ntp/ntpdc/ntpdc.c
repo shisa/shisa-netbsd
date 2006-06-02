@@ -1,4 +1,4 @@
-/*	$NetBSD: ntpdc.c,v 1.5 2003/12/04 16:23:38 drochner Exp $	*/
+/*	$NetBSD: ntpdc.c,v 1.8 2006/05/14 01:31:14 christos Exp $	*/
 
 /*
  * ntpdc - control and monitor your ntpd daemon
@@ -543,8 +543,7 @@ openhost(
 		    ai->ai_addrlen) == -1)
 #endif /* SYS_VXWORKS */
 	    error("connect", "", "");
-	if (a_info)
-		freeaddrinfo(ai);
+	freeaddrinfo(ai);
 	havehost = 1;
 	req_pkt_size = REQ_LEN_NOMAC;
 	impl_ver = IMPL_XNTPD;
@@ -1105,7 +1104,7 @@ docmd(
 	int ntok;
 	int i, ti;
 	int rval;
-	struct xcmd *xcmd;
+	struct xcmd *xcmd = NULL;	/* XXX: GCC */
 
 	ai_fam_templ = ai_fam_default;
 	/*
@@ -1451,7 +1450,7 @@ help(
 {
 	int i;
 	int n;
-	struct xcmd *xcp;
+	struct xcmd *xcp = NULL;	/* XXX: GCC */
 	char *cmd;
 	const char *cmdsort[100];
 	int length[100];

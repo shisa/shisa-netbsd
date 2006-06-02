@@ -1,4 +1,4 @@
-#	$NetBSD: sys.mk,v 1.84 2004/08/07 21:43:18 chs Exp $
+#	$NetBSD: sys.mk,v 1.86 2006/05/12 02:03:35 mrg Exp $
 #	@(#)sys.mk	8.2 (Berkeley) 3/21/94
 
 unix?=		We run NetBSD.
@@ -42,7 +42,7 @@ COMPILE.c?=	${CC} ${CFLAGS} ${CPPFLAGS} -c
 LINK.c?=	${CC} ${CFLAGS} ${CPPFLAGS} ${LDFLAGS}
 
 CXX?=		c++
-CXXFLAGS?=	${CFLAGS:S/-Wno-traditional//}
+CXXFLAGS?=	${CFLAGS:N-Wno-traditional:N-Wstrict-prototypes:N-Wmissing-prototypes}
 COMPILE.cc?=	${CXX} ${CXXFLAGS} ${CPPFLAGS} -c
 LINK.cc?=	${CXX} ${CXXFLAGS} ${CPPFLAGS} ${LDFLAGS}
 
@@ -74,7 +74,7 @@ LFLAGS?=
 LEX.l?=		${LEX} ${LFLAGS}
 
 LINT?=		lint
-LINTFLAGS?=	-chapbxzF
+LINTFLAGS?=	-chapbxzFS
 
 LORDER?=	lorder
 

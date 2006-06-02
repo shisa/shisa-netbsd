@@ -1,9 +1,9 @@
-/*	$NetBSD: iconv.c,v 1.8 2004/04/21 18:16:14 itojun Exp $	*/
+/*	$NetBSD: iconv.c,v 1.10 2005/12/11 12:25:16 christos Exp $	*/
 
 /* Public domain */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: iconv.c,v 1.8 2004/04/21 18:16:14 itojun Exp $");
+__KERNEL_RCSID(0, "$NetBSD: iconv.c,v 1.10 2005/12/11 12:25:16 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/kernel.h>
@@ -35,7 +35,7 @@ iconv_conv(void *handle, const char **inbuf,
 	if (inbuf == NULL)
 		return(0); /* initial shift state */
 
-	memcpy((void *)*inbuf, (void *)*outbuf, *inbytesleft);
+	(void)memcpy(*outbuf, *inbuf, *inbytesleft);
 
 	*outbytesleft -= *inbytesleft;
 

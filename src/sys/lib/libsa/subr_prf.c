@@ -1,4 +1,4 @@
-/*	$NetBSD: subr_prf.c,v 1.10 2003/08/07 16:32:30 agc Exp $	*/
+/*	$NetBSD: subr_prf.c,v 1.15 2006/01/27 02:28:36 uwe Exp $	*/
 
 /*-
  * Copyright (c) 1993
@@ -37,6 +37,7 @@
 
 #include <sys/cdefs.h>
 #include <sys/types.h>
+#include <sys/stdint.h>		/* XXX: for intptr_t */
 #include <machine/stdarg.h>
 
 #include "stand.h"
@@ -46,6 +47,9 @@ static void sputchar(int);
 static void kdoprnt(void (*)(int), const char *, va_list);
 
 static char *sbuf, *ebuf;
+
+const char HEXDIGITS[] = "0123456789ABCDEF";
+const char hexdigits[] = "0123456789abcdef";
 
 static void
 sputchar(int c)
@@ -92,6 +96,16 @@ reswitch:	switch (ch = *fmt++) {
 		case 'l':
 			lflag = 1;
 			goto reswitch;
+		case 't':
+#if 0 /* XXX: abuse intptr_t until the situation with ptrdiff_t is clear */
+			lflag = (sizeof(ptrdiff_t) == sizeof(long));
+#else
+			lflag = (sizeof(intptr_t) == sizeof(long));
+#endif
+			goto reswitch;
+		case 'z':
+			lflag = (sizeof(size_t) == sizeof(unsigned long));
+			goto reswitch;
 		case 'c':
 			ch = va_arg(ap, int);
 				put(ch & 0x7f);
@@ -124,7 +138,7 @@ reswitch:	switch (ch = *fmt++) {
 			put('0');
 			put('x');
 			lflag = 1;
-			/* fall through */
+			/* FALLTHROUGH */
 		case 'x':
 			ul = lflag ?
 			    va_arg(ap, u_long) : va_arg(ap, u_int);
@@ -149,7 +163,7 @@ kprintn(void (*put)(int), unsigned long ul, int base)
 
 	p = buf;
 	do {
-		*p++ = "0123456789abcdef"[ul % base];
+		*p++ = hexdigits[ul % base];
 	} while (ul /= base);
 	do {
 		put(*--p);

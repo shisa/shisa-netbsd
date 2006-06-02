@@ -1,4 +1,4 @@
-/*	$NetBSD: apmd.c,v 1.27 2004/01/06 13:29:55 wiz Exp $	*/
+/*	$NetBSD: apmd.c,v 1.29 2006/05/09 20:18:09 mrg Exp $	*/
 
 /*-
  * Copyright (c) 1996, 2000 The NetBSD Foundation, Inc.
@@ -188,7 +188,7 @@ handle_client(int sock_fd, int ctl_fd)
     /* accept a handle from the client, process it, then clean up */
     int cli_fd;
     struct sockaddr_un from;
-    int fromlen = sizeof(from);
+    socklen_t fromlen = sizeof(from);
     struct apm_command cmd;
     struct apm_reply reply;
 
@@ -320,8 +320,8 @@ main(int argc, char *argv[])
     const char *sockname = sockfile;
     char *user, *group;
     char *scratch;
-    uid_t uid = 0;
-    gid_t gid = 0;
+    uid_t uid = 2; /* operator */
+    gid_t gid = 5; /* operator */
     struct passwd *pw;
     struct group *gr;
 

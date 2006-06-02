@@ -1,4 +1,4 @@
-/*	$NetBSD: uscanner.c,v 1.47 2005/02/27 00:27:51 perry Exp $	*/
+/*	$NetBSD: uscanner.c,v 1.51 2006/03/28 17:38:35 thorpej Exp $	*/
 
 /*
  * Copyright (c) 2000 The NetBSD Foundation, Inc.
@@ -39,7 +39,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: uscanner.c,v 1.47 2005/02/27 00:27:51 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: uscanner.c,v 1.51 2006/03/28 17:38:35 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -320,13 +320,14 @@ USB_ATTACH(uscanner)
 	USB_ATTACH_START(uscanner, sc, uaa);
 	usb_interface_descriptor_t *id = 0;
 	usb_endpoint_descriptor_t *ed, *ed_bulkin = NULL, *ed_bulkout = NULL;
-	char devinfo[1024];
+	char *devinfop;
 	int i;
 	usbd_status err;
 
-	usbd_devinfo(uaa->device, 0, devinfo, sizeof(devinfo));
+	devinfop = usbd_devinfo_alloc(uaa->device, 0);
 	USB_ATTACH_SETUP;
-	printf("%s: %s\n", USBDEVNAME(sc->sc_dev), devinfo);
+	printf("%s: %s\n", USBDEVNAME(sc->sc_dev), devinfop);
+	usbd_devinfo_free(devinfop);
 
 	sc->sc_dev_flags = uscanner_lookup(uaa->vendor, uaa->product)->flags;
 
@@ -393,7 +394,7 @@ USB_ATTACH(uscanner)
 }
 
 int
-uscanneropen(dev_t dev, int flag, int mode, usb_proc_ptr p)
+uscanneropen(dev_t dev, int flag, int mode, struct lwp *l)
 {
 	struct uscanner_softc *sc;
 	int unit = USCANNERUNIT(dev);
@@ -456,7 +457,7 @@ uscanneropen(dev_t dev, int flag, int mode, usb_proc_ptr p)
 }
 
 int
-uscannerclose(dev_t dev, int flag, int mode, usb_proc_ptr p)
+uscannerclose(dev_t dev, int flag, int mode, struct lwp *l)
 {
 	struct uscanner_softc *sc;
 
@@ -680,7 +681,7 @@ USB_DETACH(uscanner)
 #endif
 
 	/* Nuke the vnodes for any open instances (calls close). */
-	mn = self->dv_unit * USB_MAX_ENDPOINTS;
+	mn = device_unit(self) * USB_MAX_ENDPOINTS;
 	vdevgone(maj, mn, mn + USB_MAX_ENDPOINTS - 1, VCHR);
 #elif defined(__FreeBSD__)
 	/* destroy the device for the control endpoint */
@@ -698,7 +699,7 @@ USB_DETACH(uscanner)
 }
 
 int
-uscannerpoll(dev_t dev, int events, usb_proc_ptr p)
+uscannerpoll(dev_t dev, int events, struct lwp *l)
 {
 	struct uscanner_softc *sc;
 	int revents = 0;
@@ -706,7 +707,7 @@ uscannerpoll(dev_t dev, int events, usb_proc_ptr p)
 	USB_GET_SC(uscanner, USCANNERUNIT(dev), sc);
 
 	if (sc->sc_dying)
-		return (EIO);
+		return (POLLHUP);
 
 	/*
 	 * We have no easy way of determining if a read will
@@ -765,7 +766,7 @@ uscannerkqfilter(dev_t dev, struct knote *kn)
 }
 
 int
-uscannerioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, usb_proc_ptr p)
+uscannerioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, struct lwp *l)
 {
 	return (EINVAL);
 }

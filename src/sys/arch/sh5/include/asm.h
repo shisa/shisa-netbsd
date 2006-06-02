@@ -1,4 +1,4 @@
-/*	$NetBSD: asm.h,v 1.10 2003/08/10 22:18:12 scw Exp $	*/
+/*	$NetBSD: asm.h,v 1.12 2006/01/20 22:02:40 christos Exp $	*/
 
 /*
  * Copyright 2002 Wasabi Systems, Inc.
@@ -184,6 +184,12 @@
 
 #define	WEAK_ALIAS(alias,sym)						\
 	.weak _C_LABEL(alias);						\
+	_C_LABEL(alias) = _C_LABEL(sym)
+/*
+ * STRONG_ALIAS: create a strong alias.
+ */
+#define STRONG_ALIAS(alias,sym)						\
+	.globl _C_LABEL(alias);						\
 	_C_LABEL(alias) = _C_LABEL(sym)
 
 #ifdef __STDC__

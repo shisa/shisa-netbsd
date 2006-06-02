@@ -1,4 +1,4 @@
-/* $NetBSD: shquote.c,v 1.6 2005/02/09 21:35:46 kleink Exp $ */
+/* $NetBSD: shquote.c,v 1.8 2006/03/19 02:33:02 christos Exp $ */
 
 /*
  * Copyright (c) 2001 Christopher G. Demetriou
@@ -33,6 +33,11 @@
  * 
  * <<Id: LICENSE,v 1.2 2000/06/14 15:57:33 cgd Exp>>
  */
+
+#include <sys/cdefs.h>
+#if defined(LIBC_SCCS) && !defined(lint)
+__RCSID("$NetBSD: shquote.c,v 1.8 2006/03/19 02:33:02 christos Exp $");
+#endif /* LIBC_SCCS and not lint */
 
 /*
  * Define SHQUOTE_USE_MULTIBYTE if you want shquote() to handle multibyte
@@ -146,8 +151,6 @@ shquote(const char *arg, char *buf, size_t bufsize)
 		PUT('\'');
 	for (;;) {
 		XLATE_INCH();
-		if (n == (size_t)-1)
-			goto bad;
 		if (n <= 0)
 			break;
 		arg += n;

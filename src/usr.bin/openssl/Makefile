@@ -1,11 +1,11 @@
-#	$NetBSD: Makefile,v 1.20 2005/03/09 03:11:22 christos Exp $
+#	$NetBSD: Makefile,v 1.24 2006/02/25 12:00:24 simonb Exp $
 
 NOMAN=	# defined
 
 .include <bsd.own.mk>
 
 # RCSid:
-#	$Id: Makefile,v 1.20 2005/03/09 03:11:22 christos Exp $
+#	$Id: Makefile,v 1.24 2006/02/25 12:00:24 simonb Exp $
 #
 #	@(#) Copyright (c) 1995 Simon J. Gerraty
 #
@@ -26,13 +26,13 @@ WARNS=0
 PROG=	openssl
 
 SRCS=	openssl.c
-SRCS+=	apps.c
+SRCS+=	apps.c ecparam.c ec.c
 SRCS+=	s_cb.c s_socket.c
 SRCS+=	app_rand.c
 SRCS+=	verify.c asn1pars.c req.c dgst.c dh.c dhparam.c enc.c passwd.c gendh.c errstr.c ca.c \
 	pkcs7.c crl2p7.c crl.c \
 	rsa.c rsautl.c dsa.c dsaparam.c \
-	x509.c genrsa.c gendsa.c s_server.c s_client.c speed.c \
+	x509.c genrsa.c gendsa.c prime.c s_server.c s_client.c speed.c \
 	s_time.c version.c sess_id.c \
 	ciphers.c nseq.c pkcs12.c pkcs8.c spkac.c smime.c rand.c engine.c ocsp.c
 
@@ -62,8 +62,6 @@ DPADD+=	${LIBCRYPTO_RC5}
 # this must be _after_ the libcrypto_rc5/libcrypto_idea entries.
 LDADD+=	-lssl -lcrypto -lcrypt
 DPADD+=	${LIBSSL} ${LIBCRYPTO} ${LIBCRYPT}
-LDADD+=	-lcompat
-DPADD+=	${LIBCOMPAT}
 
 CRYPTODIST=	${NETBSDSRCDIR}/crypto/dist
 .include "${NETBSDSRCDIR}/crypto/Makefile.openssl"
@@ -107,7 +105,7 @@ CRYPTODIST=	${NETBSDSRCDIR}/crypto/dist
 #	openssl ocsp
 
 .if ${MKSHARE} != "no"
-FILES=  CA.sh CA.pl der_chop openssl.cnf
+FILES=  CA.sh CA.pl openssl.cnf
 FILESDIR=/usr/share/examples/openssl
 .endif
 

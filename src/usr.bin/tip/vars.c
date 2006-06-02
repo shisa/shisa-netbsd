@@ -1,4 +1,4 @@
-/*	$NetBSD: vars.c,v 1.7 2004/04/23 22:11:44 christos Exp $	*/
+/*	$NetBSD: vars.c,v 1.12 2006/04/03 04:53:58 christos Exp $	*/
 
 /*
  * Copyright (c) 1983, 1993
@@ -34,83 +34,82 @@
 #if 0
 static char sccsid[] = "@(#)vars.c	8.1 (Berkeley) 6/6/93";
 #endif
-__RCSID("$NetBSD: vars.c,v 1.7 2004/04/23 22:11:44 christos Exp $");
+__RCSID("$NetBSD: vars.c,v 1.12 2006/04/03 04:53:58 christos Exp $");
 #endif /* not lint */
 
 #include "tip.h"
 #include "pathnames.h"
 
-static char path_aculog[] = _PATH_ACULOG;
 static char path_bshell[] = _PATH_BSHELL;
 /*
  * Definition of variables
  */
 value_t vtable[] = {
 	{ "beautify",	BOOL,			(READ|WRITE)<<PUBLIC,
-	  "be",		(char *)TRUE },
+	  "be",		(void *)TRUE },
 	{ "baudrate",	NUMBER|IREMOTE|INIT,	(READ<<PUBLIC)|(WRITE<<ROOT),
-	  "ba",		(char *)&BR },
+	  "ba",		&BR },
 	{ "dialtimeout",NUMBER,			(READ<<PUBLIC)|(WRITE<<ROOT),
-	  "dial",	(char *)60 },
+	  "dial",	(void *)60 },
 	{ "eofread",	STRING|IREMOTE|INIT,	(READ|WRITE)<<PUBLIC,
-	  "eofr",	(char *)&IE },
+	  "eofr",	&IE },
 	{ "eofwrite",	STRING|IREMOTE|INIT,	(READ|WRITE)<<PUBLIC,
-	  "eofw",	(char *)&OE },
+	  "eofw",	&OE },
 	{ "eol",	STRING|IREMOTE|INIT,	(READ|WRITE)<<PUBLIC,
-	  NULL,		(char *)&EL },
+	  NULL,		&EL },
 	{ "escape",	CHAR,			(READ|WRITE)<<PUBLIC,
-	  "es",		(char *)'~' },
+	  "es",		(void *)'~' },
 	{ "exceptions",	STRING|INIT|IREMOTE,	(READ|WRITE)<<PUBLIC,
-	  "ex",		(char *)&EX },
+	  "ex",		&EX },
 	{ "force",	CHAR,			(READ|WRITE)<<PUBLIC,
-	  "fo",		(char *)CTRL('p') },
+	  "fo",		NULL },
 	{ "framesize",	NUMBER|IREMOTE|INIT,	(READ|WRITE)<<PUBLIC,
-	  "fr",		(char *)&FS },
+	  "fr",		&FS },
 	{ "host",	STRING|IREMOTE|INIT,	READ<<PUBLIC,
-	  "ho",		(char *)&HO },
-	{ "log",	STRING|INIT,		(READ|WRITE)<<ROOT,
-	  NULL,		path_aculog },
+	  "ho",		&HO },
 	{ "phones",	STRING|INIT|IREMOTE,	READ<<PUBLIC,
-	  NULL,		(char *)&PH },
+	  NULL,		&PH },
 	{ "prompt",	CHAR,			(READ|WRITE)<<PUBLIC,
-	  "pr",		(char *)'\n' },
+	  "pr",		(void *)'\n' },
 	{ "raise",	BOOL,			(READ|WRITE)<<PUBLIC,
-	  "ra",		(char *)FALSE },
+	  "ra",		(void *)FALSE },
 	{ "raisechar",	CHAR,			(READ|WRITE)<<PUBLIC,
-	  "rc",		(char *)CTRL('a') },
+	  "rc",		NULL },
 	{ "record",	STRING|INIT|IREMOTE,	(READ|WRITE)<<PUBLIC,
-	  "rec",	(char *)&RE },
+	  "rec",	&RE },
 	{ "remote",	STRING|INIT|IREMOTE,	READ<<PUBLIC,
-	  NULL,		(char *)&RM },
+	  NULL,		&RM },
 	{ "script",	BOOL,			(READ|WRITE)<<PUBLIC,
-	  "sc",		(char *)FALSE },
+	  "sc",		FALSE },
 	{ "tabexpand",	BOOL,			(READ|WRITE)<<PUBLIC,
-	  "tab",	(char *)FALSE },
+	  "tab",	(void *)FALSE },
 	{ "verbose",	BOOL,			(READ|WRITE)<<PUBLIC,
-	  "verb",	(char *)TRUE },
+	  "verb",	(void *)TRUE },
 	{ "SHELL",	STRING|ENVIRON|INIT,	(READ|WRITE)<<PUBLIC,
 	  NULL,		path_bshell },
 	{ "HOME",	STRING|ENVIRON,		(READ|WRITE)<<PUBLIC,
 	  NULL,		NULL },
 	{ "echocheck",	BOOL,			(READ|WRITE)<<PUBLIC,
-	  "ec",		(char *)FALSE },
+	  "ec",		(void *)FALSE },
 	{ "disconnect",	STRING|IREMOTE|INIT,	(READ|WRITE)<<PUBLIC,
-	  "di",		(char *)&DI },
+	  "di",		&DI },
 	{ "tandem",	BOOL,			(READ|WRITE)<<PUBLIC,
-	  "ta",		(char *)TRUE },
+	  "ta",		(void *)TRUE },
 	{ "linedelay",	NUMBER|IREMOTE|INIT,	(READ|WRITE)<<PUBLIC,
-	  "ldelay",	(char *)&DL },
+	  "ldelay",	&DL },
 	{ "chardelay",	NUMBER|IREMOTE|INIT,	(READ|WRITE)<<PUBLIC,
-	  "cdelay",	(char *)&CL },
+	  "cdelay",	&CL },
 	{ "etimeout",	NUMBER|IREMOTE|INIT,	(READ|WRITE)<<PUBLIC,
-	  "et",		(char *)&ET },
+	  "et",		&ET },
 	{ "rawftp",	BOOL,			(READ|WRITE)<<PUBLIC,
-	  "raw",	(char *)FALSE },
+	  "raw",	(void *)FALSE },
 	{ "halfduplex",	BOOL,			(READ|WRITE)<<PUBLIC,
-	  "hdx",	(char *)FALSE },
+	  "hdx",	(void *)FALSE },
 	{ "localecho",	BOOL,			(READ|WRITE)<<PUBLIC,
-	  "le",		(char *)FALSE },
+	  "le",		(void *)FALSE },
 	{ "parity",	STRING|INIT|IREMOTE,	(READ|WRITE)<<PUBLIC,
-	  "par",	(char *)&PA },
+	  "par",	&PA },
+	{ "hardwareflow", BOOL,			(READ|WRITE)<<PUBLIC,
+	  "hf",		(void *)FALSE },
 	{ NULL,	0, 0, NULL, NULL }
 };

@@ -1,4 +1,4 @@
-/*	$NetBSD: ah_input.c,v 1.44.14.2 2005/07/18 21:06:42 riz Exp $	*/
+/*	$NetBSD: ah_input.c,v 1.49 2005/12/11 12:25:02 christos Exp $	*/
 /*	$KAME: ah_input.c,v 1.64 2001/09/04 08:43:19 itojun Exp $	*/
 
 /*
@@ -35,7 +35,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ah_input.c,v 1.44.14.2 2005/07/18 21:06:42 riz Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ah_input.c,v 1.49 2005/12/11 12:25:02 christos Exp $");
 
 #include "opt_inet.h"
 #include "opt_ipsec.h"
@@ -60,6 +60,7 @@ __KERNEL_RCSID(0, "$NetBSD: ah_input.c,v 1.44.14.2 2005/07/18 21:06:42 riz Exp $
 #include <netinet/in.h>
 #include <netinet/in_systm.h>
 #include <netinet/in_var.h>
+#include <netinet/in_proto.h>
 #include <netinet/ip.h>
 #include <netinet/ip_var.h>
 #include <netinet/ip_ecn.h>
@@ -109,11 +110,24 @@ ah4_input(m, va_alist)
 	int off, proto;
 	va_list ap;
 	size_t stripsiz = 0;
+	u_int16_t sport = 0;
+	u_int16_t dport = 0;
+#ifdef IPSEC_NAT_T
+	struct m_tag *tag = NULL;
+#endif
 
 	va_start(ap, m);
 	off = va_arg(ap, int);
 	proto = va_arg(ap, int);
 	va_end(ap);
+
+#ifdef IPSEC_NAT_T
+	/* find the source port for NAT-T */
+	if ((tag = m_tag_find(m, PACKET_TAG_IPSEC_NAT_T_PORTS, NULL)) != NULL) {
+		sport = ((u_int16_t *)(tag + 1))[0];
+		dport = ((u_int16_t *)(tag + 1))[1];
+	}
+#endif
 
 	ip = mtod(m, struct ip *);
 	IP6_EXTHDR_GET(ah, struct ah *, m, off, sizeof(struct newah));
@@ -131,7 +145,7 @@ ah4_input(m, va_alist)
 
 	if ((sav = key_allocsa(AF_INET,
 	                      (caddr_t)&ip->ip_src, (caddr_t)&ip->ip_dst,
-	                      IPPROTO_AH, spi, 0, 0)) == 0) {
+	                      IPPROTO_AH, spi, sport, dport)) == 0) {
 		ipseclog((LOG_WARNING,
 		    "IPv4 AH input: no key association found for spi %u\n",
 		    (u_int32_t)ntohl(spi)));

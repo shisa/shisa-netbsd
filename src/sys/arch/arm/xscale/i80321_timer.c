@@ -1,4 +1,4 @@
-/*	$NetBSD: i80321_timer.c,v 1.9 2005/02/26 12:00:52 simonb Exp $	*/
+/*	$NetBSD: i80321_timer.c,v 1.13 2005/12/24 20:06:52 perry Exp $	*/
 
 /*
  * Copyright (c) 2001, 2002 Wasabi Systems, Inc.
@@ -40,7 +40,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: i80321_timer.c,v 1.9 2005/02/26 12:00:52 simonb Exp $");
+__KERNEL_RCSID(0, "$NetBSD: i80321_timer.c,v 1.13 2005/12/24 20:06:52 perry Exp $");
 
 #include "opt_perfctrs.h"
 #include "opt_i80321.h"
@@ -73,58 +73,58 @@ static uint32_t counts_per_hz;
 
 int	clockhandler(void *);
 
-static __inline uint32_t
+static inline uint32_t
 tmr0_read(void)
 {
 	uint32_t rv;
 
-	__asm __volatile("mrc p6, 0, %0, c0, c1, 0"
+	__asm volatile("mrc p6, 0, %0, c0, c1, 0"
 		: "=r" (rv));
 	return (rv);
 }
 
-static __inline void
+static inline void
 tmr0_write(uint32_t val)
 {
 
-	__asm __volatile("mcr p6, 0, %0, c0, c1, 0"
+	__asm volatile("mcr p6, 0, %0, c0, c1, 0"
 		:
 		: "r" (val));
 }
 
-static __inline uint32_t
+static inline uint32_t
 tcr0_read(void)
 {
 	uint32_t rv;
 
-	__asm __volatile("mrc p6, 0, %0, c2, c1, 0"
+	__asm volatile("mrc p6, 0, %0, c2, c1, 0"
 		: "=r" (rv));
 	return (rv);
 }
 
-static __inline void
+static inline void
 tcr0_write(uint32_t val)
 {
 
-	__asm __volatile("mcr p6, 0, %0, c2, c1, 0"
+	__asm volatile("mcr p6, 0, %0, c2, c1, 0"
 		:
 		: "r" (val));
 }
 
-static __inline void
+static inline void
 trr0_write(uint32_t val)
 {
 
-	__asm __volatile("mcr p6, 0, %0, c4, c1, 0"
+	__asm volatile("mcr p6, 0, %0, c4, c1, 0"
 		:
 		: "r" (val));
 }
 
-static __inline void
+static inline void
 tisr_write(uint32_t val)
 {
 
-	__asm __volatile("mcr p6, 0, %0, c6, c1, 0"
+	__asm volatile("mcr p6, 0, %0, c6, c1, 0"
 		:
 		: "r" (val));
 }
@@ -235,7 +235,7 @@ cpu_initclocks(void)
  *	recalculate the intervals here, but that would be a pain.
  */
 void
-setstatclockrate(int hz)
+setstatclockrate(int newhz)
 {
 
 	/*
@@ -357,7 +357,7 @@ inittodr(time_t base)
 		badbase = 0;
 
 	if (todr_handle == NULL ||
-	    todr_gettime(todr_handle, (struct timeval *)&time) != 0 ||
+	    todr_gettime(todr_handle, &time) != 0 ||
 	    time.tv_sec == 0) {
 		/*
 		 * Believe the time in the file system for lack of
@@ -403,7 +403,7 @@ resettodr(void)
 		return;
 
 	if (todr_handle != NULL &&
-	    todr_settime(todr_handle, (struct timeval *)&time) != 0)
+	    todr_settime(todr_handle, &time) != 0)
 		printf("resettodr: failed to set time\n");
 }
 

@@ -1,4 +1,4 @@
-#	$NetBSD: sets.subr,v 1.39.2.1 2005/04/06 21:25:18 tron Exp $
+#	$NetBSD: sets.subr,v 1.49 2006/05/19 01:49:05 dogcow Exp $
 #
 
 #
@@ -19,7 +19,7 @@
 #	MACHINE	
 #	MACHINE_ARCH
 #	MACHINE_CPU
-#	HAVE_GCC3
+#	HAVE_GCC
 #	TOOLCHAIN_MISSING
 #	OBJECT_FMT
 # as well as:
@@ -40,7 +40,6 @@ MKVARS="\
 	MKIPFILTER	\
 	MKINET6		\
 	MKKERBEROS	\
-	MKKERBEROS4	\
 	MKLINT		\
 	MKMAN		\
 	MKMANPAGES	\
@@ -57,13 +56,104 @@ MKVARS="\
 	MKUUCP		\
 	MKX11		\
 	MKYP		\
+	USE_INET6	\
+	USE_KERBEROS	\
+	USE_YP		\
 "
+#
+# The following variables refer to tools that are used when building sets:
+#
+: ${AWK:=awk}
+: ${CKSUM:=cksum}
+: ${COMM:=comm}
+: ${DATE:=date}
+: ${DB:=db}
+: ${EGREP:=egrep}
+: ${ENV_CMD:=env}       # ${ENV} is special to sh(1), ksh(1), etc.
+: ${FGREP:=fgrep}
+: ${FIND:=find}
+: ${GREP:=grep}
+: ${GZIP_CMD:=gzip}     # ${GZIP} is special to gzip(1)
+: ${HOSTNAME:=hostname}
+: ${HOST_SH:=sh}
+: ${IDENT:=ident}
+: ${JOIN:=join}
+: ${LS:=ls}
+: ${MAKE:=make}
+: ${MKTEMP:=mktemp}
+: ${MTREE:=mtree}
+: ${PASTE:=paste}
+: ${PAX:=pax}
+: ${PKG_CREATE:=pkg_create}
+: ${PRINTF:=printf}
+: ${SED:=sed}
+: ${SORT:=sort}
+: ${STAT:=stat}
+: ${TSORT:=tsort}
+: ${UNAME:=uname}
+: ${WC:=wc}
+
+#
+# If printf is a shell builtin command, then we can
+# implement cheaper versions of basename and dirname
+# that do not involve any fork/exec overhead.
+# If printf is not builtin, approximate it using echo,
+# and hope there are no weird file names that cause
+# some versions of echo to do the wrong thing.
+# (Converting to this version of dirname speeded up the
+# syspkgdeps script by an order of magnitude, from 68
+# seconds to 6.3 seconds on one particular host.)
+#
+# Note that naive approximations for dirname
+# using ${foo%/*} do not do the right thing in cases
+# where the result should be "/" or ".".
+#
+case "$(type printf)" in
+*builtin*)
+	basename ()
+	{
+		local bn
+		bn="${1##*/}"
+		bn="${bn%$2}"
+		printf "%s\n" "$bn"
+	}
+	dirname ()
+	{
+		local dn
+		case "$1" in
+		?*/*)	dn="${1%/*}" ;;
+		/*)	dn=/ ;;
+		*)	dn=. ;;
+		esac
+		printf "%s\n" "$dn"
+	}
+	;;
+*)
+	basename ()
+	{
+		local bn
+		bn="${1##*/}"
+		bn="${bn%$2}"
+		echo "$bn"
+	}
+	dirname ()
+	{
+		local dn
+		case "$1" in
+		?*/*)	dn="${1%/*}" ;;
+		/*)	dn=/ ;;
+		*)	dn=. ;;
+		esac
+		echo "$dn"
+	}
+	;;
+esac
 
 oIFS=$IFS
 IFS="
 "
 for x in $(
-${MAKE:-make} -B -f- all <<EOMAKE
+${MAKE} -B -f- all <<EOMAKE
 .include <bsd.own.mk>
 .if (\${MKMAN} == "no" || empty(MANINSTALL:Mmaninstall))
 MKMANPAGES=no
@@ -72,7 +162,7 @@ MKMANPAGES=yes
 .endif
 all:
 .for i in MACHINE MACHINE_ARCH MACHINE_CPU \
-		HAVE_GCC3 OBJECT_FMT TOOLCHAIN_MISSING \
+		HAVE_GCC OBJECT_FMT TOOLCHAIN_MISSING \
 		${MKVARS}
 	@echo "export \$i=\${\$i}"
 .endfor
@@ -124,7 +214,7 @@ fi
 # In each file, a record consists of a path and a System Package name,
 # separated by whitespace. E.g.,
 #
-# 	# $NetBSD: sets.subr,v 1.39.2.1 2005/04/06 21:25:18 tron Exp $
+# 	# $NetBSD: sets.subr,v 1.49 2006/05/19 01:49:05 dogcow Exp $
 # 	.			base-sys-root	[keyword[,...]]
 # 	./altroot		base-sys-root
 # 	./bin			base-sys-root
@@ -159,7 +249,6 @@ fi
 #	ipfilter		${MKIPFILTER} != no
 #	inet6			${MKINET6} != no
 #	kerberos		${MKKERBEROS} != no
-#	kerberos4		${MKKERBEROS4} != no
 #	lint			${MKLINT} != no
 #	man			${MKMAN} != no
 #	manz			${MKMANZ} != no
@@ -174,6 +263,10 @@ fi
 #	uucp			${MKUUCP} != no
 #	yp			${MKYP} != no
 #
+#	use_inet6		${USE_INET6} != no
+#	use_kerberos		${USE_KERBEROS} != no
+#	use_yp			${USE_YP} != no
+#
 #	.cat			if ${MKMANZ} != "no" && ${MKCATPAGES} != "no"
 #				  automatically append ".gz" to the filename
 #
@@ -185,13 +278,14 @@ list_set_files()
 	for setname; do
 		list_set_lists $setname
 	done | xargs cat | \
-	awk -v obsolete=${obsolete} '
+	${AWK} -v obsolete=${obsolete} '
 		BEGIN {
 			if (! obsolete) {
 				split("'"${MKVARS}"'", needvars)
 				for (vi in needvars) {
 					nv = needvars[vi]
-					kw = tolower(substr(nv, 3))
+					kw = tolower(nv)
+					sub(/^mk/, "", kw)
 					if (ENVIRON[nv] != "no")
 						wanted[kw] = 1 
 				}
@@ -317,13 +411,25 @@ list_set_lists()
 		fi
 	fi
 	if [ "${TOOLCHAIN_MISSING}" != "yes" ]; then
-		if [ "${HAVE_GCC3}" = "yes" ]; then
+		if [ "${HAVE_GCC}" = "3" ]; then
 			if [ -f $setdir/gcc.mi ]; then
 				echo $setdir/gcc.mi
 			fi
 			if [ "$shlib" != "no" ]; then
 				if [ -f $setdir/gcc.shl ]; then
 					echo $setdir/gcc.shl
+				fi
+			fi
+		elif [ "${HAVE_GCC}" = "4" ]; then
+			if [ -f $setdir/gcc4.mi ]; then
+				echo $setdir/gcc4.mi
+			fi
+			if [ -f $setdir/gcc4.md.${MACHINE_CPU} ]; then
+				echo $setdir/gcc4.md.${MACHINE_CPU}
+			fi
+			if [ "$shlib" != "no" ]; then
+				if [ -f $setdir/gcc4.shl ]; then
+					echo $setdir/gcc4.shl
 				fi
 			fi
 		else
@@ -368,9 +474,23 @@ list_set_lists()
 #
 arch_to_cpu()
 {
-	MACHINE_ARCH=${1} ${MAKE:-make} -f- all <<EOMAKE
+	MACHINE_ARCH=${1} ${MAKE} -f- all <<EOMAKE
 .include <bsd.own.mk>
 all:
 	@echo \${MACHINE_CPU}
+EOMAKE
+}
+
+# arch_to_endian mach
+#
+# Print the ${TARGET_ENDIANNESS} for ${MACHINE_ARCH}=mach,
+# as determined by <bsd.endian.mk>.
+#
+arch_to_endian()
+{
+	MACHINE_ARCH=${1} ${MAKE} -f- all <<EOMAKE
+.include <bsd.endian.mk>
+all:
+	@echo \${TARGET_ENDIANNESS}
 EOMAKE
 }

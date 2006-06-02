@@ -1,4 +1,4 @@
-/*	$NetBSD: txcsbus.c,v 1.15.14.1 2005/08/04 18:30:06 tron Exp $ */
+/*	$NetBSD: txcsbus.c,v 1.20 2005/12/11 12:17:34 christos Exp $ */
 
 /*-
  * Copyright (c) 1999 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: txcsbus.c,v 1.15.14.1 2005/08/04 18:30:06 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: txcsbus.c,v 1.20 2005/12/11 12:17:34 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -59,7 +59,7 @@ __KERNEL_RCSID(0, "$NetBSD: txcsbus.c,v 1.15.14.1 2005/08/04 18:30:06 tron Exp $
 
 /* TX39 CS mapping. (nonconfigurationable) */
 const struct csmap {
-	char	*cs_name;
+	const char *cs_name;
 	paddr_t	cs_addr;
 	psize_t	cs_size;
 } __csmap[] = {
@@ -102,7 +102,8 @@ const struct csmap {
 int	txcsbus_match(struct device *, struct cfdata *, void *);
 void	txcsbus_attach(struct device *, struct device *, void *);
 int	txcsbus_print(void *, const char *);
-int	txcsbus_search(struct device *, struct cfdata *, void *);
+int	txcsbus_search(struct device *, struct cfdata *,
+		       const int *, void *);
 
 struct txcsbus_softc {
 	struct	device sc_dev;
@@ -151,10 +152,10 @@ txcsbus_attach(struct device *parent, struct device *self, void *aux)
 	 */
 	/* higher priority devices attach first */
 	sc->sc_pri = 2;
-	config_search(txcsbus_search, self, txcsbus_print);
+	config_search_ia(txcsbus_search, self, "txcsbus", txcsbus_print);
 	/* then, normal priority devices */
 	sc->sc_pri = 1;
-	config_search(txcsbus_search, self, txcsbus_print);
+	config_search_ia(txcsbus_search, self, "txcsbus", txcsbus_print);
 }
 
 int
@@ -203,7 +204,8 @@ txcsbus_print(void *aux, const char *pnp)
 }
 
 int
-txcsbus_search(struct device *parent, struct cfdata *cf, void *aux)
+txcsbus_search(struct device *parent, struct cfdata *cf,
+	       const int *ldesc, void *aux)
 {
 	struct txcsbus_softc *sc = (void*)parent;
 	struct cs_attach_args ca;

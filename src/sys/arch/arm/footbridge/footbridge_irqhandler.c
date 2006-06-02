@@ -1,4 +1,4 @@
-/*	$NetBSD: footbridge_irqhandler.c,v 1.11 2004/02/24 15:12:51 wiz Exp $	*/
+/*	$NetBSD: footbridge_irqhandler.c,v 1.15 2006/05/17 05:15:26 mrg Exp $	*/
 
 /*
  * Copyright (c) 2001, 2002 Wasabi Systems, Inc.
@@ -40,7 +40,7 @@
 #endif
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0,"$NetBSD: footbridge_irqhandler.c,v 1.11 2004/02/24 15:12:51 wiz Exp $");
+__KERNEL_RCSID(0,"$NetBSD: footbridge_irqhandler.c,v 1.15 2006/05/17 05:15:26 mrg Exp $");
 
 #include "opt_irqstats.h"
 
@@ -68,13 +68,13 @@ static struct intrq footbridge_intrq[NIRQ];
 int footbridge_imask[NIPL];
 
 /* Software copy of the IRQs we have enabled. */
-__volatile uint32_t intr_enabled;
+volatile uint32_t intr_enabled;
 
 /* Current interrupt priority level */
-__volatile int current_spl_level;
+volatile int current_spl_level;
 
 /* Interrupts pending */
-__volatile int footbridge_ipending;
+volatile int footbridge_ipending;
 
 void footbridge_intr_dispatch(struct clockframe *frame);
 
@@ -114,7 +114,7 @@ footbridge_pci_intr_evcnt(pcv, ih)
 	return &footbridge_intrq[ih].iq_ev;
 }
 
-static __inline void
+static inline void
 footbridge_enable_irq(int irq)
 {
 	intr_enabled |= (1U << irq);
@@ -122,7 +122,7 @@ footbridge_enable_irq(int irq)
 	footbridge_set_intrmask();
 }
 
-static __inline void
+static inline void
 footbridge_disable_irq(int irq)
 {
 	intr_enabled &= ~(1U << irq);
@@ -253,7 +253,7 @@ _spllower(int ipl)
     return (footbridge_spllower(ipl));
 }
 
-__inline void
+void
 footbridge_do_pending(void)
 {
 	static __cpu_simple_lock_t processing = __SIMPLELOCK_UNLOCKED;
@@ -328,7 +328,7 @@ footbridge_intr_init(void)
 }
 
 void *
-footbridge_intr_claim(int irq, int ipl, char *name, int (*func)(void *), void *arg)
+footbridge_intr_claim(int irq, int ipl, const char *name, int (*func)(void *), void *arg)
 {
 	struct intrq *iq;
 	struct intrhand *ih;
@@ -390,7 +390,7 @@ static uint32_t footbridge_intstatus(void);
 
 static inline uint32_t footbridge_intstatus()
 {
-    return ((__volatile uint32_t*)(DC21285_ARMCSR_VBASE))[IRQ_STATUS>>2];
+    return ((volatile uint32_t*)(DC21285_ARMCSR_VBASE))[IRQ_STATUS>>2];
 }
 
 /* called with external interrupts disabled */

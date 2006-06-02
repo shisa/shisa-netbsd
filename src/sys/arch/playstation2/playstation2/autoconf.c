@@ -1,4 +1,4 @@
-/*	$NetBSD: autoconf.c,v 1.2 2003/07/15 02:54:37 lukem Exp $	*/
+/*	$NetBSD: autoconf.c,v 1.4 2005/12/11 12:18:36 christos Exp $	*/
 
 /*-
  * Copyright (c) 2001 The NetBSD Foundation, Inc.
@@ -34,7 +34,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.2 2003/07/15 02:54:37 lukem Exp $");
+__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.4 2005/12/11 12:18:36 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -55,7 +55,7 @@ cpu_configure()
 	/* Enable SIF BIOS for IOP access */
 	sif_init();
 
-	if (config_rootfound("mainbus", "mainbus") == NULL)
+	if (config_rootfound("mainbus", NULL) == NULL)
 		panic("no mainbus found");
 
 	/* Enable all interrupts */

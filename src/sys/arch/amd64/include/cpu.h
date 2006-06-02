@@ -1,4 +1,4 @@
-/*	$NetBSD: cpu.h,v 1.6 2004/09/25 11:08:47 yamt Exp $	*/
+/*	$NetBSD: cpu.h,v 1.10 2006/03/06 08:30:44 cube Exp $	*/
 
 /*-
  * Copyright (c) 1990 The Regents of the University of California.
@@ -143,7 +143,7 @@ extern struct cpu_info *cpu_info_list;
 #define CPU_START_CLEANUP(_ci)	((_ci)->ci_func->cleanup(_ci))
 
 #define curcpu()	({struct cpu_info *__ci;                  \
-			asm volatile("movq %%gs:8,%0" : "=r" (__ci)); \
+			__asm volatile("movq %%gs:8,%0" : "=r" (__ci)); \
 			__ci;})
 #define cpu_number()	(curcpu()->ci_cpuid)
 
@@ -203,11 +203,13 @@ extern u_int32_t cpus_attached;
  * encapsulate the previous machine state in an opaque
  * clockframe; for now, use generic intrframe.
  */
-#define clockframe intrframe
+struct clockframe {
+	struct intrframe cf_if;
+};
 
-#define	CLKF_USERMODE(frame)	USERMODE((frame)->if_cs, (frame)->if_rflags)
+#define	CLKF_USERMODE(frame)	USERMODE((frame)->cf_if.if_cs, (frame)->cf_if.if_rflags)
 #define CLKF_BASEPRI(frame)	(0)
-#define CLKF_PC(frame)		((frame)->if_rip)
+#define CLKF_PC(frame)		((frame)->cf_if.if_rip)
 #define CLKF_INTR(frame)	(curcpu()->ci_idepth > 1)
 
 /*
@@ -259,7 +261,6 @@ void	identifycpu __P((struct cpu_info *));
 void cpu_probe_features __P((struct cpu_info *));
 
 /* machdep.c */
-void	delay __P((int));
 void	dumpconf __P((void));
 int	cpu_maxproc __P((void));
 void	cpu_reset __P((void));

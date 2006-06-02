@@ -1,4 +1,4 @@
-/*	$NetBSD: passwd.c,v 1.39 2005/01/15 03:07:56 christos Exp $	*/
+/*	$NetBSD: passwd.c,v 1.43 2006/03/20 17:32:17 elad Exp $	*/
 
 /*
  * Copyright (c) 1987, 1993, 1994, 1995
@@ -31,7 +31,7 @@
 
 #include <sys/cdefs.h>
 #if defined(LIBC_SCCS) && !defined(lint)
-__RCSID("$NetBSD: passwd.c,v 1.39 2005/01/15 03:07:56 christos Exp $");
+__RCSID("$NetBSD: passwd.c,v 1.43 2006/03/20 17:32:17 elad Exp $");
 #endif /* LIBC_SCCS and not lint */
 
 #include <sys/types.h>
@@ -298,7 +298,7 @@ static int
 pw_equal(char *buf, struct passwd *pw)
 {
 	struct passwd buf_pw;
-	int len;
+	size_t len;
 
 	_DIAGASSERT(buf != NULL);
 	_DIAGASSERT(pw != NULL);
@@ -364,12 +364,15 @@ pw_copyx(int ffd, int tfd, struct passwd *pw, struct passwd *old_pw,
 	}
 	if (!(to = fdopen(tfd, "w"))) {
 		snprintf(errbuf, errbufsz, "%s: %s", mpwdl, strerror(errno));
+		(void)fclose(from);
 		return (0);
 	}
 
-	for (done = 0; fgets(buf, sizeof(buf), from);) {
+	for (done = 0; fgets(buf, (int)sizeof(buf), from);) {
 		if (!strchr(buf, '\n')) {
 			snprintf(errbuf, errbufsz, "%s: line too long", mpwd);
+			(void)fclose(from);
+			(void)fclose(to);
 			return (0);
 		}
 		if (done) {
@@ -377,12 +380,16 @@ pw_copyx(int ffd, int tfd, struct passwd *pw, struct passwd *old_pw,
 			if (ferror(to)) {
 				snprintf(errbuf, errbufsz, "%s",
 				    strerror(errno));
+				(void)fclose(from);
+				(void)fclose(to);
 				return (0);
 			}
 			continue;
 		}
 		if (!(p = strchr(buf, ':'))) {
 			snprintf(errbuf, errbufsz, "%s: corrupted entry", mpwd);
+			(void)fclose(from);
+			(void)fclose(to);
 			return (0);
 		}
 		*p = '\0';
@@ -392,6 +399,8 @@ pw_copyx(int ffd, int tfd, struct passwd *pw, struct passwd *old_pw,
 			if (ferror(to)) {
 				snprintf(errbuf, errbufsz, "%s",
 				    strerror(errno));
+				(void)fclose(from);
+				(void)fclose(to);
 				return (0);
 			}
 			continue;
@@ -400,6 +409,8 @@ pw_copyx(int ffd, int tfd, struct passwd *pw, struct passwd *old_pw,
 		if (old_pw && !pw_equal(buf, old_pw)) {
 			snprintf(errbuf, errbufsz, "%s: entry inconsistent",
 			    mpwd);
+			(void)fclose(from);
+			(void)fclose(to);
 			return (0);
 		}
 		(void)fprintf(to, "%s:%s:%d:%d:%s:%ld:%ld:%s:%s:%s\n",
@@ -409,6 +420,8 @@ pw_copyx(int ffd, int tfd, struct passwd *pw, struct passwd *old_pw,
 		done = 1;
 		if (ferror(to)) {
 			snprintf(errbuf, errbufsz, "%s", strerror(errno));
+			(void)fclose(from);
+			(void)fclose(to);
 			return (0);
 		}
 	}
@@ -429,8 +442,11 @@ pw_copyx(int ffd, int tfd, struct passwd *pw, struct passwd *old_pw,
 
 	if (ferror(to)) {
 		snprintf(errbuf, errbufsz, "%s", strerror(errno));
+		(void)fclose(from);
+		(void)fclose(to);
 		return (0);
 	}
+	(void)fclose(from);
 	(void)fclose(to);
 
 	return (done);
@@ -577,6 +593,11 @@ pw_getconf(char *data, size_t max, const char *key, const char *option)
 	}
 	fclose(fp);
 
+	if (!found)
+		errno = ENOENT;
+	if (!got)
+		errno = ENOTDIR;
+
 	/* 
 	 * If we got no result and were looking for a default
 	 * value, try hard coded defaults.
@@ -594,14 +615,17 @@ pw_getpwconf(char *data, size_t max, const struct passwd *pwd,
     const char *option)
 {
 	char grpkey[LINE_MAX];
-	struct group *grp;
+	struct group grs, *grp;
+	char grbuf[1024];
 
 	pw_getconf(data, max, pwd->pw_name, option);
 
 	/* Try to find an entry for the group */
 	if (*data == '\0') {
-		if ((grp = getgrgid(pwd->pw_gid)) != NULL) {
-			snprintf(grpkey, sizeof(grpkey), ":%s", grp->gr_name);
+		(void)getgrgid_r(pwd->pw_gid, &grs, grbuf, sizeof(grbuf), &grp);
+		if (grp != NULL) {
+			(void)snprintf(grpkey, sizeof(grpkey), ":%s",
+			    grp->gr_name);
 			pw_getconf(data, max, grpkey, option);
 		}
 		if (*data == '\0')

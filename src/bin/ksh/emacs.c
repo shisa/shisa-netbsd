@@ -1,4 +1,4 @@
-/*	$NetBSD: emacs.c,v 1.27 2005/02/11 06:21:21 simonb Exp $	*/
+/*	$NetBSD: emacs.c,v 1.31 2006/05/13 21:58:51 christos Exp $	*/
 
 /*
  *  Emacs-like command line editing and history
@@ -10,7 +10,7 @@
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: emacs.c,v 1.27 2005/02/11 06:21:21 simonb Exp $");
+__RCSID("$NetBSD: emacs.c,v 1.31 2006/05/13 21:58:51 christos Exp $");
 #endif
 
 
@@ -142,7 +142,7 @@ static int      x_search    ARGS((char *pat, int sameline, int offset));
 static int      x_match     ARGS((char *str, char *pat));
 static void	x_redraw    ARGS((int limit));
 static void     x_push      ARGS((int nchars));
-static char *   x_mapin     ARGS((const char *cp));
+static char *   x_mapin     ARGS((const char *cp, Area *area));
 static char *   x_mapout    ARGS((int c));
 static void     x_print     ARGS((int prefix, int key));
 static void	x_adjust    ARGS((void));
@@ -1347,12 +1347,13 @@ x_stuff(c)
 }
 
 static char *
-x_mapin(cp)
+x_mapin(cp, area)
 	const char *cp;
+	Area *area;
 {
 	char *new, *op;
 
-	op = new = str_save(cp, ATEMP);
+	op = new = str_save(cp, area);
 	while (*cp)  {
 		/* XXX -- should handle \^ escape? */
 		if (*cp == '^')  {
@@ -1455,7 +1456,7 @@ x_bind(a1, a2, macro, list)
 		return 0;
 	}
 
-	m1 = x_mapin(a1);
+	m2 = m1 = x_mapin(a1, ATEMP);
 	prefix = key = 0;
 	for (;; m1++) {
 		key = *m1 & CHARMASK;
@@ -1470,6 +1471,7 @@ x_bind(a1, a2, macro, list)
 		else
 			break;
 	}
+	afree(m2, ATEMP);
 
 	if (a2 == NULL) {
 		x_print(prefix, key);
@@ -1495,8 +1497,7 @@ x_bind(a1, a2, macro, list)
 #endif /* 0 */
 	} else {
 		f = XFUNC_ins_string;
-		m2 = x_mapin(a2);
-		sp = str_save(m2, AEDIT);
+		sp = x_mapin(a2, AEDIT);
 	}
 
 	if (x_tab[prefix][key] == XFUNC_ins_string && x_atab[prefix][key])
@@ -1544,7 +1545,7 @@ x_init_emacs()
 	 * determine if the locale is 7-bit or not.
 	 */
 	locale = setlocale(LC_CTYPE, NULL);
-	if (locale != NULL || !strcmp(locale, "C") || !strcmp(locale, "POSIX"))
+	if (locale == NULL || !strcmp(locale, "C") || !strcmp(locale, "POSIX"))
 		Flag(FEMACSUSEMETA) = 0;
 }
 
@@ -1637,8 +1638,8 @@ x_version(c)
 	char *o_xbp = xbp, *o_xep = xep, *o_xcp = xcp;
 	int lim = x_lastcp() - xbp;
 
-	xbuf = xbp = xcp = (char *) ksh_version + 4;
-	xend = xep = (char *) ksh_version + 4 + strlen(ksh_version + 4);
+	xbuf = xbp = xcp = ksh_version + 4;
+	xend = xep = ksh_version + 4 + strlen(ksh_version + 4);
 	x_redraw(lim);
 	x_flush();
 
@@ -1908,7 +1909,7 @@ x_e_getc()
 		unget_char = -1;
 	} else {
 		if (macroptr)  {
-			c = *macroptr++;
+			c = (unsigned char) *macroptr++;
 			if (!*macroptr)
 				macroptr = (char *) 0;
 		} else
@@ -2071,7 +2072,7 @@ x_prev_histword(c)
       rcp++;
     x_ins(rcp);
   } else {
-    int c;
+    int i;
 
     rcp = cp;
     /*
@@ -2089,10 +2090,10 @@ x_prev_histword(c)
     cp = rcp;
     while (*rcp && !is_cfs(*rcp))
       rcp++;
-    c = *rcp;
+    i = *rcp;
     *rcp = '\0';
     x_ins(cp);
-    *rcp = c;
+    *rcp = i;
   }
   return KSTD;
 }

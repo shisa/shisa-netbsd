@@ -1,4 +1,4 @@
-/*	$NetBSD: machdep.c,v 1.13 2004/07/06 13:09:18 uch Exp $	*/
+/*	$NetBSD: machdep.c,v 1.16 2006/04/09 01:18:14 tsutsui Exp $	*/
 
 /*-
  * Copyright (c) 2001 The NetBSD Foundation, Inc.
@@ -34,7 +34,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.13 2004/07/06 13:09:18 uch Exp $");
+__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.16 2006/04/09 01:18:14 tsutsui Exp $");
 
 #include "opt_ddb.h"
 #include "opt_kloader.h"
@@ -76,9 +76,6 @@ __KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.13 2004/07/06 13:09:18 uch Exp $");
 #ifdef KLOADER
 #include <machine/kloader.h>
 #endif
-
-/* For sysctl_hw */
-extern char cpu_model[];
 
 struct cpu_info cpu_info_store;
 
@@ -187,7 +184,7 @@ cpu_startup()
 	/*
 	 * Good {morning,afternoon,evening,night}.
 	 */
-	printf(version);
+	printf("%s%s", copyright, version);
 	printf("%s\n", cpu_model);
 	format_bytes(pbuf, sizeof(pbuf), ctob(physmem));
 	printf("total memory = %s\n", pbuf);

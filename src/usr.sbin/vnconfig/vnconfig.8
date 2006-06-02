@@ -1,4 +1,4 @@
-.\"	$NetBSD: vnconfig.8,v 1.29.6.1 2005/08/14 21:13:56 riz Exp $
+.\"	$NetBSD: vnconfig.8,v 1.33 2005/09/11 23:49:58 wiz Exp $
 .\"
 .\" Copyright (c) 1997 The NetBSD Foundation, Inc.
 .\" All rights reserved.
@@ -201,12 +201,12 @@ Unconfigures the device.
 Print messages to stdout describing actions taken.
 .It Fl z
 Assume that
-.Ar regular file
-is compressed disk image in cloop2 format, and configures it
+.Ar regular_file
+is a compressed disk image in cloop2 format, and configure it
 read-only.
 See the
 .Xr vndcompress 1
-manpage on how to create such an image. 
+manpage on how to create such an image.
 .El
 .Pp
 If no action option is given,

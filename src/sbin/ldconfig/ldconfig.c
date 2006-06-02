@@ -1,4 +1,4 @@
-/*	$NetBSD: ldconfig.c,v 1.39 2005/02/05 14:33:50 xtraeme Exp $	*/
+/*	$NetBSD: ldconfig.c,v 1.43 2006/03/26 23:06:45 christos Exp $	*/
 
 /*-
  * Copyright (c) 1998 The NetBSD Foundation, Inc.
@@ -38,7 +38,7 @@
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: ldconfig.c,v 1.39 2005/02/05 14:33:50 xtraeme Exp $");
+__RCSID("$NetBSD: ldconfig.c,v 1.43 2006/03/26 23:06:45 christos Exp $");
 #endif
 
 
@@ -178,6 +178,7 @@ do_conf(void)
 	if ((conf = fopen(aout_conf, "r")) == NULL) {
 		if (verbose)
 			warnx("can't open `%s'", aout_conf);
+		free(aout_conf);
 		return (0);
 	}
 	free(aout_conf);
@@ -432,7 +433,7 @@ buildhints(void)
 			}
 			if (i == hdr.hh_nbucket) {
 				warnx("Bummer!");
-				return (-1);
+				goto out;
 			}
 			while (bp->hi_next != -1)
 				bp = &blist[bp->hi_next];
@@ -466,44 +467,50 @@ buildhints(void)
 	tempfile = concat(_PATH_LD_HINTS, ".XXXXXX", "");
 	if ((fd = mkstemp(tempfile)) == -1) {
 		warn("%s", tempfile);
-		return (-1);
+		goto out;
 	}
 
 	if (write(fd, &hdr, sizeof(struct hints_header)) !=
 	    sizeof(struct hints_header)) {
 		warn("%s", _PATH_LD_HINTS);
-		return (-1);
+		goto out;
 	}
 	if (write(fd, blist, hdr.hh_nbucket * sizeof(struct hints_bucket)) !=
 		  hdr.hh_nbucket * sizeof(struct hints_bucket)) {
 		warn("%s", _PATH_LD_HINTS);
-		return (-1);
+		goto out;
 	}
 	if (write(fd, strtab, strtab_sz) != strtab_sz) {
 		warn("%s", _PATH_LD_HINTS);
-		return (-1);
+		goto out;
 	}
 	if (fchmod(fd, 0444) == -1) {
 		warn("%s", _PATH_LD_HINTS);
-		return (-1);
+		goto out;
 	}
 	if (close(fd) != 0) {
 		warn("%s", _PATH_LD_HINTS);
-		return (-1);
+		goto out;
 	}
 
 	/* Install it */
 	if (unlink(_PATH_LD_HINTS) != 0 && errno != ENOENT) {
 		warn("%s", _PATH_LD_HINTS);
-		return (-1);
+		goto out;
 	}
 
 	if (rename(tempfile, _PATH_LD_HINTS) != 0) {
 		warn("%s", _PATH_LD_HINTS);
-		return (-1);
+		goto out;
 	}
 
-	return (0);
+	free(blist);
+	free(strtab);
+	return 0;
+out:
+	free(blist);
+	free(strtab);
+	return -1;
 }
 
 static int
@@ -511,7 +518,7 @@ readhints(void)
 {
 	int			fd;
 	void			*addr = (void *) -1;
-	size_t			msize;
+	size_t			msize = 0;
 	struct hints_header	*hdr;
 	struct hints_bucket	*blist;
 	char			*strtab;

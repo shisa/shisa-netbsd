@@ -1,4 +1,4 @@
-.\"	$NetBSD: vnd.4,v 1.9.8.1 2005/08/14 21:13:32 riz Exp $
+.\"	$NetBSD: vnd.4,v 1.14 2006/02/01 03:22:14 cube Exp $
 .\"
 .\" Copyright (c) 1996, 1997 The NetBSD Foundation, Inc.
 .\" All rights reserved.
@@ -34,14 +34,14 @@
 .\" ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 .\" POSSIBILITY OF SUCH DAMAGE.
 .\"
-.Dd July 16, 2005
+.Dd February 1, 2006
 .Dt VND 4
 .Os
 .Sh NAME
 .Nm vnd
 .Nd vnode disk driver
 .Sh SYNOPSIS
-.Cd "pseudo-device vnd" Op Ar count
+.Cd "pseudo-device vnd"
 .Cd "options VND_COMPRESSION
 .Sh DESCRIPTION
 The
@@ -57,26 +57,19 @@ configuration file.
 In order to compile in support for the vnd, you must add a line similar
 to the following to your kernel configuration file:
 .Bd -unfilled -offset indent
-pseudo-device	vnd	4	# vnode disk driver
+pseudo-device	vnd		# vnode disk driver
 .Ed
 .Pp
-The
-.Ar count
-argument is how many
-.Nm vnd Ns s
-memory is allocated for at boot time.
-In this example, no more than 4
-.Nm vnd Ns s
-may be configured.
 To also compile in support for reading compressed disk images,
 add the following option to your kernel config file:
 .Bd -unfilled -offset indent
 options        VND_COMPRESSION    # compressed vnd(4)
 .Ed
+.Pp
 Compressed disk images are expected in the cloop2 format,
 they can be created from "normal" disk images by the
 .Xr vndcompress 1
-program. 
+program.
 .Pp
 There is a run-time utility that is used for configuring
 both compressed and uncompressed
@@ -90,9 +83,9 @@ for more information.
 vnd device special files.
 .El
 .Sh SEE ALSO
+.Xr config 1 ,
 .Xr vndcompress 1 ,
 .Xr MAKEDEV 8 ,
-.Xr config 8 ,
 .Xr fsck 8 ,
 .Xr mount 8 ,
 .Xr newfs 8 ,
@@ -102,7 +95,7 @@ The vnode disk driver was originally written at the University of
 Utah.
 The compression handling is based on code by
 .An Cliff Wright
-.Aq cliff@snipe444.org . 
+.Aq cliff@snipe444.org .
 .Sh BUGS
 The
 .Nm

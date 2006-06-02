@@ -1,5 +1,5 @@
-/*	$NetBSD: pfctl_optimize.c,v 1.3 2004/12/19 10:27:46 yamt Exp $	*/
-/*	$OpenBSD: pfctl_optimize.c,v 1.2.2.1 2004/12/17 02:51:35 brad Exp $ */
+/*	$NetBSD: pfctl_optimize.c,v 1.5 2005/07/01 12:43:50 peter Exp $	*/
+/*	$OpenBSD: pfctl_optimize.c,v 1.5 2005/01/03 15:18:10 frantzen Exp $ */
 
 /*
  * Copyright (c) 2004 Mike Frantzen <frantzen@openbsd.org>
@@ -246,7 +246,7 @@ pfctl_optimize_rules(struct pfctl *pf)
 	struct superblocks superblocks;
 	struct superblock *block;
 	struct pf_opt_rule *por;
-	int nr;
+	int nr = 0;
 
 	DEBUG("optimizing ruleset");
 	memset(&table_buffer, 0, sizeof(table_buffer));
@@ -465,6 +465,7 @@ combine_rules(struct pfctl *pf, struct superblock *block)
 
 			if (src_eq && !dst_eq && p1->por_src_tbl == NULL &&
 			    p2->por_dst_tbl == NULL &&
+			    p2->por_src_tbl == NULL &&
 			    rules_combineable(&p1->por_rule, &p2->por_rule) &&
 			    addrs_combineable(&p1->por_rule.dst,
 			    &p2->por_rule.dst)) {
@@ -486,6 +487,7 @@ combine_rules(struct pfctl *pf, struct superblock *block)
 				}
 			} else if (!src_eq && dst_eq && p1->por_dst_tbl == NULL
 			    && p2->por_src_tbl == NULL &&
+			    p2->por_dst_tbl == NULL &&
 			    rules_combineable(&p1->por_rule, &p2->por_rule) &&
 			    addrs_combineable(&p1->por_rule.src,
 			    &p2->por_rule.src)) {
@@ -596,7 +598,7 @@ reorder_rules(struct pfctl *pf, struct superblock *block, int depth)
 	struct superblock *newblock;
 	struct pf_skip_step *skiplist;
 	struct pf_opt_rule *por;
-	int i, largest, largest_list, rule_count = 0;
+	int i, largest, largest_list = -1, rule_count = 0;
 	TAILQ_HEAD( , pf_opt_rule) head;
 
 	/*
@@ -1198,8 +1200,10 @@ add_opt_table(struct pfctl *pf, struct pf_opt_tbl **tbl, sa_family_t af,
 	    unmask(&node_host.addr.v.a.mask, af));
 #endif /* OPT_DEBUG */
 
-	if (append_addr_host((*tbl)->pt_buf, &node_host, 0, 0))
+	if (append_addr_host((*tbl)->pt_buf, &node_host, 0, 0)) {
+		warn("failed to add host");
 		return (1);
+	}
 	if (pf->opts & PF_OPT_VERBOSE) {
 		struct node_tinit *ti;
 
@@ -1265,8 +1269,10 @@ again:
 
 
 	if (pfctl_define_table(tbl->pt_name, PFR_TFLAG_CONST, 1, pf->anchor,
-	    tbl->pt_buf, pf->tticket))
+	    tbl->pt_buf, pf->tticket)) {
+		warn("failed to create table %s", tbl->pt_name);
 		return (1);
+	}
 	return (0);
 }
 

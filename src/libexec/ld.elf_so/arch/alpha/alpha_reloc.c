@@ -1,4 +1,4 @@
-/*	$NetBSD: alpha_reloc.c,v 1.24 2003/07/24 10:12:27 skrll Exp $	*/
+/*	$NetBSD: alpha_reloc.c,v 1.29 2005/12/24 20:59:30 perry Exp $	*/
 
 /*
  * Copyright (c) 2001 Wasabi Systems, Inc.
@@ -60,6 +60,11 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <sys/cdefs.h>
+#ifndef lint
+__RCSID("$NetBSD: alpha_reloc.c,v 1.29 2005/12/24 20:59:30 perry Exp $");
+#endif /* not lint */
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <string.h>
@@ -77,6 +82,8 @@ void _rtld_bind_start(void);
 void _rtld_bind_start_old(void);
 void _rtld_relocate_nonplt_self(Elf_Dyn *, Elf_Addr);
 caddr_t _rtld_bind(const Obj_Entry *, Elf_Word);
+static inline int _rtld_relocate_plt_object(const Obj_Entry *,
+    const Elf_Rela *, Elf_Addr *);
 
 void
 _rtld_setup_pltgot(const Obj_Entry *obj)
@@ -136,7 +143,7 @@ _rtld_setup_pltgot(const Obj_Entry *obj)
 		obj->pltgot[3] = (Elf_Addr) obj;
 	}
 
-	__asm __volatile("imb");
+	__asm volatile("imb");
 }
 
 /*
@@ -146,7 +153,7 @@ _rtld_setup_pltgot(const Obj_Entry *obj)
 #define	RELOC_ALIGNED_P(x) \
 	(((uintptr_t)(x) & (sizeof(void *) - 1)) == 0)
 
-static __inline Elf_Addr
+static inline Elf_Addr
 load_ptr(void *where)
 {
 	Elf_Addr res;
@@ -156,7 +163,7 @@ load_ptr(void *where)
 	return (res);
 }
 
-static __inline void
+static inline void
 store_ptr(void *where, Elf_Addr val)
 {
 
@@ -196,7 +203,7 @@ _rtld_relocate_nonplt_objects(const Obj_Entry *obj)
 #ifdef COMBRELOC
 	unsigned long lastsym = -1;
 #endif
-	Elf_Addr target;
+	Elf_Addr target = -1;
 
 	for (rela = obj->rela; rela < obj->relalim; rela++) {
 		Elf_Addr        *where;
@@ -304,10 +311,9 @@ _rtld_relocate_plt_lazy(const Obj_Entry *obj)
 	return 0;
 }
 
-caddr_t
-_rtld_bind(const Obj_Entry *obj, Elf_Word reloff)
+static inline int
+_rtld_relocate_plt_object(const Obj_Entry *obj, const Elf_Rela *rela, Elf_Addr *tp)
 {
-	const Elf_Rela *rela = (const Elf_Rela *)((caddr_t)obj->pltrela + reloff);
 	Elf_Addr *where = (Elf_Addr *)(obj->relocbase + rela->r_offset);
 	Elf_Addr new_value;
 	const Elf_Sym  *def;
@@ -318,7 +324,7 @@ _rtld_bind(const Obj_Entry *obj, Elf_Word reloff)
 
 	def = _rtld_find_symdef(ELF_R_SYM(rela->r_info), obj, &defobj, true);
 	if (def == NULL)
-		_rtld_die();
+		return -1;
 
 	new_value = (Elf_Addr)(defobj->relocbase + def->st_value);
 	rdbg(("bind now/fixup in %s --> old=%p new=%p",
@@ -463,7 +469,7 @@ _rtld_bind(const Obj_Entry *obj, Elf_Word reloff)
 		 * Commit the tail of the insn sequence to memory
 		 * before overwriting the first insn.
 		 */
-		__asm __volatile("wmb" ::: "memory");
+		__asm volatile("wmb" ::: "memory");
 		stubptr[0] = insn[0];
 		/*
 		 * I-stream will be sync'd when we either return from
@@ -471,7 +477,35 @@ _rtld_bind(const Obj_Entry *obj, Elf_Word reloff)
 		 * is patched up (bind-now case).
 		 */
 	}
+out:
+	if (tp)
+		*tp = new_value;
 
- out:
-	return (caddr_t)new_value;
+	return 0;
+}
+
+caddr_t
+_rtld_bind(const Obj_Entry *obj, Elf_Word reloff)
+{
+	const Elf_Rela *rela = (const Elf_Rela *)((caddr_t)obj->pltrela + reloff);
+	Elf_Addr result;
+	int err;
+
+	err = _rtld_relocate_plt_object(obj, rela, &result);
+	if (err)
+		_rtld_die();
+
+	return (caddr_t)result;
+}
+
+int
+_rtld_relocate_plt_objects(const Obj_Entry *obj)
+{
+	const Elf_Rela *rela;
+
+	for (rela = obj->pltrela; rela < obj->pltrelalim; rela++)
+		if (_rtld_relocate_plt_object(obj, rela, NULL) < 0)
+			return -1;
+
+	return 0;
 }

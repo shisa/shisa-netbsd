@@ -1,4 +1,4 @@
-/*	$NetBSD: autoconf.c,v 1.13 2004/10/23 17:07:39 thorpej Exp $	*/
+/*	$NetBSD: autoconf.c,v 1.17 2006/03/28 17:38:25 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -85,7 +85,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.13 2004/10/23 17:07:39 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.17 2006/03/28 17:38:25 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -132,7 +132,7 @@ cpu_configure()
 	 * Kick off autoconfiguration
 	 */
 	s = splhigh();
-	if (config_rootfound("mainbus", "mainbus") == NULL)
+	if (config_rootfound("mainbus", NULL) == NULL)
 		panic("no mainbus found");
 	initcpu();
 }
@@ -162,7 +162,9 @@ findroot(devpp, partp)
 	struct device *dv;
 
 	for (dv = TAILQ_FIRST(&alldevs); dv; dv = TAILQ_NEXT(dv, dv_list)) {
-		if (dv->dv_class == boot_class && dv->dv_unit == boot_id) {
+		if (device_class(dv) == boot_class &&
+		    /* XXX device_unit() abuse */
+		    device_unit(dv) == boot_id) {
 			*devpp = dv;
 			*partp = boot_part;
 			return;

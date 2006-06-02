@@ -1,4 +1,4 @@
-/*	$NetBSD: sockmisc.h,v 1.1.1.2.2.4 2005/11/21 21:12:31 tron Exp $	*/
+/*	$NetBSD: sockmisc.h,v 1.6 2005/11/21 14:20:29 manu Exp $	*/
 
 /* Id: sockmisc.h,v 1.5.10.4 2005/10/04 09:54:27 manubsd Exp */
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: symtab.c,v 1.20 2005/02/17 15:00:33 xtraeme Exp $	*/
+/*	$NetBSD: symtab.c,v 1.23 2005/08/19 02:07:19 christos Exp $	*/
 
 /*
  * Copyright (c) 1983, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)symtab.c	8.3 (Berkeley) 4/28/95";
 #else
-__RCSID("$NetBSD: symtab.c,v 1.20 2005/02/17 15:00:33 xtraeme Exp $");
+__RCSID("$NetBSD: symtab.c,v 1.23 2005/08/19 02:07:19 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -74,7 +74,7 @@ static struct entry **entry;
 static long entrytblsize;
 
 static void		 addino(ino_t, struct entry *);
-static struct entry	*lookupparent(char *);
+static struct entry	*lookupparent(const char *);
 static void		 removeentry(struct entry *);
 
 /*
@@ -102,7 +102,7 @@ addino(ino_t inum, struct entry *np)
 	struct entry **epp;
 
 	if (inum < WINO || inum >= maxino)
-		panic("addino: out of range %d\n", inum);
+		panic("addino: out of range %llu\n", (unsigned long long)inum);
 	epp = &entry[inum % entrytblsize];
 	np->e_ino = inum;
 	np->e_next = *epp;
@@ -123,7 +123,8 @@ deleteino(ino_t inum)
 	struct entry **prev;
 
 	if (inum < WINO || inum >= maxino)
-		panic("deleteino: out of range %d\n", inum);
+		panic("deleteino: out of range %llu\n",
+		    (unsigned long long)inum);
 	prev = &entry[inum % entrytblsize];
 	for (next = *prev; next != NULL; next = next->e_next) {
 		if (next->e_ino == inum) {
@@ -133,17 +134,18 @@ deleteino(ino_t inum)
 		}
 		prev = &next->e_next;
 	}
-	panic("deleteino: %d not found\n", inum);
+	panic("deleteino: %llu not found\n", (unsigned long long)inum);
 }
 
 /*
  * Look up an entry by name
  */
 struct entry *
-lookupname(char *name)
+lookupname(const char *name)
 {
 	struct entry *ep;
-	char *np, *cp;
+	char *np;
+	const char *cp;
 	char buf[MAXPATHLEN];
 
 	cp = name;
@@ -166,7 +168,7 @@ lookupname(char *name)
  * Look up the parent of a pathname
  */
 static struct entry *
-lookupparent(char *name)
+lookupparent(const char *name)
 {
 	struct entry *ep;
 	char *tailindex;
@@ -215,7 +217,7 @@ static struct entry *freelist = NULL;
  * add an entry to the symbol table
  */
 struct entry *
-addentry(char *name, ino_t inum, int type)
+addentry(const char *name, ino_t inum, int type)
 {
 	struct entry *np, *ep;
 
@@ -311,7 +313,7 @@ freeentry(struct entry *ep)
  * Relocate an entry in the tree structure
  */
 void
-moveentry(struct entry *ep, char *newname)
+moveentry(struct entry *ep, const char *newname)
 {
 	struct entry *np;
 	char *cp;
@@ -384,7 +386,7 @@ static struct strhdr strtblhdr[allocsize(NAME_MAX) / STRTBLINCR];
  * has an appropriate sized entry, and if not allocates a new one.
  */
 char *
-savename(char *name)
+savename(const char *name)
 {
 	struct strhdr *np, *tp;
 	long len, siz;
@@ -444,7 +446,7 @@ struct symtableheader {
  * dump a snapshot of the symbol table
  */
 void
-dumpsymtable(char *filename, int32_t checkpt)
+dumpsymtable(const char *filename, int32_t checkpt)
 {
 	struct entry *ep, *tep;
 	ino_t i;
@@ -530,7 +532,7 @@ dumpsymtable(char *filename, int32_t checkpt)
  * Initialize a symbol table from a file
  */
 void
-initsymtable(char *filename)
+initsymtable(const char *filename)
 {
 	char *base;
 	long tblsize;

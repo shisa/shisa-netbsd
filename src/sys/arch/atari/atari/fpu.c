@@ -1,4 +1,4 @@
-/*	$NetBSD: fpu.c,v 1.9 2003/07/15 01:19:44 lukem Exp $	*/
+/*	$NetBSD: fpu.c,v 1.12 2005/12/24 22:45:34 perry Exp $	*/
 
 /*-
  * Copyright (c) 1996 The NetBSD Foundation, Inc.
@@ -42,7 +42,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: fpu.c,v 1.9 2003/07/15 01:19:44 lukem Exp $");
+__KERNEL_RCSID(0, "$NetBSD: fpu.c,v 1.12 2005/12/24 22:45:34 perry Exp $");
 
 #include "opt_fpu_emulate.h"
 
@@ -59,7 +59,7 @@ __KERNEL_RCSID(0, "$NetBSD: fpu.c,v 1.9 2003/07/15 01:19:44 lukem Exp $");
 extern int fpu_type;
 extern int *nofault;
 
-static char *fpu_descr[] = {
+static const char *fpu_descr[] = {
 #ifdef	FPU_EMULATE
 	" emulated ", 		/* 0 */
 #else
@@ -70,7 +70,7 @@ static char *fpu_descr[] = {
 	"/",			/* 3 68040 internal */
 	"??? " };
 
-char *
+const char *
 fpu_describe(type)
 int	type;
 {
@@ -104,7 +104,7 @@ fpu_probe()
 	 * state, so we can determine which we have by
 	 * examining the size of the FP state frame
 	 */
-	asm("fnop");
+	__asm("fnop");
 
 	nofault = (int *) 0;
 
@@ -121,7 +121,7 @@ fpu_probe()
 	 * have if this will.  We save the state in order to get the
 	 * size of the frame.
 	 */
-	asm("movl %0, %%a0; fsave %%a0@" : : "a" (&fpframe) : "a0" );
+	__asm("movl %0, %%a0; fsave %%a0@" : : "a" (&fpframe) : "a0" );
 
 	b = fpframe.fpf_fsize;
 

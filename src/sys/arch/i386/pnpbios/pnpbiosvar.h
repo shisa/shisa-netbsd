@@ -1,4 +1,4 @@
-/* $NetBSD: pnpbiosvar.h,v 1.6 2005/02/03 20:08:55 perry Exp $ */
+/* $NetBSD: pnpbiosvar.h,v 1.10 2005/12/26 19:24:00 perry Exp $ */
 /*
  * Copyright (c) 1999
  * 	Matthias Drochner.  All rights reserved.
@@ -26,7 +26,6 @@
  */
 
 struct pnpbios_attach_args {
-	char *paa_busname;
 	isa_chipset_tag_t paa_ic;
 };
 
@@ -39,22 +38,22 @@ struct pnp_compatid {
 
 struct pnp_mem {
 	SIMPLEQ_ENTRY(pnp_mem) next;
-	u_int32_t minbase, maxbase, align, len;
+	uint32_t minbase, maxbase, align, len;
 	int flags;
 };
 struct pnp_io {
 	SIMPLEQ_ENTRY(pnp_io) next;
-	u_int16_t minbase, maxbase, align, len;
+	uint16_t minbase, maxbase, align, len;
 	int flags;
 };
 struct pnp_irq {
 	SIMPLEQ_ENTRY(pnp_irq) next;
-	u_int16_t mask;
+	uint16_t mask;
 	int flags;
 };
 struct pnp_dma {
 	SIMPLEQ_ENTRY(pnp_dma) next;
-	u_int8_t mask;
+	uint8_t mask;
 	int flags;
 };
 

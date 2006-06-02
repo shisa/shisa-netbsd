@@ -1,4 +1,4 @@
-/*	$NetBSD: puts.c,v 1.12 2003/08/07 16:43:29 agc Exp $	*/
+/*	$NetBSD: puts.c,v 1.15 2006/03/17 02:25:23 chris Exp $	*/
 
 /*-
  * Copyright (c) 1990, 1993
@@ -37,7 +37,7 @@
 #if 0
 static char sccsid[] = "@(#)puts.c	8.1 (Berkeley) 6/4/93";
 #else
-__RCSID("$NetBSD: puts.c,v 1.12 2003/08/07 16:43:29 agc Exp $");
+__RCSID("$NetBSD: puts.c,v 1.15 2006/03/17 02:25:23 chris Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
@@ -56,17 +56,21 @@ int
 puts(s)
 	char const *s;
 {
-	size_t c = strlen(s);
+	size_t c;
 	struct __suio uio;
 	struct __siov iov[2];
 	int r;
 
 	_DIAGASSERT(s != NULL);
 
-	/* LINTED we don't touch the string */
-	iov[0].iov_base = (void *)s;
+	if (s == NULL)
+		s = "(null)";
+
+	c = strlen(s);
+
+	iov[0].iov_base = __UNCONST(s);
 	iov[0].iov_len = c;
-	iov[1].iov_base = "\n";
+	iov[1].iov_base = __UNCONST("\n");
 	iov[1].iov_len = 1;
 	uio.uio_resid = c + 1;
 	uio.uio_iov = &iov[0];

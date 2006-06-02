@@ -1,4 +1,4 @@
-/*	$NetBSD: ipcomp_input.c,v 1.22.14.2 2005/07/18 21:06:51 riz Exp $	*/
+/*	$NetBSD: ipcomp_input.c,v 1.28 2006/02/14 21:43:02 rpaulo Exp $	*/
 /*	$KAME: ipcomp_input.c,v 1.29 2001/09/04 08:43:19 itojun Exp $	*/
 
 /*
@@ -35,7 +35,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ipcomp_input.c,v 1.22.14.2 2005/07/18 21:06:51 riz Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ipcomp_input.c,v 1.28 2006/02/14 21:43:02 rpaulo Exp $");
 
 #include "opt_inet.h"
 #include "opt_ipsec.h"
@@ -61,6 +61,7 @@ __KERNEL_RCSID(0, "$NetBSD: ipcomp_input.c,v 1.22.14.2 2005/07/18 21:06:51 riz E
 #include <netinet/in.h>
 #include <netinet/in_systm.h>
 #include <netinet/in_var.h>
+#include <netinet/in_proto.h>
 #include <netinet/ip.h>
 #include <netinet/ip_var.h>
 #include <netinet/ip_ecn.h>
@@ -103,6 +104,11 @@ ipcomp4_input(m, va_alist)
 	struct secasvar *sav = NULL;
 	int off, proto;
 	va_list ap;
+	u_int16_t sport = 0;
+	u_int16_t dport = 0;
+#ifdef IPSEC_NAT_T
+	struct m_tag *tag = NULL;
+#endif
 
 	va_start(ap, m);
 	off = va_arg(ap, int);
@@ -115,6 +121,13 @@ ipcomp4_input(m, va_alist)
 		ipsecstat.in_inval++;
 		goto fail;
 	}
+#ifdef IPSEC_NAT_T
+	/* find the source port for NAT-T */
+	if ((tag = m_tag_find(m, PACKET_TAG_IPSEC_NAT_T_PORTS, NULL)) != NULL) {
+		sport = ((u_int16_t *)(tag + 1))[0];
+		dport = ((u_int16_t *)(tag + 1))[1];
+	}
+#endif
 
 	md = m_pulldown(m, off, sizeof(*ipcomp), NULL);
 	if (!md) {
@@ -138,7 +151,7 @@ ipcomp4_input(m, va_alist)
 	if (cpi >= IPCOMP_CPI_NEGOTIATE_MIN) {
 		sav = key_allocsa(AF_INET, (caddr_t)&ip->ip_src,
 			(caddr_t)&ip->ip_dst, IPPROTO_IPCOMP, htonl(cpi), 
-			0, 0);
+			sport, dport);
 		if (sav != NULL &&
 		    (sav->state == SADB_SASTATE_MATURE ||
 		     sav->state == SADB_SASTATE_DYING)) {
@@ -267,7 +280,7 @@ ipcomp6_input(mp, offp, proto)
 	off = *offp;
 
 	md = m_pulldown(m, off, sizeof(*ipcomp), NULL);
-	if (!m) {
+	if (!md) {
 		m = NULL;	/* already freed */
 		ipseclog((LOG_DEBUG, "IPv6 IPComp input: assumption failed "
 		    "(pulldown failure)\n"));

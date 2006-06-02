@@ -1,41 +1,48 @@
-#       $NetBSD: Makefile,v 1.169.2.1 2005/07/21 21:22:37 tron Exp $
+#       $NetBSD: Makefile,v 1.198 2006/05/16 15:56:15 elad Exp $
 
 #	Makefile for section 9 (kernel function and variable) manual pages.
 
 MAN=	altq.9 arc4random.9 arp.9 audio.9 autoconf.9 \
-	bitmask_snprintf.9 bcmp.9 bcopy.9 bzero.9 \
+	bcdtobin.9 bitmask_snprintf.9 bcmp.9 bcopy.9 bzero.9 \
 	buffercache.9 bufq.9 bus_dma.9 bus_space.9 \
-	callout.9 cardbus.9 chooseproc.9 cnmagic.9 config.9 cons.9 copy.9 \
+	callout.9 cardbus.9 chooselwp.9 cnmagic.9 config.9 cons.9 copy.9 \
+	coredump_write.9 \
 	cpu_configure.9 cpu_coredump.9 cpu_dumpconf.9 cpu_exit.9 cpu_idle.9 \
-	cpu_fork.9 \
+	cpu_lwp_fork.9 \
 	cpu_initclocks.9 cpu_number.9 cpu_reboot.9 cpu_rootconf.9 \
 	cpu_startup.9 cpu_swapout.9 \
-	cred.9 ctxsw.9 curproc.9 \
-	delay.9 disk.9 disklabel.9 dofileread.9 \
+	ctxsw.9 curproc.9 \
+	delay.9 disk.9 ddc.9 disklabel.9 dofileread.9 \
 	dopowerhooks.9 do_setresuid.9 doshutdownhooks.9 driver.9 \
-	errno.9 ethersubr.9 evcnt.9 extattr.9 extent.9 \
-	fetch.9 file.9 filedesc.9 fork1.9 fsetown.9 \
+	edid.9 errno.9 ethersubr.9 evcnt.9 extattr.9 extent.9 \
+	fetch.9 file.9 filedesc.9 firmload.9 fork1.9 fsetown.9 \
+	getiobuf.9 \
 	hash.9 hardclock.9 humanize_number.9 hz.9 \
+	ieee80211.9 ieee80211_crypto.9 ieee80211_input.9 ieee80211_ioctl.9 \
+	ieee80211_node.9 ieee80211_output.9 ieee80211_proto.9 \
+	ieee80211_radiotap.9 iic.9 \
 	in4_cksum.9 inittodr.9 intro.9 ioasic.9 ioctl.9 ipkdb.9 isa.9 \
-	isapnp.9 itimerfix.9 kcopy.9 kcont.9 \
+	isapnp.9 itimerfix.9 kauth.9 kcopy.9 kcont.9 \
 	kfilter_register.9 knote.9 \
 	kprintf.9 kthread.9 linedisc.9 lock.9 log.9 ltsleep.9 \
 	malloc.9 mbuf.9 mca.9 memcmp.9 memcpy.9 memmove.9 memset.9 \
 	microtime.9 mstohz.9 m_tag.9 namecache.9 namei.9 need_resched.9 \
-	opencrypto.9 \
+	opencrypto.9 optstr.9 \
 	panic.9 pci.9 pci_configure_bus.9 pci_intr.9 pckbport.9 \
 	pcmcia.9 pfil.9 physio.9 pmap.9 pmatch.9 pmc.9 \
 	pool.9 pool_cache.9 powerhook_establish.9 ppsratecheck.9 \
-	properties.9 preempt.9 \
+	preempt.9 \
 	radio.9 ras.9 rasops.9 ratecheck.9 resettodr.9 rnd.9 rssadapt.9 \
-	rt_timer.9 \
+	rt_timer.9 RUN_ONCE.9 \
 	SCHED_LOCK.9 scheduler.9 \
 	scsipi.9 setjmp.9 setrunqueue.9 shutdownhook_establish.9 \
-	signal.9 softintr.9 spl.9 store.9 suser.9 suspendsched.9 \
+	signal.9 softintr.9 spl.9 store.9 suspendsched.9 \
 	sysctl.9 tc.9 time.9 todr.9 uiomove.9 ucom.9 userret.9 \
-	vattr.9 vfs.9 vfsops.9 vfssubr.9 vme.9 vnfileops.9 \
-	vnode.9 vnodeops.9 vnsubr.9 \
-	usbdi.9 uvm.9 wdc.9 wscons.9 wsdisplay.9 wsfont.9 wskbd.9 wsmouse.9
+	vattr.9 vcons.9 vfs.9 vfs_hooks.9 vfsops.9 vfssubr.9 vme.9 \
+	vnfileops.9 vnode.9 vnodeops.9 vnsubr.9 \
+	usbdi.9 uvm.9 wdc.9 \
+	workqueue.9 workqueue_create.9 workqueue_enqueue.9 \
+	wscons.9 wsdisplay.9 wsfont.9 wskbd.9 wsmouse.9
 
 MAN+=	dmover.9
 MLINKS+=dmover.9 dmover_backend_register.9 \
@@ -60,6 +67,7 @@ MLINKS+=autoconf.9 config_search.9 \
 	autoconf.9 config_interrupts.9 \
 	autoconf.9 config_pending_incr.9 \
 	autoconf.9 config_pending_decr.9
+MLINKS+=bcdtobin.9 bintobcd.9
 MLINKS+=buffercache.9 bread.9 \
 	buffercache.9 breada.9 \
 	buffercache.9 breadn.9 \
@@ -146,21 +154,16 @@ MLINKS+=cons.9 cnbell.9 cons.9 cngetc.9 cons.9 cngetsn.9 cons.9 cnpollc.9 \
 	cons.9 cnputc.9
 MLINKS+=copy.9 copyin.9 copy.9 copyout.9 copy.9 copystr.9 \
 	copy.9 copyinstr.9 copy.9 copyoutstr.9 \
-	copy.9 copyin_proc.9 copy.9 copyout_proc.9
+	copy.9 copyin_proc.9 copy.9 copyout_proc.9 \
+	copy.9 ioctl_copyin.9 copy.9 ioctl_copyout.9
 MLINKS+=cpu_dumpconf.9 cpu_dump.9 cpu_dumpconf.9 cpu_dumpsize.9 \
 	cpu_dumpconf.9 dumpsys.9
-MLINKS+=cpu_fork.9 child_return.9 cpu_fork.9 proc_trampoline.9
+MLINKS+=cpu_lwp_fork.9 child_return.9 cpu_lwp_fork.9 proc_trampoline.9
 MLINKS+=cpu_swapout.9 cpu_swapin.9
-MLINKS+=cred.9 crfree.9 \
-	cred.9 crhold.9 \
-	cred.9 crcopy.9 \
-	cred.9 crdup.9 \
-	cred.9 crget.9 \
-	cred.9 crcvt.9
 MLINKS+=ctxsw.9 cpu_switch.9 ctxsw.9 mi_switch.9
 MLINKS+=curproc.9 curcpu.9
 MLINKS+=delay.9 DELAY.9
-MLINKS+=disk.9 disk_init.9 disk.9 disk_attach.9 disk.9 disk_detach.9 \
+MLINKS+=disk.9 disk_attach.9 disk.9 disk_detach.9 \
 	disk.9 disk_busy.9 disk.9 disk_unbusy.9 disk.9 disk_find.9 \
 	disk.9 disk_resetstat.9
 MLINKS+=disklabel.9 readdisklabel.9 disklabel.9 writedisklabel.9 \
@@ -192,9 +195,9 @@ MLINKS+=filedesc.9 falloc.9 \
 	filedesc.9 fd_getfile.9 \
 	filedesc.9 dupfdopen.9 \
 	filedesc.9 fdalloc.9 \
-	filedesc.9 fdavail.9 \
 	filedesc.9 fdcheckstd.9 \
 	filedesc.9 fdclear.9 \
+	filedesc.9 fdclone.9 \
 	filedesc.9 fdcloseexec.9 \
 	filedesc.9 fdcopy.9 \
 	filedesc.9 fdexpand.9 \
@@ -204,8 +207,16 @@ MLINKS+=filedesc.9 falloc.9 \
 	filedesc.9 fdremove.9 \
 	filedesc.9 fdshare.9 \
 	filedesc.9 fdunshare.9
+MLINKS+=firmload.9 firmware_open.9 \
+	firmload.9 firmware_close.9 \
+	firmload.9 firmware_get_size.9 \
+	firmload.9 firmware_read.9 \
+	firmload.9 firmware_malloc.9 \
+	firmload.9 firmware_free.9
 MLINKS+=fsetown.9 fgetown.9 \
 	fsetown.9 fownsignal.9
+MLINKS+=getiobuf.9 getiobuf_nowait.9 \
+	getiobuf.9 putiobuf.9
 MLINKS+=hash.9 hash32_buf.9 hash.9 hash32_str.9 hash.9 hash32_strn.9
 MLINKS+=humanize_number.9 format_bytes.9
 MLINKS+=in4_cksum.9 in_cksum.9 \
@@ -275,6 +286,7 @@ MLINKS+=mbuf.9 m_get.9 mbuf.9 m_getclr.9 mbuf.9 m_gethdr.9 mbuf.9 m_devget.9 \
 	mbuf.9 m_freem.9 mbuf.9 mtod.9 mbuf.9 mtocl.9 mbuf.9 cltom.9 \
 	mbuf.9 MGET.9 mbuf.9 MGETHDR.9 mbuf.9 MEXTMALLOC.9 \
 	mbuf.9 MEXTADD.9 mbuf.9 MCLGET.9 mbuf.9 M_COPY_PKTHDR.9 \
+	mbuf.9 M_MOVE_PKTHDR.9 \
 	mbuf.9 M_ALIGN.9 mbuf.9 MH_ALIGN.9 mbuf.9 M_LEADINGSPACE.9 \
 	mbuf.9 M_TRAILINGSPACE.9 mbuf.9 M_PREPEND.9 mbuf.9 MCHTYPE.9 \
 	mbuf.9 MEXTREMOVE.9 mbuf.9 MFREE.9
@@ -317,6 +329,7 @@ MLINKS+=opencrypto.9 crypto_get_driverid.9 \
 	opencrypto.9 crypto_kdispatch.9 \
 	opencrypto.9 crypto_getreq.9 \
 	opencrypto.9 crypto_freereq.9
+MLINKS+=optstr.9 optstr_get.9
 MLINKS+=pci.9 pci_conf_read.9 \
 	pci.9 pci_conf_write.9 \
 	pci.9 pci_conf_print.9 \
@@ -409,14 +422,6 @@ MLINKS+=pool_cache.9 pool_cache_init.9 \
 	pool_cache.9 pool_cache_destruct_object.9 \
 	pool_cache.9 pool_cache_invalidate.9
 MLINKS+=powerhook_establish.9 powerhook_disestablish.9
-MLINKS+=properties.9 propdb_create.9 \
-	properties.9 propdb_destroy.9 \
-	properties.9 prop_copy.9 \
-	properties.9 prop_delete.9 \
-	properties.9 prop_get.9 \
-	properties.9 prop_list.9 \
-	properties.9 prop_objs.9 \
-	properties.9 prop_set.9
 MLINKS+=ras.9 ras_lookup.9 \
 	ras.9 ras_fork.9 \
 	ras.9 ras_purgeall.9
@@ -491,7 +496,7 @@ MLINKS+=sysctl.9 old_sysctl.9 \
 	sysctl.9 sysctl_query.9 \
 	sysctl.9 sysctl_teardown.9 \
 	sysctl.9 sysctl_unlock.9
-MLINKS+=time.9 boottime.9 time.9 mono_time.9 time.9 runtime.9
+MLINKS+=time.9 boottime.9 time.9 mono_time.9
 MLINKS+=tc.9 tc_intr_establish.9 \
 	tc.9 tc_intr_disestablish.9 \
 	tc.9 tc_intr_evcnt.9 \
@@ -512,10 +517,9 @@ MLINKS+=uvm.9 uvm_init.9 uvm.9 uvm_init_limits.9 uvm.9 uvm_setpagesize.9 \
 	uvm.9 uvmspace_fork.9 uvm.9 uvmspace_free.9 uvm.9 uvmspace_share.9 \
 	uvm.9 uvmspace_unshare.9 uvm.9 uvm_fault.9 uvm.9 uvn_attach.9 \
 	uvm.9 uvm_vnp_setsize.9 \
-	uvm.9 uvm_io.9 uvm.9 uvm_km_alloc.9 uvm.9 uvm_km_zalloc.9 \
-	uvm.9 uvm_km_alloc1.9 uvm.9 uvm_km_kmemalloc.9 uvm.9 uvm_km_valloc.9 \
-	uvm.9 uvm_km_valloc_wait.9 uvm.9 uvm_km_suballoc.9 uvm.9 uvm_km_free.9 \
-	uvm.9 uvm_km_free_wakeup.9 uvm.9 uvm_pagealloc.9 \
+	uvm.9 uvm_io.9 uvm.9 uvm_km_alloc.9 \
+	uvm.9 uvm_km_suballoc.9 uvm.9 uvm_km_free.9 \
+	uvm.9 uvm_pagealloc.9 \
 	uvm.9 uvm_pagerealloc.9 uvm.9 uvm_pagefree.9 uvm.9 uvm_pglistalloc.9 \
 	uvm.9 uvm_pglistfree.9 uvm.9 uvm_page_physload.9 uvm.9 uvm_pageout.9 \
 	uvm.9 uvm_scheduler.9 uvm.9 uvm_swapin.9 uvm.9 uao_create.9 \
@@ -543,6 +547,7 @@ MLINKS+=vme.9 vme_probe.9 \
 	vme.9 vme_space_get.9
 MLINKS+=vattr.9 vattr_null.9 \
 	vattr.9 VATTR_NULL.9
+MLINKS+=vfs_hooks.9 vfs_hooks_unmount.9
 MLINKS+=vfsops.9 VFS_MOUNT.9 \
 	vfsops.9 VFS_START.9 \
 	vfsops.9 VFS_UNMOUNT.9 \
@@ -636,13 +641,6 @@ MLINKS+=vnodeops.9 VOP_LOOKUP.9 \
 	vnodeops.9 VOP_PRINT.9 \
 	vnodeops.9 VOP_PATHCONF.9 \
 	vnodeops.9 VOP_ADVLOCK.9 \
-	vnodeops.9 VOP_BLKATOFF.9 \
-	vnodeops.9 VOP_VALLOC.9 \
-	vnodeops.9 VOP_BALLOC.9 \
-	vnodeops.9 VOP_REALLOCBLKS.9 \
-	vnodeops.9 VOP_VFREE.9 \
-	vnodeops.9 VOP_TRUNCATE.9 \
-	vnodeops.9 VOP_UPDATE.9 \
 	vnodeops.9 VOP_LEASE.9 \
 	vnodeops.9 VOP_WHITEOUT.9 \
 	vnodeops.9 VOP_GETPAGES.9 \

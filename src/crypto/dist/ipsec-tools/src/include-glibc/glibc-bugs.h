@@ -1,4 +1,4 @@
-/*	$NetBSD: glibc-bugs.h,v 1.1.1.2.2.2 2005/11/21 21:12:29 tron Exp $	*/
+/*	$NetBSD: glibc-bugs.h,v 1.3 2005/11/21 14:20:28 manu Exp $	*/
 
 #ifndef __GLIBC_BUGS_H__
 #define __GLIBC_BUGS_H__ 1

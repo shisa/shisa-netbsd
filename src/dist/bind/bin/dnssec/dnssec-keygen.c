@@ -1,4 +1,4 @@
-/*	$NetBSD: dnssec-keygen.c,v 1.1.1.2 2004/11/06 23:53:32 christos Exp $	*/
+/*	$NetBSD: dnssec-keygen.c,v 1.1.1.4 2005/12/21 23:07:47 christos Exp $	*/
 
 /*
  * Portions Copyright (C) 2004  Internet Systems Consortium, Inc. ("ISC")

@@ -1,5 +1,5 @@
-# $NetBSD: Makefile,v 1.1.2.1 2005/09/08 19:15:44 tron Exp $
+# $NetBSD: Makefile,v 1.3 2005/12/11 12:20:47 christos Exp $
 
-SUBDIR=	sha2
+SUBDIR=	sha2 ripemd160
 
 .include <bsd.kinc.mk>

@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-#	$NetBSD: fpgen.sh,v 1.3.2.3 2005/09/15 20:40:06 tron Exp $	
+#	$NetBSD: fpgen.sh,v 1.3 2005/09/03 10:22:21 elad Exp $	
 #
 # Copyright 2005 Brett Lymn <blymn@netbsd.org>
 # Copyright 2005 Elad Efrat <elad@netbsd.org>

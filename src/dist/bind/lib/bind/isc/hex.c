@@ -1,4 +1,4 @@
-/*	$NetBSD: hex.c,v 1.1.1.1 2004/05/17 23:44:46 christos Exp $	*/
+/*	$NetBSD: hex.c,v 1.1.1.3 2005/12/21 23:15:43 christos Exp $	*/
 
 /*
  * Copyright (c) 2004 by Internet Systems Consortium, Inc. ("ISC")

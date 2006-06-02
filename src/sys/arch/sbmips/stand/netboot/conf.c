@@ -1,4 +1,4 @@
-/* $NetBSD: conf.c,v 1.1 2002/11/09 06:20:41 cgd Exp $ */
+/* $NetBSD: conf.c,v 1.3 2005/12/11 12:18:51 christos Exp $ */
 
 #include <sys/types.h>
 #include <netinet/in.h>
@@ -8,14 +8,14 @@
 #include <lib/libsa/dev_net.h>
 
 struct fs_ops file_system[] = {
-	{ nfs_open, nfs_close, nfs_read, nfs_write, nfs_seek, nfs_stat },
+	FS_OPS(nfs),
 };
 int nfsys = 1;
 
 struct devsw devsw[] = {
 	{ "net",  net_strategy,  net_open,  net_close,  net_ioctl },
 };
-int	ndevs = 1;
+int ndevs = 1;
 
 extern struct netif_driver prom_netif_driver;
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: intr.h,v 1.11 2001/07/06 19:00:14 scw Exp $	*/
+/*	$NetBSD: intr.h,v 1.13 2006/02/16 20:17:14 perry Exp $	*/
 
 /*-
  * Copyright (c) 2000 The NetBSD Foundation, Inc.
@@ -94,7 +94,7 @@ static __inline void
 splx(int sr)
 {
 
-	__asm __volatile("movw %0,%%sr" : : "di" (sr));
+	__asm volatile("movw %0,%%sr" : : "di" (sr));
 }
 
 #define setsoft(x)		x = 0

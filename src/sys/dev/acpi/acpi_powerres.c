@@ -1,4 +1,4 @@
-/* $NetBSD: acpi_powerres.c,v 1.1 2004/05/26 17:15:17 kochi Exp $ */
+/* $NetBSD: acpi_powerres.c,v 1.4 2006/02/16 06:19:26 kochi Exp $ */
 
 /*-
  * Copyright (c) 2001 Michael Smith
@@ -29,7 +29,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: acpi_powerres.c,v 1.1 2004/05/26 17:15:17 kochi Exp $");
+__KERNEL_RCSID(0, "$NetBSD: acpi_powerres.c,v 1.4 2006/02/16 06:19:26 kochi Exp $");
 
 #include <sys/param.h>
 #include <sys/kernel.h>
@@ -105,16 +105,16 @@ static TAILQ_HEAD(acpi_powerresource_list, acpi_powerresource)
 static TAILQ_HEAD(acpi_powerconsumer_list, acpi_powerconsumer)
 	acpi_powerconsumers = TAILQ_HEAD_INITIALIZER(acpi_powerconsumers);
 
-static ACPI_STATUS	acpi_pwr_register_consumer(ACPI_HANDLE consumer);
+static ACPI_STATUS	acpi_pwr_register_consumer(ACPI_HANDLE);
 #if 0
-static ACPI_STATUS	acpi_pwr_register_resource(ACPI_HANDLE res);
-static ACPI_STATUS	acpi_pwr_deregister_consumer(ACPI_HANDLE consumer);
-static ACPI_STATUS	acpi_pwr_deregister_resource(ACPI_HANDLE res);
+static ACPI_STATUS	acpi_pwr_register_resource(ACPI_HANDLE);
+static ACPI_STATUS	acpi_pwr_deregister_consumer(ACPI_HANDLE);
+static ACPI_STATUS	acpi_pwr_deregister_resource(ACPI_HANDLE);
 #endif
-static ACPI_STATUS	acpi_pwr_reference_resource(ACPI_OBJECT *obj, void *arg);
+static ACPI_STATUS	acpi_pwr_reference_resource(ACPI_OBJECT *, void *);
 static ACPI_STATUS	acpi_pwr_switch_power(void);
-static struct acpi_powerresource *acpi_pwr_find_resource(ACPI_HANDLE res);
-static struct acpi_powerconsumer *acpi_pwr_find_consumer(ACPI_HANDLE consumer);
+static struct acpi_powerresource *acpi_pwr_find_resource(ACPI_HANDLE);
+static struct acpi_powerconsumer *acpi_pwr_find_consumer(ACPI_HANDLE);
 
 /*
  * Register a power resource.
@@ -298,7 +298,7 @@ acpi_pwr_switch_consumer(ACPI_HANDLE consumer, int state)
 	ACPI_BUFFER			reslist_buffer;
 	ACPI_OBJECT			*reslist_object;
 	ACPI_STATUS			status;
-	char				*method_name, *reslist_name;
+	const char				*method_name, *reslist_name;
 	int				res_changed;
 
 	ACPI_FUNCTION_TRACE(__FUNCTION__);

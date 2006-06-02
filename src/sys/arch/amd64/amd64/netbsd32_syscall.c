@@ -1,4 +1,4 @@
-/*	$NetBSD: netbsd32_syscall.c,v 1.5 2004/02/13 17:07:56 drochner Exp $	*/
+/*	$NetBSD: netbsd32_syscall.c,v 1.12 2006/03/07 07:21:50 thorpej Exp $	*/
 
 /*-
  * Copyright (c) 1998, 2000 The NetBSD Foundation, Inc.
@@ -37,9 +37,8 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: netbsd32_syscall.c,v 1.5 2004/02/13 17:07:56 drochner Exp $");
+__KERNEL_RCSID(0, "$NetBSD: netbsd32_syscall.c,v 1.12 2006/03/07 07:21:50 thorpej Exp $");
 
-#include "opt_syscall_debug.h"
 #include "opt_ktrace.h"
 #include "opt_systrace.h"
 
@@ -69,22 +68,13 @@ void netbsd32_syscall_plain(struct trapframe *);
 void netbsd32_syscall_fancy(struct trapframe *);
 
 void
-netbsd32_syscall_intern(p)
-	struct proc *p;
+netbsd32_syscall_intern(struct proc *p)
 {
-#ifdef KTRACE
-	if (p->p_traceflag & (KTRFAC_SYSCALL | KTRFAC_SYSRET)) {
+
+	if (trace_is_enabled(p))
 		p->p_md.md_syscall = netbsd32_syscall_fancy;
-		return;
-	}
-#endif
-#ifdef SYSTRACE
-	if (ISSET(p->p_flag, P_SYSTRACE)) {
-		p->p_md.md_syscall = netbsd32_syscall_fancy;
-		return;
-	} 
-#endif
-	p->p_md.md_syscall = netbsd32_syscall_plain;
+	else
+		p->p_md.md_syscall = netbsd32_syscall_plain;
 }
 
 void
@@ -137,10 +127,6 @@ netbsd32_syscall_plain(frame)
 			goto bad;
 	}
 
-#ifdef SYSCALL_DEBUG
-	scdebug_call(p, code, args);
-#endif /* SYSCALL_DEBUG */
-
 	rval[0] = 0;
 	rval[1] = 0;
 #if 0
@@ -175,9 +161,6 @@ netbsd32_syscall_plain(frame)
 		break;
 	}
 
-#ifdef SYSCALL_DEBUG
-	scdebug_ret(p, code, error, rval);
-#endif /* SYSCALL_DEBUG */
 	userret(l);
 }
 
@@ -251,16 +234,17 @@ netbsd32_syscall_fancy(frame)
 		for (i = 0; i < (argsize >> 2); i++)
 			args64[i] = args[i];
 		/* XXX we need to pass argsize << 1 here? */
-		if ((error = trace_enter(l, code, code, NULL, args64)) != 0) {
-			KERNEL_PROC_UNLOCK(l);
-			goto bad;
-		}
+		if ((error = trace_enter(l, code, code, NULL, args64)) != 0)
+			goto out;
 	}
 #endif
 
 	rval[0] = 0;
 	rval[1] = 0;
 	error = (*callp->sy_call)(l, args, rval);
+#if defined(KTRACE) || defined(SYSTRACE)
+out:
+#endif
 	KERNEL_PROC_UNLOCK(l);
 	switch (error) {
 	case 0:

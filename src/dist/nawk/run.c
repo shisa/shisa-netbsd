@@ -26,6 +26,7 @@ THIS SOFTWARE.
 #include <stdio.h>
 #include <ctype.h>
 #include <setjmp.h>
+#include <limits.h>
 #include <math.h>
 #include <string.h>
 #include <stdlib.h>
@@ -219,6 +220,7 @@ Cell *call(Node **a, int n)	/* function call.  very kludgy and fragile */
 {
 	static const Cell newcopycell = { OCELL, CCOPY, 0, "", 0.0, NUM|STR|DONTFREE };
 	int i, ncall, ndef;
+	int freed = 0; /* handles potential double freeing when fcn & param share a tempcell */
 	Node *x;
 	Cell *args[NARGS], *oargs[NARGS];	/* BUG: fixed size arrays */
 	Cell *y, *z, *fcn;
@@ -296,12 +298,18 @@ Cell *call(Node **a, int n)	/* function call.  very kludgy and fragile */
 		} else if (t != y) {	/* kludge to prevent freeing twice */
 			t->csub = CTEMP;
 			tempfree(t);
+		} else if (t == y && t->csub == CCOPY) {
+			t->csub = CTEMP;
+			tempfree(t);
+			freed = 1;
 		}
 	}
 	tempfree(fcn);
 	if (isexit(y) || isnext(y))
 		return y;
-	tempfree(y);		/* this can free twice! */
+	if (freed == 0) {
+		tempfree(y);	/* don't free twice! */
+	}
 	z = fp->retval;			/* return value */
 	   dprintf( ("%s returns %g |%s| %o\n", s, getfval(z), getsval(z), z->tval) );
 	fp--;
@@ -457,9 +465,9 @@ Cell *array(Node **a, int n)	/* a[0] is symtab, a[1] is list of subscripts */
 		s = getsval(y);
 		if (!adjbuf(&buf, &bufsz, strlen(buf)+strlen(s)+nsub+1, recsize, 0, 0))
 			FATAL("out of memory for %s[%s...]", x->nval, buf);
-		strlcat(buf, s, bufsz);
+		strcat(buf, s);
 		if (np->nnext)
-			strlcat(buf, *SUBSEP, bufsz);
+			strcat(buf, *SUBSEP);
 		tempfree(y);
 	}
 	if (!isarr(x)) {
@@ -504,9 +512,9 @@ Cell *awkdelete(Node **a, int n)	/* a[0] is symtab, a[1] is list of subscripts *
 			s = getsval(y);
 			if (!adjbuf(&buf, &bufsz, strlen(buf)+strlen(s)+nsub+1, recsize, 0, 0))
 				FATAL("out of memory deleting %s[%s...]", x->nval, buf);
-			strlcat(buf, s, bufsz);
+			strcat(buf, s);	
 			if (np->nnext)
-				strlcat(buf, *SUBSEP, bufsz);
+				strcat(buf, *SUBSEP);
 			tempfree(y);
 		}
 		freeelem(x, buf);
@@ -543,10 +551,10 @@ Cell *intest(Node **a, int n)	/* a[0] is index (list), a[1] is symtab */
 		s = getsval(x);
 		if (!adjbuf(&buf, &bufsz, strlen(buf)+strlen(s)+nsub+1, recsize, 0, 0))
 			FATAL("out of memory deleting %s[%s...]", x->nval, buf);
-		strlcat(buf, s, bufsz);
+		strcat(buf, s);
 		tempfree(x);
 		if (p->nnext)
-			strlcat(buf, *SUBSEP, bufsz);
+			strcat(buf, *SUBSEP);
 	}
 	k = lookup(buf, (Array *) ap->sval);
 	tempfree(ap);
@@ -699,12 +707,16 @@ Cell *gettemp(void)	/* get a tempcell */
 
 Cell *indirect(Node **a, int n)	/* $( a[0] ) */
 {
+	Awkfloat val;
 	Cell *x;
 	int m;
 	char *s;
 
 	x = execute(a[0]);
-	m = (int) getfval(x);
+	val = getfval(x);	/* freebsd: defend against super large field numbers */
+	if ((Awkfloat)INT_MAX < val)
+		FATAL("trying to access out of range field %s", x->nval);
+	m = (int) val;
 	if (m == 0 && !is_number(s = getsval(x)))	/* suspicion! */
 		FATAL("illegal field $(%s), name \"%s\"", s, x->nval);
 		/* BUG: can x->nval ever be null??? */
@@ -1130,16 +1142,21 @@ Cell *assign(Node **a, int n)	/* a[0] = a[1], a[0] += a[1], etc. */
 Cell *cat(Node **a, int q)	/* a[0] cat a[1] */
 {
 	Cell *x, *y, *z;
+	int n1, n2;
 	char *s;
 
 	x = execute(a[0]);
 	y = execute(a[1]);
 	getsval(x);
 	getsval(y);
-	asprintf(&s, "%s%s", x->sval, y->sval);
+	n1 = strlen(x->sval);
+	n2 = strlen(y->sval);
+	s = (char *) malloc(n1 + n2 + 1);
 	if (s == NULL)
 		FATAL("out of space concatenating %.15s... and %.15s...",
 			x->sval, y->sval);
+	strcpy(s, x->sval);
+	strcpy(s+n1, y->sval);
 	tempfree(y);
 	z = gettemp();
 	z->sval = s;
@@ -1245,6 +1262,8 @@ Cell *split(Node **a, int nnn)	/* split(a[0], a[1], a[2]); a[3] is type */
 					goto spdone;
 				}
 			} while (nematch(pfa,s));
+			pfa->initstat = tempstat; 	/* bwk: has to be here to reset */
+							/* cf gsub and refldbld */
 		}
 		n++;
 		sprintf(num, "%d", n);
@@ -1541,7 +1560,7 @@ Cell *bltin(Node **a, int n)	/* builtin functions. a[0] is type, a[1] is arg lis
 
 		if (isrec(x)) {
 			/* format argument not provided, use default */
-			fmt = "%a %b %d %H:%M:%S %Z %Y";
+			fmt = tostring("%a %b %d %H:%M:%S %Z %Y");
 		} else
 			fmt = tostring(getsval(x));
 
@@ -1553,6 +1572,7 @@ Cell *bltin(Node **a, int n)	/* builtin functions. a[0] is type, a[1] is arg lis
 
 		y = gettemp();
 		setsval(y, buf);
+		free(fmt);
 		free(buf);
 
 		return y;

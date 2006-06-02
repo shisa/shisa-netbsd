@@ -1,4 +1,4 @@
-/*	$NetBSD: mdreloc.c,v 1.35 2005/01/09 14:58:15 martin Exp $	*/
+/*	$NetBSD: mdreloc.c,v 1.39 2006/05/20 07:09:44 mrg Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2002 The NetBSD Foundation, Inc.
@@ -35,6 +35,11 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+
+#include <sys/cdefs.h>
+#ifndef lint
+__RCSID("$NetBSD: mdreloc.c,v 1.39 2006/05/20 07:09:44 mrg Exp $");
+#endif /* not lint */
 
 #include <errno.h>
 #include <stdio.h>
@@ -134,8 +139,8 @@ static const int reloc_target_bitmask[] = {
 void _rtld_bind_start(void);
 void _rtld_relocate_nonplt_self(Elf_Dyn *, Elf_Addr);
 caddr_t _rtld_bind(const Obj_Entry *, Elf_Word);
-static inline int _rtld_relocate_plt_object(const Obj_Entry *obj,
-    const Elf_Rela *rela, Elf_Addr *tp);
+static inline int _rtld_relocate_plt_object(const Obj_Entry *,
+    const Elf_Rela *, Elf_Addr *);
 
 void
 _rtld_setup_pltgot(const Obj_Entry *obj)
@@ -326,6 +331,8 @@ _rtld_bind(const Obj_Entry *obj, Elf_Word reloff)
 	Elf_Addr value;
 	int err;
 
+	value = 0;	/* XXX gcc */
+
 	err = _rtld_relocate_plt_object(obj, rela, &value);
 	if (err)
 		_rtld_die();
@@ -384,8 +391,8 @@ _rtld_relocate_plt_object(const Obj_Entry *obj, const Elf_Rela *rela, Elf_Addr *
 #define NOP	0x01000000
 	where[2] = JMP   | (value & 0x000003ff);
 	where[1] = SETHI | ((value >> 10) & 0x003fffff);
-	__asm __volatile("iflush %0+8" : : "r" (where));
-	__asm __volatile("iflush %0+4" : : "r" (where));
+	__asm volatile("iflush %0+8" : : "r" (where));
+	__asm volatile("iflush %0+4" : : "r" (where));
 
 	if (tp)
 		*tp = value;

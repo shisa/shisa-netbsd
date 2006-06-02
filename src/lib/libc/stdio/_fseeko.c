@@ -1,4 +1,4 @@
-/*	$NetBSD: _fseeko.c,v 1.1 2000/07/08 13:46:35 kleink Exp $	*/
+/*	$NetBSD: _fseeko.c,v 1.4 2005/09/13 01:44:10 christos Exp $	*/
 
 /*
  * Copyright (c) 1996 Christos Zoulas.  All rights reserved.
@@ -28,20 +28,21 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#include <sys/cdefs.h>
 
-#ifdef __indr_reference
+#include <sys/cdefs.h>
+#if defined(LIBC_SCCS) && !defined(lint)
+__RCSID("$NetBSD: _fseeko.c,v 1.4 2005/09/13 01:44:10 christos Exp $");
+#endif /* LIBC_SCCS and not lint */
+
+#if defined(__indr_reference)
 __indr_reference(_fseeko, fseeko)
 #else
 
 #include <stdio.h>
-int	_fseeko __P((FILE *, off_t, int));	/* XXX */
+int	_fseeko(FILE *, off_t, int);
 
 int
-fseeko(stream, offset, whence)
-	FILE *stream;
-	off_t offset;
-	int whence;
+fseeko(FILE *stream, off_t offset, int whence)
 {
 
 	return _fseeko(stream, offset, whence);

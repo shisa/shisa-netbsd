@@ -1,4 +1,4 @@
-/*	$NetBSD: kbd.c,v 1.46 2003/09/21 19:16:48 jdolecek Exp $ */
+/*	$NetBSD: kbd.c,v 1.48 2005/12/11 12:16:28 christos Exp $ */
 
 /*
  * Copyright (c) 1982, 1986, 1990 The Regents of the University of California.
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kbd.c,v 1.46 2003/09/21 19:16:48 jdolecek Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kbd.c,v 1.48 2005/12/11 12:16:28 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -57,6 +57,7 @@ __KERNEL_RCSID(0, "$NetBSD: kbd.c,v 1.46 2003/09/21 19:16:48 jdolecek Exp $");
 #include <amiga/dev/itevar.h>
 #include <amiga/dev/kbdreg.h>
 #include <amiga/dev/kbdmap.h>
+#include <amiga/dev/kbdvar.h>
 #include <amiga/dev/event_var.h>
 #include <amiga/dev/vuid_event.h>
 
@@ -103,7 +104,7 @@ __KERNEL_RCSID(0, "$NetBSD: kbd.c,v 1.46 2003/09/21 19:16:48 jdolecek Exp $");
 /* accessops */
 int     kbd_enable(void *, int);
 void    kbd_set_leds(void *, int);
-int     kbd_ioctl(void *, u_long, caddr_t, int, struct proc *);
+int     kbd_ioctl(void *, u_long, caddr_t, int, struct lwp *);
 
 /* console ops */
 void    kbd_getc(void *, u_int *, int *);
@@ -140,6 +141,7 @@ struct kbd_softc {
 	u_char k_mf2;
 #endif
 
+	int k_console;		/* true if used as console keyboard */
 #if NWSKBD>0
 	struct device *k_wskbddev; /* pointer to wskbd for sending strokes */
 	int k_pollingmode;         /* polling mode on? whatever it isss... */
@@ -203,11 +205,7 @@ kbdattach(struct device *pdp, struct device *dp, void *auxp)
 		 * Try to attach the wskbd.
 		 */
 		struct wskbddev_attach_args waa;
-
-		/* Maybe should be done before this?... */
-		wskbd_cnattach(&kbd_consops, NULL, &kbd_mapdata);
-
-		waa.console = 1;
+		waa.console = kbd_softc.k_console;
 		waa.keymap = &kbd_mapdata;
 		waa.accessops = &kbd_accessops;
 		waa.accesscookie = NULL;
@@ -217,6 +215,18 @@ kbdattach(struct device *pdp, struct device *dp, void *auxp)
 	}
 	kbdenable();
 #endif /* WSKBD */
+}
+
+/*
+ * This is called when somebody wants to use kbd as the console keyboard.
+ */
+void
+kbd_cnattach(void)
+{
+#if NWSKBD>0
+	wskbd_cnattach(&kbd_consops, NULL, &kbd_mapdata);
+	kbd_softc.k_console = 1;
+#endif
 }
 
 /* definitions for amiga keyboard encoding. */
@@ -434,20 +444,20 @@ drkbdputc2(u_int8_t c1, u_int8_t c2)
 #endif
 
 int
-kbdopen(dev_t dev, int flags, int mode, struct proc *p)
+kbdopen(dev_t dev, int flags, int mode, struct lwp *l)
 {
 
 	kbdenable();
 	if (kbd_softc.k_events.ev_io)
 		return EBUSY;
 
-	kbd_softc.k_events.ev_io = p;
+	kbd_softc.k_events.ev_io = l->l_proc;
 	ev_init(&kbd_softc.k_events);
 	return (0);
 }
 
 int
-kbdclose(dev_t dev, int flags, int mode, struct proc *p)
+kbdclose(dev_t dev, int flags, int mode, struct lwp *l)
 {
 
 	/* Turn off event mode, dump the queue */
@@ -465,7 +475,7 @@ kbdread(dev_t dev, struct uio *uio, int flags)
 
 int
 kbdioctl(dev_t dev, u_long cmd, register caddr_t data, int flag,
-         struct proc *p)
+         struct lwp *l)
 {
 	register struct kbd_softc *k = &kbd_softc;
 
@@ -511,9 +521,9 @@ kbdioctl(dev_t dev, u_long cmd, register caddr_t data, int flag,
 }
 
 int
-kbdpoll(dev_t dev, int events, struct proc *p)
+kbdpoll(dev_t dev, int events, struct lwp *l)
 {
-	return ev_poll (&kbd_softc.k_events, events, p);
+	return ev_poll (&kbd_softc.k_events, events, l);
 }
 
 int
@@ -762,7 +772,7 @@ kbd_set_leds(void *c, int leds)
 }
 
 int
-kbd_ioctl(void *c, u_long cmd, caddr_t data, int flag, struct proc *p)
+kbd_ioctl(void *c, u_long cmd, caddr_t data, int flag, struct lwp *l)
 {
 	switch (cmd)
 	{

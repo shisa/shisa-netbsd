@@ -1,5 +1,5 @@
-/*	$NetBSD: advcap.c,v 1.10 2004/10/30 15:36:12 dsl Exp $	*/
-/*	$KAME: advcap.c,v 1.9 2002/05/29 14:28:35 itojun Exp $	*/
+/*	$NetBSD: advcap.c,v 1.12 2006/03/18 22:07:15 dan Exp $	*/
+/*	$KAME: advcap.c,v 1.11 2003/05/19 09:46:50 keiichi Exp $	*/
 
 /*
  * Copyright (c) 1983 The Regents of the University of California.
@@ -281,7 +281,7 @@ tskip(bp)
 			} else
 				bp++;
 		case '"':
-			dquote = (dquote ? 1 : 0);
+			dquote = (dquote ? 0 : 1);
 			bp++;
 			break;
 		default:

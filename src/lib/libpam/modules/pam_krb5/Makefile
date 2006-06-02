@@ -1,4 +1,4 @@
-# $NetBSD: Makefile,v 1.4 2004/12/29 15:04:06 lukem Exp $
+# $NetBSD: Makefile,v 1.6 2005/04/25 17:21:31 matt Exp $
 # Copyright 2001 FreeBSD, Inc.
 # All rights reserved.
 #

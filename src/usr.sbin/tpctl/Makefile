@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.1 2002/08/27 14:12:15 takemura Exp $
+#	$NetBSD: Makefile,v 1.3 2006/05/22 20:06:54 uwe Exp $
 
 .if ${MACHINE} == "hpcarm" || ${MACHINE} == "hpcmips" || ${MACHINE} == "hpcsh"
 PROG=	tpctl

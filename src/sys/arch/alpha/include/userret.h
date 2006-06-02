@@ -1,4 +1,4 @@
-/* $NetBSD: userret.h,v 1.3 2003/10/31 16:44:34 cl Exp $ */
+/* $NetBSD: userret.h,v 1.6 2006/02/16 20:17:13 perry Exp $ */
 
 /*-
  * Copyright (c) 2000 The NetBSD Foundation, Inc.

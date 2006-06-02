@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.5.18.1 2005/09/26 20:29:05 tron Exp $
+#	$NetBSD: Makefile,v 1.6 2005/09/17 16:52:02 chs Exp $
 
 SUBDIR = mkhits mkastosc mkastods mkdstoas mkdctype mkmake .WAIT prt3270
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: jobs.c,v 1.62 2003/12/18 00:56:05 christos Exp $	*/
+/*	$NetBSD: jobs.c,v 1.65 2006/04/24 19:00:29 snj Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -37,7 +37,7 @@
 #if 0
 static char sccsid[] = "@(#)jobs.c	8.5 (Berkeley) 5/4/95";
 #else
-__RCSID("$NetBSD: jobs.c,v 1.62 2003/12/18 00:56:05 christos Exp $");
+__RCSID("$NetBSD: jobs.c,v 1.65 2006/04/24 19:00:29 snj Exp $");
 #endif
 #endif /* not lint */
 
@@ -205,14 +205,14 @@ out:
 		setsignal(SIGTSTP, 0);
 		setsignal(SIGTTOU, 0);
 		setsignal(SIGTTIN, 0);
-		if (getpgid(0) != rootpid && setpgid(0, rootpid) == -1)
+		if (getpgrp() != rootpid && setpgid(0, rootpid) == -1)
 			error("Cannot set process group (%s) at %d",
 			    strerror(errno), __LINE__);
 		if (tcsetpgrp(ttyfd, rootpid) == -1)
 			error("Cannot set tty process group (%s) at %d",
 			    strerror(errno), __LINE__);
 	} else { /* turning job control off */
-		if (getpgid(0) != initialpgrp && setpgid(0, initialpgrp) == -1)
+		if (getpgrp() != initialpgrp && setpgid(0, initialpgrp) == -1)
 			error("Cannot set process group (%s) at %d",
 			    strerror(errno), __LINE__);
 		if (tcsetpgrp(ttyfd, initialpgrp) == -1)
@@ -618,6 +618,7 @@ waitcmd(int argc, char **argv)
 		}
 	}
 
+	retval = 127;		/* XXXGCC: -Wuninitialized */
 	for (; *argptr; argptr++) {
 		job = getjob(*argptr, 1);
 		if (!job) {
@@ -1104,7 +1105,7 @@ dowait(int block, struct job *job)
  * rather than blocking.
  *
  * System V doesn't have a non-blocking wait system call.  It does
- * have a SIGCLD signal that is sent to a process when one of it's
+ * have a SIGCLD signal that is sent to a process when one of its
  * children dies.  The obvious way to use SIGCLD would be to install
  * a handler for SIGCLD which simply bumped a counter when a SIGCLD
  * was received, and have waitproc bump another counter when it got
@@ -1148,7 +1149,7 @@ waitproc(int block, struct job *jp, int *status)
 #endif
 	if (block == 0)
 		flags |= WNOHANG;
-	return wait3(status, flags, (struct rusage *)NULL);
+	return waitpid(-1, status, flags);
 #else
 #ifdef SYSV
 	int (*save)();

@@ -1,4 +1,4 @@
-/*	$NetBSD: exec_script.c,v 1.38.10.7 2005/09/08 21:06:30 tron Exp $	*/
+/*	$NetBSD: exec_script.c,v 1.47 2006/05/14 21:15:11 elad Exp $	*/
 
 /*
  * Copyright (c) 1993, 1994, 1996 Christopher G. Demetriou
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: exec_script.c,v 1.38.10.7 2005/09/08 21:06:30 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: exec_script.c,v 1.47 2006/05/14 21:15:11 elad Exp $");
 
 #if defined(SETUIDSCRIPTS) && !defined(FDSCRIPTS)
 #define FDSCRIPTS		/* Need this for safe set-id scripts. */
@@ -56,7 +56,13 @@ __KERNEL_RCSID(0, "$NetBSD: exec_script.c,v 1.38.10.7 2005/09/08 21:06:30 tron E
 #include <sys/exec_script.h>
 #include <sys/exec_elf.h>
 
+#ifdef VERIFIED_EXEC
 #include <sys/verified_exec.h>
+#endif /* VERIFIED_EXEC */
+
+#ifdef SYSTRACE
+#include <sys/systrace.h>
+#endif /* SYSTRACE */
 
 /*
  * exec_script_makecmds(): Check if it's an executable shell script.
@@ -71,13 +77,14 @@ __KERNEL_RCSID(0, "$NetBSD: exec_script.c,v 1.38.10.7 2005/09/08 21:06:30 tron E
  * into the exec package.
  */
 int
-exec_script_makecmds(struct proc *p, struct exec_package *epp)
+exec_script_makecmds(struct lwp *l, struct exec_package *epp)
 {
 	int error, hdrlinelen, shellnamelen, shellarglen;
 	char *hdrstr = epp->ep_hdr;
 	char *cp, *shellname, *shellarg, *oldpnbuf;
 	char **shellargp, **tmpsap;
 	struct vnode *scriptvp;
+	struct proc *p = l->l_proc;
 #ifdef SETUIDSCRIPTS
 	/* Gcc needs those initialized for spurious uninitialized warning */
 	uid_t script_uid = (uid_t) -1;
@@ -177,7 +184,7 @@ check_shell:
 	 * method of implementing "safe" set-id and x-only scripts.
 	 */
 	vn_lock(epp->ep_vp, LK_EXCLUSIVE | LK_RETRY);
-	error = VOP_ACCESS(epp->ep_vp, VREAD, p->p_ucred, p);
+	error = VOP_ACCESS(epp->ep_vp, VREAD, l->l_proc->p_cred, l);
 	VOP_UNLOCK(epp->ep_vp, 0);
 	if (error == EACCES
 #ifdef SETUIDSCRIPTS
@@ -204,7 +211,7 @@ check_shell:
 		fp->f_data = (caddr_t) epp->ep_vp;
 		fp->f_flag = FREAD;
 		FILE_SET_MATURE(fp);
-		FILE_UNUSE(fp, p);
+		FILE_UNUSE(fp, l);
 	}
 #endif
 
@@ -216,10 +223,10 @@ check_shell:
 	/* and set up the fake args list, for later */
 	MALLOC(shellargp, char **, 4 * sizeof(char *), M_EXEC, M_WAITOK);
 	tmpsap = shellargp;
-	MALLOC(*tmpsap, char *, shellnamelen + 1, M_EXEC, M_WAITOK);
+	*tmpsap = malloc(shellnamelen + 1, M_EXEC, M_WAITOK);
 	strlcpy(*tmpsap++, shellname, shellnamelen + 1);
 	if (shellarg != NULL) {
-		MALLOC(*tmpsap, char *, shellarglen + 1, M_EXEC, M_WAITOK);
+		*tmpsap = malloc(shellarglen + 1, M_EXEC, M_WAITOK);
 		strlcpy(*tmpsap++, shellarg, shellarglen + 1);
 	}
 	MALLOC(*tmpsap, char *, MAXPATHLEN, M_EXEC, M_WAITOK);
@@ -227,8 +234,26 @@ check_shell:
 	if ((epp->ep_flags & EXEC_HASFD) == 0) {
 #endif
 		/* normally can't fail, but check for it if diagnostic */
+#ifdef SYSTRACE
+		error = 1;
+		if (ISSET(p->p_flag, P_SYSTRACE)) {
+			error = systrace_scriptname(p, *tmpsap);
+			if (error == 0)
+				tmpsap++;
+		}
+		if (error) {
+			/*
+			 * Since systrace_scriptname() provides a
+			 * convenience, not a security issue, we are
+			 * safe to do this.
+			 */
+			error = copystr(epp->ep_name, *tmpsap++, MAXPATHLEN,
+					NULL);
+		}
+#else
 		error = copyinstr(epp->ep_name, *tmpsap++, MAXPATHLEN,
 		    (size_t *)0);
+#endif /* SYSTRACE */
 #ifdef DIAGNOSTIC
 		if (error != 0)
 			panic("exec_script: copyinstr couldn't fail");
@@ -253,9 +278,9 @@ check_shell:
 	oldpnbuf = epp->ep_ndp->ni_cnd.cn_pnbuf;
 
 #ifdef VERIFIED_EXEC
-	if ((error = check_exec(p, epp, VERIEXEC_INDIRECT)) == 0) {
+	if ((error = check_exec(l, epp, VERIEXEC_INDIRECT)) == 0) {
 #else
-	if ((error = check_exec(p, epp, 0)) == 0) {
+	if ((error = check_exec(l, epp, 0)) == 0) {
 #endif
 		/* note that we've clobbered the header */
 		epp->ep_flags |= EXEC_DESTR|EXEC_HASES;
@@ -268,7 +293,7 @@ check_shell:
 		 */
 		if ((epp->ep_flags & EXEC_HASFD) == 0) {
 			vn_lock(scriptvp, LK_EXCLUSIVE | LK_RETRY);
-			VOP_CLOSE(scriptvp, FREAD, p->p_ucred, p);
+			VOP_CLOSE(scriptvp, FREAD, p->p_cred, l);
 			vput(scriptvp);
 		}
 
@@ -304,10 +329,10 @@ fail:
 	/* kill the opened file descriptor, else close the file */
         if (epp->ep_flags & EXEC_HASFD) {
                 epp->ep_flags &= ~EXEC_HASFD;
-                (void) fdrelease(p, epp->ep_fd);
+                (void) fdrelease(l, epp->ep_fd);
         } else if (scriptvp) {
 		vn_lock(scriptvp, LK_EXCLUSIVE | LK_RETRY);
-		VOP_CLOSE(scriptvp, FREAD, p->p_ucred, p);
+		VOP_CLOSE(scriptvp, FREAD, p->p_cred, l);
 		vput(scriptvp);
 	}
 

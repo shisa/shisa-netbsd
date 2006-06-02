@@ -1,4 +1,4 @@
-/*	$NetBSD: frame.h,v 1.1 2002/03/24 15:46:58 bjh21 Exp $	*/
+/*	$NetBSD: frame.h,v 1.3 2005/12/11 12:16:04 christos Exp $	*/
 
 /*
  * Copyright (c) 1999 Ben Harris.
@@ -78,7 +78,9 @@ typedef struct irqframe {
 	register_t if_r15; /* Must be fixed so we know which branch to use */
 } irqframe_t;
 
-#define clockframe irqframe
+struct clockframe {
+	struct irqframe cf_if;
+};
 
 /*
  * Switch frame

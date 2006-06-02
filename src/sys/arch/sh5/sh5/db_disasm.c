@@ -1,4 +1,4 @@
-/*	$NetBSD: db_disasm.c,v 1.16 2003/12/08 08:08:40 jdolecek Exp $	*/
+/*	$NetBSD: db_disasm.c,v 1.18 2005/12/11 12:19:02 christos Exp $	*/
 
 /*
  * Copyright 2002 Wasabi Systems, Inc.
@@ -36,7 +36,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: db_disasm.c,v 1.16 2003/12/08 08:08:40 jdolecek Exp $");
+__KERNEL_RCSID(0, "$NetBSD: db_disasm.c,v 1.18 2005/12/11 12:19:02 christos Exp $");
 
 #include "opt_ddb.h"
 
@@ -1416,7 +1416,7 @@ sh5_fmt_xsd16(opcode_t op, db_addr_t loc, char *op1, char *op2, char *op3)
 static int
 sh5_fmt_xsd16_decode_op(int fmt, int op, int d, db_addr_t loc, char *ops)
 {
-	char *symname;
+	const char *symname;
 	db_sym_t sym;
 	db_expr_t diff;
 	opcode_t nextop;

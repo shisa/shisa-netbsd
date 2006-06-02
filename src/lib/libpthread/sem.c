@@ -1,4 +1,4 @@
-/*	$NetBSD: sem.c,v 1.7.6.1 2005/11/01 20:01:44 jmc Exp $	*/
+/*	$NetBSD: sem.c,v 1.9 2005/10/19 02:15:03 chs Exp $	*/
 
 /*-
  * Copyright (c) 2003 The NetBSD Foundation, Inc.
@@ -66,7 +66,7 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: sem.c,v 1.7.6.1 2005/11/01 20:01:44 jmc Exp $");
+__RCSID("$NetBSD: sem.c,v 1.9 2005/10/19 02:15:03 chs Exp $");
 
 #include <sys/types.h>
 #include <sys/ksem.h>

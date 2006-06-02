@@ -1,4 +1,4 @@
-/*	$NetBSD: pt_filter.c,v 1.5 2005/02/09 13:57:57 xtraeme Exp $	*/
+/*	$NetBSD: pt_filter.c,v 1.7 2006/04/21 15:00:49 skrll Exp $	*/
 
 /*
  * Copyright (c) 1999 The NetBSD Foundation, Inc.
@@ -39,7 +39,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: pt_filter.c,v 1.5 2005/02/09 13:57:57 xtraeme Exp $");
+__RCSID("$NetBSD: pt_filter.c,v 1.7 2006/04/21 15:00:49 skrll Exp $");
 #endif				/* not lint */
 
 #include <stdio.h>
@@ -91,6 +91,7 @@ portal_rfilter(struct portal_cred *pcr, char *key, char **v, int kso, int *fdp)
 	char   *path;
 	FILE   *fp;
 	int     error = 0;
+	char	percent_s[] = "%s";
 
 	/* We don't use this parameter. */
 	(void) kso;
@@ -103,7 +104,6 @@ portal_rfilter(struct portal_cred *pcr, char *key, char **v, int kso, int *fdp)
 	fprintf(stderr, "rfilter:  Got key %s\n", key);
 #endif
 
-	errno = 0;
 	if (!v[1] || !v[2]) {
 		syslog(LOG_ERR,
 		    "rfilter: got strip-key of %s, and command start of %s\n",
@@ -125,7 +125,7 @@ portal_rfilter(struct portal_cred *pcr, char *key, char **v, int kso, int *fdp)
 	 * v[3] could be NULL, or could point to "".
 	 */
 	if (!v[3] || strlen(v[3]) == 0)
-	  (const char *)v[3] = "%s";	/* Handle above assumption. */
+		v[3] = percent_s;	/* Handle above assumption. */
 	path = key;
 	/* Strip out stripkey if it matches leading part of key. */
 	if (!strncmp(v[1], key, strlen(v[1])))
@@ -140,15 +140,14 @@ portal_rfilter(struct portal_cred *pcr, char *key, char **v, int kso, int *fdp)
 		syslog(LOG_WARNING,
 		    "Warning:  potential overflow on string!  Length was %lu\n",
 		    (unsigned long)strlen(cmd));
-		return -1;
+		return ENAMETOOLONG;
 	}
 #ifdef DEBUG
 	fprintf(stderr, "rfilter:  Using cmd of %s\n", cmd);
 #endif
 	fp = popen(cmd, "r");
-	if (fp == NULL) {
+	if (fp == NULL)
 	  	return errno;
-	}
 
 	/* Before returning, restore original uid and gid. */
 	/* But only do this if we were root to start with. */
@@ -156,15 +155,13 @@ portal_rfilter(struct portal_cred *pcr, char *key, char **v, int kso, int *fdp)
 		if ((seteuid((uid_t) 0) < 0) || (setegid((gid_t) 0) < 0)) {
 			error = errno;
 			syslog(LOG_WARNING, "setcred: %m");
-			if (fp) {
-				fclose(fp);
-				fp = NULL;
-			}
+			fclose(fp);
+			fp = NULL;
 		}
 	}
-	if (error == 0)
+	if (fp)
 		fdp[0] = fileno(fp);
-	return (errno);
+	return error;
 }
 
 int
@@ -183,7 +180,6 @@ portal_wfilter(struct portal_cred *pcr, char *key, char **v, int kso, int *fdp)
 	if (cred_change_err != 0)
 		return cred_change_err;
 
-	errno = 0;
 	path = key + (v[1] ? strlen(v[1]) : 0);
 	/*
 	 * v[0] is key match, v[1] says how much to strip, v[2]
@@ -194,7 +190,7 @@ portal_wfilter(struct portal_cred *pcr, char *key, char **v, int kso, int *fdp)
 		syslog(LOG_WARNING,
 		    "Warning:  potential overflow on string!  Length was %lu\n",
 		    (unsigned long)strlen(cmd));
-		return -1;
+		return ENAMETOOLONG;
 	}
 	fp = popen(cmd, "w");
 	if (fp == NULL) {
@@ -206,13 +202,11 @@ portal_wfilter(struct portal_cred *pcr, char *key, char **v, int kso, int *fdp)
 		if ((seteuid((uid_t) 0) < 0) || (setegid((gid_t) 0) < 0)) {
 			error = errno;
 			syslog(LOG_WARNING, "setcred: %m");
-			if (fp) {
-				fclose(fp);
-				fp = NULL;
-			}
+			fclose(fp);
+			fp = NULL;
 		}
 	}
-	if (error == 0)
+	if (fp)
 		fdp[0] = fileno(fp);
-	return (errno);
+	return error;
 }

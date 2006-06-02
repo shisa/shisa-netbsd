@@ -1,4 +1,4 @@
-/*	$NetBSD: spec_vnops.c,v 1.80.2.1 2005/09/26 20:22:55 tron Exp $	*/
+/*	$NetBSD: spec_vnops.c,v 1.87 2006/05/14 21:32:21 elad Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: spec_vnops.c,v 1.80.2.1 2005/09/26 20:22:55 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: spec_vnops.c,v 1.87 2006/05/14 21:32:21 elad Exp $");
 
 #include <sys/param.h>
 #include <sys/proc.h>
@@ -46,10 +46,12 @@ __KERNEL_RCSID(0, "$NetBSD: spec_vnops.c,v 1.80.2.1 2005/09/26 20:22:55 tron Exp
 #include <sys/stat.h>
 #include <sys/errno.h>
 #include <sys/ioctl.h>
+#include <sys/poll.h>
 #include <sys/file.h>
 #include <sys/disklabel.h>
 #include <sys/lockf.h>
 #include <sys/tty.h>
+#include <sys/kauth.h>
 
 #include <miscfs/genfs/genfs.h>
 #include <miscfs/specfs/specdev.h>
@@ -75,7 +77,7 @@ struct vnode	*speclisth[SPECHSZ];
  * equivalent for other filesystems.
  */
 
-int (**spec_vnodeop_p) __P((void *));
+int (**spec_vnodeop_p)(void *);
 const struct vnodeopv_entry_desc spec_vnodeop_entries[] = {
 	{ &vop_default_desc, vn_default_error },
 	{ &vop_lookup_desc, spec_lookup },		/* lookup */
@@ -116,11 +118,6 @@ const struct vnodeopv_entry_desc spec_vnodeop_entries[] = {
 	{ &vop_islocked_desc, spec_islocked },		/* islocked */
 	{ &vop_pathconf_desc, spec_pathconf },		/* pathconf */
 	{ &vop_advlock_desc, spec_advlock },		/* advlock */
-	{ &vop_blkatoff_desc, spec_blkatoff },		/* blkatoff */
-	{ &vop_valloc_desc, spec_valloc },		/* valloc */
-	{ &vop_vfree_desc, spec_vfree },		/* vfree */
-	{ &vop_truncate_desc, spec_truncate },		/* truncate */
-	{ &vop_update_desc, spec_update },		/* update */
 	{ &vop_bwrite_desc, spec_bwrite },		/* bwrite */
 	{ &vop_getpages_desc, spec_getpages },		/* getpages */
 	{ &vop_putpages_desc, spec_putpages },		/* putpages */
@@ -170,17 +167,17 @@ spec_open(v)
 	struct vop_open_args /* {
 		struct vnode *a_vp;
 		int  a_mode;
-		struct ucred *a_cred;
-		struct proc *a_p;
+		kauth_cred_t a_cred;
+		struct lwp *a_l;
 	} */ *ap = v;
-	struct proc *p = ap->a_p;
+	struct lwp *l = ap->a_l;
 	struct vnode *bvp, *vp = ap->a_vp;
 	const struct bdevsw *bdev;
 	const struct cdevsw *cdev;
 	dev_t blkdev, dev = (dev_t)vp->v_rdev;
 	int error;
 	struct partinfo pi;
-	int (*d_ioctl)(dev_t, u_long, caddr_t, int, struct proc *);
+	int (*d_ioctl)(dev_t, u_long, caddr_t, int, struct lwp *);
 
 	/*
 	 * Don't allow open if fs is mounted -nodev.
@@ -220,7 +217,7 @@ spec_open(v)
 		if (cdev->d_type == D_TTY)
 			vp->v_flag |= VISTTY;
 		VOP_UNLOCK(vp, 0);
-		error = (*cdev->d_open)(dev, ap->a_mode, S_IFCHR, p);
+		error = (*cdev->d_open)(dev, ap->a_mode, S_IFCHR, l);
 		vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);
 		if (cdev->d_type != D_DISK)
 			return error;
@@ -244,7 +241,7 @@ spec_open(v)
 		 */
 		if ((error = vfs_mountedon(vp)) != 0)
 			return (error);
-		error = (*bdev->d_open)(dev, ap->a_mode, S_IFBLK, p);
+		error = (*bdev->d_open)(dev, ap->a_mode, S_IFBLK, l);
 		d_ioctl = bdev->d_ioctl;
 		break;
 
@@ -261,7 +258,7 @@ spec_open(v)
 
 	if (error)
 		return error;
-	if (!(*d_ioctl)(vp->v_rdev, DIOCGPART, (caddr_t)&pi, FREAD, curproc))
+	if (!(*d_ioctl)(vp->v_rdev, DIOCGPART, (caddr_t)&pi, FREAD, curlwp))
 		vp->v_size = (voff_t)pi.disklab->d_secsize * pi.part->p_size;
 	return 0;
 }
@@ -278,11 +275,11 @@ spec_read(v)
 		struct vnode *a_vp;
 		struct uio *a_uio;
 		int  a_ioflag;
-		struct ucred *a_cred;
+		kauth_cred_t a_cred;
 	} */ *ap = v;
 	struct vnode *vp = ap->a_vp;
 	struct uio *uio = ap->a_uio;
- 	struct proc *p = uio->uio_procp;
+ 	struct lwp *l = curlwp;
 	struct buf *bp;
 	const struct bdevsw *bdev;
 	const struct cdevsw *cdev;
@@ -295,7 +292,8 @@ spec_read(v)
 #ifdef DIAGNOSTIC
 	if (uio->uio_rw != UIO_READ)
 		panic("spec_read mode");
-	if (uio->uio_segflg == UIO_USERSPACE && uio->uio_procp != curproc)
+	if (&uio->uio_vmspace->vm_map != kernel_map &&
+	    uio->uio_vmspace != curproc->p_vmspace)
 		panic("spec_read proc");
 #endif
 	if (uio->uio_resid == 0)
@@ -320,7 +318,7 @@ spec_read(v)
 		bdev = bdevsw_lookup(vp->v_rdev);
 		if (bdev != NULL &&
 		    (*bdev->d_ioctl)(vp->v_rdev, DIOCGPART, (caddr_t)&dpart,
-				     FREAD, p) == 0) {
+				     FREAD, l) == 0) {
 			if (dpart.part->p_fstype == FS_BSDFFS &&
 			    dpart.part->p_frag != 0 && dpart.part->p_fsize != 0)
 				bsize = dpart.part->p_frag *
@@ -360,11 +358,11 @@ spec_write(v)
 		struct vnode *a_vp;
 		struct uio *a_uio;
 		int  a_ioflag;
-		struct ucred *a_cred;
+		kauth_cred_t a_cred;
 	} */ *ap = v;
 	struct vnode *vp = ap->a_vp;
 	struct uio *uio = ap->a_uio;
-	struct proc *p = uio->uio_procp;
+	struct lwp *l = curlwp;
 	struct buf *bp;
 	const struct bdevsw *bdev;
 	const struct cdevsw *cdev;
@@ -377,7 +375,8 @@ spec_write(v)
 #ifdef DIAGNOSTIC
 	if (uio->uio_rw != UIO_WRITE)
 		panic("spec_write mode");
-	if (uio->uio_segflg == UIO_USERSPACE && uio->uio_procp != curproc)
+	if (&uio->uio_vmspace->vm_map != kernel_map &&
+	    uio->uio_vmspace != curproc->p_vmspace)
 		panic("spec_write proc");
 #endif
 
@@ -402,7 +401,7 @@ spec_write(v)
 		bdev = bdevsw_lookup(vp->v_rdev);
 		if (bdev != NULL &&
 		    (*bdev->d_ioctl)(vp->v_rdev, DIOCGPART, (caddr_t)&dpart,
-				    FREAD, p) == 0) {
+				    FREAD, l) == 0) {
 			if (dpart.part->p_fstype == FS_BSDFFS &&
 			    dpart.part->p_frag != 0 && dpart.part->p_fsize != 0)
 				bsize = dpart.part->p_frag *
@@ -455,8 +454,8 @@ spec_ioctl(v)
 		u_long a_command;
 		void  *a_data;
 		int  a_fflag;
-		struct ucred *a_cred;
-		struct proc *a_p;
+		kauth_cred_t a_cred;
+		struct lwp *a_l;
 	} */ *ap = v;
 	const struct bdevsw *bdev;
 	const struct cdevsw *cdev;
@@ -486,7 +485,7 @@ spec_ioctl(v)
 		if (cdev == NULL)
 			return (ENXIO);
 		return ((*cdev->d_ioctl)(dev, ap->a_command, ap->a_data,
-		    ap->a_fflag, ap->a_p));
+		    ap->a_fflag, ap->a_l));
 
 	case VBLK:
 		bdev = bdevsw_lookup(dev);
@@ -499,7 +498,7 @@ spec_ioctl(v)
 				return (1);
 		}
 		return ((*bdev->d_ioctl)(dev, ap->a_command, ap->a_data,
-		   ap->a_fflag, ap->a_p));
+		   ap->a_fflag, ap->a_l));
 
 	default:
 		panic("spec_ioctl");
@@ -515,7 +514,7 @@ spec_poll(v)
 	struct vop_poll_args /* {
 		struct vnode *a_vp;
 		int a_events;
-		struct proc *a_p;
+		struct lwp *a_l;
 	} */ *ap = v;
 	const struct cdevsw *cdev;
 	dev_t dev;
@@ -526,8 +525,8 @@ spec_poll(v)
 		dev = ap->a_vp->v_rdev;
 		cdev = cdevsw_lookup(dev);
 		if (cdev == NULL)
-			return (ENXIO);
-		return (*cdev->d_poll)(dev, ap->a_events, ap->a_p);
+			return (POLLERR);
+		return (*cdev->d_poll)(dev, ap->a_events, ap->a_l);
 
 	default:
 		return (genfs_poll(v));
@@ -573,11 +572,11 @@ spec_fsync(v)
 {
 	struct vop_fsync_args /* {
 		struct vnode *a_vp;
-		struct ucred *a_cred;
+		kauth_cred_t a_cred;
 		int  a_flags;
 		off_t offlo;
 		off_t offhi;
-		struct proc *a_p;
+		struct lwp *a_l;
 	} */ *ap = v;
 	struct vnode *vp = ap->a_vp;
 
@@ -646,7 +645,7 @@ spec_inactive(v)
 {
 	struct vop_inactive_args /* {
 		struct vnode *a_vp;
-		struct proc *a_p;
+		struct proc *a_l;
 	} */ *ap = v;
 
 	VOP_UNLOCK(ap->a_vp, 0);
@@ -688,15 +687,15 @@ spec_close(v)
 	struct vop_close_args /* {
 		struct vnode *a_vp;
 		int  a_fflag;
-		struct ucred *a_cred;
-		struct proc *a_p;
+		kauth_cred_t a_cred;
+		struct lwp *a_l;
 	} */ *ap = v;
 	struct vnode *vp = ap->a_vp;
 	const struct bdevsw *bdev;
 	const struct cdevsw *cdev;
 	struct session *sess;
 	dev_t dev = vp->v_rdev;
-	int (*devclose) __P((dev_t, int, int, struct proc *));
+	int (*devclose)(dev_t, int, int, struct lwp *);
 	int mode, error, count, flags, flags1;
 
 	count = vcount(vp);
@@ -718,8 +717,8 @@ spec_close(v)
 		 * guarantee that the vrele() will do the final close on the
 		 * actual tty device.
 		 */
-		if (count == 2 && ap->a_p &&
-		    vp == (sess = ap->a_p->p_session)->s_ttyvp) {
+		if (count == 2 && ap->a_l &&
+		    vp == (sess = ap->a_l->l_proc->p_session)->s_ttyvp) {
 			sess->s_ttyvp = NULL;
 			if (sess->s_ttyp->t_session != NULL) {
 				sess->s_ttyp->t_pgrp = NULL;
@@ -751,7 +750,7 @@ spec_close(v)
 		 * we must invalidate any in core blocks, so that
 		 * we can, for instance, change floppy disks.
 		 */
-		error = vinvalbuf(vp, V_SAVE, ap->a_cred, ap->a_p, 0, 0);
+		error = vinvalbuf(vp, V_SAVE, ap->a_cred, ap->a_l, 0, 0);
 		if (error)
 			return (error);
 		/*
@@ -796,7 +795,7 @@ spec_close(v)
 		VOP_UNLOCK(vp, 0);
 
 	if (devclose != NULL)
-		error = (*devclose)(dev, flags1, mode, ap->a_p);
+		error = (*devclose)(dev, flags1, mode, ap->a_l);
 	else
 		error = ENXIO;
 

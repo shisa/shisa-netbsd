@@ -1,4 +1,4 @@
-/*	$NetBSD: md.h,v 1.11 2004/06/06 06:06:59 christos Exp $	*/
+/*	$NetBSD: md.h,v 1.13 2006/02/26 10:25:52 dsl Exp $	*/
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.
@@ -50,6 +50,7 @@
  *      base etc comp games man misc text xbase xcomp xetc xfont xserver
  */
 #define SET_KERNEL_1_NAME	"kern-GENERIC"
+#define SET_KERNEL_2_NAME	"kern-GENERIC.ABLE"
 
 /*
  * Machine-specific command to write a new label to a disk.
@@ -61,13 +62,3 @@
  * hand-edited disklabel will NOT be written by MI code.
  */
 #define DISKLABEL_CMD "disklabel -w -r"
-
-/*
- * Default fileystem type for floppy disks.
- * On cats, that is msdos.
- */
-const char *fdtype;
-
-/*
- *  prototypes for MD code.
- */

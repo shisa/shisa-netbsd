@@ -1,4 +1,4 @@
-/*	$NetBSD: pwd.h,v 1.37.2.2 2005/07/11 21:32:30 tron Exp $	*/
+/*	$NetBSD: pwd.h,v 1.39 2005/05/24 17:36:29 kleink Exp $	*/
 
 /*-
  * Copyright (c) 1989, 1993

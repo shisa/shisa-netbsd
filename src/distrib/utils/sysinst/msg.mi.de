@@ -1,4 +1,4 @@
-/*	$NetBSD: msg.mi.de,v 1.17.2.7 2005/09/30 17:29:39 tron Exp $	*/
+/*	$NetBSD: msg.mi.de,v 1.31 2006/02/26 10:25:52 dsl Exp $	*/
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.
@@ -138,9 +138,6 @@ message ask_disk
 message Available_disks
 {Verfügbare Festplatten}
 
-message cylinders
-{Zylinder}
-
 message heads
 {Köpfe}
 
@@ -189,12 +186,6 @@ ist es am effizientesten sich Partitionsgrößen auszusuchen, die exakt
 ein Vielfaches der aktuellen Zylindergröße ausmachen.
 
 Wählen Sie Ihre Einheit.}
-
-message defaultunit
-{Solange Sie nicht 'M' (Megabytes), 'G' (Gigabytes), 'c' (Zylinder) oder
-'s' (Sektoren) Ihrer Zahleneingabe anhängen, wird sowohl bei Größen als auch
-Offsets von %s ausgegangen.
-}
 
 message ptnsizes
 {Sie können jetzt die Größen der Systempartitionen verändern. Standardmäßig
@@ -383,42 +374,6 @@ message openfail
 }
 
 
-message statfail
-{Kann Eigenschaften von %s nicht lesen, die Fehlermeldung lautet: %s.
-}
-
-message unlink_fail
-{Ich konnte %s nicht löschen, die Fehermeldung lautet: %s.
-}
-
-message rename_fail
-{Ich konnte %s nicht auf %s umbenennen, die Fehlermeldung lautet: %s.
-}
-
-message deleting_files
-{Folgende Dateien werden im Rahmen dieser Aktualisierung gelöscht:
-}
-
-message deleting_dirs
-{Im Rahmen dieser Aktualisierung werden folgende Verzeichnisse gelöscht
-(ich werde Verzeichnisse die noch Dateien enthalten umbenennen):
-}
-
-message renamed_dir
-{Das Verzeichnis %s wurde zu %s umbenannt, weil es nicht leer ist.
-}
-
-message cleanup_warn
-{Das Löschen nicht mehr benötigter Dateien der bestehenden
-Installation ist fehlgeschlagen. Dadurch kann das Extrahieren der
-Distribution ebenfalls fehlschlagen.
-}
-
-message nomount
-{Bei der Partition %c handelt es sich nicht um ein 4.2BSD oder msdos
-Dateisystem, so daß diese Partition kein Mountverzeichnis hat.
-}
-
 message mountfail
 {Das Mounten des Gerätes /dev/%s%c auf %s ist fehlgeschlagen.
 }
@@ -471,13 +426,12 @@ message distmedium
 {Ihre Festplatte ist nun bereit für die Installation der Kernel- und
 Distributionspakete. Wie im INSTALL Dokument beschrieben, haben Sie nun 
 mehrere Optionen.
-Für FTP oder NFS müssen Sie mit einem Netzwerk verbunden sein und Zugriff auf
-die entsprechenden Server haben. Wenn Sie zu diesem Zeitpunkt noch nicht
-bereit sind diese Installation zu vollenden, können Sie 'kein' auswählen,
-wodurch Sie zum Hauptmenü zurückkehren. Sie können dann zu einem späteren
-Zeitpunkt die Installation erneut starten und im Hauptmenü "Aktualisierung"
-wählen.
-}
+Für FTP oder NFS müssen Sie mit einem Netzwerk verbunden sein und
+Zugriff auf die entsprechenden Server haben.
+
+Sets selected %d, processed %d. Next set %s.
+
+}	/* XXX translate last line */
 
 message distset
 {Die NetBSD Distribution ist in verschiedene Pakete aufgeteilt.
@@ -489,16 +443,9 @@ wollen.
 }
 
 message ftpsource
-{
-Dies sind die Daten zum Aufbau einer %s Verbindung.
+{Dies sind die Daten zum Aufbau einer %s Verbindung.
 Falls der Benutzer "ftp" ist, benötigen Sie kein Passwort.
 
-Server:		%s 
-Basispfad:	%s 
-Verzeichnis:	%s 
-Benutzer:	%s 
-Passwort:	%s 
-Proxy:		%s
 }
 
 message email
@@ -512,21 +459,19 @@ message nfssource
 finden ist. 
 (Das Verzeichnis muss .tgz Dateien enthalten und NFS mountbar sein)
 
-Server:		%s 
-Basispfad:	%s 
-Verzeichnis:	%s
 }
 
-message nfsbadmount
-{Das Verzeichnis %s:%s konnte nicht gemountet werden.}
+message floppysource	/* XXX translate */
+{Enter the floppy device to be used and transfer directory on the target
+filesystem.  The set files must be in the root directory of the floppies.
+
+}
 
 message cdromsource
 {Geben Sie das CD-Laufwerk und das entsprechende Verzeichnis 
 an, in dem die Distribution zu finden ist.
 (Das Verzeichnis muss .tgz Dateien enthalten)
 
-Laufwerk:	%s 
-Verzeichnis:	%s
 }
 
 message localfssource
@@ -534,10 +479,6 @@ message localfssource
 Verzeichnis an, in dem die Distribution zu finden ist.
 (Das Verzeichnis muss .tgz Dateien enthalten)
 
-Laufwerk:	%s 
-Dateisystem:	%s 
-Basispfad:	%s 
-Verzeichnis:	%s
 }
 
 message localdir
@@ -545,25 +486,10 @@ message localdir
 die Distribution zu finden ist.
 (Das Verzeichnis muss .tgz Dateien enthalten)
 
-Basispfad:	%s 
-Verzeichnis:	%s
 }
 
 message filesys
 {Dateisystem}
-
-message cdrombadmount
-{Die CD in %s konnte nicht gemountet werden.}
-
-message localfsbadmount
-{%s konnte auf dem Laufwerk %s nicht gemountet werden.}
-
-message badlocalsetdir
-{%s ist kein Verzeichnis.}
-
-message badsetdir
-{Die notwendigen Pakete etc.tgz und base.tgz sind in %s nicht vorhanden.
-Sind Sie sicher, daß Sie das richtige Verzeichnis angegeben haben?}
 
 message nonet
 {NetBSD hat keinen bekannten Netzwerkadapter gefunden.
@@ -598,7 +524,7 @@ message net_host
 message net_ip
 {IPv4 Adresse}
 
-message net_ip_2nd
+message net_srv_ip
 {IPv4 Adressse des Servers}
 
 message net_mask
@@ -675,17 +601,8 @@ message realdir
 {Konnte nicht in das Verzeichnis %s: %s wechseln. Installation abgebrochen.
 }
 
-message ftperror
-{"ftp" konnte eine Datei nicht herunterladen.
-Wollen Sie es erneut versuchen?}
-
-message distdir
-{Welches Verzeichnis möchten Sie für %s nutzen?}
-
-message delete_dist_files
-{Wollen Sie die NetBSD Pakete von %s löschen? 
-(Sie können diese auch dazu beibehalten ein weiteres System zu installieren
-oder zu erneuern.)}
+message delete_xfer_file	/* XXX translate */
+{Delete after install}
 
 message verboseextract
 {
@@ -695,9 +612,6 @@ geladen und auf die Festplatte kopiert.
 
 message notarfile
 {Das Release Paket %s existiert nicht.}
-
-message notarfile_ok
-{Möchten Sie dennoch mit der Extraktion fortfahren?}
 
 message endtarok
 {Alle Distributionspakete wurden erfolgreich entpackt.}
@@ -790,10 +704,6 @@ die Prüfung des Dateisystems (fsck) ist fehlgeschlagen.
 Die Aktualisierung wird abgebrochen. (Fehlernummer %d.)
 }
 
-message badmount
-{Das Dateisystem auf /dev/%s%c konnte nicht erfolgreich gemountet werden. Die
-Aktualisierung wird abgebrochen.}
-
 message rootmissing
 { Das Zielverzeichnis %s existiert nicht.
 }
@@ -803,14 +713,30 @@ message badroot
 Sind Sie sicher, daß Sie alle benötigten Sets installiert haben? 
 }
 
-message fddev
-{Welches Diskettenlaufwerk wollen Sie nutzen? }
+message fd_type		/* XXX translate */
+{Floppy file system type}
 
+message fdnotfound	/* XXX fix translation */
+{Ich konnte die Datei nicht finden.
+}
+
+message fdremount
+{Die Diskette konnte nicht gemountet werden.
+}
+
+message fdmount		/* XXX translate */
+{Please load the floppy containing the file named "%s.%s". 
+
+If the set's has no more disks, select "Set finished" to install the set.
+Select "Abort fetch" to return to the install media selection menu.
+}
+
+.if 0
 message fdmount
-{Bitte legen Sie die Diskette ein, auf der sich die Datei "%s" befindet. }
+{Bitte legen Sie die Diskette ein, auf der sich die Datei "%s.%s" befindet. }
 
 message fdnotfound
-{Ich konnte die Datei "%s" nicht finden. Bitte legen Sie die entsprechende 
+{Ich konnte die Datei "%s.%s" nicht finden. Bitte legen Sie die entsprechende 
 Diskette ein.
 Wenn dies die letzte Diskette des Paketes war, wählen Sie "Paket fertig",
 um zum nächsten Paket überzugehen - falls ein weiteres Paket folgt.}
@@ -820,7 +746,7 @@ message fdremount
 
 Sie sollten: 
 
-Erneut probieren, die Diskette mit der Datei "%s" einzulegen.
+Erneut probieren, die Diskette mit der Datei "%s.%s" einzulegen.
 
 Keine weiteren Disketten für dieses Paket laden, und stattdessen mit dem
 nächsten Paket fortfahren - falls ein weiteres existiert.
@@ -828,6 +754,7 @@ nächsten Paket fortfahren - falls ein weiteres existiert.
 Keine weiteren Pakete mehr vom dem Diskettenlaufwerk laden und die Installation
 abbrechen.
 }
+.endif
 
 message mntnetconfig
 {Möchten Sie die aktuellen Netzwerkeinstellungen für den allgemeinen
@@ -879,17 +806,11 @@ message set_X11_fonts
 message set_X11_servers
 {X11 Server}
 
-message set_X_contrib
-{X zusätzliche Clientsoftware}
-
 message set_X11_prog
 {X11 Programmierung}
 
-message set_X11_misc
-{X11 Diverses}
-
 message cur_distsets_row
-{%-27s %3s\n}
+{%-27s %3s}
 
 message select_all
 {Alle oben angezeigten Pakete auswählen}
@@ -922,27 +843,8 @@ Hauptmenü zurückkehren.
 Wollen Sie die Partitionstabelle erneut editieren?}
 
 
-message not_regular_file
-{Die Konfigurationsdatei %s ist keine reguläre Datei.\n}
-
-message out_of_memory
-{Nicht genug freier Arbeitsspeicher (malloc ist fehlgeschlagen).\n}
-
 message config_open_error
 {Konnte Konfigurationsdatei %s nicht öffnen.\n}
-
-message config_read_error
-{Konnte Konfigurationsdatei %s nicht lesen.\n}
-
-message cmdfail
-{Das Kommando
-	%s
-ist fehlgeschlagen. Der Vorgang muss abgebrochen werden.}
-
-message upgradeparttype
-{Die einzige für NetBSD nutzbare Partition hat den alten
-NetBSD/386BSD/FreeBSD Typ. Möchten Sie den Typ dieser Partition in den
-aktuellen nur-NetBSD Partitionstyp ändern?}
 
 message choose_timezone
 {Bitte wählen Sie die für Sie passende Zeitzone aus der folgenden Liste aus.
@@ -994,12 +896,6 @@ message rootsh
 {Sie können jetzt die Standardshell für Benutzer "root" auswählen.
 Die Vorgabe dafür ist /bin/sh, aber vielleicht bevorzugen Sie eine andere
 Shell.}
-
-message postuseexisting
-{
-Vergessen Sie nicht alle Mountverzeichnisse für jedes Dateisystem, das
-gemountet werden soll, zu prüfen. Drücken Sie die Eingabetaste um fortzufahren.
-}
 
 message no_root_fs
 {
@@ -1053,12 +949,11 @@ message local_dir {Lokales Verzeichnis}
 message Select_your_distribution {Wählen Sie Ihre Pakete}
 message Full_installation {Volle Installation}
 message Custom_installation {Benutzerdefinierte Installation}
-message Change {Ändern}
 message hidden {** versteckt **}
 message Host {Host}
 message Base_dir {Basispfad}
 message Set_dir {Verzeichnis}
-message Directory {Verzeichnis}
+message Xfer_dir {Zwischenspeicher}
 message User {Benutzer}
 message Password {Passwort}
 message Proxy {Proxy}
@@ -1066,10 +961,11 @@ message Get_Distribution {Distribution herunterladen}
 message Continue {Weiter}
 message What_do_you_want_to_do {Was möchten Sie tun?}
 message Try_again {Versuchen Sie es erneut}
-message Give_up {Aufgeben}
-message Ignore_continue_anyway {Ignorieren und dennoch fortsetzen}
 message Set_finished {Paket fertig}
-message Abort_install {Installation abbrechen}
+message Skip_set {Paket skip}	/* XXX */
+message Skip_group {Paket skip group}	/* XXX */
+message Abandon {Abandon installation}	/* XXX */
+message Abort_fetch {Abort fetch}	/* XXX */
 message Password_cipher {Passwort Verschlüsselungsverfahren}
 message DES {DES}
 message MD5 {MD5}

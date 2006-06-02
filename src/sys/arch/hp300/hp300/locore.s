@@ -1,4 +1,4 @@
-/*	$NetBSD: locore.s,v 1.134 2004/03/04 19:53:44 nathanw Exp $	*/
+/*	$NetBSD: locore.s,v 1.136 2005/12/11 12:17:18 christos Exp $	*/
 
 /*
  * Copyright (c) 1980, 1990, 1993
@@ -1552,16 +1552,3 @@ ASGLOBAL(fulltflush)
 ASGLOBAL(fullcflush)
 	.long	0
 #endif
-
-/*
- * Interrupt Counters
- *
- * We now use the evcnt(9) subsystem, but these are provided to keep
- * vmstat(8) happy.
- */
-
-GLOBAL(intrnames)
-GLOBAL(eintrnames)
-GLOBAL(intrcnt)
-GLOBAL(eintrcnt)
-	.long 0

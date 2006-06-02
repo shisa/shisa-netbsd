@@ -1,4 +1,4 @@
-/*	$NetBSD: _fileno.c,v 1.1 2004/05/09 17:27:53 kleink Exp $	*/
+/*	$NetBSD: _fileno.c,v 1.4 2005/09/13 01:44:10 christos Exp $	*/
 
 /*
  * Copyright (c) 1996 Christos Zoulas.  All rights reserved.
@@ -28,21 +28,24 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#include <sys/cdefs.h>
 
-#ifdef __indr_reference
+#include <sys/cdefs.h>
+#if defined(LIBC_SCCS) && !defined(lint)
+__RCSID("$NetBSD: _fileno.c,v 1.4 2005/09/13 01:44:10 christos Exp $");
+#endif /* LIBC_SCCS and not lint */
+
+#if defined(__indr_reference)
 __indr_reference(_fileno, fileno)
 #else
 
 #include <stdio.h>
 #undef fileno
-int	_fileno __P((FILE *));	/* XXX */
+int	_fileno (FILE *);
 
 int
-fileno(stream)
-	FILE *stream;
+fileno(FILE *stream)
 {
 
-	return _fileo(stream);
+	return _fileno(stream);
 }
 #endif

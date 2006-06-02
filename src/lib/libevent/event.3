@@ -1,4 +1,4 @@
-.\"	$NetBSD: event.3,v 1.6 2004/08/08 14:48:47 wiz Exp $
+.\"	$NetBSD: event.3,v 1.9 2005/04/17 08:51:19 wiz Exp $
 .\"	$OpenBSD: event.3,v 1.4 2002/07/12 18:50:48 provos Exp $
 .\"
 .\" Copyright (c) 2000 Artur Grabowski <art@openbsd.org>
@@ -27,7 +27,7 @@
 .\" OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 .\" ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 .\"
-.Dd June 12, 2003
+.Dd April 17, 2005
 .Dt EVENT 3
 .Os
 .Sh NAME
@@ -35,12 +35,16 @@
 .Nm event_dispatch ,
 .Nm event_loop ,
 .Nm event_loopexit ,
+.Nm event_base_loop ,
+.Nm event_base_loopexit ,
 .Nm event_set ,
 .Nm event_add ,
 .Nm event_del ,
 .Nm event_once ,
 .Nm event_pending ,
 .Nm event_initialized ,
+.Nm event_priority_init ,
+.Nm event_priority_set ,
 .Nm evtimer_set ,
 .Nm evtimer_add ,
 .Nm evtimer_del
@@ -268,6 +272,20 @@ and
 .Fn event_del
 and does not need to be reinitialized unless the function called and/or
 the argument to it are to be changed.
+However, when an
+.Fa ev
+structure has been added to libevent using
+.Fn event_add
+the structure must persist until the event occurs (assuming
+.Fa EV_PERSIST
+is not set) or is removed
+using
+.Fn event_del .
+You may not reuse the same
+.Fa ev
+structure for multiple monitored descriptors; each descriptor
+needs its own
+.Fa ev .
 .Pp
 The function
 .Fn event_add
@@ -362,17 +380,60 @@ adds
 .Va EV_PERSIST .
 .Pp
 It is possible to disable support for
-.Va epoll , kqueue , poll ,
+.Va epoll , kqueue , devpoll, poll ,
 or
 .Va select
-by setting the environment variable
-.Va EVENT_NOEPOLL , EVENT_NOKQUEUE , EVENT_NOPOLL ,
+by setting the environment variables
+.Va EVENT_NOEPOLL , EVENT_NOKQUEUE , EVENT_NODEVPOLL, EVENT_NOPOLL ,
 or
-.Va EVENT_NOSELECT .
+.Va EVENT_NOSELECT ,
+respectively.
 By setting the environment variable
 .Va EVENT_SHOW_METHOD ,
 .Nm libevent
 displays the kernel notification method that it uses.
+.Sh EVENT PRIORITIES
+By default
+.Nm libevent
+schedules all active events with the same priority.
+However, sometime it is desirable to process some events with a higher
+priority than others.
+For that reason,
+.Nm libevent
+supports strict priority queues.
+Active events with a lower priority are always processed before events
+with a higher priority.
+.Pp
+The number of different priorities can be set initially with the
+.Fn event_priority_init
+function.
+This function should be called before the first call to
+.Fn event_dispatch .
+The
+.Fn event_priority_set
+function can be used to assign a priority to an event.
+By default,
+.Nm libevent
+assigns the middle priority to all events unless their priority
+is explicitly set.
+.Sh THREAD SAFE EVENTS
+.Nm Libevent
+has experimental support for thread-safe events.
+When initializing the library via
+.Fn event_init ,
+an event base is returned.
+This event base can be used in conjunction with calls to
+.Fn event_base_set ,
+.Fn event_base_dispatch ,
+.Fn event_base_loop ,
+and
+.Fn event_base_loopexit .
+.Fn event_base_set
+should be called after preparing an event with
+.Fn event_set ,
+as
+.Fn event_set
+assigns the provided event to the most recently created event base.
 .Sh BUFFERED EVENTS
 .Nm libevent
 provides an abstraction on top of the regular event callbacks.
@@ -400,7 +461,9 @@ The argument is specified by the fourth parameter
 By default the buffered event is read enabled and will try to read
 from the file descriptor.
 The write callback is executed whenever the output buffer is drained
-below the write low watermark which is 0 by default.
+below the write low watermark which is
+.Va 0
+by default.
 .Pp
 The
 .Fn bufferevent_write

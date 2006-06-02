@@ -1,4 +1,4 @@
-/*	$NetBSD: md5_locl.h,v 1.1.1.1 2004/05/17 23:44:40 christos Exp $	*/
+/*	$NetBSD: md5_locl.h,v 1.1.1.3 2005/12/21 23:15:20 christos Exp $	*/
 
 /* crypto/md/md5_locl.h */
 /* Copyright (C) 1995-1997 Eric Young (eay@cryptsoft.com)

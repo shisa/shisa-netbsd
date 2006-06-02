@@ -1,4 +1,4 @@
-/*	$NetBSD: hpc.c,v 1.31 2004/12/30 23:18:09 rumble Exp $	*/
+/*	$NetBSD: hpc.c,v 1.36 2006/03/29 04:16:47 thorpej Exp $	*/
 
 /*
  * Copyright (c) 2000 Soren S. Jorvang
@@ -35,7 +35,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: hpc.c,v 1.31 2004/12/30 23:18:09 rumble Exp $");
+__KERNEL_RCSID(0, "$NetBSD: hpc.c,v 1.36 2006/03/29 04:16:47 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -165,6 +165,12 @@ const struct hpc_device {
 	  HPC_BASE_ADDRESS_0,
 	  HPC3_PBUS_CH0_DEVREGS, HPC3_PBUS_DMAREGS,
 	  8 + 4, /* XXX IRQ_LOCAL1 + 4 */
+	  HPCDEV_IP22 | HPCDEV_IP24 },
+
+	{ "pi1ppc",
+	  HPC_BASE_ADDRESS_0,
+	  HPC3_PBUS_CH6_DEVREGS + IOC_PLP_REGS, 0,
+	  -1,
 	  HPCDEV_IP22 | HPCDEV_IP24 },
 
 	{ NULL,
@@ -332,7 +338,8 @@ int	hpc_print(void *, const char *);
 
 int	hpc_revision(struct hpc_softc *, struct gio_attach_args *);
 
-int	hpc_submatch(struct device *, struct cfdata *, void *);
+int	hpc_submatch(struct device *, struct cfdata *,
+		     const int *, void *);
 
 int	hpc_power_intr(void *);
 
@@ -420,7 +427,8 @@ hpc_attach(struct device *parent, struct device *self, void *aux)
 			ha.hpc_regs = &hpc1_values;
 		ha.hpc_regs->revision = hpctype;
 
-		(void) config_found_sm(self, &ha, hpc_print, hpc_submatch);
+		(void) config_found_sm_loc(self, "hpc", NULL, &ha, hpc_print,
+					   hpc_submatch);
 	}
 
 	/*
@@ -448,7 +456,7 @@ hpc_revision(struct hpc_softc *sc, struct gio_attach_args *ga)
 	int hpctype;
 
 	/* Allow forcing of our hpc revision. */ 
-	switch (sc->sc_dev.dv_cfdata->cf_flags & HPC_REVISION_MASK) {
+	switch (device_cfdata(&sc->sc_dev)->cf_flags & HPC_REVISION_MASK) {
 	case HPC_REVISION_1:
 		return (1);
 
@@ -504,7 +512,8 @@ hpc_revision(struct hpc_softc *sc, struct gio_attach_args *ga)
 }
 
 int
-hpc_submatch(struct device *parent, struct cfdata *cf, void *aux)
+hpc_submatch(struct device *parent, struct cfdata *cf,
+	     const int *ldesc, void *aux)
 {
 	struct hpc_attach_args *ha = aux;
 

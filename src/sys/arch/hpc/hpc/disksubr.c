@@ -1,4 +1,4 @@
-/*	$NetBSD: disksubr.c,v 1.9 2003/10/08 04:25:44 lukem Exp $	*/
+/*	$NetBSD: disksubr.c,v 1.12 2006/03/05 02:14:41 uwe Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1988 Regents of the University of California.
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: disksubr.c,v 1.9 2003/10/08 04:25:44 lukem Exp $");
+__KERNEL_RCSID(0, "$NetBSD: disksubr.c,v 1.12 2006/03/05 02:14:41 uwe Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -63,11 +63,11 @@ struct mbr_partition *
 mbr_findslice(struct mbr_partition *dp, struct buf *bp)
 {
 	struct mbr_partition *ourdp = NULL;
-	u_int16_t *mbrmagicp;
+	uint16_t *mbrmagicp;
 	int i;
 
 	/* Note: Magic number is little-endian. */
-	mbrmagicp = (u_int16_t *)(bp->b_data + MBR_MAGIC_OFFSET);
+	mbrmagicp = (uint16_t *)(bp->b_data + MBR_MAGIC_OFFSET);
 	if (*mbrmagicp != MBR_MAGIC)
 		return (NO_MBR_SIGNATURE);
 
@@ -129,7 +129,7 @@ readdisklabel(dev_t dev, void (*strat)(struct buf *), struct disklabel *lp,
 	struct dkbad *bdp;
 	struct buf *bp;
 	struct disklabel *dlp;
-	char *msg = NULL;
+	const char *msg = NULL;
 	int dospartoff, cyl, i, *ip;
 
 	/* minimal requirements for archtypal disk label */

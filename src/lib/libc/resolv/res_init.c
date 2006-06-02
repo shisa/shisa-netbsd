@@ -1,4 +1,4 @@
-/*	$NetBSD: res_init.c,v 1.5 2004/05/21 16:03:05 christos Exp $	*/
+/*	$NetBSD: res_init.c,v 1.8 2006/03/19 03:10:08 christos Exp $	*/
 
 /*
  * Copyright (c) 1985, 1989, 1993
@@ -76,7 +76,7 @@
 static const char sccsid[] = "@(#)res_init.c	8.1 (Berkeley) 6/7/93";
 static const char rcsid[] = "Id: res_init.c,v 1.9.2.5.4.2 2004/03/16 12:34:18 marka Exp";
 #else
-__RCSID("$NetBSD: res_init.c,v 1.5 2004/05/21 16:03:05 christos Exp $");
+__RCSID("$NetBSD: res_init.c,v 1.8 2006/03/19 03:10:08 christos Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
@@ -121,16 +121,15 @@ __weak_alias(res_setservers,__res_setservers)
 #include "res_private.h"
 
 /* Options.  Should all be left alone. */
-#define RESOLVSORT
+#ifndef DEBUG
 #define DEBUG
+#endif
 
 static void res_setoptions __P((res_state, const char *, const char *));
 
-#ifdef RESOLVSORT
 static const char sort_mask[] = "/&";
 #define ISSORTMASK(ch) (strchr(sort_mask, ch) != NULL)
 static u_int32_t net_mask __P((struct in_addr));
-#endif
 
 #if !defined(isascii)	/* XXX - could be a function */
 # define isascii(c) (!(c & 0200))
@@ -178,10 +177,8 @@ __res_vinit(res_state statp, int preinit) {
 	int nserv = 0;    /* number of nameserver records read from file */
 	int haveenv = 0;
 	int havesearch = 0;
-#ifdef RESOLVSORT
 	int nsort = 0;
 	char *net;
-#endif
 	int dots;
 	union res_sockaddr_union u[2];
 
@@ -235,9 +232,7 @@ __res_vinit(res_state statp, int preinit) {
 		strcpy(statp->_u._ext.ext->nsuffix, "ip6.arpa");
 		strcpy(statp->_u._ext.ext->nsuffix2, "ip6.int");
 	}
-#ifdef RESOLVSORT
 	statp->nsort = 0;
-#endif
 	res_setservers(statp, u, nserv);
 
 	/* Allow user to override the local domain definition */
@@ -375,7 +370,6 @@ __res_vinit(res_state statp, int preinit) {
 		    }
 		    continue;
 		}
-#ifdef RESOLVSORT
 		if (MATCH(buf, "sortlist")) {
 		    struct in_addr a;
 
@@ -418,7 +412,6 @@ __res_vinit(res_state statp, int preinit) {
 		    }
 		    continue;
 		}
-#endif
 		if (MATCH(buf, "options")) {
 		    res_setoptions(statp, buf + sizeof("options") - 1, "conf");
 		    continue;
@@ -426,9 +419,7 @@ __res_vinit(res_state statp, int preinit) {
 	    }
 	    if (nserv > 0) 
 		statp->nscount = nserv;
-#ifdef RESOLVSORT
 	    statp->nsort = nsort;
-#endif
 	    (void) fclose(fp);
 	}
 /*
@@ -593,7 +584,6 @@ res_setoptions(res_state statp, const char *options, const char *source)
 	}
 }
 
-#ifdef RESOLVSORT
 /* XXX - should really support CIDR which means explicit masks always. */
 static u_int32_t
 net_mask(in)		/* XXX - should really use system's version of this */
@@ -607,7 +597,6 @@ net_mask(in)		/* XXX - should really use system's version of this */
 		return (htonl(IN_CLASSB_NET));
 	return (htonl(IN_CLASSC_NET));
 }
-#endif
 
 u_int
 res_randomid(void) {
@@ -686,8 +675,10 @@ res_setservers(res_state statp, const union res_sockaddr_union *set, int cnt) {
 			if (size <= sizeof(statp->nsaddr_list[nserv]))
 				memcpy(&statp->nsaddr_list[nserv],
 					&set->sin, size);
+#ifdef notdef
 			else
 				statp->nsaddr_list[nserv].sin_family = 0;
+#endif
 			nserv++;
 			break;
 

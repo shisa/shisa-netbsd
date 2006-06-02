@@ -1,4 +1,4 @@
-/*	$NetBSD: setemul.c,v 1.20 2005/01/15 17:55:38 jdolecek Exp $	*/
+/*	$NetBSD: setemul.c,v 1.22 2006/05/04 18:06:29 christos Exp $	*/
 
 /*-
  * Copyright (c) 2000 The NetBSD Foundation, Inc.
@@ -69,7 +69,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: setemul.c,v 1.20 2005/01/15 17:55:38 jdolecek Exp $");
+__RCSID("$NetBSD: setemul.c,v 1.22 2006/05/04 18:06:29 christos Exp $");
 #endif /* not lint */
 
 #include <sys/param.h>
@@ -94,6 +94,7 @@ __RCSID("$NetBSD: setemul.c,v 1.20 2005/01/15 17:55:38 jdolecek Exp $");
 #include "../../sys/compat/ibcs2/ibcs2_syscall.h"
 #include "../../sys/compat/irix/irix_syscall.h"
 #include "../../sys/compat/linux/linux_syscall.h"
+#include "../../sys/compat/linux32/linux32_syscall.h"
 #include "../../sys/compat/mach/mach_syscall.h"
 #include "../../sys/compat/darwin/darwin_syscall.h"
 #include "../../sys/compat/mach/arch/powerpc/ppccalls/mach_ppccalls_syscall.h"
@@ -104,6 +105,9 @@ __RCSID("$NetBSD: setemul.c,v 1.20 2005/01/15 17:55:38 jdolecek Exp $");
 #include "../../sys/compat/svr4/svr4_syscall.h"
 #include "../../sys/compat/svr4_32/svr4_32_syscall.h"
 #include "../../sys/compat/ultrix/ultrix_syscall.h"
+#ifdef __m68k__
+#include "../../sys/compat/aoutm68k/aoutm68k_syscall.h"
+#endif
 
 #define KTRACE
 #include "../../sys/kern/syscalls.c"
@@ -114,6 +118,7 @@ __RCSID("$NetBSD: setemul.c,v 1.20 2005/01/15 17:55:38 jdolecek Exp $");
 #include "../../sys/compat/ibcs2/ibcs2_syscalls.c"
 #include "../../sys/compat/irix/irix_syscalls.c"
 #include "../../sys/compat/linux/linux_syscalls.c"
+#include "../../sys/compat/linux32/linux32_syscalls.c"
 #include "../../sys/compat/darwin/darwin_syscalls.c"
 #include "../../sys/compat/mach/mach_syscalls.c"
 #include "../../sys/compat/mach/arch/powerpc/ppccalls/mach_ppccalls_syscalls.c"
@@ -124,6 +129,9 @@ __RCSID("$NetBSD: setemul.c,v 1.20 2005/01/15 17:55:38 jdolecek Exp $");
 #include "../../sys/compat/svr4/svr4_syscalls.c"
 #include "../../sys/compat/svr4_32/svr4_32_syscalls.c"
 #include "../../sys/compat/ultrix/ultrix_syscalls.c"
+#ifdef __m68k__
+#include "../../sys/compat/aoutm68k/aoutm68k_syscalls.c"
+#endif
 
 #include "../../sys/compat/hpux/hpux_errno.c"
 #include "../../sys/compat/svr4/svr4_errno.c"
@@ -182,6 +190,10 @@ const struct emulation emulations[] = {
 	  native_to_linux_errno,	NELEM(native_to_linux_errno),
 	  linux_to_native_signo,	NSIG,	0 },
 
+	{ "linux32",	linux32_syscallnames,	LINUX32_SYS_MAXSYSCALL,
+	  native_to_linux_errno,	NELEM(native_to_linux_errno),
+	  linux_to_native_signo,	NSIG,	0 },
+
 	{ "darwin",	darwin_syscallnames,	DARWIN_SYS_MAXSYSCALL,
 	  NULL,				0,
 	  NULL,				0,	0 },
@@ -227,6 +239,12 @@ const struct emulation emulations[] = {
 	{ "pecoff",	syscallnames,		SYS_MAXSYSCALL,
 	  NULL,				0,
 	  NULL,				0,	0 },
+
+#ifdef __m68k__
+	{ "aoutm68k",	aoutm68k_syscallnames,	AOUTM68K_SYS_MAXSYSCALL,
+	  NULL,				0,
+	  NULL,				0,	0 },
+#endif
 
 	{ NULL,		NULL,			0,
 	  NULL,				0,

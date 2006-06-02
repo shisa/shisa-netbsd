@@ -1,4 +1,4 @@
-/*	$NetBSD: com_ebus.c,v 1.21 2004/03/21 15:08:24 pk Exp $	*/
+/*	$NetBSD: com_ebus.c,v 1.25 2006/03/28 17:38:27 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1999, 2000 Matthew R. Green
@@ -33,7 +33,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: com_ebus.c,v 1.21 2004/03/21 15:08:24 pk Exp $");
+__KERNEL_RCSID(0, "$NetBSD: com_ebus.c,v 1.25 2006/03/28 17:38:27 thorpej Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -56,23 +56,20 @@ __KERNEL_RCSID(0, "$NetBSD: com_ebus.c,v 1.21 2004/03/21 15:08:24 pk Exp $");
 #include "kbd.h"
 #include "ms.h"
 
-int	com_ebus_match __P((struct device *, struct cfdata *, void *));
-void	com_ebus_attach __P((struct device *, struct device *, void *));
+int	com_ebus_match(struct device *, struct cfdata *, void *);
+void	com_ebus_attach(struct device *, struct device *, void *);
 
 CFATTACH_DECL(com_ebus, sizeof(struct com_softc),
     com_ebus_match, com_ebus_attach, NULL, NULL);
 
-static char *com_names[] = {
+static const char *com_names[] = {
 	"su",
 	"su_pnp",
 	NULL
 };
 
 int
-com_ebus_match(parent, match, aux)
-	struct device *parent;
-	struct cfdata *match;
-	void *aux;
+com_ebus_match(struct device *parent, struct cfdata *match, void *aux)
 {
 	struct ebus_attach_args *ea = aux;
 	int i;
@@ -97,9 +94,7 @@ com_ebus_match(parent, match, aux)
 #define BAUD_BASE       (1846200)
 
 void
-com_ebus_attach(parent, self, aux)
-	struct device *parent, *self;
-	void *aux;
+com_ebus_attach(struct device *parent, struct device *self, void *aux)
 {
 	struct com_softc *sc = (void *)self;
 	struct ebus_attach_args *ea = aux;
@@ -184,7 +179,7 @@ com_ebus_attach(parent, self, aux)
 	/* locate the major number */
 	maj = cdevsw_lookup_major(&com_cdevsw);
 
-	kma.kmta_dev = makedev(maj, sc->sc_dev.dv_unit);
+	kma.kmta_dev = makedev(maj, device_unit(&sc->sc_dev));
 
 /* Attach 'em if we got 'em. */
 #if (NKBD > 0)

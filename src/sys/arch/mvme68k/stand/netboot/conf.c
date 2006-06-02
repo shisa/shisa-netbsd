@@ -1,10 +1,10 @@
-/*	$NetBSD: conf.c,v 1.4 2001/06/10 14:12:49 scw Exp $ */
+/*	$NetBSD: conf.c,v 1.6 2005/12/11 12:18:19 christos Exp $ */
 
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <netinet/in_systm.h>
 
-#include <stand.h>
+#include <lib/libsa/stand.h>
 #include <nfs.h>
 #include <dev_net.h>
 

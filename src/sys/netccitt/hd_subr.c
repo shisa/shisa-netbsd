@@ -1,4 +1,4 @@
-/*	$NetBSD: hd_subr.c,v 1.17 2004/04/18 19:11:39 matt Exp $	*/
+/*	$NetBSD: hd_subr.c,v 1.19 2005/12/11 12:24:54 christos Exp $	*/
 
 /*
  * Copyright (c) 1990, 1993
@@ -74,7 +74,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: hd_subr.c,v 1.17 2004/04/18 19:11:39 matt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: hd_subr.c,v 1.19 2005/12/11 12:24:54 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -412,7 +412,7 @@ hd_flush(ifp)
 void
 hd_message(hdp, msg)
 	struct hdcb    *hdp;
-	char           *msg;
+	const char           *msg;
 {
 	if (hdcbhead->hd_next)
 		printf("HDLC(%s): %s\n", format_ntn(hdp->hd_xcp), msg);

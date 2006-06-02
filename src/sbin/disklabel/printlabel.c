@@ -1,4 +1,4 @@
-/*	$NetBSD: printlabel.c,v 1.11 2004/02/28 18:19:00 dsl Exp $	*/
+/*	$NetBSD: printlabel.c,v 1.14 2005/08/27 23:34:52 uwe Exp $	*/
 
 /*
  * Copyright (c) 1987, 1993
@@ -32,16 +32,27 @@
  * SUCH DAMAGE.
  */
 
+#if HAVE_NBTOOL_CONFIG_H
+#include "nbtool_config.h"
+#endif
+
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: printlabel.c,v 1.11 2004/02/28 18:19:00 dsl Exp $");
+__RCSID("$NetBSD: printlabel.c,v 1.14 2005/08/27 23:34:52 uwe Exp $");
 #endif	/* not lint */
 
 #include <sys/param.h>
 
 #define DKTYPENAMES
 #define FSTYPENAMES
+#if HAVE_NBTOOL_CONFIG_H
+#include <nbinclude/sys/disklabel.h>
+#ifndef PRIu32
+#define PRIu32 "u"
+#endif
+#else
 #include <sys/disklabel.h>
+#endif /* HAVE_NBTOOL_CONFIG_H */
 
 #include <stdio.h>
 

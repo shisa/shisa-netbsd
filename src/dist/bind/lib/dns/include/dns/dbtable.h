@@ -1,4 +1,4 @@
-/*	$NetBSD: dbtable.h,v 1.1.1.1 2004/05/17 23:44:57 christos Exp $	*/
+/*	$NetBSD: dbtable.h,v 1.1.1.3 2005/12/21 23:16:48 christos Exp $	*/
 
 /*
  * Copyright (C) 2004  Internet Systems Consortium, Inc. ("ISC")

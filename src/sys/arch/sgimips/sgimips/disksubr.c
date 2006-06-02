@@ -1,4 +1,4 @@
-/*	$NetBSD: disksubr.c,v 1.14.10.1 2005/10/06 11:51:21 tron Exp $	*/
+/*	$NetBSD: disksubr.c,v 1.17 2005/12/11 12:18:58 christos Exp $	*/
 
 /*
  * Copyright (c) 2001 Christopher Sekiya
@@ -35,7 +35,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: disksubr.c,v 1.14.10.1 2005/10/06 11:51:21 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: disksubr.c,v 1.17 2005/12/11 12:18:58 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -49,7 +49,7 @@ __KERNEL_RCSID(0, "$NetBSD: disksubr.c,v 1.14.10.1 2005/10/06 11:51:21 tron Exp 
 
 static int disklabel_bsd_to_sgimips(struct disklabel *lp, 
 				    struct sgi_boot_block *vh);
-static char *disklabel_sgimips_to_bsd(struct sgi_boot_block *vh, 
+static const char *disklabel_sgimips_to_bsd(struct sgi_boot_block *vh, 
 				      struct disklabel *lp);
 
 int mipsvh_cksum(struct sgi_boot_block *vhp);
@@ -303,7 +303,7 @@ struct partitionmap partition_map[] = {
  *
  * Returns NULL on success, otherwise an error string
  */
-static char *
+static const char *
 disklabel_sgimips_to_bsd(struct sgi_boot_block *vh, struct disklabel *lp)
 {
 	int  i, bp, mp;

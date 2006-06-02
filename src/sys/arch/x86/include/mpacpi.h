@@ -1,4 +1,4 @@
-/*	$NetBSD: mpacpi.h,v 1.2.16.1 2005/04/21 17:06:10 tron Exp $	*/
+/*	$NetBSD: mpacpi.h,v 1.3 2005/04/16 07:45:59 yamt Exp $	*/
 
 #ifndef _X86_MPACPI_H_
 #define _X86_MPACPI_H_

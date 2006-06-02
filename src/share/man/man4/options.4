@@ -1,4 +1,4 @@
-.\"	$NetBSD: options.4,v 1.268.2.4 2005/12/06 20:09:46 riz Exp $
+.\"	$NetBSD: options.4,v 1.320 2006/05/19 17:53:18 tsutsui Exp $
 .\"
 .\" Copyright (c) 1996
 .\" 	Perry E. Metzger.  All rights reserved.
@@ -30,7 +30,7 @@
 .\" THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 .\"
 .\"
-.Dd December 2, 2005
+.Dd May 19, 2006
 .Os
 .Dt OPTIONS 4
 .Sh NAME
@@ -51,7 +51,7 @@ This manual page describes a number of miscellaneous kernel
 configuration options that may be specified in a kernel config
 file.
 See
-.Xr config 8
+.Xr config 1
 for information on how to configure and build kernels.
 .Pp
 The
@@ -146,6 +146,8 @@ Specifies (or sets) the option, or comma-separated list of options,
 Some options expect to be assigned a value, which may be an integer,
 a double-quoted word, a bare word, or an empty string
 .Pq Qq .
+Note that those are eventually handled by the C compiler, so the rules
+of that language apply.
 .Pp
 .Em Note :
 Options that are not defined by device definition files are passed to
@@ -170,7 +172,7 @@ Set the maxusers variable in the kernel.
 .Ar keyword Ar name Op Ar arguments Op ...
 .Xc
 For the
-.Xr config 8
+.Xr config 1
 .Ar keywords
 file-system, makeoptions, options, and pseudo-device,
 .Ar no
@@ -311,17 +313,34 @@ Enable binary compatibility with
 .Nx 1.6 .
 This allows the use of old signal trampoline code which has been deprecated
 with the addition of
-.Xr siginfo 5 .
+.Xr siginfo 2 .
 .It Cd options COMPAT_20
 Enable binary compatibility with
 .Nx 2.0 .
 This allows the use of old syscalls for
-.Fn statfs
-and
+.Fn statfs ,
 .Fn fstatfs ,
-which has been deprecated with the addition of the
-.Xr statvfs 2
-family of system calls.
+.Fn getfsstat
+and
+.Fn fhstatfs ,
+which have been deprecated with the addition of the
+.Xr statvfs 2 ,
+.Xr fstatvfs 2 ,
+.Xr getvfsstat 2
+and
+.Xr fhstatvfs 2 
+system calls.
+.It Cd options COMPAT_30
+Enable binary compatibility with
+.Nx 3.0 .
+This allows the use of old syscalls for
+.Fn getdents ,
+.Fn stat ,
+.Fn fstat ,
+.Fn lstat
+and
+.Fn fhstat .
+The syscall numbers were changed post 3.0 to introduce 64 bit inode.
 .It Cd options COMPAT_43
 Enables compatibility with
 .Bx 4.3 .
@@ -374,8 +393,12 @@ On those architectures that support it, this enables binary
 compatibility with Linux ELF and
 .Xr a.out 5
 applications built for the same architecture.
-This currently includes the alpha, arm, i386, m68k, mips, and powerpc
-ports.
+This currently includes the alpha, arm, i386, m68k, mips, powerpc, and
+x86_64 ports.
+.It Cd options COMPAT_LINUX32
+On those 64 bit architectures that support it, this enables binary
+compatibility with 32 bit Linux binaries.
+For now this is limited to running i386 ELF Linux binaries on amd64.
 .It Cd options COMPAT_SUNOS
 On those architectures that support it, this enables binary
 compatibility with
@@ -525,14 +548,33 @@ for details.
 If this is non-zero, enable history editing in the kernel debugger
 and set the size of the history to this value.
 .It Cd options DDB_ONPANIC
-If set to non-zero, DDB will be entered upon kernel panic.
-The default if not specified is "1".
+The default if not specified is
+.Dq 1
+- just enter into DDB.
+If set to
+.Dq 2
+the kernel will
+attempt to print out a stack trace before entering into DDB.
+If set to
+.Dq 0
+the kernel will attempt to print out a stack trace
+and reboot the system.
+If set to
+.Dq -1
+then neither a stack trace is printed or DDB entered -
+it is as if DDB were not compiled into the kernel.
 Note that this sets the value of the
 .Em ddb.onpanic
 .Xr sysctl 3
 variable which may be changed at run time -- see
 .Xr sysctl 8
 for details.
+.It Cd options DDB_COMMANDONENTER=string
+This option specify commands which will be executed on each entry to DDB.
+This sets the default value of the
+.Em ddb.commandonenter
+.Xr sysctl 3
+variable which may be changed at run time.
 .It Cd options DDB_BREAK_CHAR=integer
 This option overrides using break to enter the kernel debugger
 on the serial console.
@@ -680,7 +722,7 @@ See
 .Xr mount_ext2fs 8
 for details.
 .It Cd file-system LFS
-.Em [EXPERIMENTAL]
+.Bq Em EXPERIMENTAL
 Include the Log-structured File System
 .Em ( LFS ) .
 See
@@ -737,7 +779,7 @@ and
 .Xr fsck_msdos 8
 for details.
 .It Cd file-system NTFS
-.Em [EXPERIMENTAL]
+.Bq Em EXPERIMENTAL
 Includes code for the
 .Tn Microsoft Windows NT
 file system.
@@ -795,7 +837,7 @@ See
 .Xr mount_overlay 8
 for details.
 .It Cd file-system PORTAL
-.Em [EXPERIMENTAL]
+.Bq Em EXPERIMENTAL
 Includes the portal file system.
 This permits interesting tricks like opening
 .Tn TCP
@@ -818,6 +860,16 @@ files in the procfs namespace.
 See
 .Xr mount_procfs 8
 for details.
+.It Cd file-system UDF
+.Bq Em EXPERIMENTAL
+Includes code for the UDF file system commonly found on CD and DVD
+media but also more and more on USB sticks.
+Useful primarily if you have a CD or a DVD drive, be it a read-only
+or a rewritable device.
+Currently only supports read-access.
+See
+.Xr mount_udf 8
+for details.
 .It Cd file-system UMAPFS
 Includes a loopback file system in which user and group IDs may be
 remapped -- this can be useful when mounting alien file systems with
@@ -826,7 +878,7 @@ See
 .Xr mount_umap 8
 for details.
 .It Cd file-system UNION
-.Em [EXPERIMENTAL]
+.Bq Em EXPERIMENTAL
 Includes code for the union file system, which permits directories to
 be mounted on top of each other in such a way that both file systems
 remain visible -- this permits tricks like allowing writing (and the
@@ -837,7 +889,7 @@ See
 .Xr mount_union 8
 for details.
 .It Cd file-system CODA
-.Em [EXPERIMENTAL]
+.Bq Em EXPERIMENTAL
 Includes code for the Coda file system.
 Coda is a distributed file system like NFS and AFS.
 It is freely available, like NFS, but it functions much like AFS in being a
@@ -851,11 +903,51 @@ In Coda, both the client and server are outside the kernel which makes
 them easier to experiment with.
 Coda is available for several UNIX and non-UNIX platforms.
 See http://www.coda.cs.cmu.edu for more details.
-NOTE: You also need to enable the pseudo-device, vcoda, for the Coda
+.Em NOTE :
+You also need to enable the pseudo-device, vcoda, for the Coda
 file system to work.
+.It Cd file-system SMBFS
+.Bq Em EXPERIMENTAL
+Includes code for the SMB/CIFS file system.
+See
+.Xr mount_smbfs 8
+for details.
+.Em NOTE :
+You also need to enable the pseudo-device, nsmb, for the SMB
+file system to work.
+.It Cd file-system PTYFS
+.Bq Em EXPERIMENTAL
+Includes code for a special file system (normally mounted on
+.Pa /dev/pts )
+in which pseudo-terminal slave devices become visible in the file system.
+See
+.Xr mount_ptyfs 8
+for details.
+.It Cd file-system TMPFS
+.Bq Em EXPERIMENTAL
+Includes code for the efficient memory file system, normally used over
+.Pa /tmp .
+See
+.Xr mount_tmpfs 8
+for details.
 .El
 .Ss File System Options
 .Bl -ohang
+.It Cd options MAGICLINKS
+Enables the expansion of special strings
+.Po
+beginning with
+.Dq @
+.Pc
+when traversing symbolic links.
+See
+.Xr symlink 7
+for a list of supported strings.
+Note that this option only controls the enabling of this feature
+by the kernel at boot-up.
+This feature can still be manipulated with the
+.Xr sysctl 8
+command regardless of the setting of this option.
 .It Cd options NFSSERVER
 Include the server side of the
 .Em NFS
@@ -892,6 +984,12 @@ See also
 .Xr fsck_ffs 8 ,
 .Xr dumpfs 8
 for file system byte order status and manipulation.
+.It Cd options FFS_NO_SNAPSHOT
+Disable the
+.Dq file system snapshot
+support in FFS file systems.
+Maybe useful for install media kernels, small memory systems and
+embedded systems which don't require the snapshot support.
 .It Cd options NVNODE=integer
 This option sets the size of the cache used by the name-to-inode translation
 routines, (a.k.a. the
@@ -980,9 +1078,10 @@ for details.
 Increase lookup performance by maintaining in-core hash tables
 for large directories.
 .El
-.Ss Miscellaneous Options
+.Ss Buffer queue strategy options
+The following options enable alternative buffer queue strategies.
 .Bl -ohang
-.It Cd options NEW_BUFQ_STRATEGY
+.It Cd options BUFQ_READPRIO
 Enable experimental buffer queue strategy for disk I/O.
 In the default strategy, outstanding disk requests are ordered by
 sector number and sent to the disk, regardless of whether the
@@ -1016,6 +1115,15 @@ Such systems are likely to see the most benefit from this option.
 Finally, the performance interaction of this option with ffs soft
 dependencies can be subtle, as that mechanism can drastically alter
 the workload for filesystem metadata writes.
+.It Cd options BUFQ_PRIOCSCAN
+Enable another experimental buffer queue strategy for disk I/O,
+Per-priority cyclical scan.
+.It Cd options NEW_BUFQ_STRATEGY
+Synonym of
+.Em BUFQ_READPRIO .
+.El
+.Ss Miscellaneous Options
+.Bl -ohang
 .It Cd options LKM
 Enable loadable kernel modules.
 See
@@ -1023,28 +1131,13 @@ See
 for details.
 .Em NOTE :
 not available on all architectures.
-.It Cd options INSECURE
-Hardwires the kernel security level at -1.
-This means that the system
-always runs in secure level 0 mode, even when running multiuser.
-See the manual page for
-.Xr init 8
-for details on the implications of this.
-The kernel secure level may manipulated by the superuser by altering the
-.Em kern.securelevel
-.Xr sysctl 3
-variable (the secure level may only be lowered by a call from process ID 1,
-i.e.
-.Xr init 8 ) .
-See also
-.Xr sysctl 8
-and
-.Xr sysctl 3 .
 .It Cd options MEMORY_DISK_DYNAMIC
-This options makes the
+This option makes the
 .Xr md 4
 .Tn RAM
 disk size dynamically sized.
+It is incompatible with
+.Xr mdsetimage 8 .
 .It Cd options MEMORY_DISK_HOOKS
 This option allows for some machine dependent functions to be called when
 the
@@ -1069,18 +1162,13 @@ disk, to be populated with
 .Xr mdsetimage 8 .
 .It Cd options MEMORY_DISK_SERVER=0
 Do not include the interface to a userland memory disk server process.
-Per default, this options is set to 1, including the support code.
+Per default, this option is set to 1, including the support code.
 Useful for install media kernels.
-.It Cd options VNODE_OP_NOINLINE
-Do not inline the
-.Fn VOP_*
-calls in the kernel.
-On i386 GENERIC, this saves 36k of kernel text.
-Useful for install media kernels, small memory systems and embedded systems.
 .It Cd options VND_COMPRESSION
 Enables the
 .Xr vnd 4
-driver to also handle compressed images. See
+driver to also handle compressed images.
+See
 .Xr vndcompress 1 ,
 .Xr vnd 4
 and
@@ -1292,6 +1380,11 @@ this value is inherited by its child processes.
 It defaults to
 .Em OPEN_MAX ,
 which is currently defined to be 64.
+.It Cd options MAXFILES=integer
+Sets the default value of the
+.Em kern.maxfiles
+sysctl variable, which indicates the maximum number of files that may
+be open in the system.
 .It Cd options DEFCORENAME=string
 Sets the default value of the
 .Em kern.defcorename
@@ -1327,7 +1420,7 @@ file itself, e.g.
 or
 .Pa std.$MACHINE .
 The embedded config file can be extracted from the resulting kernel with
-.Xr config 8
+.Xr config 1
 .Fl x ,
 or by the following command:
 .Bd -literal -offset indent
@@ -1390,6 +1483,13 @@ or
 .Tn XNS ) .
 .Em GATEWAY
 option also compiles IPv4 fast forwarding code into the kernel.
+.It Cd options ICMPPRINTFS
+The
+.Em ICMPPRINTFS
+option will enable debugging information to be printed about
+the
+.Xr icmp 4
+protocol.
 .It Cd options IPFORWARDING=value
 If
 .Em value
@@ -2058,6 +2158,60 @@ See the files
 for some implementation details, and
 .Pa /usr/include/machine/vmparam.h
 for port specific details including availability.
+.It Cd options VMSWAP
+Enable paging device/file support.
+This option is on by default.
+.El
+.Ss Security Options
+.Bl -ohang
+.It Cd options INSECURE
+Hardwires the kernel security level at \-1.
+This means that the system
+always runs in secure level \-1 mode, even when running multiuser.
+See the manual page for
+.Xr init 8
+for details on the implications of this.
+The kernel secure level may manipulated by the superuser by altering the
+.Em kern.securelevel
+.Xr sysctl 3
+variable (the secure level may only be lowered by a call from process ID 1,
+i.e.,
+.Xr init 8 ) .
+See also
+.Xr sysctl 8
+and
+.Xr sysctl 3 .
+.It Cd options VERIFIED_EXEC
+Enables Veriexec, the in-kernel file integrity subsystem.
+.It Cd options VERIFIED_EXEC_FP_MD5
+Enables support for MD5 hashes in Veriexec.
+.It Cd options VERIFIED_EXEC_FP_SHA1
+Enables support for SHA1 hashes in Veriexec.
+.It Cd options VERIFIED_EXEC_FP_RMD160
+Enables support for RMD160 hashes in Veriexec.
+.It Cd options VERIFIED_EXEC_FP_SHA256
+Enables support for SHA256 hashes in Veriexec.
+.It Cd options VERIFIED_EXEC_FP_SHA384
+Enables support for SHA384 hashes in Veriexec.
+.It Cd options VERIFIED_EXEC_FP_SHA512
+Enables support for SHA512 hashes in Veriexec.
+.It Cd options PAX_MPROTECT=value
+Enables PaX MPROTECT,
+.Xr mprotect 2
+restrictions from the PaX project.
+.Pp
+The
+.Ar value
+is the default value for the
+.Em global_protection
+knob, see
+.Xr sysctl 3 .
+If 0, PaX MPROTECT will be enabled only if explicitly set on programs
+using
+.Xr paxctl 1 .
+If 1, PaX MPROTECT will be enabled to all programs, and exemption can
+be done using
+.Xr paxctl 1 .
 .El
 .Ss amiga-specific Options
 .Bl -ohang
@@ -2205,6 +2359,10 @@ Allow any user to change the frequency of an
 .Tn Enhanced SpeedStep Technology
 capable
 .Tn CPU .
+.It Cd options POWERNOW_K7
+Include support for the AMD
+.Tn PowerNow! Technology
+present in AMD Athlon Mobile processors.
 .It Cd options CPURESET_DELAY=value
 Specifies the time (in millisecond) to wait before doing a hardware reset
 in the last phase of a reboot.
@@ -2301,6 +2459,19 @@ The duration of each beep when
 .Cd options BEEP_ONHALT
 is enabled, in milliseconds.
 Defaults to 250.
+.It Cd options MULTIBOOT
+Makes the kernel Multiboot-compliant, allowing it to be booted through
+a Multiboot-compliant boot manager such as GRUB.
+See
+.Xr multiboot 8
+for more information.
+.It Cd options MULTIBOOT_SYMTAB_SPACE=nbytes
+Space (in bytes) reserved in memory to store the kernel's symbol table.
+If the symbol table is bigger than this space, it will not be loaded;
+if it is smaller, the unused memory will be claimed by the kernel and
+used normally.
+You shouldn't need to touch this variable.
+Defaults to 1048576 bytes (one megabyte).
 .El
 .Ss isa-specific Options
 Options specific to
@@ -2326,6 +2497,19 @@ This mask is a logical-or of power-of-2s of allowable interrupts:
  2  0x0004    6  0x0040   10  0x0400    14  0x4000
  3  0x0008    7  0x0080   11  0x0800    15  0x8000
 .Ed
+.It Cd options PCKBC_CNATTACH_SELFTEST
+Perform a self test of the keyboard controller before attaching it as a
+console.
+This might be necessary on machines where we boot on cold iron, and
+pckbc refuses to talk until we request a self test.
+Currently only the netwinder port uses it.
+.It Cd options PCKBD_CNATTACH_MAY_FAIL
+If this option is set the PS/2 keyboard will not be used as the console
+if it cannot be found during boot.
+This allows other keyboards, like USB, to be the console keyboard.
+.It Cd options PCKBD_LAYOUT=layout
+Sets the default keyboard layout, see
+.Xr pckbd 4 .
 .El
 .Ss m68k-specific Options
 .Bl -ohang
@@ -2343,12 +2527,17 @@ This provides emulation of unimplemented
 integer instructions as well as emulation of unimplemented floating point
 instructions and data types and software support for floating point traps.
 .El
-.Ss powerpc-specific Options
+.Ss powerpc-specific Options (OEA Only)
 .Bl -ohang
 .It Cd options PMAP_MEMLIMIT=value
 Limit the amount of memory seen by the kernel to
 .Ar value
-bytes (OEA only).
+bytes.
+.It Cd options PTEGCOUNT=value
+Specify the size of the page table as
+.Ar value
+PTE groups.
+Normally, one PTEG is allocated per physical page frame.
 .El
 .Ss sparc-specific Options
 .Bl -ohang
@@ -2454,11 +2643,12 @@ bolded
 .\" .Sh FILES
 .\" .Sh EXAMPLES
 .Sh SEE ALSO
+.Xr config 1 ,
 .Xr gdb 1 ,
 .Xr ktrace 1 ,
 .Xr pmc 1 ,
-.Xr vndcompress 1 ,
 .Xr quota 1 ,
+.Xr vndcompress 1 ,
 .Xr gettimeofday 2 ,
 .Xr i386_get_mtrr 2 ,
 .Xr i386_iopl 2 ,
@@ -2489,7 +2679,6 @@ bolded
 .Xr userconf 4 ,
 .Xr vnd 4 ,
 .Xr wscons 4 ,
-.Xr config 8 ,
 .Xr edquota 8 ,
 .Xr init 8 ,
 .Xr mdsetimage 8 ,
@@ -2504,6 +2693,7 @@ bolded
 .Xr mount_null 8 ,
 .Xr mount_portal 8 ,
 .Xr mount_procfs 8 ,
+.Xr mount_udf 8 ,
 .Xr mount_umap 8 ,
 .Xr mount_union 8 ,
 .Xr mrouted 8 ,

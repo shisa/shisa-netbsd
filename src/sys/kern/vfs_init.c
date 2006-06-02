@@ -1,4 +1,4 @@
-/*	$NetBSD: vfs_init.c,v 1.26 2005/02/26 21:34:56 perry Exp $	*/
+/*	$NetBSD: vfs_init.c,v 1.30 2005/12/27 04:06:46 chs Exp $	*/
 
 /*-
  * Copyright (c) 1998, 2000 The NetBSD Foundation, Inc.
@@ -74,7 +74,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: vfs_init.c,v 1.26 2005/02/26 21:34:56 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: vfs_init.c,v 1.30 2005/12/27 04:06:46 chs Exp $");
 
 #include <sys/param.h>
 #include <sys/mount.h>
@@ -128,20 +128,13 @@ const struct vnodeopv_desc * const vfs_special_vnodeopv_descs[] = {
  */
 typedef int (*PFI)(void *);
 
-static void vfs_opv_init_explicit(const struct vnodeopv_desc *);
-static void vfs_opv_init_default(const struct vnodeopv_desc *);
-#ifdef DEBUG
-static void vfs_op_check(void);
-#endif
-
 /*
  * A miscellaneous routine.
  * A generic "default" routine that just returns an error.
  */
 /*ARGSUSED*/
 int
-vn_default_error(v)
-	void *v;
+vn_default_error(void *v)
 {
 
 	return (EOPNOTSUPP);
@@ -169,8 +162,7 @@ vn_default_error(v)
  * Also handle backwards compatibility.
  */
 static void
-vfs_opv_init_explicit(vfs_opv_desc)
-	const struct vnodeopv_desc *vfs_opv_desc;
+vfs_opv_init_explicit(const struct vnodeopv_desc *vfs_opv_desc)
 {
 	int (**opv_desc_vector)(void *);
 	const struct vnodeopv_entry_desc *opve_descp;
@@ -213,8 +205,7 @@ vfs_opv_init_explicit(vfs_opv_desc)
 }
 
 static void
-vfs_opv_init_default(vfs_opv_desc)
-	const struct vnodeopv_desc *vfs_opv_desc;
+vfs_opv_init_default(const struct vnodeopv_desc *vfs_opv_desc)
 {
 	int j;
 	int (**opv_desc_vector)(void *);
@@ -234,8 +225,7 @@ vfs_opv_init_default(vfs_opv_desc)
 }
 
 void
-vfs_opv_init(vopvdpp)
-	const struct vnodeopv_desc * const *vopvdpp;
+vfs_opv_init(const struct vnodeopv_desc * const *vopvdpp)
 {
 	int (**opv_desc_vector)(void *);
 	int i;
@@ -268,8 +258,7 @@ vfs_opv_init(vopvdpp)
 }
 
 void
-vfs_opv_free(vopvdpp)
-	const struct vnodeopv_desc * const *vopvdpp;
+vfs_opv_free(const struct vnodeopv_desc * const *vopvdpp)
 {
 	int i;
 
@@ -285,7 +274,7 @@ vfs_opv_free(vopvdpp)
 
 #ifdef DEBUG
 static void
-vfs_op_check()
+vfs_op_check(void)
 {
 	int i;
 
@@ -309,18 +298,13 @@ vfs_op_check()
 #endif /* DEBUG */
 
 /*
- * Routines having to do with the management of the vnode table.
- */
-struct vattr va_null;
-
-/*
  * Initialize the vnode structures and initialize each file system type.
  */
 void
-vfsinit()
+vfsinit(void)
 {
-	extern struct vfsops * const vfs_list_initial[];
-	int i;
+	__link_set_decl(vfsops, struct vfsops);
+	struct vfsops * const *vfsp;
 
 	/*
 	 * Initialize the namei pathname buffer pool and cache.
@@ -355,11 +339,10 @@ vfsinit()
 	 * Establish each file system which was statically
 	 * included in the kernel.
 	 */
-	vattr_null(&va_null);
-	for (i = 0; vfs_list_initial[i] != NULL; i++) {
-		if (vfs_attach(vfs_list_initial[i])) {
+	__link_set_foreach(vfsp, vfsops) {
+		if (vfs_attach(*vfsp)) {
 			printf("multiple `%s' file systems",
-			    vfs_list_initial[i]->vfs_name);
+			    (*vfsp)->vfs_name);
 			panic("vfsinit");
 		}
 	}

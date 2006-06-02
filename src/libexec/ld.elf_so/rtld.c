@@ -1,4 +1,4 @@
-/*	$NetBSD: rtld.c,v 1.107 2004/10/22 05:39:57 skrll Exp $	 */
+/*	$NetBSD: rtld.c,v 1.110 2006/03/21 17:48:10 christos Exp $	 */
 
 /*
  * Copyright 1996 John D. Polstra.
@@ -40,7 +40,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: rtld.c,v 1.107 2004/10/22 05:39:57 skrll Exp $");
+__RCSID("$NetBSD: rtld.c,v 1.110 2006/03/21 17:48:10 christos Exp $");
 #endif /* not lint */
 
 #include <err.h>
@@ -100,7 +100,13 @@ Library_Xform  *_rtld_xforms;
 char           *__progname;
 char          **environ;
 
+#if defined(RTLD_DEBUG)
+#if !(defined(__sh__) && !defined(__SH5__))
 extern Elf_Addr _GLOBAL_OFFSET_TABLE_[];
+#else  /* 32-bit SuperH */
+register Elf_Addr *_GLOBAL_OFFSET_TABLE_ asm("r12");
+#endif
+#endif /* RTLD_DEBUG */
 extern Elf_Dyn  _DYNAMIC;
 
 static void _rtld_call_fini_functions(Obj_Entry *);
@@ -349,9 +355,9 @@ _rtld(Elf_Addr *sp, Elf_Addr relocbase)
          */
 	if (pAUX_execfd != NULL) {	/* Load the main program. */
 		int             fd = pAUX_execfd->a_v;
+		const char *obj_name = argv[0] ? argv[0] : "main program";
 		dbg(("loading main program"));
-		_rtld_objmain = _rtld_map_object(xstrdup(argv[0] ? argv[0] :
-		    "main program"), fd, NULL);
+		_rtld_objmain = _rtld_map_object(obj_name, fd, NULL);
 		close(fd);
 		if (_rtld_objmain == NULL)
 			_rtld_die();
@@ -869,10 +875,20 @@ _rtld_linkmap_add(Obj_Entry *obj)
 		_rtld_debug.r_map = l;
 		return;
 	}
-	for (prev = _rtld_debug.r_map; prev->l_next != NULL; prev = prev->l_next);
+
+	/*
+	 * Scan to the end of the list, but not past the entry for the
+	 * dynamic linker, which we want to keep at the very end.
+	 */
+	for (prev = _rtld_debug.r_map;
+	    prev->l_next != NULL && prev->l_next != &_rtld_objself.linkmap;
+	    prev = prev->l_next);
+
 	l->l_prev = prev;
+	l->l_next = prev->l_next;
+	if (l->l_next != NULL)
+		l->l_next->l_prev = l;
 	prev->l_next = l;
-	l->l_next = NULL;
 }
 
 void

@@ -1,4 +1,4 @@
-/*	$NetBSD: if_we_mca.c,v 1.12 2005/02/04 02:10:43 perry Exp $	*/
+/*	$NetBSD: if_we_mca.c,v 1.15 2006/03/29 06:58:14 thorpej Exp $	*/
 
 /*-
  * Copyright (c) 1997, 1998, 2001 The NetBSD Foundation, Inc.
@@ -60,7 +60,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_we_mca.c,v 1.12 2005/02/04 02:10:43 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_we_mca.c,v 1.15 2006/03/29 06:58:14 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -160,7 +160,7 @@ we_mca_attach(parent, self, aux)
 	struct device *parent, *self;
 	void *aux;
 {
-	struct we_softc *wsc = (struct we_softc *)self;
+	struct we_softc *wsc = device_private(self);
 	struct dp8390_softc *sc = &wsc->sc_dp8390;
 	struct mca_attach_args *ma = aux;
 	const struct we_mca_product *wep;
@@ -267,7 +267,8 @@ we_mca_attach(parent, self, aux)
 	}
 
 	wsc->sc_type = wep->we_type;
-	wsc->sc_16bitp = 1;		/* all cards we support are 16bit */
+	/* all cards we support are 16bit native (no need for reset) */
+	wsc->sc_flags = WE_16BIT_ENABLE|WE_16BIT_NOTOGGLE;
 	sc->is790 = 0;
 	typestr = wep->we_typestr;
 

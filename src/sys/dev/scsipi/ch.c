@@ -1,4 +1,4 @@
-/*	$NetBSD: ch.c,v 1.69 2005/02/27 00:27:48 perry Exp $	*/
+/*	$NetBSD: ch.c,v 1.73 2006/03/30 16:09:28 thorpej Exp $	*/
 
 /*-
  * Copyright (c) 1996, 1997, 1998, 1999, 2004 The NetBSD Foundation, Inc.
@@ -38,7 +38,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ch.c,v 1.69 2005/02/27 00:27:48 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ch.c,v 1.73 2006/03/30 16:09:28 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -195,7 +195,7 @@ chmatch(struct device *parent, struct cfdata *match, void *aux)
 static void
 chattach(struct device *parent, struct device *self, void *aux)
 {
-	struct ch_softc *sc = (struct ch_softc *)self;
+	struct ch_softc *sc = device_private(self);
 	struct scsipibus_attach_args *sa = aux;
 	struct scsipi_periph *periph = sa->sa_periph;
 
@@ -253,7 +253,7 @@ chattach(struct device *parent, struct device *self, void *aux)
 }
 
 static int
-chopen(dev_t dev, int flags, int fmt, struct proc *p)
+chopen(dev_t dev, int flags, int fmt, struct lwp *l)
 {
 	struct ch_softc *sc;
 	struct scsipi_periph *periph;
@@ -306,7 +306,7 @@ chopen(dev_t dev, int flags, int fmt, struct proc *p)
 }
 
 static int
-chclose(dev_t dev, int flags, int fmt, struct proc *p)
+chclose(dev_t dev, int flags, int fmt, struct lwp *l)
 {
 	struct ch_softc *sc = ch_cd.cd_devs[CHUNIT(dev)];
 	struct scsipi_periph *periph = sc->sc_periph;
@@ -342,7 +342,7 @@ chread(dev_t dev, struct uio *uio, int flags)
 }
 
 static int
-chioctl(dev_t dev, u_long cmd, caddr_t data, int flags, struct proc *p)
+chioctl(dev_t dev, u_long cmd, caddr_t data, int flags, struct lwp *l)
 {
 	struct ch_softc *sc = ch_cd.cd_devs[CHUNIT(dev)];
 	int error = 0;
@@ -434,7 +434,7 @@ chioctl(dev_t dev, u_long cmd, caddr_t data, int flags, struct proc *p)
 
 	default:
 		error = scsipi_do_ioctl(sc->sc_periph, dev, cmd, data,
-		    flags, p);
+		    flags, l);
 		break;
 	}
 
@@ -442,7 +442,7 @@ chioctl(dev_t dev, u_long cmd, caddr_t data, int flags, struct proc *p)
 }
 
 static int
-chpoll(dev_t dev, int events, struct proc *p)
+chpoll(dev_t dev, int events, struct lwp *l)
 {
 	struct ch_softc *sc = ch_cd.cd_devs[CHUNIT(dev)];
 	int revents;
@@ -455,7 +455,7 @@ chpoll(dev_t dev, int events, struct proc *p)
 	if (sc->sc_events == 0)
 		revents |= events & (POLLIN | POLLRDNORM);
 	else
-		selrecord(p, &sc->sc_selq);
+		selrecord(l, &sc->sc_selq);
 
 	return (revents);
 }
@@ -532,9 +532,8 @@ ch_interpret_sense(struct scsipi_xfer *xs)
 	 * If it isn't an extended or extended/deferred error, let
 	 * the generic code handle it.
 	 */
-	if ((sense->response_code & SSD_RCODE_VALID) == 0 ||
-	    (SSD_RCODE(sense->response_code) != SSD_RCODE_CURRENT &&
-	     SSD_RCODE(sense->response_code) != SSD_RCODE_DEFERRED))
+	if (SSD_RCODE(sense->response_code) != SSD_RCODE_CURRENT &&
+	    SSD_RCODE(sense->response_code) != SSD_RCODE_DEFERRED)
 		return (EJUSTRETURN);
 
 	/*
@@ -1237,13 +1236,12 @@ ch_get_params(struct ch_softc *sc, int scsiflags)
 static void
 ch_get_quirks(struct ch_softc *sc, struct scsipi_inquiry_pattern *inqbuf)
 {
-	struct chquirk *match;
+	const struct chquirk *match;
 	int priority;
 
 	sc->sc_settledelay = 0;
 
-	match = (struct chquirk *)scsipi_inqmatch(inqbuf,
-	    (caddr_t)chquirks,
+	match = scsipi_inqmatch(inqbuf, chquirks,
 	    sizeof(chquirks) / sizeof(chquirks[0]),
 	    sizeof(chquirks[0]), &priority);
 	if (priority != 0)

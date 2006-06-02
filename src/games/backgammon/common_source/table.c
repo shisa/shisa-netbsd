@@ -1,4 +1,4 @@
-/*	$NetBSD: table.c,v 1.7 2003/08/07 09:36:57 agc Exp $	*/
+/*	$NetBSD: table.c,v 1.9 2006/03/18 23:23:33 christos Exp $	*/
 
 /*
  * Copyright (c) 1980, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)table.c	8.1 (Berkeley) 5/31/93";
 #else
-__RCSID("$NetBSD: table.c,v 1.7 2003/08/07 09:36:57 agc Exp $");
+__RCSID("$NetBSD: table.c,v 1.9 2006/03/18 23:23:33 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -78,8 +78,7 @@ static const struct state atmata[] = {
 };
 
 int
-checkmove(ist)
-	int     ist;
+checkmove(int ist)
 {
 	int     j, n;
 	char    c;
@@ -196,9 +195,7 @@ dochar:
 }
 
 int
-dotable(c, i)
-	char    c;
-	int     i;
+dotable(int c, int i)
 {
 	int     a;
 	int     test;
@@ -292,7 +289,7 @@ dotable(c, i)
 }
 
 int
-rsetbrd()
+rsetbrd(void)
 {
 	int     i, j, n;
 
@@ -301,6 +298,7 @@ rsetbrd()
 	for (i = 0; i < 4; i++)
 		p[i] = g[i] = -1;
 	for (j = 0; j < ncin; j++)
-		n = dotable(cin[j], n);
+		if ((n = dotable(cin[j], n)) < 0)
+			return n;
 	return (n);
 }

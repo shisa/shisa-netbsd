@@ -51,6 +51,7 @@ char	**SUBSEP;	/* subscript separator for a[i,j,k]; default \034 */
 Awkfloat *RSTART;	/* start of re matched with ~; origin 1 (!) */
 Awkfloat *RLENGTH;	/* length of same */
 
+Cell	*fsloc;		/* FS */
 Cell	*nrloc;		/* NR */
 Cell	*nfloc;		/* NF */
 Cell	*fnrloc;	/* FNR */
@@ -73,7 +74,8 @@ void syminit(void)	/* initialize symbol table with builtin vars */
 	nullloc = setsymtab("$zero&null", "", 0.0, NUM|STR|CON|DONTFREE, symtab);
 	nullnode = celltonode(nullloc, CCON);
 
-	FS = &setsymtab("FS", " ", 0.0, STR|DONTFREE, symtab)->sval;
+	fsloc = setsymtab("FS", " ", 0.0, STR|DONTFREE, symtab);
+	FS = &fsloc->sval;
 	RS = &setsymtab("RS", "\n", 0.0, STR|DONTFREE, symtab)->sval;
 	OFS = &setsymtab("OFS", " ", 0.0, STR|DONTFREE, symtab)->sval;
 	ORS = &setsymtab("ORS", "\n", 0.0, STR|DONTFREE, symtab)->sval;
@@ -208,7 +210,10 @@ Cell *setsymtab(const char *n, const char *s, Awkfloat f, unsigned t, Array *tp)
 	int h;
 	Cell *p;
 
-	if (n != NULL && (p = lookup(n, tp)) != NULL) {
+	if (n == NULL)
+		n = "";
+
+	if ((p = lookup(n, tp)) != NULL) {
 		   dprintf( ("setsymtab found %p: n=%s s=\"%s\" f=%g t=%o\n",
 			p, NN(p->nval), NN(p->sval), p->fval, p->tval) );
 		return(p);
@@ -315,7 +320,8 @@ char *setsval(Cell *vp, const char *s)	/* set string val of a Cell */
 	char *t;
 	int fldno;
 
-	   dprintf( ("starting setsval %p: %s = \"%s\", t=%o\n", vp, NN(vp->nval), s, vp->tval) );
+	   dprintf( ("starting setsval %p: %s = \"%s\", t=%o, r,f=%d,%d\n", 
+		vp, NN(vp->nval), s, vp->tval, donerec, donefld) );
 	if ((vp->tval & (NUM | STR)) == 0)
 		funnyvar(vp, "assign to");
 	if (isfld(vp)) {
@@ -334,7 +340,8 @@ char *setsval(Cell *vp, const char *s)	/* set string val of a Cell */
 	if (freeable(vp))
 		xfree(vp->sval);
 	vp->tval &= ~DONTFREE;
-	   dprintf( ("setsval %p: %s = \"%s (%p)\", t=%o\n", vp, NN(vp->nval), t,t, vp->tval) );
+	   dprintf( ("setsval %p: %s = \"%s (%p) \", t=%o r,f=%d,%d\n", 
+		vp, NN(vp->nval), t,t, vp->tval, donerec, donefld) );
 	return(vp->sval = t);
 }
 
@@ -355,8 +362,7 @@ Awkfloat getfval(Cell *vp)	/* get float val of a Cell */
 	return(vp->fval);
 }
 
- static char *get_str_val(Cell *vp, char **fmt)        /* get string val of a Cell */
-
+static char *get_str_val(Cell *vp, char **fmt)        /* get string val of a Cell */
 {
 	char s[100];	/* BUG: unchecked */
 	double dtemp;
@@ -397,9 +403,10 @@ char *tostring(const char *s)	/* make a copy of string s */
 {
 	char *p;
 
-	p = strdup(s);
+	p = (char *) malloc(strlen(s)+1);
 	if (p == NULL)
 		FATAL("out of space in tostring on %s", s);
+	strcpy(p, s);
 	return(p);
 }
 

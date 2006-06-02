@@ -1,4 +1,4 @@
-/*	$NetBSD: isa_machdep.c,v 1.29 2004/08/30 15:05:17 drochner Exp $	*/
+/*	$NetBSD: isa_machdep.c,v 1.32 2006/03/29 04:16:45 thorpej Exp $	*/
 
 /*-
  * Copyright (c) 1999 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: isa_machdep.c,v 1.29 2004/08/30 15:05:17 drochner Exp $");
+__KERNEL_RCSID(0, "$NetBSD: isa_machdep.c,v 1.32 2006/03/29 04:16:45 thorpej Exp $");
 
 #include "opt_vr41xx.h"
 
@@ -156,7 +156,7 @@ vrisabattach(struct device *parent, struct device *self, void *aux)
 
 	/* Allocate ISA memory space */
 	memt = hpcmips_alloc_bus_space_tag();
-	offset = sc->sc_dev.dv_cfdata->cf_loc[VRISABIFCF_ISAMEMOFFSET];
+	offset = device_cfdata(&sc->sc_dev)->cf_loc[VRISABIFCF_ISAMEMOFFSET];
 	hpcmips_init_bus_space(memt,
 	    (struct bus_space_tag_hpcmips *)haa->haa_iot, "ISA mem",
 	    VR_ISA_MEM_BASE + offset, VR_ISA_MEM_SIZE - offset);
@@ -164,7 +164,7 @@ vrisabattach(struct device *parent, struct device *self, void *aux)
 
 	/* Allocate ISA port space */
 	iot = hpcmips_alloc_bus_space_tag();
-	offset = sc->sc_dev.dv_cfdata->cf_loc[VRISABIFCF_ISAPORTOFFSET];
+	offset = device_cfdata(&sc->sc_dev)->cf_loc[VRISABIFCF_ISAPORTOFFSET];
 	hpcmips_init_bus_space(iot,
 	    (struct bus_space_tag_hpcmips *)haa->haa_iot, "ISA port",
 	    VR_ISA_PORT_BASE + offset, VR_ISA_PORT_SIZE - offset);
@@ -231,7 +231,7 @@ isa_intr_establish(isa_chipset_tag_t ic, int intr, int type, int level,
 		HPCIO_INTR_EDGE_HOLD,
 	};
 #ifdef VRISADEBUG
-	static char* intr_mode_names[8] = {
+	static const char* intr_mode_names[8] = {
 		"level high through",
 		"level high hold",
 		"level low through",

@@ -1,4 +1,4 @@
-/*	$NetBSD: if_udav.c,v 1.5 2005/02/27 00:27:51 perry Exp $	*/
+/*	$NetBSD: if_udav.c,v 1.9 2006/02/25 00:58:35 wiz Exp $	*/
 /*	$nabe: if_udav.c,v 1.3 2003/08/21 16:57:19 nabe Exp $	*/
 /*
  * Copyright (c) 2003
@@ -44,7 +44,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_udav.c,v 1.5 2005/02/27 00:27:51 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_udav.c,v 1.9 2006/02/25 00:58:35 wiz Exp $");
 
 #include "opt_inet.h"
 #include "opt_ns.h"
@@ -162,7 +162,7 @@ static const struct udav_type {
 	{{ 0x0a46, 0x9601 }, 0},
 #endif
 };
-#define udav_lookup(v, p) ((struct udav_type *)usb_lookup(udav_devs, v, p))
+#define udav_lookup(v, p) ((const struct udav_type *)usb_lookup(udav_devs, v, p))
 
 
 /* Probe */
@@ -186,16 +186,17 @@ USB_ATTACH(udav)
 	usbd_status err;
 	usb_interface_descriptor_t *id;
 	usb_endpoint_descriptor_t *ed;
-	char devinfo[1024];
+	char *devinfop;
 	char *devname = USBDEVNAME(sc->sc_dev);
 	struct ifnet *ifp;
 	struct mii_data *mii;
 	u_char eaddr[ETHER_ADDR_LEN];
 	int i, s;
 
-	usbd_devinfo(dev, 0, devinfo, sizeof(devinfo));
+	devinfop = usbd_devinfo_alloc(dev, 0);
 	USB_ATTACH_SETUP;
-	printf("%s: %s\n", devname, devinfo);
+	printf("%s: %s\n", devname, devinfop);
+	usbd_devinfo_free(devinfop);
 
 	/* Move the device into the configured state. */
 	err = usbd_set_config_no(dev, UDAV_CONFIG_NO, 1);
@@ -264,7 +265,7 @@ USB_ATTACH(udav)
 	/* Print Ethernet Address */
 	printf("%s: Ethernet address %s\n", devname, ether_sprintf(eaddr));
 
-	/* initialize interface infomation */
+	/* initialize interface information */
 	ifp = GET_IFP(sc);
 	ifp->if_softc = sc;
 	ifp->if_mtu = ETHERMTU;
@@ -1086,7 +1087,7 @@ udav_txeof(usbd_xfer_handle xfer, usbd_private_handle priv, usbd_status status)
 		       usbd_errstr(status));
 		if (status == USBD_STALLED) {
 			sc->sc_refcnt++;
-			usbd_clear_endpoint_stall(sc->sc_pipe_tx);
+			usbd_clear_endpoint_stall_async(sc->sc_pipe_tx);
 			if (--sc->sc_refcnt < 0)
 				usb_detach_wakeup(USBDEV(sc->sc_dev));
 		}
@@ -1133,7 +1134,7 @@ udav_rxeof(usbd_xfer_handle xfer, usbd_private_handle priv, usbd_status status)
 		}
 		if (status == USBD_STALLED) {
 			sc->sc_refcnt++;
-			usbd_clear_endpoint_stall(sc->sc_pipe_rx);
+			usbd_clear_endpoint_stall_async(sc->sc_pipe_rx);
 			if (--sc->sc_refcnt < 0)
 				usb_detach_wakeup(USBDEV(sc->sc_dev));
 		}

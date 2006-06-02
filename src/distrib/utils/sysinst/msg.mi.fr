@@ -1,4 +1,4 @@
-/*	$NetBSD: msg.mi.fr,v 1.83.2.4 2005/09/30 17:42:02 tron Exp $	*/
+/*	$NetBSD: msg.mi.fr,v 1.94 2006/02/26 10:25:52 dsl Exp $	*/
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.
@@ -140,9 +140,6 @@ message ask_disk
 message Available_disks
 {Disques disponibles:}
 
-message cylinders
-{cylindres}
-
 message heads
 {têtes}
 
@@ -187,11 +184,6 @@ Pour les disques plus ancien, il est plus efficace de choisir des tailles
 de partitions multiples de la taille d'un cylindre.
 
 Choisissez votre unité d'espace disque}
-
-message defaultunit
-{Tailles et décalages ("offsets") sont en %s, sauf si vous spécifiez une unitée ('M' pour
-Mega-octets, 'c' pour cylindres, 's' pour secteurs) à la fin de votre nombre.
-}
 
 message ptnsizes
 {Vous pouvez désormais changer la taille des partitions système.
@@ -375,44 +367,6 @@ message openfail
 {Je n'ai pas pu ouvrir %s, le message d'erreur était: %s.
 }
 
-message statfail
-{Je n'ai pas pu avoir les propriétées de %s, le message d'erreur
-etait: %s.
-}
-
-message unlink_fail
-{Je n'ai pas pu effacer %s, le message d'erreur était: %s.
-}
-
-message rename_fail
-{je n'ai pas pu renomer %s en %s, le message d'erreur était: %s.
-}
-
-message deleting_files
-{Pour la procédure de mise à jour, les fichiers suivants doivent être
-supprimés:
-}
-
-message deleting_dirs
-{Pour la procédude de mise à jour, les répertoires suivants doivent
-être supprimés (les fichiers déjà existants seront renommés):
-}
-
-message renamed_dir
-{Le répertoire %s a été renomé %s.
-}
-
-message cleanup_warn
-{Les ajustements nécessaire à la mise à niveau de l'installation
-existante ont échouées. Cela peut empêcher l'extraction du composant
-suivant.
-}
-
-message nomount
-{La partition %c n'est ni 4.2BSD,
-ni msdos et ne dispose donc d'aucun point de montage.
-}
-
 message mountfail
 {Le montage de /dev/%s%c sur %s a échoué.
 }
@@ -460,10 +414,10 @@ Comme indiqué dans le document d'installation, vous avez
 plusieurs possibilités.
 Pour une installation via nfs ou ftp, vous devez être
 connecté au réseau et avoir accès au bon serveur.
-Si vous n'êtes pas prêt pour terminer l'installation maintenant,
-choisissez "aucun" puis retournerez au menu principal.
-Vous pourrez choisir l'option "mise à jour" pour terminer l'installation.
-}
+
+Sets selected %d, processed %d. Next set %s.
+
+}	/* XXX translate last line */
 
 message distset
 {La distribution de NetBSD est découpée en plusieurs composants.
@@ -480,12 +434,6 @@ Si l'utilisateur est ftp, alors le mot de passe n'est pas nécessaire.
 Le répertoire des composants est relatif au répertoire de base, et
 doit contenir les fichiers .tgz.
 
-serveur:		   %s 
-répertoire de base:	   %s 
-répertoire des composants: %s 
-utilisateur:		   %s 
-mot de passe:		   %s 
-proxy:			   %s
 }
 
 message email
@@ -501,21 +449,19 @@ Le répertoire de base doit etre accessible par NFS, le répertoire des
 composants est relatif au répertoire de base et doit contenir les fichiers
 .tgz.
 
-serveur:		   %s 
-répertoire de base:	   %s 
-répertoire des composants: %s
 }
 
-message nfsbadmount
-{Le répertoire %s:%s n'est pas montable par nfs.}
+message floppysource	/* XXX translate */
+{Enter the floppy device to be used and transfer directory on the target
+filesystem.  The set files must be in the root directory of the floppies.
+
+}
 
 message cdromsource
 {Donnez le nom de périphérique du CD-Rom à utiliser ainsi que
 le répertoire qui contient les composants. 
 Rappelez-vous que le répertoire doit contenir les fichiers .tgz .
 
-device:		%s 
-répertoire:	%s
 }
 
 
@@ -525,10 +471,6 @@ ainsi que le répertoire contenant les composants.
 Le répertoire des composants est relatif au répertoire de base et doit
 contenir les fichiers .tgz.
 
-device:			%s 
-système de fichiers:		%s 
-répertoire de base:		%s 
-répertoire des composants:	%s
 }
 
 message localdir
@@ -536,25 +478,10 @@ message localdir
 distribution. 
 Rapellez vous que ce répertoire doit contenir les fichiers .tgz.
 
-Répertoire de base:	        %s
-Répertoire des composants:	%s
 }
 
 message filesys
 {système de fichiers}
-
-message cdrombadmount
-{Le CDROM ne peut pas être monté depuis le device %s.}
-
-message localfsbadmount
-{%s ne peut pas être monté depuis le device %s.}
-
-message badlocalsetdir
-{%s n'est pas un répertoire}
-
-message badsetdir
-{%s ne contient pas les composants indispensables etc.tgz et base.tgz.
- Etes-vous sur que c'est le bon répertoire ?}
 
 message nonet
 {Je ne trouve aucune interface réseau utilisable.
@@ -592,7 +519,7 @@ message net_host
 message net_ip
 {Votre adresse IPv4}
 
-message net_ip_2nd
+message net_srv_ip
 {Server IPv4 number}
 
 message net_mask
@@ -668,16 +595,8 @@ message realdir
 L'installation a échoué.
 }
 
-message ftperror
-{Impossible de télécharger un fichier par ftp.
-Voulez vous réessayer ?}
-
-message distdir
-{Quel répertoire dois je utiliser pour %s ?}
-
-message delete_dist_files
-{Voulez-vous supprimer les fichiers de distribution de NetBSD de %s ? 
-Vous pouvez les conserver pour installer ou mettre a jour d'autre systèmes.}
+message delete_xfer_file	/* XXX translate */
+{Delete after install}
 
 message verboseextract
 {
@@ -690,9 +609,6 @@ voir pendant qu'ils seront extraits ?
 
 message notarfile
 {Le composant %s n'existe pas.}
-
-message notarfile_ok
-{Voulez-vous continuer à extraire les composants ?}
 
 message endtarok
 {Tous les fichiers sont extraits. Veuillez appuyer sur <entrée> pour continuer.}
@@ -785,11 +701,6 @@ par fsck a rencontré un problème.
 La mise à jour a été interrompue avec un code erreur %d.
 }
 
-message badmount
-{Le système de fichiers /dev/%s%c n'a pas été monté correctement.
-Arrêt de la mise à jour
-}
-
 message rootmissing
 { La racine du système cible %s est introuvable.
 }
@@ -799,23 +710,22 @@ message badroot
 Avez-vous bien installé tous les composants indispensables ?
 }
 
-message fddev
-{Quel lecteur de disquette voulez vous utiliser? }
-
-message fdmount
-{Veuillez insérer la disquette contenant le fichier "%s". }
+message fd_type		/* XXX translate */
+{Floppy file system type}
 
 message fdnotfound
-{Impossible de trouver le fichier "%s" sur la disquette.
+{Impossible de trouver le fichier sur la disquette.
 }
 
 message fdremount
-{La disquette n'a pas été montée correctement. Vous devez :
+{La disquette n'a pas été montée correctement.
+}
 
-Insérer une disquette contenant le fichier %s.
+message fdmount
+{Veuillez insérer la disquette contenant le fichier "%s.%s".
 
-Ne plus charger d'autre fichiers depuis la disquette et interrompre le
-processus
+If the set's has no more disks, select "Set finished" to install the set.
+Select "Abort fetch" to return to the install media selection menu.
 }
 
 message mntnetconfig
@@ -868,17 +778,11 @@ message set_X11_fonts
 message set_X11_servers
 {X11 serveurs}
 
-message set_X_contrib
-{X11 clients contribués}
-
 message set_X11_prog
 {X11 développement}
 
-message set_X11_misc
-{X11 Misc.}
-
 message cur_distsets_row
-{%-33s %3s\n}
+{%-33s %3s}
 
 message select_all
 {Sélectionner tout les composants}
@@ -911,26 +815,8 @@ retourner au menu principal
 Voulez-vous éditer la table des partitions à nouveau ?
 }
 
-message not_regular_file
-{Le fichier de configuration %s n'est pas un fichier régulier.\n}
-
-message out_of_memory
-{Votre machine ne dispose pas d'assez de mémoire : échec du malloc()\n}
-
 message config_open_error
 {Impossible d'ouvrir le fichier de configuration %s.\n}
-
-message config_read_error
-{Impossible de lire le fichier de configuration %s.n}
-
-message cmdfail
-{La commande
-	%s
-ne s'est pas executée correctement. Impossible de continuer.}
-
-message upgradeparttype
-{La seule partition disponible pour installer NetBSD est de l'ancien type
-NetBSD/386BSD/FreeBSD. Voulez-vous le changer pour le nouveau ? }
 
 message choose_timezone	
 {Sélectionnez votre zone horaire dans la liste suivante. 
@@ -980,12 +866,6 @@ pour le système maintenant ?}
 message rootsh	
 {Vous pouvez maintenant choisir quel shell utiliser pour l'utilisateur root.
 Par default il s'agit de /bin/sh}
-
-message postuseexisting
-{
-N'oubliez pas d'indiquer pour chaque partition un point de
-montage. Appuyez sur <entrée> pour continuer.
-}
 
 message no_root_fs
 {Il n'y a pas de partition racine définie. Vous devez définir au moins 
@@ -1039,12 +919,11 @@ message local_dir {Répertoire local}
 message Select_your_distribution {Sélection de la distribution}
 message Full_installation {Installation complète}
 message Custom_installation {Installation personnalisée}
-message Change {Changer}
 message hidden {** caché **}
 message Host {Serveur ftp}
 message Base_dir {Répertoire de base}
 message Set_dir {Répertoire des composants}
-message Directory {Répertoire}
+message Xfer_dir {Répertoire de transfer}	/* fix XLAT */
 message User {Utilisateur}
 message Password {Mot de passe}
 message Proxy {Proxy}
@@ -1052,10 +931,11 @@ message Get_Distribution {Récupérer la Distribution}
 message Continue {Continuer}
 message What_do_you_want_to_do {Que voulez vous faire?}
 message Try_again {Réessayer}
-message Give_up {Abandonner}
-message Ignore_continue_anyway {Ignorer les erreurs, continuer quand même}
 message Set_finished {Extraction terminée}
-message Abort_install {Annuler l'installation}
+message Skip_set {Skip set}  /* XXX translate */
+message Skip_group {Skip set group}  /* XXX translate */
+message Abandon {Abandon installation}	/* XXX */
+message Abort_fetch {Abort fetch}	/* XXX */
 message Password_cipher {Password cipher}
 message DES {DES}
 message MD5 {MD5}

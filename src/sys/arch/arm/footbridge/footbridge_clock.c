@@ -1,4 +1,4 @@
-/*	$NetBSD: footbridge_clock.c,v 1.18 2003/10/05 19:44:58 matt Exp $	*/
+/*	$NetBSD: footbridge_clock.c,v 1.21 2006/04/17 00:03:17 chris Exp $	*/
 
 /*
  * Copyright (c) 1997 Mark Brinicombe.
@@ -35,7 +35,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: footbridge_clock.c,v 1.18 2003/10/05 19:44:58 matt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: footbridge_clock.c,v 1.21 2006/04/17 00:03:17 chris Exp $");
 
 /* Include header files */
 
@@ -205,14 +205,14 @@ statclockhandler(aframe)
 }
 
 static int
-load_timer(base, hz)
+load_timer(base, herz)
 	int base;
-	int hz;
+	int herz;
 {
 	unsigned int timer_count;
 	int control;
 
-	timer_count = dc21285_fclk / hz;
+	timer_count = dc21285_fclk / herz;
 	if (timer_count > TIMER_MAX_VAL * 16) {
 		control = TIMER_FCLK_256;
 		timer_count >>= 8;
@@ -233,25 +233,25 @@ load_timer(base, hz)
 }
 
 /*
- * void setstatclockrate(int hz)
+ * void setstatclockrate(int herz)
  *
  * Set the stat clock rate. The stat clock uses timer2
  */
 
 void
-setstatclockrate(hz)
-	int hz;
+setstatclockrate(herz)
+	int herz;
 {
 	int statint;
 	int countpersecond;
 	int statvarticks;
 
-	/* statint == num in counter to drop by desired hz */
+	/* statint == num in counter to drop by desired herz */
 	statint = statprev = clock_sc->sc_statclock_count =
-	    load_timer(TIMER_2_BASE, hz);
+	    load_timer(TIMER_2_BASE, herz);
 	
 	/* Get the total ticks a second */
-	countpersecond = statint * hz;
+	countpersecond = statint * herz;
 	
 	/* now work out how many ticks per usec */
 	statcountperusec = countpersecond / 1000000;
@@ -421,7 +421,6 @@ delay(n)
 
 	if (n == 0) return;
 
-
 	/* 
 	 * not calibrated the timer yet, so try to live with this horrible
 	 * loop!
@@ -440,9 +439,11 @@ delay(n)
 	last = bus_space_read_4(clock_sc->sc_iot, clock_sc->sc_ioh,
 		    TIMER_3_VALUE);
 	 
-	delta = usecs = 0;
+	delta = 0;
 
-	while (n > usecs)
+	usecs = n * delay_count_per_usec;
+
+	while (usecs > delta)
 	{
 	    cur = bus_space_read_4(clock_sc->sc_iot, clock_sc->sc_ioh,
 		    TIMER_3_VALUE);
@@ -463,12 +464,6 @@ delay(n)
 			TIMER_3_CLEAR, 0);
 	    }
 	    last = cur;
-	    
-	    if (delta >= delay_count_per_usec)
-	    {
-		usecs += delta / delay_count_per_usec;
-		delta %= delay_count_per_usec;
-	    }
 	}
 }
 

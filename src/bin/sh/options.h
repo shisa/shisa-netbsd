@@ -1,4 +1,4 @@
-/*	$NetBSD: options.h,v 1.17 2003/08/07 09:05:36 agc Exp $	*/
+/*	$NetBSD: options.h,v 1.19 2005/12/13 17:44:18 dsl Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -48,7 +48,7 @@ struct optent {
 	const char *name;		/* for set -o <name> */
 	const char letter;		/* set [+/-]<letter> and $- */
 	const char opt_set;		/* mutually exclusive option set */
-	char val;			/* value of <letter>flag */
+	unsigned char val;		/* value of <letter>flag */
 };
 
 /* Those marked [U] are required by posix, but have no effect! */
@@ -97,9 +97,11 @@ DEF_OPT( "nolog",	0 )	/* [U] no functon defs in command history */
 #define	nolog optlist[16].val
 DEF_OPT( "cdprint",	0 )	/* always print result of cd */
 #define	cdprint optlist[17].val
+DEF_OPT( "tabcomplete",	0 )	/* <tab> causes filename expansion */
+#define	tabcomplete optlist[18].val
 #ifdef DEBUG
 DEF_OPT( "debug",	0 )	/* enable debug prints */
-#define	debug optlist[18].val
+#define	debug optlist[19].val
 #endif
 
 #ifdef DEFINE_OPTIONS

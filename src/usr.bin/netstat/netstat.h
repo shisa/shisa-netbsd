@@ -1,4 +1,4 @@
-/*	$NetBSD: netstat.h,v 1.30 2004/09/04 23:35:43 manu Exp $	*/
+/*	$NetBSD: netstat.h,v 1.35 2006/05/28 16:51:40 elad Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -35,6 +35,7 @@
 
 int	Aflag;		/* show addresses of protocol control block */
 int	aflag;		/* show all sockets (including servers) */
+int	Bflag;		/* show Berkeley Packet Filter information */
 int	bflag;		/* show i/f byte stats */
 int	dflag;		/* show i/f dropped packets */
 #ifndef SMALL
@@ -46,6 +47,7 @@ int	lflag;		/* show routing table with use and ref */
 int	mflag;		/* show memory stats */
 int	numeric_addr;	/* show addresses numerically */
 int	numeric_port;	/* show ports numerically */
+int	nflag;		/* same as above, for show.c compat */
 int	Pflag;		/* dump a PCB */
 int	pflag;		/* show given protocol */
 int	qflag;		/* show softintrq */
@@ -76,6 +78,7 @@ void	icmp_stats __P((u_long, char *));
 void	igmp_stats __P((u_long, char *));
 void	pim_stats __P((u_long, char *));
 void	arp_stats __P((u_long, char *));
+void	carp_stats __P((u_long, char *));
 #ifdef IPSEC
 /* run-time selector for which  implementation (KAME, FAST_IPSEC) to show */
 void	ipsec_switch __P((u_long, char *));
@@ -112,16 +115,26 @@ void	mbpr(u_long, u_long, u_long, u_long, u_long);
 void	hostpr __P((u_long, u_long));
 void	impstats __P((u_long, u_long));
 
-void	pr_rthdr __P((int));
+void	pr_rthdr __P((int, int));
 void	pr_family __P((int));
 void	rt_stats __P((u_long));
 char	*ns_phost __P((struct sockaddr *));
 void	upHex __P((char *));
 
-char	*routename __P((u_int32_t));
-char	*netname __P((u_int32_t, u_int32_t));
+void	p_rttables(int);
+void	p_flags(int, char *);
+void	p_addr(struct sockaddr *, struct sockaddr *, int);
+void	p_gwaddr(struct sockaddr *, int);
+void	p_sockaddr(struct sockaddr *, struct sockaddr *, int, int);
+char	*routename(struct sockaddr *);
+char	*routename4(in_addr_t);
+char	*netname(struct sockaddr *, struct sockaddr *);
+char	*netname4(in_addr_t, in_addr_t);
+
+/* char	*routename __P((u_int32_t)); */
+/* char	*netname __P((u_int32_t, u_int32_t)); */
 #ifdef INET6
-char	*netname6 __P((struct sockaddr_in6 *, struct in6_addr *));
+char	*netname6 __P((struct sockaddr_in6 *, struct sockaddr_in6 *));
 #endif 
 char	*atalk_print __P((const struct sockaddr *, int));
 char	*atalk_print2 __P((const struct sockaddr *, const struct sockaddr *,
@@ -152,3 +165,8 @@ void	tp_stats __P((u_long, caddr_t));
 
 void	mroutepr __P((u_long, u_long, u_long, u_long));
 void	mrt_stats __P((u_long, u_long));
+
+void	bpf_stats(void);
+void	bpf_dump(char *);
+
+#define PLEN    (LONG_BIT / 4 + 2)

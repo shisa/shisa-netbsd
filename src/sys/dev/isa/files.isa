@@ -1,4 +1,4 @@
-#	$NetBSD: files.isa,v 1.137 2005/02/27 00:27:17 perry Exp $
+#	$NetBSD: files.isa,v 1.144 2006/05/13 09:02:19 xtraeme Exp $
 #
 # Config file and device description for machine-independent ISA code.
 # Included by ports that need it.  Requires that the SCSI files be
@@ -332,16 +332,6 @@ file	dev/isa/ad1848_isa.c		ad1848
 define	ics2101
 file	dev/isa/ics2101.c		ics2101
 
-
-# Audio systems based on Echo Speech Corp. ESC61[45] ASICs
-device	pss {[port = -1], [size = 0],
-	     [iomem = -1], [iosiz = 0],
-	     [irq = -1], [drq = -1]}
-attach	pss at isa
-device	sp: audiobus, isadma, ad1848, auconv
-attach	sp at pss
-file	dev/isa/pss.c			pss			needs-flag
-
 # Microsoft Windows Sound System
 device	wss { } : audiobus, isadma, ad1848, auconv
 file	dev/isa/wss.c			wss			needs-flag
@@ -406,6 +396,7 @@ attach	satlink at isa
 file	dev/isa/satlink.c		satlink			needs-flag
 
 # ISA PC keyboard controller
+defflag opt_pckbc.h			PCKBCNOTEST
 attach	pckbc at isa with pckbc_isa
 file	dev/isa/pckbc_isa.c		pckbc_isa
 
@@ -451,7 +442,7 @@ device	rtii: radiodev, tea5757
 attach	rtii at isa
 file	dev/isa/radiotrack2.c		rtii
 
-# PC PPI + TIMER 1 (speaker interface)
+# PC PPI (speaker interface)
 device	pcppi {}
 attach	pcppi at isa
 file	dev/isa/pcppi.c			pcppi			needs-flag
@@ -461,6 +452,10 @@ file	dev/isa/spkr.c			spkr			needs-flag
 attach	midi at pcppi with midi_pcppi: midisyn
 file	dev/isa/midi_pcppi.c		midi_pcppi
 
+# AT Timer (TIMER 1)
+attach	attimer at isa with attimer_isa
+file	dev/isa/attimer_isa.c		attimer_isa
+
 #
 # Environmental monitors
 #
@@ -468,6 +463,11 @@ file	dev/isa/midi_pcppi.c		midi_pcppi
 # LM78 temp/fanspeed monitor
 attach	lm at isa with lm_isa
 file	dev/isa/lm_isa.c		lm_isa
+
+# IT8705F/8712F SIS950 hardware monitor
+device	it: sysmon_envsys
+attach	it at isa with it_isa
+file	dev/isa/it.c			it_isa
 
 # ISDN devices
 attach	isic at isa with isic_isa
@@ -490,13 +490,25 @@ attach	joy at isa with joy_isa
 file	dev/isa/joy_isa.c		joy_isa
 
 # NSC PC87366 Super IO / monitor chip
-device nsclpcsio: sysmon_envsys
+device nsclpcsio: sysmon_envsys, gpiobus
 attach nsclpcsio at isa with nsclpcsio_isa
 file dev/isa/nsclpcsio_isa.c nsclpcsio_isa
 
 # USB Controller
 attach	slhci at isa with slhci_isa
 file	dev/isa/slhci_isa.c		slhci_isa
+
+device	tsdio {}
+attach	tsdio at isa
+file	dev/isa/tsdio.c			tsdio
+
+device	toasterlcd: hd44780, wsemuldisplaydev
+attach	toasterlcd at tsdio
+file	dev/isa/toasterlcd.c		toasterlcd
+
+device toaster
+attach toaster at tsdio
+file	dev/isa/toaster.c		toaster
 
 #
 # ISA Plug 'n Play autoconfiguration glue.

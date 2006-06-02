@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile.kern.inc,v 1.59 2005/02/26 23:04:16 perry Exp $
+#	$NetBSD: Makefile.kern.inc,v 1.81 2006/05/21 05:49:54 christos Exp $
 #
 # This file contains common `MI' targets and definitions and it is included
 # at the bottom of each `MD' ${MACHINE}/conf/Makefile.${MACHINE}.
@@ -30,6 +30,8 @@ OBJDUMP?=	objdump
 CSCOPE?=	cscope
 MKID?=		mkid
 UUDECODE?=	${TOOL_UUDECODE:Uuudecode}
+HEXDUMP?=	${TOOL_HEXDUMP:Uhexdump}
+GENASSYM?=	${TOOL_GENASSYM:Ugenassym}
 .MAKEOVERRIDES+=USETOOLS	# make sure proper value is propagated
 
 _MKMSG?=		@\#
@@ -52,7 +54,9 @@ S!=	cd ../../../..; pwd
 ##
 ## CPPFLAGS, CFLAGS, and AFLAGS must be set in the port's Makefile
 ##
-INCLUDES?=	-I. ${EXTRA_INCLUDES} -I$S/arch -I$S -nostdinc
+_ISGCC295!=		${CC} --version 2>/dev/null | grep 2.95 2>/dev/null || echo 0
+INCLUDES?=	-I. ${EXTRA_INCLUDES} -I${S}/../common/include -I$S/arch \
+		-I$S -nostdinc
 CPPFLAGS+=	${INCLUDES} ${IDENT} ${PARAM} -D_KERNEL -D_KERNEL_OPT
 DEFCOPTS?=	-O2
 COPTS?=		${DEFCOPTS}
@@ -64,23 +68,33 @@ CWARNFLAGS+=	-Werror
 .endif
 CWARNFLAGS+=	-Wall -Wno-main -Wno-format-zero-length -Wpointer-arith
 CWARNFLAGS+=	-Wmissing-prototypes -Wstrict-prototypes
+.if !${_ISGCC295}
+CWARNFLAGS+=	-Wreturn-type
+.endif
+CWARNFLAGS+=	-Wswitch -Wshadow
+CWARNFLAGS+=	-Wcast-qual -Wwrite-strings
 # Add -Wno-sign-compare.  -Wsign-compare is included in -Wall as of GCC 3.3,
 # but our sources aren't up for it yet.
 CWARNFLAGS+=	-Wno-sign-compare
+. if ${HAVE_GCC} > 3
+CWARNFLAGS+=	-Wno-pointer-sign -Wno-attributes
+. endif
 .endif
 
-CFLAGS+=	${COPTS.${.IMPSRC:T}} ${CPUFLAGS.${.IMPSRC:T}}
-CFLAGS+=	${CPPFLAGS.${.IMPSRC:T}}
-CFLAGS+=	${CPUFLAGS} -ffreestanding
+CFLAGS+=	-ffreestanding
 CFLAGS+=	${CPUFLAGS} ${DEBUG} ${COPTS} ${CWARNFLAGS}
 AFLAGS+=	${CPUFLAGS} -D_LOCORE
 
 # Disable unitialized warnings with 2.95 - it gets it wrong way too often
-_ISGCC295!=		${CC} --version 2>/dev/null | grep 2.95 2>/dev/null || echo 0
 .if ${_ISGCC295}
 CWARNFLAGS+=	-Wno-uninitialized
 .else
 CFLAGS+=	-fno-zero-initialized-in-bss
+.endif
+
+# XXX
+.if ${HAVE_GCC} > 3
+CFLAGS+=	-fno-strict-aliasing
 .endif
 
 # Use the per-source COPTS variables to add -g to just those
@@ -170,7 +184,7 @@ ${_cfile:T:R}.o: ${_cfile}
 #	${SYSTEM_LD} swapxxx.o
 #	${SYSTEM_LD_TAIL}
 SYSTEM_OBJ?=	${MD_OBJS} ${MI_OBJS} ${OBJS} ${SYSLIBCOMPAT} ${LIBKERN}
-SYSTEM_DEP?=	Makefile ${SYSTEM_OBJ} .gdbinit
+SYSTEM_DEP?=	Makefile ${SYSTEM_OBJ:O} .gdbinit
 SYSTEM_LD_HEAD?=@rm -f $@
 SYSTEM_LD?=	@${_MKSHMSG} "   link  ${.CURDIR:T}/${.TARGET}"; \
 		${_MKSHECHO}\
@@ -195,13 +209,19 @@ LINKFLAGS_NORMAL?=	-S
 STRIPFLAGS?=	-g
 
 DEBUG?=
-.if ${DEBUG} == "-g" || ${DEBUG} == "-gstabs" || ${DEBUG} == "-gstabs+"
+.if !empty(DEBUG:M-g*)
 SYSTEM_LD_TAIL+=${SYSTEM_LD_TAIL_DEBUG}
 LINKFLAGS+=	${LINKFLAGS_DEBUG}
 EXTRA_KERNELS+= ${KERNELS:@.KERNEL.@${.KERNEL.}.gdb@}
 .elifndef PROF
 LINKFLAGS+=	${LINKFLAGS_NORMAL}
 .endif
+
+SYSTEM_LD_TAIL+=; \
+	if grep -q '^\#define.*SYMTAB_SPACE' opt_ddbparam.h; then \
+		echo "${DBSYM} $@"; \
+		${DBSYM} $@; \
+	fi
 
 SYSTEM_LD_HEAD+=${SYSTEM_LD_HEAD_EXTRA}
 SYSTEM_LD_TAIL+=${SYSTEM_LD_TAIL_EXTRA}
@@ -210,10 +230,10 @@ SYSTEM_LD_TAIL+=${SYSTEM_LD_TAIL_EXTRA}
 ## (6) port independent targets and dependencies: assym.h, vers.o
 ##
 .if !target(assym.h)
-assym.h: $S/kern/genassym.sh ${GENASSYM} ${GENASSYM_EXTRAS}
+assym.h: ${GENASSYM_CONF} ${GENASSYM_EXTRAS}
 	${_MKTARGET_CREATE}
-	cat ${GENASSYM} ${GENASSYM_EXTRAS} | \
-	    ${HOST_SH} $S/kern/genassym.sh ${CC} ${CFLAGS} ${CPPFLAGS} ${PROF} \
+	cat ${GENASSYM_CONF} ${GENASSYM_EXTRAS} | \
+	    ${GENASSYM} -- ${CC} ${CFLAGS} ${CPPFLAGS} ${PROF} \
 	    > assym.h.tmp && \
 	mv -f assym.h.tmp assym.h
 ${MD_SFILES:C/\.[Ss]/.o/} ${SFILES:C/\.[Ss]/.o/}: assym.h
@@ -280,7 +300,7 @@ kernelnames:
 
 .if !target(__CLEANDEPEND)
 __CLEANDEPEND: .USE
-	rm -f .depend
+	echo .depend ${DEPS} | xargs rm -f --
 .endif
 
 # do not !target these, the kern and compat Makefiles augment them
@@ -290,19 +310,37 @@ depend: .depend
 dependall: depend all
 
 .if !target(.depend)
-SRCS?=		${MD_SFILES} ${MD_CFILES} ${MI_CFILES} ${CFILES} ${SFILES}
 MKDEP_AFLAGS?=	${AFLAGS}
 MKDEP_CFLAGS?=	${CFLAGS}
-.depend: ${SRCS} assym.h config_time.h
+SSRCS=${MD_SFILES} ${SFILES}
+CSRCS=${MD_CFILES} ${MI_CFILES} ${CFILES}
+SRCS=${SSRCS} ${CSRCS}
+DEPS=	${SRCS:T:O:u:R:S/$/.d/g}
+
+.for _s in ${SSRCS}
+${_s:T:R}.d: ${_s} assym.h config_time.h
 	${_MKTARGET_CREATE}
-	${MKDEP} -- ${MKDEP_AFLAGS} ${CPPFLAGS} ${MD_SFILES} ${SFILES}
-	${MKDEP} -a -- ${MKDEP_CFLAGS} ${CPPFLAGS} ${MD_CFILES} ${MI_CFILES} \
-	    ${CFILES}
-	cat ${GENASSYM} ${GENASSYM_EXTRAS} | \
-	    ${HOST_SH} $S/kern/genassym.sh ${MKDEP} -f assym.dep -- \
+	${MKDEP} -f ${.TARGET} -- ${MKDEP_AFLAGS} \
+	    ${CPPFLAGS} ${CPPFLAGS.${_s:T}} ${_s}
+.endfor
+.for _s in ${CSRCS}
+${_s:T:R}.d: ${_s} config_time.h
+	${_MKTARGET_CREATE}
+	${MKDEP} -f ${.TARGET} -- ${MKDEP_CFLAGS} \
+	    ${CPPFLAGS} ${CPPFLAGS.${_s:T}} ${_s}
+.endfor
+
+assym.d: assym.h config_time.h
+	${_MKTARGET_CREATE}
+	cat ${GENASSYM_CONF} ${GENASSYM_EXTRAS} | \
+	    ${GENASSYM} -- ${MKDEP} -f assym.dep -- \
 	    ${CFLAGS} ${CPPFLAGS}
-	@sed -e 's/^.*\.o:.*\.c /assym.h: /' < assym.dep >> .depend
-	@rm -f assym.dep
+	sed -e 's/.*\.o:.*\.c/assym.h:/' < assym.dep >${.TARGET}
+	rm -f assym.dep
+
+.depend: ${DEPS} assym.d
+	${_MKTARGET_CREATE}
+	echo "${.ALLSRC}" | ${MKDEP} -D
 .endif
 
 .if !target(lint)
@@ -400,6 +438,10 @@ EXTRA_CLEAN+= .gdbinit
 	echo "source ${__gdbinit}" >> .gdbinit
 .endfor
 .endif
+
+CFLAGS+=	${COPTS.${.IMPSRC:T}} ${CPUFLAGS.${.IMPSRC:T}}
+CPPFLAGS+=	${CPPFLAGS.${.IMPSRC:T}}
+CWARNFLAGS+=	${CWARNFLAGS.${.IMPSRC:T}}
 
 ##
 ## the end

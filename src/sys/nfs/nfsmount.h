@@ -1,4 +1,4 @@
-/*	$NetBSD: nfsmount.h,v 1.33.6.1 2005/09/26 20:31:03 tron Exp $	*/
+/*	$NetBSD: nfsmount.h,v 1.39 2006/05/14 21:32:21 elad Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993
@@ -37,6 +37,9 @@
 
 #ifndef _NFS_NFSMOUNT_H_
 #define _NFS_NFSMOUNT_H_
+#ifdef _KERNEL
+#include <sys/disk.h>
+#endif
 
 /*
  * Arguments to mount NFS
@@ -167,6 +170,7 @@ struct	nfsmount {
 	int	nm_iflag;		/* internal flags */
 	int	nm_waiters;		/* number of waiting listeners.. */
 	long	nm_wcckludgetime;	/* see nfs_check_wccdata() */
+	struct io_stats *nm_stats;	/* per nfs mount statistics */
 };
 
 /*
@@ -178,36 +182,29 @@ struct	nfsmount {
  * Prototypes for NFS mount operations
  */
 int	nfs_mount __P((struct mount *mp, const char *path, void *data,
-		struct nameidata *ndp, struct proc *p));
+		struct nameidata *ndp, struct lwp *l));
 int	mountnfs __P((struct nfs_args *argp, struct mount *mp,
 		struct mbuf *nam, const char *pth, const char *hst,
-		struct vnode **vpp, struct proc *p));
+		struct vnode **vpp, struct lwp *p));
 int	nfs_mountroot __P((void));
 void	nfs_decode_args __P((struct nfsmount *, struct nfs_args *,
-		struct proc *p));
-int	nfs_start __P((struct mount *mp, int flags, struct proc *p));
-int	nfs_unmount __P((struct mount *mp, int mntflags, struct proc *p));
+		struct lwp *l));
+int	nfs_start __P((struct mount *mp, int flags, struct lwp *l));
+int	nfs_unmount __P((struct mount *mp, int mntflags, struct lwp *l));
 int	nfs_root __P((struct mount *mp, struct vnode **vpp));
 int	nfs_quotactl __P((struct mount *mp, int cmds, uid_t uid, void *arg,
-		struct proc *p));
-int	nfs_statvfs __P((struct mount *mp, struct statvfs *sbp, struct proc *p));
-int	nfs_sync __P((struct mount *mp, int waitfor, struct ucred *cred,
-		struct proc *p));
+		struct lwp *l));
+int	nfs_statvfs __P((struct mount *mp, struct statvfs *sbp, struct lwp *l));
+int	nfs_sync __P((struct mount *mp, int waitfor, kauth_cred_t cred,
+		struct lwp *p));
 int	nfs_vget __P((struct mount *, ino_t, struct vnode **));
 int	nfs_fhtovp __P((struct mount *mp, struct fid *fhp, struct vnode **vpp));
-int	nfs_checkexp __P((struct mount *mp, struct mbuf *nam, int *exflagsp,
-		struct ucred **credanonp));
 int	nfs_vptofh __P((struct vnode *vp, struct fid *fhp));
-int	nfs_fsinfo __P((struct nfsmount *, struct vnode *, struct ucred *,
-			struct proc *));
+int	nfs_fsinfo __P((struct nfsmount *, struct vnode *, kauth_cred_t,
+			struct lwp *));
 void	nfs_vfs_init __P((void));
 void	nfs_vfs_reinit __P((void));
 void	nfs_vfs_done __P((void));
-
-/*
- * Prototypes for miscellaneous exported NFS functions.
- */
-void	nfs_init __P((void));
 
 #endif /* _KERNEL */
 

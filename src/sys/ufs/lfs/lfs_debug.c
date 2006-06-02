@@ -1,4 +1,4 @@
-/*	$NetBSD: lfs_debug.c,v 1.27.2.1 2005/05/07 11:21:30 tron Exp $	*/
+/*	$NetBSD: lfs_debug.c,v 1.33 2005/12/11 12:25:26 christos Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2000, 2001, 2002, 2003 The NetBSD Foundation, Inc.
@@ -71,7 +71,7 @@
 #include <machine/stdarg.h>
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: lfs_debug.c,v 1.27.2.1 2005/05/07 11:21:30 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: lfs_debug.c,v 1.33 2005/12/11 12:25:26 christos Exp $");
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/namei.h>
@@ -87,7 +87,7 @@ __KERNEL_RCSID(0, "$NetBSD: lfs_debug.c,v 1.27.2.1 2005/05/07 11:21:30 tron Exp 
 int lfs_lognum;
 struct lfs_log_entry lfs_log[LFS_LOGLENGTH];
 
-int lfs_bwrite_log(struct buf *bp, char *file, int line)
+int lfs_bwrite_log(struct buf *bp, const char *file, int line)
 {
 	struct vop_bwrite_args a;
 	a.a_desc = VDESC(vop_bwrite);
@@ -103,7 +103,7 @@ int lfs_bwrite_log(struct buf *bp, char *file, int line)
 void lfs_dumplog(void)
 {
 	int i;
-	char *cp;
+	const char *cp;
 
 	for (i = lfs_lognum; i != (lfs_lognum - 1) % LFS_LOGLENGTH;
 	     i = (i + 1) % LFS_LOGLENGTH)
@@ -292,11 +292,13 @@ lfs_check_bpp(struct lfs *fs, struct segment *sp, char *file, int line)
 				       (*bpp)->b_blkno,
 				       blkno);
 			} else {
-				printf("%s:%d: misplace ino %d lbn %" PRId64
+				printf("%s:%d: misplace ino %llu lbn %" PRId64
 				       " at 0x%" PRIx64 " instead of "
 				       "0x%" PRIx64 "\n",
 				       file, line,
-				       VTOI((*bpp)->b_vp)->i_number, (*bpp)->b_lblkno,
+				       (unsigned long long)
+				       VTOI((*bpp)->b_vp)->i_number,
+				       (*bpp)->b_lblkno,
 				       blkno,
 				       (*bpp)->b_blkno);
 			}

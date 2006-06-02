@@ -1,4 +1,4 @@
-/*	$NetBSD: uvm_vnode.c,v 1.64 2005/01/09 16:42:44 chs Exp $	*/
+/*	$NetBSD: uvm_vnode.c,v 1.70 2006/05/14 21:38:18 elad Exp $	*/
 
 /*
  * Copyright (c) 1997 Charles D. Cranor and Washington University.
@@ -50,10 +50,11 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: uvm_vnode.c,v 1.64 2005/01/09 16:42:44 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: uvm_vnode.c,v 1.70 2006/05/14 21:38:18 elad Exp $");
 
 #include "fs_nfs.h"
 #include "opt_uvmhist.h"
+#include "opt_readahead.h"
 #include "opt_ddb.h"
 
 #include <sys/param.h>
@@ -72,18 +73,20 @@ __KERNEL_RCSID(0, "$NetBSD: uvm_vnode.c,v 1.64 2005/01/09 16:42:44 chs Exp $");
 #include <miscfs/specfs/specdev.h>
 
 #include <uvm/uvm.h>
+#include <uvm/uvm_readahead.h>
 
 /*
  * functions
  */
 
-void	uvn_detach(struct uvm_object *);
-int	uvn_get(struct uvm_object *, voff_t, struct vm_page **, int *, int,
-	    vm_prot_t, int, int);
-int	uvn_put(struct uvm_object *, voff_t, voff_t, int);
-void	uvn_reference(struct uvm_object *);
+static void	uvn_detach(struct uvm_object *);
+static int	uvn_get(struct uvm_object *, voff_t, struct vm_page **, int *,
+			int, vm_prot_t, int, int);
+static int	uvn_put(struct uvm_object *, voff_t, voff_t, int);
+static void	uvn_reference(struct uvm_object *);
 
-int	uvn_findpage(struct uvm_object *, voff_t, struct vm_page **, int);
+static int	uvn_findpage(struct uvm_object *, voff_t, struct vm_page **,
+			     int);
 
 /*
  * master pager structure
@@ -118,9 +121,7 @@ struct uvm_pagerops uvm_vnodeops = {
  */
 
 struct uvm_object *
-uvn_attach(arg, accessprot)
-	void *arg;
-	vm_prot_t accessprot;
+uvn_attach(void *arg, vm_prot_t accessprot)
 {
 	struct vnode *vp = arg;
 	struct uvm_object *uobj = &vp->v_uobj;
@@ -184,7 +185,7 @@ uvn_attach(arg, accessprot)
 		bdev = bdevsw_lookup(vp->v_rdev);
 		if (bdev != NULL) {
 			result = (*bdev->d_ioctl)(vp->v_rdev, DIOCGPART,
-						  (caddr_t)&pi, FREAD, curproc);
+						  (caddr_t)&pi, FREAD, curlwp);
 		} else {
 			result = ENXIO;
 		}
@@ -194,7 +195,7 @@ uvn_attach(arg, accessprot)
 			    (voff_t)pi.part->p_size;
 		}
 	} else {
-		result = VOP_GETATTR(vp, &vattr, curproc->p_ucred, curproc);
+		result = VOP_GETATTR(vp, &vattr, curproc->p_cred, curlwp);
 		if (result == 0)
 			used_vnode_size = vattr.va_size;
 	}
@@ -234,9 +235,8 @@ uvn_attach(arg, accessprot)
  * => caller must be using the same accessprot as was used at attach time
  */
 
-void
-uvn_reference(uobj)
-	struct uvm_object *uobj;
+static void
+uvn_reference(struct uvm_object *uobj)
 {
 	VREF((struct vnode *)uobj);
 }
@@ -250,9 +250,8 @@ uvn_reference(uobj)
  * => caller must call with object unlocked and map locked.
  */
 
-void
-uvn_detach(uobj)
-	struct uvm_object *uobj;
+static void
+uvn_detach(struct uvm_object *uobj)
 {
 	vrele((struct vnode *)uobj);
 }
@@ -265,12 +264,8 @@ uvn_detach(uobj)
  * => note: caller must set PG_CLEAN and pmap_clear_modify (if needed)
  */
 
-int
-uvn_put(uobj, offlo, offhi, flags)
-	struct uvm_object *uobj;
-	voff_t offlo;
-	voff_t offhi;
-	int flags;
+static int
+uvn_put(struct uvm_object *uobj, voff_t offlo, voff_t offhi, int flags)
 {
 	struct vnode *vp = (struct vnode *)uobj;
 	int error;
@@ -293,23 +288,58 @@ uvn_put(uobj, offlo, offhi, flags)
  * => NOTE: caller must check for released pages!!
  */
 
-int
-uvn_get(uobj, offset, pps, npagesp, centeridx, access_type, advice, flags)
-	struct uvm_object *uobj;
-	voff_t offset;
-	struct vm_page **pps;		/* IN/OUT */
-	int *npagesp;			/* IN (OUT if PGO_LOCKED) */
-	int centeridx;
-	vm_prot_t access_type;
-	int advice, flags;
+static int
+uvn_get(struct uvm_object *uobj, voff_t offset,
+    struct vm_page **pps /* IN/OUT */,
+    int *npagesp /* IN (OUT if PGO_LOCKED)*/,
+    int centeridx, vm_prot_t access_type, int advice, int flags)
 {
 	struct vnode *vp = (struct vnode *)uobj;
 	int error;
+#if defined(READAHEAD_STATS)
+	int orignpages = *npagesp;
+#endif /* defined(READAHEAD_STATS) */
+
 	UVMHIST_FUNC("uvn_get"); UVMHIST_CALLED(ubchist);
 
 	UVMHIST_LOG(ubchist, "vp %p off 0x%x", vp, (int)offset, 0,0);
+
+	if ((access_type & VM_PROT_WRITE) == 0 && (flags & PGO_LOCKED) == 0) {
+		simple_unlock(&vp->v_interlock);
+		vn_ra_allocctx(vp);
+		uvm_ra_request(vp->v_ractx, advice, uobj, offset,
+		    *npagesp << PAGE_SHIFT);
+		simple_lock(&vp->v_interlock);
+	}
+
 	error = VOP_GETPAGES(vp, offset, pps, npagesp, centeridx,
 			     access_type, advice, flags);
+
+#if defined(READAHEAD_STATS)
+	if (((flags & PGO_LOCKED) != 0 && *npagesp > 0) ||
+	    ((flags & (PGO_LOCKED|PGO_SYNCIO)) == PGO_SYNCIO && error == 0)) {
+		int i;
+
+		if ((flags & PGO_LOCKED) == 0) {
+			simple_lock(&uobj->vmobjlock);
+		}
+		for (i = 0; i < orignpages; i++) {
+			struct vm_page *pg = pps[i];
+
+			if (pg == NULL || pg == PGO_DONTCARE) {
+				continue;
+			}
+			if ((pg->flags & PG_SPECULATIVE) != 0) {
+				pg->flags &= ~PG_SPECULATIVE;
+				uvm_ra_hit.ev_count++;
+			}
+		}
+		if ((flags & PGO_LOCKED) == 0) {
+			simple_unlock(&uobj->vmobjlock);
+		}
+	}
+#endif /* defined(READAHEAD_STATS) */
+
 	return error;
 }
 
@@ -322,12 +352,8 @@ uvn_get(uobj, offset, pps, npagesp, centeridx, access_type, advice, flags)
  */
 
 int
-uvn_findpages(uobj, offset, npagesp, pgs, flags)
-	struct uvm_object *uobj;
-	voff_t offset;
-	int *npagesp;
-	struct vm_page **pgs;
-	int flags;
+uvn_findpages(struct uvm_object *uobj, voff_t offset, int *npagesp,
+    struct vm_page **pgs, int flags)
 {
 	int i, count, found, npages, rv;
 
@@ -358,12 +384,9 @@ uvn_findpages(uobj, offset, npagesp, pgs, flags)
 	return (found);
 }
 
-int
-uvn_findpage(uobj, offset, pgp, flags)
-	struct uvm_object *uobj;
-	voff_t offset;
-	struct vm_page **pgp;
-	int flags;
+static int
+uvn_findpage(struct uvm_object *uobj, voff_t offset, struct vm_page **pgp,
+    int flags)
 {
 	struct vm_page *pg;
 	boolean_t dirty;
@@ -455,9 +478,7 @@ uvn_findpage(uobj, offset, pgp, flags)
  */
 
 void
-uvm_vnp_setsize(vp, newsize)
-	struct vnode *vp;
-	voff_t newsize;
+uvm_vnp_setsize(struct vnode *vp, voff_t newsize)
 {
 	struct uvm_object *uobj = &vp->v_uobj;
 	voff_t pgend = round_page(newsize);
@@ -485,10 +506,7 @@ uvm_vnp_setsize(vp, newsize)
  */
 
 void
-uvm_vnp_zerorange(vp, off, len)
-	struct vnode *vp;
-	off_t off;
-	size_t len;
+uvm_vnp_zerorange(struct vnode *vp, off_t off, size_t len)
 {
 	void *win;
 	int flags;
@@ -500,7 +518,8 @@ uvm_vnp_zerorange(vp, off, len)
 	while (len) {
 		vsize_t bytelen = len;
 
-		win = ubc_alloc(&vp->v_uobj, off, &bytelen, UBC_WRITE);
+		win = ubc_alloc(&vp->v_uobj, off, &bytelen, UVM_ADV_NORMAL,
+		    UBC_WRITE);
 		memset(win, 0, bytelen);
 		flags = UBC_WANT_UNMAP(vp) ? UBC_UNMAP : 0;
 		ubc_release(win, flags);

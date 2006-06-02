@@ -1,4 +1,4 @@
-/*	$NetBSD: rarp.c,v 1.23 2005/02/26 22:58:56 perry Exp $	*/
+/*	$NetBSD: rarp.c,v 1.25 2005/12/11 12:24:46 christos Exp $	*/
 
 /*
  * Copyright (c) 1992 Regents of the University of California.
@@ -231,7 +231,7 @@ rarprecv(d, pkt, len, tleft)
 	}
 
 	/* Is the reply for our Ethernet address? */
-	if (bcmp(ap->arp_tha, d->myea, 6)) {
+	if (memcmp(ap->arp_tha, d->myea, 6)) {
 #ifdef RARP_DEBUG
 		if (debug)
 			printf("unwanted address\n");

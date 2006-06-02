@@ -1,4 +1,4 @@
-/* $NetBSD: s3c2410_intr.c,v 1.3 2003/08/29 12:57:50 bsh Exp $ */
+/* $NetBSD: s3c2410_intr.c,v 1.6 2005/12/24 20:06:52 perry Exp $ */
 
 /*
  * Copyright (c) 2003  Genetec corporation.  All rights reserved.
@@ -35,7 +35,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: s3c2410_intr.c,v 1.3 2003/08/29 12:57:50 bsh Exp $");
+__KERNEL_RCSID(0, "$NetBSD: s3c2410_intr.c,v 1.6 2005/12/24 20:06:52 perry Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -54,12 +54,12 @@ __KERNEL_RCSID(0, "$NetBSD: s3c2410_intr.c,v 1.3 2003/08/29 12:57:50 bsh Exp $")
 
 struct s3c2xx0_intr_dispatch handler[ICU_LEN];
 
-__volatile int softint_pending;
+volatile int softint_pending;
 
-__volatile int current_spl_level;
-__volatile int intr_mask;
-__volatile int soft_intr_mask;
-__volatile int global_intr_mask = 0; /* mask some interrupts at all spl level */
+volatile int current_spl_level;
+volatile int intr_mask;
+volatile int soft_intr_mask;
+volatile int global_intr_mask = 0; /* mask some interrupts at all spl level */
 
 /* interrupt masks for each level */
 int s3c2xx0_imask[NIPL];
@@ -310,13 +310,15 @@ s3c2410_intr_init(struct s3c24x0_softc *sc)
 void
 s3c2410_mask_subinterrupts(int bits)
 {
-	atomic_set_bit((uint32_t *)&icreg(INTCTL_INTSUBMSK), bits);
+	atomic_set_bit((uint32_t *)__UNVOLATILE(&icreg(INTCTL_INTSUBMSK)),
+		bits);
 }
 
 void
 s3c2410_unmask_subinterrupts(int bits)
 {
-	atomic_clear_bit((uint32_t *)&icreg(INTCTL_INTSUBMSK), bits);
+	atomic_clear_bit((uint32_t *)__UNVOLATILE(&icreg(INTCTL_INTSUBMSK)),
+		bits);
 }
 
 /*

@@ -1,4 +1,4 @@
-/*	$NetBSD: irix_prctl.c,v 1.26 2005/02/26 23:10:18 perry Exp $ */
+/*	$NetBSD: irix_prctl.c,v 1.31 2006/05/15 22:10:09 yamt Exp $ */
 
 /*-
  * Copyright (c) 2001-2002 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: irix_prctl.c,v 1.26 2005/02/26 23:10:18 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: irix_prctl.c,v 1.31 2006/05/15 22:10:09 yamt Exp $");
 
 #include <sys/errno.h>
 #include <sys/types.h>
@@ -52,6 +52,7 @@ __KERNEL_RCSID(0, "$NetBSD: irix_prctl.c,v 1.26 2005/02/26 23:10:18 perry Exp $"
 #include <sys/filedesc.h>
 #include <sys/vnode.h>
 #include <sys/resourcevar.h>
+#include <sys/kauth.h>
 
 #include <uvm/uvm_extern.h>
 #include <uvm/uvm_map.h>
@@ -172,7 +173,7 @@ irix_sys_prctl(l, v, retval)
 		pid_t pid = (pid_t)SCARG(uap, arg1);
 		struct irix_emuldata *ied;
 		struct proc *target;
-		struct pcred *pc;
+		kauth_cred_t pc;
 
 		if (pid == 0)
 			pid = p->p_pid;
@@ -184,11 +185,11 @@ irix_sys_prctl(l, v, retval)
 			return 0;
 
 		pc = p->p_cred;
-		if (!(pc->pc_ucred->cr_uid == 0 || \
-		    pc->p_ruid == target->p_cred->p_ruid || \
-		    pc->pc_ucred->cr_uid == target->p_cred->p_ruid || \
-		    pc->p_ruid == target->p_ucred->cr_uid || \
-		    pc->pc_ucred->cr_uid == target->p_ucred->cr_uid))
+		if (!(kauth_cred_geteuid(pc) == 0 || \
+		    kauth_cred_getuid(pc) == kauth_cred_getuid(target->p_cred) || \
+		    kauth_cred_geteuid(pc) == kauth_cred_getuid(target->p_cred) || \
+		    kauth_cred_getuid(pc) == kauth_cred_geteuid(target->p_cred) || \
+		    kauth_cred_geteuid(pc) == kauth_cred_geteuid(target->p_cred)))
 			return EPERM;
 
 		ied = (struct irix_emuldata *)(target->p_emuldata);
@@ -357,7 +358,7 @@ irix_sproc(entry, inh, arg, sp, len, pid, l, retval)
 		if ((isg = ied->ied_share_group) == NULL)
 			panic("irix_sproc: NULL ied->ied_share_group");
 
-		IRIX_VM_SYNC(p, error = (*vmc.ev_proc)(p, &vmc));
+		IRIX_VM_SYNC(p, error = (*vmc.ev_proc)(l, &vmc));
 		if (error)
 			return error;
 
@@ -422,7 +423,7 @@ irix_sproc_child(isc)
 	struct proc *parent = lparent->l_proc;
 	struct frame *tf = (struct frame *)l2->l_md.md_regs;
 	struct frame *ptf = (struct frame *)lparent->l_md.md_regs;
-	struct pcred *pc;
+	kauth_cred_t pc;
 	struct plimit *pl;
 	struct irix_emuldata *ied;
 	struct irix_emuldata *parent_ied;
@@ -435,32 +436,32 @@ irix_sproc_child(isc)
 	 */
 	if (inh & IRIX_PR_SADDR) {
 		int error;
-		vaddr_t min, max;
+		vaddr_t minp, maxp;
 		vsize_t len;
 		struct irix_shared_regions_rec *isrr;
 
 		/*
 		 * First, unmap the whole address space
 		 */
-		min = vm_map_min(&p2->p_vmspace->vm_map);
-		max = vm_map_max(&p2->p_vmspace->vm_map);
-		uvm_unmap(&p2->p_vmspace->vm_map, min, max);
+		minp = vm_map_min(&p2->p_vmspace->vm_map);
+		maxp = vm_map_max(&p2->p_vmspace->vm_map);
+		uvm_unmap(&p2->p_vmspace->vm_map, minp, maxp);
 
 		/*
 		 * Now, copy the mapping from the parent for shared regions
 		 */
 		parent_ied = (struct irix_emuldata *)parent->p_emuldata;
 		LIST_FOREACH(isrr, &parent_ied->ied_shared_regions, isrr_list) {
-			min = isrr->isrr_start;
+			minp = isrr->isrr_start;
 			len = isrr->isrr_len;
-			max = min + len;
+			maxp = minp + len;
 			/* If this is a private region, skip */
 			if (isrr->isrr_shared == IRIX_ISRR_PRIVATE)
 				continue;
 
 			/* Copy the new mapping from the parent */
 			error = uvm_map_extract(&parent->p_vmspace->vm_map,
-			    min, len, &p2->p_vmspace->vm_map, &min, 0);
+			    minp, len, &p2->p_vmspace->vm_map, &minp, 0);
 			if (error != 0) {
 #ifdef DEBUG_IRIX
 				printf("irix_sproc_child(): error %d\n", error);
@@ -486,12 +487,9 @@ irix_sproc_child(isc)
 	 */
 	if (inh & IRIX_PR_SID) {
 		pc = p2->p_cred;
-		parent->p_cred->p_refcnt++;
+		kauth_cred_hold(parent->p_cred);
 		p2->p_cred = parent->p_cred;
-		if (--pc->p_refcnt == 0) {
-			crfree(pc->pc_ucred);
-			pool_put(&pcred_pool, pc);
-		}
+		kauth_cred_free(pc);
 	}
 
 	/*
@@ -572,7 +570,7 @@ irix_sys_procblk(l, v, retval)
 	struct irix_emuldata *iedp;
 	struct irix_share_group *isg;
 	struct proc *target;
-	struct pcred *pc;
+	kauth_cred_t pc;
 	int oldcount;
 	struct lwp *ied_lwp;
 	int error, last_error;
@@ -584,11 +582,11 @@ irix_sys_procblk(l, v, retval)
 
 	/* May we stop it? */
 	pc = p->p_cred;
-	if (!(pc->pc_ucred->cr_uid == 0 || \
-	    pc->p_ruid == target->p_cred->p_ruid || \
-	    pc->pc_ucred->cr_uid == target->p_cred->p_ruid || \
-	    pc->p_ruid == target->p_ucred->cr_uid || \
-	    pc->pc_ucred->cr_uid == target->p_ucred->cr_uid))
+	if (!(kauth_cred_geteuid(pc) == 0 || \
+	    kauth_cred_getuid(pc) == kauth_cred_getuid(target->p_cred) || \
+	    kauth_cred_geteuid(pc) == kauth_cred_getuid(target->p_cred) || \
+	    kauth_cred_getuid(pc) == kauth_cred_geteuid(target->p_cred) || \
+	    kauth_cred_geteuid(pc) == kauth_cred_geteuid(target->p_cred)))
 		return EPERM;
 
 	/* Is it an IRIX process? */
@@ -671,14 +669,16 @@ irix_prda_init(p)
 	struct exec_vmcmd evc;
 	struct irix_prda *ip;
 	struct irix_prda_sys ips;
+	struct lwp *l;
 
 	bzero(&evc, sizeof(evc));
 	evc.ev_addr = (u_long)IRIX_PRDA;
 	evc.ev_len = sizeof(struct irix_prda);
 	evc.ev_prot = UVM_PROT_RW;
 	evc.ev_proc = *vmcmd_map_zero;
+	l = proc_representative_lwp(p);
 
-	if ((error = (*evc.ev_proc)(p, &evc)) != 0)
+	if ((error = (*evc.ev_proc)(l, &evc)) != 0)
 		return error;
 
 	ip = (struct irix_prda *)IRIX_PRDA;
@@ -703,10 +703,9 @@ irix_prda_init(p)
 }
 
 int
-irix_vm_fault(p, vaddr, fault_type, access_type)
+irix_vm_fault(p, vaddr, access_type)
 	struct proc *p;
 	vaddr_t vaddr;
-	vm_fault_t fault_type;
 	vm_prot_t access_type;
 {
 	int error;
@@ -717,11 +716,11 @@ irix_vm_fault(p, vaddr, fault_type, access_type)
 	map = &p->p_vmspace->vm_map;
 
 	if (ied->ied_share_group == NULL || ied->ied_shareaddr == 0)
-		return uvm_fault(map, vaddr, fault_type, access_type);
+		return uvm_fault(map, vaddr, access_type);
 
 	/* share group version */
 	(void)lockmgr(&ied->ied_share_group->isg_lock, LK_EXCLUSIVE, NULL);
-	error = uvm_fault(map, vaddr, fault_type, access_type);
+	error = uvm_fault(map, vaddr, access_type);
 	irix_vm_sync(p);
 	(void)lockmgr(&ied->ied_share_group->isg_lock, LK_RELEASE, NULL);
 
@@ -739,8 +738,8 @@ irix_vm_sync(p)
 	struct irix_emuldata *iedp;
 	struct irix_emuldata *ied = (struct irix_emuldata *)p->p_emuldata;
 	struct irix_shared_regions_rec *isrr;
-	vaddr_t min;
-	vaddr_t max;
+	vaddr_t minp;
+	vaddr_t maxp;
 	vsize_t len;
 	int error;
 
@@ -763,16 +762,16 @@ irix_vm_sync(p)
 			 */
 
 			/* The region is shared */
-			min = isrr->isrr_start;
+			minp = isrr->isrr_start;
 			len = isrr->isrr_len;
-			max = min + len;
+			maxp = minp + len;
 
 			/* Drop the region */
-			uvm_unmap(&pp->p_vmspace->vm_map, min, max);
+			uvm_unmap(&pp->p_vmspace->vm_map, minp, maxp);
 
 			/* Clone it from the parent */
 			error = uvm_map_extract(&p->p_vmspace->vm_map,
-			    min, len, &pp->p_vmspace->vm_map, &min, 0);
+			    minp, len, &pp->p_vmspace->vm_map, &minp, 0);
 
 			if (error)
 				break;

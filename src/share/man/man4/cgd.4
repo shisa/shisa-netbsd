@@ -1,4 +1,4 @@
-.\" $NetBSD: cgd.4,v 1.6 2003/08/14 17:59:40 wiz Exp $
+.\" $NetBSD: cgd.4,v 1.9 2006/03/11 12:00:53 wiz Exp $
 .\"
 .\" Copyright (c) 2002, 2003 The NetBSD Foundation, Inc.
 .\" All rights reserved.
@@ -34,7 +34,7 @@
 .\" ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 .\" POSSIBILITY OF SUCH DAMAGE.
 .\"
-.Dd August 14, 2003
+.Dd March 11, 2006
 .Dt CGD 4
 .Os
 .Sh NAME
@@ -76,7 +76,11 @@ The key passed to the kernel
 is 192 bits but the parity bits are ignored.
 .It blowfish-cbc
 Blowfish in CBC mode.
-Blowfish uses a 64 bit blocksize and can accept keys of length 128.
+Blowfish uses a 64 bit blocksize and can accept keys between 40 and
+448 bits in multiples of 8.
+It is strongly encouraged that keys be at least 128 bits long.
+There are no performance advantages of using shorter keys.
+The default key length is 128 bits.
 .El
 .Ss IV Methods
 Currently, the only IV Method supported is
@@ -126,11 +130,11 @@ Please ensure that you are using an appropriate backup strategy.
 device special files.
 .El
 .Sh SEE ALSO
+.Xr config 1 ,
 .Xr ioctl 2 ,
 .Xr sd 4 ,
 .Xr MAKEDEV 8 ,
-.Xr cgdconfig 8 ,
-.Xr config 8
+.Xr cgdconfig 8
 .Sh HISTORY
 The
 .Nm

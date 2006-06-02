@@ -1,4 +1,4 @@
-/*	$NetBSD: kvm_x86_64.c,v 1.4.6.1 2005/11/06 13:26:20 tron Exp $	*/
+/*	$NetBSD: kvm_x86_64.c,v 1.5 2005/08/04 19:26:02 fvdl Exp $	*/
 
 /*-
  * Copyright (c) 1989, 1992, 1993
@@ -38,7 +38,7 @@
 #if 0
 static char sccsid[] = "@(#)kvm_hp300.c	8.1 (Berkeley) 6/4/93";
 #else
-__RCSID("$NetBSD: kvm_x86_64.c,v 1.4.6.1 2005/11/06 13:26:20 tron Exp $");
+__RCSID("$NetBSD: kvm_x86_64.c,v 1.5 2005/08/04 19:26:02 fvdl Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 

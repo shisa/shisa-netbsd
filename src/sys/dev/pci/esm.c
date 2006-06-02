@@ -1,4 +1,4 @@
-/*      $NetBSD: esm.c,v 1.30 2005/01/15 15:19:52 kent Exp $      */
+/*      $NetBSD: esm.c,v 1.34 2006/04/14 19:08:30 christos Exp $      */
 
 /*-
  * Copyright (c) 2002, 2003 Matt Fredette
@@ -66,7 +66,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: esm.c,v 1.30 2005/01/15 15:19:52 kent Exp $");
+__KERNEL_RCSID(0, "$NetBSD: esm.c,v 1.34 2006/04/14 19:08:30 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -120,7 +120,7 @@ int esm_debug = 0xfffc;
 #define RANGE(x,y,z)	/* nothing */
 #endif
 
-#define inline __inline
+#define inline inline
 
 static inline void	ringbus_setdest(struct esm_softc *, int, int);
 
@@ -938,7 +938,7 @@ esm_trigger_input(void *sc, void *start, void *end, int blksize,
 	if (speed < 4000) speed = 4000;
 	dv = (((speed % 48000) << 16) + 24000) / 48000
 	    + ((speed / 48000) << 16);
-	mixdv = 65536;	/* 48KHz */
+	mixdv = 65536;	/* 48 kHz */
 
 	for (i = 0; i < nch; i++) {
 
@@ -1289,10 +1289,10 @@ esm_set_params(void *sc, int setmode, int usemode,
 			hw_rec = p;
 	}
 
-	if (setmode & AUMODE_PLAY)
+	if (hw_play)
 		esmch_set_format(&ess->pch, hw_play);
 
-	if (setmode & AUMODE_RECORD)
+	if (hw_rec)
 		esmch_set_format(&ess->rch, hw_rec);
 
 	return 0;

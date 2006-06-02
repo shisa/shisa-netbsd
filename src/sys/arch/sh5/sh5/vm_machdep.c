@@ -1,4 +1,4 @@
-/*	$NetBSD: vm_machdep.c,v 1.10 2004/09/17 14:11:22 skrll Exp $	*/
+/*	$NetBSD: vm_machdep.c,v 1.13 2005/12/11 12:19:02 christos Exp $	*/
 
 /*
  * Copyright 2002 Wasabi Systems, Inc.
@@ -62,7 +62,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: vm_machdep.c,v 1.10 2004/09/17 14:11:22 skrll Exp $");
+__KERNEL_RCSID(0, "$NetBSD: vm_machdep.c,v 1.13 2005/12/11 12:19:02 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -84,18 +84,21 @@ __KERNEL_RCSID(0, "$NetBSD: vm_machdep.c,v 1.10 2004/09/17 14:11:22 skrll Exp $"
  *
  */
 int
-cpu_coredump(struct lwp *l, struct vnode *vp, struct ucred *cred,
-    struct core *chdr)
+cpu_coredump(struct lwp *l, void *iocookie, struct core *chdr)
 {
 #ifdef notyet
 	struct md_coredump md_core;
 	struct coreseg cseg;
 	int error;
 
-	CORE_SETMAGIC(*chdr, COREMAGIC, MID_MACHINE, 0);
-	chdr->c_hdrsize = ALIGN(sizeof(*chdr));
-	chdr->c_seghdrsize = ALIGN(sizeof(cseg));
-	chdr->c_cpusize = ALIGN(sizeof(md_core));
+	if (iocookie == NULL) {
+		CORE_SETMAGIC(*chdr, COREMAGIC, MID_MACHINE, 0);
+		chdr->c_hdrsize = ALIGN(sizeof(*chdr));
+		chdr->c_seghdrsize = ALIGN(sizeof(cseg));
+		chdr->c_cpusize = ALIGN(sizeof(md_core));
+		chdr->c_nseg++;
+		return 0;
+	}
 
 	md_core.md_regs = *p->p_md.md_regs;
 
@@ -116,22 +119,15 @@ cpu_coredump(struct lwp *l, struct vnode *vp, struct ucred *cred,
 	cseg.c_addr = 0;
 	cseg.c_size = chdr->c_cpusize;
 
-	error = vn_rdwr(UIO_WRITE, vp, (caddr_t)&cseg, chdr->c_seghdrsize,
-	    (off_t)chdr->c_hdrsize, UIO_SYSSPACE, IO_NODELOCKED|IO_UNIT, cred,
-	    NULL, NULL);
+	error = coredump_write(iocookie, UIO_SYSSPACE, &cseg,
+	    chdr->c_seghdrsize);
 	if (error)
 		return (error);
 
-	error = vn_rdwr(UIO_WRITE, vp, (caddr_t)&md_core, sizeof(md_core),
-	    (off_t)(chdr->c_hdrsize + chdr->c_seghdrsize), UIO_SYSSPACE,
-	    IO_NODELOCKED|IO_UNIT, cred, NULL, NULL);
-	if (error)
-		return (error);
-
-	chdr->c_nseg++;
-	return (0);
+	return coredump_write(iocookie, UIO_SYSSPACE, &md_core,
+	    sizeof(md_core));
 #else
-	return (0);
+	return (EFAULT);
 #endif
 }
 
@@ -264,7 +260,7 @@ vmapbuf(struct buf *bp, vsize_t len)
 	uva = sh5_trunc_page(bp->b_saveaddr = bp->b_data);
 	off = (vaddr_t)bp->b_data - uva;
 	len = sh5_round_page(off + len);
-	kva = uvm_km_valloc_wait(phys_map, len);
+	kva = uvm_km_alloc(phys_map, len, 0, UVM_KMF_VAONLY | UVM_KMF_WAITVA);
 	bp->b_data = (caddr_t)(kva + off);
 
 	upmap = vm_map_pmap(&bp->b_proc->p_vmspace->vm_map);
@@ -296,7 +292,7 @@ vunmapbuf(struct buf *bp, vsize_t len)
 	len = sh5_round_page(off + len);
 	pmap_kremove(kva, len);
 	pmap_update(pmap_kernel());
-	uvm_km_free_wakeup(phys_map, kva, len);
+	uvm_km_free(phys_map, kva, len, UVM_KMF_VAONLY);
 	bp->b_data = bp->b_saveaddr;
 	bp->b_saveaddr = 0;
 }

@@ -1,4 +1,4 @@
-.\"	$NetBSD: mbuf.9,v 1.33 2004/12/15 15:39:03 wiz Exp $
+.\"	$NetBSD: mbuf.9,v 1.41 2006/03/29 19:36:55 riz Exp $
 .\"
 .\" Copyright (c) 1997 The NetBSD Foundation, Inc.
 .\" All rights reserved.
@@ -34,7 +34,7 @@
 .\" ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 .\" POSSIBILITY OF SUCH DAMAGE.
 .\"
-.Dd December 12, 2004
+.Dd March 29, 2006
 .Dt MBUF 9
 .Os
 .Sh NAME
@@ -60,14 +60,13 @@
 .Nm m_free ,
 .Nm m_freem ,
 .Nm mtod ,
-.Nm mtocl ,
-.Nm cltom ,
 .Nm MGET ,
 .Nm MGETHDR ,
 .Nm MEXTMALLOC ,
 .Nm MEXTADD ,
 .Nm MCLGET ,
 .Nm M_COPY_PKTHDR ,
+.Nm M_MOVE_PKTHDR ,
 .Nm M_ALIGN ,
 .Nm MH_ALIGN ,
 .Nm M_LEADINGSPACE ,
@@ -121,10 +120,6 @@
 .Fn m_freem "struct mbuf *m"
 .Ft datatype
 .Fn mtod "struct mbuf *m" "datatype"
-.Ft u_long
-.Fn mtocl "void *datapointer"
-.Ft caddr_t
-.Fn cltom "u_long clusternum"
 .Ft void
 .Fn MGET "struct mbuf *m" "int how" "int type"
 .Ft void
@@ -137,6 +132,8 @@
 .Fn MCLGET "struct mbuf *m" "int how"
 .Ft void
 .Fn M_COPY_PKTHDR "struct mbuf *to" "struct mbuf *from"
+.Ft void
+.Fn M_MOVE_PKTHDR "struct mbuf *to" "struct mbuf *from"
 .Ft void
 .Fn M_ALIGN "struct mbuf *m" "int len"
 .Ft void
@@ -336,7 +333,7 @@ back into the mbuf chain
 .Fa m0 ,
 starting
 .Fa off
-bytes from the beginning, extending the mbuf chain if necessary.
+bytes from the beginning of the chain, extending the mbuf chain if necessary.
 .Fn m_copyback
 can only fail when extending the chain.
 The caller should check for this kind of failure
@@ -363,12 +360,11 @@ on read-only mbufs.
 If needed,
 .Fn m_copyback_cow
 automatically allocates new mbufs and adjusts the chain.
-It returns a pointer to the resulting mbuf chain on success.
+On success, it returns a pointer to the resulting mbuf chain,
+and frees the original mbuf
+.Fa m0 .
 Otherwise, it returns
 .Dv NULL .
-In that case, the original mbuf
-.Fa m0
-will be freed.
 The
 .Fa how
 parameter is a choice of
@@ -554,19 +550,6 @@ Returns a pointer to the data contained in the specified mbuf
 type-casted to the specified data type
 .Fa datatype .
 Implemented as a macro.
-.It Fn mtocl "void *datapointer"
-Takes a
-.Fa datapointer
-within an mbuf cluster and returns the cluster index number of the mbuf
-owning the data.
-Avoid this; it may be deprecated in the future.
-Implemented as a macro.
-.It Fn cltom "u_long clusternum"
-Takes an mbuf cluster index number
-.Fa clusternum
-and returns a pointer to the beginning of the cluster.
-Avoid this; it may be deprecated in the future.
-Implemented as a macro.
 .It Fn MGET "struct mbuf *m" "int how" "int type"
 Allocates mbuf
 .Fa m
@@ -652,6 +635,22 @@ set, and
 .Fa to
 must be empty.
 Implemented as a macro.
+.It Fn M_MOVE_PKTHDR "struct mbuf *to" "struct mbuf *from"
+Moves the mbuf pkthdr from mbuf
+.Fa from
+to mbuf
+.Fa to .
+.Fa from
+must have the type flag
+.Dv M_PKTHDR
+set, and
+.Fa to
+must be empty.
+The flag
+.Dv M_PKTHDR
+in mbuf
+.Fa from
+will be cleared.
 .It Fn M_ALIGN "struct mbuf *m" "int len"
 Sets the data pointer of a newly allocated mbuf
 .Fa m
@@ -740,6 +739,7 @@ source tree,
 .Sh SEE ALSO
 .Pa /usr/share/doc/smm/18.net ,
 .Xr netstat 1 ,
+.Xr m_tag 9 ,
 .Xr malloc 9
 .Rs
 .%A Jun-ichiro Hagino
@@ -748,6 +748,7 @@ source tree,
 .%D June 2000
 .Re
 .Sh AUTHORS
+.An -nosplit
 The original mbuf data structures were designed by Rob Gurwitz
 when he did the initial TCP/IP implementation at BBN.
 .br

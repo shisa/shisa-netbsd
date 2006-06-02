@@ -1,4 +1,4 @@
-/*	$NetBSD: s3c2410.c,v 1.7 2005/03/16 05:02:12 bsh Exp $ */
+/*	$NetBSD: s3c2410.c,v 1.10 2005/12/11 12:16:51 christos Exp $ */
 
 /*
  * Copyright (c) 2003, 2005  Genetec corporation.  All rights reserved.
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: s3c2410.c,v 1.7 2005/03/16 05:02:12 bsh Exp $");
+__KERNEL_RCSID(0, "$NetBSD: s3c2410.c,v 1.10 2005/12/11 12:16:51 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -52,7 +52,8 @@ __KERNEL_RCSID(0, "$NetBSD: s3c2410.c,v 1.7 2005/03/16 05:02:12 bsh Exp $");
 /* prototypes */
 static int	s3c2410_match(struct device *, struct cfdata *, void *);
 static void	s3c2410_attach(struct device *, struct device *, void *);
-static int	s3c2410_search(struct device *, struct cfdata *, void *);
+static int	s3c2410_search(struct device *, struct cfdata *,
+			       const int *, void *);
 
 /* attach structures */
 CFATTACH_DECL(ssio, sizeof(struct s3c24x0_softc), s3c2410_match, s3c2410_attach,
@@ -164,7 +165,7 @@ s3c2410_attach(struct device *parent, struct device *self, void *aux)
 	/*
 	 *  Attach devices.
 	 */
-	config_search(s3c2410_search, self, NULL);
+	config_search_ia(s3c2410_search, self, "ssio", NULL);
 	return;
 
 abort:
@@ -175,7 +176,8 @@ abort:
 }
 
 int
-s3c2410_search(struct device * parent, struct cfdata * cf, void *aux)
+s3c2410_search(struct device * parent, struct cfdata * cf,
+	       const int *ldesc, void *aux)
 {
 	struct s3c24x0_softc *sc = (struct s3c24x0_softc *) parent;
 	struct s3c2xx0_attach_args aa;

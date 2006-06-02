@@ -1,4 +1,4 @@
-/*	$NetBSD: disks.c,v 1.87.2.2 2005/09/19 20:50:20 tron Exp $ */
+/*	$NetBSD: disks.c,v 1.94 2006/02/25 20:21:00 dsl Exp $ */
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.
@@ -76,7 +76,9 @@ struct disk_desc {
 
 /* Local prototypes */
 static int foundffs(struct data *, size_t);
-static int mount_root(void);
+#ifdef USE_SYSVBFS
+static int foundsysvbfs(struct data *, size_t);
+#endif
 static int fsck_preen(const char *, int, const char *);
 static void fixsb(const char *, const char *, char);
 
@@ -103,7 +105,7 @@ get_disks(struct disk_desc *dd)
 			strlcpy(dd->dd_name, *xd, sizeof dd->dd_name - 2);
 			cp = strchr(dd->dd_name, ':');
 			if (cp != NULL)
-				dd->dd_no_mbr = ~strcmp(cp, ":no_mbr");
+				dd->dd_no_mbr = !strcmp(cp, ":no_mbr");
 			else {
 				dd->dd_no_mbr = 0;
 				cp = strchr(dd->dd_name, 0);
@@ -153,6 +155,8 @@ find_disks(const char *doingwhat)
 	/* need a redraw here, kernel messages hose everything */
 	touchwin(stdscr);
 	refresh();
+	/* Kill typeahead, it won't be what the user had in mind */
+	fpurge(stdin);
 
 	if (numdisks == 0) {
 		/* No disks found! */
@@ -187,6 +191,9 @@ find_disks(const char *doingwhat)
 
 	disk = disks + selected_disk;
 	strlcpy(diskdev, disk->dd_name, sizeof diskdev);
+
+	/* Use as a default disk if the user has the sets on a local disk */
+	strlcpy(localfs_dev, disk->dd_name, sizeof localfs_dev);
 
 	sectorsize = disk->dd_secsize;
 	dlcyl = disk->dd_cyl;
@@ -336,10 +343,11 @@ make_filesystems(void)
 			fsname = "ffs";
 			break;
 		case FS_BSDFFS:
-			asprintf(&newfs, "/sbin/newfs -O %d -b %d -f %d %s%.0d",
-				lbl->pi_flags & PIF_FFSv2 ? 2 : 1,
-				lbl->pi_fsize * lbl->pi_frag, lbl->pi_fsize,
-				lbl->pi_isize != 0 ? "-i" : "", lbl->pi_isize);
+			asprintf(&newfs,
+			    "/sbin/newfs -V2 -O %d -b %d -f %d%s%.0d",
+			    lbl->pi_flags & PIF_FFSv2 ? 2 : 1,
+			    lbl->pi_fsize * lbl->pi_frag, lbl->pi_fsize,
+			    lbl->pi_isize != 0 ? " -i " : "", lbl->pi_isize);
 			mnt_opts = "-tffs -o async";
 			fsname = "ffs";
 			break;
@@ -353,6 +361,13 @@ make_filesystems(void)
 			mnt_opts = "-tmsdos";
 			fsname = "msdos";
 			break;
+#ifdef USE_SYSVBFS
+		case FS_SYSVBFS:
+			asprintf(&newfs, "/sbin/newfs_sysvbfs");
+			mnt_opts = "-tsysvbfs";
+			fsname = "sysvbfs";
+			break;
+#endif
 		}
 		if (lbl->pi_flags & PIF_NEWFS && newfs != NULL) {
 			error = run_program(RUN_DISPLAY | RUN_PROGRESS,
@@ -406,6 +421,8 @@ make_fstab(void)
 #endif
 	}
 
+	scripting_fprintf(f, "# NetBSD /etc/fstab\n# See /usr/share/examples/"
+		"fstab/ for more examples.\n", target_prefix());
 	for (i = 0; i < getmaxpartitions(); i++) {
 		const char *s = "";
 		const char *mp = bsdlabel[i].pi_mount;
@@ -440,9 +457,15 @@ make_fstab(void)
 		case FS_SWAP:
 			if (swap_dev == -1)
 				swap_dev = i;
-			scripting_fprintf(f, "/dev/%s%c none swap sw 0 0\n",
+			scripting_fprintf(f, "/dev/%s%c\t\tnone\tswap\tsw\t\t 0 0\n",
 				diskdev, 'a' + i);
 			continue;
+#ifdef USE_SYSVBFS
+		case FS_SYSVBFS:
+			fstype = "sysvbfs";
+			make_target_dir("/stand");
+			break;
+#endif
 		default:
 			fstype = "???";
 			s = "# ";
@@ -452,7 +475,7 @@ make_fstab(void)
 		if (strcmp(mp, "/") == 0 && !(bsdlabel[i].pi_flags & PIF_MOUNT))
 			s = "# ";
 
-		scripting_fprintf(f, "%s/dev/%s%c %s %s rw%s%s%s%s%s%s%s%s %d %d\n",
+ 		scripting_fprintf(f, "%s/dev/%s%c\t\t%s\t%s\trw%s%s%s%s%s%s%s%s\t\t %d %d\n",
 		   s, diskdev, 'a' + i, mp, fstype,
 		   bsdlabel[i].pi_flags & PIF_MOUNT ? "" : ",noauto",
 		   bsdlabel[i].pi_flags & PIF_ASYNC ? ",async" : "",
@@ -467,16 +490,16 @@ make_fstab(void)
 
 	if (tmp_mfs_size != 0) {
 		if (swap_dev != -1)
-			scripting_fprintf(f, "/dev/%s%c /tmp mfs rw,-s=%d\n",
+			scripting_fprintf(f, "/dev/%s%c\t\t/tmp\tmfs\trw,-s=%d\n",
 				diskdev, 'a' + swap_dev, tmp_mfs_size);
 		else
-			scripting_fprintf(f, "swap /tmp mfs rw,-s=%d\n",
+			scripting_fprintf(f, "swap\t\t/tmp\tmfs\trw,-s=%d\n",
 				tmp_mfs_size);
 	}
 
 	/* Add /kern and /proc to fstab and make mountpoint. */
-	scripting_fprintf(f, "kernfs /kern kernfs rw\n");
-	scripting_fprintf(f, "procfs /proc procfs rw,noauto\n");
+	scripting_fprintf(f, "kernfs\t\t/kern\tkernfs\trw\n");
+	scripting_fprintf(f, "procfs\t\t/proc\tprocfs\trw,noauto\n");
 	make_target_dir("/kern");
 	make_target_dir("/proc");
 
@@ -510,6 +533,24 @@ foundffs(struct data *list, size_t num)
 		return error;
 	return 0;
 }
+
+#ifdef USE_SYSVBFS
+static int
+/*ARGSUSED*/
+foundsysvbfs(struct data *list, size_t num)
+{
+	int error;
+
+	if (num < 2 || strcmp(list[1].u.s_val, "/") == 0 ||
+	    strstr(list[2].u.s_val, "noauto") != NULL)
+		return 0;
+
+	error = target_mount("", list[0].u.s_val, ' '-'a', list[1].u.s_val);
+	if (error != 0)
+		return error;
+	return 0;
+}
+#endif
 
 /*
  * Do an fsck. On failure, inform the user by showing a warning
@@ -600,7 +641,7 @@ fixsb(const char *prog, const char *disk, char ptn)
 /*
  * fsck and mount the root partition.
  */
-int
+static int
 mount_root(void)
 {
 	int	error;
@@ -633,11 +674,18 @@ mount_disks(void)
 	static struct lookfor fstabbuf[] = {
 		{"/dev/", "/dev/%s %s ffs %s", "c", NULL, 0, 0, foundffs},
 		{"/dev/", "/dev/%s %s ufs %s", "c", NULL, 0, 0, foundffs},
+#ifdef USE_SYSVBFS
+		{"/dev/", "/dev/%s %s sysvbfs %s", "c", NULL, 0, 0,
+		    foundsysvbfs},
+#endif
 	};
 	static size_t numfstabbuf = sizeof(fstabbuf) / sizeof(struct lookfor);
 
 	/* First the root device. */
-	if (!target_already_root()) {
+	if (target_already_root())
+		/* avoid needing to call target_already_root() again */
+		targetroot_mnt[0] = 0;
+	else {
 		error = mount_root();
 		if (error != 0 && error != EBUSY)
 			return 0;

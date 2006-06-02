@@ -1,4 +1,4 @@
-/*	$NetBSD: interactive.c,v 1.21 2005/02/17 15:00:33 xtraeme Exp $	*/
+/*	$NetBSD: interactive.c,v 1.24 2005/08/19 06:44:06 christos Exp $	*/
 
 /*
  * Copyright (c) 1985, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)interactive.c	8.5 (Berkeley) 5/1/95";
 #else
-__RCSID("$NetBSD: interactive.c,v 1.21 2005/02/17 15:00:33 xtraeme Exp $");
+__RCSID("$NetBSD: interactive.c,v 1.24 2005/08/19 06:44:06 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -457,7 +457,7 @@ copynext(char *input, char *output)
  * remove any imbedded "." and ".." components.
  */
 void
-canon(char *rawname, char *canonname)
+canon(const char *rawname, char *canonname)
 {
 	char *cp, *np;
 
@@ -687,7 +687,8 @@ formatf(struct afile *list, int nentry)
 		for (j = 0; j < columns; j++) {
 			fp = &list[j * lines + i];
 			if (vflag) {
-				fprintf(stderr, "%*d ", precision, fp->fnum);
+				fprintf(stderr, "%*llu ", precision,
+				    (unsigned long long)fp->fnum);
 				fp->len += precision + 1;
 			}
 			if (haveprefix) {
@@ -725,14 +726,14 @@ glob_readdir(RST_DIR *dirp)
 	static struct dirent adirent;
 
 	while ((dp = rst_readdir(dirp)) != NULL) {
-		if (!vflag && dp->d_ino == WINO)
+		if (!vflag && dp->d_fileno == WINO)
 			continue;
-		if (dflag || TSTINO(dp->d_ino, dumpmap))
+		if (dflag || TSTINO(dp->d_fileno, dumpmap))
 			break;
 	}
 	if (dp == NULL)
 		return (NULL);
-	adirent.d_fileno = dp->d_ino;
+	adirent.d_fileno = dp->d_fileno;
 	adirent.d_namlen = dp->d_namlen;
 	memmove(adirent.d_name, dp->d_name, dp->d_namlen + 1);
 	return (&adirent);
@@ -747,10 +748,10 @@ glob_stat(const char *name, struct stat *stp)
 	struct direct *dp;
 
 	dp = pathsearch(name);
-	if (dp == NULL || (!dflag && TSTINO(dp->d_ino, dumpmap) == 0) ||
-	    (!vflag && dp->d_ino == WINO))
+	if (dp == NULL || (!dflag && TSTINO(dp->d_fileno, dumpmap) == 0) ||
+	    (!vflag && dp->d_fileno == WINO))
 		return (-1);
-	if (inodetype(dp->d_ino) == NODE)
+	if (inodetype(dp->d_fileno) == NODE)
 		stp->st_mode = S_IFDIR;
 	else
 		stp->st_mode = S_IFREG;
@@ -763,8 +764,8 @@ glob_stat(const char *name, struct stat *stp)
 static int
 fcmp(const void *f1, const void *f2)
 {
-	return (strcmp(((struct afile *)f1)->fname,
-	    ((struct afile *)f2)->fname));
+	return (strcmp(((const struct afile *)f1)->fname,
+	    ((const struct afile *)f2)->fname));
 }
 
 /*

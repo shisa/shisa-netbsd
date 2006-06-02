@@ -1,4 +1,4 @@
-/*	$NetBSD: uvm_glue.c,v 1.83.4.3 2005/12/06 20:00:12 riz Exp $	*/
+/*	$NetBSD: uvm_glue.c,v 1.94 2006/05/22 13:43:54 yamt Exp $	*/
 
 /*
  * Copyright (c) 1997 Charles D. Cranor and Washington University.
@@ -67,7 +67,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: uvm_glue.c,v 1.83.4.3 2005/12/06 20:00:12 riz Exp $");
+__KERNEL_RCSID(0, "$NetBSD: uvm_glue.c,v 1.94 2006/05/22 13:43:54 yamt Exp $");
 
 #include "opt_kgdb.h"
 #include "opt_kstack.h"
@@ -95,9 +95,10 @@ __KERNEL_RCSID(0, "$NetBSD: uvm_glue.c,v 1.83.4.3 2005/12/06 20:00:12 riz Exp $"
 static void uvm_swapout(struct lwp *);
 
 #define UVM_NUAREA_MAX 16
-void *uvm_uareas;
-int uvm_nuarea;
-struct simplelock uvm_uareas_slock = SIMPLELOCK_INITIALIZER;
+static vaddr_t uvm_uareas;
+static int uvm_nuarea;
+static struct simplelock uvm_uareas_slock = SIMPLELOCK_INITIALIZER;
+#define	UAREA_NEXTFREE(uarea)	(*(vaddr_t *)(UAREA_TO_USER(uarea)))
 
 static void uvm_uarea_free(vaddr_t);
 
@@ -112,10 +113,7 @@ static void uvm_uarea_free(vaddr_t);
  */
 
 boolean_t
-uvm_kernacc(addr, len, rw)
-	caddr_t addr;
-	size_t len;
-	int rw;
+uvm_kernacc(caddr_t addr, size_t len, int rw)
 {
 	boolean_t rv;
 	vaddr_t saddr, eaddr;
@@ -144,10 +142,7 @@ uvm_kernacc(addr, len, rw)
  * we can ensure the change takes place properly.
  */
 void
-uvm_chgkprot(addr, len, rw)
-	caddr_t addr;
-	size_t len;
-	int rw;
+uvm_chgkprot(caddr_t addr, size_t len, int rw)
 {
 	vm_prot_t prot;
 	paddr_t pa;
@@ -175,11 +170,7 @@ uvm_chgkprot(addr, len, rw)
  */
 
 int
-uvm_vslock(p, addr, len, access_type)
-	struct proc *p;
-	caddr_t	addr;
-	size_t	len;
-	vm_prot_t access_type;
+uvm_vslock(struct proc *p, caddr_t addr, size_t len, vm_prot_t access_type)
 {
 	struct vm_map *map;
 	vaddr_t start, end;
@@ -188,7 +179,7 @@ uvm_vslock(p, addr, len, access_type)
 	map = &p->p_vmspace->vm_map;
 	start = trunc_page((vaddr_t)addr);
 	end = round_page((vaddr_t)addr + len);
-	error = uvm_fault_wire(map, start, end, VM_FAULT_WIRE, access_type);
+	error = uvm_fault_wire(map, start, end, access_type, 0);
 	return error;
 }
 
@@ -200,10 +191,7 @@ uvm_vslock(p, addr, len, access_type)
  */
 
 void
-uvm_vsunlock(p, addr, len)
-	struct proc *p;
-	caddr_t	addr;
-	size_t	len;
+uvm_vsunlock(struct proc *p, caddr_t addr, size_t len)
 {
 	uvm_fault_unwire(&p->p_vmspace->vm_map, trunc_page((vaddr_t)addr),
 		round_page((vaddr_t)addr + len));
@@ -215,9 +203,7 @@ uvm_vsunlock(p, addr, len)
  * - the address space is copied as per parent map's inherit values
  */
 void
-uvm_proc_fork(p1, p2, shared)
-	struct proc *p1, *p2;
-	boolean_t shared;
+uvm_proc_fork(struct proc *p1, struct proc *p2, boolean_t shared)
 {
 
 	if (shared == TRUE) {
@@ -246,14 +232,9 @@ uvm_proc_fork(p1, p2, shared)
  *   than just hang
  */
 void
-uvm_lwp_fork(l1, l2, stack, stacksize, func, arg)
-	struct lwp *l1, *l2;
-	void *stack;
-	size_t stacksize;
-	void (*func)(void *);
-	void *arg;
+uvm_lwp_fork(struct lwp *l1, struct lwp *l2, void *stack, size_t stacksize,
+    void (*func)(void *), void *arg)
 {
-	struct user *up = l2->l_addr;
 	int error;
 
 	/*
@@ -267,14 +248,15 @@ uvm_lwp_fork(l1, l2, stack, stacksize, func, arg)
 	 */
 
 	if ((l2->l_flag & L_INMEM) == 0) {
-		error = uvm_fault_wire(kernel_map, (vaddr_t)up,
-		    (vaddr_t)up + USPACE, VM_FAULT_WIRE,
-		    VM_PROT_READ | VM_PROT_WRITE);
+		vaddr_t uarea = USER_TO_UAREA(l2->l_addr);
+
+		error = uvm_fault_wire(kernel_map, uarea,
+		    uarea + USPACE, VM_PROT_READ | VM_PROT_WRITE, 0);
 		if (error)
 			panic("uvm_lwp_fork: uvm_fault_wire failed: %d", error);
 #ifdef PMAP_UAREA
 		/* Tell the pmap this is a u-area mapping */
-		PMAP_UAREA((vaddr_t)up);
+		PMAP_UAREA(uarea);
 #endif
 		l2->l_flag |= L_INMEM;
 	}
@@ -311,16 +293,16 @@ uvm_uarea_alloc(vaddr_t *uaddrp)
 
 	simple_lock(&uvm_uareas_slock);
 	if (uvm_nuarea > 0) {
-		uaddr = (vaddr_t)uvm_uareas;
-		uvm_uareas = *(void **)uvm_uareas;
+		uaddr = uvm_uareas;
+		uvm_uareas = UAREA_NEXTFREE(uaddr);
 		uvm_nuarea--;
 		simple_unlock(&uvm_uareas_slock);
 		*uaddrp = uaddr;
 		return TRUE;
 	} else {
 		simple_unlock(&uvm_uareas_slock);
-		*uaddrp = uvm_km_valloc1(kernel_map, USPACE, USPACE_ALIGN,
-		    UVM_UNKNOWN_OFFSET, 0);
+		*uaddrp = uvm_km_alloc(kernel_map, USPACE, USPACE_ALIGN,
+		    UVM_KMF_PAGEABLE);
 		return FALSE;
 	}
 }
@@ -329,12 +311,12 @@ uvm_uarea_alloc(vaddr_t *uaddrp)
  * uvm_uarea_free: free a u-area; never blocks
  */
 
-static __inline__ void
+static inline void
 uvm_uarea_free(vaddr_t uaddr)
 {
 	simple_lock(&uvm_uareas_slock);
-	*(void **)uaddr = uvm_uareas;
-	uvm_uareas = (void *)uaddr;
+	UAREA_NEXTFREE(uaddr) = uvm_uareas;
+	uvm_uareas = uaddr;
 	uvm_nuarea++;
 	simple_unlock(&uvm_uareas_slock);
 }
@@ -355,11 +337,11 @@ uvm_uarea_drain(boolean_t empty)
 
 	simple_lock(&uvm_uareas_slock);
 	while(uvm_nuarea > leave) {
-		uaddr = (vaddr_t)uvm_uareas;
-		uvm_uareas = *(void **)uvm_uareas;
+		uaddr = uvm_uareas;
+		uvm_uareas = UAREA_NEXTFREE(uaddr);
 		uvm_nuarea--;
 		simple_unlock(&uvm_uareas_slock);
-		uvm_km_free(kernel_map, uaddr, USPACE);
+		uvm_km_free(kernel_map, uaddr, USPACE, UVM_KMF_PAGEABLE);
 		simple_lock(&uvm_uareas_slock);
 	}
 	simple_unlock(&uvm_uareas_slock);
@@ -375,8 +357,7 @@ uvm_uarea_drain(boolean_t empty)
  */
 
 void
-uvm_proc_exit(p)
-	struct proc *p;
+uvm_proc_exit(struct proc *p)
 {
 	struct lwp *l = curlwp; /* XXX */
 	struct vmspace *ovm;
@@ -397,7 +378,7 @@ uvm_proc_exit(p)
 void
 uvm_lwp_exit(struct lwp *l)
 {
-	vaddr_t va = (vaddr_t)l->l_addr;
+	vaddr_t va = USER_TO_UAREA(l->l_addr);
 
 	l->l_flag &= ~L_INMEM;
 	uvm_uarea_free(va);
@@ -411,8 +392,7 @@ uvm_lwp_exit(struct lwp *l)
  */
 
 void
-uvm_init_limits(p)
-	struct proc *p;
+uvm_init_limits(struct proc *p)
 {
 
 	/*
@@ -442,16 +422,15 @@ int	swapdebug = 0;
  */
 
 void
-uvm_swapin(l)
-	struct lwp *l;
+uvm_swapin(struct lwp *l)
 {
 	vaddr_t addr;
 	int s, error;
 
-	addr = (vaddr_t)l->l_addr;
+	addr = USER_TO_UAREA(l->l_addr);
 	/* make L_INMEM true */
-	error = uvm_fault_wire(kernel_map, addr, addr + USPACE, VM_FAULT_WIRE,
-	    VM_PROT_READ | VM_PROT_WRITE);
+	error = uvm_fault_wire(kernel_map, addr, addr + USPACE,
+	    VM_PROT_READ | VM_PROT_WRITE, 0);
 	if (error) {
 		panic("uvm_swapin: rewiring stack failed: %d", error);
 	}
@@ -479,7 +458,7 @@ uvm_swapin(l)
  */
 
 void
-uvm_scheduler()
+uvm_scheduler(void)
 {
 	struct lwp *l, *ll;
 	int pri;
@@ -577,7 +556,7 @@ loop:
  */
 
 void
-uvm_swapout_threads()
+uvm_swapout_threads(void)
 {
 	struct lwp *l;
 	struct lwp *outl, *outl2;
@@ -654,8 +633,7 @@ uvm_swapout_threads()
  */
 
 static void
-uvm_swapout(l)
-	struct lwp *l;
+uvm_swapout(struct lwp *l)
 {
 	vaddr_t addr;
 	int s;
@@ -694,7 +672,7 @@ uvm_swapout(l)
 	/*
 	 * Unwire the to-be-swapped process's user struct and kernel stack.
 	 */
-	addr = (vaddr_t)l->l_addr;
+	addr = USER_TO_UAREA(l->l_addr);
 	uvm_fault_unwire(kernel_map, addr, addr + USPACE); /* !L_INMEM */
 	pmap_collect(vm_map_pmap(&p->p_vmspace->vm_map));
 }
@@ -705,13 +683,9 @@ uvm_swapout(l)
  */
 
 int
-uvm_coredump_walkmap(p, vp, cred, func, cookie)
-	struct proc *p;
-	struct vnode *vp;
-	struct ucred *cred;
-	int (*func)(struct proc *, struct vnode *, struct ucred *,
-	    struct uvm_coredump_state *);
-	void *cookie;
+uvm_coredump_walkmap(struct proc *p, void *iocookie,
+    int (*func)(struct proc *, void *, struct uvm_coredump_state *),
+    void *cookie)
 {
 	struct uvm_coredump_state state;
 	struct vmspace *vm = p->p_vmspace;
@@ -721,6 +695,7 @@ uvm_coredump_walkmap(p, vp, cred, func, cookie)
 
 	entry = NULL;
 	vm_map_lock_read(map);
+	state.end = 0;
 	for (;;) {
 		if (entry == NULL)
 			entry = map->header.next;
@@ -730,7 +705,12 @@ uvm_coredump_walkmap(p, vp, cred, func, cookie)
 			break;
 
 		state.cookie = cookie;
-		state.start = entry->start;
+		if (state.end > entry->start) {
+			state.start = state.end;
+		} else {
+			state.start = entry->start;
+		}
+		state.realend = entry->end;
 		state.end = entry->end;
 		state.prot = entry->protection;
 		state.flags = 0;
@@ -754,25 +734,61 @@ uvm_coredump_walkmap(p, vp, cred, func, cookie)
 		KASSERT(state.end <= VM_MAXUSER_ADDRESS);
 		if (entry->object.uvm_obj == NULL &&
 		    entry->aref.ar_amap == NULL) {
-			state.flags |= UVM_COREDUMP_NODUMP;
-		}
-		if ((entry->protection & VM_PROT_WRITE) == 0 &&
+			state.realend = state.start;
+		} else if ((entry->protection & VM_PROT_WRITE) == 0 &&
 		    entry->aref.ar_amap == NULL) {
-			state.flags |= UVM_COREDUMP_NODUMP;
-		}
-		if (entry->object.uvm_obj != NULL &&
+			state.realend = state.start;
+		} else if (entry->object.uvm_obj != NULL &&
 		    UVM_OBJ_IS_DEVICE(entry->object.uvm_obj)) {
-			state.flags |= UVM_COREDUMP_NODUMP;
+			state.realend = state.start;
+		} else if ((entry->protection & VM_PROT_READ) == 0) {
+			state.realend = state.start;
+		} else {
+			if (state.start >= (vaddr_t)vm->vm_maxsaddr)
+				state.flags |= UVM_COREDUMP_STACK;
+
+			/*
+			 * If this an anonymous entry, only dump instantiated
+			 * pages.
+			 */
+			if (entry->object.uvm_obj == NULL) {
+				vaddr_t end;
+
+				amap_lock(entry->aref.ar_amap);
+				for (end = state.start;
+				     end < state.end; end += PAGE_SIZE) {
+					struct vm_anon *anon;
+					anon = amap_lookup(&entry->aref,
+					    end - entry->start);
+					/*
+					 * If we have already encountered an
+					 * uninstantiated page, stop at the
+					 * first instantied page.
+					 */
+					if (anon != NULL &&
+					    state.realend != state.end) {
+						state.end = end;
+						break;
+					}
+
+					/*
+					 * If this page is the first
+					 * uninstantiated page, mark this as
+					 * the real ending point.  Continue to
+					 * counting uninstantiated pages.
+					 */
+					if (anon == NULL &&
+					    state.realend == state.end) {
+						state.realend = end;
+					}
+				}
+				amap_unlock(entry->aref.ar_amap);
+			}
 		}
-		if ((entry->protection & VM_PROT_READ) == 0) {
-			state.flags |= UVM_COREDUMP_NODUMP;
-		}
-		if (state.start >= (vaddr_t)vm->vm_maxsaddr) {
-			state.flags |= UVM_COREDUMP_STACK;
-		}
+		
 
 		vm_map_unlock_read(map);
-		error = (*func)(p, vp, cred, &state);
+		error = (*func)(p, iocookie, &state);
 		if (error)
 			return (error);
 		vm_map_lock_read(map);

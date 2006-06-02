@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.kmod.mk,v 1.77 2004/06/10 00:29:59 lukem Exp $
+#	$NetBSD: bsd.kmod.mk,v 1.81 2006/05/11 22:24:48 mrg Exp $
 
 .include <bsd.init.mk>
 
@@ -20,7 +20,13 @@ KERN=		$S/kern
 
 CFLAGS+=	-ffreestanding ${COPTS}
 CPPFLAGS+=	-nostdinc -I. -I${.CURDIR} -isystem $S -isystem $S/arch
+CPPFLAGS+=	-isystem ${S}/../common/include
 CPPFLAGS+=	-D_KERNEL -D_LKM
+
+# XXX until the kernel is fixed again...
+.if ${HAVE_GCC} == 4
+CFLAGS+=	-fno-strict-aliasing -Wno-pointer-sign
+.endif
 
 _YKMSRCS=	${SRCS:M*.[ly]:C/\..$/.c/} ${YHEADER:D${SRCS:M*.y:.y=.h}}
 DPSRCS+=	${_YKMSRCS}
@@ -136,7 +142,7 @@ ${_PROG}:	.MADE					# no build at install
 .endif
 .endif
 	${INSTALL_FILE} -o ${KMODOWN} -g ${KMODGRP} -m ${KMODMODE} \
-		${SYSPKGTAG} ${.ALLSRC} ${.TARGET}
+		${.ALLSRC} ${.TARGET}
 
 kmodinstall::	${_PROG}
 .PHONY:		kmodinstall

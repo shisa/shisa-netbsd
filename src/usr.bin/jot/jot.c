@@ -1,4 +1,4 @@
-/*	$NetBSD: jot.c,v 1.12 2004/11/22 17:34:24 peter Exp $	*/
+/*	$NetBSD: jot.c,v 1.14 2006/01/07 07:09:01 garbled Exp $	*/
 
 /*-
  * Copyright (c) 1993
@@ -39,7 +39,7 @@ __COPYRIGHT("@(#) Copyright (c) 1993\n\
 #if 0
 static char sccsid[] = "@(#)jot.c	8.1 (Berkeley) 6/6/93";
 #endif
-__RCSID("$NetBSD: jot.c,v 1.12 2004/11/22 17:34:24 peter Exp $");
+__RCSID("$NetBSD: jot.c,v 1.14 2006/01/07 07:09:01 garbled Exp $");
 #endif /* not lint */
 
 /*
@@ -51,6 +51,7 @@ __RCSID("$NetBSD: jot.c,v 1.12 2004/11/22 17:34:24 peter Exp $");
 #include <ctype.h>
 #include <err.h>
 #include <limits.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -78,17 +79,15 @@ int	nofinalnl;
 char	sepstring[BUFSIZ] = "\n";
 char	format[BUFSIZ];
 
-void	getargs __P((int, char *[]));
-void	getformat __P((void));
-int	getprec __P((char *));
-int	main __P((int, char **));
-void	putdata __P((double, long));
-static void	usage __P((void));
+void	getargs(int, char *[]);
+void	getformat(void);
+int	getprec(char *);
+int	main(int, char **);
+void	putdata(double, long);
+static void	usage(void);
 
 int
-main(argc, argv)
-	int argc;
-	char *argv[];
+main(int argc, char *argv[])
 {
 	double	xd, yd;
 	long	id;
@@ -114,9 +113,7 @@ main(argc, argv)
 }
 
 void
-getargs(argc, argv)
-	int argc;
-	char *argv[];
+getargs(int argc, char *argv[])
 {
 	unsigned int	mask = 0;
 	int		n = 0;
@@ -306,9 +303,7 @@ getargs(argc, argv)
 }
 
 void
-putdata(x, notlast)
-	double x;
-	long notlast;
+putdata(double x, long notlast)
 {
 	long	d = x;
 	long	*dp = &d;
@@ -317,6 +312,8 @@ putdata(x, notlast)
 		printf("%s", format);
 	else if (dox)				/* scalar */
 		printf(format, *dp);
+	else if (prec == 0)			/* integer */
+		printf(format, round(x));
 	else					/* real */
 		printf(format, x);
 	if (notlast != 0)
@@ -332,8 +329,7 @@ usage(void)
 }
 
 int
-getprec(s)
-	char *s;
+getprec(char *s)
 {
 	char	*p;
 	char	*q;
@@ -350,7 +346,7 @@ getprec(s)
 }
 
 void
-getformat()
+getformat(void)
 {
 	char	*p;
 	size_t	sz;

@@ -1,4 +1,4 @@
-/*	$NetBSD: aarp.c,v 1.15 2005/01/08 03:11:03 yamt Exp $	*/
+/*	$NetBSD: aarp.c,v 1.18 2005/12/11 12:24:54 christos Exp $	*/
 
 /*
  * Copyright (c) 1990,1991 Regents of The University of Michigan.
@@ -27,7 +27,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: aarp.c,v 1.15 2005/01/08 03:11:03 yamt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: aarp.c,v 1.18 2005/12/11 12:24:54 christos Exp $");
 
 #include "opt_mbuftrace.h"
 
@@ -128,7 +128,7 @@ aarptimer(ignored)
  */
 struct ifaddr *
 at_ifawithnet(sat, ifp)
-	struct sockaddr_at *sat;
+	const struct sockaddr_at *sat;
 	struct ifnet *ifp;
 {
 	struct ifaddr  *ifa;
@@ -146,8 +146,8 @@ at_ifawithnet(sat, ifp)
 
 		nr = (struct netrange *) (sat2->sat_zero);
 		if ((nr->nr_phase == 2)
-		    && (nr->nr_firstnet <= sat->sat_addr.s_net)
-		    && (nr->nr_lastnet >= sat->sat_addr.s_net))
+		    && (ntohs(nr->nr_firstnet) <= ntohs(sat->sat_addr.s_net))
+		    && (ntohs(nr->nr_lastnet) >= ntohs(sat->sat_addr.s_net)))
 			break;
 	}
 	return ifa;

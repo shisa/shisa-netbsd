@@ -1,4 +1,4 @@
-/*	$NetBSD: rtl8169.c,v 1.14.2.4 2005/08/18 20:40:38 tron Exp $	*/
+/*	$NetBSD: rtl8169.c,v 1.24 2006/05/26 12:59:24 blymn Exp $	*/
 
 /*
  * Copyright (c) 1997, 1998-2003
@@ -493,7 +493,7 @@ re_diag(struct rtk_softc *sc)
 	    dmamap, 0, dmamap->dm_mapsize, BUS_DMASYNC_POSTREAD);
 	dmamap = sc->rtk_ldata.rtk_rx_dmamap[0];
 	bus_dmamap_sync(sc->sc_dmat, dmamap, 0, dmamap->dm_mapsize,
-	    BUS_DMASYNC_POSTWRITE);
+	    BUS_DMASYNC_POSTREAD);
 	bus_dmamap_unload(sc->sc_dmat,
 	    sc->rtk_ldata.rtk_rx_dmamap[0]);
 
@@ -745,12 +745,27 @@ re_attach(struct rtk_softc *sc)
 	ifp->if_mtu = ETHERMTU;
 	ifp->if_flags = IFF_BROADCAST | IFF_SIMPLEX | IFF_MULTICAST;
 	ifp->if_ioctl = re_ioctl;
-	sc->ethercom.ec_capabilities |=
-	    ETHERCAP_VLAN_MTU | ETHERCAP_VLAN_HWTAGGING;
+	sc->ethercom.ec_capabilities |= ETHERCAP_VLAN_MTU;
+
+	/*
+	 * This is a way to disable hw VLAN tagging by default
+	 * (RE_VLAN is undefined), as it is problematic. PR 32643
+	 */
+
+#ifdef RE_VLAN
+	sc->ethercom.ec_capabilities |= ETHERCAP_VLAN_HWTAGGING;
+#endif
 	ifp->if_start = re_start;
 	ifp->if_stop = re_stop;
+
+	/*
+	 * IFCAP_CSUM_IPv4_Tx seems broken for small packets.
+	 */
+
 	ifp->if_capabilities |=
-	    IFCAP_CSUM_IPv4 | IFCAP_CSUM_TCPv4 | IFCAP_CSUM_UDPv4 |
+	    /* IFCAP_CSUM_IPv4_Tx | */ IFCAP_CSUM_IPv4_Rx |
+	    IFCAP_CSUM_TCPv4_Tx | IFCAP_CSUM_TCPv4_Rx |
+	    IFCAP_CSUM_UDPv4_Tx | IFCAP_CSUM_UDPv4_Rx |
 	    IFCAP_TSOv4;
 	ifp->if_watchdog = re_watchdog;
 	ifp->if_init = re_init;
@@ -1147,7 +1162,7 @@ re_rxeof(struct rtk_softc *sc)
 		bus_dmamap_sync(sc->sc_dmat,
 		    sc->rtk_ldata.rtk_rx_dmamap[i],
 		    0, sc->rtk_ldata.rtk_rx_dmamap[i]->dm_mapsize,
-		    BUS_DMASYNC_POSTWRITE);
+		    BUS_DMASYNC_POSTREAD);
 		bus_dmamap_unload(sc->sc_dmat,
 		    sc->rtk_ldata.rtk_rx_dmamap[i]);
 
@@ -1246,7 +1261,7 @@ re_rxeof(struct rtk_softc *sc)
 
 		/* Do RX checksumming if enabled */
 
-		if (ifp->if_capenable & IFCAP_CSUM_IPv4) {
+		if (ifp->if_capenable & IFCAP_CSUM_IPv4_Rx) {
 
 			/* Check IP header checksum */
 			if (rxstat & RTK_RDESC_STAT_PROTOID)
@@ -1257,23 +1272,25 @@ re_rxeof(struct rtk_softc *sc)
 
 		/* Check TCP/UDP checksum */
 		if (RTK_TCPPKT(rxstat) &&
-		    (ifp->if_capenable & IFCAP_CSUM_TCPv4)) {
+		    (ifp->if_capenable & IFCAP_CSUM_TCPv4_Rx)) {
 			m->m_pkthdr.csum_flags |= M_CSUM_TCPv4;
 			if (rxstat & RTK_RDESC_STAT_TCPSUMBAD)
 				m->m_pkthdr.csum_flags |= M_CSUM_TCP_UDP_BAD;
 		}
 		if (RTK_UDPPKT(rxstat) &&
-		    (ifp->if_capenable & IFCAP_CSUM_UDPv4)) {
+		    (ifp->if_capenable & IFCAP_CSUM_UDPv4_Rx)) {
 			m->m_pkthdr.csum_flags |= M_CSUM_UDPv4;
 			if (rxstat & RTK_RDESC_STAT_UDPSUMBAD)
 				m->m_pkthdr.csum_flags |= M_CSUM_TCP_UDP_BAD;
 		}
 
+#ifdef RE_VLAN
 		if (rxvlan & RTK_RDESC_VLANCTL_TAG) {
 			VLAN_INPUT_TAG(ifp, m,
 			     be16toh(rxvlan & RTK_RDESC_VLANCTL_DATA),
 			     continue);
 		}
+#endif
 #if NBPFILTER > 0
 		if (ifp->if_bpf)
 			bpf_mtap(ifp->if_bpf, m);
@@ -1511,7 +1528,9 @@ re_encap(struct rtk_softc *sc, struct mbuf *m, int *idx)
 {
 	bus_dmamap_t		map;
 	int			error, i, startidx, curidx;
+#ifdef RE_VLAN
 	struct m_tag		*mtag;
+#endif
 	struct rtk_desc		*d;
 	u_int32_t		cmdstat, rtk_flags;
 	struct rtk_txq		*txq;
@@ -1570,6 +1589,14 @@ re_encap(struct rtk_softc *sc, struct mbuf *m, int *idx)
 		error = EFBIG;
 		goto fail_unload;
 	}
+
+	/*
+	 * Make sure that the caches are synchronized before we
+	 * ask the chip to start DMA for the packet data.
+	 */
+	bus_dmamap_sync(sc->sc_dmat, map, 0, map->dm_mapsize,
+		BUS_DMASYNC_PREWRITE);
+
 	/*
 	 * Map the segment array into descriptors. Note that we set the
 	 * start-of-frame and end-of-frame markers for either TX or RX, but
@@ -1625,11 +1652,13 @@ re_encap(struct rtk_softc *sc, struct mbuf *m, int *idx)
 	 * transmission attempt.
 	 */
 
+#ifdef RE_VLAN
 	if ((mtag = VLAN_OUTPUT_TAG(&sc->ethercom, m)) != NULL) {
 		sc->rtk_ldata.rtk_tx_list[startidx].rtk_vlanctl =
 		    htole32(htons(VLAN_TAG_VALUE(mtag)) |
 		    RTK_TDESC_VLANCTL_TAG);
 	}
+#endif
 
 	/* Transfer ownership of packet to the chip. */
 
@@ -1781,9 +1810,13 @@ re_init(struct ifnet *ifp)
 		reg |= (0x1 << 14) | RTK_CPLUSCMD_PCI_MRW;;
 
 	if (1)  {/* not for 8169S ? */
-		reg |= RTK_CPLUSCMD_VLANSTRIP |
+		reg |=
+#ifdef RE_VLAN
+		    RTK_CPLUSCMD_VLANSTRIP |
+#endif
 		    (ifp->if_capenable &
-		    (IFCAP_CSUM_IPv4 | IFCAP_CSUM_TCPv4 | IFCAP_CSUM_UDPv4) ?
+		    (IFCAP_CSUM_IPv4_Rx | IFCAP_CSUM_TCPv4_Rx |
+		     IFCAP_CSUM_UDPv4_Rx) ?
 		    RTK_CPLUSCMD_RXCSUM_ENB : 0);
 	}
 

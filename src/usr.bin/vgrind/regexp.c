@@ -1,4 +1,4 @@
-/*	$NetBSD: regexp.c,v 1.8 2004/11/04 07:44:47 dsl Exp $	*/
+/*	$NetBSD: regexp.c,v 1.10 2006/05/01 05:14:22 christos Exp $	*/
 
 /*
  * Copyright (c) 1980, 1993
@@ -40,9 +40,10 @@ __COPYRIGHT("@(#) Copyright (c) 1980, 1993\n\
 #if 0
 static char sccsid[] = "@(#)regexp.c	8.1 (Berkeley) 6/6/93";
 #endif
-__RCSID("$NetBSD: regexp.c,v 1.8 2004/11/04 07:44:47 dsl Exp $");
+__RCSID("$NetBSD: regexp.c,v 1.10 2006/05/01 05:14:22 christos Exp $");
 #endif /* not lint */
 
+#include <assert.h>
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
@@ -288,6 +289,7 @@ expconv()
 		OCNT(ccre) = ccre - acs;	/* make a back pointer */
 	    else
 		OCNT(ccre) = 0;
+	    assert(cs != NULL);
 	    *cs |= ALT;
 	    cs = ccre;
 	    *cs = OPER;

@@ -1,4 +1,4 @@
-/*	$NetBSD: bus_space.c,v 1.3 2005/03/09 22:39:21 bouyer Exp $	*/
+/*	$NetBSD: bus_space.c,v 1.6 2006/01/15 22:09:52 bouyer Exp $	*/
 /*	NetBSD: bus_space.c,v 1.2 2003/03/14 18:47:53 christos Exp 	*/
 
 /*-
@@ -39,7 +39,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: bus_space.c,v 1.3 2005/03/09 22:39:21 bouyer Exp $");
+__KERNEL_RCSID(0, "$NetBSD: bus_space.c,v 1.6 2006/01/15 22:09:52 bouyer Exp $");
 
 #include "opt_xen.h"
 
@@ -102,6 +102,14 @@ x86_bus_space_init()
 
 	/* We are privileged guest os - should have IO privileges. */
 	if (xen_start_info.flags & SIF_PRIVILEGED) {
+#ifdef XEN3
+		struct physdev_op physop;
+		physop.cmd = PHYSDEVOP_SET_IOPL;
+		physop.u.set_iopl.iopl = 1;
+		if (HYPERVISOR_physdev_op(&physop) != 0)
+			panic("Unable to obtain IOPL, "
+			    "despite being SIF_PRIVILEGED");
+#else
 		dom0_op_t op;
 		op.cmd = DOM0_IOPL;
 		op.u.iopl.domain = DOMID_SELF;
@@ -109,6 +117,7 @@ x86_bus_space_init()
 		if (HYPERVISOR_dom0_op(&op) != 0)
 			panic("Unable to obtain IOPL, "
 			    "despite being SIF_PRIVILEGED");
+#endif
 	}
 }
 
@@ -299,7 +308,8 @@ x86_mem_add_mapping(bpa, size, cacheable, bshp)
 	if (bpa >= IOM_BEGIN && (bpa + size) <= IOM_END) {
 		va = (vaddr_t)ISA_HOLE_VADDR(pa);
 	} else {
-		va = uvm_km_valloc(kernel_map, endpa - pa);
+		va = uvm_km_alloc(kernel_map, endpa - pa, 0,
+		    UVM_KMF_VAONLY | UVM_KMF_NOWAIT);
 		if (va == 0)
 			return (ENOMEM);
 	}
@@ -390,7 +400,7 @@ _x86_memio_unmap(t, bsh, size, adrp)
 			/*
 			 * Free the kernel virtual mapping.
 			 */
-			uvm_km_free(kernel_map, va, endva - va);
+			uvm_km_free(kernel_map, va, endva - va, UVM_KMF_VAONLY);
 		}
 	} else {
 		panic("_x86_memio_unmap: bad bus space tag");
@@ -441,7 +451,7 @@ x86_memio_unmap(t, bsh, size)
 		/*
 		 * Free the kernel virtual mapping.
 		 */
-		uvm_km_free(kernel_map, va, endva - va);
+		uvm_km_free(kernel_map, va, endva - va, UVM_KMF_VAONLY);
 	} else
 		panic("x86_memio_unmap: bad bus space tag");
 

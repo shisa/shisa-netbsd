@@ -1,4 +1,4 @@
-/*	$NetBSD: makewhatis.c,v 1.31.2.6 2005/09/15 23:51:29 snj Exp $	*/
+/*	$NetBSD: makewhatis.c,v 1.39 2006/04/10 14:39:06 chuck Exp $	*/
 
 /*-
  * Copyright (c) 1999 The NetBSD Foundation, Inc.
@@ -44,7 +44,7 @@
 #if !defined(lint)
 __COPYRIGHT("@(#) Copyright (c) 1999 The NetBSD Foundation, Inc.\n\
 	All rights reserved.\n");
-__RCSID("$NetBSD: makewhatis.c,v 1.31.2.6 2005/09/15 23:51:29 snj Exp $");
+__RCSID("$NetBSD: makewhatis.c,v 1.39 2006/04/10 14:39:06 chuck Exp $");
 #endif /* not lint */
 
 #include <sys/types.h>
@@ -180,14 +180,14 @@ main(int argc, char *const *argv)
 	 * if man.conf not available.
 	 */
 	config(conffile);
-	if ((tp = getlist("_whatdb", 0)) == NULL) {
+	if ((tp = gettag("_whatdb", 0)) == NULL) {
 		manpath = default_manpath;
 		goto mkwhatis;
 	}
 
 	/* Build individual databases */
 	paths[1] = NULL;
-	TAILQ_FOREACH(ep, &tp->list, q) {
+	TAILQ_FOREACH(ep, &tp->entrylist, q) {
 		if ((rv = glob(ep->s,
 		    GLOB_BRACE | GLOB_NOSORT | GLOB_ERR | GLOB_NOCHECK,
 		    NULL, &pg)) != 0)
@@ -300,11 +300,30 @@ makewhatis(char * const * manpath)
 		case FTS_DC:
 		case FTS_DEFAULT:
 		case FTS_DP:
+		case FTS_SL:
+		case FTS_DOT:
+		case FTS_W:
+		case FTS_NSOK:
+		case FTS_INIT:
+			break;
 		case FTS_SLNONE:
+			warnx("Symbolic link with no target: `%s'",
+			    fe->fts_path);
+			break;
+		case FTS_DNR:
+			warnx("Unreadable directory: `%s'", fe->fts_path);
+			break;
+		case FTS_NS:
+			errno = fe->fts_errno;
+			warn("Cannot stat `%s'", fe->fts_path);
+			break;
+		case FTS_ERR:
+			errno = fe->fts_errno;
+			warn("Error reading `%s'", fe->fts_path);
 			break;
 		default:
-			errno = fe->fts_errno;
-			err(EXIT_FAILURE, "Error reading `%s'", fe->fts_path);
+			errx(EXIT_FAILURE, "Unknown info %d returned from fts "
+			    " for path: `%s'", fe->fts_info, fe->fts_path);
 		}
 	}
 

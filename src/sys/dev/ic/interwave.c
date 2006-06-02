@@ -1,4 +1,4 @@
-/*	$NetBSD: interwave.c,v 1.25 2005/01/15 15:19:52 kent Exp $	*/
+/*	$NetBSD: interwave.c,v 1.28 2006/03/08 23:46:24 lukem Exp $	*/
 
 /*
  * Copyright (c) 1997, 1999 The NetBSD Foundation, Inc.
@@ -36,7 +36,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: interwave.c,v 1.25 2005/01/15 15:19:52 kent Exp $");
+__KERNEL_RCSID(0, "$NetBSD: interwave.c,v 1.28 2006/03/08 23:46:24 lukem Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -517,7 +517,7 @@ iw_set_speed(struct iw_softc *sc, u_long freq, char in)
 	cfig3 = 0;		/* XXX gcc -Wall */
 
 	/*
-	 * if the frequency is between 3493Hz and 32KHz we can use a more
+	 * if the frequency is between 3493 Hz and 32 kHz we can use a more
 	 * accurate frequency than the ones listed above base on the formula
 	 * FREQ/((16*(48+x))) where FREQ is either FREQ_1 (24576000Hz) or
 	 * FREQ_2 (16934400Hz) and x is the value to be written to either
@@ -526,8 +526,8 @@ iw_set_speed(struct iw_softc *sc, u_long freq, char in)
 	 *
 	 * NOT IMPLEMENTED!
 	 *
-	 * Note that if you have a 'bad' XTAL_1 (higher than 18.5 MHz), 44.8KHz
-	 * and 38.4KHz modes will provide wrong frequencies to output.
+	 * Note that if you have a 'bad' XTAL_1 (higher than 18.5 MHz), 44.8 kHz
+	 * and 38.4 kHz modes will provide wrong frequencies to output.
 	 */
 
 
@@ -939,28 +939,28 @@ iw_dma_count(struct iw_softc *sc, u_short count, int io)
 }
 
 int
-iw_init_output(addr, buf, cc)
+iw_init_output(addr, sbuf, cc)
 	void	*addr;
-	void	*buf;
+	void	*sbuf;
 	int	cc;
 {
 	struct iw_softc *sc = (struct iw_softc *) addr;
 
 	DPRINTF(("iw_init_output\n"));
 
-	isa_dmastart(sc->sc_ic, sc->sc_playdrq, buf,
+	isa_dmastart(sc->sc_ic, sc->sc_playdrq, sbuf,
 		     cc, NULL, DMAMODE_WRITE | DMAMODE_LOOP, BUS_DMA_NOWAIT);
 	return 0;
 }
 
 int
-iw_init_input(void *addr, void *buf, int cc)
+iw_init_input(void *addr, void *sbuf, int cc)
 {
 	struct	iw_softc *sc;
 
 	DPRINTF(("iw_init_input\n"));
 	sc = (struct iw_softc *) addr;
-	isa_dmastart(sc->sc_ic, sc->sc_recdrq, buf,
+	isa_dmastart(sc->sc_ic, sc->sc_recdrq, sbuf,
 		     cc, NULL, DMAMODE_READ | DMAMODE_LOOP, BUS_DMA_NOWAIT);
 	return 0;
 }

@@ -1,4 +1,4 @@
-/*	$NetBSD: create.c,v 1.46.2.1 2005/09/12 12:26:27 tron Exp $	*/
+/*	$NetBSD: create.c,v 1.49 2005/09/24 22:41:26 elad Exp $	*/
 
 /*-
  * Copyright (c) 1989, 1993
@@ -38,7 +38,7 @@
 #if 0
 static char sccsid[] = "@(#)create.c	8.1 (Berkeley) 6/6/93";
 #else
-__RCSID("$NetBSD: create.c,v 1.46.2.1 2005/09/12 12:26:27 tron Exp $");
+__RCSID("$NetBSD: create.c,v 1.49 2005/09/24 22:41:26 elad Exp $");
 #endif
 #endif /* not lint */
 
@@ -64,7 +64,7 @@ __RCSID("$NetBSD: create.c,v 1.46.2.1 2005/09/12 12:26:27 tron Exp $");
 #include <md5.h>
 #endif
 #ifndef NO_RMD160
-#include <rmd160.h>
+#include <crypto/rmd160.h>
 #endif
 #ifndef NO_SHA1
 #include <sha1.h>

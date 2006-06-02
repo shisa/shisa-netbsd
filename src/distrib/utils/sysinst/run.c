@@ -1,4 +1,4 @@
-/*	$NetBSD: run.c,v 1.59 2005/02/26 17:40:49 dsl Exp $	*/
+/*	$NetBSD: run.c,v 1.62 2006/04/24 19:00:30 snj Exp $	*/
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.
@@ -174,7 +174,7 @@ collect(int kind, char **buffer, const char *name, ...)
 	char *cp;
 
 	va_start(ap, name);
-	vsnprintf(fileorcmd, STRSIZE, name, ap);
+	vsnprintf(fileorcmd, sizeof fileorcmd, name, ap);
 	va_end(ap);
 
 	if (kind == T_FILE) {
@@ -367,7 +367,7 @@ show_cmd(const char *scmd, struct winsize *win)
 }
 
 /*
- * launch a program inside a subwindow, and report it's return status when done
+ * launch a program inside a subwindow, and report its return status when done
  */
 static int
 launch_subwin(WINDOW **actionwin, char **args, struct winsize *win, int flags,
@@ -446,18 +446,25 @@ launch_subwin(WINDOW **actionwin, char **args, struct winsize *win, int flags,
 			fprintf(script, "%s\n", scmd);
 			fclose(script);
 		}
+		if (strcmp(args[0], "cd") == 0 && strcmp(args[2], "&&") == 0) {
+			target_chdir_or_die(args[1]);
+			args += 3;
+		}
+		if (flags & RUN_XFER_DIR)
+			target_chdir_or_die(xfer_dir);
 		/*
 		 * If target_prefix == "", the chroot will fail, but
 		 * that's ok, since we don't need it then.
 		 */
-		if ((flags & RUN_CHROOT) != 0 && chroot(target_prefix()) != 0)
+		if (flags & RUN_CHROOT && *target_prefix()
+		    && chroot(target_prefix()) != 0)
 			warn("chroot(%s) for %s", target_prefix(), *args);
 		else {
 			execvp(*args, args);
 			warn("execvp %s", *args);
 		}
 		_exit(EXIT_FAILURE);
-		break; /* end of child */
+		// break; /* end of child */
 	default:
 		/*
 		 * parent: we've set up the subprocess.
@@ -467,6 +474,12 @@ launch_subwin(WINDOW **actionwin, char **args, struct winsize *win, int flags,
 		ttysig_ignore = 0;
 		break;
 	}
+
+	/*
+	 * Now loop transferring program output to screen, and keyboard
+	 * input to the program.
+	 */
+
 	FD_ZERO(&active_fd_set);
 	FD_SET(master, &active_fd_set);
 	FD_SET(STDIN_FILENO, &active_fd_set);
@@ -479,16 +492,20 @@ launch_subwin(WINDOW **actionwin, char **args, struct winsize *win, int flags,
 			errx(1, mmsg);
 		}
 		read_fd_set = active_fd_set;
-		tmo.tv_sec = 1;
+		tmo.tv_sec = 2;
 		tmo.tv_usec = 0;
-		if (select(FD_SETSIZE, &read_fd_set, NULL, NULL, &tmo) < 0) {
-			if (errno == EINTR)
-				goto loop;
-			warn("select");
-			if (logging)
-				(void)fprintf(logfp,
-				    "select failure: %s\n", strerror(errno));
-			++selectfailed;
+		i = select(FD_SETSIZE, &read_fd_set, NULL, NULL, &tmo);
+		if (i == 0 && *actionwin == NULL)
+			*actionwin = show_cmd(scmd, win);
+		if (i < 0) {
+			if (errno != EINTR) {
+				warn("select");
+				if (logging)
+					(void)fprintf(logfp,
+					    "select failure: %s\n",
+					    strerror(errno));
+				selectfailed = 1;
+			}
 		} else for (i = 0; i < FD_SETSIZE; ++i) {
 			if (!FD_ISSET(i, &read_fd_set))
 				continue;
@@ -529,7 +546,6 @@ launch_subwin(WINDOW **actionwin, char **args, struct winsize *win, int flags,
 			waddstr(*actionwin, cp);
 			wrefresh(*actionwin);
 		}
-loop:
 		pid = wait4(child, &status, WNOHANG, 0);
  		if (pid == child && (WIFEXITED(status) || WIFSIGNALED(status)))
 			break;
@@ -584,6 +600,7 @@ run_program(int flags, const char *cmd, ...)
 
 	va_start(ap, cmd);
 	vasprintf(&scmd, cmd, ap);
+	va_end(ap);
 	if (scmd == NULL)
 		err(1, "vasprintf(&scmd, \"%s\", ...)", cmd);
 
@@ -612,6 +629,7 @@ run_program(int flags, const char *cmd, ...)
 		win.ws_row -= 4;
 
 	ret = launch_subwin(&actionwin, args, &win, flags, scmd, &errstr);
+	fpurge(stdin);
 
 	/* If the command failed, show command name */
 	if (actionwin == NULL && ret != 0 && !(flags & RUN_ERROR_OK))
@@ -655,7 +673,6 @@ run_program(int flags, const char *cmd, ...)
 		}
 	}
 
-	va_end(ap);
 	/* restore tty setting we saved earlier */
 	reset_prog_mode();
 

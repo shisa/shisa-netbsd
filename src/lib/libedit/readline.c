@@ -1,4 +1,4 @@
-/*	$NetBSD: readline.c,v 1.49.2.4 2005/07/12 11:35:03 tron Exp $	*/
+/*	$NetBSD: readline.c,v 1.67 2006/03/25 13:00:11 rtr Exp $	*/
 
 /*-
  * Copyright (c) 1997 The NetBSD Foundation, Inc.
@@ -38,7 +38,7 @@
 
 #include "config.h"
 #if !defined(lint) && !defined(SCCSID)
-__RCSID("$NetBSD: readline.c,v 1.49.2.4 2005/07/12 11:35:03 tron Exp $");
+__RCSID("$NetBSD: readline.c,v 1.67 2006/03/25 13:00:11 rtr Exp $");
 #endif /* not lint && not SCCSID */
 
 #include <sys/types.h>
@@ -65,6 +65,7 @@ __RCSID("$NetBSD: readline.c,v 1.49.2.4 2005/07/12 11:35:03 tron Exp $");
 #include "fcns.h"		/* for EL_NUM_FCNS */
 #include "histedit.h"
 #include "readline/readline.h"
+#include "filecomplete.h"
 
 /* for rl_complete() */
 #define TAB		'\r'
@@ -141,7 +142,7 @@ int rl_completion_query_items = 100;
  * in the parsed text when it is passed to the completion function.
  * Shell uses this to help determine what kind of completing to do.
  */
-char *rl_special_prefixes = (char *)NULL;
+char *rl_special_prefixes = NULL;
 
 /*
  * This is the character appended to the completed words if at the end of
@@ -151,25 +152,20 @@ int rl_completion_append_character = ' ';
 
 /* stuff below is used internally by libedit for readline emulation */
 
-/* if not zero, non-unique completions always show list of possible matches */
-static int _rl_complete_show_all = 0;
-
 static History *h = NULL;
 static EditLine *e = NULL;
 static Function *map[256];
-static int el_rl_complete_cmdnum = 0;
 
 /* internal functions */
 static unsigned char	 _el_rl_complete(EditLine *, int);
 static unsigned char	 _el_rl_tstp(EditLine *, int);
 static char		*_get_prompt(EditLine *);
+static int		 _getc_function(EditLine *, char *);
 static HIST_ENTRY	*_move_history(int);
 static int		 _history_expand_command(const char *, size_t, size_t,
     char **);
 static char		*_rl_compat_sub(const char *, const char *,
     const char *, int);
-static int		 _rl_complete_internal(int);
-static int		 _rl_qsort_string_compare(const void *, const void *);
 static int		 _rl_event_read_char(EditLine *, char *);
 static void		 _rl_update_pos(void);
 
@@ -203,6 +199,23 @@ _move_history(int op)
 
 
 /*
+ * read one key from user defined input function
+ */
+static int
+/*ARGSUSED*/
+_getc_function(EditLine *el, char *c)
+{
+	int i;
+
+	i = (*rl_getc_function)(NULL, 0);
+	if (i == -1)
+		return 0;
+	*c = i;
+	return 1;
+}
+
+
+/*
  * READLINE compatibility stuff
  */
 
@@ -214,7 +227,6 @@ rl_initialize(void)
 {
 	HistEvent ev;
 	const LineInfo *li;
-	int i;
 	int editmode = 1;
 	struct termios t;
 
@@ -247,6 +259,10 @@ rl_initialize(void)
 	history_length = 0;
 	max_input_history = INT_MAX;
 	el_set(e, EL_HIST, history, h);
+
+	/* setup getc function if valid */
+	if (rl_getc_function)
+		el_set(e, EL_GETCFN, _getc_function);
 
 	/* for proper prompt printing in readline() */
 	rl_prompt = strdup("");
@@ -282,17 +298,6 @@ rl_initialize(void)
 	    "ReadLine compatible suspend function",
 	    _el_rl_tstp);
 	el_set(e, EL_BIND, "^Z", "rl_tstp", NULL);
-
-	/*
-	 * Find out where the rl_complete function was added; this is
-	 * used later to detect that lastcmd was also rl_complete.
-	 */
-	for(i=EL_NUM_FCNS; i < e->el_map.nfunc; i++) {
-		if (e->el_map.func[i] == _el_rl_complete) {
-			el_rl_complete_cmdnum = i;
-			break;
-		}
-	}
 		
 	/* read settings from configuration file */
 	el_source(e, NULL);
@@ -723,6 +728,7 @@ _history_expand_command(const char *command, size_t offs, size_t cmdlen,
 				what = realloc(from, size);
 				if (what == NULL) {
 					free(from);
+					free(tmp);
 					return 0;
 				}
 				len = 0;
@@ -735,6 +741,7 @@ _history_expand_command(const char *command, size_t offs, size_t cmdlen,
 								(size <<= 1));
 						if (nwhat == NULL) {
 							free(what);
+							free(tmp);
 							return 0;
 						}
 						what = nwhat;
@@ -747,10 +754,13 @@ _history_expand_command(const char *command, size_t offs, size_t cmdlen,
 					free(what);
 					if (search) {
 						from = strdup(search);
-						if (from == NULL)
+						if (from == NULL) {
+							free(tmp);
 							return 0;
+						}
 					} else {
 						from = NULL;
+						free(tmp);
 						return (-1);
 					}
 				}
@@ -762,6 +772,7 @@ _history_expand_command(const char *command, size_t offs, size_t cmdlen,
 				with = realloc(to, size);
 				if (with == NULL) {
 					free(to);
+					free(tmp);
 					return -1;
 				}
 				len = 0;
@@ -773,6 +784,7 @@ _history_expand_command(const char *command, size_t offs, size_t cmdlen,
 						nwith = realloc(with, size);
 						if (nwith == NULL) {
 							free(with);
+							free(tmp);
 							return -1;
 						}
 						with = nwith;
@@ -841,12 +853,14 @@ history_expand(char *str, char **output)
 			return 0;
 	}
 
-#define ADD_STRING(what, len)						\
+#define ADD_STRING(what, len, fr)					\
 	{								\
 		if (idx + len + 1 > size) {				\
 			char *nresult = realloc(result, (size += len + 1));\
 			if (nresult == NULL) {				\
 				free(*output);				\
+				if (/*CONSTCOND*/fr)			\
+					free(tmp);			\
 				return 0;				\
 			}						\
 			result = nresult;				\
@@ -858,6 +872,7 @@ history_expand(char *str, char **output)
 
 	result = NULL;
 	size = idx = 0;
+	tmp = NULL;
 	for (i = 0; str[i];) {
 		int qchar, loop_again;
 		size_t len, start, j;
@@ -895,13 +910,11 @@ loop:
 			goto loop;
 		}
 		len = i - start;
-		tmp = &str[start];
-		ADD_STRING(tmp, len);
+		ADD_STRING(&str[start], len, 0);
 
 		if (str[i] == '\0' || str[i] != history_expansion_char) {
 			len = j - i;
-			tmp = &str[i];
-			ADD_STRING(tmp, len);
+			ADD_STRING(&str[i], len, 0);
 			if (start == 0)
 				ret = 0;
 			else
@@ -911,8 +924,11 @@ loop:
 		ret = _history_expand_command (str, i, (j - i), &tmp);
 		if (ret > 0 && tmp) {
 			len = strlen(tmp);
-			ADD_STRING(tmp, len);
+			ADD_STRING(tmp, len, 1);
+		}
+		if (tmp) {
 			free(tmp);
+			tmp = NULL;
 		}
 		i = j;
 	}
@@ -1100,7 +1116,7 @@ read_history(const char *filename)
 
 	if (h == NULL || e == NULL)
 		rl_initialize();
-	return (history(h, &ev, H_LOAD, filename));
+	return (history(h, &ev, H_LOAD, filename) == -1);
 }
 
 
@@ -1114,7 +1130,7 @@ write_history(const char *filename)
 
 	if (h == NULL || e == NULL)
 		rl_initialize();
-	return (history(h, &ev, H_SAVE, filename));
+	return (history(h, &ev, H_SAVE, filename) == -1);
 }
 
 
@@ -1172,6 +1188,28 @@ add_history(const char *line)
 		history_length = ev.num;
 
 	return (!(history_length > 0)); /* return 0 if all is okay */
+}
+
+
+/*
+ * remove the specified entry from the history list and return it.
+ */
+HIST_ENTRY *
+remove_history(int num)
+{
+	static HIST_ENTRY she;
+	HistEvent ev;
+
+	if (h == NULL || e == NULL)
+		rl_initialize();
+
+	if (history(h, &ev, H_DEL, num) != 0)
+		return NULL;
+
+	she.line = ev.str;
+	she.data = NULL;
+
+	return &she;
 }
 
 
@@ -1368,179 +1406,17 @@ history_search_pos(const char *str,
 /********************************/
 /* completion functions */
 
-/*
- * does tilde expansion of strings of type ``~user/foo''
- * if ``user'' isn't valid user name or ``txt'' doesn't start
- * w/ '~', returns pointer to strdup()ed copy of ``txt''
- *
- * it's callers's responsibility to free() returned string
- */
 char *
-tilde_expand(char *txt)
+tilde_expand(char *name)
 {
-	struct passwd pwres, *pass;
-	char *temp;
-	size_t len = 0;
-	char pwbuf[1024];
-
-	if (txt[0] != '~')
-		return (strdup(txt));
-
-	temp = strchr(txt + 1, '/');
-	if (temp == NULL) {
-		temp = strdup(txt + 1);
-		if (temp == NULL)
-			return NULL;
-	} else {
-		len = temp - txt + 1;	/* text until string after slash */
-		temp = malloc(len);
-		if (temp == NULL)
-			return NULL;
-		(void)strncpy(temp, txt + 1, len - 2);
-		temp[len - 2] = '\0';
-	}
-	if (getpwnam_r(temp, &pwres, pwbuf, sizeof(pwbuf), &pass) != 0)
-		pass = NULL;
-	free(temp);		/* value no more needed */
-	if (pass == NULL)
-		return (strdup(txt));
-
-	/* update pointer txt to point at string immedially following */
-	/* first slash */
-	txt += len;
-
-	temp = malloc(strlen(pass->pw_dir) + 1 + strlen(txt) + 1);
-	if (temp == NULL)
-		return NULL;
-	(void)sprintf(temp, "%s/%s", pass->pw_dir, txt);
-
-	return (temp);
+	return fn_tilde_expand(name);
 }
 
-
-/*
- * return first found file name starting by the ``text'' or NULL if no
- * such file can be found
- * value of ``state'' is ignored
- *
- * it's caller's responsibility to free returned string
- */
 char *
-filename_completion_function(const char *text, int state)
+filename_completion_function(const char *name, int state)
 {
-	static DIR *dir = NULL;
-	static char *filename = NULL, *dirname = NULL;
-	static size_t filename_len = 0;
-	struct dirent *entry;
-	char *temp;
-	size_t len;
-
-	if (state == 0 || dir == NULL) {
-		temp = strrchr(text, '/');
-		if (temp) {
-			char *nptr;
-			temp++;
-			nptr = realloc(filename, strlen(temp) + 1);
-			if (nptr == NULL) {
-				free(filename);
-				return NULL;
-			}
-			filename = nptr;
-			(void)strcpy(filename, temp);
-			len = temp - text;	/* including last slash */
-			nptr = realloc(dirname, len + 1);
-			if (nptr == NULL) {
-				free(filename);
-				return NULL;
-			}
-			dirname = nptr;
-			(void)strncpy(dirname, text, len);
-			dirname[len] = '\0';
-		} else {
-			if (*text == 0)
-				filename = NULL;
-			else {
-				filename = strdup(text);
-				if (filename == NULL)
-					return NULL;
-			}
-			dirname = NULL;
-		}
-
-		/* support for ``~user'' syntax */
-		if (dirname && *dirname == '~') {
-			char *nptr;
-			temp = tilde_expand(dirname);
-			if (temp == NULL)
-				return NULL;
-			nptr = realloc(dirname, strlen(temp) + 1);
-			if (nptr == NULL) {
-				free(dirname);
-				return NULL;
-			}
-			dirname = nptr;
-			(void)strcpy(dirname, temp);	/* safe */
-			free(temp);	/* no longer needed */
-		}
-		/* will be used in cycle */
-		filename_len = filename ? strlen(filename) : 0;
-
-		if (dir != NULL) {
-			(void)closedir(dir);
-			dir = NULL;
-		}
-		dir = opendir(dirname ? dirname : ".");
-		if (!dir)
-			return (NULL);	/* cannot open the directory */
-	}
-	/* find the match */
-	while ((entry = readdir(dir)) != NULL) {
-		/* skip . and .. */
-		if (entry->d_name[0] == '.' && (!entry->d_name[1]
-		    || (entry->d_name[1] == '.' && !entry->d_name[2])))
-			continue;
-		if (filename_len == 0)
-			break;
-		/* otherwise, get first entry where first */
-		/* filename_len characters are equal	  */
-		if (entry->d_name[0] == filename[0]
-#if defined(__SVR4) || defined(__linux__)
-		    && strlen(entry->d_name) >= filename_len
-#else
-		    && entry->d_namlen >= filename_len
-#endif
-		    && strncmp(entry->d_name, filename,
-			filename_len) == 0)
-			break;
-	}
-
-	if (entry) {		/* match found */
-
-		struct stat stbuf;
-#if defined(__SVR4) || defined(__linux__)
-		len = strlen(entry->d_name) +
-#else
-		len = entry->d_namlen +
-#endif
-		    ((dirname) ? strlen(dirname) : 0) + 1 + 1;
-		temp = malloc(len);
-		if (temp == NULL)
-			return NULL;
-		(void)sprintf(temp, "%s%s",
-		    dirname ? dirname : "", entry->d_name);	/* safe */
-
-		/* test, if it's directory */
-		if (stat(temp, &stbuf) == 0 && S_ISDIR(stbuf.st_mode))
-			strcat(temp, "/");	/* safe */
-	} else {
-		(void)closedir(dir);
-		dir = NULL;
-		temp = NULL;
-	}
-
-	return (temp);
+	return fn_filename_completion_function(name, state);
 }
-
 
 /*
  * a completion generator for usernames; returns _first_ username
@@ -1577,16 +1453,6 @@ username_completion_function(const char *text, int state)
 
 
 /*
- * el-compatible wrapper around rl_complete; needed for key binding
- */
-/* ARGSUSED */
-static unsigned char
-_el_rl_complete(EditLine *el __attribute__((__unused__)), int ch)
-{
-	return (unsigned char) rl_complete(0, ch);
-}
-
-/*
  * el-compatible wrapper to send TSTP on ^Z
  */
 /* ARGSUSED */
@@ -1598,273 +1464,34 @@ _el_rl_tstp(EditLine *el __attribute__((__unused__)), int ch __attribute__((__un
 }
 
 /*
- * returns list of completions for text given
- */
-char **
-completion_matches(const char *text, CPFunction *genfunc)
-{
-	char **match_list = NULL, *retstr, *prevstr;
-	size_t match_list_len, max_equal, which, i;
-	size_t matches;
-
-	if (h == NULL || e == NULL)
-		rl_initialize();
-
-	matches = 0;
-	match_list_len = 1;
-	while ((retstr = (*genfunc) (text, (int)matches)) != NULL) {
-		/* allow for list terminator here */
-		if (matches + 3 >= match_list_len) {
-			char **nmatch_list;
-			while (matches + 3 >= match_list_len)
-				match_list_len <<= 1;
-			nmatch_list = realloc(match_list,
-			    match_list_len * sizeof(char *));
-			if (nmatch_list == NULL) {
-				free(match_list);
-				return NULL;
-			}
-			match_list = nmatch_list;
-
-		}
-		match_list[++matches] = retstr;
-	}
-
-	if (!match_list)
-		return NULL;	/* nothing found */
-
-	/* find least denominator and insert it to match_list[0] */
-	which = 2;
-	prevstr = match_list[1];
-	max_equal = strlen(prevstr);
-	for (; which <= matches; which++) {
-		for (i = 0; i < max_equal &&
-		    prevstr[i] == match_list[which][i]; i++)
-			continue;
-		max_equal = i;
-	}
-
-	retstr = malloc(max_equal + 1);
-	if (retstr == NULL) {
-		free(match_list);
-		return NULL;
-	}
-	(void)strncpy(retstr, match_list[1], max_equal);
-	retstr[max_equal] = '\0';
-	match_list[0] = retstr;
-
-	/* add NULL as last pointer to the array */
-	match_list[matches + 1] = (char *) NULL;
-
-	return (match_list);
-}
-
-/*
- * Sort function for qsort(). Just wrapper around strcasecmp().
- */
-static int
-_rl_qsort_string_compare(i1, i2)
-	const void *i1, *i2;
-{
-	const char *s1 = ((const char * const *)i1)[0];
-	const char *s2 = ((const char * const *)i2)[0];
-
-	return strcasecmp(s1, s2);
-}
-
-/*
  * Display list of strings in columnar format on readline's output stream.
  * 'matches' is list of strings, 'len' is number of strings in 'matches',
  * 'max' is maximum length of string in 'matches'.
  */
 void
-rl_display_match_list (matches, len, max)
-     char **matches;
-     int len, max;
+rl_display_match_list(char **matches, int len, int max)
 {
-	int i, idx, limit, count;
-	int screenwidth = e->el_term.t_size.h;
 
-	/*
-	 * Find out how many entries can be put on one line, count
-	 * with two spaces between strings.
-	 */
-	limit = screenwidth / (max + 2);
-	if (limit == 0)
-		limit = 1;
-
-	/* how many lines of output */
-	count = len / limit;
-	if (count * limit < len)
-		count++;
-
-	/* Sort the items if they are not already sorted. */
-	qsort(&matches[1], (size_t)(len - 1), sizeof(char *),
-	    _rl_qsort_string_compare);
-
-	idx = 1;
-	for(; count > 0; count--) {
-		for(i = 0; i < limit && matches[idx]; i++, idx++)
-			(void)fprintf(e->el_outfile, "%-*s  ", max,
-			    matches[idx]);
-		(void)fprintf(e->el_outfile, "\n");
-	}
+	fn_display_match_list(e, matches, len, max);
 }
 
-/*
- * Complete the word at or before point, called by rl_complete()
- * 'what_to_do' says what to do with the completion.
- * `?' means list the possible completions.
- * TAB means do standard completion.
- * `*' means insert all of the possible completions.
- * `!' means to do standard completion, and list all possible completions if
- * there is more than one.
- *
- * Note: '*' support is not implemented
- */
-static int
-_rl_complete_internal(int what_to_do)
+static const char *
+/*ARGSUSED*/
+_rl_completion_append_character_function(const char *dummy
+    __attribute__((__unused__)))
 {
-	Function *complet_func;
-	const LineInfo *li;
-	char *temp, **matches;
-	const char *ctemp;
-	size_t len;
-
-	rl_completion_type = what_to_do;
-
-	if (h == NULL || e == NULL)
-		rl_initialize();
-
-	complet_func = rl_completion_entry_function;
-	if (!complet_func)
-		complet_func = (Function *)(void *)filename_completion_function;
-
-	/* We now look backwards for the start of a filename/variable word */
-	li = el_line(e);
-	ctemp = (const char *) li->cursor;
-	while (ctemp > li->buffer
-	    && !strchr(rl_basic_word_break_characters, ctemp[-1])
-	    && (!rl_special_prefixes
-		|| !strchr(rl_special_prefixes, ctemp[-1]) ) )
-		ctemp--;
-
-	len = li->cursor - ctemp;
-	temp = alloca(len + 1);
-	(void)strncpy(temp, ctemp, len);
-	temp[len] = '\0';
-
-	/* these can be used by function called in completion_matches() */
-	/* or (*rl_attempted_completion_function)() */
-	_rl_update_pos();
-
-	if (rl_attempted_completion_function) {
-		int end = li->cursor - li->buffer;
-		matches = (*rl_attempted_completion_function) (temp, (int)
-		    (end - len), end);
-	} else
-		matches = 0;
-	if (!rl_attempted_completion_function || !matches)
-		matches = completion_matches(temp, (CPFunction *)complet_func);
-
-	if (matches) {
-		int i, retval = CC_REFRESH;
-		int matches_num, maxlen, match_len, match_display=1;
-
-		/*
-		 * Only replace the completed string with common part of
-		 * possible matches if there is possible completion.
-		 */
-		if (matches[0][0] != '\0') {
-			el_deletestr(e, (int) len);
-			el_insertstr(e, matches[0]);
-		}
-
-		if (what_to_do == '?')
-			goto display_matches;
-
-		if (matches[2] == NULL && strcmp(matches[0], matches[1]) == 0) {
-			/*
-			 * We found exact match. Add a space after
-			 * it, unless we do filename completion and the
-			 * object is a directory.
-			 */
-			size_t alen = strlen(matches[0]);
-			if ((complet_func !=
-			    (Function *)filename_completion_function
-			      || (alen > 0 && (matches[0])[alen - 1] != '/'))
-			    && rl_completion_append_character) {
-				char buf[2];
-				buf[0] = rl_completion_append_character;
-				buf[1] = '\0';
-				el_insertstr(e, buf);
-			}
-		} else if (what_to_do == '!') {
-    display_matches:
-			/*
-			 * More than one match and requested to list possible
-			 * matches.
-			 */
-
-			for(i=1, maxlen=0; matches[i]; i++) {
-				match_len = strlen(matches[i]);
-				if (match_len > maxlen)
-					maxlen = match_len;
-			}
-			matches_num = i - 1;
-				
-			/* newline to get on next line from command line */
-			(void)fprintf(e->el_outfile, "\n");
-
-			/*
-			 * If there are too many items, ask user for display
-			 * confirmation.
-			 */
-			if (matches_num > rl_completion_query_items) {
-				(void)fprintf(e->el_outfile,
-				    "Display all %d possibilities? (y or n) ",
-				    matches_num);
-				(void)fflush(e->el_outfile);
-				if (getc(stdin) != 'y')
-					match_display = 0;
-				(void)fprintf(e->el_outfile, "\n");
-			}
-
-			if (match_display)
-				rl_display_match_list(matches, matches_num,
-					maxlen);
-			retval = CC_REDISPLAY;
-		} else if (matches[0][0]) {
-			/*
-			 * There was some common match, but the name was
-			 * not complete enough. Next tab will print possible
-			 * completions.
-			 */
-			el_beep(e);
-		} else {
-			/* lcd is not a valid object - further specification */
-			/* is needed */
-			el_beep(e);
-			retval = CC_NORM;
-		}
-
-		/* free elements of array and the array itself */
-		for (i = 0; matches[i]; i++)
-			free(matches[i]);
-		free(matches), matches = NULL;
-
-		return (retval);
-	}
-	return (CC_NORM);
+	static char buf[2];
+	buf[1] = rl_completion_append_character;
+	return buf;
 }
 
 
 /*
  * complete word at current point
  */
+/* ARGSUSED */
 int
-/*ARGSUSED*/
-rl_complete(int ignore, int invoking_key)
+rl_complete(int ignore __attribute__((__unused__)), int invoking_key)
 {
 	if (h == NULL || e == NULL)
 		rl_initialize();
@@ -1875,14 +1502,25 @@ rl_complete(int ignore, int invoking_key)
 		arr[1] = '\0';
 		el_insertstr(e, arr);
 		return (CC_REFRESH);
-	} else if (e->el_state.lastcmd == el_rl_complete_cmdnum)
-		return _rl_complete_internal('?');
-	else if (_rl_complete_show_all)
-		return _rl_complete_internal('!');
-	else
-		return _rl_complete_internal(TAB);
+	}
+
+	/* Just look at how many global variables modify this operation! */
+	return fn_complete(e,
+	    (CPFunction *)rl_completion_entry_function,
+	    rl_attempted_completion_function,
+	    rl_basic_word_break_characters, rl_special_prefixes,
+	    _rl_completion_append_character_function, rl_completion_query_items,
+	    &rl_completion_type, &rl_attempted_completion_over,
+	    &rl_point, &rl_end);
 }
 
+
+/* ARGSUSED */
+static unsigned char
+_el_rl_complete(EditLine *el __attribute__((__unused__)), int ch)
+{
+	return (unsigned char)rl_complete(0, ch);
+}
 
 /*
  * misc other functions
@@ -2009,7 +1647,7 @@ rl_callback_read_char()
 
 	if (buf == NULL || count-- <= 0)
 		return;
-	if (count == 0 && buf[0] == CTRL('d'))
+	if (count == 0 && buf[0] == e->el_tty.t_c[TS_IO][C_EOF])
 		done = 1;
 	if (buf[count] == '\n' || buf[count] == '\r')
 		done = 2;
@@ -2049,7 +1687,7 @@ void
 rl_redisplay(void)
 {
 	char a[2];
-	a[0] = CTRL('r');
+	a[0] = e->el_tty.t_c[TS_IO][C_REPRINT];
 	a[1] = '\0';
 	el_push(e, a);
 }
@@ -2096,6 +1734,16 @@ rl_parse_and_bind(const char *line)
 	argc = el_parse(e, argc, argv);
 	tok_end(tok);
 	return (argc ? 1 : 0);
+}
+
+int
+rl_variable_bind(const char *var, const char *value)
+{
+	/*
+	 * The proper return value is undocument, but this is what the
+	 * readline source seems to do.
+	 */
+	return ((el_set(e, EL_BIND, "", var, value) == -1) ? 1 : 0);
 }
 
 void

@@ -1,4 +1,4 @@
-/*	$NetBSD: rpcb_svc_4.c,v 1.2 2001/04/30 00:36:07 fvdl Exp $	*/
+/*	$NetBSD: rpcb_svc_4.c,v 1.5 2006/05/25 02:33:16 christos Exp $	*/
 
 /*
  * Sun RPC is a product of Sun Microsystems, Inc. and is provided for
@@ -322,7 +322,7 @@ rpcbproc_getaddrlist_4_local(void *arg, struct svc_req *rqstp, SVCXPRT *transp,
 	RPCB *regp = (RPCB *)arg;
 	static rpcb_entry_list_ptr rlist;
 	register rpcblist_ptr rbl;
-	rpcb_entry_list_ptr rp, tail;
+	rpcb_entry_list_ptr rp, tail = NULL;
 	rpcprog_t prog;
 	rpcvers_t vers;
 	rpcb_entry *a;
@@ -375,6 +375,7 @@ rpcbproc_getaddrlist_4_local(void *arg, struct svc_req *rqstp, SVCXPRT *transp,
 #endif
 			/* The server died. Unset this combination */
 			delete_prog(regp->r_prog);
+			free(maddr);
 			continue;
 		}
 #ifdef RPCBIND_DEBUG
@@ -386,8 +387,10 @@ rpcbproc_getaddrlist_4_local(void *arg, struct svc_req *rqstp, SVCXPRT *transp,
 		 */
 		rp = (rpcb_entry_list_ptr)
 			malloc((u_int)sizeof (rpcb_entry_list));
-		if (rp == NULL)
+		if (rp == NULL) {
+			free(maddr);
 			goto fail;
+		}
 		a = &rp->rpcb_entry_map;
 		a->r_maddr = maddr;
 		a->r_nc_netid = nconf->nc_netid;
@@ -398,7 +401,7 @@ rpcbproc_getaddrlist_4_local(void *arg, struct svc_req *rqstp, SVCXPRT *transp,
 		if (rlist == NULL) {
 			rlist = rp;
 			tail = rp;
-		} else {
+		} else if (tail) {
 			tail->rpcb_entry_next = rp;
 			tail = rp;
 		}

@@ -1,4 +1,4 @@
-/*	$NetBSD: ntp_io.c,v 1.11.2.1 2005/06/15 06:00:47 snj Exp $	*/
+/*	$NetBSD: ntp_io.c,v 1.14 2006/05/09 20:18:06 mrg Exp $	*/
 
 /*
  * ntp_io.c - input/output routines for ntpd.	The socket-opening code
@@ -1273,6 +1273,9 @@ close_socket(
 {
 	SOCKET i, newmax;
 
+	if (fd == INVALID_SOCKET)
+		return;
+
 	(void) closesocket(fd);
 
 	/*
@@ -1305,6 +1308,9 @@ close_file(
 	)
 {
 	int i, newmax;
+
+	if (fd == INVALID_SOCKET)
+		return;
 
 	(void) close(fd);
 	/*
@@ -1581,7 +1587,7 @@ input_handler(
 	register int doing;
 	register SOCKET fd;
 	struct timeval tvzero;
-	int fromlen;
+	socklen_t fromlen;
 	l_fp ts;			/* Timestamp at BOselect() gob */
 	l_fp ts_e;			/* Timestamp at EOselect() gob */
 	fd_set fds;
@@ -1909,7 +1915,7 @@ findinterface(
 	SOCKET s;
 	int rtn, i;
 	struct sockaddr_storage saddr;
-	int saddrlen = SOCKLEN(addr);
+	socklen_t saddrlen = SOCKLEN(addr);
 	/*
 	 * This is considerably hoke. We open a socket, connect to it
 	 * and slap a getsockname() on it. If anything breaks, as it

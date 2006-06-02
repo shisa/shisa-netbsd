@@ -1,4 +1,4 @@
-/*	$NetBSD: mmeyepcmcia.c,v 1.8 2003/12/28 01:20:23 christos Exp $	*/
+/*	$NetBSD: mmeyepcmcia.c,v 1.11 2005/12/24 20:07:19 perry Exp $	*/
 
 /*
  * Copyright (c) 1997 Marc Horowitz.  All rights reserved.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mmeyepcmcia.c,v 1.8 2003/12/28 01:20:23 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: mmeyepcmcia.c,v 1.11 2005/12/24 20:07:19 perry Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -192,8 +192,8 @@ void	mmeyepcmcia_chip_io_unmap(pcmcia_chipset_handle_t, int);
 void	mmeyepcmcia_chip_socket_enable(pcmcia_chipset_handle_t);
 void	mmeyepcmcia_chip_socket_disable(pcmcia_chipset_handle_t);
 
-static __inline int mmeyepcmcia_read(struct mmeyepcmcia_handle *, int);
-static __inline int
+static inline int mmeyepcmcia_read(struct mmeyepcmcia_handle *, int);
+static inline int
 mmeyepcmcia_read(struct mmeyepcmcia_handle *h, int idx)
 {
 	static int prev_idx = 0;
@@ -205,8 +205,8 @@ mmeyepcmcia_read(struct mmeyepcmcia_handle *h, int idx)
 	return (bus_space_read_stream_2(h->sc->iot, h->sc->ioh, idx));
 }
 
-static __inline void mmeyepcmcia_write(struct mmeyepcmcia_handle *, int, int);
-static __inline void
+static inline void mmeyepcmcia_write(struct mmeyepcmcia_handle *, int, int);
+static inline void
 mmeyepcmcia_write(struct mmeyepcmcia_handle *h, int idx, int data)
 {
 	static int prev_idx;
@@ -227,7 +227,6 @@ void	mmeyepcmcia_chip_intr_disestablish(pcmcia_chipset_handle_t,
 
 void	mmeyepcmcia_attach_socket(struct mmeyepcmcia_handle *);
 void	mmeyepcmcia_init_socket(struct mmeyepcmcia_handle *);
-int	mmeyepcmcia_submatch(struct device *, struct cfdata *, void *);
 int	mmeyepcmcia_print (void *, const char *);
 int	mmeyepcmcia_intr_socket(struct mmeyepcmcia_handle *);
 void	mmeyepcmcia_attach_card(struct mmeyepcmcia_handle *);
@@ -360,8 +359,8 @@ mmeyepcmcia_attach_socket(struct mmeyepcmcia_handle *h)
 	paa.iobase = h->sc->iobase;
 	paa.iosize = h->sc->iosize;
 
-	h->pcmcia = config_found_sm(&h->sc->dev, &paa, mmeyepcmcia_print,
-	    mmeyepcmcia_submatch);
+	h->pcmcia = config_found_ia(&h->sc->dev, "pcmciabus", &paa,
+				    mmeyepcmcia_print);
 
 	/* if there's actually a pcmcia device attached, initialize the slot */
 
@@ -505,13 +504,6 @@ mmeyepcmcia_init_socket(struct mmeyepcmcia_handle *h)
 	} else {
 		h->laststate = MMEYEPCMCIA_LASTSTATE_EMPTY;
 	}
-}
-
-int
-mmeyepcmcia_submatch(struct device *parent, struct cfdata *cf, void *aux)
-{
-
-	return (config_match(parent, cf, aux));
 }
 
 int

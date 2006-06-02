@@ -1,4 +1,4 @@
-/*	$NetBSD: main.c,v 1.18 2003/08/07 11:14:40 agc Exp $	*/
+/*	$NetBSD: main.c,v 1.21 2006/05/01 23:12:24 christos Exp $	*/
 
 /*
  * Copyright (c) 1980, 1993
@@ -39,7 +39,7 @@ __COPYRIGHT("@(#) Copyright (c) 1980, 1993\n\
 #if 0
 static char sccsid[] = "@(#)main.c	8.2 (Berkeley) 4/20/95";
 #else
-__RCSID("$NetBSD: main.c,v 1.18 2003/08/07 11:14:40 agc Exp $");
+__RCSID("$NetBSD: main.c,v 1.21 2006/05/01 23:12:24 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -48,8 +48,6 @@ __RCSID("$NetBSD: main.c,v 1.18 2003/08/07 11:14:40 agc Exp $");
 #undef EXTERN
 
 #include "extern.h"
-
-extern char *version;
 
 int	main(int, char **);
 
@@ -67,10 +65,10 @@ main(int argc, char *argv[])
 	int i;
 	struct name *to, *cc, *bcc, *smopts;
 	char *subject;
-	char *ef;
+	const char *ef;
 	char nosrc = 0;
 	sig_t prevint;
-	char *rc;
+	const char *rc;
 
 	/*
 	 * Set up a reasonable environment.
@@ -106,14 +104,14 @@ main(int argc, char *argv[])
 				warn("%s", Tflag);
 				exit(1);
 			}
-			close(i);
+			(void)close(i);
 			break;
 		case 'u':
 			/*
 			 * Next argument is person to pretend to be.
 			 */
 			myname = optarg;
-			unsetenv("MAIL");
+			(void)unsetenv("MAIL");
 			break;
 		case 'i':
 			/*
@@ -191,7 +189,7 @@ main(int argc, char *argv[])
 			assign("dontsendempty", "");
 			break;
 		case '?':
-			fputs("\
+			(void)fputs("\
 Usage: mail [-EiInv] [-s subject] [-c cc-addr] [-b bcc-addr] to-addr ...\n\
             [- sendmail-options ...]\n\
        mail [-EiInNv] -f [name]\n\
@@ -207,13 +205,10 @@ Usage: mail [-EiInv] [-s subject] [-c cc-addr] [-b bcc-addr] to-addr ...\n\
 	/*
 	 * Check for inconsistent arguments.
 	 */
-	if (to == NULL && (subject != NULL || cc != NULL || bcc != NULL)) {
-		fputs("You must specify direct recipients with -s, -c, or -b.\n", stderr);
-		exit(1);
-	}
+	if (to == NULL && (subject != NULL || cc != NULL || bcc != NULL))
+		errx(1, "You must specify direct recipients with -s, -c, or -b.");
 	if (ef != NULL && to != NULL) {
-		fprintf(stderr, "Cannot give -f and people to send to.\n");
-		exit(1);
+		errx(1, "Cannot give -f and people to send to.");
 	}
 	tinit();
 	setscreensize();
@@ -230,7 +225,7 @@ Usage: mail [-EiInv] [-s subject] [-c cc-addr] [-b bcc-addr] to-addr ...\n\
 		rc = "~/.mailrc";
 	load(expand(rc));
 	if (!rcvmode) {
-		mail(to, cc, bcc, smopts, subject);
+		(void)mail(to, cc, bcc, smopts, subject);
 		/*
 		 * why wait?
 		 */
@@ -247,31 +242,32 @@ Usage: mail [-EiInv] [-s subject] [-c cc-addr] [-b bcc-addr] to-addr ...\n\
 		exit(1);		/* error already reported */
 	if (setjmp(hdrjmp) == 0) {
 		if ((prevint = signal(SIGINT, SIG_IGN)) != SIG_IGN)
-			signal(SIGINT, hdrstop);
+			(void)signal(SIGINT, hdrstop);
 		if (value("quiet") == NULL)
-			printf("Mail version %s.  Type ? for help.\n",
+			(void)printf("Mail version %s.  Type ? for help.\n",
 				version);
 		announce();
-		fflush(stdout);
-		signal(SIGINT, prevint);
+		(void)fflush(stdout);
+		(void)signal(SIGINT, prevint);
 	}
 	commands();
-	signal(SIGHUP, SIG_IGN);
-	signal(SIGINT, SIG_IGN);
-	signal(SIGQUIT, SIG_IGN);
+	(void)signal(SIGHUP, SIG_IGN);
+	(void)signal(SIGINT, SIG_IGN);
+	(void)signal(SIGQUIT, SIG_IGN);
 	quit();
-	exit(0);
+	return 0;
 }
 
 /*
  * Interrupt printing of the headers.
  */
 void
+/*ARGSUSED*/
 hdrstop(int signo)
 {
 
-	fflush(stdout);
-	fprintf(stderr, "\nInterrupt\n");
+	(void)fflush(stdout);
+	(void)fprintf(stderr, "\nInterrupt\n");
 	longjmp(hdrjmp, 1);
 }
 
@@ -290,7 +286,7 @@ setscreensize(void)
 	struct winsize ws;
 	speed_t ospeed;
 
-	if (ioctl(1, TIOCGWINSZ, (char *) &ws) < 0)
+	if (ioctl(1, TIOCGWINSZ, &ws) < 0)
 		ws.ws_col = ws.ws_row = 0;
 	if (tcgetattr(1, &tbuf) < 0)
 		ospeed = 9600;

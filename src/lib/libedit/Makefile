@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.29 2003/12/05 13:37:48 lukem Exp $
+#	$NetBSD: Makefile,v 1.34 2005/05/28 12:02:53 lukem Exp $
 #	@(#)Makefile	8.1 (Berkeley) 6/4/93
 
 USE_SHLIBDIR=	yes
@@ -6,7 +6,10 @@ USE_SHLIBDIR=	yes
 WARNS=	3
 LIB=	edit
 
-OSRCS=	chared.c common.c el.c emacs.c fcns.c help.c hist.c key.c map.c \
+LIBDPLIBS=     termcap ${.CURDIR}/../libterm
+
+OSRCS=	chared.c common.c el.c emacs.c fcns.c filecomplete.c help.c hist.c \
+	key.c map.c \
 	parse.c prompt.c read.c refresh.c search.c sig.c term.c tty.c vi.c
 
 MAN=	editline.3 editrc.5
@@ -34,6 +37,7 @@ INCSDIR=/usr/include
 CLEANFILES+=editline.c
 CLEANFILES+=common.h.tmp editline.c.tmp emacs.h.tmp fcns.c.tmp fcns.h.tmp
 CLEANFILES+=help.c.tmp help.h.tmp vi.h.tmp
+CLEANFILES+=test.o test
 CPPFLAGS+=-I. -I${LIBEDITDIR} 
 CPPFLAGS+=-I. -I${.CURDIR}
 CPPFLAGS+=#-DDEBUG_TTY -DDEBUG_KEY -DDEBUG_READ -DDEBUG -DDEBUG_REFRESH
@@ -47,44 +51,53 @@ CLEANFILES+=	${AHDR} fcns.h help.h fcns.c help.c
 
 SUBDIR=	readline
 
-vi.h: vi.c makelist
+vi.h: vi.c makelist Makefile
+	${_MKTARGET_CREATE}
 	${HOST_SH} ${LIBEDITDIR}/makelist -h ${LIBEDITDIR}/vi.c \
 	    > ${.TARGET}.tmp && \
 	    mv ${.TARGET}.tmp ${.TARGET}
 
-emacs.h: emacs.c makelist
+emacs.h: emacs.c makelist Makefile
+	${_MKTARGET_CREATE}
 	${HOST_SH} ${LIBEDITDIR}/makelist -h ${LIBEDITDIR}/emacs.c \
 	    > ${.TARGET}.tmp && \
 	    mv ${.TARGET}.tmp ${.TARGET}
 
-common.h: common.c makelist
+common.h: common.c makelist Makefile
+	${_MKTARGET_CREATE}
 	${HOST_SH} ${LIBEDITDIR}/makelist -h ${LIBEDITDIR}/common.c \
 	    > ${.TARGET}.tmp && \
 	    mv ${.TARGET}.tmp ${.TARGET}
 
-fcns.h: ${AHDR} makelist
+fcns.h: ${AHDR} makelist Makefile
+	${_MKTARGET_CREATE}
 	${HOST_SH} ${LIBEDITDIR}/makelist -fh ${AHDR} > ${.TARGET}.tmp && \
 	    mv ${.TARGET}.tmp ${.TARGET}
 
-fcns.c: ${AHDR} fcns.h help.h makelist
+fcns.c: ${AHDR} fcns.h help.h makelist Makefile
+	${_MKTARGET_CREATE}
 	${HOST_SH} ${LIBEDITDIR}/makelist -fc ${AHDR} > ${.TARGET}.tmp && \
 	    mv ${.TARGET}.tmp ${.TARGET}
 
-help.c: ${ASRC} makelist 
+help.c: ${ASRC} makelist Makefile
+	${_MKTARGET_CREATE}
 	${HOST_SH} ${LIBEDITDIR}/makelist -bc ${ASRC} > ${.TARGET}.tmp && \
 	    mv ${.TARGET}.tmp ${.TARGET}
 
-help.h: ${ASRC} makelist
+help.h: ${ASRC} makelist Makefile
+	${_MKTARGET_CREATE}
 	${HOST_SH} ${LIBEDITDIR}/makelist -bh ${ASRC} > ${.TARGET}.tmp && \
 	    mv ${.TARGET}.tmp ${.TARGET}
 
-editline.c: ${OSRCS}
-	${HOST_SH} ${LIBEDITDIR}/makelist -e ${.ALLSRC:T} > ${.TARGET}.tmp && \
+editline.c: ${OSRCS} makelist Makefile
+	${_MKTARGET_CREATE}
+	${HOST_SH} ${LIBEDITDIR}/makelist -e ${OSRCS:T} > ${.TARGET}.tmp && \
 	    mv ${.TARGET}.tmp ${.TARGET}
 
 test.o:	${LIBEDITDIR}/TEST/test.c
 	
 test:	libedit.a test.o 
+	${_MKTARGET_LINK}
 	${CC} ${LDFLAGS} ${.ALLSRC} -o ${.TARGET} libedit.a ${LDADD} -ltermcap
 
 .include <bsd.lib.mk>

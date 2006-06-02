@@ -1,4 +1,4 @@
-/*	$NetBSD: do_command.c,v 1.16.2.1 2005/08/25 19:19:46 snj Exp $	*/
+/*	$NetBSD: do_command.c,v 1.20 2006/05/21 19:26:43 christos Exp $	*/
 
 /* Copyright 1988,1990,1993,1994 by Paul Vixie
  * All rights reserved
@@ -22,13 +22,14 @@
 #if 0
 static char rcsid[] = "Id: do_command.c,v 2.12 1994/01/15 20:43:43 vixie Exp ";
 #else
-__RCSID("$NetBSD: do_command.c,v 1.16.2.1 2005/08/25 19:19:46 snj Exp $");
+__RCSID("$NetBSD: do_command.c,v 1.20 2006/05/21 19:26:43 christos Exp $");
 #endif
 #endif
 
 
 #include "cron.h"
 #include <sys/signal.h>
+#include <err.h>
 #if defined(sequent)
 # include <sys/universe.h>
 #endif
@@ -102,7 +103,7 @@ child_process(entry *e, user *u)
 #ifdef USE_SIGCHLD
 	/* our parent is watching for our death by catching SIGCHLD.  we
 	 * do not care to watch for our children's deaths this way -- we
-	 * use wait() explictly.  so we have to disable the signal (which
+	 * use wait() explicitly.  so we have to disable the signal (which
 	 * was inherited from the parent).
 	 */
 	(void) signal(SIGCHLD, SIG_DFL);
@@ -267,8 +268,7 @@ child_process(entry *e, user *u)
 			}
 # endif /*DEBUGGING*/
 			execle(shell, shell, "-c", e->cmd, (char *)0, e->envp);
-			fprintf(stderr, "execl: couldn't exec `%s'\n", shell);
-			perror("execl");
+			warn("execl: couldn't exec `%s'", shell);
 			_exit(ERROR_EXIT);
 		}
 		break;
@@ -374,7 +374,7 @@ child_process(entry *e, user *u)
 			int		status = 0;
 
 #ifdef __GNUC__
-			(void) &mail;	/* Avoid vfork clobbering */
+			mail = NULL;	/* XXX gcc */
 #endif
 			Debug(DPROC|DEXT,
 				("[%d] got data (%x:%c) from grandchild\n",
@@ -412,7 +412,7 @@ child_process(entry *e, user *u)
 				(void)snprintf(mailcmd, sizeof(mailcmd),
 				    MAILARGS, MAILCMD);
 				if (!(mail = cron_popen(mailcmd, "w"))) {
-					perror(MAILCMD);
+					warn("cannot run %s", MAILCMD);
 					(void) _exit(ERROR_EXIT);
 				}
 				fprintf(mail, "From: root (Cron Daemon)\n");

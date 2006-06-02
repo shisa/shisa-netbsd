@@ -1,4 +1,4 @@
-/*	$NetBSD: nubus.h,v 1.59 2005/01/15 16:00:59 chs Exp $	*/
+/*	$NetBSD: nubus.h,v 1.61 2005/12/11 12:18:03 christos Exp $	*/
 
 /*
  * Copyright (c) 1995 Allen Briggs.  All rights reserved.
@@ -373,9 +373,9 @@ int	nubus_get_c_string(bus_space_tag_t, bus_space_handle_t, nubus_slot *,
 int	nubus_get_smem_addr_rangelist(bus_space_tag_t, bus_space_handle_t,
     	    nubus_slot *, nubus_dirent *, caddr_t);
 
-char	*nubus_get_vendor(bus_space_tag_t, bus_space_handle_t, nubus_slot *,
+const char	*nubus_get_vendor(bus_space_tag_t, bus_space_handle_t, nubus_slot *,
 	    int);
-char	*nubus_get_card_name(bus_space_tag_t, bus_space_handle_t, nubus_slot *);
+const char	*nubus_get_card_name(bus_space_tag_t, bus_space_handle_t, nubus_slot *);
 #ifdef DEBUG
 void	nubus_scan_slot(bus_space_tag_t, int);
 #endif

@@ -1,4 +1,4 @@
-/*	$NetBSD: if_axe.c,v 1.7.2.1 2005/11/10 23:56:13 snj Exp $	*/
+/*	$NetBSD: if_axe.c,v 1.13 2006/03/19 22:30:56 david Exp $	*/
 
 /*
  * Copyright (c) 1997, 1998, 1999, 2000-2003
@@ -73,7 +73,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_axe.c,v 1.7.2.1 2005/11/10 23:56:13 snj Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_axe.c,v 1.13 2006/03/19 22:30:56 david Exp $");
 
 #if defined(__NetBSD__)
 #include "opt_inet.h"
@@ -167,7 +167,7 @@ Static const struct axe_type axe_devs[] = {
 	{ { USB_VENDOR_SITECOM,		USB_PRODUCT_SITECOM_LN029}, 0 },
 	{ { USB_VENDOR_SYSTEMTALKS,	USB_PRODUCT_SYSTEMTALKS_SGCX2UL}, 0 },
 };
-#define axe_lookup(v, p) ((struct axe_type *)usb_lookup(axe_devs, v, p))
+#define axe_lookup(v, p) ((const struct axe_type *)usb_lookup(axe_devs, v, p))
 
 USB_DECLARE_DRIVER(axe);
 
@@ -290,15 +290,16 @@ axe_miibus_readreg(device_ptr_t dev, int phy, int reg)
 }
 
 Static void
-axe_miibus_writereg(device_ptr_t dev, int phy, int reg, int val)
+axe_miibus_writereg(device_ptr_t dev, int phy, int reg, int aval)
 {
 	struct axe_softc	*sc = USBGETSOFTC(dev);
 	usbd_status		err;
+	u_int16_t		val;
 
 	if (sc->axe_dying)
 		return;
 
-	val = htole32(val);
+	val = htole16(aval);
 	axe_lock_mii(sc);
 	axe_cmd(sc, AXE_CMD_MII_OPMODE_SW, 0, 0, NULL);
 	err = axe_cmd(sc, AXE_CMD_MII_WRITE_REG, reg, phy, (void *)&val);
@@ -452,18 +453,19 @@ USB_ATTACH(axe)
 	usb_endpoint_descriptor_t *ed;
 	struct mii_data	*mii;
 	u_char eaddr[ETHER_ADDR_LEN];
-	char devinfo[1024];
+	char *devinfop;
 	char *devname = USBDEVNAME(sc->axe_dev);
 	struct ifnet *ifp;
 	int i, s;
 
-        usbd_devinfo(dev, 0, devinfo, sizeof devinfo);
+	devinfop = usbd_devinfo_alloc(dev, 0);
 	USB_ATTACH_SETUP;
 
 	err = usbd_set_config_no(dev, AXE_CONFIG_NO, 1);
 	if (err) {
 		printf("%s: getting interface handle failed\n",
 		    USBDEVNAME(sc->axe_dev));
+                usbd_devinfo_free(devinfop);
 		USB_ATTACH_ERROR_RETURN;
 	}
 
@@ -475,6 +477,7 @@ USB_ATTACH(axe)
 	if (err) {
 		printf("%s: getting interface handle failed\n",
 		    USBDEVNAME(sc->axe_dev));
+                usbd_devinfo_free(devinfop);
 		USB_ATTACH_ERROR_RETURN;
 	}
 
@@ -484,7 +487,8 @@ USB_ATTACH(axe)
 
 	id = usbd_get_interface_descriptor(sc->axe_iface);
 
-	printf("%s: %s\n", USBDEVNAME(sc->axe_dev), devinfo);
+	printf("%s: %s\n", USBDEVNAME(sc->axe_dev), devinfop);
+	usbd_devinfo_free(devinfop);
 
 	/* Find endpoints. */
 	for (i = 0; i < id->bNumEndpoints; i++) {
@@ -837,7 +841,7 @@ axe_rxeof(usbd_xfer_handle xfer, usbd_private_handle priv, usbd_status status)
 			    USBDEVNAME(sc->axe_dev), usbd_errstr(status));
 		}
 		if (status == USBD_STALLED)
-			usbd_clear_endpoint_stall(sc->axe_ep[AXE_ENDPT_RX]);
+			usbd_clear_endpoint_stall_async(sc->axe_ep[AXE_ENDPT_RX]);
 		goto done;
 	}
 
@@ -924,7 +928,7 @@ axe_txeof(usbd_xfer_handle xfer, usbd_private_handle priv, usbd_status status)
 		printf("%s: usb error on tx: %s\n", USBDEVNAME(sc->axe_dev),
 		    usbd_errstr(status));
 		if (status == USBD_STALLED)
-			usbd_clear_endpoint_stall(sc->axe_ep[AXE_ENDPT_TX]);
+			usbd_clear_endpoint_stall_async(sc->axe_ep[AXE_ENDPT_TX]);
 		splx(s);
 		return;
 	}

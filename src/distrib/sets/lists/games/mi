@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.35 2004/07/06 19:46:27 mycroft Exp $
+# $NetBSD: mi,v 1.39 2006/01/24 19:06:35 elad Exp $
 ./etc/mtree/set.games				games-sys-root
 ./usr/games/adventure				games-games-bin
 ./usr/games/arithmetic				games-games-bin
@@ -12,6 +12,7 @@
 ./usr/games/canfield				games-games-bin
 ./usr/games/cfscores				games-games-bin
 ./usr/games/chess				games-obsolete		obsolete
+./usr/games/ching				games-games-bin
 ./usr/games/countmail				games-utils-bin
 ./usr/games/cribbage				games-games-bin
 ./usr/games/dab					games-games-bin
@@ -84,6 +85,8 @@
 ./usr/games/worms				games-games-bin
 ./usr/games/wtf					games-utils-bin
 ./usr/games/wump				games-games-bin
+./usr/libexec/ching/castching			games-games-bin
+./usr/libexec/ching/printching			games-games-bin
 ./usr/share/doc/usd/30.rogue/Makefile		games-usd-doc		doc
 ./usr/share/doc/usd/30.rogue/rogue.me		games-usd-doc		doc
 ./usr/share/doc/usd/31.trek/Makefile		games-usd-doc		doc
@@ -109,6 +112,8 @@
 ./usr/share/games/boggle/dictionary		games-games-share	share
 ./usr/share/games/boggle/helpfile		games-games-share	share
 ./usr/share/games/cards.pck			games-games-share	share
+./usr/share/games/ching/hexagrams		games-games-share	share
+./usr/share/games/ching/macros			games-games-share	share
 ./usr/share/games/cribbage.instr		games-games-share	share
 ./usr/share/games/fish.instr			games-games-share	share
 ./usr/share/games/fortune/farber		games-utils-share	share
@@ -189,6 +194,7 @@
 ./usr/share/man/cat6/caesar.0			games-utils-catman	.cat
 ./usr/share/man/cat6/canfield.0			games-games-catman	.cat
 ./usr/share/man/cat6/chess.0			games-obsolete		obsolete
+./usr/share/man/cat6/ching.0			games-games-catman	.cat
 ./usr/share/man/cat6/countmail.0		games-utils-catman	.cat
 ./usr/share/man/cat6/cribbage.0			games-games-catman	.cat
 ./usr/share/man/cat6/dab.0			games-games-catman	.cat
@@ -240,6 +246,7 @@
 ./usr/share/man/man6/caesar.6			games-utils-man		.man
 ./usr/share/man/man6/canfield.6			games-games-man		.man
 ./usr/share/man/man6/chess.6			games-obsolete		obsolete
+./usr/share/man/man6/ching.6			games-games-man		.man
 ./usr/share/man/man6/countmail.6		games-utils-man		.man
 ./usr/share/man/man6/cribbage.6			games-games-man		.man
 ./usr/share/man/man6/dab.6			games-games-man		.man

@@ -1,4 +1,4 @@
-/*	$NetBSD: main.c,v 1.13 2003/08/07 09:36:54 agc Exp $	*/
+/*	$NetBSD: main.c,v 1.16 2006/03/18 23:38:12 christos Exp $	*/
 
 /*-
  * Copyright (c) 1990, 1993
@@ -51,7 +51,7 @@ __COPYRIGHT("@(#) Copyright (c) 1990, 1993\n\
 #if 0
 static char sccsid[] = "@(#)main.c	8.1 (Berkeley) 5/31/93";
 #else
-__RCSID("$NetBSD: main.c,v 1.13 2003/08/07 09:36:54 agc Exp $");
+__RCSID("$NetBSD: main.c,v 1.16 2006/03/18 23:38:12 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -61,9 +61,7 @@ __RCSID("$NetBSD: main.c,v 1.13 2003/08/07 09:36:54 agc Exp $");
 extern FILE	*yyin;
 
 int
-main(ac, av)
-	int	 ac;
-	char	*av[];
+main(int argc, char *argv[])
 {
 	int			seed;
 	int			f_usage = 0, f_list = 0, f_showscore = 0;
@@ -77,11 +75,11 @@ main(ac, av)
 
 	/* Open the score file then revoke setgid privileges */
 	open_score_file();
-	setgid(getgid());
+	(void)setgid(getgid());
 
 	start_time = seed = time(NULL);
 
-	while ((ch = getopt(ac, av, "ulstpg:f:r:")) != -1) {
+	while ((ch = getopt(argc, argv, "ulstpg:f:r:")) != -1) {
 		switch (ch) {
 		case '?':
 		case 'u':
@@ -107,24 +105,24 @@ main(ac, av)
 			break;
 		}
 	}
-	if (optind < ac)
+	if (optind < argc)
 		f_usage++;
-	srandom(seed);
+	srandom((unsigned long)seed);
 
 	if (f_usage)
-		fprintf(stderr, 
+		(void)fprintf(stderr, 
 		    "Usage: %s -[u?lstp] [-[gf] game_name] [-r random seed]\n",
-			av[0]);
+		    argv[0]);
 	if (f_showscore)
-		log_score(1);
+		(void)log_score(1);
 	if (f_list)
-		list_games();
+		(void)list_games();
 	if (f_printpath) {
 		char	buf[100];
 
-		strcpy(buf, _PATH_GAMES);
+		(void)strcpy(buf, _PATH_GAMES);
 		buf[strlen(buf) - 1] = '\0';
-		puts(buf);
+		(void)puts(buf);
 	}
 		
 	if (f_usage || f_showscore || f_list || f_printpath)
@@ -141,38 +139,38 @@ main(ac, av)
 	init_gr();
 	setup_screen(sp);
 
-	addplane();
+	(void)addplane();
 
-	signal(SIGINT, quit);
-	signal(SIGQUIT, quit);
+	(void)signal(SIGINT, quit);
+	(void)signal(SIGQUIT, quit);
 #ifdef BSD
-	signal(SIGTSTP, SIG_IGN);
-	signal(SIGSTOP, SIG_IGN);
+	(void)signal(SIGTSTP, SIG_IGN);
+	(void)signal(SIGSTOP, SIG_IGN);
 #endif
-	signal(SIGHUP, log_score_quit);
-	signal(SIGTERM, log_score_quit);
+	(void)signal(SIGHUP, log_score_quit);
+	(void)signal(SIGTERM, log_score_quit);
 
-	tcgetattr(fileno(stdin), &tty_start);
+	(void)tcgetattr(fileno(stdin), &tty_start);
 	tty_new = tty_start;
 	tty_new.c_lflag &= ~(ICANON|ECHO);
 	tty_new.c_iflag |= ICRNL;
 	tty_new.c_cc[VMIN] = 1;
 	tty_new.c_cc[VTIME] = 0;
-	tcsetattr(fileno(stdin), TCSADRAIN, &tty_new);
+	(void)tcsetattr(fileno(stdin), TCSADRAIN, &tty_new);
 
 	sa.sa_handler = update;
-	sigemptyset(&sa.sa_mask);
-	sigaddset(&sa.sa_mask, SIGALRM);
-	sigaddset(&sa.sa_mask, SIGINT);
+	(void)sigemptyset(&sa.sa_mask);
+	(void)sigaddset(&sa.sa_mask, SIGALRM);
+	(void)sigaddset(&sa.sa_mask, SIGINT);
 	sa.sa_flags = 0;
-	sigaction(SIGALRM, &sa, (struct sigaction *)0);
+	(void)sigaction(SIGALRM, &sa, (struct sigaction *)0);
 
 #ifdef BSD
 	itv.it_value.tv_sec = 0;
 	itv.it_value.tv_usec = 1;
 	itv.it_interval.tv_sec = sp->update_secs;
 	itv.it_interval.tv_usec = 0;
-	setitimer(ITIMER_REAL, &itv, NULL);
+	(void)setitimer(ITIMER_REAL, &itv, NULL);
 #endif
 #ifdef SYSV
 	alarm(sp->update_secs);
@@ -185,7 +183,7 @@ main(ac, av)
 #ifdef BSD
 			itv.it_value.tv_sec = 0;
 			itv.it_value.tv_usec = 0;
-			setitimer(ITIMER_REAL, &itv, NULL);
+			(void)setitimer(ITIMER_REAL, &itv, NULL);
 #endif
 #ifdef SYSV
 			alarm(0);
@@ -198,7 +196,7 @@ main(ac, av)
 			itv.it_value.tv_usec = 0;
 			itv.it_interval.tv_sec = sp->update_secs;
 			itv.it_interval.tv_usec = 0;
-			setitimer(ITIMER_REAL, &itv, NULL);
+			(void)setitimer(ITIMER_REAL, &itv, NULL);
 #endif
 #ifdef SYSV
 			alarm(sp->update_secs);
@@ -208,19 +206,18 @@ main(ac, av)
 }
 
 int
-read_file(s)
-	const char	*s;
+read_file(const char *s)
 {
 	int		retval;
 
-	file = s;
+	filename = s;
 	yyin = fopen(s, "r");
 	if (yyin == NULL) {
 		warn("fopen %s", s);
 		return (-1);
 	}
 	retval = yyparse();
-	fclose(yyin);
+	(void)fclose(yyin);
 
 	if (retval != 0)
 		return (-1);
@@ -228,42 +225,42 @@ read_file(s)
 		return (0);
 }
 
-const char	*
-default_game()
+const char *
+default_game(void)
 {
 	FILE		*fp;
 	static char	file[256];
 	char		line[256], games[256];
 
-	strcpy(games, _PATH_GAMES);
-	strcat(games, GAMES);
+	(void)strcpy(games, _PATH_GAMES);
+	(void)strcat(games, GAMES);
 
 	if ((fp = fopen(games, "r")) == NULL) {
 		warn("fopen %s", games);
 		return (NULL);
 	}
 	if (fgets(line, sizeof(line), fp) == NULL) {
-		fprintf(stderr, "%s: no default game available\n", games);
+		(void)fprintf(stderr, "%s: no default game available\n", games);
+		fclose(fp);
 		return (NULL);
 	}
-	fclose(fp);
+	(void)fclose(fp);
 	line[strlen(line) - 1] = '\0';
-	strcpy(file, _PATH_GAMES);
-	strcat(file, line);
+	(void)strcpy(file, _PATH_GAMES);
+	(void)strcat(file, line);
 	return (file);
 }
 
-const char	*
-okay_game(s)
-	const char	*s;
+const char *
+okay_game(const char *s)
 {
 	FILE		*fp;
 	static char	file[256];
 	const char	*ret = NULL;
 	char		line[256], games[256];
 
-	strcpy(games, _PATH_GAMES);
-	strcat(games, GAMES);
+	(void)strcpy(games, _PATH_GAMES);
+	(void)strcat(games, GAMES);
 
 	if ((fp = fopen(games, "r")) == NULL) {
 		warn("fopen %s", games);
@@ -272,45 +269,45 @@ okay_game(s)
 	while (fgets(line, sizeof(line), fp) != NULL) {
 		line[strlen(line) - 1] = '\0';
 		if (strcmp(s, line) == 0) {
-			strcpy(file, _PATH_GAMES);
-			strcat(file, line);
+			(void)strcpy(file, _PATH_GAMES);
+			(void)strcat(file, line);
 			ret = file;
 			break;
 		}
 	}
-	fclose(fp);
+	(void)fclose(fp);
 	if (ret == NULL) {
 		test_mode = 1;
 		ret = s;
-		fprintf(stderr, "%s: %s: game not found\n", games, s);
-		fprintf(stderr, "Your score will not be logged.\n");
-		sleep(2);	/* give the guy time to read it */
+		(void)fprintf(stderr, "%s: %s: game not found\n", games, s);
+		(void)fprintf(stderr, "Your score will not be logged.\n");
+		(void)sleep(2);	/* give the guy time to read it */
 	}
 	return (ret);
 }
 
 int
-list_games()
+list_games(void)
 {
 	FILE		*fp;
 	char		line[256], games[256];
 	int		num_games = 0;
 
-	strcpy(games, _PATH_GAMES);
-	strcat(games, GAMES);
+	(void)strcpy(games, _PATH_GAMES);
+	(void)strcat(games, GAMES);
 
 	if ((fp = fopen(games, "r")) == NULL) {
 		warn("fopen %s", games);
 		return (-1);
 	}
-	puts("available games:");
+	(void)puts("available games:");
 	while (fgets(line, sizeof(line), fp) != NULL) {
-		printf("	%s", line);
+		(void)printf("	%s", line);
 		num_games++;
 	}
-	fclose(fp);
+	(void)fclose(fp);
 	if (num_games == 0) {
-		fprintf(stderr, "%s: no games available\n", games);
+		(void)fprintf(stderr, "%s: no games available\n", games);
 		return (-1);
 	}
 	return (0);

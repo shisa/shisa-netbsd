@@ -1,4 +1,4 @@
-/*	$NetBSD: cpuvar.h,v 1.63 2004/09/22 11:32:03 yamt Exp $ */
+/*	$NetBSD: cpuvar.h,v 1.68 2005/12/24 20:07:37 perry Exp $ */
 
 /*
  *  Copyright (c) 1996 The NetBSD Foundation, Inc.
@@ -98,12 +98,12 @@ struct module_info {
  * Message structure for Inter Processor Communication in MP systems
  */
 struct xpmsg {
-	__volatile int tag;
+	volatile int tag;
 #define	XPMSG15_PAUSECPU	1
 #define	XPMSG_FUNC		4
 #define	XPMSG_FTRP		5
 
-	__volatile union {
+	volatile union {
 		/*
 		 * Cross call: ask to run (*func)(arg0,arg1,arg2)
 		 * or (*trap)(arg0,arg1,arg2). `trap' should be the
@@ -119,8 +119,8 @@ struct xpmsg {
 			int	retval;
 		} xpmsg_func;
 	} u;
-	__volatile int	received;
-	__volatile int	complete;
+	volatile int	received;
+	volatile int	complete;
 };
 
 /*
@@ -156,7 +156,7 @@ struct cpu_info {
 	 * self-reference the global VA so that we can return it
 	 * in the curcpu() macro.
 	 */
-	struct cpu_info * __volatile ci_self;
+	struct cpu_info * volatile ci_self;
 
 	/* Primary Inter-processor message area */
 	struct xpmsg	msg;
@@ -171,13 +171,13 @@ struct cpu_info {
 	struct cacheinfo	cacheinfo;	/* see cache.h */
 
 	/* various flags to workaround anomalies in chips */
-	__volatile int	flags;		/* see CPUFLG_xxx, below */
+	volatile int	flags;		/* see CPUFLG_xxx, below */
 
 	/* Per processor counter register (sun4m only) */
-	__volatile struct counter_4m	*counterreg_4m;
+	volatile struct counter_4m	*counterreg_4m;
 
 	/* Per processor interrupt mask register (sun4m only) */
-	__volatile struct icr_pi	*intreg_4m;
+	volatile struct icr_pi	*intreg_4m;
 	/*
 	 * Send a IPI to (cpi).  For Ross cpus we need to read
 	 * the pending register to avoid a hardware bug.
@@ -274,7 +274,7 @@ struct cpu_info {
 	int		mid;		/* Module ID for MP systems */
 	int		mbus;		/* 1 if CPU is on MBus */
 	int		mxcc;		/* 1 if a MBus-level MXCC is present */
-	char		*cpu_name;	/* CPU model */
+	const char	*cpu_name;	/* CPU model */
 	int		cpu_impl;	/* CPU implementation code */
 	int		cpu_vers;	/* CPU version code */
 	int		mmu_impl;	/* MMU implementation code */
@@ -299,11 +299,11 @@ struct cpu_info {
 	/* FPU information */
 	int		fpupresent;	/* true if FPU is present */
 	int		fpuvers;	/* FPU revision */
-	char		*fpu_name;	/* FPU model */
+	const char	*fpu_name;	/* FPU model */
 	char		fpu_namebuf[32];/* Buffer for FPU name, if necessary */
 
 	/* XXX */
-	__volatile void	*ci_ddb_regs;		/* DDB regs */
+	volatile void	*ci_ddb_regs;		/* DDB regs */
 
 	/*
 	 * The following are function pointers to do interesting CPU-dependent
@@ -332,7 +332,7 @@ struct cpu_info {
 	 * unrecoverable faults end up here.
 	 */
 	void		(*memerr)(unsigned, u_int, u_int, struct trapframe *);
-
+	void		(*idlespin)(struct cpu_info *);
 	/* Module Control Registers */
 	/*bus_space_handle_t*/ long ci_mbusport;
 	/*bus_space_handle_t*/ long ci_mxccregs;
@@ -419,7 +419,7 @@ struct cpu_info {
 
 
 #define CPU_INFO_ITERATOR		int
-#define CPU_INFO_FOREACH(cii, ci)	cii = 0; ci = cpus[cii], cii < ncpu; cii++
+#define CPU_INFO_FOREACH(cii, ci)	cii = 0; ci = cpus[cii], cii < sparc_ncpus; cii++
 
 /*
  * Useful macros.

@@ -1,4 +1,4 @@
-/*	$NetBSD: zonekey.h,v 1.1.1.1 2004/05/17 23:44:59 christos Exp $	*/
+/*	$NetBSD: zonekey.h,v 1.1.1.3 2005/12/21 23:16:59 christos Exp $	*/
 
 /*
  * Copyright (C) 2004  Internet Systems Consortium, Inc. ("ISC")

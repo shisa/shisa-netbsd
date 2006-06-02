@@ -1,4 +1,4 @@
-/*	$NetBSD: c_ksh.c,v 1.12 2004/10/28 20:15:36 dsl Exp $	*/
+/*	$NetBSD: c_ksh.c,v 1.15 2006/04/24 20:00:31 christos Exp $	*/
 
 /*
  * built-in Korn commands: c_*
@@ -6,7 +6,7 @@
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: c_ksh.c,v 1.12 2004/10/28 20:15:36 dsl Exp $");
+__RCSID("$NetBSD: c_ksh.c,v 1.15 2006/04/24 20:00:31 christos Exp $");
 #endif
 
 #include "sh.h"
@@ -32,6 +32,7 @@ c_cd(wp)
 	char *dir, *try, *pwd;
 	int phys_path;
 	char *cdpath;
+	char *fdir = NULL;
 
 	while ((optc = ksh_getopt(wp, &builtin_opt, "LP")) != EOF)
 		switch (optc) {
@@ -93,7 +94,7 @@ c_cd(wp)
 		olen = strlen(wp[0]);
 		nlen = strlen(wp[1]);
 		elen = strlen(current_wd + ilen + olen) + 1;
-		dir = alloc(ilen + nlen + elen, ATEMP);
+		fdir = dir = alloc(ilen + nlen + elen, ATEMP);
 		memcpy(dir, current_wd, ilen);
 		memcpy(dir + ilen, wp[1], nlen);
 		memcpy(dir + ilen + nlen, current_wd + ilen + olen, elen);
@@ -128,6 +129,8 @@ c_cd(wp)
 			bi_errorf("%s: bad directory", dir);
 		else
 			bi_errorf("%s - %s", try, strerror(errno));
+		if (fdir)
+			afree(fdir, ATEMP);
 		return 1;
 	}
 
@@ -176,6 +179,9 @@ c_cd(wp)
 	if (printpath || cdnode)
 		shprintf("%s\n", pwd);
 
+	if (fdir)
+		afree(fdir, ATEMP);
+
 	return 0;
 }
 
@@ -185,7 +191,7 @@ c_pwd(wp)
 {
 	int optc;
 	int physical = Flag(FPHYSICAL);
-	char *p;
+	char *p, *freep = NULL;
 
 	while ((optc = ksh_getopt(wp, &builtin_opt, "LP")) != EOF)
 		switch (optc) {
@@ -213,7 +219,7 @@ c_pwd(wp)
 	if (p && eaccess(p, R_OK) < 0)
 		p = (char *) 0;
 	if (!p) {
-		p = ksh_get_wd((char *) 0, 0);
+		freep = p = ksh_get_wd((char *) 0, 0);
 		if (!p) {
 			bi_errorf("can't get current directory - %s",
 				strerror(errno));
@@ -221,6 +227,8 @@ c_pwd(wp)
 		}
 	}
 	shprintf("%s\n", p);
+	if (freep)
+		afree(freep, ATEMP);
 	return 0;
 }
 
@@ -589,7 +597,7 @@ c_typeset(wp)
 	struct block *l = e->loc;
 	struct tbl *vp, **p;
 	Tflag fset = 0, fclr = 0;
-	int thing = 0, func = 0, local = 0;
+	int thing = 0, func = 0, localv = 0;
 	const char *options = "L#R#UZ#fi#lprtux";	/* see comment below */
 	char *fieldstr, *basestr;
 	int field, base;
@@ -610,7 +618,7 @@ c_typeset(wp)
 		/* called with 'typeset -' */
 		break;
  	  case 't':		/* typeset */
- 		local = 1;
+ 		localv = 1;
  		break;
  	}
 
@@ -737,7 +745,7 @@ c_typeset(wp)
 		int rval = 0;
 		struct tbl *f;
 
-		if (local && !func)
+		if (localv && !func)
 			fset |= LOCAL;
 		for (i = builtin_opt.optind; wp[i]; i++) {
 			if (func) {
@@ -940,7 +948,7 @@ c_alias(wp)
 			return 1;
 		}
 		ksh_getopt_reset(&builtin_opt, GF_ERROR);
-		return c_unalias((char **) args);
+		return c_unalias((char **)__UNCONST(args));
 	}
 
 	
@@ -1251,19 +1259,19 @@ c_kill(wp)
 					shprintf("%s%s", p, sigtraps[i].name);
 			shprintf(newline);
 		} else {
-			int w, i;
+			int w, si;
 			int mess_width;
 			struct kill_info ki;
 
-			for (i = SIGNALS, ki.num_width = 1; i >= 10; i /= 10)
+			for (si = SIGNALS, ki.num_width = 1; si >= 10; si /= 10)
 				ki.num_width++;
 			ki.name_width = mess_width = 0;
-			for (i = 0; i < SIGNALS; i++) {
-				w = sigtraps[i].name ? strlen(sigtraps[i].name)
-						     : ki.num_width;
+			for (si = 0; si < SIGNALS; si++) {
+				w = sigtraps[si].name ?
+				    strlen(sigtraps[si].name) : ki.num_width;
 				if (w > ki.name_width)
 					ki.name_width = w;
-				w = strlen(sigtraps[i].mess);
+				w = strlen(sigtraps[si].mess);
 				if (w > mess_width)
 					mess_width = w;
 			}

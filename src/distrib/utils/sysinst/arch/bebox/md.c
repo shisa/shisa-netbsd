@@ -1,4 +1,4 @@
-/*	$NetBSD: md.c,v 1.47 2004/08/14 16:06:40 dsl Exp $ */
+/*	$NetBSD: md.c,v 1.49 2006/04/05 16:55:05 garbled Exp $ */
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.
@@ -46,10 +46,6 @@
 #include "md.h"
 #include "msg_defs.h"
 #include "menu_defs.h"
-
-
-/* prototypes */
-const char *fdtype = "msdos";
 
 int
 md_get_info(void)
@@ -175,4 +171,22 @@ md_bios_info(char *dev)
 		msg_display_add(MSG_biosguess, cyl, head, sec);
 	set_bios_geom(cyl, head, sec);
 	return 0;
+}
+
+int
+md_post_extract(void)
+{
+	return 0;
+}
+
+int
+md_check_mbr(mbr_info_t *mbri)
+{
+	return 2;
+}
+
+int
+md_mbr_use_wholedisk(mbr_info_t *mbri)
+{
+	return mbr_use_wholedisk(mbri);
 }

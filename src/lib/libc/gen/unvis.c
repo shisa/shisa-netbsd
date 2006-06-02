@@ -1,4 +1,4 @@
-/*	$NetBSD: unvis.c,v 1.24 2003/08/07 16:42:59 agc Exp $	*/
+/*	$NetBSD: unvis.c,v 1.28 2005/09/13 01:44:09 christos Exp $	*/
 
 /*-
  * Copyright (c) 1989, 1993
@@ -34,11 +34,9 @@
 #if 0
 static char sccsid[] = "@(#)unvis.c	8.1 (Berkeley) 6/4/93";
 #else
-__RCSID("$NetBSD: unvis.c,v 1.24 2003/08/07 16:42:59 agc Exp $");
+__RCSID("$NetBSD: unvis.c,v 1.28 2005/09/13 01:44:09 christos Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
-
-#define __LIBC12_SOURCE__
 
 #include "namespace.h"
 #include <sys/types.h>
@@ -50,12 +48,6 @@ __RCSID("$NetBSD: unvis.c,v 1.24 2003/08/07 16:42:59 agc Exp $");
 
 #ifdef __weak_alias
 __weak_alias(strunvis,_strunvis)
-__weak_alias(unvis,_unvis)
-#endif
-
-#ifdef __warn_references
-__warn_references(unvis,
-    "warning: reference to compatibility unvis(); include <vis.h> for correct reference")
 #endif
 
 #if !HAVE_VIS
@@ -69,30 +61,22 @@ __warn_references(unvis,
 #define	S_CTRL		4	/* control char started (^) */
 #define	S_OCTAL2	5	/* octal digit 2 */
 #define	S_OCTAL3	6	/* octal digit 3 */
-#define S_HEX1		7	/* hex digit */
-#define S_HEX2		8	/* hex digit 2 */
+#define	S_HEX1		7	/* hex digit */
+#define	S_HEX2		8	/* hex digit 2 */
 
 #define	isoctal(c)	(((u_char)(c)) >= '0' && ((u_char)(c)) <= '7')
 #define xtod(c)		(isdigit(c) ? (c - '0') : ((tolower(c) - 'a') + 10))
 
+/*
+ * unvis - decode characters previously encoded by vis
+ */
 int
 unvis(cp, c, astate, flag)
 	char *cp;
 	int c;
 	int *astate, flag;
 {
-	return __unvis13(cp, (int)c, astate, flag);
-}
-
-/*
- * unvis - decode characters previously encoded by vis
- */
-int
-__unvis13(cp, c, astate, flag)
-	char *cp;
-	int c;
-	int *astate, flag;
-{
+	unsigned char uc = (unsigned char)c;
 
 	_DIAGASSERT(cp != NULL);
 	_DIAGASSERT(astate != NULL);
@@ -102,7 +86,7 @@ __unvis13(cp, c, astate, flag)
 		    || *astate == S_HEX2) {
 			*astate = S_GROUND;
 			return (UNVIS_VALID);
-		} 
+		}
 		return (*astate == S_GROUND ? UNVIS_NOCHAR : UNVIS_SYNBAD);
 	}
 
@@ -113,7 +97,7 @@ __unvis13(cp, c, astate, flag)
 		if (c == '\\') {
 			*astate = S_START;
 			return (0);
-		} 
+		}
 		if ((flag & VIS_HTTPSTYLE) && c == '%') {
 			*astate = S_HEX1;
 			return (0);
@@ -190,7 +174,7 @@ __unvis13(cp, c, astate, flag)
 		}
 		*astate = S_GROUND;
 		return (UNVIS_SYNBAD);
-		 
+
 	case S_META:
 		if (c == '-')
 			*astate = S_META1;
@@ -201,12 +185,12 @@ __unvis13(cp, c, astate, flag)
 			return (UNVIS_SYNBAD);
 		}
 		return (0);
-		 
+
 	case S_META1:
 		*astate = S_GROUND;
 		*cp |= c;
 		return (UNVIS_VALID);
-		 
+
 	case S_CTRL:
 		if (c == '?')
 			*cp |= 0177;
@@ -216,23 +200,23 @@ __unvis13(cp, c, astate, flag)
 		return (UNVIS_VALID);
 
 	case S_OCTAL2:	/* second possible octal digit */
-		if (isoctal(c)) {
-			/* 
-			 * yes - and maybe a third 
+		if (isoctal(uc)) {
+			/*
+			 * yes - and maybe a third
 			 */
 			*cp = (*cp << 3) + (c - '0');
-			*astate = S_OCTAL3;	
+			*astate = S_OCTAL3;
 			return (0);
-		} 
-		/* 
-		 * no - done with current sequence, push back passed char 
+		}
+		/*
+		 * no - done with current sequence, push back passed char
 		 */
 		*astate = S_GROUND;
 		return (UNVIS_VALIDPUSH);
 
 	case S_OCTAL3:	/* third possible octal digit */
 		*astate = S_GROUND;
-		if (isoctal(c)) {
+		if (isoctal(uc)) {
 			*cp = (*cp << 3) + (c - '0');
 			return (UNVIS_VALID);
 		}
@@ -240,27 +224,30 @@ __unvis13(cp, c, astate, flag)
 		 * we were done, push back passed char
 		 */
 		return (UNVIS_VALIDPUSH);
+
 	case S_HEX1:
-		if (isxdigit(c)) {
-			*cp = xtod(c);
+		if (isxdigit(uc)) {
+			*cp = xtod(uc);
 			*astate = S_HEX2;
 			return (0);
 		}
-		/* 
-		 * no - done with current sequence, push back passed char 
+		/*
+		 * no - done with current sequence, push back passed char
 		 */
 		*astate = S_GROUND;
 		return (UNVIS_VALIDPUSH);
+
 	case S_HEX2:
-                *astate = S_GROUND;
-                if (isxdigit(c)) {
-                        *cp = xtod(c) | (*cp << 4);
+		*astate = S_GROUND;
+		if (isxdigit(uc)) {
+			*cp = xtod(uc) | (*cp << 4);
 			return (UNVIS_VALID);
 		}
-                return (UNVIS_VALIDPUSH);
-	default:	
-		/* 
-		 * decoder in unknown state - (probably uninitialized) 
+		return (UNVIS_VALIDPUSH);
+
+	default:
+		/*
+		 * decoder in unknown state - (probably uninitialized)
 		 */
 		*astate = S_GROUND;
 		return (UNVIS_SYNBAD);
@@ -268,7 +255,7 @@ __unvis13(cp, c, astate, flag)
 }
 
 /*
- * strunvis - decode src into dst 
+ * strunvis - decode src into dst
  *
  *	Number of chars decoded into dst is returned, -1 on error.
  *	Dst is null terminated.
@@ -288,8 +275,8 @@ strunvisx(dst, src, flag)
 	_DIAGASSERT(dst != NULL);
 
 	while ((c = *src++) != '\0') {
-	again:
-		switch (__unvis13(dst, c, &state, flag)) {
+ again:
+		switch (unvis(dst, c, &state, flag)) {
 		case UNVIS_VALID:
 			dst++;
 			break;
@@ -303,7 +290,7 @@ strunvisx(dst, src, flag)
 			return (-1);
 		}
 	}
-	if (__unvis13(dst, c, &state, UNVIS_END) == UNVIS_VALID)
+	if (unvis(dst, c, &state, UNVIS_END) == UNVIS_VALID)
 		dst++;
 	*dst = '\0';
 	return (dst - start);

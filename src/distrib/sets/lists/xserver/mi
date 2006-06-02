@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.14.10.2 2005/04/06 21:27:56 tron Exp $
+# $NetBSD: mi,v 1.16 2005/03/22 13:45:46 tron Exp $
 ./etc/mtree/set.xserver				xserver-sys-root
 ./usr/X11R6/bin/Xdmx
 ./usr/X11R6/bin/Xnest

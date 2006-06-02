@@ -1,4 +1,4 @@
-/*	$NetBSD: cgsix_obio.c,v 1.14 2003/07/15 00:04:53 lukem Exp $ */
+/*	$NetBSD: cgsix_obio.c,v 1.18 2006/03/29 04:16:47 thorpej Exp $ */
 
 /*-
  * Copyright (c) 1998 The NetBSD Foundation, Inc.
@@ -41,7 +41,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: cgsix_obio.c,v 1.14 2003/07/15 00:04:53 lukem Exp $");
+__KERNEL_RCSID(0, "$NetBSD: cgsix_obio.c,v 1.18 2006/03/29 04:16:47 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -71,9 +71,9 @@ __KERNEL_RCSID(0, "$NetBSD: cgsix_obio.c,v 1.14 2003/07/15 00:04:53 lukem Exp $"
 #include <dev/sun/pfourreg.h>
 
 /* autoconfiguration driver */
-static int	cgsixmatch __P((struct device *, struct cfdata *, void *));
-static void	cgsixattach __P((struct device *, struct device *, void *));
-static int	cg6_pfour_probe __P((void *, void *));
+static int	cgsixmatch(struct device *, struct cfdata *, void *);
+static void	cgsixattach(struct device *, struct device *, void *);
+static int	cg6_pfour_probe(void *, void *);
 
 CFATTACH_DECL(cgsix_obio, sizeof(struct cgsix_softc),
     cgsixmatch, cgsixattach, NULL, NULL);
@@ -82,10 +82,7 @@ CFATTACH_DECL(cgsix_obio, sizeof(struct cgsix_softc),
  * Match a cgsix.
  */
 static int
-cgsixmatch(parent, cf, aux)
-	struct device *parent;
-	struct cfdata *cf;
-	void *aux;
+cgsixmatch(struct device *parent, struct cfdata *cf, void *aux)
 {
 	union obio_attach_args *uoba = aux;
 	struct obio4_attach_args *oba;
@@ -103,9 +100,7 @@ cgsixmatch(parent, cf, aux)
 }
 
 static int
-cg6_pfour_probe(vaddr, arg)
-	void *vaddr;
-	void *arg;
+cg6_pfour_probe(void *vaddr, void *arg)
 {
 
 	return (fb_pfour_id(vaddr) == PFOUR_ID_FASTCOLOR);
@@ -116,9 +111,7 @@ cg6_pfour_probe(vaddr, arg)
  * Attach a display.
  */
 static void
-cgsixattach(parent, self, aux)
-	struct device *parent, *self;
-	void *aux;
+cgsixattach(struct device *parent, struct device *self, void *aux)
 {
 	struct cgsix_softc *sc = (struct cgsix_softc *)self;
 	union obio_attach_args *uoba = aux;
@@ -127,7 +120,7 @@ cgsixattach(parent, self, aux)
 	struct fbdevice *fb = &sc->sc_fb;
 	bus_space_handle_t bh;
 	int constype, isconsole;
-	char *name;
+	const char *name;
 
 	oba = &uoba->uoba_oba4;
 
@@ -137,7 +130,7 @@ cgsixattach(parent, self, aux)
 
 	fb->fb_device = &sc->sc_dev;
 	fb->fb_type.fb_type = FBTYPE_SUNFAST_COLOR;
-	fb->fb_flags = sc->sc_dev.dv_cfdata->cf_flags & FB_USERMASK;
+	fb->fb_flags = device_cfdata(&sc->sc_dev)->cf_flags & FB_USERMASK;
 	fb->fb_type.fb_depth = 8;
 
 	fb_setsize_eeprom(fb, fb->fb_type.fb_depth, 1152, 900);
@@ -198,7 +191,7 @@ cgsixattach(parent, self, aux)
 	sc->sc_fbc = (struct cg6_fbc *)bh;
 
 
-	if (fb_pfour_id((void *)sc->sc_fhc) == PFOUR_ID_FASTCOLOR) {
+	if (fb_pfour_id(sc->sc_fhc) == PFOUR_ID_FASTCOLOR) {
 		fb->fb_flags |= FB_PFOUR;
 		name = "cgsix/p4";
 	} else

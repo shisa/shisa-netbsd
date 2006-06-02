@@ -1,4 +1,4 @@
-/* $NetBSD: inode.c,v 1.25.2.1 2005/05/07 11:21:29 tron Exp $	 */
+/* $NetBSD: inode.c,v 1.31 2005/09/13 04:14:17 christos Exp $	 */
 
 /*-
  * Copyright (c) 1997, 1998 The NetBSD Foundation, Inc.
@@ -87,7 +87,7 @@
 
 #include "bufcache.h"
 #include "vnode.h"
-#include "lfs.h"
+#include "lfs_user.h"
 
 #include "fsck.h"
 #include "fsutil.h"
@@ -263,8 +263,8 @@ iblock(struct inodesc *idesc, long ilevel, u_int64_t isize)
 		for (ap = ((ufs_daddr_t *) bp->b_data) + nif; ap < aplim; ap++) {
 			if (*ap == 0)
 				continue;
-			(void) sprintf(buf, "PARTIALLY TRUNCATED INODE I=%u",
-			    idesc->id_number);
+			(void) sprintf(buf, "PARTIALLY TRUNCATED INODE I=%llu",
+			    (unsigned long long)idesc->id_number);
 			if (dofix(idesc, buf)) {
 				*ap = 0;
 				++diddirty;
@@ -322,6 +322,7 @@ iblock(struct inodesc *idesc, long ilevel, u_int64_t isize)
 		brelse(bp);
 	return (KEEPON);
 }
+
 /*
  * Check that a block in a legal block number.
  * Return 0 if in range, 1 if out of range.
@@ -343,6 +344,7 @@ chkrange(daddr_t blk, int cnt)
 	}
 	return (0);
 }
+
 /*
  * Routines to maintain information about directory inodes.
  * This is built during the first pass and used during the
@@ -402,7 +404,7 @@ getinoinfo(ino_t inumber)
 			continue;
 		return (inp);
 	}
-	err(8, "cannot find inode %d\n", inumber);
+	err(8, "cannot find inode %llu\n", (unsigned long long)inumber);
 	return ((struct inoinfo *) 0);
 }
 
@@ -430,7 +432,7 @@ inodirty(struct inode *ip)
 }
 
 void
-clri(struct inodesc * idesc, char *type, int flag)
+clri(struct inodesc * idesc, const char *type, int flag)
 {
 	struct uvnode *vp;
 
@@ -485,10 +487,18 @@ int
 findname(struct inodesc * idesc)
 {
 	struct direct *dirp = idesc->id_dirp;
+	size_t len;
+	char *buf;
 
 	if (dirp->d_ino != idesc->id_parent)
 		return (KEEPON);
-	memcpy(idesc->id_name, dirp->d_name, (size_t) dirp->d_namlen + 1);
+	if ((len = dirp->d_namlen + 1) > MAXPATHLEN) {
+		/* Truncate it but don't overflow the buffer */
+		len = MAXPATHLEN;
+	}
+	/* this is namebuf with utils.h */
+	buf = __UNCONST(idesc->id_name);
+	(void)memcpy(buf, dirp->d_name, len);
 	return (STOP | FOUND);
 }
 
@@ -515,7 +525,7 @@ pinode(ino_t ino)
 	struct passwd *pw;
 	time_t t;
 
-	printf(" I=%u ", ino);
+	printf(" I=%llu ", (unsigned long long)ino);
 	if (ino < ROOTINO || ino >= maxino)
 		return;
 	dp = ginode(ino);
@@ -538,10 +548,11 @@ pinode(ino_t ino)
 }
 
 void
-blkerror(ino_t ino, char *type, daddr_t blk)
+blkerror(ino_t ino, const char *type, daddr_t blk)
 {
 
-	pfatal("%lld %s I=%u", (long long) blk, type, ino);
+	pfatal("%lld %s I=%llu", (long long) blk, type,
+	    (unsigned long long)ino);
 	printf("\n");
 	if (exitonfail)
 		exit(1);
@@ -564,6 +575,7 @@ blkerror(ino_t ino, char *type, daddr_t blk)
 		/* NOTREACHED */
 	}
 }
+
 /*
  * allocate an unused inode
  */
@@ -596,7 +608,9 @@ allocino(ino_t request, int type)
 	default:
 		return (0);
 	}
-	vp = vget(fs, ino);
+        vp = lfs_valloc(fs, ino);
+	if (vp == NULL)
+		return (0);
 	dp = (VTOI(vp)->i_din.ffs1_din);
 	bp = getblk(vp, 0, fs->lfs_fsize);
 	VOP_BWRITE(bp);
@@ -611,6 +625,7 @@ allocino(ino_t request, int type)
 	typemap[ino] = IFTODT(type);
 	return (ino);
 }
+
 /*
  * deallocate an inode
  */

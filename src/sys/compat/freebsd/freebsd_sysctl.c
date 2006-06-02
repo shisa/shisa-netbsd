@@ -1,4 +1,4 @@
-/*	$NetBSD: freebsd_sysctl.c,v 1.2.4.1 2005/09/13 20:44:05 tron Exp $	*/
+/*	$NetBSD: freebsd_sysctl.c,v 1.4 2005/12/11 12:20:02 christos Exp $	*/
 
 /*-
  * Copyright (c) 2005 The NetBSD Foundation, Inc.
@@ -41,7 +41,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: freebsd_sysctl.c,v 1.2.4.1 2005/09/13 20:44:05 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: freebsd_sysctl.c,v 1.4 2005/12/11 12:20:02 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>

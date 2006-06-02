@@ -1,4 +1,4 @@
-/*	$NetBSD: rf_dagutils.h,v 1.18.2.1 2005/06/17 13:35:50 tron Exp $	*/
+/*	$NetBSD: rf_dagutils.h,v 1.20 2005/12/11 12:23:37 christos Exp $	*/
 /*
  * Copyright (c) 1995 Carnegie-Mellon University.
  * All rights reserved.

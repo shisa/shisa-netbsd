@@ -1,4 +1,4 @@
-/*	$NetBSD: rhvar.h,v 1.1 2003/08/19 10:51:58 ragge Exp $ */
+/*	$NetBSD: rhvar.h,v 1.3 2005/12/11 12:18:34 christos Exp $ */
 /*
  * Copyright (c) 1994 Ludd, University of Lule}, Sweden
  * All rights reserved.
@@ -91,7 +91,7 @@ struct	rh_device {
 	int	(*md_finish)(struct rh_device *, int, int *);
 	void	*md_softc;	/* Backpointer to this units softc. */
 	struct	rh_softc *md_rh;
-	struct	bufq_state md_q;	/* queue of I/O requests */
+	struct	bufq_state *md_q;	/* queue of I/O requests */
 	int	md_csr;	/* Drive command given to RH20 */
 	int	md_da;	/* Disk address given to RH20 */
 };

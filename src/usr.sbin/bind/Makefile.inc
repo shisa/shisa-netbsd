@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile.inc,v 1.19.2.1 2005/10/15 16:45:21 riz Exp $
+#	$NetBSD: Makefile.inc,v 1.22 2006/05/11 23:16:30 mrg Exp $
 
 .if !defined(BIND9_MAKEFILE_INC)
 BIND9_MAKEFILE_INC=yes
@@ -6,6 +6,7 @@ BIND9_MAKEFILE_INC=yes
 WARNS?=	1
 WFORMAT?=2
 NAMED_USE_PTHREADS?=yes
+NAMED_USE_OPENSSL?=yes
 
 .include <bsd.own.mk>
 
@@ -35,6 +36,10 @@ CPPFLAGS+=-I${BIND_SRCDIR}/include \
 CPPFLAGS+=	-DWANT_IPV6
 .endif
 
+.if ${HAVE_GCC} == 4
+COPTS+=	-Wno-pointer-sign
+.endif
+
 .if !defined(LIB) || empty(LIB)						# {
 # NOTE: the order of these libraries is important...
 .for _LL in	bind9 dns lwres isccfg isccc isc
@@ -54,6 +59,12 @@ DPADD+= ${LIBPTHREAD}
 MKPRIVATELIB=yes
 CPPFLAGS+= -DLIBINTERFACE=${LIBINTERFACE} \
 	-DLIBREVISION=${LIBREVISION} -DLIBAGE=${LIBAGE}
+.endif
+
+.if ${NAMED_USE_OPENSSL} == "yes"
+CPPFLAGS+=-DOPENSSL
+LDADD+= -lcrypto
+DPADD+= ${LIBCRYPTO}
 .endif
 
 .if ${NAMED_USE_PTHREADS} == "yes"

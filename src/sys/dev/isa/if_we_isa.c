@@ -1,4 +1,4 @@
-/*	$NetBSD: if_we_isa.c,v 1.11 2005/02/27 00:27:17 perry Exp $	*/
+/*	$NetBSD: if_we_isa.c,v 1.14 2006/01/29 21:42:41 dsl Exp $	*/
 
 /*-
  * Copyright (c) 1997, 1998 The NetBSD Foundation, Inc.
@@ -56,7 +56,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_we_isa.c,v 1.11 2005/02/27 00:27:17 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_we_isa.c,v 1.14 2006/01/29 21:42:41 dsl Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -73,7 +73,7 @@ __KERNEL_RCSID(0, "$NetBSD: if_we_isa.c,v 1.11 2005/02/27 00:27:17 perry Exp $")
 #include <net/if_ether.h>
 
 #include <machine/bus.h>
-#include <machine/bswap.h>
+#include <sys/bswap.h>
 #include <machine/intr.h>
 
 #include <dev/isa/isareg.h>
@@ -99,7 +99,7 @@ CFATTACH_DECL(we_isa, sizeof(struct we_softc),
 extern struct cfdriver we_cd;
 
 static const char *we_params(bus_space_tag_t, bus_space_handle_t,
-		u_int8_t *, bus_size_t *, int *, int *);
+		u_int8_t *, bus_size_t *, u_int8_t *, int *);
 
 static const int we_584_irq[] = {
 	9, 3, 5, 7, 10, 11, 15, 4,
@@ -331,7 +331,7 @@ we_isa_attach(parent, self, aux)
 	}
 
 	typestr = we_params(asict, asich, &wsc->sc_type, NULL,
-	    &wsc->sc_16bitp, &sc->is790);
+	    &wsc->sc_flags, &sc->is790);
 	if (typestr == NULL) {
 		printf("%s: where did the card go?\n", sc->sc_dev.dv_xname);
 		return;
@@ -390,12 +390,12 @@ we_isa_attach(parent, self, aux)
 }
 
 static const char *
-we_params(asict, asich, typep, memsizep, is16bitp, is790p)
+we_params(asict, asich, typep, memsizep, flagp, is790p)
 	bus_space_tag_t asict;
 	bus_space_handle_t asich;
-	u_int8_t *typep;
+	u_int8_t *typep, *flagp;
 	bus_size_t *memsizep;
-	int *is16bitp, *is790p;
+	int *is790p;
 {
 	const char *typestr;
 	bus_size_t memsize;
@@ -533,8 +533,8 @@ we_params(asict, asich, typep, memsizep, is16bitp, is790p)
 		*typep = type;
 	if (memsizep != NULL)
 		*memsizep = memsize;
-	if (is16bitp != NULL)
-		*is16bitp = is16bit;
+	if (flagp != NULL && is16bit)
+		*flagp |= WE_16BIT_ENABLE;
 	if (is790p != NULL)
 		*is790p = is790;
 	return (typestr);

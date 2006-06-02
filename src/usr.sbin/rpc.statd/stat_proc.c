@@ -1,4 +1,4 @@
-/*	$NetBSD: stat_proc.c,v 1.6.10.1 2005/11/05 00:50:18 tron Exp $	*/
+/*	$NetBSD: stat_proc.c,v 1.7 2005/11/03 19:36:42 bouyer Exp $	*/
 
 /*
  * Copyright (c) 1995
@@ -35,7 +35,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: stat_proc.c,v 1.6.10.1 2005/11/05 00:50:18 tron Exp $");
+__RCSID("$NetBSD: stat_proc.c,v 1.7 2005/11/03 19:36:42 bouyer Exp $");
 #endif
 
 #include <errno.h>

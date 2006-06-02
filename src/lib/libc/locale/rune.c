@@ -1,4 +1,4 @@
-/*	$NetBSD: rune.c,v 1.26 2004/05/09 11:26:33 kleink Exp $	*/
+/*	$NetBSD: rune.c,v 1.29 2006/03/19 02:54:38 christos Exp $	*/
 
 /*-
  * Copyright (c)1999 Citrus Project,
@@ -63,7 +63,7 @@
 #if 0
 static char sccsid[] = "@(#)rune.c	8.1 (Berkeley) 6/4/93";
 #else
-__RCSID("$NetBSD: rune.c,v 1.26 2004/05/09 11:26:33 kleink Exp $");
+__RCSID("$NetBSD: rune.c,v 1.29 2006/03/19 02:54:38 christos Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
@@ -307,7 +307,8 @@ _Read_RuneMagi(fp)
 	}
 	if (rl->rl_variable_len == 0)
 		rl->rl_variable = NULL;
-	else if (fread(rl->rl_variable, rl->rl_variable_len, 1, fp) != 1) {
+	if (rl->rl_variable == NULL ||
+	    fread(rl->rl_variable, rl->rl_variable_len, 1, fp) != 1) {
 		_freeentry(&rl->rl_runetype_ext);
 		free(hostdata);
 		return NULL;
@@ -335,7 +336,7 @@ _NukeRune(rl)
 	if (rl != &_DefaultRuneLocale) {
 		_freeentry(&rl->rl_runetype_ext);
 		if (rl->rl_codeset)
-			free(rl->rl_codeset);
+			free(__UNCONST(rl->rl_codeset));
 		if (rl->rl_citrus_ctype)
 			_citrus_ctype_close(rl->rl_citrus_ctype);
 		free(rl);
@@ -486,7 +487,5 @@ bad:
 		free(new_toupper);
 	if (new_tolower)
 		free(new_tolower);
-	if (hostdata)
-		free(hostdata);
 	return NULL;
 }

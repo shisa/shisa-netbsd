@@ -1,4 +1,4 @@
-/*	$NetBSD: gssapi.c,v 1.1.1.2.2.2 2005/11/21 21:12:30 tron Exp $	*/
+/*	$NetBSD: gssapi.c,v 1.3 2005/11/21 14:20:29 manu Exp $	*/
 
 /*	$KAME: gssapi.c,v 1.19 2001/04/03 15:51:55 thorpej Exp $	*/
 

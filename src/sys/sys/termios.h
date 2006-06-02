@@ -1,4 +1,4 @@
-/*	$NetBSD: termios.h,v 1.27.4.1 2005/08/04 17:27:42 tron Exp $	*/
+/*	$NetBSD: termios.h,v 1.29 2005/12/11 12:25:21 christos Exp $	*/
 
 /*
  * Copyright (c) 1988, 1989, 1993, 1994

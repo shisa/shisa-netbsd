@@ -1,4 +1,4 @@
-/*	$NetBSD: filter.c,v 1.24 2003/11/28 21:53:32 provos Exp $	*/
+/*	$NetBSD: filter.c,v 1.31 2005/08/24 19:09:03 elad Exp $	*/
 /*	$OpenBSD: filter.c,v 1.16 2002/08/08 21:18:20 provos Exp $	*/
 /*
  * Copyright 2002 Niels Provos <provos@citi.umich.edu>
@@ -30,7 +30,7 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: filter.c,v 1.24 2003/11/28 21:53:32 provos Exp $");
+__RCSID("$NetBSD: filter.c,v 1.31 2005/08/24 19:09:03 elad Exp $");
 
 #include <sys/param.h>
 #include <sys/types.h>
@@ -72,13 +72,13 @@ static int filter_template(int, struct policy *, int);
 static int filter_quickpredicate(struct filter *);
 static void filter_policyrecord(struct policy *, struct filter *, const char *,
     const char *, char *);
-static void filter_replace(char *, size_t, char *, char *);
+static void filter_replace(char *, size_t, const char *, char *);
 
 static int
 filter_match(struct intercept_pid *icpid, struct intercept_tlq *tls,
     struct logic *logic)
 {
-	struct intercept_translate *tl;
+	struct intercept_translate *tl = NULL;
 	int off = 0, res;
 
 	switch (logic->op) {
@@ -516,7 +516,7 @@ filter_ask(int fd, struct intercept_tlq *tls, struct filterq *fls,
 		/* Automatically allow */
 		if (tls != NULL) {
 			struct intercept_translate *tl;
-			char *l, *lst = NULL;
+			const char *l, *lst = NULL;
 			int set = 0;
 
 			/* Explicitly match every component */
@@ -694,7 +694,7 @@ filter_ask(int fd, struct intercept_tlq *tls, struct filterq *fls,
 }
 
 static void
-filter_replace(char *buf, size_t buflen, char *match, char *repl)
+filter_replace(char *buf, size_t buflen, const char *match, char *repl)
 {
 	while (strrpl(buf, buflen, match, repl) != NULL)
 		;
@@ -748,7 +748,7 @@ int
 filter_fnmatch(struct intercept_translate *tl, struct logic *logic)
 {
 	int res;
-	char *line;
+	const char *line;
 
 	if ((line = intercept_translate_print(tl)) == NULL)
 		return (0);
@@ -760,7 +760,7 @@ filter_fnmatch(struct intercept_translate *tl, struct logic *logic)
 int
 filter_substrmatch(struct intercept_translate *tl, struct logic *logic)
 {
-	char *line;
+	const char *line;
 
 	if ((line = intercept_translate_print(tl)) == NULL)
 		return (0);
@@ -771,7 +771,7 @@ filter_substrmatch(struct intercept_translate *tl, struct logic *logic)
 int
 filter_negsubstrmatch(struct intercept_translate *tl, struct logic *logic)
 {
-	char *line;
+	const char *line;
 
 	if ((line = intercept_translate_print(tl)) == NULL)
 		return (0);
@@ -782,29 +782,30 @@ filter_negsubstrmatch(struct intercept_translate *tl, struct logic *logic)
 int
 filter_stringmatch(struct intercept_translate *tl, struct logic *logic)
 {
-	char *line;
+	const char *line;
 
 	if ((line = intercept_translate_print(tl)) == NULL)
 		return (0);
 
-	return (!strcasecmp(line, logic->filterdata));
+	return (!strcmp(line, logic->filterdata));
 }
 
 int
 filter_negstringmatch(struct intercept_translate *tl, struct logic *logic)
 {
-	char *line;
+	const char *line;
 
 	if ((line = intercept_translate_print(tl)) == NULL)
 		return (1);
 
-	return (strcasecmp(line, logic->filterdata) != 0);
+	return (strcmp(line, logic->filterdata) != 0);
 }
 
 int
 filter_inpath(struct intercept_translate *tl, struct logic *logic)
 {
-	char *line, c;
+	const char *line;
+	char c;
 	int len;
 
 	if ((line = intercept_translate_print(tl)) == NULL)
@@ -834,7 +835,7 @@ int
 filter_regex(struct intercept_translate *tl, struct logic *logic)
 {
 	regex_t tmpre, *re;
-	char *line;
+	const char *line;
 	int res;
 
 	if ((line = intercept_translate_print(tl)) == NULL)
@@ -863,3 +864,35 @@ filter_true(struct intercept_translate *tl, struct logic *logic)
 {
 	return (1);
 }
+
+int
+filter_topdir(struct intercept_translate *tl, struct logic *logic)
+{
+	const char *line;
+	size_t len, baselen;
+
+	if ((line = intercept_translate_print(tl)) == NULL)
+		return (0);
+
+	len = strlen(line);
+	baselen = strlen(logic->filterdata);
+
+	/* remove trailing slash */
+	if (baselen && ((char *)logic->filterdata)[baselen - 1] == '/')
+		baselen--;
+
+	if (baselen <= 1)
+		return (1);
+
+	if (len < baselen)
+		return (0);
+
+	if (line[baselen] != '/')
+		return (0);
+
+	if (strncmp(logic->filterdata, line, baselen))
+		return (0);
+
+	return (1);
+}
+

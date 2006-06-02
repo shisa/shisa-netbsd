@@ -1,4 +1,4 @@
-/*	$NetBSD: setjmp.S,v 1.5 2003/08/07 16:42:27 agc Exp $	*/
+/*	$NetBSD: setjmp.S,v 1.7 2005/10/16 17:15:38 christos Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -42,14 +42,14 @@
 #if 0
 	.asciz "@(#)setjmp.s	8.1 (Berkeley) 6/4/93"
 #else
-	RCSID("$NetBSD: setjmp.S,v 1.5 2003/08/07 16:42:27 agc Exp $")
+	RCSID("$NetBSD: setjmp.S,v 1.7 2005/10/16 17:15:38 christos Exp $")
 #endif
 #endif /* LIBC_SCCS and not lint */
 
 /*
- * C library -- setjmp, longjmp
+ * C library -- setjmp
  *
- *	longjmp(a,v)
+ *	__longjmp14(a,v)
  * will generate a "return(v)" from
  * the last call to
  *	setjmp(a)
@@ -59,61 +59,78 @@
 
 #include "SYS.h"
 
-#define STACK_T_SZ
-ENTRY(setjmp)
-	/*
-	 * We use the part of the sigcontext structure, the sp, pc, and npc fields,
-	 * for the sigstack call so we don't need to get our own stackframe.  It 
-	 * won't be filled out till later anyway.
-	 */
-	mov	%o0, %o3		/* Save our jmp_buf in %o3 */
-	mov	%o0, %o2		/* build sigcontext in [%o2] */
-	mov	1, %o0			/* SIG_BLOCK */
-	mov	SYS_compat_13_sigprocmask13, %g1
-	clr	%o1			/* sigprocmask(SIG_BLOCK, (sigset_t *)NULL, (sigset_t *)a) */
-	t	ST_SYSCALL
-	
-	st	%o0, [%o3 + 0x04]	/* sc.sc_mask = current mask; */
-	mov	SYS___sigaltstack14, %g1
-	clr	%o0			/* sigstack(NULL, &foo) */
-	add	%o3, 0x38, %o1		/* (foo being the sigcontext14 sc_mask) */
-	t	ST_SYSCALL
-	
-	lduw	[%o3 + 0x38+0x10], %o0	/* foo.ss_flags */
-	and	%o0, 1, %o1		/* onstack = foo.ss_flags & 1; */
-	st	%o0, [%o3 + 0x00]	/* sc.sc_onstack = current onstack; */
-	stx	%sp, [%o3 + 0x08]	/* sc.sc_sp = sp (both ours and caller's) */
-	add	%o7, 8, %o0
-	stx	%o0, [%o3 + 0x10]	/* sc.sc_pc = return_pc */
-	add	%o7, 12, %o0
-	stx	%o0, [%o3 + 0x18]	/* sc.sc_npc = return_pc + 4 */
-	stx	%g0, [%o3 + 0x20]	/* sc.sc_psr = (clean psr) */
-	stx	%fp, [%o3 + 0x28]	/* sc.sc_g1 = %fp (misuse, but what the heck) */
-					/* sc.sc_o0 = random(), set in longjmp */
-	retl				/* return 0 */
-	 clr	%o0
+	.register %g2,#ignore
+	.register %g3,#ignore
+	.register %g6,#ignore
 
-/*
- * All we need to do here is force sigreturn to load a new stack pointer,
- * new <pc,npc>, and appropriate %o0 return value from the sigcontext built
- * in setjmp.  The %i and %l registers will be reloaded from the place to
- * which %sp points, due to sigreturn() semantics (sigreturn does not modify
- * the window pointer in the psr, hence it must force all windows to reload).
- */
-ENTRY(longjmp)
+ENTRY(__setjmp14)
 	save	%sp, -CC64FSZ, %sp
-	ldx	[%i0 + 0x08], %o2	/* make sure sc->sc_sp, sc->sc_fp nonzero */
-	ldx	[%i0 + 0x28], %o3
-	orcc	%o2, %o3, %g0
-	bz,pn	%xcc, Lbotch
-	 movrz	%i1, 1, %i1		/* if (v == 0) v = 1; */
-	st	%i1, [%i0 + 0x30]	/* sc.sc_o0 = v; */
-	mov	SYS_compat_13_sigreturn13, %g1
-	mov	%i0, %o0
-	t	ST_SYSCALL		/* sigreturn(scp); */
 
-Lbotch:
-	/* oops, caller botched it */
-	call	_C_LABEL(longjmperror)
-	 nop
-	unimp	0
+	/* save globals into locals */
+	mov	%g1, %l1
+	mov	%g2, %l2
+	mov	%g3, %l3
+	mov	%g4, %l4
+	mov	%g5, %l5
+	mov	%g6, %l6
+	mov	%g7, %l7
+
+#ifdef PIC
+	PIC_PROLOGUE(%i1, %o4)
+#endif
+
+	/* now get sigmask and onstack flag */
+	add	%i0, 0x38, %o2		/* build sigcontext in [%o2]->sc.sc_mask */
+	mov	1, %o0			/* SIG_BLOCK */
+					/* sigprocmask(SIG_BLOCK, (sigset_t *)NULL, (sigset_t *)a) */
+#ifdef PIC
+#ifdef BIGPIC
+	set	_C_LABEL(__sigprocmask14), %o4
+	ldx	[%i1 + %o4], %g2
+#else
+	ldx	[%i1 + _C_LABEL(__sigprocmask14)], %g2
+#endif
+	call	%g2
+#else
+	call	_C_LABEL(__sigprocmask14)
+#endif
+	 clr	%o1
+
+	clr	%o0			/* sigstack(NULL, &foo) */
+#ifdef PIC
+#ifdef BIGPIC
+	set	_C_LABEL(__sigaltstack14), %o4
+	ldx	[%i1 + %o4], %g2
+#else
+	ldx	[%i1 + _C_LABEL(__sigaltstack14)], %g2
+#endif
+	call	%g2
+#else
+	call	_C_LABEL(__sigaltstack14)
+#endif
+	 add	%i0, 8, %o1		/* (foo being part of the sigcontext we're overwriting) */
+	
+	lduw	[%i0 + 8 + 0x10], %o0	/* foo.ss_flags */
+	and	%o0, 1, %o1		/* onstack = foo.ss_flags & SS_ONSTACK; */
+	st	%o1, [%i0 + 0x00]	/* sc.sc_onstack = current onstack; */
+
+	/* store essential state */
+	stx	%fp, [%i0 + 0x08]	/* sc.sc_sp = sp */
+	add	%i7, 8, %o0
+	stx	%o0, [%i0 + 0x10]	/* sc.sc_pc = return_pc */
+	add	%i7, 12, %o0
+	stx	%o0, [%i0 + 0x18]	/* sc.sc_npc = return_pc + 4 */
+	stx	%g0, [%i0 + 0x20]	/* sc.sc_tstate = (clean ccr) */
+	stx	%l1, [%i0 + 0x28]	/* sc.sc_g1 */
+	stx	%l2, [%i0 + 0x30]	/* sc.sc_o0, set in longjmp, use as %g2 */
+	/* 0x38 */			/* sc.sc_mask was already saved above */
+
+	/* save additional registers needed to fill a complete mcontext */
+	stx	%l3, [%i0 + 0x40]
+	stx	%l4, [%i0 + 0x48]
+	stx	%l5, [%i0 + 0x50]
+	stx	%l6, [%i0 + 0x58]
+	stx	%l7, [%i0 + 0x60]
+
+	ret				/* return 0 */
+	 restore %g0, 0, %o0

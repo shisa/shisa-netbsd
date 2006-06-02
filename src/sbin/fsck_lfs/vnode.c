@@ -1,4 +1,4 @@
-/* $NetBSD: vnode.c,v 1.2.6.1 2005/05/07 11:21:29 tron Exp $ */
+/* $NetBSD: vnode.c,v 1.5 2006/03/20 01:20:55 christos Exp $ */
 /*-
  * Copyright (c) 2003 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -110,6 +110,8 @@ register_vget(void *fs, struct uvnode *func(void *, ino_t))
 	struct vget_reg *vgr;
 
 	vgr = (struct vget_reg *)malloc(sizeof(*vgr));
+	if (vgr == NULL)
+		err(1, NULL);
 	vgr->vgr_fs = fs;
 	vgr->vgr_func = func;
 	LIST_INSERT_HEAD(&vgrlist, vgr, vgr_list);
@@ -135,11 +137,13 @@ vnode_destroy(struct uvnode *tossvp)
 	--nvnodes;
 	LIST_REMOVE(tossvp, v_getvnodes);
 	LIST_REMOVE(tossvp, v_mntvnodes);
-	LIST_FOREACH(bp, &tossvp->v_dirtyblkhd, b_vnbufs) {
+	while ((bp = LIST_FIRST(&tossvp->v_dirtyblkhd)) != NULL) {
+		LIST_REMOVE(bp, b_vnbufs);
 		bremfree(bp);
 		buf_destroy(bp);
 	}
-	LIST_FOREACH(bp, &tossvp->v_cleanblkhd, b_vnbufs) {
+	while ((bp = LIST_FIRST(&tossvp->v_cleanblkhd)) != NULL) {
+		LIST_REMOVE(bp, b_vnbufs);
 		bremfree(bp);
 		buf_destroy(bp);
 	}

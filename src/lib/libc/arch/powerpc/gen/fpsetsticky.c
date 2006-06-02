@@ -1,4 +1,4 @@
-/*	$NetBSD: fpsetsticky.c,v 1.6 2004/04/04 19:54:05 matt Exp $	*/
+/*	$NetBSD: fpsetsticky.c,v 1.9 2005/12/24 23:10:08 perry Exp $	*/
 
 /*
  * Copyright (c) 1999 The NetBSD Foundation, Inc.
@@ -37,6 +37,9 @@
  */
 
 #include <sys/cdefs.h>
+#if defined(LIBC_SCCS) && !defined(lint)
+__RCSID("$NetBSD: fpsetsticky.c,v 1.9 2005/12/24 23:10:08 perry Exp $");
+#endif /* LIBC_SCCS and not lint */
 
 #include "namespace.h"
 
@@ -60,7 +63,7 @@ fpsetsticky(fp_except mask)
 	uint64_t fpscr;
 	fp_except old;
 
-	__asm__ __volatile("mffs %0" : "=f"(fpscr));
+	__asm volatile("mffs %0" : "=f"(fpscr));
 	old = ((uint32_t)fpscr & STICKYBITS) >> STICKYSHFT;
 	/*
 	 * FPSCR_VX (aka FP_X_INV) is not a sticky bit but a summary of the
@@ -83,6 +86,6 @@ fpsetsticky(fp_except mask)
 	/*
 	 * Write back the fpscr.
 	 */
-	__asm__ __volatile("mtfsf 0xff,%0" :: "f"(fpscr));
+	__asm volatile("mtfsf 0xff,%0" :: "f"(fpscr));
 	return (old);
 }

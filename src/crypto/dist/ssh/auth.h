@@ -1,5 +1,5 @@
-/*	$NetBSD: auth.h,v 1.18 2005/02/13 18:14:04 christos Exp $	*/
-/*	$OpenBSD: auth.h,v 1.50 2004/05/23 23:59:53 dtucker Exp $	*/
+/*	$NetBSD: auth.h,v 1.20 2006/02/04 22:32:13 christos Exp $	*/
+/*	$OpenBSD: auth.h,v 1.51 2005/06/06 11:20:36 djm Exp $	*/
 
 /*
  * Copyright (c) 2000 Markus Friedl.  All rights reserved.
@@ -108,6 +108,8 @@ struct KbdintDevice
 	void	(*free_ctx)(void *ctx);
 };
 
+void 	 disable_forwarding(void);
+
 int      auth_rhosts(struct passwd *, const char *);
 int
 auth_rhosts2(struct passwd *, const char *, const char *, const char *);
@@ -150,6 +152,7 @@ void	do_authentication2(Authctxt *);
 
 void	auth_log(Authctxt *, int, char *, char *);
 void	userauth_finish(Authctxt *, int, char *);
+void	userauth_send_banner(const char *);
 int	auth_root_allowed(char *);
 
 char	*auth2_read_banner(void);
@@ -169,7 +172,6 @@ struct passwd * getpwnamallow(const char *user);
 char	*get_challenge(Authctxt *);
 int	verify_response(Authctxt *, const char *);
 
-char	*expand_filename(const char *, struct passwd *);
 char	*authorized_keys_file(struct passwd *);
 char	*authorized_keys_file2(struct passwd *);
 

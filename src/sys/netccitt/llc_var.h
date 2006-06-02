@@ -1,4 +1,4 @@
-/*	$NetBSD: llc_var.h,v 1.14 2005/02/26 22:45:10 perry Exp $	*/
+/*	$NetBSD: llc_var.h,v 1.16 2005/12/10 23:31:41 elad Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -74,6 +74,9 @@
  *
  *	@(#)llc_var.h	8.2 (Berkeley) 2/9/95
  */
+
+#ifndef _NETCCITT_LLC_VAR_H_
+#define _NETCCITT_LLC_VAR_H_
 
 struct llc;
 
@@ -651,7 +654,7 @@ extern int af_link_rts_init_done;
 extern struct ifqueue llcintrq;
 
 extern struct llccb_q llccb_q;
-extern char *frame_names[];
+extern const char *frame_names[];
 
 /*
  * Function prototypes
@@ -711,7 +714,7 @@ struct llc_linkcb *llc_newlink __P((struct sockaddr_dl *, struct ifnet *,
 void llc_dellink __P((struct llc_linkcb *));
 int llc_decode __P((struct llc *, struct llc_linkcb *));
 int llc_anytimersup __P((struct llc_linkcb *));
-char *llc_getstatename __P((struct llc_linkcb *));
+const char *llc_getstatename __P((struct llc_linkcb *));
 void llc_link_dump __P((struct llc_linkcb *, const char *));
 void llc_trace __P((struct llc_linkcb *, int, const char *));
 
@@ -719,3 +722,5 @@ void llc_trace __P((struct llc_linkcb *, int, const char *));
 void llc_timer __P((void));
 
 #endif
+
+#endif /* !_NETCCITT_LLC_VAR_H_ */

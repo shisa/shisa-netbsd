@@ -1,4 +1,4 @@
-.\"	$NetBSD: ex.4,v 1.15 2003/05/22 07:42:30 fair Exp $
+.\"	$NetBSD: ex.4,v 1.17 2005/09/09 14:11:39 drochner Exp $
 .\"
 .\" Copyright (c) 1999 The NetBSD Foundation, Inc.
 .\" All rights reserved.
@@ -17,7 +17,7 @@ bus and
 .Tn Ethernet
 interfaces
 .Sh SYNOPSIS
-.Cd "ex* at cardbus? dev ? function ?"
+.Cd "ex* at cardbus? function ?"
 .Cd "ex* at pci? dev ? function ?"
 .Sh DESCRIPTION
 .Tn 3Com
@@ -113,7 +113,7 @@ found on a given
 must be configured into a
 .Nx
 kernel
-.Xr config 8
+.Xr config 1
 for this driver to work properly in those cases.
 .Pp
 See

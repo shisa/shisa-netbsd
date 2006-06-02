@@ -1,4 +1,4 @@
-/*	$NetBSD: epsoc.c,v 1.1 2004/12/22 19:12:21 joff Exp $	*/
+/*	$NetBSD: epsoc.c,v 1.6 2006/03/08 23:46:22 lukem Exp $	*/
 
 /*
  * Copyright (c) 2004 Jesse Off
@@ -34,7 +34,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: epsoc.c,v 1.1 2004/12/22 19:12:21 joff Exp $");
+__KERNEL_RCSID(0, "$NetBSD: epsoc.c,v 1.6 2006/03/08 23:46:22 lukem Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -56,8 +56,11 @@ __KERNEL_RCSID(0, "$NetBSD: epsoc.c,v 1.1 2004/12/22 19:12:21 joff Exp $");
 
 static int	epsoc_match(struct device *, struct cfdata *, void *);
 static void	epsoc_attach(struct device *, struct device *, void *);
-static int	epsoc_search(struct device *, struct cfdata *, void *);
+static int	epsoc_search(struct device *, struct cfdata *,
+			     const int *, void *);
 static int	epsoc_print(void *, const char *);
+static int	epsoc_submatch(struct device *, struct cfdata *,
+			       const int *, void *);
 
 CFATTACH_DECL(epsoc, sizeof(struct epsoc_softc),
     epsoc_match, epsoc_attach, NULL, NULL);
@@ -84,8 +87,9 @@ epsoc_attach(struct device *parent, struct device *self, void *aux)
 	struct epsoc_softc	*sc;
 	u_int64_t		fclk, pclk, hclk;
 	u_int32_t		id, clkset1;
-	char			*rev;
-
+	const char		*rev;
+	int			locs[EPSOCCF_NLOCS];
+	struct epsoc_attach_args sa;
 
 	sc = (struct epsoc_softc*) self;
 
@@ -148,7 +152,7 @@ epsoc_attach(struct device *parent, struct device *self, void *aux)
 		else
 			fclk = 14745600ULL;
 	}
-	printf("%s: fclk %lld.%02lld Mhz hclk %lld.%02lld Mhz pclk %lld.%02lld Mhz\n", 
+	printf("%s: fclk %lld.%02lld MHz hclk %lld.%02lld MHz pclk %lld.%02lld MHz\n", 
 		sc->sc_dev.dv_xname,
 		fclk / 1000000, (fclk % 1000000 + 5000) / 10000, 
 		hclk / 1000000, (hclk % 1000000 + 5000) / 10000, 
@@ -163,30 +167,56 @@ epsoc_attach(struct device *parent, struct device *self, void *aux)
 
 	/*
 	 *  Attach each devices
+	 *	some device is used by other system device. so attach first.
 	 */
-	config_search(epsoc_search, self, NULL);
+	sa.sa_iot = sc->sc_iot;
+	sa.sa_dmat = sc->sc_dmat;
+	sa.sa_hclk = sc->sc_hclk;
+	sa.sa_pclk = sc->sc_pclk;
+	locs[EPSOCCF_ADDR] = EP93XX_APB_HWBASE + EP93XX_APB_TIMERS;
+	config_found_sm_loc(self, "epsoc", locs, &sa,
+			    epsoc_print, epsoc_submatch);
+	locs[EPSOCCF_ADDR] = EP93XX_APB_HWBASE + EP93XX_APB_GPIO;
+	sa.sa_gpio = (struct epgpio_softc *)
+	  config_found_sm_loc(self, "epsoc", locs, &sa,
+			      epsoc_print, epsoc_submatch);
+	config_search_ia(epsoc_search, self, "epsoc", &sa);
 	
 }
 
 int
-epsoc_search(parent, cf, aux)
+epsoc_submatch(parent, cf, ldesc, aux)
 	struct device *parent;
 	struct cfdata *cf;
+	const int *ldesc;
 	void *aux;
 {
-	struct epsoc_softc *sc = (struct epsoc_softc *)parent;
-	struct epsoc_attach_args sa;
+	struct epsoc_attach_args *sa = aux;
 
-	sa.sa_iot = sc->sc_iot;
-	sa.sa_dmat = sc->sc_dmat;
-	sa.sa_addr = cf->cf_loc[EPSOCCF_ADDR];
-	sa.sa_size = cf->cf_loc[EPSOCCF_SIZE];
-	sa.sa_intr = cf->cf_loc[EPSOCCF_INTR];
-	sa.sa_hclk = sc->sc_hclk;
-	sa.sa_pclk = sc->sc_pclk;
+	if (cf->cf_loc[EPSOCCF_ADDR] == ldesc[EPSOCCF_ADDR]) {
+		sa->sa_addr = cf->cf_loc[EPSOCCF_ADDR];
+		sa->sa_size = cf->cf_loc[EPSOCCF_SIZE];
+		sa->sa_intr = cf->cf_loc[EPSOCCF_INTR];
+		return (config_match(parent, cf, aux));
+	} else
+		return (0);
+}
 
-	if (config_match(parent, cf, &sa) > 0)
-		config_attach(parent, cf, &sa, epsoc_print);
+int
+epsoc_search(parent, cf, ldesc, aux)
+	struct device *parent;
+	struct cfdata *cf;
+	const int *ldesc;
+	void *aux;
+{
+	struct epsoc_attach_args *sa = aux;
+
+	sa->sa_addr = cf->cf_loc[EPSOCCF_ADDR];
+	sa->sa_size = cf->cf_loc[EPSOCCF_SIZE];
+	sa->sa_intr = cf->cf_loc[EPSOCCF_INTR];
+
+	if (config_match(parent, cf, aux) > 0)
+		config_attach(parent, cf, aux, epsoc_print);
 
 	return (0);
 }

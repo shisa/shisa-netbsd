@@ -1,4 +1,4 @@
-/*	$NetBSD: regdump.c,v 1.8 2004/08/28 22:06:28 thorpej Exp $	*/
+/*	$NetBSD: regdump.c,v 1.11 2005/12/11 12:17:59 christos Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1990, 1993
@@ -75,7 +75,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: regdump.c,v 1.8 2004/08/28 22:06:28 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: regdump.c,v 1.11 2005/12/11 12:17:59 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -168,13 +168,15 @@ hexstr(int val, int len)
 	static char nbuf[9];
 	register int x, i;
 
-	if (len > 8)
-		return("");
+	if (len > 8) {
+		nbuf[0] = '\0';
+		return(nbuf);
+	}
 	nbuf[len] = '\0';
 	for (i = len-1; i >= 0; --i) {
 		x = val & 0xF;
 		/* Isn't this a cool trick? */
-		nbuf[i] = "0123456789ABCDEF"[x];
+		nbuf[i] = HEXDIGITS[x];
 		val >>= 4;
 	}
 	return(nbuf);

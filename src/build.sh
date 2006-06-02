@@ -1,5 +1,5 @@
 #! /usr/bin/env sh
-#	$NetBSD: build.sh,v 1.134.2.2 2005/12/15 20:11:48 tron Exp $
+#	$NetBSD: build.sh,v 1.146 2006/02/03 12:29:41 apb Exp $
 #
 # Copyright (c) 2001-2005 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -127,6 +127,8 @@ initdefaults()
 	do_install=false
 	do_sets=false
 	do_sourcesets=false
+	do_syspkgs=false
+	do_iso_image=false
 	do_params=false
 
 	# Create scratch directory
@@ -179,7 +181,7 @@ getarch()
 	evbmips|sbmips)		# no default MACHINE_ARCH
 		;;
 
-	mipsco|newsmips|sgimips)
+	ews4800mips|mipsco|newsmips|sgimips)
 		MACHINE_ARCH=mipseb
 		;;
 
@@ -219,20 +221,7 @@ getarch()
 		MACHINE_ARCH=x86_64
 		;;
 
-	xen-*)
-		setmakeenv XEN_BUILD "${MACHINE##*-}"
-		setmakeenv KERNARCHDIR "arch/xen"
-		setmakeenv RELEASEMACHINE "xen"
-		setmakeenv RELEASEMACHINEDIR "${MACHINE}"
-		makewrappermachine=${MACHINE}
-		MACHINE=${MACHINE##*-}
-		getarch
-		;;
-
-	xen)			# no default MACHINE_ARCH
-		;;
-
-	alpha|i386|sparc|sparc64|vax)
+	alpha|i386|sparc|sparc64|vax|ia64)
 		MACHINE_ARCH=${MACHINE}
 		;;
 
@@ -249,7 +238,7 @@ validatearch()
 	#
 	case "${MACHINE_ARCH}" in
 
-	alpha|arm|armeb|hppa|i386|m68000|m68k|mipse[bl]|ns32k|powerpc|sh[35]e[bl]|sparc|sparc64|vax|x86_64)
+	alpha|arm|armeb|hppa|i386|m68000|m68k|mipse[bl]|ns32k|powerpc|sh[35]e[bl]|sparc|sparc64|vax|x86_64|ia64)
 		;;
 
 	"")
@@ -389,6 +378,8 @@ Usage: ${progname} [-EnorUux] [-a arch] [-B buildid] [-D dest] [-j njob]
     sets                Create binary sets in RELEASEDIR/MACHINE/binary/sets.
 			DESTDIR should be populated beforehand.
     sourcesets          Create source sets in RELEASEDIR/source/sets.
+    syspkgs             Create syspkgs in RELEASEDIR/MACHINE/binary/syspkgs.
+    iso-image           Create CD-ROM image in RELEASEDIR/MACHINE/installation.
     params              Display various make(1) parameters.
 
  Options:
@@ -628,7 +619,11 @@ parseoptions()
 			usage
 			;;
 
-		makewrapper|obj|tools|build|distribution|release|sets|sourcesets|params)
+		makewrapper|obj|tools|build|distribution|release|sets|sourcesets|syspkgs|params)
+			;;
+
+		iso-image)
+			op=iso_image	# used as part of a variable name
 			;;
 
 		kernel=*|releasekernel=*)
@@ -864,10 +859,16 @@ createmakewrapper()
 		makewrapout=">>\${makewrapper}"
 	fi
 
+	case "${KSH_VERSION:-${SH_VERSION}}" in
+	*PD\ KSH*)
+		set +o braceexpand
+		;;
+	esac
+
 	eval cat <<EOF ${makewrapout}
 #! /bin/sh
 # Set proper variables to allow easy "make" building of a NetBSD subtree.
-# Generated from:  \$NetBSD: build.sh,v 1.134.2.2 2005/12/15 20:11:48 tron Exp $
+# Generated from:  \$NetBSD: build.sh,v 1.146 2006/02/03 12:29:41 apb Exp $
 # with these arguments: ${_args}
 #
 EOF
@@ -898,12 +899,13 @@ buildtools()
 	fi
 	${runcmd} cd tools
 	if [ "${MKUPDATE}" = "no" ]; then
-		cleandir=cleandir
-	else
-		cleandir=
+		${runcmd} "${makewrapper}" ${parallel} cleandir ||
+		    bomb "Failed to make cleandir tools"
 	fi
-	${runcmd} "${makewrapper}" ${cleandir} dependall install ||
-	    bomb "Failed to make tools"
+	${runcmd} "${makewrapper}" ${parallel} dependall ||
+	    bomb "Failed to make dependall tools"
+	${runcmd} "${makewrapper}" ${parallel} install ||
+	    bomb "Failed to make install tools"
 	statusmsg "Tools built to ${TOOLDIR}"
 	${runcmd} cd "${TOP}"
 }
@@ -919,7 +921,7 @@ getkernelconf()
 		KERNSRCDIR="$(getmakevar KERNSRCDIR)"
 		KERNARCHDIR="$(getmakevar KERNARCHDIR)"
 		${runcmd} cd "${KERNSRCDIR}/${KERNARCHDIR}/compile"
-		${runcmd} "${makewrapper}" obj ||
+		${runcmd} "${makewrapper}" ${parallel} obj ||
 		    bomb "Failed to make obj in ${KERNSRCDIR}/${KERNARCHDIR}/compile"
 		${runcmd} cd "${TOP}"
 	fi
@@ -957,7 +959,7 @@ buildkernel()
 	    bomb "Cannot mkdir: ${kernelbuildpath}"
 	if [ "${MKUPDATE}" = "no" ]; then
 		${runcmd} cd "${kernelbuildpath}"
-		${runcmd} "${makewrapper}" cleandir ||
+		${runcmd} "${makewrapper}" ${parallel} cleandir ||
 		    bomb "Failed to make cleandir in ${kernelbuildpath}"
 		${runcmd} cd "${TOP}"
 	fi
@@ -965,7 +967,7 @@ buildkernel()
 		-s "${TOP}/sys" "${kernelconfpath}" ||
 	    bomb "${toolprefix}config failed for ${kernelconf}"
 	${runcmd} cd "${kernelbuildpath}"
-	${runcmd} "${makewrapper}" depend ||
+	${runcmd} "${makewrapper}" ${parallel} depend ||
 	    bomb "Failed to make depend in ${kernelbuildpath}"
 	${runcmd} "${makewrapper}" ${parallel} all ||
 	    bomb "Failed to make all in ${kernelbuildpath}"
@@ -1038,8 +1040,8 @@ main()
 			    bomb "Failed to make ${op}"
 			statusmsg "Successful make ${op}"
 			;;
-			
-		obj|build|distribution|release|sourcesets|params)
+
+		obj|build|distribution|iso-image|release|sourcesets|syspkgs|params)
 			${runcmd} "${makewrapper}" ${parallel} ${op} ||
 			    bomb "Failed to make ${op}"
 			statusmsg "Successful make ${op}"

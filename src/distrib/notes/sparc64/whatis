@@ -1,4 +1,4 @@
-.\"	$NetBSD: whatis,v 1.14.2.1 2005/06/11 12:23:18 tron Exp $
+.\"	$NetBSD: whatis,v 1.15 2005/06/09 21:51:37 martin Exp $
 .
 .Nx \*V
 features several \*M-specific bug fixes that greatly improve

@@ -1,4 +1,4 @@
-/*	$NetBSD: pow.c,v 1.12 2005/01/18 07:12:15 chs Exp $	*/
+/*	$NetBSD: pow.c,v 1.14 2005/12/11 12:19:37 christos Exp $	*/
 
 /*
  * Copyright (c) 1995 MINOURA Makoto.
@@ -38,7 +38,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: pow.c,v 1.12 2005/01/18 07:12:15 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pow.c,v 1.14 2005/12/11 12:19:37 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -122,7 +122,7 @@ powattach(int num)
 
 /*ARGSUSED*/
 int 
-powopen(dev_t dev, int flags, int mode, struct proc *p)
+powopen(dev_t dev, int flags, int mode, struct lwp *l)
 {
 	struct pow_softc *sc = &pows[minor(dev)];
 
@@ -143,7 +143,7 @@ powopen(dev_t dev, int flags, int mode, struct proc *p)
 
 /*ARGSUSED*/
 int 
-powclose(dev_t dev, int flags, int mode, struct proc *p)
+powclose(dev_t dev, int flags, int mode, struct lwp *l)
 {
 	struct pow_softc *sc = &pows[minor(dev)];
 
@@ -154,7 +154,7 @@ powclose(dev_t dev, int flags, int mode, struct proc *p)
 	return 0;
 }
 
-#define SRAMINT(offset)	(*((int *) (&sramtop[offset])))
+#define SRAMINT(offset)	(*((volatile int *) (&sramtop[offset])))
 #define RTCWAIT DELAY(100)
 
 static int 
@@ -225,7 +225,7 @@ setalarm(struct x68k_alarminfo *bp)
 
 /*ARGSUSED*/
 int 
-powioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, struct proc *p)
+powioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, struct lwp *l)
 {
 	struct pow_softc *sc = &pows[minor(dev)];
 
@@ -271,8 +271,8 @@ powioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, struct proc *p)
 				return EINVAL;
 
 			sc->signum = signum;
-			sc->proc = p;
-			sc->pid = p->p_pid;
+			sc->proc = l->l_proc;
+			sc->pid = l->l_proc->p_pid;
 		}
 
 		break;

@@ -1,4 +1,4 @@
-/*	$NetBSD: if_hippisubr.c,v 1.18 2005/02/26 22:45:09 perry Exp $	*/
+/*	$NetBSD: if_hippisubr.c,v 1.22 2005/12/11 23:05:25 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1982, 1989, 1993
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_hippisubr.c,v 1.18 2005/02/26 22:45:09 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_hippisubr.c,v 1.22 2005/12/11 23:05:25 thorpej Exp $");
 
 #include "opt_inet.h"
 
@@ -76,9 +76,9 @@ __KERNEL_RCSID(0, "$NetBSD: if_hippisubr.c,v 1.18 2005/02/26 22:45:09 perry Exp 
 #define	llc_snap	llc_un.type_snap
 #endif
 
-static	int hippi_output __P((struct ifnet *, struct mbuf *,
-	    struct sockaddr *, struct rtentry *));
-static	void hippi_input __P((struct ifnet *, struct mbuf *));
+static int	hippi_output(struct ifnet *, struct mbuf *,
+			     struct sockaddr *, struct rtentry *);
+static void	hippi_input(struct ifnet *, struct mbuf *);
 
 /*
  * HIPPI output routine.
@@ -88,15 +88,12 @@ static	void hippi_input __P((struct ifnet *, struct mbuf *));
  */
 
 static int
-hippi_output(ifp, m0, dst, rt0)
-	struct ifnet *ifp;
-	struct mbuf *m0;
-	struct sockaddr *dst;
-	struct rtentry *rt0;
+hippi_output(struct ifnet *ifp, struct mbuf *m0, struct sockaddr *dst,
+    struct rtentry *rt0)
 {
 	u_int16_t htype;
 	u_int32_t ifield = 0;
-	int s, len, error = 0;
+	int error = 0;
 	struct mbuf *m = m0;
 	struct rtentry *rt;
 	struct hippi_header *hh;
@@ -226,23 +223,7 @@ hippi_output(ifp, m0, dst, rt0)
 		m_copyback(m, m->m_pkthdr.len, 8 - d2_len % 8, (caddr_t) buffer);
 	}
 
-	len = m->m_pkthdr.len;
-	s = splnet();
-	/*
-	 * Queue message on interface, and start output if interface
-	 * not yet active.
-	 */
-	IFQ_ENQUEUE(&ifp->if_snd, m, &pktattr, error);
-	if (error) {
-		/* mbuf is already free */
-		splx(s);
-		return (error);
-	}
-	ifp->if_obytes += len;
-	if ((ifp->if_flags & IFF_OACTIVE) == 0)
-		(*ifp->if_start)(ifp);
-	splx(s);
-	return (error);
+	return ifq_enqueue(ifp, m ALTQ_COMMA ALTQ_DECL(&pktattr));
 
  bad:
 	if (m)
@@ -257,9 +238,7 @@ hippi_output(ifp, m0, dst, rt0)
  */
 
 static void
-hippi_input(ifp, m)
-	struct ifnet *ifp;
-	struct mbuf *m;
+hippi_input(struct ifnet *ifp, struct mbuf *m)
 {
 	struct ifqueue *inq;
 	struct llc *l;
@@ -278,9 +257,8 @@ hippi_input(ifp, m)
 
 	ifp->if_ibytes += m->m_pkthdr.len;
 	if (hh->hi_le.le_dest_addr[0] & 1) {
-		if (bcmp((caddr_t)etherbroadcastaddr,
-			 (caddr_t)hh->hi_le.le_dest_addr,
-			 sizeof(etherbroadcastaddr)) == 0)
+		if (memcmp(etherbroadcastaddr, hh->hi_le.le_dest_addr,
+		    sizeof(etherbroadcastaddr)) == 0)
 			m->m_flags |= M_BCAST;
 		else
 			m->m_flags |= M_MCAST;
@@ -331,9 +309,7 @@ hippi_input(ifp, m)
 
 #ifdef INET
 void
-hippi_ip_input(ifp, m)
-	struct ifnet *ifp;
-	struct mbuf *m;
+hippi_ip_input(struct ifnet *ifp, struct mbuf *m)
 {
 	struct ifqueue *inq;
 	int s;
@@ -355,9 +331,7 @@ hippi_ip_input(ifp, m)
  * Perform common duties while attaching to interface list
  */
 void
-hippi_ifattach(ifp, lla)
-	struct ifnet *ifp;
-	caddr_t lla;
+hippi_ifattach(struct ifnet *ifp, caddr_t lla)
 {
 
 	ifp->if_type = IFT_HIPPI;

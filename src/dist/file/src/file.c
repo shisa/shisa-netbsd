@@ -1,4 +1,4 @@
-/*	$NetBSD: file.c,v 1.12 2005/02/21 15:00:05 pooka Exp $	*/
+/*	$NetBSD: file.c,v 1.15 2005/10/17 19:07:43 christos Exp $	*/
 
 /*
  * Copyright (c) Ian F. Darwin 1986-1995.
@@ -41,7 +41,6 @@
 #include <sys/types.h>
 #include <sys/param.h>	/* for MAXPATHLEN */
 #include <sys/stat.h>
-#include <fcntl.h>	/* for open() */
 #ifdef RESTORE_TIME
 # if (__COHERENT__ >= 0x420)
 #  include <sys/utime.h>
@@ -75,15 +74,15 @@
 
 #ifndef	lint
 #if 0
-FILE_RCSID("@(#)Id: file.c,v 1.95 2004/09/27 15:28:37 christos Exp")
+FILE_RCSID("@(#)Id: file.c,v 1.98 2005/10/17 15:31:10 christos Exp")
 #else
-__RCSID("$NetBSD: file.c,v 1.12 2005/02/21 15:00:05 pooka Exp $");
+__RCSID("$NetBSD: file.c,v 1.15 2005/10/17 19:07:43 christos Exp $");
 #endif
 #endif	/* lint */
 
 
 #ifdef S_IFLNK
-#define SYMLINKFLAG "L"
+#define SYMLINKFLAG "Lh"
 #else
 #define SYMLINKFLAG ""
 #endif
@@ -101,7 +100,7 @@ private int 		/* Global command-line options 		*/
 
 private const char *magicfile = 0;	/* where the magic is	*/
 private const char *default_magicfile = MAGIC;
-private char *separator = ":";	/* Default field separator	*/
+private const char *separator = ":";	/* Default field separator	*/
 
 private char *progname;		/* used throughout 		*/
 
@@ -133,7 +132,7 @@ main(int argc, char *argv[])
 	int flags = 0;
 	char *home, *usermagic;
 	struct stat sb;
-#define OPTSTRING	"bcCdf:F:ikLm:nNprsvz"
+#define OPTSTRING	"bcCdf:F:hikLm:nNprsvz"
 #ifdef HAVE_GETOPT_LONG
 	int longindex;
 	private struct option long_options[] =
@@ -149,6 +148,7 @@ main(int argc, char *argv[])
 		{"keep-going", 0, 0, 'k'},
 #ifdef S_IFLNK
 		{"dereference", 0, 0, 'L'},
+		{"no-dereference", 0, 0, 'h'},
 #endif
 		{"magic-file", 1, 0, 'm'},
 #if defined(HAVE_UTIME) || defined(HAVE_UTIMES)
@@ -165,7 +165,8 @@ main(int argc, char *argv[])
 #endif
 
 #ifdef LC_CTYPE
-	setlocale(LC_CTYPE, ""); /* makes islower etc work for other langs */
+	/* makes islower etc work for other langs */
+	(void)setlocale(LC_CTYPE, "");
 #endif
 
 #ifdef __EMX__
@@ -193,6 +194,9 @@ main(int argc, char *argv[])
 			}
 		}
 
+#ifdef S_IFLNK
+	flags |= getenv("POSIXLY_CORRECT") ? MAGIC_SYMLINK : 0;
+#endif
 #ifndef HAVE_GETOPT_LONG
 	while ((c = getopt(argc, argv, OPTSTRING)) != -1)
 #else
@@ -255,9 +259,9 @@ main(int argc, char *argv[])
 			flags |= MAGIC_DEVICES;
 			break;
 		case 'v':
-			(void) fprintf(stdout, "%s-%d.%.2d\n", progname,
+			(void)fprintf(stdout, "%s-%d.%.2d\n", progname,
 				       FILE_VERSION_MAJOR, patchlevel);
-			(void) fprintf(stdout, "magic file from %s\n",
+			(void)fprintf(stdout, "magic file from %s\n",
 				       magicfile);
 			return 1;
 		case 'z':
@@ -266,6 +270,9 @@ main(int argc, char *argv[])
 #ifdef S_IFLNK
 		case 'L':
 			flags |= MAGIC_SYMLINK;
+			break;
+		case 'h':
+			flags &= ~MAGIC_SYMLINK;
 			break;
 #endif
 		case '?':
@@ -322,6 +329,7 @@ main(int argc, char *argv[])
 
 
 private void
+/*ARGSUSED*/
 load(const char *m, int flags)
 {
 	if (magic)
@@ -347,6 +355,7 @@ unwrap(char *fn)
 	char buf[MAXPATHLEN];
 	FILE *f;
 	int wid = 0, cwid;
+	size_t len;
 
 	if (strcmp("-", fn) == 0) {
 		f = stdin;
@@ -359,7 +368,10 @@ unwrap(char *fn)
 		}
 
 		while (fgets(buf, MAXPATHLEN, f) != NULL) {
-			cwid = file_mbswidth(buf) - 1;
+			len = strlen(buf);
+			if (len > 0 && buf[len - 1] == '\n')
+				buf[len - 1] = '\0';
+			cwid = file_mbswidth(buf);
 			if (cwid > wid)
 				wid = cwid;
 		}
@@ -368,13 +380,15 @@ unwrap(char *fn)
 	}
 
 	while (fgets(buf, MAXPATHLEN, f) != NULL) {
-		buf[file_mbswidth(buf)-1] = '\0';
+		len = strlen(buf);
+		if (len > 0 && buf[len - 1] == '\n')
+			buf[len - 1] = '\0';
 		process(buf, wid);
 		if(nobuffer)
-			(void) fflush(stdout);
+			(void)fflush(stdout);
 	}
 
-	(void) fclose(f);
+	(void)fclose(f);
 }
 
 private void
@@ -384,14 +398,14 @@ process(const char *inname, int wid)
 	int std_in = strcmp(inname, "-") == 0;
 
 	if (wid > 0 && !bflag)
-		(void) printf("%s%s%*s ", std_in ? "/dev/stdin" : inname,
+		(void)printf("%s%s%*s ", std_in ? "/dev/stdin" : inname,
 		    separator, (int) (nopad ? 0 : (wid - file_mbswidth(inname))), "");
 
 	type = magic_file(magic, std_in ? NULL : inname);
 	if (type == NULL)
-		printf("ERROR: %s\n", magic_error(magic));
+		(void)printf("ERROR: %s\n", magic_error(magic));
 	else
-		printf("%s\n", type);
+		(void)printf("%s\n", type);
 }
 
 
@@ -500,7 +514,7 @@ usage(void)
 private void
 help(void)
 {
-	puts(
+	(void)puts(
 "Usage: file [OPTION]... [FILE]...\n"
 "Determine file type of FILEs.\n"
 "\n"

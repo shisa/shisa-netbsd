@@ -1,4 +1,4 @@
-/*	$NetBSD: ex_write.c,v 1.10 2005/02/12 12:53:23 aymeric Exp $	*/
+/*	$NetBSD: ex_write.c,v 1.12 2006/03/19 05:01:48 rtr Exp $	*/
 
 /*-
  * Copyright (c) 1992, 1993, 1994
@@ -16,7 +16,7 @@
 #if 0
 static const char sccsid[] = "@(#)ex_write.c	10.30 (Berkeley) 7/12/96";
 #else
-__RCSID("$NetBSD: ex_write.c,v 1.10 2005/02/12 12:53:23 aymeric Exp $");
+__RCSID("$NetBSD: ex_write.c,v 1.12 2006/03/19 05:01:48 rtr Exp $");
 #endif
 #endif /* not lint */
 
@@ -147,6 +147,7 @@ exwr(sp, cmdp, cmd)
 	int flags;
 	char *name, *p;
 
+	p = NULL;	/* XXXGCC -Wuninitialized */
 	NEEDFILE(sp, cmdp);
 
 	/* All write commands can have an associated '!'. */
@@ -359,14 +360,17 @@ ex_writefp(sp, name, fp, fm, tm, nlno, nch, silent)
 	    S_ISREG(sb.st_mode) && fsync(fileno(fp)))
 		goto err;
 
-	if (fclose(fp))
+	if (fclose(fp)) {
+		fp = NULL;
 		goto err;
+	}
 
 	rval = 0;
 	if (0) {
 err:		if (!F_ISSET(sp->ep, F_MULTILOCK))
 			msgq_str(sp, M_SYSERR, name, "%s");
-		(void)fclose(fp);
+		if (NULL != fp)
+			(void)fclose(fp);
 		rval = 1;
 	}
 

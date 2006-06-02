@@ -1,4 +1,4 @@
-/*	$NetBSD: scsipi_base.c,v 1.128 2005/02/27 00:27:48 perry Exp $	*/
+/*	$NetBSD: scsipi_base.c,v 1.135 2006/04/17 14:30:40 nathanw Exp $	*/
 
 /*-
  * Copyright (c) 1998, 1999, 2000, 2002, 2003, 2004 The NetBSD Foundation, Inc.
@@ -38,7 +38,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: scsipi_base.c,v 1.128 2005/02/27 00:27:48 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: scsipi_base.c,v 1.135 2006/04/17 14:30:40 nathanw Exp $");
 
 #include "opt_scsi.h"
 
@@ -269,7 +269,7 @@ scsipi_get_resource(struct scsipi_channel *chan)
  *
  *	NOTE: Must be called at splbio().
  */
-static __inline int
+static inline int
 scsipi_grow_resources(struct scsipi_channel *chan)
 {
 
@@ -525,7 +525,7 @@ scsipi_put_xs(struct scsipi_xfer *xs)
 		wakeup(periph);
 	} else {
 		if (periph->periph_switch->psw_start != NULL &&
-		    (periph->periph_dev->dv_flags & DVF_ACTIVE)) {
+		    device_is_active(periph->periph_dev)) {
 			SC_DEBUG(periph, SCSIPI_DB2,
 			    ("calling private start()\n"));
 			(*periph->periph_switch->psw_start)(periph);
@@ -766,7 +766,7 @@ scsipi_interpret_sense(struct scsipi_xfer *xs)
 	int error;
 #ifndef	SCSIVERBOSE
 	u_int32_t info;
-	static char *error_mes[] = {
+	static const char *error_mes[] = {
 		"soft error (corrected)",
 		"not ready", "medium error",
 		"non-media hardware failure", "illegal request",
@@ -989,7 +989,7 @@ scsipi_interpret_sense(struct scsipi_xfer *xs)
 	default:
 #if    defined(SCSIDEBUG) || defined(DEBUG)
 	{
-		static char *uc = "undecodable sense error";
+		static const char *uc = "undecodable sense error";
 		int i;
 		u_int8_t *cptr = (u_int8_t *) sense;
 		scsipi_printaddr(periph);
@@ -1321,6 +1321,20 @@ scsipi_done(struct scsipi_xfer *xs)
 	/*
 	 * The resource this command was using is now free.
 	 */
+	if (xs->xs_status & XS_STS_DONE) {
+		/* XXX in certain circumstances, such as a device
+		 * being detached, a xs that has already been
+		 * scsipi_done()'d by the main thread will be done'd
+		 * again by scsibusdetach(). Putting the xs on the
+		 * chan_complete queue causes list corruption and
+		 * everyone dies. This prevents that, but perhaps
+		 * there should be better coordination somewhere such
+		 * that this won't ever happen (and can be turned into
+		 * a KASSERT().
+		 */
+		splx(s);
+		goto out;
+	}
 	scsipi_put_resource(chan);
 	xs->xs_periph->periph_sent--;
 
@@ -2116,6 +2130,9 @@ scsipi_completion_thread(void *arg)
 			    ADAPTER_REQ_GROW_RESOURCES, NULL);
 			scsipi_channel_thaw(chan, 1);
 			splx(s);
+			if (chan->chan_tflags & SCSIPI_CHANT_GROWRES) {
+				preempt(1);
+			}
 			continue;
 		}
 		if (chan->chan_tflags & SCSIPI_CHANT_KICK) {

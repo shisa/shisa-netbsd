@@ -1,4 +1,4 @@
-/*	$NetBSD: 3c590.c,v 1.12 2003/08/31 22:40:14 fvdl Exp $	*/
+/*	$NetBSD: 3c590.c,v 1.14 2006/05/11 00:48:05 mrg Exp $	*/
 
 /* stripped down from freebsd:sys/i386/netboot/3c509.c */
 
@@ -78,7 +78,7 @@ int EtherInit(myadr)
 	/* common variables */
 	int i, j;
 	/* variables for 3C509 */
-	short *p;
+	u_short *p;
 	struct mtabentry *m;
 
 	/*********************************************************

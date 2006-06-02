@@ -1,4 +1,4 @@
-/*	$NetBSD: xboxvar.h,v 1.2 2000/01/11 12:59:44 pk Exp $ */
+/*	$NetBSD: xboxvar.h,v 1.4 2005/12/11 12:23:44 christos Exp $ */
 
 /*-
  * Copyright (c) 1998 The NetBSD Foundation, Inc.
@@ -45,7 +45,7 @@
 struct xbox_attach_args {
 	bus_space_tag_t	xa_bustag;
 	bus_dma_tag_t	xa_dmatag;
-	char		*xa_name;	/* PROM node name */
+	const char	*xa_name;	/* PROM node name */
 	int		xa_node;	/* PROM handle */
 };
 #endif /* _XBOX_VAR_H */

@@ -1,4 +1,4 @@
-/* $NetBSD: setup.c,v 1.19.2.1 2005/05/07 11:21:29 tron Exp $ */
+/* $NetBSD: setup.c,v 1.28 2006/04/28 00:07:54 perseant Exp $ */
 
 /*-
  * Copyright (c) 2003 The NetBSD Foundation, Inc.
@@ -92,7 +92,7 @@
 
 #include "bufcache.h"
 #include "vnode.h"
-#include "lfs.h"
+#include "lfs_user.h"
 
 #include "fsck.h"
 #include "extern.h"
@@ -150,6 +150,8 @@ reset_maxino(ino_t len)
 	memset(typemap + maxino, 0, (len - maxino) * sizeof(char));
 	memset(lncntp + maxino, 0, (len - maxino) * sizeof(int16_t));
 
+	maxino = len;
+
 	return;
 }
  
@@ -203,7 +205,7 @@ setup(const char *dev)
 	if (fs == NULL) {
 		if (preen)
 			printf("%s: ", cdevname());
-		pfatal("BAD SUPER BLOCK\n");
+		errexit("BAD SUPER BLOCK OR IFILE INODE NOT FOUND\n");
 	}
 	if ((lp = getdisklabel((char *) NULL, fsreadfd)) != NULL)
 		dev_bsize = secsize = lp->d_secsize;
@@ -247,7 +249,7 @@ setup(const char *dev)
 		}
 	}
 	if (fs->lfs_bmask != fs->lfs_bsize - 1) {
-		pwarn("INCORRECT BMASK=%x IN SUPERBLOCK (should be %x)",
+		pwarn("INCORRECT BMASK=0x%x IN SUPERBLOCK (should be 0x%x)",
 		    (unsigned int) fs->lfs_bmask,
 		    (unsigned int) fs->lfs_bsize - 1);
 		fs->lfs_bmask = fs->lfs_bsize - 1;
@@ -311,7 +313,7 @@ setup(const char *dev)
 	maxino = ((VTOI(ivp)->i_ffs1_size - (fs->lfs_cleansz + fs->lfs_segtabsz)
 		* fs->lfs_bsize) / fs->lfs_bsize) * fs->lfs_ifpb;
 	if (debug)
-		printf("maxino    = %d\n", maxino);
+		printf("maxino    = %llu\n", (unsigned long long)maxino);
 	for (i = 0; i < VTOI(ivp)->i_ffs1_size; i += fs->lfs_bsize) {
 		bread(ivp, i >> fs->lfs_bshift, fs->lfs_bsize, NOCRED, &bp);
 		/* XXX check B_ERROR */
@@ -322,8 +324,18 @@ setup(const char *dev)
 	 * allocate and initialize the necessary maps
 	 */
 	din_table = (ufs_daddr_t *) malloc(maxino * sizeof(*din_table));
+	if (din_table == NULL) {
+		printf("cannot alloc %lu bytes for din_table\n",
+		    (unsigned long) maxino * sizeof(*din_table));
+		goto badsblabel;
+	}
 	memset(din_table, 0, maxino * sizeof(*din_table));
 	seg_table = (SEGUSE *) malloc(fs->lfs_nseg * sizeof(SEGUSE));
+	if (seg_table == NULL) {
+		printf("cannot alloc %lu bytes for seg_table\n",
+		    (unsigned long) fs->lfs_nseg * sizeof(SEGUSE));
+		goto badsblabel;
+	}
 	memset(seg_table, 0, fs->lfs_nseg * sizeof(SEGUSE));
 	/* Get segment flags */
 	for (i = 0; i < fs->lfs_nseg; i++) {

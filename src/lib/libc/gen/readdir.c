@@ -1,4 +1,4 @@
-/*	$NetBSD: readdir.c,v 1.18 2003/08/07 16:42:55 agc Exp $	*/
+/*	$NetBSD: readdir.c,v 1.23 2006/05/17 20:36:50 christos Exp $	*/
 
 /*
  * Copyright (c) 1983, 1993
@@ -34,12 +34,13 @@
 #if 0
 static char sccsid[] = "@(#)readdir.c	8.3 (Berkeley) 9/29/94";
 #else
-__RCSID("$NetBSD: readdir.c,v 1.18 2003/08/07 16:42:55 agc Exp $");
+__RCSID("$NetBSD: readdir.c,v 1.23 2006/05/17 20:36:50 christos Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
 #include "namespace.h"
 #include "reentrant.h"
+#include "extern.h"
 #include <sys/param.h>
 
 #include <dirent.h>
@@ -47,15 +48,12 @@ __RCSID("$NetBSD: readdir.c,v 1.18 2003/08/07 16:42:55 agc Exp $");
 #include <string.h>
 #include <unistd.h>
 
-#ifdef __weak_alias
-__weak_alias(readdir,_readdir)
-__weak_alias(readdir_r,_readdir_r)
-#endif
+#include "dirent_private.h"
 
 /*
  * get next entry in a directory.
  */
-static struct dirent *
+struct dirent *
 _readdir_unlocked(DIR *dirp)
 {
 	struct dirent *dp;
@@ -76,7 +74,7 @@ _readdir_unlocked(DIR *dirp)
 		}
 		dp = (struct dirent *)
 		    (void *)(dirp->dd_buf + (size_t)dirp->dd_loc);
-		if ((long)dp & 03)	/* bogus pointer check */
+		if ((intptr_t)dp & _DIRENT_ALIGN(dp))/* bogus pointer check */
 			return (NULL);
 		/* d_reclen is unsigned; no need to compare it <= 0 */
 		if (dp->d_reclen > dirp->dd_len + 1 - dirp->dd_loc)
@@ -123,13 +121,13 @@ readdir_r(dirp, entry, result)
 	if (__isthreaded) {
 		mutex_lock((mutex_t *)dirp->dd_lock);
 		if ((dp = _readdir_unlocked(dirp)) != NULL)
-			memcpy(entry, dp, DIRENT_SIZE(dp));
+			memcpy(entry, dp, (size_t)_DIRENT_SIZE(dp));
 		mutex_unlock((mutex_t *)dirp->dd_lock);
 	}
 	else 
 #endif
 		if ((dp = _readdir_unlocked(dirp)) != NULL)
-			memcpy(entry, dp, DIRENT_SIZE(dp));
+			memcpy(entry, dp, (size_t)_DIRENT_SIZE(dp));
 
 	if (errno != 0) {
 		if (dp == NULL)

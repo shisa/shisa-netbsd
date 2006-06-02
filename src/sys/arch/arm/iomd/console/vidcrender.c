@@ -1,4 +1,4 @@
-/*	$NetBSD: vidcrender.c,v 1.14 2005/02/11 06:21:22 simonb Exp $	*/
+/*	$NetBSD: vidcrender.c,v 1.18 2005/12/24 20:06:52 perry Exp $	*/
 
 /*
  * Copyright (c) 1996 Mark Brinicombe
@@ -45,7 +45,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: vidcrender.c,v 1.14 2005/02/11 06:21:22 simonb Exp $");
+__KERNEL_RCSID(0, "$NetBSD: vidcrender.c,v 1.18 2005/12/24 20:06:52 perry Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -169,7 +169,7 @@ int		vidcrender_setbgcol(struct vconsole *, int);
 int		vidcrender_sgr(struct vconsole *, int);
 int		vidcrender_scrollregion(struct vconsole *, int, int);
 int		vidcrender_ioctl(struct vconsole *, dev_t, int, caddr_t, int,
-				 struct proc *);
+				 struct lwp *);
 int		vidcrender_attach(struct vconsole *, struct device *,
 				  struct device *, void *);
 
@@ -220,7 +220,7 @@ static struct fsyn fsyn_pref[] = {
 
 /*#define mod(x)	(((x) > 0) ? (x) : (-x))*/
 
-static __inline int
+static inline int
 mod(int n)
 {
 	if (n < 0)
@@ -1246,7 +1246,8 @@ vidc_cursor_init(vc)
 
 	if (!cursor_data) {
 		/* Allocate cursor memory first time round */
-		cursor_data = (char *)uvm_km_zalloc(kernel_map, PAGE_SIZE);
+		cursor_data = (char *)uvm_km_alloc(kernel_map, PAGE_SIZE, 0,
+		    UVM_KMF_VAONLY);
 		if (!cursor_data)
 			panic("Cannot allocate memory for hardware cursor");
 		(void) pmap_extract(pmap_kernel(), (vaddr_t)cursor_data, &pa);
@@ -1485,7 +1486,7 @@ vidcrender_blank(vc, type)
 }
 
 int vidcrender_ioctl ( struct vconsole *vc, dev_t dev, int cmd, caddr_t data,
-			int flag, struct proc *p )
+			int flag, struct lwp *l )
 {
 	int error;
 	int bpp, log2_bpp;
@@ -1516,10 +1517,10 @@ int vidcrender_ioctl ( struct vconsole *vc, dev_t dev, int cmd, caddr_t data,
     		vc->MODECHANGE ( vc );
 		ws.ws_row=vc->ychars;
 		ws.ws_col=vc->xchars;
-		error = (*tp->t_linesw->l_ioctl)(tp, TIOCSWINSZ, (char *)&ws, flag, p);
+		error = (*tp->t_linesw->l_ioctl)(tp, TIOCSWINSZ, (char *)&ws, flag, l);
 		if (error != EPASSTHROUGH)
 			return (error);
-		return ttioctl(tp, TIOCSWINSZ, (char *)&ws, flag, p);
+		return ttioctl(tp, TIOCSWINSZ, (char *)&ws, flag, l);
 		break;
 
 	case CONSOLE_RESETSCREEN:
@@ -1609,20 +1610,20 @@ vidcrender_flash_go(vc)
 
 /* What does this function do ? */
 int 
-vidcrender_flash(vc, flash)
+vidcrender_flash(vc, flashit)
 	struct vconsole *vc;
-	int flash;
+	int flashit;
 {
-	flash = flash;
+	flashit = flashit;
 	return(0);
 }
 
 int
-vidcrender_cursorflash(vc, flash)
+vidcrender_cursorflash(vc, flashit)
 	struct vconsole *vc;
-	int flash;
+	int flashit;
 {
-	cursor_flash = flash;
+	cursor_flash = flashit;
 	return(0);
 }
 

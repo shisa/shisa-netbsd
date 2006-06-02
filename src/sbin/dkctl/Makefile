@@ -1,6 +1,5 @@
-#	$NetBSD: Makefile,v 1.2 2005/01/20 15:53:35 xtraeme Exp $
+#	$NetBSD: Makefile,v 1.4 2006/05/11 23:16:29 mrg Exp $
 
-WARNS=	3
 PROG=	dkctl
 MAN=	dkctl.8
 
@@ -8,3 +7,7 @@ LDADD+=	-lutil
 DPADD+=	${LIBUTIL}
 
 .include <bsd.prog.mk>
+
+.if ${HAVE_GCC} == 4
+COPTS.dkctl.c+=	-Wno-pointer-sign
+.endif

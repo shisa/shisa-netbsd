@@ -1,4 +1,4 @@
-/* $NetBSD: kern_kcont.c,v 1.10 2004/04/25 16:42:41 simonb Exp $ */
+/* $NetBSD: kern_kcont.c,v 1.13 2005/12/24 19:12:23 perry Exp $ */
 
 /*
  * Copyright 2003 Jonathan Stone.
@@ -37,7 +37,7 @@
 /*
  */
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_kcont.c,v 1.10 2004/04/25 16:42:41 simonb Exp $ ");
+__KERNEL_RCSID(0, "$NetBSD: kern_kcont.c,v 1.13 2005/12/24 19:12:23 perry Exp $ ");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -55,20 +55,6 @@ __KERNEL_RCSID(0, "$NetBSD: kern_kcont.c,v 1.10 2004/04/25 16:42:41 simonb Exp $
 				/* XXX: schedsofnet() should die. */
 
 #include <sys/kcont.h>
-
-
-/* Accessors for struct kc_queue */
-static __inline struct kc *kc_set(struct kc *,
-	void (*func)(void *, void *, int),
-	void *env_arg, int ipl);
-
-static __inline void kcont_enqueue_atomic(kcq_t *kcq, struct kc *kc);
-static __inline struct kc *kcont_dequeue_atomic(kcq_t *kcq);
-
-
-static void	kcont_worker(void * /*arg*/);
-static void	kcont_create_worker(void *);
-
 
 #ifdef __HAVE_GENERIC_SOFT_INTERRUPTS
 /*
@@ -93,14 +79,13 @@ POOL_INIT(kc_pool, sizeof(struct kc), 0, 0, 0, "kcpl", NULL);
  */
 static kcq_t kcq_process_ctxt;
 
-
 /*
  * Insert/Remove a fully-formed struct kc * into the kc_queue *
  * of some kernel object (e.g., a struct buf *).
  * For fine-grained SMP, both enqueueing and dequeueing will
  * need a locking mechanism.
  */
-static __inline void
+static inline void
 kcont_enqueue_atomic(kcq_t *kcq, struct kc *kc)
 {
 	int s;
@@ -110,7 +95,7 @@ kcont_enqueue_atomic(kcq_t *kcq, struct kc *kc)
 	splx(s);
 }
 
-static __inline struct kc *
+static inline struct kc *
 kcont_dequeue_atomic(kcq_t *kcq)
 {
 	struct kc *kc;
@@ -131,7 +116,7 @@ kcont_dequeue_atomic(kcq_t *kcq)
  * Used by functions that are about call an asynchronous operation,
  * to build a continuation to be called once the operation completes.
  */
-static __inline struct kc *
+static inline struct kc *
 kc_set(struct kc *kc, void (*func)(void *, void *, int),
     void *env_arg, int ipl)
 {
@@ -343,14 +328,6 @@ kcont_run_softserial(void *arg)
 }
 #endif /* __HAVE_GENERIC_SOFT_INTERRUPTS */
 
-
-static void
-kcont_create_worker(void *arg)
-{
-	if (kthread_create1(kcont_worker, NULL, NULL, "kcont"))
-		panic("fork kcont");
-}
-
 /*
  * Main entrypoint for kcont worker kthreads to execute
  * a continuation which requested deferral to process context.
@@ -371,6 +348,12 @@ kcont_worker(void *arg)
 	kthread_exit(0);
 }
 
+static void
+kcont_create_worker(void *arg)
+{
+	if (kthread_create1(kcont_worker, NULL, NULL, "kcont"))
+		panic("fork kcont");
+}
 
 /*
  * Initialize kcont subsystem.

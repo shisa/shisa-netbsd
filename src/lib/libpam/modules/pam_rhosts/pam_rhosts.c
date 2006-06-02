@@ -1,4 +1,4 @@
-/*	$NetBSD: pam_rhosts.c,v 1.2.2.2 2005/07/11 11:19:34 tron Exp $	*/
+/*	$NetBSD: pam_rhosts.c,v 1.4 2005/04/19 03:15:36 christos Exp $	*/
 
 /*-
  * Copyright (c) 2002 Danny Braniss
@@ -40,7 +40,7 @@
 #ifdef __FreeBSD__
 __FBSDID("$FreeBSD: src/lib/libpam/modules/pam_rhosts/pam_rhosts.c,v 1.3 2003/12/11 13:55:16 des Exp $");
 #else
-__RCSID("$NetBSD: pam_rhosts.c,v 1.2.2.2 2005/07/11 11:19:34 tron Exp $");
+__RCSID("$NetBSD: pam_rhosts.c,v 1.4 2005/04/19 03:15:36 christos Exp $");
 #endif
 
 #include <pwd.h>

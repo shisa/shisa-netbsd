@@ -1,4 +1,4 @@
-/*	$NetBSD: getgrent.c,v 1.9 2005/01/06 15:10:45 lukem Exp $	*/
+/*	$NetBSD: getgrent.c,v 1.12 2005/09/14 15:54:53 drochner Exp $	*/
 
 /*
  * Copyright (c) 1989, 1991, 1993
@@ -67,17 +67,19 @@
 #define getgrent		_getgrent
 #define getgrgid		_getgrgid
 #define getgrnam		_getgrnam
+#define getgrnam_r		_getgrnam_r
 #define setgrent		_setgrent
 #define setgroupent		_setgroupent
-#define getgroupmembership	_getgroupmembership
+#define getgrouplist		_getgrouplist
 
 __weak_alias(endgrent,_endgrent)
 __weak_alias(getgrent,_getgrent)
 __weak_alias(getgrgid,_getgrgid)
 __weak_alias(getgrnam,_getgrnam)
+__weak_alias(getgrnam_r,_getgrnam_r)
 __weak_alias(setgrent,_setgrent)
 __weak_alias(setgroupent,_setgroupent)
-__weak_alias(getgroupmembership,_getgroupmembership)
+__weak_alias(getgrouplist,_getgrouplist)
 #endif
 
 #include <sys/param.h>
@@ -87,6 +89,8 @@ __weak_alias(getgroupmembership,_getgroupmembership)
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <errno.h>
 
 static FILE		*_gr_fp;
 static struct group	_gr_group;
@@ -110,6 +114,31 @@ getgrent(void)
 	if ((!_gr_fp && !grstart()) || !grscan(0, 0, NULL, NULL))
  		return (NULL);
 	return &_gr_group;
+}
+
+int
+getgrnam_r(const char *name, struct group *grp, char *buffer,
+	size_t buflen, struct group **result)
+{
+	struct group *gp, *bgp;
+
+	/* 
+	 * We blatantly cheat (don't provide reentrancy) 
+	 * and hope to get away with it
+	 */
+
+	*result = NULL;
+	bgp = (struct group*)buffer;
+	if (buflen < sizeof(struct group))
+		return ENOMEM;
+
+	gp = getgrnam(name);
+	if (gp) {
+		*bgp = *gp;
+		*result = bgp;
+	}
+
+	return (gp) ? ENOENT : 0;
 }
 
 struct group *
@@ -179,12 +208,13 @@ endgrent(void)
 }
 
 int
-getgroupmembership(const char *uname, gid_t agroup,
-    gid_t *groups, int maxgroups, int *grpcnt)
+getgrouplist(const char *uname, gid_t agroup,
+    gid_t *groups, int *grpcnt)
 {
 	struct group *grp;
-	int i, ngroups, ret;
+	int maxgroups, i, ngroups, ret;
 
+	maxgroups = *grpcnt;
 	ret = 0;
 	ngroups = 0;
 

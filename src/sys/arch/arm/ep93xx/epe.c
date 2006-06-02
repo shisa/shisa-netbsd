@@ -1,4 +1,4 @@
-/*	$NetBSD: epe.c,v 1.2.8.1 2005/10/21 18:57:57 riz Exp $	*/
+/*	$NetBSD: epe.c,v 1.8 2006/05/05 18:04:41 thorpej Exp $	*/
 
 /*
  * Copyright (c) 2004 Jesse Off
@@ -34,7 +34,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: epe.c,v 1.2.8.1 2005/10/21 18:57:57 riz Exp $");
+__KERNEL_RCSID(0, "$NetBSD: epe.c,v 1.8 2006/05/05 18:04:41 thorpej Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -93,6 +93,8 @@ __KERNEL_RCSID(0, "$NetBSD: epe.c,v 1.2.8.1 2005/10/21 18:57:57 riz Exp $");
 #include <arm/ep93xx/epereg.h> 
 #include <arm/ep93xx/epevar.h> 
 
+#define DEFAULT_MDCDIV	32
+
 #ifndef EPE_FAST
 #define EPE_FAST
 #endif
@@ -105,9 +107,9 @@ __KERNEL_RCSID(0, "$NetBSD: epe.c,v 1.2.8.1 2005/10/21 18:57:57 riz Exp $");
 #define CTRLPAGE_DMASYNC(x, y, z) \
 	bus_dmamap_sync(sc->sc_dmat, sc->ctrlpage_dmamap, (x), (y), (z))
 #else
-#define EPE_READ(x) *(__volatile u_int32_t *) \
+#define EPE_READ(x) *(volatile u_int32_t *) \
 	(EP93XX_AHB_VBASE + EP93XX_AHB_EPE + (EPE_ ## x))
-#define EPE_WRITE(x, y) *(__volatile u_int32_t *) \
+#define EPE_WRITE(x, y) *(volatile u_int32_t *) \
 	(EP93XX_AHB_VBASE + EP93XX_AHB_EPE + (EPE_ ## x)) = y
 #define CTRLPAGE_DMASYNC(x, y, z)
 #endif /* ! EPE_FAST */
@@ -144,6 +146,7 @@ epe_attach(struct device *parent, struct device *self, void *aux)
 {
 	struct epe_softc		*sc;
 	struct epsoc_attach_args	*sa;
+	prop_data_t			 enaddr;
 
 	printf("\n");
 	sc = (struct epe_softc*) self;
@@ -155,6 +158,18 @@ epe_attach(struct device *parent, struct device *self, void *aux)
 	if (bus_space_map(sa->sa_iot, sa->sa_addr, sa->sa_size, 
 		0, &sc->sc_ioh))
 		panic("%s: Cannot map registers", self->dv_xname);
+
+	/* Fetch the Ethernet address from property if set. */
+	enaddr = prop_dictionary_get(device_properties(self), "mac-addr");
+	if (enaddr != NULL) {
+		KASSERT(prop_object_type(enaddr) == PROP_TYPE_DATA);
+		KASSERT(prop_data_size(enaddr) == ETHER_ADDR_LEN);
+		memcpy(sc->sc_enaddr, prop_data_data_nocopy(enaddr),
+		       ETHER_ADDR_LEN);
+		bus_space_write_4(sc->sc_iot, sc->sc_ioh, EPE_AFP, 0);
+		bus_space_write_region_1(sc->sc_iot, sc->sc_ioh, EPE_IndAd,
+					 sc->sc_enaddr, ETHER_ADDR_LEN);
+	}
 
         ep93xx_intr_establish(sc->sc_intr, IPL_NET, epe_intr, sc);
 	epe_init(sc);
@@ -299,6 +314,7 @@ epe_init(struct epe_softc *sc)
 	caddr_t addr;
 	int rsegs, err, i;
 	struct ifnet * ifp = &sc->sc_ec.ec_if;
+	int mdcdiv = DEFAULT_MDCDIV;
 
 	callout_init(&sc->epe_tick_ch);
 
@@ -406,7 +422,9 @@ epe_init(struct epe_softc *sc)
 	}
 
 	/* Divide HCLK by 32 for MDC clock */
-	EPE_WRITE(SelfCtl, (SelfCtl_MDCDIV(32)|SelfCtl_PSPRS));
+	if (device_cfdata(&sc->sc_dev)->cf_flags)
+		mdcdiv = device_cfdata(&sc->sc_dev)->cf_flags;
+	EPE_WRITE(SelfCtl, (SelfCtl_MDCDIV(mdcdiv)|SelfCtl_PSPRS));
 
 	sc->sc_mii.mii_ifp = ifp;
 	sc->sc_mii.mii_readreg = epe_mii_readreg;

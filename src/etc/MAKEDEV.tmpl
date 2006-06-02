@@ -1,5 +1,5 @@
 #!/bin/sh -
-#	$NetBSD: MAKEDEV.tmpl,v 1.40.2.4 2005/07/02 15:49:36 tron Exp $
+#	$NetBSD: MAKEDEV.tmpl,v 1.52 2006/04/03 08:15:50 scw Exp $
 #
 # Copyright (c) 2003 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -186,6 +186,7 @@
 #	urio*	USB Diamond Rio 500 devices
 #	uscanner*	USB scanners
 #	ttyU*	USB modems
+#	ttyY*	USB serial adapters
 #
 # ISDN devices:
 #	isdn	communication between userland isdnd and kernel
@@ -213,6 +214,10 @@
 #	maple	Maple bus control devices
 #	mlcd*	Maple bus LCD devices
 #	mmem*	Maple bus storage devices
+#
+# IEEE1394 bus devices:
+#	fw*	IEEE1394 bus generic node access devices
+#	fwmem*	IEEE1394 bus physical memory of the remote node access devices
 #
 # Special purpose devices:
 #	ad*	UNIBUS interface to Data Translation A/D converter
@@ -461,6 +466,7 @@ all)
 	makedev local
 	makedev atabus0 atabus1 atabus2 atabus3
 	makedev tap tap0 tap1 tap2 tap3
+	makedev gpio gpio0 gpio1 gpio2 gpio3 gpio4 gpio5 gpio6 gpio7
 	;;
 
 init)
@@ -477,6 +483,11 @@ audio)
 	lndev audioctl0 audioctl
 	;;
 
+gpio)
+	makedev gpio0 gpio1 gpio2 gpio3 gpio4 gpio5 gpio6 gpio7
+	lndev gpio0 gpio
+	;;
+
 radio)
 	makedev radio0 radio1
 	lndev radio0 radio
@@ -491,8 +502,10 @@ usbs)
 	makedev uhid0 uhid1 uhid2 uhid3
 	makedev ulpt0 ulpt1
 	makedev ttyU0 ttyU1
+	makedev ttyY0 ttyY1
 	makedev urio0
 	makedev uscanner0 uscanner1
+	makedev utoppy0 utoppy1
 	makedev ugen0
 	;;
 
@@ -518,15 +531,14 @@ std)
 	fi
 	;;
 
+usb)
+	mkdev usb c %usb_chr% 255 444
+	;;
+
 usb*)
 	unit=${i#usb}
-	if [ "$unit" = "" ]; then
-		unit=255
-		usb=usb
-	else
-		usb=usb$unit
-	fi
-	mkdev $usb c %usb_chr% $unit
+	usb=usb$unit
+	mkdev usb$unit c %usb_chr% $unit
 	;;
 
 uhid*)
@@ -548,6 +560,18 @@ urio*)
 uscanner*)
 	unit=${i#uscanner}
 	mkdev uscanner$unit c %uscanner_chr% $unit
+	;;
+
+utoppy*)
+	unit=${i#utoppy}
+	mkdev utoppy$unit c %utoppy_chr% $unit
+	;;
+
+ttyY*)
+	unit=${i#ttyY}
+	mkdev ttyY$unit c %ucycom_chr% $(($unit + $dialin  )) "" "" $u_uucp
+	mkdev dtyY$unit c %ucycom_chr% $(($unit + $dialout )) "" "" $u_uucp
+	mkdev ctyY$unit c %ucycom_chr% $(($unit + $callunit)) "" "" $u_uucp
 	;;
 
 ttyU*)
@@ -718,7 +742,9 @@ ttyCY*)
 	eminor=$(($minor + $off))
 	while [ $minor -lt $eminor ]
 	do
-		nminor=$(zeropad 3 $minor)
+		# nminor=$(zeropad 3 $minor)
+		nminor=000$minor
+		nminor=${nminor#${nminor%???}}
 		mkdev t$name$nminor c $chr $(($minor + $dialin )) "" "" $u_uucp
 		mkdev d$name$nminor c $chr $(($minor + $dialout)) "" "" $u_uucp
 		minor=$(($minor + 1))
@@ -732,7 +758,9 @@ ttyCZ*)
 	eminor=$(($minor + $off))
 	while [ $minor -lt $eminor ]
 	do
-		nminor=$(zeropad 4 $minor)
+		# nminor=$(zeropad 4 $minor)
+		nminor=0000$minor
+		nminor=${nminor#${nminor%????}}
 		mkdev t$name$nminor c $chr $(($minor + $dialin )) "" "" $u_uucp
 		mkdev d$name$nminor c $chr $(($minor + $dialout)) "" "" $u_uucp
 		minor=$(($minor + 1))
@@ -753,7 +781,9 @@ tty[0-9]|tty0[0-9])
 
 tty0*|tty1*|tty[0-9])
 	unit=${i#tty}
-	ounit=$(zeropad 2 $unit)
+	# ounit=$(zeropad 2 $unit)
+	ounit=00$unit
+	ounit=${ounit#${ounit%??}}
 	mkdev tty$ounit c %com_chr% $(($unit + $dialin )) "" "" $u_uucp
 	mkdev dty$ounit c %com_chr% $(($unit + $dialout)) "" "" $u_uucp
 	;;
@@ -829,7 +859,7 @@ pty*)
 		warn "$i: pty unit conflicts with console ttyv0 device"
 		continue
 	fi
-	s2=$(($start % $nt - $s1 * $mult))
+	s2=$(($start % ($nt - $s1 * $mult)))
 	set -- $d2
 	shift $s2
 	t2=$1
@@ -947,6 +977,11 @@ audio*)
 	mkdev $audio    c %audio_chr% $(($unit + 128))	666
 	mkdev $mixer    c %audio_chr% $(($unit + 16))	666
 	mkdev $audioctl c %audio_chr% $(($unit + 192))	666
+	;;
+
+gpio*)
+	unit=${i#gpio}
+	mkdev gpio$unit c %gpio_chr% $unit 644
 	;;
 
 rmidi*)
@@ -1521,6 +1556,15 @@ tap*)
 		mkdev tap c %tap_chr% 0xfffff 600
 		;;
 	esac
+	;;
+
+fw*)
+	unit=${i#fw}
+	for j in 0 1 2 3
+	do
+		mkdev fw${unit}.${j} c %fw_chr% $((${unit} * 256 + ${j})) 660 ${g_operator}
+		mkdev fwmem${unit}.${j} c %fw_chr% $((65536 + ${unit} * 256 + ${j})) 660 ${g_operator}
+	done
 	;;
 
 midevend)

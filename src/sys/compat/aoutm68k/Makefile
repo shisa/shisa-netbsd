@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.4 2004/09/10 07:11:26 jdolecek Exp $
+#	$NetBSD: Makefile,v 1.6 2006/05/04 22:27:51 tsutsui Exp $
 
 .include <bsd.sys.mk>		# for HOST_SH
 
@@ -8,7 +8,6 @@ OBJS=	aoutm68k_sysent.c aoutm68k_syscalls.c \
 
 ${OBJS}: ${DEP}
 	${HOST_SH} ../../kern/makesyscalls.sh syscalls.conf syscalls.master
-	rm -f aoutm68k_syscalls.c	# garbage-collect, not needed
 
 all: ${OBJS}
 

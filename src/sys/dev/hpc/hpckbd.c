@@ -1,4 +1,4 @@
-/*	$NetBSD: hpckbd.c,v 1.12 2005/02/27 00:26:59 perry Exp $ */
+/*	$NetBSD: hpckbd.c,v 1.17 2006/03/29 06:37:35 thorpej Exp $ */
 
 /*-
  * Copyright (c) 1999-2001 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: hpckbd.c,v 1.12 2005/02/27 00:26:59 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: hpckbd.c,v 1.17 2006/03/29 06:37:35 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -78,7 +78,7 @@ struct hpckbd_eventq {
 struct hpckbd_core {
 	struct hpckbd_if	hc_if;
 	struct hpckbd_ic_if	*hc_ic;
-	const u_int8_t		*hc_keymap;
+	const uint8_t		*hc_keymap;
 	const int		*hc_special;
 	int			hc_polling;
 	int			hc_console;
@@ -118,7 +118,7 @@ CFATTACH_DECL(hpckbd, sizeof(struct hpckbd_softc),
 /* wskbd accessopts */
 int	hpckbd_enable(void *, int);
 void	hpckbd_set_leds(void *, int);
-int	hpckbd_ioctl(void *, u_long, caddr_t, int, struct proc *);
+int	hpckbd_ioctl(void *, u_long, caddr_t, int, struct lwp *);
 
 /* consopts */
 struct	hpckbd_core hpckbd_consdata;
@@ -155,7 +155,7 @@ void
 hpckbd_attach(struct device *parent, struct device *self, void *aux)
 {
 	struct hpckbd_attach_args *haa = aux;
-	struct hpckbd_softc *sc = (void*)self;
+	struct hpckbd_softc *sc = device_private(self);
 	struct hpckbd_ic_if *ic = haa->haa_ic;
 	struct wskbddev_attach_args wa;
 
@@ -268,7 +268,15 @@ hpckbd_keymap_setup(struct hpckbd_core *hc, const keysym_t *map, int mapsize)
 	struct wscons_keydesc *desc;
 
 	/* fix keydesc table */
-	desc = (struct wscons_keydesc *)hpckbd_keymapdata.keydesc;
+	/* 
+	 * XXX The way this is done is really wrong.  The __UNCONST()
+	 * is a hint as to what is wrong.  This actually ends up modifying
+	 * initialized data which is marked "const".
+	 * The reason we get away with it here is apparently that text
+	 * and read-only data gets mapped read/write on the platforms
+	 * using this code.
+	 */
+	desc = (struct wscons_keydesc *)__UNCONST(hpckbd_keymapdata.keydesc);
 	for (i = 0; desc[i].name != 0; i++) {
 		if ((desc[i].name & KB_MACHDEP) && desc[i].map == NULL) {
 			desc[i].map = map;
@@ -340,7 +348,8 @@ __hpckbd_input(void *arg, int flag, int scancode)
 		type = WSCONS_EVENT_KEY_UP;
 	}
 
-	if ((key = hc->hc_keymap[scancode]) == UNK) {
+	key = hc->hc_keymap[scancode];
+	if (key == UNK) {
 #ifdef DEBUG
 		printf("hpckbd: unknown scan code %#x (%d, %d)\n",
 		    scancode, scancode >> 3,
@@ -376,18 +385,18 @@ __hpckbd_input(void *arg, int flag, int scancode)
 	}
 
 	if (hc->hc_polling) {
-		if (hpckbd_putevent(hc, type, hc->hc_keymap[scancode]) == 0)
-			printf("hpckbd: queue over flow");
+		if (hpckbd_putevent(hc, type, key) == 0)
+			printf("hpckbd: queue over flow\n");
 	} else {
 #ifdef WSDISPLAY_COMPAT_RAWKBD
 		if (hc->hc_rawkbd) {
 			int n;
 			u_char data[16];
-			n = pckbd_encode(type, hc->hc_keymap[scancode], data);
+			n = pckbd_encode(type, key, data);
 			wskbd_rawinput(hc->hc_wskbddev, data, n);
 		} else
 #endif
-			wskbd_input(hc->hc_wskbddev, type, hc->hc_keymap[scancode]);
+			wskbd_input(hc->hc_wskbddev, type, key);
 	}
 
 	return (0);
@@ -457,7 +466,7 @@ hpckbd_set_leds(void *arg, int leds)
 }
 
 int
-hpckbd_ioctl(void *arg, u_long cmd, caddr_t data, int flag, struct proc *p)
+hpckbd_ioctl(void *arg, u_long cmd, caddr_t data, int flag, struct lwp *l)
 {
 #ifdef WSDISPLAY_COMPAT_RAWKBD
 	struct hpckbd_core *hc = arg;

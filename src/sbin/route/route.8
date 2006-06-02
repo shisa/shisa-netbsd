@@ -1,4 +1,4 @@
-.\"	$NetBSD: route.8,v 1.36 2003/10/02 00:09:06 itojun Exp $
+.\"	$NetBSD: route.8,v 1.38 2006/01/29 22:11:10 wiz Exp $
 .\"
 .\" Copyright (c) 1983, 1991, 1993
 .\"	The Regents of the University of California.  All rights reserved.
@@ -29,7 +29,7 @@
 .\"
 .\"     @(#)route.8	8.4 (Berkeley) 6/1/94
 .\"
-.Dd July 19, 2003
+.Dd January 25, 2006
 .Dt ROUTE 8
 .Os
 .Sh NAME
@@ -37,7 +37,7 @@
 .Nd manually manipulate the routing tables
 .Sh SYNOPSIS
 .Nm
-.Op Fl fnqsv
+.Op Fl fnqSsv
 .Ar command
 .Oo
 .Op Ar modifiers
@@ -88,6 +88,9 @@ may require correct operation of the network; thus it may be expedient
 to forgo this, especially when attempting to repair networking operations).
 .It Fl q
 Suppress all output from commands that manipulate the routing table.
+.It Fl S
+Print a space when a flag is missing so that flags are vertically aligned
+instead of printing the flags that are set as a contiguous string.
 .It Fl s
 (short) Suppresses all output from a
 .Cm get

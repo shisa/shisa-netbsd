@@ -1,4 +1,4 @@
-/*	$NetBSD: cpu.c,v 1.38 2004/07/02 02:50:25 petrov Exp $ */
+/*	$NetBSD: cpu.c,v 1.47 2006/02/20 19:00:27 cdi Exp $ */
 
 /*
  * Copyright (c) 1996
@@ -52,7 +52,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: cpu.c,v 1.38 2004/07/02 02:50:25 petrov Exp $");
+__KERNEL_RCSID(0, "$NetBSD: cpu.c,v 1.47 2006/02/20 19:00:27 cdi Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -75,14 +75,13 @@ __KERNEL_RCSID(0, "$NetBSD: cpu.c,v 1.38 2004/07/02 02:50:25 petrov Exp $");
 struct cacheinfo cacheinfo;
 
 /* Linked list of all CPUs in system. */
-int ncpus = 0;
+int sparc_ncpus = 0;
 struct cpu_info *cpus = NULL;
 
-__volatile cpuset_t cpus_active;/* set of active cpus */
+volatile cpuset_t cpus_active;/* set of active cpus */
 struct cpu_bootargs *cpu_args;	/* allocated very early in pmap_bootstrap. */
 
 static struct cpu_info *alloc_cpuinfo(u_int);
-void mp_main(void);
 
 /* The following are used externally (sysctl_hw). */
 char	machine[] = MACHINE;		/* from <machine/param.h> */
@@ -103,8 +102,7 @@ extern struct cfdriver cpu_cd;
 #define	IU_VERS(v)	((((uint64_t)(v)) & VER_MASK) >> VER_MASK_SHIFT)
 
 struct cpu_info *
-alloc_cpuinfo(cpu_node)
-	u_int cpu_node;
+alloc_cpuinfo(u_int cpu_node)
 {
 	paddr_t pa0, pa;
 	vaddr_t va, va0;
@@ -124,7 +122,7 @@ alloc_cpuinfo(cpu_node)
 			return cpi;
 
 	/* Allocate the aligned VA and determine the size. */
-	va = uvm_km_valloc_align(kernel_map, sz, sz);
+	va = uvm_km_alloc(kernel_map, sz, sz, UVM_KMF_VAONLY);
 	if (!va)
 		panic("alloc_cpuinfo: no virtual space");
 	va0 = va;
@@ -171,10 +169,7 @@ alloc_cpuinfo(cpu_node)
 }
 
 int
-cpu_match(parent, cf, aux)
-	struct device *parent;
-	struct cfdata *cf;
-	void *aux;
+cpu_match(struct device *parent, struct cfdata *cf, void *aux)
 {
 	struct mainbus_attach_args *ma = aux;
 
@@ -187,10 +182,7 @@ cpu_match(parent, cf, aux)
  * (slightly funny place to do it, but this is where it is to be found).
  */
 void
-cpu_attach(parent, dev, aux)
-	struct device *parent;
-	struct device *dev;
-	void *aux;
+cpu_attach(struct device *parent, struct device *dev, void *aux)
 {
 	int node;
 	long clk;
@@ -198,7 +190,7 @@ cpu_attach(parent, dev, aux)
 	struct mainbus_attach_args *ma = aux;
 	struct fpstate64 *fpstate;
 	struct fpstate64 fps[2];
-	char *sep;
+	const char *sep;
 	register int i, l;
 	uint64_t ver;
 	int bigcache, cachesize;
@@ -335,57 +327,24 @@ cpu_attach(parent, dev, aux)
 	 * in there.
 	 */
 	alloc_cpuinfo((u_int)node);
+	printf("%s: upa id %" PRIu64 "\n", dev->dv_xname, CPU_UPAID);
 }
 
 #if defined(MULTIPROCESSOR)
+vaddr_t cpu_spinup_trampoline;
+
+u_long dump_rtf_info = 0;
+
 /*
  * Start secondary processors in motion.
  */
-extern vaddr_t ktext;
-extern paddr_t ktextp;
-extern vaddr_t ektext;
-extern vaddr_t kdata;
-extern paddr_t kdatap;
-extern vaddr_t ekdata;
-
-extern void cpu_mp_startup_end(void *);
-
 void
 cpu_boot_secondary_processors()
 {
-	int pstate;
+	int i, pstate;
 	struct cpu_info *ci;
-	int i;
-	vaddr_t mp_start;
-	int     mp_start_size;
 
 	sparc64_ipi_init();
-
-	cpu_args->cb_ktext = ktext;
-	cpu_args->cb_ktextp = ktextp;
-	cpu_args->cb_ektext = ektext;
-
-	cpu_args->cb_kdata = kdata;
-	cpu_args->cb_kdatap = kdatap;
-	cpu_args->cb_ekdata = ekdata;
-
-	mp_start = ((vaddr_t)cpu_args + sizeof(*cpu_args)+ 0x0f) & ~0x0f;
-	mp_start_size = (vaddr_t)cpu_mp_startup_end - (vaddr_t)cpu_mp_startup;
-	memcpy((void *)mp_start, cpu_mp_startup, mp_start_size);
-
-	mp_start_size = mp_start_size >> 3;
-	for (i = 0; i < mp_start_size; i++)
-		flush(mp_start + (i << 3));
-
-#ifdef DEBUG
-	printf("cpu_args @ %p\n", cpu_args);
-	printf("ktext %lx, ktextp %lx, ektext %lx\n",
-	       cpu_args->cb_ktext, cpu_args->cb_ktextp,cpu_args->cb_ektext);
-	printf("kdata %lx, kdatap %lx, ekdata %lx\n",
-	       cpu_args->cb_kdata, cpu_args->cb_kdatap, cpu_args->cb_ekdata);
-	printf("mp_start %lx, mp_start_size 0x%x\n",
-	       mp_start, mp_start_size);
-#endif
 
 	printf("cpu0: booting secondary processors:\n");
 
@@ -408,7 +367,8 @@ cpu_boot_secondary_processors()
 		pstate = getpstate();
 		setpstate(PSTATE_KERN);
 
-		prom_startcpu(ci->ci_node, (void *)mp_start, 0);
+		printf("mp_tramp: %p\n", (void*)cpu_spinup_trampoline);
+		prom_startcpu(ci->ci_node, (void *)cpu_spinup_trampoline, 0);
 
 		for (i = 0; i < 2000; i++) {
 			membar_sync();
@@ -429,10 +389,21 @@ cpu_boot_secondary_processors()
 }
 
 void
-mp_main()
+cpu_hatch()
 {
+	int i;
+	char *v = (char*)CPUINFO_VA;
 
+	for (i = 0; i < 4*PAGE_SIZE; i += sizeof(long))
+		flush(v + i);
+
+	dump_rtf_info = 1;
+
+	printf("cpu%d fired up.\n", cpu_number());
 	CPUSET_ADD(cpus_active, cpu_number());
+	for (i = 0; i < 5000000; i++)
+		;
+	printf("cpu%d enters idle loop.\n", cpu_number());
 	membar_sync();
 	spl0();
 }

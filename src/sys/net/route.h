@@ -1,4 +1,4 @@
-/*	$NetBSD: route.h,v 1.39 2005/02/26 22:45:09 perry Exp $	*/
+/*	$NetBSD: route.h,v 1.43 2005/12/11 12:24:52 christos Exp $	*/
 
 /*
  * Copyright (c) 1980, 1986, 1993
@@ -92,8 +92,10 @@ struct rt_metrics {
 #endif
 struct rtentry {
 	struct	radix_node rt_nodes[2];	/* tree glue, and other values */
-#define	rt_key(r)	((struct sockaddr *)((r)->rt_nodes->rn_key))
-#define	rt_mask(r)	((struct sockaddr *)((r)->rt_nodes->rn_mask))
+/*XXXUNCONST*/
+#define	rt_key(r)	((struct sockaddr *)__UNCONST((r)->rt_nodes->rn_key))
+/*XXXUNCONST*/
+#define	rt_mask(r)	((struct sockaddr *)__UNCONST((r)->rt_nodes->rn_mask))
 	struct	sockaddr *rt_gateway;	/* value */
 	int	rt_flags;		/* up/down?, host/net */
 	int	rt_refcnt;		/* # held references */
@@ -186,6 +188,7 @@ struct rt_msghdr {
 #define RTM_OIFINFO	0xe	/* Old (pre-1.5) RTM_IFINFO message */
 #define RTM_IFINFO	0xf	/* iface/link going up/down etc. */
 #define	RTM_IFANNOUNCE	0x10	/* iface arrival/departure */
+#define	RTM_IEEE80211	0x11	/* IEEE80211 wireless event */
 
 #define RTV_MTU		0x1	/* init or lock _mtu */
 #define RTV_HOPCOUNT	0x2	/* init or lock _hopcount */
@@ -280,8 +283,9 @@ struct socket;
 void	 route_init(void);
 int	 route_output(struct mbuf *, ...);
 int	 route_usrreq(struct socket *,
-	    int, struct mbuf *, struct mbuf *, struct mbuf *, struct proc *);
+	    int, struct mbuf *, struct mbuf *, struct mbuf *, struct lwp *);
 void	 rt_ifannouncemsg(struct ifnet *, int);
+void	 rt_ieee80211msg(struct ifnet *, int, void *, size_t);
 void	 rt_ifmsg(struct ifnet *);
 void	 rt_maskedcopy(const struct sockaddr *,
 	    struct sockaddr *, const struct sockaddr *);
@@ -309,7 +313,7 @@ struct rtentry *
 void	 rtfree(struct rtentry *);
 int	 rt_getifa(struct rt_addrinfo *);
 int	 rtinit(struct ifaddr *, int, int);
-int	 rtioctl(u_long, caddr_t, struct proc *);
+int	 rtioctl(u_long, caddr_t, struct lwp *);
 void	 rtredirect(const struct sockaddr *, const struct sockaddr *,
 	    const struct sockaddr *, int, const struct sockaddr *,
 	    struct rtentry **);
@@ -318,4 +322,4 @@ int	 rtrequest(int, const struct sockaddr *,
 	    struct rtentry **);
 int	 rtrequest1(int, struct rt_addrinfo *, struct rtentry **);
 #endif /* _KERNEL */
-#endif /* _NET_ROUTE_H_ */
+#endif /* !_NET_ROUTE_H_ */

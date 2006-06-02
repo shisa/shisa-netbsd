@@ -1,4 +1,4 @@
-/*	$NetBSD: ata_raid.c,v 1.11.10.2 2005/07/21 21:21:19 tron Exp $	*/
+/*	$NetBSD: ata_raid.c,v 1.18 2006/01/04 10:13:05 yamt Exp $	*/
 
 /*
  * Copyright (c) 2003 Wasabi Systems, Inc.
@@ -40,7 +40,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ata_raid.c,v 1.11.10.2 2005/07/21 21:21:19 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ata_raid.c,v 1.18 2006/01/04 10:13:05 yamt Exp $");
 
 #include <sys/param.h>
 #include <sys/buf.h>
@@ -75,9 +75,6 @@ void		ataraidattach(int);
 static int	ataraid_match(struct device *, struct cfdata *, void *);
 static void	ataraid_attach(struct device *, struct device *, void *);
 static int	ataraid_print(void *, const char *);
-
-static int	ataraid_submatch(struct device *, struct cfdata *,
-				 const locdesc_t *, void *);
 
 static int	ata_raid_finalize(struct device *);
 
@@ -191,8 +188,7 @@ static void
 ataraid_attach(struct device *parent, struct device *self, void *aux)
 {
 	struct ataraid_array_info *aai;
-	int help[3];
-	locdesc_t *ldesc = (void *)help; /* XXX */
+	int locs[ATARAIDCF_NLOCS];
 
 	/*
 	 * We're a pseudo-device, so we get to announce our own
@@ -203,12 +199,11 @@ ataraid_attach(struct device *parent, struct device *self, void *aux)
 	    ataraid_array_info_count == 1 ? "" : "s");
 
 	TAILQ_FOREACH(aai, &ataraid_array_info_list, aai_list) {
-		ldesc->len = 2;
-		ldesc->locs[ATARAIDCF_VENDTYPE] = aai->aai_type;
-		ldesc->locs[ATARAIDCF_UNIT] = aai->aai_arrayno;
+		locs[ATARAIDCF_VENDTYPE] = aai->aai_type;
+		locs[ATARAIDCF_UNIT] = aai->aai_arrayno;
 
-		config_found_sm_loc(self, "ataraid", NULL, aai,
-				    ataraid_print, ataraid_submatch);
+		config_found_sm_loc(self, "ataraid", locs, aai,
+				    ataraid_print, config_stdsubmatch);
 	}
 }
 
@@ -226,27 +221,6 @@ ataraid_print(void *aux, const char *pnp)
 		aprint_normal("block device at %s", pnp);
 	aprint_normal(" vendtype %d unit %d", aai->aai_type, aai->aai_arrayno);
 	return (UNCONF);
-}
-
-/*
- * ataraid_submatch:
- *
- *	Submatch routine for ATA RAID logical disks.
- */
-static int
-ataraid_submatch(struct device *parent, struct cfdata *cf,
-		 const locdesc_t *ldesc, void *aux)
-{
-
-	if (cf->cf_loc[ATARAIDCF_VENDTYPE] != ATARAIDCF_VENDTYPE_DEFAULT &&
-	    cf->cf_loc[ATARAIDCF_VENDTYPE] != ldesc->locs[ATARAIDCF_VENDTYPE])
-		return (0);
-
-	if (cf->cf_loc[ATARAIDCF_UNIT] != ATARAIDCF_UNIT_DEFAULT &&
-	    cf->cf_loc[ATARAIDCF_UNIT] != ldesc->locs[ATARAIDCF_UNIT])
-		return (0);
-
-	return (config_match(parent, cf, aux));
 }
 
 /*
@@ -308,29 +282,23 @@ ata_raid_get_array_info(u_int type, u_int arrayno)
 }
 
 int
-ata_raid_config_block_rw(struct vnode *vp, daddr_t blkno, void *buf,
+ata_raid_config_block_rw(struct vnode *vp, daddr_t blkno, void *tbuf,
     size_t size, int bflags)
 {
 	struct buf *bp;
-	int error, s;
+	int error;
 
-	s = splbio();
-	bp = pool_get(&bufpool, PR_WAITOK);
-	splx(s);
-	BUF_INIT(bp);
-
+	bp = getiobuf();
 	bp->b_vp = vp;
 	bp->b_blkno = blkno;
 	bp->b_bcount = bp->b_resid = size;
 	bp->b_flags = bflags;
 	bp->b_proc = curproc;
-	bp->b_data = buf;
+	bp->b_data = tbuf;
 
 	VOP_STRATEGY(vp, bp);
 	error = biowait(bp);
 
-	s = splbio();
-	pool_put(&bufpool, bp);
-	splx(s);
+	putiobuf(bp);
 	return (error);
 }

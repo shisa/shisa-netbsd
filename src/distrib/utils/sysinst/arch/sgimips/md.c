@@ -1,4 +1,4 @@
-/*	$NetBSD: md.c,v 1.18 2004/11/14 18:36:11 dsl Exp $	*/
+/*	$NetBSD: md.c,v 1.21 2006/04/05 16:55:07 garbled Exp $	*/
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.
@@ -54,7 +54,6 @@
 #include "msg_defs.h"
 #include "menu_defs.h"
 
-const char *fdtype = "";
 struct utsname instsys;
 
 int
@@ -203,9 +202,15 @@ md_init()
          */
         uname(&instsys);
         if (strstr(instsys.version, "(INSTALL32_IP3x)"))
-                sets_selected = (sets_selected & ~SET_KERNEL) | SET_KERNEL_2;
+                set_kernel_set(SET_KERNEL_2);
         else if (strstr(instsys.version, "(INSTALL32_IP2x)"))
-                sets_selected = (sets_selected & ~SET_KERNEL) | SET_KERNEL_1;
+                set_kernel_set(SET_KERNEL_1);
 	else if (strstr(instsys.version, "(GENERIC32_IP12)"))
-		sets_selected = (sets_selected & ~SET_KERNEL) | SET_KERNEL_3;
+		set_kernel_set(SET_KERNEL_3);
+}
+
+int
+md_post_extract(void)
+{
+	return 0;
 }

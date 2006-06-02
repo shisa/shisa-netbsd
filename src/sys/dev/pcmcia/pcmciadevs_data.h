@@ -1,10 +1,10 @@
-/*	$NetBSD: pcmciadevs_data.h,v 1.210.2.2 2005/11/09 14:50:48 tron Exp $	*/
+/*	$NetBSD: pcmciadevs_data.h,v 1.217 2006/03/23 02:15:05 christos Exp $	*/
 
 /*
  * THIS FILE AUTOMATICALLY GENERATED.  DO NOT EDIT.
  *
  * generated from:
- *	NetBSD: pcmciadevs,v 1.208.6.4 2005/11/09 14:48:25 tron Exp
+ *	NetBSD: pcmciadevs,v 1.215 2006/03/23 02:14:42 christos Exp
  */
 /* $FreeBSD: src/sys/dev/pccard/pccarddevs,v 1.20 2001/11/19 05:02:55 imp Exp $*/
 
@@ -183,6 +183,13 @@ struct pcmcia_knowndev pcmcia_knowndevs[] = {
 	    "Allied Telesis LA-PCM",	}
 	,
 	{
+	    PCMCIA_VENDOR_ALVARION, PCMCIA_PRODUCT_ALVARION_BREEZENET,
+	    PCMCIA_CIS_ALVARION_BREEZENET,
+	    0,
+	    "Alvarion Ltd.",
+	    "Alvarion Ltd. BreezeNET PC-DS.11b",	}
+	,
+	{
 	    PCMCIA_VENDOR_ANYCOM, PCMCIA_PRODUCT_ANYCOM_LSE041,
 	    PCMCIA_CIS_ANYCOM_LSE041,
 	    0,
@@ -251,6 +258,13 @@ struct pcmcia_knowndev pcmcia_knowndevs[] = {
 	    0,
 	    "BreezeCOM",
 	    "BreezeCOM BreezeNET",	}
+	,
+	{
+	    PCMCIA_VENDOR_BELKIN, PCMCIA_PRODUCT_BELKIN_F5D5020,
+	    PCMCIA_CIS_BELKIN_F5D5020,
+	    0,
+	    "Belkin",
+	    "Belkin F5D5020 PCMCIA Network Card",	}
 	,
 	{
 	    PCMCIA_VENDOR_BUFFALO, PCMCIA_PRODUCT_BUFFALO_WLI_PCM_S11,
@@ -736,6 +750,13 @@ struct pcmcia_knowndev pcmcia_knowndevs[] = {
 	    "Melco LPC3-TX",	}
 	,
 	{
+	    PCMCIA_VENDOR_MICROSOFT, PCMCIA_PRODUCT_MICROSOFT_MN_520,
+	    PCMCIA_CIS_MICROSOFT_MN_520,
+	    0,
+	    "Microsoft Corporation",
+	    "Microsoft MN-520 WLAN Card",	}
+	,
+	{
 	    PCMCIA_VENDOR_MOTOROLA, PCMCIA_PRODUCT_MOTOROLA_POWER144,
 	    PCMCIA_CIS_MOTOROLA_POWER144,
 	    0,
@@ -902,6 +923,13 @@ struct pcmcia_knowndev pcmcia_knowndevs[] = {
 	    0,
 	    "Proxim",
 	    "Proxim RangeLAN2 7401",	}
+	,
+	{
+	    PCMCIA_VENDOR_PROXIM, PCMCIA_PRODUCT_PROXIM_RANGELANDS_8430,
+	    PCMCIA_CIS_PROXIM_RANGELANDS_8430,
+	    0,
+	    "Proxim",
+	    "Proxim RangeLAN-DS 8430",	}
 	,
 	{
 	    PCMCIA_VENDOR_PSION, PCMCIA_PRODUCT_PSION_GOLDCARD,
@@ -2001,6 +2029,14 @@ struct pcmcia_knowndev pcmcia_knowndevs[] = {
 	    NULL,
 	},
 	{
+	    PCMCIA_VENDOR_BELKIN,
+	    PCMCIA_KNOWNDEV_NOPROD,
+	    PCMCIA_CIS_INVALID,
+	    0,
+	    "Belkin",
+	    NULL,
+	},
+	{
 	    PCMCIA_VENDOR_BAY,
 	    PCMCIA_KNOWNDEV_NOPROD,
 	    PCMCIA_CIS_INVALID,
@@ -2049,6 +2085,14 @@ struct pcmcia_knowndev pcmcia_knowndevs[] = {
 	    NULL,
 	},
 	{
+	    PCMCIA_VENDOR_ALVARION,
+	    PCMCIA_KNOWNDEV_NOPROD,
+	    PCMCIA_CIS_INVALID,
+	    0,
+	    "Alvarion Ltd.",
+	    NULL,
+	},
+	{
 	    PCMCIA_VENDOR_ARTEM,
 	    PCMCIA_KNOWNDEV_NOPROD,
 	    PCMCIA_CIS_INVALID,
@@ -2094,6 +2138,14 @@ struct pcmcia_knowndev pcmcia_knowndevs[] = {
 	    PCMCIA_CIS_INVALID,
 	    0,
 	    "Asustek Computer",
+	    NULL,
+	},
+	{
+	    PCMCIA_VENDOR_MICROSOFT,
+	    PCMCIA_KNOWNDEV_NOPROD,
+	    PCMCIA_CIS_INVALID,
+	    0,
+	    "Microsoft Corporation",
 	    NULL,
 	},
 	{

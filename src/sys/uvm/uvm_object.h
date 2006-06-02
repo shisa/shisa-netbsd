@@ -1,4 +1,4 @@
-/*	$NetBSD: uvm_object.h,v 1.17.14.1 2005/08/24 18:43:38 riz Exp $	*/
+/*	$NetBSD: uvm_object.h,v 1.21 2005/12/11 12:25:29 christos Exp $	*/
 
 /*
  *
@@ -106,6 +106,15 @@ extern struct uvm_pagerops aobj_pager;
 
 #define	UVM_OBJ_IS_AOBJ(uobj)						\
 	((uobj)->pgops == &aobj_pager)
+
+#define	UVM_OBJ_INIT(uobj, ops, refs)					\
+	do {								\
+		simple_lock_init(&(uobj)->vmobjlock);			\
+		(uobj)->pgops = (ops);					\
+		TAILQ_INIT(&(uobj)->memq);				\
+		(uobj)->uo_npages = 0;					\
+		(uobj)->uo_refs = (refs);				\
+	} while (/* CONSTCOND */ 0)
 
 #endif /* _KERNEL */
 

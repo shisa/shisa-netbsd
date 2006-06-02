@@ -1,4 +1,4 @@
-/*	$NetBSD: footbridgevar.h,v 1.2 2002/02/10 12:26:00 chris Exp $	*/
+/*	$NetBSD: footbridgevar.h,v 1.4 2005/12/11 12:16:46 christos Exp $	*/
 
 /*
  * Copyright (c) 1997 Mark Brinicombe.
@@ -79,7 +79,7 @@ union footbridge_attach_args {
 	struct pcibus_attach_args fba_pba;	/* pci attach args */
 	struct todclock_attach_args fba_tca;
 	struct fcom_attach_args {
-		char *fca_name;
+		const char *fca_name;
 		bus_space_tag_t fca_iot;
 		bus_space_handle_t fca_ioh;
 		int fca_rx_irq;

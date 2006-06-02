@@ -1,4 +1,4 @@
-/*	$NetBSD: map_object.c,v 1.31 2004/10/22 05:39:56 skrll Exp $	 */
+/*	$NetBSD: map_object.c,v 1.34 2006/03/21 17:48:10 christos Exp $	 */
 
 /*
  * Copyright 1996 John D. Polstra.
@@ -34,7 +34,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: map_object.c,v 1.31 2004/10/22 05:39:56 skrll Exp $");
+__RCSID("$NetBSD: map_object.c,v 1.34 2006/03/21 17:48:10 christos Exp $");
 #endif /* not lint */
 
 #include <errno.h>
@@ -58,7 +58,7 @@ static int protflags(int);	/* Elf flags -> mmap protection */
  * for the shared object.  Returns NULL on failure.
  */
 Obj_Entry *
-_rtld_map_object(char *path, int fd, const struct stat *sb)
+_rtld_map_object(const char *path, int fd, const struct stat *sb)
 {
 	Obj_Entry	*obj;
 	Elf_Ehdr	*ehdr;
@@ -67,7 +67,7 @@ _rtld_map_object(char *path, int fd, const struct stat *sb)
 	Elf_Phdr	*segs[2];
 	int		 nsegs;
 	caddr_t		 mapbase = MAP_FAILED;
-	size_t		 mapsize;
+	size_t		 mapsize = 0;
 	int		 mapflags;
 	Elf_Off		 base_offset;
 #ifdef MAP_ALIGNED
@@ -97,7 +97,7 @@ _rtld_map_object(char *path, int fd, const struct stat *sb)
 	}
 
 	obj = _rtld_obj_new();
-	obj->path = path;
+	obj->path = xstrdup(path);
 	obj->pathlen = strlen(path);
 	if (sb != NULL) {
 		obj->dev = sb->st_dev;

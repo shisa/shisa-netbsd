@@ -1,4 +1,4 @@
-/* $NetBSD: utilities.c,v 1.18 2005/02/26 05:45:54 perseant Exp $	 */
+/* $NetBSD: utilities.c,v 1.24 2006/04/28 00:07:54 perseant Exp $	 */
 
 /*
  * Copyright (c) 1980, 1986, 1993
@@ -50,7 +50,7 @@
 
 #include "bufcache.h"
 #include "vnode.h"
-#include "lfs.h"
+#include "lfs_user.h"
 #include "segwrite.h"
 
 #include "fsutil.h"
@@ -84,7 +84,7 @@ ftypeok(struct ufs1_dinode * dp)
 }
 
 int
-reply(char *question)
+reply(const char *question)
 {
 	int persevere;
 	char c;
@@ -136,10 +136,10 @@ ckfini(int markclean)
 		}
 	}
 
-	if ((fs->lfs_pflags & LFS_PF_CLEAN) == 0) {
+	if (!nflag && (fs->lfs_pflags & LFS_PF_CLEAN) == 0) {
+		fs->lfs_pflags |= LFS_PF_CLEAN;
 		fsmodified = 1;
 	}
-	fs->lfs_pflags |= LFS_PF_CLEAN;
 
 	if (fsmodified && (preen || reply("UPDATE STANDARD SUPERBLOCK"))) {
 		sbdirty();
@@ -220,13 +220,15 @@ namelookup:
 		idesc.id_parent = ino;
 		idesc.id_func = findname;
 		idesc.id_name = namebuf;
+		if (ginode(idesc.id_number) == NULL)
+			break;
 		if ((ckinode(ginode(idesc.id_number), &idesc) & FOUND) == 0)
 			break;
 		len = strlen(namebuf);
 		cp -= len;
 		memcpy(cp, namebuf, (size_t) len);
 		*--cp = '/';
-		if (cp < &namebuf[MAXNAMLEN])
+		if (cp < &namebuf[LFS_MAXNAMLEN])
 			break;
 		ino = idesc.id_number;
 	}
@@ -270,7 +272,7 @@ voidquit(int n)
  * determine whether an inode should be fixed.
  */
 int
-dofix(struct inodesc * idesc, char *msg)
+dofix(struct inodesc * idesc, const char *msg)
 {
 
 	switch (idesc->id_fix) {

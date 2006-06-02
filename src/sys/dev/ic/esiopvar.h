@@ -1,4 +1,4 @@
-/*	$NetBSD: esiopvar.h,v 1.12.2.1 2005/11/21 20:55:44 tron Exp $	*/
+/*	$NetBSD: esiopvar.h,v 1.15 2006/02/16 20:17:16 perry Exp $	*/
 
 /*
  * Copyright (c) 2002 Manuel Bouyer.
@@ -121,8 +121,8 @@ struct esiop_target {
 	u_int32_t lun_table_offset; /* pointer to our DSA table */
 };
 
-static __inline__ void esiop_table_sync(struct esiop_cmd *, int);
-static __inline__ void
+static __inline void esiop_table_sync(struct esiop_cmd *, int);
+static __inline void
 esiop_table_sync(esiop_cmd, ops)
 	struct esiop_cmd *esiop_cmd;
 	int ops;

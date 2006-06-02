@@ -1,4 +1,4 @@
-/*	$NetBSD: viaide.c,v 1.24 2005/02/27 00:27:34 perry Exp $	*/
+/*	$NetBSD: viaide.c,v 1.29 2006/04/30 17:33:17 xtraeme Exp $	*/
 
 /*
  * Copyright (c) 1999, 2000, 2001 Manuel Bouyer.
@@ -29,6 +29,9 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+
+#include <sys/cdefs.h>
+__KERNEL_RCSID(0, "$NetBSD: viaide.c,v 1.29 2006/04/30 17:33:17 xtraeme Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -132,6 +135,21 @@ static const struct pciide_product_desc pciide_nvidia_products[] = {
 	  "NVIDIA nForce4 Serial ATA Controller",
 	  via_sata_chip_map
 	},
+	{ PCI_PRODUCT_NVIDIA_NFORCE430_ATA133,
+	  0,
+	  "NVIDIA nForce430 IDE Controller",
+	  via_chip_map
+	},
+	{ PCI_PRODUCT_NVIDIA_NFORCE430_SATA1,
+	  0,
+	  "NVIDIA nForce430 Serial ATA Controller",
+	  via_sata_chip_map
+	},
+	{ PCI_PRODUCT_NVIDIA_NFORCE430_SATA2,
+	  0,
+	  "NVIDIA nForce430 Serial ATA Controller",
+	  via_sata_chip_map
+	},
 	{ 0,
 	  0,
 	  NULL,
@@ -158,6 +176,11 @@ static const struct pciide_product_desc pciide_via_products[] =  {
 	{ PCI_PRODUCT_VIATECH_VT8237_SATA,
 	  0,
 	  "VIA Technologies VT8237 SATA Controller",
+	  via_sata_chip_map,
+	},
+	{ PCI_PRODUCT_VIATECH_VT8237R_SATA,
+	  0,
+	  "VIA Technologies VT8237R SATA Controller",
 	  via_sata_chip_map,
 	},
 	{ 0,
@@ -325,6 +348,7 @@ unknown:
 		case PCI_PRODUCT_NVIDIA_NFORCE3_ATA133:
 		case PCI_PRODUCT_NVIDIA_NFORCE3_250_ATA133:
 		case PCI_PRODUCT_NVIDIA_NFORCE4_ATA133:
+		case PCI_PRODUCT_NVIDIA_NFORCE430_ATA133:
 			sc->sc_wdcdev.sc_atac.atac_udma_cap = 6;
 			break;
 		}

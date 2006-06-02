@@ -1,4 +1,4 @@
-/*	$NetBSD: time.h,v 1.45 2005/02/26 22:25:34 perry Exp $	*/
+/*	$NetBSD: time.h,v 1.54 2006/03/29 21:57:07 kleink Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1993
@@ -59,6 +59,7 @@ struct timespec {
 	long	tv_nsec;	/* and nanoseconds */
 };
 
+#if defined(_NETBSD_SOURCE)
 #define	TIMEVAL_TO_TIMESPEC(tv, ts) do {				\
 	(ts)->tv_sec = (tv)->tv_sec;					\
 	(ts)->tv_nsec = (tv)->tv_usec * 1000;				\
@@ -128,6 +129,7 @@ struct timezone {
 			(vsp)->tv_nsec += 1000000000L;			\
 		}							\
 	} while (/* CONSTCOND */ 0)
+#endif /* _NETBSD_SOURCE */
 
 /*
  * Names of the interval timers, and structure
@@ -149,17 +151,6 @@ struct	itimerval {
 struct	itimerspec {
 	struct	timespec it_interval;
 	struct	timespec it_value;
-};
-
-/*
- * Getkerninfo clock information structure
- */
-struct clockinfo {
-	int	hz;		/* clock frequency */
-	int	tick;		/* micro-seconds per hz tick */
-	int	tickadj;	/* clock skew rate for adjtime() */
-	int	stathz;		/* statistics clock frequency */
-	int	profhz;		/* profiling clock frequency */
 };
 
 #define	CLOCK_REALTIME	0
@@ -212,40 +203,51 @@ struct	ptimers {
 int	itimerfix(struct timeval *tv);
 int	itimerdecr(struct ptimer *, int);
 void	itimerfire(struct ptimer *);
-void	microtime(struct timeval *tv);
-int	settime(struct timeval *);
+void	microtime(struct timeval *);
+struct timespec	*nanotime(struct timespec *);
+int	settime(struct proc *p, struct timespec *);
 int	ratecheck(struct timeval *, const struct timeval *);
 int	ppsratecheck(struct timeval *, int *, int);
 int	settimeofday1(const struct timeval *, const struct timezone *,
 	    struct proc *);
 int	adjtime1(const struct timeval *, struct timeval *, struct proc *);
-int	clock_settime1(clockid_t, const struct timespec *);
+int	clock_settime1(struct proc *, clockid_t, const struct timespec *);
 void	timer_settime(struct ptimer *);
 void	timer_gettime(struct ptimer *, struct itimerval *);
 void	timers_alloc(struct proc *);
 void	timers_free(struct proc *, int);
 void	realtimerexpire(void *);
+
 #else /* !_KERNEL */
 
 #ifndef _STANDALONE
+#if (_POSIX_C_SOURCE - 0) >= 200112L || \
+    (defined(_XOPEN_SOURCE) && defined(_XOPEN_SOURCE_EXTENDED)) || \
+    (_XOPEN_SOURCE - 0) >= 500 || defined(_NETBSD_SOURCE)
+#include <sys/select.h>
+#endif
+
+#include <sys/cdefs.h>
 #include <time.h>
 
-#if defined(_XOPEN_SOURCE) || defined(_NETBSD_SOURCE)
-#include <sys/cdefs.h>
-
 __BEGIN_DECLS
-int	adjtime(const struct timeval *, struct timeval *);
-int	futimes(int, const struct timeval [2]);
+#if (_POSIX_C_SOURCE - 0) >= 200112L || \
+    defined(_XOPEN_SOURCE) || defined(_NETBSD_SOURCE)
 int	getitimer(int, struct itimerval *);
 int	gettimeofday(struct timeval * __restrict, void * __restrict);
-int	lutimes(const char *, const struct timeval [2]);
 int	setitimer(int, const struct itimerval * __restrict,
 	    struct itimerval * __restrict);
+int	utimes(const char *, const struct timeval [2]);
+#endif /* _POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE || _NETBSD_SOURCE */
+
+#if defined(_NETBSD_SOURCE)
+int	adjtime(const struct timeval *, struct timeval *);
+int	futimes(int, const struct timeval [2]);
+int	lutimes(const char *, const struct timeval [2]);
 int	settimeofday(const struct timeval * __restrict,
 	    const void * __restrict);
-int	utimes(const char *, const struct timeval [2]);
+#endif /* _NETBSD_SOURCE */
 __END_DECLS
-#endif /* _XOPEN_SOURCE || _NETBSD_SOURCE */
 
 #endif	/* !_STANDALONE */
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: sysv_msg_14.c,v 1.6 2005/02/26 23:10:18 perry Exp $	*/
+/*	$NetBSD: sysv_msg_14.c,v 1.9 2005/11/11 17:10:42 christos Exp $	*/
 
 /*-
  * Copyright (c) 1999 The NetBSD Foundation, Inc.
@@ -38,7 +38,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: sysv_msg_14.c,v 1.6 2005/02/26 23:10:18 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: sysv_msg_14.c,v 1.9 2005/11/11 17:10:42 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -46,6 +46,8 @@ __KERNEL_RCSID(0, "$NetBSD: sysv_msg_14.c,v 1.6 2005/02/26 23:10:18 perry Exp $"
 #include <sys/proc.h>
 #include <sys/mount.h>
 #include <sys/msg.h>
+
+#include <compat/sys/msg.h>
 
 #ifndef SYSVMSG
 #define	SYSVMSG

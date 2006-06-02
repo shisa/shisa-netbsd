@@ -1,4 +1,4 @@
-$NetBSD: acronyms,v 1.146 2005/03/10 05:45:25 soda Exp $
+$NetBSD: acronyms,v 1.156 2006/05/15 14:11:07 christos Exp $
 
 AFAIC	as far as I'm concerned
 AFAICR	as far as I can recall
@@ -47,6 +47,7 @@ COB	close of business [day]
 COTS	commercial off-the-shelf
 CYA	see you around
 D/L	download
+DGAS	don't give a shit
 DIY	do it yourself
 DKDC	don't know, don't care
 DSTM	don't shoot the messenger
@@ -58,6 +59,7 @@ EMSG	email message
 EOB	end of business [day]
 EOD	end of discussion
 EOL	end of life
+ETA	estimated time of arrival
 ETLA	extended three letter acronym
 EWAG	experienced wild-ass guess
 FAQ	frequently asked question
@@ -67,6 +69,7 @@ FIIK	fuck[ed] if I know
 FIIR	fuck[ed] if I remember
 FM	fucking magic
 FOAD	fall over and die
+FOS	full of shit
 FSDO	for some definition of
 FSVO	for some value of
 FTFM	fuck the fuckin' manual!
@@ -147,6 +150,7 @@ NOYFB	none of your fucking business
 NP	no problem
 NRFPT	not ready for prime time
 NRN	no reply necessary
+NSFW	not suitable for work
 OIC	oh, I see
 OMG	oh, my god
 OT	off topic
@@ -154,6 +158,7 @@ OTL	out to lunch
 OTOH	on the other hand
 OTT	over the top
 OTTOMH	off the top of my head
+PDQ	pretty darn quick
 PEBKAC	problem exists between keyboard and chair
 PFO	please fuck off
 PFY	pimply faced youth
@@ -215,9 +220,9 @@ THX	thanks
 TIA	thanks in advance
 TINC	there is no cabal
 TLA	three letter acronym
-TLB	translation lookaside buffer
 TMA	too many abbreviations
 TMI	too much information
+TMTOWTDI	there's more than one way to do it
 TNF	The NetBSD Foundation
 TOEFL	test of english as a foreign language
 TPTB	the powers that be
@@ -235,6 +240,7 @@ W/	with
 W/O	without
 WAG	wild-ass guess
 WB	welcome back
+WFH	working from home
 WFM	works for me
 WIBNI	wouldn't it be nice if
 WIP	work in progress

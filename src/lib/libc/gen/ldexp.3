@@ -1,4 +1,4 @@
-.\"	$NetBSD: ldexp.3,v 1.11 2003/08/07 16:42:53 agc Exp $
+.\"	$NetBSD: ldexp.3,v 1.13 2006/03/23 19:43:58 wiz Exp $
 .\"
 .\" Copyright (c) 1991, 1993
 .\"	The Regents of the University of California.  All rights reserved.
@@ -33,18 +33,20 @@
 .\"
 .\"     @(#)ldexp.3	8.2 (Berkeley) 4/19/94
 .\"
-.Dd August 29, 1999
+.Dd March 21, 2006
 .Dt LDEXP 3
 .Os
 .Sh NAME
 .Nm ldexp
 .Nd multiply floating-point number by integral power of 2
 .Sh LIBRARY
-.Lb libc
+.Lb libm
 .Sh SYNOPSIS
 .In math.h
 .Ft double
 .Fn ldexp "double x" "int exp"
+.Ft float
+.Fn ldexpf "float x" "int exp"
 .Sh DESCRIPTION
 The
 .Fn ldexp

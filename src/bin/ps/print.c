@@ -1,4 +1,4 @@
-/*	$NetBSD: print.c,v 1.91 2004/11/16 04:58:14 christos Exp $	*/
+/*	$NetBSD: print.c,v 1.94 2005/06/27 00:46:04 christos Exp $	*/
 
 /*
  * Copyright (c) 2000 The NetBSD Foundation, Inc.
@@ -70,7 +70,7 @@
 #if 0
 static char sccsid[] = "@(#)print.c	8.6 (Berkeley) 4/16/94";
 #else
-__RCSID("$NetBSD: print.c,v 1.91 2004/11/16 04:58:14 christos Exp $");
+__RCSID("$NetBSD: print.c,v 1.94 2005/06/27 00:46:04 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -1038,7 +1038,7 @@ cputime(void *arg, VARENT *ve, int mode)
 
 double
 getpcpu(k)
-	struct kinfo_proc2 *k;
+	const struct kinfo_proc2 *k;
 {
 	static int failure;
 
@@ -1072,7 +1072,7 @@ pcpu(void *arg, VARENT *ve, int mode)
 
 double
 getpmem(k)
-	struct kinfo_proc2 *k;
+	const struct kinfo_proc2 *k;
 {
 	static int failure;
 	double fracmem;
@@ -1148,9 +1148,13 @@ printval(bp, v, mode)
 {
 	static char ofmt[32] = "%";
 	int width, vok, fmtlen;
-	char *fcp, *cp;
+	const char *fcp;
+	char *cp;
 	int64_t val;
 	u_int64_t uval;
+
+	val = 0;	/* XXXGCC -Wuninitialized [hpcarm] */
+	uval = 0;	/* XXXGCC -Wuninitialized [hpcarm] */
 
 	/*
 	 * Note that the "INF127" check is nonsensical for types

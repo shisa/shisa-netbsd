@@ -1,4 +1,4 @@
-/*	$NetBSD: ehci_pci.c,v 1.17.2.1 2005/12/07 19:15:05 riz Exp $	*/
+/*	$NetBSD: ehci_pci.c,v 1.23 2006/03/10 17:21:20 jmcneill Exp $	*/
 
 /*
  * Copyright (c) 2001, 2002 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ehci_pci.c,v 1.17.2.1 2005/12/07 19:15:05 riz Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ehci_pci.c,v 1.23 2006/03/10 17:21:20 jmcneill Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -48,6 +48,7 @@ __KERNEL_RCSID(0, "$NetBSD: ehci_pci.c,v 1.17.2.1 2005/12/07 19:15:05 riz Exp $"
 
 #include <machine/bus.h>
 
+#include <dev/pci/pcidevs.h>
 #include <dev/pci/pcivar.h>
 #include <dev/pci/usb_pci.h>
 
@@ -68,12 +69,16 @@ extern int ehcidebug;
 
 static void ehci_get_ownership(ehci_softc_t *sc, pci_chipset_tag_t pc,
 			       pcitag_t tag);
+static void ehci_pci_powerhook(int, void *);
 
 struct ehci_pci_softc {
 	ehci_softc_t		sc;
 	pci_chipset_tag_t	sc_pc;
 	pcitag_t		sc_tag;
 	void 			*sc_ih;		/* interrupt vectoring */
+
+	void			*sc_powerhook;
+	struct pci_conf_state	sc_pciconf;
 };
 
 #define EHCI_MAX_BIOS_WAIT		1000 /* ms */
@@ -175,6 +180,10 @@ ehci_pci_attach(struct device *parent, struct device *self, void *aux)
 		snprintf(sc->sc.sc_vendor, sizeof(sc->sc.sc_vendor),
 		    "vendor 0x%04x", PCI_VENDOR(pa->pa_id));
 
+	/* Enable workaround for dropped interrupts as required */
+	if (sc->sc.sc_id_vendor == PCI_VENDOR_VIATECH)
+		sc->sc.sc_flags |= EHCIF_DROPPED_INTR_WORKAROUND;
+
 	/*
 	 * Find companion controllers.  According to the spec they always
 	 * have lower function numbers so they should be enumerated already.
@@ -199,6 +208,11 @@ ehci_pci_attach(struct device *parent, struct device *self, void *aux)
 		return;
 	}
 
+	sc->sc_powerhook = powerhook_establish(ehci_pci_powerhook, sc);
+	if (sc->sc_powerhook == NULL)
+		aprint_error("%s: couldn't establish powerhook\n",
+		    devname);
+
 	/* Attach usb device. */
 	sc->sc.sc_child = config_found((void *)sc, &sc->sc.sc_bus,
 				       usbctlprint);
@@ -209,6 +223,9 @@ ehci_pci_detach(device_ptr_t self, int flags)
 {
 	struct ehci_pci_softc *sc = (struct ehci_pci_softc *)self;
 	int rv;
+
+	if (sc->sc_powerhook != NULL)
+		powerhook_disestablish(sc->sc_powerhook);
 
 	rv = ehci_detach(&sc->sc, flags);
 	if (rv)
@@ -301,4 +318,29 @@ ehci_get_ownership(ehci_softc_t *sc, pci_chipset_tag_t pc, pcitag_t tag)
 	} else {
 		aprint_normal("%s: BIOS has given up ownership\n", devname);
 	}
+}
+
+static void
+ehci_pci_powerhook(int why, void *opaque)
+{
+	struct ehci_pci_softc *sc;
+	pci_chipset_tag_t pc;
+	pcitag_t tag;
+
+	sc = (struct ehci_pci_softc *)opaque;
+	pc = sc->sc_pc;
+	tag = sc->sc_tag;
+
+	switch (why) {
+	case PWR_STANDBY:
+	case PWR_SUSPEND:
+		pci_conf_capture(pc, tag, &sc->sc_pciconf);
+		break;
+	case PWR_RESUME:
+		pci_conf_restore(pc, tag, &sc->sc_pciconf);
+		ehci_get_ownership(&sc->sc, pc, tag);
+		break;
+	}
+
+	return;
 }

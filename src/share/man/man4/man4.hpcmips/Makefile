@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.1.2.1 2005/08/04 18:40:30 tron Exp $
+#	$NetBSD: Makefile,v 1.1 2005/07/31 00:12:17 nakayama Exp $
 
 MAN=	teliosio.4
 

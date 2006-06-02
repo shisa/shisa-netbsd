@@ -1,4 +1,4 @@
-/*	$NetBSD: svr4_32_exec.c,v 1.15.10.1 2005/09/18 20:09:50 tron Exp $	 */
+/*	$NetBSD: svr4_32_exec.c,v 1.18 2005/12/11 12:20:26 christos Exp $	 */
 
 /*-
  * Copyright (c) 1994, 2000 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: svr4_32_exec.c,v 1.15.10.1 2005/09/18 20:09:50 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: svr4_32_exec.c,v 1.18 2005/12/11 12:20:26 christos Exp $");
 
 #if defined(_KERNEL_OPT)
 #include "opt_syscall_debug.h"
@@ -52,6 +52,7 @@ __KERNEL_RCSID(0, "$NetBSD: svr4_32_exec.c,v 1.15.10.1 2005/09/18 20:09:50 tron 
 #include <uvm/uvm_extern.h>
 
 #include <machine/svr4_machdep.h>
+#include <machine/svr4_32_machdep.h>
 
 #include <compat/svr4_32/svr4_32_types.h>
 #include <compat/svr4_32/svr4_32_syscall.h>

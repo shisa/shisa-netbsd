@@ -1,4 +1,4 @@
-/*	$NetBSD: atwvar.h,v 1.15 2004/12/19 08:09:23 dyoung Exp $	*/
+/*	$NetBSD: atwvar.h,v 1.21 2006/03/08 08:26:50 dyoung Exp $	*/
 
 /*
  * Copyright (c) 2003, 2004 The NetBSD Foundation, Inc.  All rights reserved.
@@ -103,6 +103,8 @@ struct atw_txsoft {
 	int txs_firstdesc;		/* first descriptor in packet */
 	int txs_lastdesc;		/* last descriptor in packet */
 	int txs_ndescs;			/* number of descriptors */
+	struct ieee80211_duration	txs_d0;
+	struct ieee80211_duration	txs_dn;
 	SIMPLEQ_ENTRY(atw_txsoft) txs_q;
 };
 
@@ -185,6 +187,7 @@ enum atw_revision {
 
 struct atw_softc {
 	struct device		sc_dev;
+	struct ethercom		sc_ec;
 	struct ieee80211com	sc_ic;
 	int			(*sc_enable)(struct atw_softc *);
 	void			(*sc_disable)(struct atw_softc *);
@@ -194,9 +197,8 @@ struct atw_softc {
 	void			(*sc_recv_mgmt)(struct ieee80211com *,
 				    struct mbuf *, struct ieee80211_node *,
 				    int, int, u_int32_t);
-	struct ieee80211_node	*(*sc_node_alloc)(struct ieee80211com *);
-	void			(*sc_node_free)(struct ieee80211com *,
-					struct ieee80211_node *);
+	struct ieee80211_node	*(*sc_node_alloc)(struct ieee80211_node_table*);
+	void			(*sc_node_free)(struct ieee80211_node *);
 
 	struct atw_stats sc_stats;	/* debugging stats */
 
@@ -294,10 +296,9 @@ struct atw_softc {
 	} sc_txtapu;
 };
 
+#define	sc_if		sc_ec.ec_if
 #define sc_rxtap	sc_rxtapu.tap
 #define sc_txtap	sc_txtapu.tap
-
-#define	sc_if			sc_ic.ic_if
 
 /* XXX this is fragile. try not to introduce any u_int32_t's. */
 struct atw_frame {
@@ -346,23 +347,24 @@ struct atw_frame {
 #define atw_keyid	u.s1.keyid
 #define atw_ihdr	u.s2.ihdr
 
-#define ATW_HDRCTL_SHORT_PREAMBLE	BIT(0)	/* use short preamble */
-#define ATW_HDRCTL_RTSCTS		BIT(4)	/* send RTS */
-#define ATW_HDRCTL_WEP			BIT(5)
-#define ATW_HDRCTL_UNKNOWN1		BIT(15) /* MAC adds FCS? */
-#define ATW_HDRCTL_UNKNOWN2		BIT(8)
+#define ATW_HDRCTL_SHORT_PREAMBLE	__BIT(0)	/* use short preamble */
+#define ATW_HDRCTL_RTSCTS		__BIT(4)	/* send RTS */
+#define ATW_HDRCTL_WEP			__BIT(5)
+#define ATW_HDRCTL_UNKNOWN1		__BIT(15) /* MAC adds FCS? */
+#define ATW_HDRCTL_UNKNOWN2		__BIT(8)
 
-#define ATW_FRAGTHR_FRAGTHR_MASK	BITS(0, 11)
-#define ATW_FRAGNUM_FRAGNUM_MASK	BITS(4, 7)
+#define ATW_FRAGTHR_FRAGTHR_MASK	__BITS(0, 11)
+#define ATW_FRAGNUM_FRAGNUM_MASK	__BITS(4, 7)
 
 /* Values for sc_flags. */
-#define	ATWF_MRL		0x00000010	/* memory read line okay */
-#define	ATWF_MRM		0x00000020	/* memory read multi okay */
-#define	ATWF_MWI		0x00000040	/* memory write inval okay */
-#define	ATWF_SHORT_PREAMBLE	0x00000080	/* short preamble enabled */
-#define	ATWF_RTSCTS		0x00000100	/* RTS/CTS enabled */
-#define	ATWF_ATTACHED		0x00000800	/* attach has succeeded */
-#define	ATWF_ENABLED		0x00001000	/* chip is enabled */
+#define	ATWF_MRL		0x00000001	/* memory read line okay */
+#define	ATWF_MRM		0x00000002	/* memory read multi okay */
+#define	ATWF_MWI		0x00000004	/* memory write inval okay */
+#define	ATWF_SHORT_PREAMBLE	0x00000008	/* short preamble enabled */
+#define	ATWF_RTSCTS		0x00000010	/* RTS/CTS enabled */
+#define	ATWF_ATTACHED		0x00000020	/* attach has succeeded */
+#define	ATWF_ENABLED		0x00000040	/* chip is enabled */
+#define	ATWF_WEP_SRAM_VALID	0x00000080	/* SRAM matches s/w state */
 
 #define	ATW_IS_ENABLED(sc)	((sc)->sc_flags & ATWF_ENABLED)
 
@@ -410,7 +412,7 @@ do {									\
 	__rxd->ar_buf2 =	/* for descriptor chaining */		\
 	    htole32(ATW_CDRXADDR((sc), ATW_NEXTRX((x))));		\
 	__rxd->ar_ctl =							\
-	    htole32(LSHIFT(((__m->m_ext.ext_size - 1) & ~0x3U),		\
+	    htole32(SHIFTIN(((__m->m_ext.ext_size - 1) & ~0x3U),	\
 	                   ATW_RXCTL_RBS1_MASK) |			\
 		    0 /* ATW_RXCTL_RCH */ |				\
 	    ((x) == (ATW_NRXDESC - 1) ? ATW_RXCTL_RER : 0));		\

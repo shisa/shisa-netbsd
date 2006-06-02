@@ -1,4 +1,4 @@
-$NetBSD: acronyms.comp,v 1.59 2005/02/22 12:24:44 grant Exp $
+$NetBSD: acronyms.comp,v 1.68 2006/05/30 03:54:20 jnemeth Exp $
 
 3WHS	three-way handshake
 ABI	application binary interface
@@ -21,6 +21,7 @@ ASN	autonomous system number
 ASCII	american standard code for information interchange
 AT	advanced technology
 ATA	advanced technology attachment
+ATC	address translation cache
 ATAPI	advanced technology attachment packet interface
 ATM	asynchronous transfer mode
 ATX	advanced technology extended
@@ -32,6 +33,7 @@ BIOS	basic input/output system
 BLOB	binary large object
 BPS	bits per second
 BSD	berkeley software distribution
+BQS	berkeley quality software
 CAD	computer-aided design
 CAV	constant angular velocity (as opposed to CLV)
 CCD	charge coupled device
@@ -45,6 +47,7 @@ CHS	cylinder/head/sector
 CIDR	classless inter-domain routing
 CIS	contact image sensor
 CLI	command line interface
+CLUT	color look-up table
 CLV	constant linear velocity (as opposed to CAV)
 CMYK	cyan magenta yellow black
 COFF	common object file format
@@ -74,6 +77,7 @@ DMA	direct memory access
 DNS	domain name system
 DOS	denial of service
 DPCM	differential pulse code modulation
+DPD	dead peer detection
 DPI	dots per inch
 DRAM	dynamic random access memory
 DSL	digital subscriber line
@@ -92,6 +96,8 @@ EGA	enhanced graphics array
 EGP	exterior gateway protocol
 EISA	extended industry standard architecture
 ELF	executable and linking format
+EOF	end of file
+EOT	end of transmission
 EPP	enhanced parallel port
 EPRML	extended partial response, maximum likelihood
 EPROM	erasable programmable read only memory
@@ -209,6 +215,7 @@ PDU	protocol data unit
 PDP	page descriptor page
 PER	packed encoding rules
 PERL	practical extraction [and] report language
+PFS	perfect forward secrecy
 PGP	pretty good privacy
 PIC	programmable interrupt controller
 PID	process id
@@ -235,7 +242,6 @@ QOS	quality of service
 RAID	redundant array of inexpensive disks
 RAM	random access memory
 RCS	revision control system
-RFC	request for comments
 RGB	red green blue
 RIFF	Resource Interchange File Format
 RIP	routing information protocol
@@ -250,6 +256,7 @@ RTS	request to send
 RTT	round time trip
 S/PDIF	sony/phillips digital interface
 SACD	super audio compact disc
+SAD	security association database
 SAM	serial access memory
 SASI	shugart associates system interface (predecessor to SCSI)
 SATA	serial advanced technology attachment
@@ -264,6 +271,7 @@ SMART	self-monitoring analysis and reporting technology
 SMP	symmetric multiprocessing
 SMTP	simple mail transfer protocol
 SNMP	simple network management protocol
+SPD	security policy database
 SPD	serial presence detect
 SRAM	static random access memory
 SSFDC	solid state floppy disc card
@@ -279,6 +287,7 @@ TIFF	tagged image file format
 TLA	top level aggregator
 TLB	transition lookaside buffer
 TLD	top level domain
+TLS	transport layer security
 TMDS	transition minimized differential signaling
 TR	token ring
 TTL	time to live

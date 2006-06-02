@@ -1,4 +1,4 @@
-/*	$NetBSD: record.c,v 1.38.2.1 2005/07/19 21:53:08 riz Exp $	*/
+/*	$NetBSD: record.c,v 1.43 2006/05/11 01:19:10 mrg Exp $	*/
 
 /*
  * Copyright (c) 1999, 2002 Matthew R. Green
@@ -34,7 +34,7 @@
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: record.c,v 1.38.2.1 2005/07/19 21:53:08 riz Exp $");
+__RCSID("$NetBSD: record.c,v 1.43 2006/05/11 01:19:10 mrg Exp $");
 #endif
 
 
@@ -93,7 +93,7 @@ main(argc, argv)
 	int argc;
 	char *argv[];
 {
-	char	*buffer;
+	u_char	*buffer;
 	size_t	len, bufsize;
 	int	ch, no_time_limit = 1;
 	const char *defdevice = _PATH_SOUND;
@@ -208,7 +208,7 @@ main(argc, argv)
 	/*
 	 * open the output file
 	 */
-	if (argv[0][0] != '-' && argv[0][1] != '\0') {
+	if (argv[0][0] != '-' || argv[0][1] != '\0') {
 		/* intuit the file type from the name */
 		if (format == AUDIO_FORMAT_DEFAULT)
 		{

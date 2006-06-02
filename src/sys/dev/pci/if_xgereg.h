@@ -1,4 +1,4 @@
-/*      $NetBSD: if_xgereg.h,v 1.1.2.1 2005/09/13 20:59:37 tron Exp $ */
+/*      $NetBSD: if_xgereg.h,v 1.2 2005/12/11 12:22:50 christos Exp $ */
 
 /*
  * Copyright (c) 2004, SUNET, Swedish University Computer Network.

@@ -1,4 +1,4 @@
-/*	$NetBSD: vm_machdep.c,v 1.81 2004/09/17 14:11:22 skrll Exp $ */
+/*	$NetBSD: vm_machdep.c,v 1.86 2005/11/16 03:00:23 uwe Exp $ */
 
 /*
  * Copyright (c) 1996
@@ -49,7 +49,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: vm_machdep.c,v 1.81 2004/09/17 14:11:22 skrll Exp $");
+__KERNEL_RCSID(0, "$NetBSD: vm_machdep.c,v 1.86 2005/11/16 03:00:23 uwe Exp $");
 
 #include "opt_multiprocessor.h"
 
@@ -74,12 +74,10 @@ __KERNEL_RCSID(0, "$NetBSD: vm_machdep.c,v 1.81 2004/09/17 14:11:22 skrll Exp $"
 /*
  * Map a user I/O request into kernel virtual address space.
  * Note: the pages are already locked by uvm_vslock(), so we
- * do not need to pass an access_type to pmap_enter().   
+ * do not need to pass an access_type to pmap_enter().
  */
 void
-vmapbuf(bp, len)
-	struct buf *bp;
-	vsize_t len;
+vmapbuf(struct buf *bp, vsize_t len)
 {
 	struct pmap *upmap, *kpmap;
 	vaddr_t uva;	/* User VA (map from) */
@@ -98,7 +96,7 @@ vmapbuf(bp, len)
 	uva = trunc_page((vaddr_t)bp->b_data);
 	off = (vaddr_t)bp->b_data - uva;
 	len = round_page(off + len);
-	kva = uvm_km_valloc_wait(kernel_map, len);
+	kva = uvm_km_alloc(kernel_map, len, 0, UVM_KMF_VAONLY | UVM_KMF_WAITVA);
 	bp->b_data = (caddr_t)(kva + off);
 
 	/*
@@ -128,9 +126,7 @@ vmapbuf(bp, len)
  * Unmap a previously-mapped user I/O request.
  */
 void
-vunmapbuf(bp, len)
-	struct buf *bp;
-	vsize_t len;
+vunmapbuf(struct buf *bp, vsize_t len)
 {
 	vaddr_t kva;
 	vsize_t off;
@@ -143,7 +139,7 @@ vunmapbuf(bp, len)
 	len = round_page(off + len);
 	pmap_remove(vm_map_pmap(kernel_map), kva, kva + len);
 	pmap_update(vm_map_pmap(kernel_map));
-	uvm_km_free_wakeup(kernel_map, kva, len);
+	uvm_km_free(kernel_map, kva, len, UVM_KMF_VAONLY);
 	bp->b_data = bp->b_saveaddr;
 	bp->b_saveaddr = NULL;
 
@@ -151,6 +147,14 @@ vunmapbuf(bp, len)
 	if (CACHEINFO.c_vactype != VAC_NONE)
 		cpuinfo.cache_flush(bp->b_data, len);
 #endif
+}
+
+
+void
+cpu_proc_fork(struct proc *p1, struct proc *p2)
+{
+
+	p2->p_md.md_flags = p1->p_md.md_flags;
 }
 
 
@@ -162,7 +166,7 @@ vunmapbuf(bp, len)
 /*
  * Finish a fork operation, with process l2 nearly set up.
  * Copy and update the pcb and trap frame, making the child ready to run.
- * 
+ *
  * Rig the child's kernel stack so that it will start out in
  * proc_trampoline() and call child_return() with l2 as an
  * argument. This causes the newly-created child process to go
@@ -178,12 +182,9 @@ vunmapbuf(bp, len)
  * accordingly.
  */
 void
-cpu_lwp_fork(l1, l2, stack, stacksize, func, arg)
-	struct lwp *l1, *l2;
-	void *stack;
-	size_t stacksize;
-	void (*func) __P((void *));
-	void *arg;
+cpu_lwp_fork(struct lwp *l1, struct lwp *l2,
+	     void *stack, size_t stacksize,
+	     void (*func)(void *), void *arg)
 {
 	struct pcb *opcb = &l1->l_addr->u_pcb;
 	struct pcb *npcb = &l2->l_addr->u_pcb;
@@ -315,10 +316,7 @@ cpu_lwp_free(struct lwp *l, int proc)
 }
 
 void
-cpu_setfunc(l, func, arg)
-	struct lwp *l;
-	void (*func) __P((void *));
-	void *arg;
+cpu_setfunc(struct lwp *l, void (*func)(void *), void *arg)
 {
 	struct pcb *pcb = &l->l_addr->u_pcb;
 	/*struct trapframe *tf = l->l_md.md_tf;*/
@@ -340,23 +338,20 @@ cpu_setfunc(l, func, arg)
  * (should this be defined elsewhere?  machdep.c?)
  */
 int
-cpu_coredump(l, vp, cred, chdr)
-	struct lwp *l;
-	struct vnode *vp;
-	struct ucred *cred;
-	struct core *chdr;
+cpu_coredump(struct lwp *l, void *iocookie, struct core *chdr)
 {
 	int error;
 	struct md_coredump md_core;
 	struct coreseg cseg;
-	struct proc *p;
 
-	p = l->l_proc;
-
-	CORE_SETMAGIC(*chdr, COREMAGIC, MID_MACHINE, 0);
-	chdr->c_hdrsize = ALIGN(sizeof(*chdr));
-	chdr->c_seghdrsize = ALIGN(sizeof(cseg));
-	chdr->c_cpusize = sizeof(md_core);
+	if (iocookie == NULL) {
+		CORE_SETMAGIC(*chdr, COREMAGIC, MID_MACHINE, 0);
+		chdr->c_hdrsize = ALIGN(sizeof(*chdr));
+		chdr->c_seghdrsize = ALIGN(sizeof(cseg));
+		chdr->c_cpusize = sizeof(md_core);
+		chdr->c_nseg++;
+		return 0;
+	}
 
 	md_core.md_tf = *l->l_md.md_tf;
 	if (l->l_md.md_fpstate) {
@@ -369,17 +364,12 @@ cpu_coredump(l, vp, cred, chdr)
 	CORE_SETMAGIC(cseg, CORESEGMAGIC, MID_MACHINE, CORE_CPU);
 	cseg.c_addr = 0;
 	cseg.c_size = chdr->c_cpusize;
-	error = vn_rdwr(UIO_WRITE, vp, (caddr_t)&cseg, chdr->c_seghdrsize,
-	    (off_t)chdr->c_hdrsize, UIO_SYSSPACE,
-	    IO_NODELOCKED|IO_UNIT, cred, NULL, NULL);
+
+	error = coredump_write(iocookie, UIO_SYSSPACE, &cseg,
+	    chdr->c_seghdrsize);
 	if (error)
 		return error;
 
-	error = vn_rdwr(UIO_WRITE, vp, (caddr_t)&md_core, sizeof(md_core),
-	    (off_t)(chdr->c_hdrsize + chdr->c_seghdrsize), UIO_SYSSPACE,
-	    IO_NODELOCKED|IO_UNIT, cred, NULL, NULL);
-	if (!error)
-		chdr->c_nseg++;
-
-	return error;
+	return coredump_write(iocookie, UIO_SYSSPACE, &md_core,
+	    sizeof(md_core));
 }

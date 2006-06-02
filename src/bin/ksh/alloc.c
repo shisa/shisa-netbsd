@@ -1,4 +1,4 @@
-/*	$NetBSD: alloc.c,v 1.6 2004/07/07 19:20:09 mycroft Exp $	*/
+/*	$NetBSD: alloc.c,v 1.9 2006/04/01 23:36:28 christos Exp $	*/
 
 /*
  * Copyright (c) 2002 Marc Espie.
@@ -58,6 +58,7 @@ afreeall(Area *ap)
 #define L2P(l)	( (void *)(((char *)(l)) + sizeof(struct link)) )
 #define P2L(p)	( (struct link *)(((char *)(p)) - sizeof(struct link)) )
 
+/* coverity[+alloc] */
 void *
 alloc(size_t size, Area *ap)
 {
@@ -75,6 +76,8 @@ alloc(size_t size, Area *ap)
 	return L2P(l);
 }
 
+/* coverity[+alloc] */
+/* coverity[+free : arg-0] */
 void *
 aresize(void *ptr, size_t size, Area *ap)
 {
@@ -100,6 +103,7 @@ aresize(void *ptr, size_t size, Area *ap)
 	return L2P(l2);
 }
 
+/* coverity[+free : arg-0] */
 void
 afree(void *ptr, Area *ap)
 {

@@ -1,4 +1,4 @@
-/*	$NetBSD: mtree.h,v 1.22.2.2 2005/09/12 18:32:08 tron Exp $	*/
+/*	$NetBSD: mtree.h,v 1.24 2005/09/02 17:12:38 elad Exp $	*/
 
 /*-
  * Copyright (c) 1990, 1993

@@ -1,4 +1,4 @@
-/* $Id: vndcompress.c,v 1.3.2.3 2005/08/16 12:16:08 tron Exp $ */
+/* $Id: vndcompress.c,v 1.3 2005/07/27 09:29:02 he Exp $ */
 
 /*
  * Copyright (c) 2005 by Florian Stoehr <netbsd@wolfnode.de>

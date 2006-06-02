@@ -1,4 +1,4 @@
-/*	$NetBSD: psl.h,v 1.34 2003/08/07 16:29:40 agc Exp $ */
+/*	$NetBSD: psl.h,v 1.40 2006/05/04 12:21:18 yamt Exp $ */
 
 /*
  * Copyright (c) 1992, 1993
@@ -71,17 +71,6 @@
 #define PSR_CWP		0x0000001f	/* current window pointer */
 
 #define PSR_BITS "\20\16EC\15EF\10S\7PS\6ET"
-
-/* Interesting spl()s */
-#define PIL_FDSOFT	IPL_SOFTFDC	/* compat */
-#define PIL_AUSOFT	IPL_SOFTAUDIO	/* compat */
-#define PIL_TTY		6		/* compat */
-#define PIL_CLOCK	10
-#define PIL_FD		11
-#define PIL_SER		13
-#define	PIL_AUD		13
-#define PIL_HIGH	15
-#define PIL_LOCK	PIL_HIGH
 
 /* 
  * SPARC V9 CCR register
@@ -239,40 +228,36 @@
 
 #if defined(_KERNEL) && !defined(_LOCORE)
 
-static __inline int getpsr __P((void));
-static __inline void setpsr __P((int));
-static __inline void spl0 __P((void));
-static __inline int splhigh __P((void));
-static __inline void splx __P((int));
-static __inline int getmid __P((void));
-
 /*
  * GCC pseudo-functions for manipulating PSR (primarily PIL field).
  */
-static __inline int getpsr()
+static __inline int
+getpsr(void)
 {
 	int psr;
 
-	__asm __volatile("rd %%psr,%0" : "=r" (psr));
+	__asm volatile("rd %%psr,%0" : "=r" (psr));
 	return (psr);
 }
 
-static __inline int getmid()
+static __inline int
+getmid(void)
 {
 	int mid;
 
-	__asm __volatile("rd %%tbr,%0" : "=r" (mid));
+	__asm volatile("rd %%tbr,%0" : "=r" (mid));
 	return ((mid >> 20) & 0x3);
 }
 
-static __inline void setpsr(newpsr)
-	int newpsr;
+static __inline void
+setpsr(int newpsr)
 {
-	__asm __volatile("wr %0,0,%%psr" : : "r" (newpsr));
-	__asm __volatile("nop; nop; nop");
+	__asm volatile("wr %0,0,%%psr" : : "r" (newpsr));
+	__asm volatile("nop; nop; nop");
 }
 
-static __inline void spl0()
+static __inline void
+spl0(void)
 {
 	int psr, oldipl;
 
@@ -281,15 +266,15 @@ static __inline void spl0()
 	 * which gives us the same value as the old psr but with all
 	 * the old PIL bits turned off.
 	 */
-	__asm __volatile("rd %%psr,%0" : "=r" (psr));
+	__asm volatile("rd %%psr,%0" : "=r" (psr));
 	oldipl = psr & PSR_PIL;
-	__asm __volatile("wr %0,%1,%%psr" : : "r" (psr), "r" (oldipl));
+	__asm volatile("wr %0,%1,%%psr" : : "r" (psr), "r" (oldipl));
 
 	/*
 	 * Three instructions must execute before we can depend
 	 * on the bits to be changed.
 	 */
-	__asm __volatile("nop; nop; nop");
+	__asm volatile("nop; nop; nop");
 }
 
 /*
@@ -298,110 +283,61 @@ static __inline void spl0()
  * into the ipl field.)
  */
 #define	_SPLSET(name, newipl) \
-static __inline void name __P((void)); \
-static __inline void name() \
+static __inline void name(void) \
 { \
 	int psr, oldipl; \
-	__asm __volatile("rd %%psr,%0" : "=r" (psr)); \
+	__asm volatile("rd %%psr,%0" : "=r" (psr)); \
 	oldipl = psr & PSR_PIL; \
 	psr &= ~oldipl; \
-	__asm __volatile("wr %0,%1,%%psr" : : \
+	__asm volatile("wr %0,%1,%%psr" : : \
 	    "r" (psr), "n" ((newipl) << 8)); \
-	__asm __volatile("nop; nop; nop"); \
+	__asm volatile("nop; nop; nop"); \
 }
 
-/* Raise IPL and return previous value */
-#define	_SPLRAISE(name, newipl) \
-static __inline int name __P((void)); \
-static __inline int name() \
-{ \
-	int psr, oldipl; \
-	__asm __volatile("rd %%psr,%0" : "=r" (psr)); \
-	oldipl = psr & PSR_PIL; \
-	if ((newipl << 8) <= oldipl) \
-		return (oldipl); \
-	psr &= ~oldipl; \
-	__asm __volatile("wr %0,%1,%%psr" : : \
-	    "r" (psr), "n" ((newipl) << 8)); \
-	__asm __volatile("nop; nop; nop"); \
-	return (oldipl); \
-}
-
-_SPLSET(spllowersoftclock, 1)
-
-_SPLRAISE(splsoftint, 1)
-#define	splsoftclock	splsoftint
-#define	splsoftnet	splsoftint
-
-
-/* audio software interrupts */
-_SPLRAISE(splausoft, IPL_SOFTAUDIO)
-
-/* floppy software interrupts */
-_SPLRAISE(splfdsoft, IPL_SOFTFDC)
-
-/* Block devices */
-_SPLRAISE(splbio, IPL_BIO)
-
-/* tty input runs at software level 6 */
-_SPLRAISE(spltty, IPL_TTY)
-
-/* network hardware interrupts are at level 7 */
-_SPLRAISE(splnet, IPL_NET)
-
-/*
- * Memory allocation (must be as high as highest network, tty, or disk device)
- */
-_SPLRAISE(splvm, IPL_VM)
-
-/* clock interrupts at level 10 */
-_SPLRAISE(splclock, IPL_CLOCK)
-
-_SPLRAISE(splsched, IPL_SCHED)
+_SPLSET(spllowersoftclock, IPL_SOFTCLOCK)
 _SPLSET(spllowerschedclock, IPL_SCHED)
 
-/* fd hardware, ts102, and tadpole microcontoller interrupts are at level 11 */
-_SPLRAISE(splfd, 11)
-_SPLRAISE(splts102, 11)
-
-/*
- * zs hardware interrupts are at level 12
- * su (com) hardware interrupts are at level 13
- * IPL_SERIAL must protect them all.
- */
-_SPLRAISE(splzs, 12)
-
-_SPLRAISE(splserial, IPL_SERIAL)
-
-/* audio hardware interrupts are at level 13 */
-_SPLRAISE(splaudio, IPL_AUDIO)
-
-/* second sparc timer interrupts at level 14 */
-_SPLRAISE(splstatclock, IPL_STATCLOCK)
-
-static __inline int splhigh()
+/* Raise IPL and return previous value */
+static __inline int
+splraiseipl(int newipl)
 {
 	int psr, oldipl;
 
-	__asm __volatile("rd %%psr,%0" : "=r" (psr));
-	__asm __volatile("wr %0,0,%%psr" : : "r" (psr | PSR_PIL));
-	__asm __volatile("and %1,%2,%0; nop; nop" : "=r" (oldipl) : \
-	    "r" (psr), "n" (PSR_PIL));
+	__asm volatile("rd %%psr,%0" : "=r" (psr));
+
+	oldipl = psr & PSR_PIL;
+	newipl <<= 8;
+	if (newipl <= oldipl)
+		return (oldipl);
+
+	psr = (psr & ~oldipl) | newipl;
+
+	__asm volatile("wr %0,0,%%psr" : : "r" (psr));
+	__asm volatile("nop; nop; nop");
+
 	return (oldipl);
 }
 
-#define	spllock()	splhigh()
+#include <sys/spl.h>
+
+#define	splausoft()	splraiseipl(IPL_SOFTAUDIO)
+#define	splfdsoft()	splraiseipl(IPL_SOFTFDC)
+
+#define	splfd()		splraiseipl(IPL_FD)
+#define	splts102()	splraiseipl(IPL_TS102)
+
+#define	splzs()		splraiseipl(IPL_ZS)
 
 /* splx does not have a return value */
-static __inline void splx(newipl)
-	int newipl;
+static __inline void
+splx(int newipl)
 {
 	int psr;
 
-	__asm __volatile("rd %%psr,%0" : "=r" (psr));
-	__asm __volatile("wr %0,%1,%%psr" : : \
+	__asm volatile("rd %%psr,%0" : "=r" (psr));
+	__asm volatile("wr %0,%1,%%psr" : : \
 	    "r" (psr & ~PSR_PIL), "rn" (newipl));
-	__asm __volatile("nop; nop; nop");
+	__asm volatile("nop; nop; nop");
 }
 #endif /* KERNEL && !_LOCORE */
 

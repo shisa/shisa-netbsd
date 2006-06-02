@@ -1,4 +1,4 @@
-# $NetBSD: NetBSD-current.mk,v 1.2.2.1 2005/10/06 11:45:59 tron Exp $
+# $NetBSD: NetBSD-current.mk,v 1.4 2005/12/08 21:12:18 riz Exp $
 #
 # Configuration file for NetBSD-current.
 
@@ -58,5 +58,5 @@ EXTFILES.sparc64=	sparc64-boot.fs:sparc64/installation/misc/boot.fs.gz
 # BOOTFILE.vax is absolute
 BOOTFILE.vax=		${EXTFILEDIR}/vax.xxboot
 EXTFILES.vax=		vax.xxboot:vax/binary/sets/base.tgz,./usr/mdec/xxboot
-INTFILES.vax=		netbsd.vax:vax/installation/netboot/install-ram.gz,link \
+INTFILES.vax=		netbsd.vax:vax/installation/netboot/install.ram.gz,link \
 			boot.vax:vax/binary/sets/base.tgz,./usr/mdec/boot

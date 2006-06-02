@@ -1,4 +1,4 @@
-/* $NetBSD: vmstat.c,v 1.131 2005/03/10 16:28:54 wiz Exp $ */
+/* $NetBSD: vmstat.c,v 1.144 2006/05/02 22:19:12 christos Exp $ */
 
 /*-
  * Copyright (c) 1998, 2000, 2001 The NetBSD Foundation, Inc.
@@ -77,7 +77,7 @@ __COPYRIGHT("@(#) Copyright (c) 1980, 1986, 1991, 1993\n\
 #if 0
 static char sccsid[] = "@(#)vmstat.c	8.2 (Berkeley) 3/1/95";
 #else
-__RCSID("$NetBSD: vmstat.c,v 1.131 2005/03/10 16:28:54 wiz Exp $");
+__RCSID("$NetBSD: vmstat.c,v 1.144 2006/05/02 22:19:12 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -132,7 +132,7 @@ __RCSID("$NetBSD: vmstat.c,v 1.131 2005/03/10 16:28:54 wiz Exp $");
 #include <unistd.h>
 #include <util.h>
 
-#include "dkstats.h"
+#include "drvstats.h"
 
 /*
  * General namelist
@@ -147,29 +147,39 @@ struct nlist namelist[] =
 	{ "_stathz" },
 #define	X_NCHSTATS	3
 	{ "_nchstats" },
-#define	X_INTRNAMES	4
-	{ "_intrnames" },
-#define	X_EINTRNAMES	5
-	{ "_eintrnames" },
-#define	X_INTRCNT	6
-	{ "_intrcnt" },
-#define	X_EINTRCNT	7
-	{ "_eintrcnt" },
-#define	X_KMEMSTAT	8
+#define	X_KMEMSTAT	4
 	{ "_kmemstatistics" },
-#define	X_KMEMBUCKETS	9
-	{ "_bucket" },
-#define	X_ALLEVENTS	10
+#define	X_KMEMBUCKETS	5
+	{ "_kmembuckets" },
+#define	X_ALLEVENTS	6
 	{ "_allevents" },
-#define	X_POOLHEAD	11
+#define	X_POOLHEAD	7
 	{ "_pool_head" },
-#define	X_UVMEXP	12
+#define	X_UVMEXP	8
 	{ "_uvmexp" },
-#define	X_TIME		13
+#define	X_TIME		9
 	{ "_time" },
-#define	X_END		14
+#define	X_NL_SIZE	10
 	{ NULL },
 };
+
+/*
+ * Namelist for pre-evcnt interrupt counters.
+ */
+struct nlist intrnl[] =
+{
+#define	X_INTRNAMES	0
+	{ "_intrnames" },
+#define	X_EINTRNAMES	1
+	{ "_eintrnames" },
+#define	X_INTRCNT	2
+	{ "_intrcnt" },
+#define	X_EINTRCNT	3
+	{ "_eintrcnt" },
+#define	X_INTRNL_SIZE	4
+	{ NULL },
+};
+
 
 /*
  * Namelist for hash statistics
@@ -241,7 +251,7 @@ kvm_t *kd;
 
 void	cpustats(void);
 void	deref_kptr(const void *, void *, size_t, const char *);
-void	dkstats(void);
+void	drvstats(void);
 void	doevcnt(int verbose);
 void	dohashstat(int, int, const char *);
 void	dointr(int verbose);
@@ -252,7 +262,7 @@ void	dosum(void);
 void	dovmstat(struct timespec *, int);
 void	print_total_hdr(void);
 void	dovmtotal(struct timespec *, int);
-void	kread(int, void *, size_t);
+void	kread(struct nlist *, int, void *, size_t);
 void	needhdr(int);
 long	getuptime(void);
 void	printhdr(void);
@@ -383,6 +393,8 @@ main(int argc, char *argv[])
 		(void)fputc('\n', stderr);
 		exit(1);
 	}
+	if (todo & INTRSTAT)
+		(void) kvm_nlist(kd, intrnl);
 	if ((c = kvm_nlist(kd, hashnl)) == -1 || c == X_HASHNL_SIZE)
 		errx(1, "kvm_nlist: %s %s", "hashnl", kvm_geterr(kd));
 	if (kvm_nlist(kd, histnl) == -1)
@@ -391,7 +403,7 @@ main(int argc, char *argv[])
 	if (todo & VMSTAT) {
 		struct winsize winsize;
 
-		dkinit(0);	/* Initialize disk stats, no disks selected. */
+		drvinit(0);	/* Initialize disk stats, no disks selected. */
 
 		(void)setgid(getgid()); /* don't need privs anymore */
 
@@ -496,20 +508,21 @@ choosedrives(char **argv)
 		if (isdigit((unsigned char)**argv))
 			break;
 #endif
-		for (i = 0; i < dk_ndrive; i++) {
+		for (i = 0; i < ndrive; i++) {
 			if (strcmp(dr_name[i], *argv))
 				continue;
-			dk_select[i] = 1;
+			drv_select[i] = 1;
 			++ndrives;
 			break;
 		}
 	}
-	for (i = 0; i < dk_ndrive && ndrives < 3; i++) {
-		if (dk_select[i])
+	for (i = 0; i < ndrive && ndrives < 3; i++) {
+		if (drv_select[i])
 			continue;
-		dk_select[i] = 1;
+		drv_select[i] = 1;
 		++ndrives;
 	}
+
 	return (argv);
 }
 
@@ -521,8 +534,8 @@ getuptime(void)
 	time_t uptime;
 
 	if (boottime.tv_sec == 0)
-		kread(X_BOOTTIME, &boottime, sizeof(boottime));
-	kread(X_TIME, &now, sizeof(now));
+		kread(namelist, X_BOOTTIME, &boottime, sizeof(boottime));
+	kread(namelist, X_TIME, &now, sizeof(now));
 	timersub(&now, &boottime, &diff);
 	uptime = diff.tv_sec;
 	if (uptime <= 0 || uptime > 60*60*24*365*10)
@@ -607,16 +620,18 @@ dovmstat(struct timespec *interval, int reps)
 	(void)signal(SIGCONT, needhdr);
 
 	if (namelist[X_STATHZ].n_type != 0 && namelist[X_STATHZ].n_value != 0)
-		kread(X_STATHZ, &hz, sizeof(hz));
+		kread(namelist, X_STATHZ, &hz, sizeof(hz));
 	if (!hz)
-		kread(X_HZ, &hz, sizeof(hz));
+		kread(namelist, X_HZ, &hz, sizeof(hz));
 
 	for (hdrcnt = 1;;) {
 		if (!--hdrcnt)
 			printhdr();
 		/* Read new disk statistics */
-		dkreadstats();
-		kread(X_UVMEXP, &uvmexp, sizeof(uvmexp));
+		cpureadstats();
+		drvreadstats();
+		tkreadstats();
+		kread(namelist, X_UVMEXP, &uvmexp, sizeof(uvmexp));
 		if (memf != NULL) {
 			/*
 			 * XXX Can't do this if we're reading a crash
@@ -647,7 +662,7 @@ dovmstat(struct timespec *interval, int reps)
 		    rate(uvmexp.pgswapout - ouvmexp.pgswapout));
 		(void)printf("%4lu ", rate(uvmexp.pdfreed - ouvmexp.pdfreed));
 		(void)printf("%4lu ", rate(uvmexp.pdscans - ouvmexp.pdscans));
-		dkstats();
+		drvstats();
 		(void)printf("%4lu %4lu %3lu ",
 		    rate(uvmexp.intrs - ouvmexp.intrs),
 		    rate(uvmexp.syscalls - ouvmexp.syscalls),
@@ -683,8 +698,8 @@ printhdr(void)
 		    ndrives * 3, "");
 
 	(void)printf(" r b w    avm    fre  flt  re  pi   po   fr   sr ");
-	for (i = 0; i < dk_ndrive; i++)
-		if (dk_select[i])
+	for (i = 0; i < ndrive; i++)
+		if (drv_select[i])
 			(void)printf("%c%c ", dr_name[i][0],
 			    dr_name[i][strlen(dr_name[i]) - 1]);
 	(void)printf("  in   sy  cs us sy id\n");
@@ -720,7 +735,7 @@ dosum(void)
 	struct nchstats nchstats;
 	u_long nchtotal;
 
-	kread(X_UVMEXP, &uvmexp, sizeof(uvmexp));
+	kread(namelist, X_UVMEXP, &uvmexp, sizeof(uvmexp));
 
 	(void)printf("%9u bytes per page\n", uvmexp.pagesize);
 
@@ -750,8 +765,6 @@ dosum(void)
 	(void)printf("%9u swap pages\n", uvmexp.swpages);
 	(void)printf("%9u swap pages in use\n", uvmexp.swpginuse);
 	(void)printf("%9u swap allocations\n", uvmexp.nswget);
-	(void)printf("%9u anons\n", uvmexp.nanon);
-	(void)printf("%9u free anons\n", uvmexp.nfreeanon);
 
 	(void)printf("%9u total faults taken\n", uvmexp.faults);
 	(void)printf("%9u traps\n", uvmexp.traps);
@@ -816,7 +829,7 @@ dosum(void)
 	(void)printf("%9u total pending pageouts\n", uvmexp.pdpending);
 	(void)printf("%9u pages deactivated\n", uvmexp.pddeact);
 
-	kread(X_NCHSTATS, &nchstats, sizeof(nchstats));
+	kread(namelist, X_NCHSTATS, &nchstats, sizeof(nchstats));
 	nchtotal = nchstats.ncs_goodhits + nchstats.ncs_neghits +
 	    nchstats.ncs_badhits + nchstats.ncs_falsehits +
 	    nchstats.ncs_miss + nchstats.ncs_long;
@@ -844,7 +857,7 @@ void
 doforkst(void)
 {
 
-	kread(X_UVMEXP, &uvmexp, sizeof(uvmexp));
+	kread(namelist, X_UVMEXP, &uvmexp, sizeof(uvmexp));
 
 	(void)printf("%u forks total\n", uvmexp.forks);
 	(void)printf("%u forks blocked parent\n", uvmexp.forks_ppwait);
@@ -853,20 +866,21 @@ doforkst(void)
 }
 
 void
-dkstats(void)
+drvstats(void)
 {
 	int dn;
 	double etime;
 
 	/* Calculate disk stat deltas. */
-	dkswap();
+	cpuswap();
+	drvswap();
+	tkswap();
 	etime = cur.cp_etime;
 
-	for (dn = 0; dn < dk_ndrive; ++dn) {
-		if (!dk_select[dn])
+	for (dn = 0; dn < ndrive; ++dn) {
+		if (!drv_select[dn])
 			continue;
-		(void)printf("%2.0f ",
-		    (cur.dk_rxfer[dn] + cur.dk_wxfer[dn]) / etime);
+		(void)printf("%2.0f ", (cur.rxfer[dn] + cur.wxfer[dn]) / etime);
 	}
 }
 
@@ -888,47 +902,53 @@ cpustats(void)
 	stat_sy = (cur.cp_time[CP_SYS] + cur.cp_time[CP_INTR]) * pcnt;
 	stat_id = cur.cp_time[CP_IDLE] * pcnt;
 	(void)printf("%*.0f ", ((stat_sy >= 100) ? 1 : 2), stat_us);
-	(void)printf("%*.0f ", ((stat_us >= 100 || stat_id >= 100) ? 1 : 2), stat_sy);
+	(void)printf("%*.0f ", ((stat_us >= 100 || stat_id >= 100) ? 1 : 2),
+		     stat_sy);
 	(void)printf("%2.0f", stat_id);
 }
 
 void
 dointr(int verbose)
 {
-	unsigned long *intrcnt;
+	unsigned long *intrcnt, *ointrcnt;
 	unsigned long long inttotal, uptime;
 	int nintr, inamlen;
-	char *intrname;
+	char *intrname, *ointrname;
 	struct evcntlist allevents;
 	struct evcnt evcnt, *evptr;
 	char evgroup[EVCNT_STRING_MAX], evname[EVCNT_STRING_MAX];
 
-	uptime = getuptime();
-	nintr = namelist[X_EINTRCNT].n_value - namelist[X_INTRCNT].n_value;
-	inamlen =
-	    namelist[X_EINTRNAMES].n_value - namelist[X_INTRNAMES].n_value;
-	intrcnt = malloc((size_t)nintr);
-	intrname = malloc((size_t)inamlen);
-	if (intrcnt == NULL || intrname == NULL)
-		errx(1, "%s", "");
-	kread(X_INTRCNT, intrcnt, (size_t)nintr);
-	kread(X_INTRNAMES, intrname, (size_t)inamlen);
-	(void)printf("%-34s %16s %8s\n", "interrupt", "total", "rate");
 	inttotal = 0;
-	nintr /= sizeof(long);
-	while (--nintr >= 0) {
-		if (*intrcnt || verbose)
-			(void)printf("%-34s %16llu %8llu\n", intrname,
-			    (unsigned long long)*intrcnt,
-			    (unsigned long long)(*intrcnt / uptime));
-		intrname += strlen(intrname) + 1;
-		inttotal += *intrcnt++;
+	uptime = getuptime();
+	(void)printf("%-34s %16s %8s\n", "interrupt", "total", "rate");
+	nintr = intrnl[X_EINTRCNT].n_value - intrnl[X_INTRCNT].n_value;
+	inamlen = intrnl[X_EINTRNAMES].n_value - intrnl[X_INTRNAMES].n_value;
+	if (nintr != 0 && inamlen != 0) {
+		ointrcnt = intrcnt = malloc((size_t)nintr);
+		ointrname = intrname = malloc((size_t)inamlen);
+		if (intrcnt == NULL || intrname == NULL)
+			errx(1, "%s", "");
+		kread(intrnl, X_INTRCNT, intrcnt, (size_t)nintr);
+		kread(intrnl, X_INTRNAMES, intrname, (size_t)inamlen);
+		nintr /= sizeof(long);
+		while (--nintr >= 0) {
+			if (*intrcnt || verbose)
+				(void)printf("%-34s %16llu %8llu\n", intrname,
+					     (unsigned long long)*intrcnt,
+					     (unsigned long long)
+					     (*intrcnt / uptime));
+			intrname += strlen(intrname) + 1;
+			inttotal += *intrcnt++;
+		}
+		free(ointrcnt);
+		free(ointrname);
 	}
-	kread(X_ALLEVENTS, &allevents, sizeof allevents);
-	evptr = allevents.tqh_first;
+
+	kread(namelist, X_ALLEVENTS, &allevents, sizeof allevents);
+	evptr = TAILQ_FIRST(&allevents);
 	while (evptr) {
 		deref_kptr(evptr, &evcnt, sizeof(evcnt), "event chain trashed");
-		evptr = evcnt.ev_list.tqe_next;
+		evptr = TAILQ_NEXT(&evcnt, ev_list);
 		if (evcnt.ev_type != EVCNT_TYPE_INTR)
 			continue;
 
@@ -964,12 +984,12 @@ doevcnt(int verbose)
 
 	uptime = getuptime();
 	(void)printf("%-34s %16s %8s %s\n", "event", "total", "rate", "type");
-	kread(X_ALLEVENTS, &allevents, sizeof allevents);
-	evptr = allevents.tqh_first;
+	kread(namelist, X_ALLEVENTS, &allevents, sizeof allevents);
+	evptr = TAILQ_FIRST(&allevents);
 	while (evptr) {
 		deref_kptr(evptr, &evcnt, sizeof(evcnt), "event chain trashed");
 
-		evptr = evcnt.ev_list.tqe_next;
+		evptr = TAILQ_NEXT(&evcnt, ev_list);
 		if (evcnt.ev_count == 0 && !verbose)
 			continue;
 
@@ -999,7 +1019,7 @@ domem(void)
 	long totuse = 0, totfree = 0, totreq = 0;
 	struct kmembuckets buckets[MINBUCKET + 16];
 
-	kread(X_KMEMBUCKETS, buckets, sizeof(buckets));
+	kread(namelist, X_KMEMBUCKETS, buckets, sizeof(buckets));
 	for (first = 1, i = MINBUCKET, kp = &buckets[i]; i < MINBUCKET + 16;
 	    i++, kp++) {
 		if (kp->kb_calls == 0)
@@ -1035,7 +1055,7 @@ domem(void)
 			continue;
 		first = 1;
 		len = 8;
-		for (kread(X_KMEMSTAT, &ksp, sizeof(ksp));
+		for (kread(namelist, X_KMEMSTAT, &ksp, sizeof(ksp));
 		     ksp != NULL; ksp = ks.ks_next) {
 			deref_kptr(ksp, &ks, sizeof(ks), "malloc type");
 			if (ks.ks_calls == 0)
@@ -1064,7 +1084,7 @@ domem(void)
 	    "\nMemory statistics by type                           Type  Kern\n");
 	(void)printf(
 "         Type  InUse MemUse HighUse  Limit Requests Limit Limit Size(s)\n");
-	for (kread(X_KMEMSTAT, &ksp, sizeof(ksp));
+	for (kread(namelist, X_KMEMSTAT, &ksp, sizeof(ksp));
 	     ksp != NULL; ksp = ks.ks_next) {
 		deref_kptr(ksp, &ks, sizeof(ks), "malloc type");
 		if (ks.ks_calls == 0)
@@ -1102,17 +1122,17 @@ dopool(int verbose, int wide)
 	int first, ovflw;
 	void *addr;
 	long total, inuse, this_total, this_inuse;
-	TAILQ_HEAD(,pool) pool_head;
+	LIST_HEAD(,pool) pool_head;
 	struct pool pool, *pp = &pool;
 	struct pool_allocator pa;
 	char name[32], maxp[32];
 
-	kread(X_POOLHEAD, &pool_head, sizeof(pool_head));
-	addr = TAILQ_FIRST(&pool_head);
+	kread(namelist, X_POOLHEAD, &pool_head, sizeof(pool_head));
+	addr = LIST_FIRST(&pool_head);
 
 	total = inuse = 0;
 
-	for (first = 1; addr != NULL; addr = TAILQ_NEXT(pp, pr_poollist) ) {
+	for (first = 1; addr != NULL; addr = LIST_NEXT(pp, pr_poollist) ) {
 		deref_kptr(addr, pp, sizeof(*pp), "pool chain trashed");
 		deref_kptr(pp->pr_alloc, &pa, sizeof(pa),
 		    "pool allocator trashed");
@@ -1228,35 +1248,49 @@ dopoolcache(struct pool *pp, int verbose)
 	if (verbose < 1)
 		return;
 
-	for (addr = TAILQ_FIRST(&pp->pr_cachelist); addr != NULL;
-	    addr = TAILQ_NEXT(pc, pc_poollist)) {
+#define PR_GROUPLIST							\
+	deref_kptr(pcg_addr, pcg, sizeof(*pcg),				\
+	    "pool cache group trashed");				\
+	printf("\t\tgroup %p: avail %d\n", pcg_addr,			\
+	    pcg->pcg_avail);						\
+	for (i = 0; i < PCG_NOBJECTS; i++) {				\
+		if (pcg->pcg_objects[i].pcgo_pa !=			\
+		    POOL_PADDR_INVALID) {				\
+			printf("\t\t\t%p, 0x%llx\n",			\
+			    pcg->pcg_objects[i].pcgo_va,		\
+			    (unsigned long long)			\
+			    pcg->pcg_objects[i].pcgo_pa);		\
+		} else {						\
+			printf("\t\t\t%p\n",				\
+			    pcg->pcg_objects[i].pcgo_va);		\
+		}							\
+	}
+
+	for (addr = LIST_FIRST(&pp->pr_cachelist); addr != NULL;
+	    addr = LIST_NEXT(pc, pc_poollist)) {
 		deref_kptr(addr, pc, sizeof(*pc), "pool cache trashed");
-		printf("\tcache %p: allocfrom %p freeto %p\n", addr,
-		    pc->pc_allocfrom, pc->pc_freeto);
 		printf("\t    hits %lu misses %lu ngroups %lu nitems %lu\n",
 		    pc->pc_hits, pc->pc_misses, pc->pc_ngroups, pc->pc_nitems);
 		if (verbose < 2)
 			continue;
-		for (pcg_addr = TAILQ_FIRST(&pc->pc_grouplist);
-		    pcg_addr != NULL; pcg_addr = TAILQ_NEXT(pcg, pcg_list)) {
-			deref_kptr(pcg_addr, pcg, sizeof(*pcg),
-			    "pool cache group trashed");
-			printf("\t\tgroup %p: avail %d\n", pcg_addr,
-			    pcg->pcg_avail);
-			for (i = 0; i < PCG_NOBJECTS; i++) {
-				if (pcg->pcg_objects[i].pcgo_pa !=
-				    POOL_PADDR_INVALID) {
-					printf("\t\t\t%p, 0x%llx\n",
-					    pcg->pcg_objects[i].pcgo_va,
-					    (unsigned long long)
-					    pcg->pcg_objects[i].pcgo_pa);
-				} else {
-					printf("\t\t\t%p\n",
-					    pcg->pcg_objects[i].pcgo_va);
-				}
-			}
+		printf("\t    full groups:\n");
+		for (pcg_addr = LIST_FIRST(&pc->pc_fullgroups);
+		    pcg_addr != NULL; pcg_addr = LIST_NEXT(pcg, pcg_list)) {
+			PR_GROUPLIST;
+		}
+		printf("\t    partial groups:\n");
+		for (pcg_addr = LIST_FIRST(&pc->pc_partgroups);
+		    pcg_addr != NULL; pcg_addr = LIST_NEXT(pcg, pcg_list)) {
+			PR_GROUPLIST;
+		}
+		printf("\t    empty groups:\n");
+		for (pcg_addr = LIST_FIRST(&pc->pc_emptygroups);
+		    pcg_addr != NULL; pcg_addr = LIST_NEXT(pcg, pcg_list)) {
+			PR_GROUPLIST;
 		}
 	}
+
+#undef PR_GROUPLIST
 
 }
 
@@ -1383,7 +1417,7 @@ dohashstat(int verbose, int todo, const char *hashname)
 			    (long)curhash->offset,
 			    (unsigned long long)elemsize);
 		thissize = hashsize * elemsize;
-		if (thissize > hashbufsize) {
+		if (hashbuf == NULL || thissize > hashbufsize) {
 			if ((nhashbuf = realloc(hashbuf, thissize)) == NULL)
 				errx(1, "malloc hashbuf %llu",
 				    (unsigned long long)hashbufsize);
@@ -1394,10 +1428,13 @@ dohashstat(int verbose, int todo, const char *hashname)
 		    hashnl[curhash->hashtbl].n_name);
 		used = 0;
 		items = maxchain = 0;
-		if (curhash->type == HASH_LIST)
+		if (curhash->type == HASH_LIST) {
 			hashtbl_list = hashbuf;
-		else
+			hashtbl_tailq = NULL;
+		} else {
+			hashtbl_list = NULL;
 			hashtbl_tailq = hashbuf;
+		}
 		for (i = 0; i < hashsize; i++) {
 			if (curhash->type == HASH_LIST)
 				nextaddr = LIST_FIRST(&hashtbl_list[i]);
@@ -1435,16 +1472,16 @@ dohashstat(int verbose, int todo, const char *hashname)
  * kread reads something from the kernel, given its nlist index in namelist[].
  */
 void
-kread(int nlx, void *addr, size_t size)
+kread(struct nlist *nl, int nlx, void *addr, size_t size)
 {
 	const char *sym;
 
-	sym = namelist[nlx].n_name;
+	sym = nl[nlx].n_name;
 	if (*sym == '_')
 		++sym;
-	if (namelist[nlx].n_type == 0 || namelist[nlx].n_value == 0)
+	if (nl[nlx].n_type == 0 || nl[nlx].n_value == 0)
 		errx(1, "symbol %s not defined", sym);
-	deref_kptr((void *)namelist[nlx].n_value, addr, size, sym);
+	deref_kptr((void *)nl[nlx].n_value, addr, size, sym);
 }
 
 /*
@@ -1494,7 +1531,7 @@ hist_traverse(int todo, const char *histname)
 	for (histkva = LIST_FIRST(&histhead); histkva != NULL;
 	    histkva = LIST_NEXT(&hist, list)) {
 		deref_kptr(histkva, &hist, sizeof(hist), "histkva");
-		if (hist.namelen > namelen) {
+		if (name == NULL || hist.namelen > namelen) {
 			if (name != NULL)
 				free(name);
 			namelen = hist.namelen;
@@ -1550,14 +1587,14 @@ hist_dodump(struct uvm_history *histp)
 	do {
 		e = &histents[i];
 		if (e->fmt != NULL) {
-			if (e->fmtlen > fmtlen) {
+			if (fmt == NULL || e->fmtlen > fmtlen) {
 				if (fmt != NULL)
 					free(fmt);
 				fmtlen = e->fmtlen;
 				if ((fmt = malloc(fmtlen + 1)) == NULL)
 					err(1, "malloc printf format");
 			}
-			if (e->fnlen > fnlen) {
+			if (fn == NULL || e->fnlen > fnlen) {
 				if (fn != NULL)
 					free(fn);
 				fnlen = e->fnlen;

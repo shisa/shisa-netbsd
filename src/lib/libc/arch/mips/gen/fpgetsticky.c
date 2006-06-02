@@ -1,4 +1,4 @@
-/*	$NetBSD: fpgetsticky.c,v 1.3 2002/01/13 21:45:45 thorpej Exp $	*/
+/*	$NetBSD: fpgetsticky.c,v 1.5 2005/12/24 23:10:08 perry Exp $	*/
 
 /*
  * Written by J.T. Conklin, Apr 11, 1995
@@ -6,6 +6,9 @@
  */
 
 #include <sys/cdefs.h>
+#if defined(LIBC_SCCS) && !defined(lint)
+__RCSID("$NetBSD: fpgetsticky.c,v 1.5 2005/12/24 23:10:08 perry Exp $");
+#endif /* LIBC_SCCS and not lint */
 
 #include "namespace.h"
 
@@ -20,6 +23,6 @@ fpgetsticky()
 {
 	int x;
 
-	__asm__("cfc1 %0,$31" : "=r" (x));
+	__asm("cfc1 %0,$31" : "=r" (x));
 	return (x >> 2) & 0x1f;
 }

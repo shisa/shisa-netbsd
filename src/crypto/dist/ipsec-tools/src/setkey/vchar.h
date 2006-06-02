@@ -1,4 +1,4 @@
-/*	$NetBSD: vchar.h,v 1.1.1.2.2.2 2005/11/21 21:12:34 tron Exp $	*/
+/*	$NetBSD: vchar.h,v 1.3 2005/11/21 14:20:36 manu Exp $	*/
 
 /* Id: vchar.h,v 1.2 2004/06/07 09:18:47 ludvigm Exp */
 

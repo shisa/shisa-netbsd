@@ -1,4 +1,4 @@
-/*	$NetBSD: uvm_pager.h,v 1.28.14.1 2005/08/24 18:43:38 riz Exp $	*/
+/*	$NetBSD: uvm_pager.h,v 1.34 2006/02/22 22:28:18 drochner Exp $	*/
 
 /*
  *
@@ -137,7 +137,7 @@ struct uvm_pagerops {
 
 	/* special non-standard fault processing */
 	int	(*pgo_fault)(struct uvm_faultinfo *, vaddr_t, struct vm_page **,
-			     int, int, vm_fault_t, vm_prot_t, int);
+			     int, int, vm_prot_t, int);
 
 	/* get/read pages */
 	int	(*pgo_get)(struct uvm_object *, voff_t, struct vm_page **,
@@ -169,21 +169,11 @@ struct uvm_pagerops {
 #ifdef _KERNEL
 
 /*
- * handle inline options
- */
-
-#ifdef UVM_PAGER_INLINE
-#define PAGER_INLINE static __inline
-#else
-#define PAGER_INLINE /* nothing */
-#endif /* UVM_PAGER_INLINE */
-
-/*
  * prototypes
  */
 
 void	uvm_pager_init(void);
-PAGER_INLINE struct vm_page *uvm_pageratop(vaddr_t);
+struct vm_page *uvm_pageratop(vaddr_t);
 vaddr_t	uvm_pagermapin(struct vm_page **, int, int);
 void	uvm_pagermapout(vaddr_t, int);
 

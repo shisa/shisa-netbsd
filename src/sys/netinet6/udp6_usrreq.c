@@ -1,4 +1,4 @@
-/*	$NetBSD: udp6_usrreq.c,v 1.67 2005/03/11 06:16:16 atatat Exp $	*/
+/*	$NetBSD: udp6_usrreq.c,v 1.74 2006/05/05 00:03:22 rpaulo Exp $	*/
 /*	$KAME: udp6_usrreq.c,v 1.86 2001/05/27 17:33:00 itojun Exp $	*/
 
 /*
@@ -62,7 +62,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: udp6_usrreq.c,v 1.67 2005/03/11 06:16:16 atatat Exp $");
+__KERNEL_RCSID(0, "$NetBSD: udp6_usrreq.c,v 1.74 2006/05/05 00:03:22 rpaulo Exp $");
 
 #include <sys/param.h>
 #include <sys/malloc.h>
@@ -95,6 +95,7 @@ __KERNEL_RCSID(0, "$NetBSD: udp6_usrreq.c,v 1.67 2005/03/11 06:16:16 atatat Exp 
 #include <netinet/icmp6.h>
 #include <netinet6/udp6_var.h>
 #include <netinet6/ip6protosw.h>
+#include <netinet/in_offload.h>
 
 #include "faith.h"
 #if defined(NFAITH) && NFAITH > 0
@@ -102,7 +103,7 @@ __KERNEL_RCSID(0, "$NetBSD: udp6_usrreq.c,v 1.67 2005/03/11 06:16:16 atatat Exp 
 #endif
 
 /*
- * UDP protocol inplementation.
+ * UDP protocol implementation.
  * Per RFC 768, August, 1980.
  */
 
@@ -209,7 +210,7 @@ udp6_ctlinput(cmd, sa, d)
 			 * payload.
 			 */
 			if (in6_pcblookup_connect(&udbtable, &sa6->sin6_addr,
-			    uh.uh_dport, (struct in6_addr *)&sa6_src->sin6_addr,
+			    uh.uh_dport, (const struct in6_addr *)&sa6_src->sin6_addr,
 			    uh.uh_sport, 0))
 				valid++;
 #if 0
@@ -235,20 +236,21 @@ udp6_ctlinput(cmd, sa, d)
 			icmp6_mtudisc_update((struct ip6ctlparam *)d, valid);
 
 			/*
-			 * regardless of if we called icmp6_mtudisc_update(),
-			 * we need to call in6_pcbnotify(), to notify path
-			 * MTU change to the userland (2292bis-02), because
-			 * some unconnected sockets may share the same
+			 * regardless of if we called
+			 * icmp6_mtudisc_update(), we need to call
+			 * in6_pcbnotify(), to notify path MTU change
+			 * to the userland (RFC3542), because some
+			 * unconnected sockets may share the same
 			 * destination and want to know the path MTU.
 			 */
 		}
 
 		(void) in6_pcbnotify(&udbtable, sa, uh.uh_dport,
-		    (struct sockaddr *)sa6_src, uh.uh_sport, cmd, cmdarg,
+		    (const struct sockaddr *)sa6_src, uh.uh_sport, cmd, cmdarg,
 		    notify);
 	} else {
 		(void) in6_pcbnotify(&udbtable, sa, 0,
-		    (struct sockaddr *)sa6_src, 0, cmd, cmdarg, notify);
+		    (const struct sockaddr *)sa6_src, 0, cmd, cmdarg, notify);
 	}
 }
 
@@ -256,16 +258,18 @@ extern	int udp6_sendspace;
 extern	int udp6_recvspace;
 
 int
-udp6_usrreq(so, req, m, addr6, control, p)
+udp6_usrreq(so, req, m, addr6, control, l)
 	struct socket *so;
 	int req;
 	struct mbuf *m, *addr6, *control;
-	struct proc *p;
+	struct lwp *l;
 {
 	struct	in6pcb *in6p = sotoin6pcb(so);
+	struct	proc *p;
 	int	error = 0;
 	int	s;
 
+	p = l ? l->l_proc : NULL;
 	/*
 	 * MAPPED_ADDR implementation info:
 	 *  Mapped addr support for PRU_CONTROL is not necessary.
@@ -335,7 +339,7 @@ udp6_usrreq(so, req, m, addr6, control, p)
 			break;
 		}
 		s = splsoftnet();
-		error = in6_pcbconnect(in6p, addr6);
+		error = in6_pcbconnect(in6p, addr6, p);
 		splx(s);
 		if (error == 0)
 			soisconnected(so);
@@ -458,5 +462,12 @@ SYSCTL_SETUP(sysctl_net_inet6_udp6_setup, "sysctl net.inet6.udp6 subtree setup")
 		       SYSCTL_DESCR("UDP protocol control block list"),
 		       sysctl_inpcblist, 0, &udbtable, 0,
 		       CTL_NET, PF_INET6, IPPROTO_UDP, CTL_CREATE,
+		       CTL_EOL);
+	sysctl_createv(clog, 0, NULL, NULL,
+		       CTLFLAG_PERMANENT,
+		       CTLTYPE_STRUCT, "stats",
+		       SYSCTL_DESCR("UDPv6 statistics"),
+		       NULL, 0, &udp6stat, sizeof(udp6stat),
+		       CTL_NET, PF_INET6, IPPROTO_UDP, UDP6CTL_STATS,
 		       CTL_EOL);
 }

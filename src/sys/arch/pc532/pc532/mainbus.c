@@ -1,4 +1,4 @@
-/*	$NetBSD: mainbus.c,v 1.15 2003/07/15 02:54:35 lukem Exp $	*/
+/*	$NetBSD: mainbus.c,v 1.20 2006/05/12 06:05:23 simonb Exp $	*/
 
 /*
  * Copyright (c) 1997 Matthias Pfaller.
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mainbus.c,v 1.15 2003/07/15 02:54:35 lukem Exp $");
+__KERNEL_RCSID(0, "$NetBSD: mainbus.c,v 1.20 2006/05/12 06:05:23 simonb Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -41,27 +41,23 @@ __KERNEL_RCSID(0, "$NetBSD: mainbus.c,v 1.15 2003/07/15 02:54:35 lukem Exp $");
 #include <machine/autoconf.h>
 #include <machine/icu.h>
 
-static int	mbprobe __P((struct device *, struct cfdata *, void *));
-static void	mbattach __P((struct device *, struct device *, void *));
-static int	mbsearch __P((struct device *, struct cfdata *, void *));
-static int	mbprint __P((void *, const char *));
+static int	mbprobe(struct device *, struct cfdata *, void *);
+static void	mbattach(struct device *, struct device *, void *);
+static int	mbsearch(struct device *, struct cfdata *, const int *, void *);
+static int	mbprint(void *, const char *);
 
 CFATTACH_DECL(mainbus, sizeof(struct device),
     mbprobe, mbattach, NULL, NULL);
 
 static int
-mbprobe(parent, cf, aux)
-	struct device *parent;
-	struct cfdata *cf;
-	void *aux;
+mbprobe(struct device *parent, struct cfdata *cf, void *aux)
 {
+
 	return(strcmp(cf->cf_name, "mainbus") == 0);
 }
 
 static void
-mbattach(parent, self, aux)
-	struct device *parent, *self;
- 	void *aux;
+mbattach(struct device *parent, struct device *self, void *aux)
 {
 	int clk, net;
 	static u_char icu_table[] = {
@@ -92,15 +88,13 @@ mbattach(parent, self, aux)
 	if (clk != SIR_CLOCK || net != SIR_NET)
 		panic("Wrong clock or net softint allocated");
 
-	config_search(mbsearch, self, NULL);
+	config_search_ia(mbsearch, self, "mainbus", NULL);
 }
 
 static int
-mbprint(aux, pnp)
-	void *aux;
-	const char *pnp;
+mbprint(void *aux, const char *pnp)
 {
-	char *delim;
+	const char *delim;
 	struct confargs *ca = aux;
 
 	if (ca->ca_addr != -1) {
@@ -119,10 +113,7 @@ mbprint(aux, pnp)
 }
 
 static int
-mbsearch(parent, cf, aux)
-	struct device *parent;
-	struct cfdata *cf;
-	void *aux;
+mbsearch(struct device *parent, struct cfdata *cf, const int *ldesc, void *aux)
 {
 	struct confargs ca;
 
@@ -139,9 +130,9 @@ mbsearch(parent, cf, aux)
 }
 
 void
-icu_init(p)
-	u_char *p;
+icu_init(u_char *p)
 {
+
 	di();
 	while (*p != 0xff) {
 		ICUB(p[0]) = p[1];

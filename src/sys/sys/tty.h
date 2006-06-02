@@ -1,4 +1,4 @@
-/*	$NetBSD: tty.h,v 1.66 2005/02/03 19:20:02 perry Exp $	*/
+/*	$NetBSD: tty.h,v 1.70 2005/12/11 12:25:21 christos Exp $	*/
 
 /*-
  * Copyright (c) 1982, 1986, 1993
@@ -36,14 +36,15 @@
  *	@(#)tty.h	8.7 (Berkeley) 1/9/95
  */
 
+#ifndef _SYS_TTY_H_
+#define _SYS_TTY_H_
+
 #include <sys/termios.h>
-#include <sys/select.h>		/* For struct selinfo. */
+#include <sys/select.h>
+#include <sys/selinfo.h>	/* For struct selinfo. */
 #include <sys/lock.h>
 #include <sys/queue.h>
 #include <sys/callout.h>
-
-#ifndef _SYS_TTY_H_
-#define _SYS_TTY_H_
 
 /*
  * Clists are actually ring buffers. The c_cc, c_cf, c_cl fields have
@@ -221,10 +222,10 @@ int	 unputc(struct clist *);
 
 int	 nullmodem(struct tty *, int);
 int	 tputchar(int, int, struct tty *);
-int	 ttioctl(struct tty *, u_long, caddr_t, int, struct proc *);
+int	 ttioctl(struct tty *, u_long, caddr_t, int, struct lwp *);
 int	 ttread(struct tty *, struct uio *, int);
 void	 ttrstrt(void *);
-int	 ttpoll(struct tty *, int, struct proc *);
+int	 ttpoll(struct tty *, int, struct lwp *);
 void	 ttsetwater(struct tty *);
 int	 ttspeedtab(int, const struct speedtab *);
 int	 ttstart(struct tty *);
@@ -249,7 +250,6 @@ int	 ttysleep(struct tty *, void *, int, const char *, int);
 int	 ttywait(struct tty *);
 int	 ttywflush(struct tty *);
 
-void	 tty_init(void);
 void	 tty_attach(struct tty *);
 void	 tty_detach(struct tty *);
 struct tty
@@ -271,7 +271,7 @@ void	clfree(struct clist *);
 #if defined(COMPAT_43) || defined(COMPAT_SUNOS) || defined(COMPAT_SVR4) || \
     defined(COMPAT_FREEBSD) || defined(COMPAT_OSF1) || defined(LKM)
 # define COMPAT_OLDTTY
-int 	ttcompat(struct tty *, u_long, caddr_t, int, struct proc *);
+int 	ttcompat(struct tty *, u_long, caddr_t, int, struct lwp *);
 #endif
 
 #endif /* _KERNEL */

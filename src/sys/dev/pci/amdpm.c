@@ -1,4 +1,4 @@
-/*	$NetBSD: amdpm.c,v 1.7 2003/09/01 06:30:24 tls Exp $	*/
+/*	$NetBSD: amdpm.c,v 1.11 2006/02/19 02:24:20 tls Exp $	*/
 
 /*-
  * Copyright (c) 2002 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: amdpm.c,v 1.7 2003/09/01 06:30:24 tls Exp $");
+__KERNEL_RCSID(0, "$NetBSD: amdpm.c,v 1.11 2006/02/19 02:24:20 tls Exp $");
 
 #include "opt_amdpm.h"
 
@@ -48,36 +48,17 @@ __KERNEL_RCSID(0, "$NetBSD: amdpm.c,v 1.7 2003/09/01 06:30:24 tls Exp $");
 #include <sys/callout.h>
 #include <sys/rnd.h>
 
+#include <dev/i2c/i2cvar.h>
+
 #include <dev/pci/pcivar.h>
 #include <dev/pci/pcireg.h>
 #include <dev/pci/pcidevs.h>
 
 #include <dev/pci/amdpmreg.h>
+#include <dev/pci/amdpmvar.h>
+#include <dev/pci/amdpm_smbusreg.h>
 
-struct amdpm_softc {
-	struct device sc_dev;
-
-	pci_chipset_tag_t sc_pc;
-	pcitag_t sc_tag;
-
-	bus_space_tag_t sc_iot;
-	bus_space_handle_t sc_ioh;		/* PMxx space */
-
-	struct callout sc_rnd_ch;
-	rndsource_element_t sc_rnd_source;
-#ifdef AMDPM_RND_COUNTERS
-	struct evcnt sc_rnd_hits;
-	struct evcnt sc_rnd_miss;
-	struct evcnt sc_rnd_data[256];
-#endif
-};
-
-int	amdpm_match(struct device *, struct cfdata *, void *);
-void	amdpm_attach(struct device *, struct device *, void *);
-void	amdpm_rnd_callout(void *);
-
-CFATTACH_DECL(amdpm, sizeof(struct amdpm_softc),
-    amdpm_match, amdpm_attach, NULL, NULL);
+static void	amdpm_rnd_callout(void *);
 
 #ifdef AMDPM_RND_COUNTERS
 #define	AMDPM_RNDCNT_INCR(ev)	(ev)->ev_count++
@@ -85,28 +66,37 @@ CFATTACH_DECL(amdpm, sizeof(struct amdpm_softc),
 #define	AMDPM_RNDCNT_INCR(ev)	/* nothing */
 #endif
 
-int
+static int
 amdpm_match(struct device *parent, struct cfdata *match, void *aux)
 {
 	struct pci_attach_args *pa = aux;
 
-	if (PCI_VENDOR(pa->pa_id) == PCI_VENDOR_AMD &&
-	    PCI_PRODUCT(pa->pa_id) == PCI_PRODUCT_AMD_PBC768_PMC)
+	if (PCI_VENDOR(pa->pa_id) != PCI_VENDOR_AMD)
+		return (0);
+
+	switch (PCI_PRODUCT(pa->pa_id)) {
+	case PCI_PRODUCT_AMD_PBC768_PMC:
+	case PCI_PRODUCT_AMD_PBC8111_ACPI:
 		return (1);
+	}
+
 	return (0);
 }
 
-void
+static void
 amdpm_attach(struct device *parent, struct device *self, void *aux)
 {
 	struct amdpm_softc *sc = (struct amdpm_softc *) self;
 	struct pci_attach_args *pa = aux;
+	char devinfo[256];
 	pcireg_t reg;
 	u_int32_t pmreg;
 	int i;
 
 	aprint_naive("\n");
-	aprint_normal("\n");
+	pci_devinfo(pa->pa_id, pa->pa_class, 0, devinfo, sizeof(devinfo));
+	aprint_normal(": %s (rev. 0x%02x)\n", devinfo,
+	    PCI_REVISION(pa->pa_class));
 
 	sc->sc_pc = pa->pa_pc;
 	sc->sc_tag = pa->pa_tag;
@@ -116,6 +106,13 @@ amdpm_attach(struct device *parent, struct device *self, void *aux)
 	aprint_normal("%s: ", sc->sc_dev.dv_xname);
 	pci_conf_print(pa->pa_pc, pa->pa_tag, NULL);
 #endif
+
+	/* enable random # generation and pm i/o space for AMD-8111 */
+	if (PCI_PRODUCT(pa->pa_id)  == PCI_PRODUCT_AMD_PBC8111_ACPI) {
+		reg = pci_conf_read(pa->pa_pc, pa->pa_tag, AMDPM_CONFREG);
+		pci_conf_write(pa->pa_pc, pa->pa_tag, AMDPM_CONFREG, reg|
+		    AMDPM_RNGEN|AMDPM_PMIOEN);
+	}
 
 	reg = pci_conf_read(pa->pa_pc, pa->pa_tag, AMDPM_CONFREG);
 	if ((reg & AMDPM_PMIOEN) == 0) {
@@ -131,6 +128,13 @@ amdpm_attach(struct device *parent, struct device *self, void *aux)
 		return;
 	}
 
+	/* try to attach devices on the smbus */
+	if (PCI_PRODUCT(pa->pa_id) == PCI_PRODUCT_AMD_PBC8111_ACPI) {
+		amdpm_smbus_attach(sc);
+	}
+
+	reg = pci_conf_read(pa->pa_pc, pa->pa_tag, AMDPM_CONFREG);
+	pci_conf_write(pa->pa_pc, pa->pa_tag, AMDPM_CONFREG, reg | AMDPM_RNGEN);
 	reg = pci_conf_read(pa->pa_pc, pa->pa_tag, AMDPM_CONFREG);
 	if (reg & AMDPM_RNGEN) {
 		/* Check to see if we can read data from the RNG. */
@@ -178,7 +182,10 @@ amdpm_attach(struct device *parent, struct device *self, void *aux)
 	}
 }
 
-void
+CFATTACH_DECL(amdpm, sizeof(struct amdpm_softc),
+    amdpm_match, amdpm_attach, NULL, NULL);
+
+static void
 amdpm_rnd_callout(void *v)
 {
 	struct amdpm_softc *sc = v;

@@ -1,4 +1,4 @@
-/*	NetBSD: pci_machdep.c,v 1.12 2001/06/19 11:56:27 nonaka Exp $	*/
+/*	$NetBSD: pci_machdep.c,v 1.26 2006/05/25 02:11:13 garbled Exp $	*/
 
 /*
  * Copyright (c) 1996 Christopher G. Demetriou.  All rights reserved.
@@ -39,7 +39,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: pci_machdep.c,v 1.19 2005/01/13 23:57:04 kleink Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pci_machdep.c,v 1.26 2006/05/25 02:11:13 garbled Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -55,6 +55,7 @@ __KERNEL_RCSID(0, "$NetBSD: pci_machdep.c,v 1.19 2005/01/13 23:57:04 kleink Exp 
 #include <machine/bus.h>
 #include <machine/intr.h>
 #include <machine/platform.h>
+#include <machine/pnp.h>
 
 #include <dev/isa/isavar.h>
 
@@ -83,6 +84,21 @@ struct powerpc_bus_dma_tag pci_bus_dma_tag = {
 	_bus_dmamem_unmap,
 	_bus_dmamem_mmap,
 };
+
+void
+prep_pci_get_chipset_tag(pci_chipset_tag_t pc)
+{
+	int i;
+
+	i = pci_chipset_tag_type();
+
+	if (i == PCIBridgeIndirect || i == PCIBridgeRS6K)
+		prep_pci_get_chipset_tag_indirect(pc);
+	else if (i == PCIBridgeDirect)
+		prep_pci_get_chipset_tag_direct(pc);
+	else
+		panic("Unknown PCI chipset tag configuration method");
+}
 
 int
 prep_pci_bus_maxdevs(void *v, int busno)
@@ -192,7 +208,7 @@ prep_pci_conf_interrupt(void *v, int bus, int dev, int pin,
     int swiz, int *iline)
 {
 
-	(*platform->pci_intr_fixup)(bus, dev, swiz, iline);
+	pci_intr_fixup_pnp(bus, dev, pin, swiz, iline);
 }
 
 int
@@ -207,5 +223,11 @@ prep_pci_conf_hook(void *v, int bus, int dev, int func, pcireg_t id)
 	    PCI_PRODUCT(id) == PCI_PRODUCT_WEITEK_P9100)
 		return 0;
 
-	return (PCI_CONF_ALL & ~PCI_CONF_MAP_ROM);
+	/* We have already mapped the MPIC2 if we have one, so leave it
+	   alone */
+	if (PCI_VENDOR(id) == PCI_VENDOR_IBM &&
+	    PCI_PRODUCT(id) == PCI_PRODUCT_IBM_MPIC2)
+		return 0;
+
+	return (PCI_CONF_DEFAULT);
 }

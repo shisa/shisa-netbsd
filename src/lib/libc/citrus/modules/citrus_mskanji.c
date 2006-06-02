@@ -1,4 +1,4 @@
-/*	$NetBSD: citrus_mskanji.c,v 1.9 2005/02/10 19:03:51 tnozaki Exp $	*/
+/*	$NetBSD: citrus_mskanji.c,v 1.11 2005/12/07 06:20:20 tshiozak Exp $	*/
 
 /*-
  * Copyright (c)2002 Citrus Project,
@@ -62,7 +62,7 @@
 
 #include <sys/cdefs.h>
 #if defined(LIBC_SCCS) && !defined(lint)
-__RCSID("$NetBSD: citrus_mskanji.c,v 1.9 2005/02/10 19:03:51 tnozaki Exp $");
+__RCSID("$NetBSD: citrus_mskanji.c,v 1.11 2005/12/07 06:20:20 tshiozak Exp $");
 #endif /* LIBC_SCCS and not lint */
 
 #include <assert.h>
@@ -128,7 +128,7 @@ static int
 _mskanji1(int c)
 {
 
-	if ((c >= 0x81 && c <= 0x9f) || (c >= 0xe0 && c <= 0xef))
+	if ((c >= 0x81 && c <= 0x9f) || (c >= 0xe0 && c <= 0xfc))
 		return 1;
 	else
 		return 0;
@@ -420,6 +420,21 @@ _citrus_MSKanji_stdenc_cstowc(_MSKanjiEncodingInfo * __restrict ei,
 	default:
 		return EILSEQ;
 	}
+
+	return 0;
+}
+
+static __inline int
+/*ARGSUSED*/
+_citrus_MSKanji_stdenc_get_state_desc_generic(_MSKanjiEncodingInfo * __restrict ei,
+					      _MSKanjiState * __restrict psenc,
+					      int * __restrict rstate)
+{
+
+	if (psenc->chlen == 0)
+		*rstate = _STDENC_SDGEN_INITIAL;
+	else
+		*rstate = _STDENC_SDGEN_INCOMPLETE_CHAR;
 
 	return 0;
 }

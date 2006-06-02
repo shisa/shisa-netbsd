@@ -1,4 +1,4 @@
-/*	$NetBSD: clock.c,v 1.86 2005/02/03 21:54:49 perry Exp $	*/
+/*	$NetBSD: clock.c,v 1.91 2006/03/11 15:40:07 kleink Exp $	*/
 
 /*-
  * Copyright (c) 1990 The Regents of the University of California.
@@ -121,7 +121,7 @@ WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: clock.c,v 1.86 2005/02/03 21:54:49 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: clock.c,v 1.91 2006/03/11 15:40:07 kleink Exp $");
 
 /* #define CLOCKDEBUG */
 /* #define CLOCK_PARANOIA */
@@ -183,8 +183,6 @@ void	sysbeep(int, int);
 void	rtcinit(void);
 int	rtcget(mc_todregs *);
 void	rtcput(mc_todregs *);
-int 	bcdtobin(int);
-int	bintobcd(int);
 
 static int cmoscheck(void);
 
@@ -193,11 +191,11 @@ static int clock_expandyear(int);
 static inline int gettick_broken_latch(void);
 
 
-__inline u_int mc146818_read(void *, u_int);
-__inline void mc146818_write(void *, u_int, u_int);
+inline u_int mc146818_read(void *, u_int);
+inline void mc146818_write(void *, u_int, u_int);
 
 /* XXX use sc? */
-__inline u_int
+inline u_int
 mc146818_read(void *sc, u_int reg)
 {
 
@@ -206,7 +204,7 @@ mc146818_read(void *sc, u_int reg)
 }
 
 /* XXX use sc? */
-__inline void
+inline void
 mc146818_write(void *sc, u_int reg, u_int datum)
 {
 
@@ -490,7 +488,7 @@ gettick(void)
 void
 i8254_delay(int n)
 {
-	int tick, otick;
+	int xtick, otick;
 	static const int delaytab[26] = {
 		 0,  2,  3,  4,  5,  6,  7,  9, 10, 11,
 		12, 13, 15, 16, 17, 18, 19, 21, 22, 23,
@@ -517,10 +515,10 @@ i8254_delay(int n)
 		 * quantity to prevent loss of significance.
 		 */
 		int m;
-		__asm __volatile("mul %3"
+		__asm volatile("mul %3"
 				 : "=a" (n), "=d" (m)
 				 : "0" (n), "r" (TIMER_FREQ));
-		__asm __volatile("div %4"
+		__asm volatile("div %4"
 				 : "=a" (n), "=d" (m)
 				 : "0" (n), "1" (m), "r" (1000000));
 #else
@@ -540,14 +538,14 @@ i8254_delay(int n)
 	while (n > 0) {
 #ifdef CLOCK_PARANOIA
 		int delta;
-		tick = gettick();
-		if (tick > otick)
-			delta = rtclock_tval - (tick - otick);
+		xtick = gettick();
+		if (xtick > otick)
+			delta = rtclock_tval - (xtick - otick);
 		else
-			delta = otick - tick;
+			delta = otick - xtick;
 		if (delta < 0 || delta >= rtclock_tval / 2) {
 			DPRINTF(("delay: ignore ticks %.4x-%.4x",
-				 otick, tick));
+				 otick, xtick));
 			if (clock_broken_latch) {
 				DPRINTF(("  (%.4x %.4x %.4x %.4x %.4x %.4x)\n",
 				         ticks[0], ticks[1], ticks[2],
@@ -558,13 +556,13 @@ i8254_delay(int n)
 		} else
 			n -= delta;
 #else
-		tick = gettick();
-		if (tick > otick)
-			n -= rtclock_tval - (tick - otick);
+		xtick = gettick();
+		if (xtick > otick)
+			n -= rtclock_tval - (xtick - otick);
 		else
-			n -= otick - tick;
+			n -= otick - xtick;
 #endif
-		otick = tick;
+		otick = xtick;
 	}
 }
 
@@ -578,7 +576,8 @@ sysbeepmatch(struct device *parent, struct cfdata *match, void *aux)
 void
 sysbeepattach(struct device *parent, struct device *self, void *aux)
 {
-	printf("\n");
+	aprint_naive("\n");
+	aprint_normal("\n");
 
 	ppicookie = ((struct pcppi_attach_args *)aux)->pa_cookie;
 	ppi_attached = 1;
@@ -649,20 +648,6 @@ rtcput(mc_todregs *regs)
 
 	rtcinit();
 	MC146818_PUTTOD(NULL, regs);			/* XXX softc */
-}
-
-int
-bcdtobin(int n)
-{
-
-	return (((n >> 4) & 0x0f) * 10 + (n & 0x0f));
-}
-
-int
-bintobcd(int n)
-{
-
-	return ((u_char)(((n / 10) << 4) & 0xf0) | ((n % 10) & 0x0f));
 }
 
 static int timeset;

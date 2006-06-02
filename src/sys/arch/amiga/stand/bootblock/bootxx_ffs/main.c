@@ -1,5 +1,5 @@
 /*
- * $NetBSD: main.c,v 1.3 2002/12/10 17:14:06 thorpej Exp $
+ * $NetBSD: main.c,v 1.6 2006/01/25 18:28:25 christos Exp $
  *
  *
  * Copyright (c) 1996,1999 Ignatios Souvatzis
@@ -44,7 +44,7 @@
 #include <include/cpu.h>
 
 #include <saerrno.h>
-#include <stand.h>
+#include <lib/libsa/stand.h>
 
 #include "libstubs.h"
 #include "samachdep.h"
@@ -133,7 +133,7 @@ pain(void *aio)
 	errno = -1;
 
 freeall:
-	free(kp, ksize);
+	dealloc(kp, ksize);
 err:
 	printf("Error %ld\n", (long)errno);
 	close(io);

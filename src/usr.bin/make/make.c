@@ -1,4 +1,4 @@
-/*	$NetBSD: make.c,v 1.56 2005/02/16 15:11:52 christos Exp $	*/
+/*	$NetBSD: make.c,v 1.62 2006/03/31 21:05:34 dsl Exp $	*/
 
 /*
  * Copyright (c) 1988, 1989, 1990, 1993
@@ -69,14 +69,14 @@
  */
 
 #ifndef MAKE_NATIVE
-static char rcsid[] = "$NetBSD: make.c,v 1.56 2005/02/16 15:11:52 christos Exp $";
+static char rcsid[] = "$NetBSD: make.c,v 1.62 2006/03/31 21:05:34 dsl Exp $";
 #else
 #include <sys/cdefs.h>
 #ifndef lint
 #if 0
 static char sccsid[] = "@(#)make.c	8.1 (Berkeley) 6/6/93";
 #else
-__RCSID("$NetBSD: make.c,v 1.56 2005/02/16 15:11:52 christos Exp $");
+__RCSID("$NetBSD: make.c,v 1.62 2006/03/31 21:05:34 dsl Exp $");
 #endif
 #endif /* not lint */
 #endif
@@ -174,7 +174,7 @@ Make_TimeStamp(GNode *pgn, GNode *cgn)
 static int
 MakeTimeStamp(ClientData pgn, ClientData cgn)
 {
-    return Make_TimeStamp((GNode *) pgn, (GNode *) cgn);
+    return Make_TimeStamp((GNode *)pgn, (GNode *)cgn);
 }
 
 /*-
@@ -208,12 +208,12 @@ Make_OODate(GNode *gn)
      * doesn't depend on their modification time...
      */
     if ((gn->type & (OP_JOIN|OP_USE|OP_USEBEFORE|OP_EXEC)) == 0) {
-	(void) Dir_MTime(gn);
+	(void)Dir_MTime(gn);
 	if (DEBUG(MAKE)) {
 	    if (gn->mtime != 0) {
-		printf ("modified %s...", Targ_FmtTime(gn->mtime));
+		printf("modified %s...", Targ_FmtTime(gn->mtime));
 	    } else {
-		printf ("non-existent...");
+		printf("non-existent...");
 	    }
 	}
     }
@@ -351,11 +351,11 @@ Make_OODate(GNode *gn)
 static int
 MakeAddChild(ClientData gnp, ClientData lp)
 {
-    GNode          *gn = (GNode *) gnp;
+    GNode          *gn = (GNode *)gnp;
     Lst            l = (Lst) lp;
 
     if ((gn->flags & REMAKE) == 0 && !(gn->type & (OP_USE|OP_USEBEFORE))) {
-	(void)Lst_EnQueue (l, (ClientData)gn);
+	(void)Lst_EnQueue(l, (ClientData)gn);
     }
     return (0);
 }
@@ -380,10 +380,10 @@ MakeAddChild(ClientData gnp, ClientData lp)
 static int
 MakeFindChild(ClientData gnp, ClientData pgnp)
 {
-    GNode          *gn = (GNode *) gnp;
-    GNode          *pgn = (GNode *) pgnp;
+    GNode          *gn = (GNode *)gnp;
+    GNode          *pgn = (GNode *)pgnp;
 
-    (void) Dir_MTime(gn);
+    (void)Dir_MTime(gn);
     Make_TimeStamp(pgn, gn);
     pgn->unmade--;
 
@@ -435,20 +435,20 @@ Make_HandleUse(GNode *cgn, GNode *pgn)
 		 */
 		Lst cmds = pgn->commands;
 		pgn->commands = Lst_Duplicate(cgn->commands, NOCOPY);
-		(void) Lst_Concat(pgn->commands, cmds, LST_CONCNEW);
+		(void)Lst_Concat(pgn->commands, cmds, LST_CONCNEW);
 		Lst_Destroy(cmds, NOFREE);
 	    } else {
 		/*
 		 * .USE or target has no commands --
 		 *	append the child's commands to the parent.
 		 */
-		(void) Lst_Concat(pgn->commands, cgn->commands, LST_CONCNEW);
+		(void)Lst_Concat(pgn->commands, cgn->commands, LST_CONCNEW);
 	    }
     }
 
     if (Lst_Open(cgn->children) == SUCCESS) {
 	while ((ln = Lst_Next(cgn->children)) != NILLNODE) {
-	    GNode *tgn, *gn = (GNode *)Lst_Datum (ln);
+	    GNode *tgn, *gn = (GNode *)Lst_Datum(ln);
 
 	    /*
 	     * Expand variables in the .USE node's name
@@ -470,8 +470,8 @@ Make_HandleUse(GNode *cgn, GNode *pgn)
 		    gn = tgn;
 	    }
 
-	    (void) Lst_AtEnd(pgn->children, gn);
-	    (void) Lst_AtEnd(gn->parents, pgn);
+	    (void)Lst_AtEnd(pgn->children, gn);
+	    (void)Lst_AtEnd(gn->parents, pgn);
 	    pgn->unmade += 1;
 	}
 	Lst_Close(cgn->children);
@@ -504,8 +504,8 @@ Make_HandleUse(GNode *cgn, GNode *pgn)
 static int
 MakeHandleUse(ClientData cgnp, ClientData pgnp)
 {
-    GNode	*cgn = (GNode *) cgnp;
-    GNode	*pgn = (GNode *) pgnp;
+    GNode	*cgn = (GNode *)cgnp;
+    GNode	*pgn = (GNode *)pgnp;
     LstNode	ln; 	/* An element in the children list */
     int		unmarked;
 
@@ -695,7 +695,7 @@ Make_Update(GNode *cgn)
     }
     if (Lst_Open(parents) == SUCCESS) {
 	while ((ln = Lst_Next(parents)) != NILLNODE) {
-	    pgn = (GNode *)Lst_Datum (ln);
+	    pgn = (GNode *)Lst_Datum(ln);
 	    if (mtime == 0)
 		pgn->flags |= FORCE;
 	    /*
@@ -709,7 +709,7 @@ Make_Update(GNode *cgn)
 	    if ( ! (cgn->type & (OP_EXEC|OP_USE|OP_USEBEFORE))) {
 		if (cgn->made == MADE)
 		    pgn->flags |= CHILDMADE;
-		(void)Make_TimeStamp (pgn, cgn);
+		(void)Make_TimeStamp(pgn, cgn);
 	    }
 
 	    /*
@@ -726,7 +726,11 @@ Make_Update(GNode *cgn)
 		 * Queue the node up -- any unmade predecessors will
 		 * be dealt with in MakeStartJobs.
 		 */
-		(void)Lst_EnQueue (toBeMade, (ClientData)pgn);
+		if (DEBUG(MAKE)) {
+		    printf("# %s made, schedule %s\n", cgn->name, pgn->name);
+		    Targ_PrintNode(pgn, 0);
+		}
+		(void)Lst_EnQueue(toBeMade, (ClientData)pgn);
 	    } else if (pgn->unmade < 0) {
 		Error("Graph cycles through %s", pgn->name);
 	    }
@@ -759,7 +763,7 @@ Make_Update(GNode *cgn)
 	char	*cpref = Var_Value(PREFIX, cgn, &p1);
 
 	while ((ln = Lst_Next(cgn->iParents)) != NILLNODE) {
-	    pgn = (GNode *)Lst_Datum (ln);
+	    pgn = (GNode *)Lst_Datum(ln);
 	    if (pgn->flags & REMAKE) {
 		Var_Set(IMPSRC, cname, pgn, 0);
 		if (cpref != NULL)
@@ -797,7 +801,7 @@ Make_Update(GNode *cgn)
 static int
 MakeUnmark(ClientData cgnp, ClientData pgnp __unused)
 {
-    GNode	*cgn = (GNode *) cgnp;
+    GNode	*cgn = (GNode *)cgnp;
 
     cgn->type &= ~OP_MARK;
     return (0);
@@ -813,8 +817,8 @@ MakeUnmark(ClientData cgnp, ClientData pgnp __unused)
 static int
 MakeAddAllSrc(ClientData cgnp, ClientData pgnp)
 {
-    GNode	*cgn = (GNode *) cgnp;
-    GNode	*pgn = (GNode *) pgnp;
+    GNode	*cgn = (GNode *)cgnp;
+    GNode	*pgn = (GNode *)pgnp;
 
     if (cgn->type & OP_MARK)
 	return (0);
@@ -931,11 +935,17 @@ static Boolean
 MakeStartJobs(void)
 {
     GNode	*gn;
+    int		have_token = 0;
 
     while (!Lst_IsEmpty (toBeMade)) {
-	gn = (GNode *) Lst_DeQueue(toBeMade);
+	/* Get token now to avoid cycling job-list when we only have 1 token */
+	if (!have_token && !Job_TokenWithdraw())
+	    break;
+	have_token = 1;
+
+	gn = (GNode *)Lst_DeQueue(toBeMade);
 	if (DEBUG(MAKE)) {
-	    printf ("Examining %s...", gn->name);
+	    printf("Examining %s...", gn->name);
 	}
 	/*
 	 * Make sure any and all predecessors that are going to be made,
@@ -966,24 +976,20 @@ MakeStartJobs(void)
 	    }
 	}
 
-	if (!Job_TokenWithdraw()) {
-	    Lst_AtFront(toBeMade, gn);
-	    break;
-	}
-
 	numNodes--;
 	if (Make_OODate(gn)) {
 	    if (DEBUG(MAKE)) {
-		printf ("out-of-date\n");
+		printf("out-of-date\n");
 	    }
 	    if (queryFlag) {
 		return (TRUE);
 	    }
 	    Make_DoAllVar(gn);
 	    Job_Make(gn);
+	    have_token = 0;
 	} else {
 	    if (DEBUG(MAKE)) {
-		printf ("up-to-date\n");
+		printf("up-to-date\n");
 	    }
 	    gn->made = UPTODATE;
 	    if (gn->type & OP_JOIN) {
@@ -995,10 +1001,13 @@ MakeStartJobs(void)
 		 */
 		Make_DoAllVar(gn);
 	    }
-	    Job_TokenReturn();
 	    Make_Update(gn);
 	}
     }
+
+    if (have_token)
+	Job_TokenReturn();
+
     return (FALSE);
 }
 
@@ -1026,10 +1035,10 @@ MakeStartJobs(void)
 static int
 MakePrintStatus(ClientData gnp, ClientData cyclep)
 {
-    GNode   	*gn = (GNode *) gnp;
-    Boolean 	cycle = *(Boolean *) cyclep;
+    GNode   	*gn = (GNode *)gnp;
+    Boolean 	cycle = *(Boolean *)cyclep;
     if (gn->made == UPTODATE) {
-	printf ("`%s' is up to date.\n", gn->name);
+	printf("`%s' is up to date.\n", gn->name);
     } else if (gn->unmade != 0) {
 	if (cycle) {
 	    Boolean t = TRUE;
@@ -1053,7 +1062,7 @@ MakePrintStatus(ClientData gnp, ClientData cyclep)
 		Lst_ForEach(gn->children, MakePrintStatus, (ClientData) &t);
 	    }
 	} else {
-	    printf ("`%s' not remade because of errors.\n", gn->name);
+	    printf("`%s' not remade because of errors.\n", gn->name);
 	}
     }
     return (0);
@@ -1096,7 +1105,7 @@ Make_ExpandUse(Lst targs)
      * and go on about our business.
      */
     while (!Lst_IsEmpty (examine)) {
-	gn = (GNode *) Lst_DeQueue(examine);
+	gn = (GNode *)Lst_DeQueue(examine);
 
 	if ((gn->type & OP_DOUBLEDEP) && !Lst_IsEmpty (gn->cohorts)) {
 	    Lst new;
@@ -1147,7 +1156,7 @@ Make_ExpandUse(Lst targs)
 	    if (gn->unmade != 0) {
 		Lst_ForEach(gn->children, MakeAddChild, (ClientData)examine);
 	    } else {
-		(void)Lst_EnQueue (ntargs, (ClientData)gn);
+		(void)Lst_EnQueue(ntargs, (ClientData)gn);
 	    }
 	}
     }
@@ -1186,6 +1195,10 @@ Make_Run(Lst targs)
     int	    	    errors; 	/* Number of errors the Job module reports */
 
     toBeMade = Make_ExpandUse(targs);
+    if (DEBUG(MAKE)) {
+	 printf("#***# toBeMade\n");
+	 Lst_ForEach(toBeMade, Targ_PrintNode, 0);
+    }
 
     if (queryFlag) {
 	/*
@@ -1202,7 +1215,7 @@ Make_Run(Lst targs)
 	 * the finishing of a job. So we fill the Job table as much as we can
 	 * before going into our loop.
 	 */
-	(void) MakeStartJobs();
+	(void)MakeStartJobs();
     }
 
     /*
@@ -1215,7 +1228,7 @@ Make_Run(Lst targs)
      * Note that the Job module will exit if there were any errors unless the
      * keepgoing flag was given.
      */
-    while (!Lst_IsEmpty(toBeMade) || !Job_Empty ()) {
+    while (!Lst_IsEmpty(toBeMade) || jobTokensRunning > 0) {
 	Job_CatchOutput();
 	Job_CatchChildren(!usePipes);
 	(void)MakeStartJobs();

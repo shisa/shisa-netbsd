@@ -1,4 +1,4 @@
-/*	$NetBSD: bbinfo.c,v 1.9 2003/10/27 00:12:44 lukem Exp $ */
+/*	$NetBSD: bbinfo.c,v 1.11 2005/06/07 13:49:31 he Exp $ */
 
 /*-
  * Copyright (c) 1998, 2002 The NetBSD Foundation, Inc.
@@ -42,7 +42,7 @@
 
 #include <sys/cdefs.h>
 #if !defined(__lint)
-__RCSID("$NetBSD: bbinfo.c,v 1.9 2003/10/27 00:12:44 lukem Exp $");
+__RCSID("$NetBSD: bbinfo.c,v 1.11 2005/06/07 13:49:31 he Exp $");
 #endif	/* !__lint */
 
 #include <sys/param.h>
@@ -139,6 +139,7 @@ shared_bbinfo_setboot(ib_params *params, struct bbinfo_params *bbparams,
 	assert(bbparams != NULL);
 	assert((strlen(bbparams->magic) + 1) == 32);
 
+	bbinfop = NULL;		/* XXXGCC -Wuninitialized [sparc64] */
 	retval = 0;
 	blocks = NULL;
 	if ((bb = malloc(bbparams->maxsize)) == NULL) {
@@ -185,6 +186,7 @@ shared_bbinfo_setboot(ib_params *params, struct bbinfo_params *bbparams,
 			    ? le32toh((x)) : be32toh((x)))
 
 		/* Look for the bbinfo structure. */
+	bbinfop = NULL;
 	for (bbi = 0; bbi < bbparams->maxsize; bbi += sizeof(uint32_t)) {
 		bbinfop = (void *) (bb + bbparams->headeroffset + bbi);
 		if (memcmp(bbinfop->bbi_magic, bbparams->magic,

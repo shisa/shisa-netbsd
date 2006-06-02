@@ -1,4 +1,4 @@
-/*	$NetBSD: parser.c,v 1.1.1.2 2004/11/06 23:56:00 christos Exp $	*/
+/*	$NetBSD: parser.c,v 1.1.1.4 2005/12/21 23:17:55 christos Exp $	*/
 
 /*
  * Copyright (C) 2004  Internet Systems Consortium, Inc. ("ISC")

@@ -1,4 +1,4 @@
-/*	$NetBSD: msg.mi.en,v 1.136.2.2 2005/09/19 21:03:13 tron Exp $	*/
+/*	$NetBSD: msg.mi.en,v 1.145 2006/02/26 10:25:52 dsl Exp $	*/
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.
@@ -136,9 +136,6 @@ message ask_disk
 message Available_disks
 {Available disks}
 
-message cylinders
-{cylinders}
-
 message heads
 {heads}
 
@@ -185,11 +182,6 @@ choose partition sizes that are exact multiples of your actual
 cylinder size.
 
 Choose your size specifier}
-
-message defaultunit
-{Unless specified with 'M' (megabytes), 'G' (gigabytes), 'c' (cylinders)
-or 's' sector at the end of input, sizes and offsets are in %s.
-}
 
 message ptnsizes
 {You can now change the sizes for the system partitions.  The default is
@@ -371,40 +363,6 @@ message openfail
 {Could not open %s, error message was: %s.
 }
 
-message statfail
-{Can't get properties of %s, error message was: %s.
-}
-
-message unlink_fail
-{I was unable to delete %s, error message was: %s.
-}
-
-message rename_fail
-{I was unable to rename %s to %s, error message was: %s.
-}
-
-message deleting_files
-{As part of the upgrade procedure, the following have to be deleted:
-}
-
-message deleting_dirs
-{As part of the upgrade procedure, the following directories have to be
-deleted (I will rename those that are not empty):
-}
-
-message renamed_dir
-{The directory %s has been renamed to %s because it was not empty.
-}
-
-message cleanup_warn
-{Cleanup of the existing install failed. This may cause the extraction
-of the set to fail.
-}
-
-message nomount
-{Partition %c's type is not 4.2BSD or msdos and therefore does not have
-a mount point.}
-
 message mountfail
 {mount of device /dev/%s%c on %s failed.
 }
@@ -456,10 +414,10 @@ message distmedium
 {Your disk is now ready for installing the kernel and the distribution
 sets.  As noted in your INSTALL notes, you have several options.  For
 ftp or nfs, you must be connected to a network with access to the proper
-machines.  If you are not ready to complete the installation at this time,
-you may select "none" and you will be returned to the main menu.  When
-you are ready at a later time, you may select "upgrade" from the main
-menu to complete the installation.
+machines.
+
+Sets selected %d, processed %d, Next set %s.
+
 }
 
 message distset
@@ -474,12 +432,6 @@ message ftpsource
 {The following are the %s site, directory, user, and password that
 will be used.  If "user" is "ftp", then the password is not needed.
 
-host:		%s 
-base directory:	%s 
-set directory:	%s 
-user:		%s 
-password:	%s 
-proxy:		%s 
 }
 
 message email
@@ -493,21 +445,19 @@ message nfssource
 Remember, the directory should contain the .tgz files and
 must be nfs mountable.
 
-host:		%s 
-base directory:	%s 
-set directory:	%s 
 }
 
-message nfsbadmount
-{The directory %s:%s could not be nfs mounted.}
+message floppysource
+{Enter the floppy device to be used and transfer directory on the target
+filesystem.  The set files must be in the root directory of the floppies.
+
+}
 
 message cdromsource
 {Enter the CDROM device to be used and directory on the CDROM where
 the distribution is located. 
 Remember, the directory should contain the .tgz files.
 
-device:		%s 
-set directory:	%s
 }
 
 message localfssource
@@ -515,35 +465,16 @@ message localfssource
 the distribution is located. 
 Remember, the directory should contain the .tgz files.
 
-device:		%s 
-file system:	%s 
-base directory:	%s 
-set directory:	%s
 }
 
 message localdir
 {Enter the already-mounted local directory where the distribution is located. 
 Remember, the directory should contain the .tgz files.
 
-base directory:	%s 
-set directory:	%s
 }
 
 message filesys
 {file system}
-
-message cdrombadmount
-{The CDROM /dev/%s could not be mounted.}
-
-message localfsbadmount
-{%s could not be mounted on local device %s.}
-
-message badlocalsetdir
-{%s is not a directory}
-
-message badsetdir
-{%s does not contain the mandatory installation sets etc.tgz 
-and base.tgz.  Are you sure you've got the right directory?}
 
 message nonet
 {I can not find any network interfaces for use by NetBSD.  You will be
@@ -577,7 +508,7 @@ message net_host
 message net_ip
 {Your IPv4 number}
 
-message net_ip_2nd
+message net_srv_ip
 {Server IPv4 number}
 
 message net_mask
@@ -649,16 +580,8 @@ message realdir
 {Could not change to directory %s: %s.  Install aborted.
 }
 
-message ftperror
-{Ftp could not retrieve a file.
-Do you want to try again?}
-
-message distdir
-{What directory shall I use for %s? }
-
-message delete_dist_files
-{Do you want to delete the NetBSD sets from %s? 
-(You can keep them to install/upgrade a second system.)}
+message delete_xfer_file
+{Delete after install}
 
 message verboseextract
 {
@@ -670,9 +593,6 @@ each file is extracted?
 
 message notarfile
 {Release set %s does not exist.}
-
-message notarfile_ok
-{Continue extracting sets?}
 
 message endtarok
 {All selected distribution sets unpacked successfully.}
@@ -756,9 +676,6 @@ message badfs
 not successful.  The upgrade has been aborted.  (Error number %d.)
 }
 
-message badmount
-{Your file system /dev/%s%c was not successfully mounted.  Upgrade aborted.}
-
 message rootmissing
 { target root is missing %s.
 }
@@ -768,27 +685,22 @@ message badroot
  Are you sure you installed all the required sets?
 }
 
-message fddev
-{What floppy device do you want to use? }
-
-message fdmount
-{Please load the floppy containing the file named "%s". }
+message fd_type
+{Floppy file system type}
 
 message fdnotfound
-{Could not find the file named "%s" on the disk.  Please load the
-floppy with that file on it.
-
-If this was the last set's disk, hit "Set finished" to continue on
-the next set, if any.}
+{Could not find the file on the floppy.
+}
 
 message fdremount
-{The floppy was not mounted successfully.  You may:
+{The floppy was not mounted successfully. 
+}
 
-Try again and put in the floppy containing the file named "%s".
+message fdmount
+{Please load the floppy containing the file named "%s.%s".
 
-Not load any more files from this set and continue on the next one, if any.
-
-Not load any more files from floppy and abort the process.
+If the set's has no more disks, select "Set finished" to install the set.
+Select "Abort fetch" to return to the install media selection menu.
 }
 
 message mntnetconfig
@@ -841,17 +753,11 @@ message set_X11_fonts
 message set_X11_servers
 {X11 servers}
 
-message set_X_contrib
-{X contrib clients}
-
 message set_X11_prog
 {X11 programming}
 
-message set_X11_misc
-{X11 Misc.}
-
 message cur_distsets_row
-{%-27s %3s\n}
+{%-27s %3s}
 
 message select_all
 {Select all the above sets}
@@ -883,27 +789,8 @@ to the main menu.
 
 Edit the partition table again?}
 
-message not_regular_file
-{Config file %s is not a regular file.\n}
-
-message out_of_memory
-{Out of memory (malloc failed).\n}
-
 message config_open_error
 {Could not open config file %s\n}
-
-message config_read_error
-{Could not read config file %s\n}
-
-message cmdfail
-{Command
-	%s
-failed. I can't continue.}
-
-message upgradeparttype
-{The only suitable partition that was found for NetBSD installation is of
-the old NetBSD/386BSD/FreeBSD partition type. Do you want to change the type
-of this partition to the new NetBSD-only partition type?}
 
 message choose_timezone
 {Please choose the timezone that fits you best from the list below. 
@@ -953,12 +840,6 @@ message rootsh
 {You can now select which shell to use for the root user. The default is
 /bin/sh, but you may prefer another one.}
 
-message postuseexisting
-{
-Don't forget to check the file system mount points for each of the
-file systems that are to be mounted.  Press <return> to continue.
-}
-
 message no_root_fs
 {
 There is no defined root file system.  You need to define at least
@@ -1004,7 +885,7 @@ message Use_Existing {Use existing partition sizes}
 message Megabytes {Megabytes}
 message Cylinders {Cylinders}
 message Sectors {Sectors}
-message Select_medium {Select medium}
+message Select_medium {Install from}
 message ftp {FTP}
 message http {HTTP}
 message nfs {NFS}
@@ -1015,12 +896,11 @@ message local_dir {Local directory}
 message Select_your_distribution {Select your distribution}
 message Full_installation {Full installation}
 message Custom_installation {Custom installation}
-message Change {Change}
 message hidden {** hidden **}
 message Host {Host}
 message Base_dir {Base directory}
 message Set_dir {Set directory}
-message Directory {Directory}
+message Xfer_dir {Transfer directory}
 message User {User}
 message Password {Password}
 message Proxy {Proxy}
@@ -1028,10 +908,11 @@ message Get_Distribution {Get Distribution}
 message Continue {Continue}
 message What_do_you_want_to_do {What do you want to do?}
 message Try_again {Try again}
-message Give_up {Give up}
-message Ignore_continue_anyway {Ignore, continue anyway}
 message Set_finished {Set finished}
-message Abort_install {Abort install}
+message Skip_set {Skip set}
+message Skip_group {Skip set group}
+message Abandon {Abandon installation}
+message Abort_fetch {Abort fetch}
 message Password_cipher {Password cipher}
 message DES {DES}
 message MD5 {MD5}

@@ -1,4 +1,4 @@
-/*	$NetBSD: param.h,v 1.1.1.1 2004/05/17 23:44:46 christos Exp $	*/
+/*	$NetBSD: param.h,v 1.1.1.3 2005/12/21 23:15:47 christos Exp $	*/
 
 /* Omitted from MPE. */
 

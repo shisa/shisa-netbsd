@@ -1,4 +1,4 @@
-/*	$NetBSD: ibcs2_exec_elf32.c,v 1.9 2005/02/26 23:10:18 perry Exp $	*/
+/*	$NetBSD: ibcs2_exec_elf32.c,v 1.11 2005/12/11 12:20:02 christos Exp $	*/
 
 /*
  * Copyright (c) 1994, 1995, 1998 Scott Bartram
@@ -35,7 +35,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ibcs2_exec_elf32.c,v 1.9 2005/02/26 23:10:18 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ibcs2_exec_elf32.c,v 1.11 2005/12/11 12:20:02 christos Exp $");
 
 #define ELFSIZE		32
 
@@ -61,7 +61,7 @@ __KERNEL_RCSID(0, "$NetBSD: ibcs2_exec_elf32.c,v 1.9 2005/02/26 23:10:18 perry E
 #include <compat/ibcs2/ibcs2_errno.h>
 #include <compat/ibcs2/ibcs2_util.h>
 
-static int ibcs2_elf32_signature __P((struct proc *p, struct exec_package *,
+static int ibcs2_elf32_signature __P((struct lwp *l, struct exec_package *,
 				      Elf32_Ehdr *));
 
 /*
@@ -74,15 +74,15 @@ static int ibcs2_elf32_signature __P((struct proc *p, struct exec_package *,
 #define SCO_SIGNATURE	"\004\0\0\0\014\0\0\0\001\0\0\0SCO\0"
 
 static int
-ibcs2_elf32_signature(p, epp, eh)
-	struct proc *p;
+ibcs2_elf32_signature(l, epp, eh)
+	struct lwp *l;
 	struct exec_package *epp;
 	Elf32_Ehdr *eh;
 {
 	size_t shsize = sizeof(Elf32_Shdr) * eh->e_shnum;
 	size_t i;
 	static const char signature[] = SCO_SIGNATURE;
-	char buf[sizeof(signature) - 1];
+	char tbuf[sizeof(signature) - 1];
 	Elf32_Shdr *sh;
 	int error;
 
@@ -91,7 +91,7 @@ ibcs2_elf32_signature(p, epp, eh)
 
 	sh = (Elf32_Shdr *)malloc(shsize, M_TEMP, M_WAITOK);
 
-	if ((error = exec_read_from(p, epp->ep_vp, eh->e_shoff, sh,
+	if ((error = exec_read_from(l, epp->ep_vp, eh->e_shoff, sh,
 	    shsize)) != 0)
 		goto out;
 
@@ -102,11 +102,11 @@ ibcs2_elf32_signature(p, epp, eh)
 		    s->sh_size < sizeof(signature) - 1)
 			continue;
 
-		if ((error = exec_read_from(p, epp->ep_vp, s->sh_offset, buf,
+		if ((error = exec_read_from(l, epp->ep_vp, s->sh_offset, tbuf,
 		    sizeof(signature) - 1)) != 0)
 			goto out;
 
-		if (memcmp(buf, signature, sizeof(signature) - 1) == 0)
+		if (memcmp(tbuf, signature, sizeof(signature) - 1) == 0)
 			goto out;
 		else
 			break;	/* only one .note section so quit */
@@ -123,8 +123,8 @@ out:
  */
 
 int
-ibcs2_elf32_probe(p, epp, eh, itp, pos)
-	struct proc *p;
+ibcs2_elf32_probe(l, epp, eh, itp, pos)
+	struct lwp *l;
 	struct exec_package *epp;
 	void *eh;
 	char *itp;
@@ -132,11 +132,11 @@ ibcs2_elf32_probe(p, epp, eh, itp, pos)
 {
 	int error;
 
-	if ((error = ibcs2_elf32_signature(p, epp, eh)) != 0)
+	if ((error = ibcs2_elf32_signature(l, epp, eh)) != 0)
                 return error;
 
 	if (itp) {
-		if ((error = emul_find_interp(p, epp->ep_esch->es_emul->e_path, itp)))
+		if ((error = emul_find_interp(l, epp->ep_esch->es_emul->e_path, itp)))
 			return error;
 	}
 	return 0;

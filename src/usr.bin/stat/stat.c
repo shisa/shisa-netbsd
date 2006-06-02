@@ -1,4 +1,4 @@
-/*	$NetBSD: stat.c,v 1.21 2005/01/13 00:53:14 jmc Exp $ */
+/*	$NetBSD: stat.c,v 1.23 2005/06/23 03:13:24 atatat Exp $ */
 
 /*
  * Copyright (c) 2002 The NetBSD Foundation, Inc.
@@ -42,7 +42,7 @@
 
 #include <sys/cdefs.h>
 #if !defined(lint)
-__RCSID("$NetBSD: stat.c,v 1.21 2005/01/13 00:53:14 jmc Exp $");
+__RCSID("$NetBSD: stat.c,v 1.23 2005/06/23 03:13:24 atatat Exp $");
 #endif
 
 #if ! HAVE_NBTOOL_CONFIG_H
@@ -357,7 +357,7 @@ output(const struct stat *st, const char *file,
     const char *statfmt, int fn, int nonl, int quiet)
 {
 	int flags, size, prec, ofmt, hilo, what;
-	char buf[PATH_MAX];
+	char buf[PATH_MAX + 4 + 1];
 	const char *subfmt;
 	int nl, t, i;
 
@@ -526,7 +526,7 @@ output(const struct stat *st, const char *file,
 		     buf, sizeof(buf),
 		     flags, size, prec, ofmt, hilo, what);
 
-		for (i = 0; i < t && i < sizeof(buf); i++)
+		for (i = 0; i < t && i < sizeof(buf) - 1; i++)
 			addchar(stdout, buf[i], &nl);
 
 		continue;
@@ -560,13 +560,14 @@ format1(const struct stat *st,
 	struct tm *tm;
 	time_t secs;
 	long nsecs;
-	int l, small, formats, gottime;
+	int l, small, formats, gottime, shift;
 
 	formats = 0;
 	small = 0;
 	gottime = 0;
 	secs = 0;
 	nsecs = 0;
+	shift = 0;
 
 	/*
 	 * First, pick out the data and tweak it based on hilo or
@@ -732,6 +733,20 @@ format1(const struct stat *st,
 		formats = FMTF_DECIMAL | FMTF_OCTAL | FMTF_UNSIGNED | FMTF_HEX;
 		if (ofmt == 0)
 			ofmt = FMTF_UNSIGNED;
+		switch (hilo) {
+		case HIGH_PIECE:
+			shift = 30;	/* gigabytes */
+			hilo = 0;
+			break;
+		case MIDDLE_PIECE:
+			shift = 20;	/* megabytes */
+			hilo = 0;
+			break;
+		case LOW_PIECE:
+			shift = 10;	/* kilobytes */
+			hilo = 0;
+			break;
+		}
 		break;
 	case SHOW_st_blocks:
 		small = (sizeof(st->st_blocks) == 4);
@@ -1045,9 +1060,19 @@ format1(const struct stat *st,
 	(void)strcat(lfmt, "ll");
 	switch (ofmt) {
 	case FMTF_DECIMAL:	(void)strcat(lfmt, "d");	break;
-	case FMTF_OCTAL:		(void)strcat(lfmt, "o");	break;
+	case FMTF_OCTAL:	(void)strcat(lfmt, "o");	break;
 	case FMTF_UNSIGNED:	(void)strcat(lfmt, "u");	break;
 	case FMTF_HEX:		(void)strcat(lfmt, "x");	break;
+	}
+
+	/*
+	 * shift and round to nearest for kilobytes, megabytes,
+	 * gigabytes.
+	 */
+	if (shift > 0) {
+		data >>= (shift - 1);
+		data++;
+		data >>= 1;
 	}
 
 	return (snprintf(buf, blen, lfmt, data));

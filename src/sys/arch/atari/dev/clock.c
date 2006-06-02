@@ -1,4 +1,4 @@
-/*	$NetBSD: clock.c,v 1.34 2003/08/07 16:26:58 agc Exp $	*/
+/*	$NetBSD: clock.c,v 1.37 2005/12/24 20:06:58 perry Exp $	*/
 
 /*
  * Copyright (c) 1982, 1990 The Regents of the University of California.
@@ -77,7 +77,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: clock.c,v 1.34 2003/08/07 16:26:58 agc Exp $");
+__KERNEL_RCSID(0, "$NetBSD: clock.c,v 1.37 2005/12/24 20:06:58 perry Exp $");
 
 #include <sys/param.h>
 #include <sys/kernel.h>
@@ -336,7 +336,7 @@ void
 delay(n)
 int	n;
 {
-	int	tick, otick;
+	int	ticks, otick;
 
 	/*
 	 * Read the counter first, so that the rest of the setup overhead is
@@ -355,18 +355,18 @@ int	n;
 	{
 	    u_int	temp;
 		
-	    __asm __volatile ("mulul %2,%1:%0" : "=d" (n), "=d" (temp)
+	    __asm volatile ("mulul %2,%1:%0" : "=d" (n), "=d" (temp)
 					       : "d" (TIMB_FREQ), "d" (n));
-	    __asm __volatile ("divul %1,%2:%0" : "=d" (n)
+	    __asm volatile ("divul %1,%2:%0" : "=d" (n)
 					       : "d"(1000000),"d"(temp),"0"(n));
 	}
 
 	while(n > 0) {
-		tick = MFP->mf_tbdr;
-		if(tick > otick)
-			n -= TIMB_LIMIT - (tick - otick);
-		else n -= otick - tick;
-		otick = tick;
+		ticks = MFP->mf_tbdr;
+		if(ticks > otick)
+			n -= TIMB_LIMIT - (ticks - otick);
+		else n -= otick - ticks;
+		otick = ticks;
 	}
 }
 
@@ -501,10 +501,10 @@ gettod()
  *                   RTC-device support				       *
  ***********************************************************************/
 int
-rtcopen(dev, flag, mode, p)
+rtcopen(dev, flag, mode, l)
 	dev_t		dev;
 	int		flag, mode;
-	struct proc	*p;
+	struct lwp	*l;
 {
 	int			unit = minor(dev);
 	struct clock_softc	*sc;
@@ -522,11 +522,11 @@ rtcopen(dev, flag, mode, p)
 }
 
 int
-rtcclose(dev, flag, mode, p)
+rtcclose(dev, flag, mode, l)
 	dev_t		dev;
 	int		flag;
 	int		mode;
-	struct proc	*p;
+	struct lwp	*l;
 {
 	int			unit = minor(dev);
 	struct clock_softc	*sc = clock_cd.cd_devs[unit];

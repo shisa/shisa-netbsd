@@ -1,4 +1,4 @@
-/*	$NetBSD: machdep.c,v 1.182.4.1 2005/11/01 22:33:25 tron Exp $	*/
+/*	$NetBSD: machdep.c,v 1.186 2006/03/26 01:49:09 tsutsui Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1990, 1993
@@ -77,7 +77,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.182.4.1 2005/11/01 22:33:25 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.186 2006/03/26 01:49:09 tsutsui Exp $");
 
 #include "opt_ddb.h"
 #include "opt_compat_hpux.h"
@@ -340,7 +340,7 @@ cpu_startup(void)
 	/*
 	 * Good {morning,afternoon,evening,night}.
 	 */
-	printf(version);
+	printf("%s%s", copyright, version);
 	identifycpu();
 	format_bytes(pbuf, sizeof(pbuf), ctob(physmem));
 	printf("total memory = %s\n", pbuf);
@@ -1028,7 +1028,7 @@ lookup_bootinfo(int type)
 	return (NULL);
 }
 
-#ifdef PANICBUTTON
+#if defined(PANICBUTTON) && !defined(DDB)
 /*
  * Declare these so they can be patched.
  */
@@ -1047,7 +1047,7 @@ candbtimer(void *arg)
 
 	crashandburn = 0;
 }
-#endif /* PANICBUTTON */
+#endif /* PANICBUTTON & !DDB */
 
 static int innmihand;	/* simple mutex */
 
@@ -1092,7 +1092,7 @@ nmihand(struct frame frame)
 				printf("\n");
 				crashandburn = 1;
 				callout_reset(&candbtimer_ch, hz / candbdiv,
-				    candbtiner, NULL);
+				    candbtimer, NULL);
 			}
 		} else
 #endif /* PANICBUTTON */
@@ -1254,7 +1254,7 @@ done:
  *	done on little-endian machines...  -- cgd
  */
 int
-cpu_exec_aout_makecmds(struct proc *p, struct exec_package *epp)
+cpu_exec_aout_makecmds(struct lwp *l, struct exec_package *epp)
 {
 #if defined(COMPAT_NOMID) || defined(COMPAT_44)
 	u_long midmag, magic;
@@ -1271,12 +1271,12 @@ cpu_exec_aout_makecmds(struct proc *p, struct exec_package *epp)
 	switch (midmag) {
 #ifdef COMPAT_NOMID
 	case (MID_ZERO << 16) | ZMAGIC:
-		error = exec_aout_prep_oldzmagic(p, epp);
+		error = exec_aout_prep_oldzmagic(l, epp);
 		return(error);
 #endif
 #ifdef COMPAT_44
 	case (MID_HP300 << 16) | ZMAGIC:
-		error = exec_aout_prep_oldzmagic(p, epp);
+		error = exec_aout_prep_oldzmagic(l, epp);
 		return(error);
 #endif
 	}

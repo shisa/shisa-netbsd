@@ -1,4 +1,4 @@
-/*	$NetBSD: ssh-agent.c,v 1.24 2005/02/13 05:57:27 christos Exp $	*/
+/*	$NetBSD: ssh-agent.c,v 1.27 2006/03/18 10:41:24 dan Exp $	*/
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -36,8 +36,8 @@
 
 #include "includes.h"
 #include <sys/queue.h>
-RCSID("$OpenBSD: ssh-agent.c,v 1.120 2004/08/11 21:43:05 avsm Exp $");
-__RCSID("$NetBSD: ssh-agent.c,v 1.24 2005/02/13 05:57:27 christos Exp $");
+RCSID("$OpenBSD: ssh-agent.c,v 1.124 2005/10/30 08:52:18 djm Exp $");
+__RCSID("$NetBSD: ssh-agent.c,v 1.27 2006/03/18 10:41:24 dan Exp $");
 
 #include <openssl/evp.h>
 #include <openssl/md5.h>
@@ -167,23 +167,15 @@ lookup_identity(Key *key, int version)
 static int
 confirm_key(Identity *id)
 {
-	char *p, prompt[1024];
+	char *p;
 	int ret = -1;
 
 	p = key_fingerprint(id->key, SSH_FP_MD5, SSH_FP_HEX);
-	snprintf(prompt, sizeof(prompt), "Allow use of key %s?\n"
-	    "Key fingerprint %s.", id->comment, p);
+	if (ask_permission("Allow use of key %s?\nKey fingerprint %s.",
+	    id->comment, p))
+		ret = 0;
 	xfree(p);
-	p = read_passphrase(prompt, RP_ALLOW_EOF);
-	if (p != NULL) {
-		/*
-		 * Accept empty responses and responses consisting
-		 * of the word "yes" as affirmative.
-		 */
-		if (*p == '\0' || *p == '\n' || strcasecmp(p, "yes") == 0)
-			ret = 0;
-		xfree(p);
-	}
+
 	return (ret);
 }
 
@@ -362,7 +354,7 @@ process_remove_identity(SocketEntry *e, int version)
 		if (id != NULL) {
 			/*
 			 * We have this key.  Free the old key.  Since we
-			 * don\'t want to leave empty slots in the middle of
+			 * don't want to leave empty slots in the middle of
 			 * the array, we actually free the key there and move
 			 * all the entries between the empty slot and the end
 			 * of the array.
@@ -391,8 +383,7 @@ process_remove_all_identities(SocketEntry *e, int version)
 	Identity *id;
 
 	/* Loop over all identities and clear the keys. */
-	for (id = TAILQ_FIRST(&tab->idlist); id;
-	    id = TAILQ_FIRST(&tab->idlist)) {
+	while ((id = TAILQ_FIRST(&tab->idlist)) != NULL) {
 		TAILQ_REMOVE(&tab->idlist, id, next);
 		free_identity(id);
 	}
@@ -1012,6 +1003,9 @@ main(int ac, char **av)
 	pid_t pid;
 	char pidstrbuf[1 + 3 * sizeof pid];
 
+	/* Ensure that fds 0, 1 and 2 are open or directed to /dev/null */
+	sanitise_stdfd();
+
 	/* drop */
 	setegid(getgid());
 	setgid(getgid());
@@ -1109,6 +1103,7 @@ main(int ac, char **av)
 	sock = socket(AF_UNIX, SOCK_STREAM, 0);
 	if (sock < 0) {
 		perror("socket");
+		*socket_name = '\0'; /* Don't unlink any existing file */
 		cleanup_exit(1);
 	}
 	memset(&sunaddr, 0, sizeof(sunaddr));
@@ -1116,6 +1111,7 @@ main(int ac, char **av)
 	strlcpy(sunaddr.sun_path, socket_name, sizeof(sunaddr.sun_path));
 	if (bind(sock, (struct sockaddr *) & sunaddr, sizeof(sunaddr)) < 0) {
 		perror("bind");
+		*socket_name = '\0'; /* Don't unlink any existing file */
 		cleanup_exit(1);
 	}
 	if (listen(sock, SSH_LISTEN_BACKLOG) < 0) {

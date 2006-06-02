@@ -1,4 +1,4 @@
-/*	$NetBSD: zs.c,v 1.47 2005/01/16 00:32:59 chs Exp $	*/
+/*	$NetBSD: zs.c,v 1.50 2006/03/28 17:38:25 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1996-1998 Bill Studenmund
@@ -54,7 +54,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: zs.c,v 1.47 2005/01/16 00:32:59 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: zs.c,v 1.50 2006/03/28 17:38:25 thorpej Exp $");
 
 #include "opt_ddb.h"
 #include "opt_mac68k.h"
@@ -177,7 +177,7 @@ zs_get_chan_addr(int channel)
 	char *addr;
 	struct zschan *zc;
 
-	addr = (char *)sccA;
+	addr = (char *)__UNVOLATILE(sccA);
 	if (channel == 0) {
 		zc = (struct zschan *)(addr + 2);
 		/* handle the fact the ports are intertwined. */
@@ -320,7 +320,7 @@ zsc_attach(struct device *parent, struct device *self, void *aux)
 			zsc_args.hwflags |= ZS_HWFLAG_NO_CTS;
 
 		printf("zsc%d channel %d: d_speed %6d DCD clk %ld CTS clk %ld",
-				self->dv_unit, channel, cs->cs_defspeed,
+				device_unit(self), channel, cs->cs_defspeed,
 				xcs->cs_clocks[1].clk, xcs->cs_clocks[2].clk);
 
 		/* Set defaults in our "extended" chanstate. */

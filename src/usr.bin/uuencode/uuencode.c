@@ -1,4 +1,4 @@
-/*	$NetBSD: uuencode.c,v 1.9 2003/08/07 11:16:59 agc Exp $	*/
+/*	$NetBSD: uuencode.c,v 1.11 2005/06/29 20:35:48 wiz Exp $	*/
 
 /*-
  * Copyright (c) 1983, 1993
@@ -39,7 +39,7 @@ __COPYRIGHT("@(#) Copyright (c) 1983, 1993\n\
 #if 0
 static char sccsid[] = "@(#)uuencode.c	8.2 (Berkeley) 4/2/94";
 #else
-__RCSID("$NetBSD: uuencode.c,v 1.9 2003/08/07 11:16:59 agc Exp $");
+__RCSID("$NetBSD: uuencode.c,v 1.11 2005/06/29 20:35:48 wiz Exp $");
 #endif
 #endif /* not lint */
 
@@ -58,20 +58,19 @@ __RCSID("$NetBSD: uuencode.c,v 1.9 2003/08/07 11:16:59 agc Exp $");
 #include <string.h>
 #include <unistd.h>
 
-int	main __P((int, char **));
-static void encode __P((void));
-static void usage __P((void));
+int main(int, char *[]);
+static void encode(void);
+static void usage(void);
 
 int
-main(argc, argv)
-	int argc;
-	char *argv[];
+main(int argc, char *argv[])
 {
 	struct stat sb;
 	int mode;
 
 	mode = 0;
 	setlocale(LC_ALL, "");
+	setprogname(argv[0]);
 
 	while (getopt(argc, argv, "") != -1)
 		usage();
@@ -110,7 +109,7 @@ main(argc, argv)
  * copy from in to out, encoding as you go along.
  */
 static void
-encode()
+encode(void)
 {
 	int ch, n;
 	char *p;
@@ -149,8 +148,9 @@ encode()
 }
 
 static void
-usage()
+usage(void)
 {
-	(void)fprintf(stderr,"usage: uuencode [infile] remotefile\n");
+	(void)fprintf(stderr, "usage: %s [infile] remotefile\n",
+		      getprogname());
 	exit(1);
 }

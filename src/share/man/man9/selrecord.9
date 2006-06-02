@@ -1,4 +1,4 @@
-.\"     $NetBSD: selrecord.9,v 1.4 2004/02/18 13:46:18 wiz Exp $
+.\"     $NetBSD: selrecord.9,v 1.6 2005/12/20 19:53:15 rpaulo Exp $
 .\"
 .\" Copyright (C) 2002 Chad David <davidc@acns.ab.ca>. All rights reserved.
 .\"
@@ -28,7 +28,7 @@
 .\" $FreeBSD: src/share/man/man9/selrecord.9,v 1.2 2002/05/30 13:29:17 ru Exp $
 .\"
 .\" FreeBSD: .Dd March 20, 2002
-.Dd February 18, 2004
+.Dd December 20, 2005
 .Dt SELRECORD 9
 .Os
 .Sh NAME
@@ -39,7 +39,7 @@
 .In sys/param.h
 .In sys/select.h
 .Ft void
-.Fn selrecord "struct proc *selector" "struct selinfo *sip"
+.Fn selrecord "struct lwp *selector" "struct selinfo *sip"
 .Ft void
 .Fn selwakeup "struct selinfo *sip"
 .Ft void
@@ -93,7 +93,7 @@ may acquire and release
 .Pp
 .Fn selnotify
 calls
-.Fn selwakup
+.Fn selwakeup
 and then calls
 .Fn KNOTE
 with

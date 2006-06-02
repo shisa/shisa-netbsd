@@ -1,4 +1,4 @@
-/*	$NetBSD: trap.c,v 1.25 2005/02/25 07:09:58 simonb Exp $	*/
+/*	$NetBSD: trap.c,v 1.34 2006/05/15 09:21:21 yamt Exp $	*/
 
 /*
  * Copyright 2001 Wasabi Systems, Inc.
@@ -67,13 +67,10 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: trap.c,v 1.25 2005/02/25 07:09:58 simonb Exp $");
+__KERNEL_RCSID(0, "$NetBSD: trap.c,v 1.34 2006/05/15 09:21:21 yamt Exp $");
 
 #include "opt_altivec.h"
 #include "opt_ddb.h"
-#include "opt_ktrace.h"
-#include "opt_systrace.h"
-#include "opt_syscall_debug.h"
 
 #include <sys/param.h>
 #include <sys/proc.h>
@@ -81,16 +78,11 @@ __KERNEL_RCSID(0, "$NetBSD: trap.c,v 1.25 2005/02/25 07:09:58 simonb Exp $");
 #include <sys/syscall.h>
 #include <sys/systm.h>
 #include <sys/user.h>
-#ifdef KTRACE
-#include <sys/ktrace.h>
-#endif
 #include <sys/pool.h>
 #include <sys/sa.h>
 #include <sys/savar.h>
-#ifdef SYSTRACE
-#include <sys/systrace.h>
-#endif
 #include <sys/userret.h>
+#include <sys/kauth.h>
 
 #include <uvm/uvm_extern.h>
 
@@ -154,7 +146,7 @@ trap(struct trapframe *frame)
 		{
 			int srr2, srr3;
 
-			__asm __volatile("mfspr %0,0x3f0" :
+			__asm volatile("mfspr %0,0x3f0" :
 			    "=r" (rv), "=r" (srr2), "=r" (srr3) :);
 			printf("debug reg is %x srr2 %x srr3 %x\n", rv, srr2,
 			    srr3);
@@ -206,7 +198,7 @@ trap(struct trapframe *frame)
 			    frame->srr0,
 			    (ftype & VM_PROT_WRITE) ? "write" : "read",
 			    (void *)va, frame->tf_xtra[TF_ESR]));
-			rv = uvm_fault(map, trunc_page(va), 0, ftype);
+			rv = uvm_fault(map, trunc_page(va), ftype);
 			KERNEL_UNLOCK();
 			if (map != kernel_map)
 				l->l_flag &= ~L_SA_PAGEFAULT;
@@ -245,7 +237,7 @@ trap(struct trapframe *frame)
 			l->l_flag |= L_SA_PAGEFAULT;
 		}
 		rv = uvm_fault(&p->p_vmspace->vm_map, trunc_page(frame->dar),
-		    0, ftype);
+		    ftype);
 		if (rv == 0) {
 			l->l_flag &= ~L_SA_PAGEFAULT;
 			KERNEL_PROC_UNLOCK(l);
@@ -259,8 +251,8 @@ trap(struct trapframe *frame)
 			printf("UVM: pid %d (%s) lid %d, uid %d killed: "
 			    "out of swap\n",
 			    p->p_pid, p->p_comm, l->l_lid,
-			    p->p_cred && p->p_ucred ?
-			    p->p_ucred->cr_uid : -1);
+			    p->p_cred ?
+			    kauth_cred_geteuid(p->p_cred) : -1);
 			ksi.ksi_signo = SIGKILL;
 		}
 		trapsignal(l, &ksi);
@@ -280,7 +272,7 @@ trap(struct trapframe *frame)
 		    ("trap(EXC_ISI|EXC_USER) at %lx execute fault tf %p\n",
 		    frame->srr0, frame));
 		rv = uvm_fault(&p->p_vmspace->vm_map, trunc_page(frame->srr0),
-		    0, ftype);
+		    ftype);
 		if (rv == 0) {
 			l->l_flag &= ~L_SA_PAGEFAULT;
 			KERNEL_PROC_UNLOCK(l);
@@ -398,7 +390,7 @@ ctx_setup(int ctx, int srr1)
 	if (srr1 & PSL_PR) {
 		pm = curproc->p_vmspace->vm_map.pmap;
 		if (!pm->pm_ctx) {
-			ctx_alloc((struct pmap *)pm);
+			ctx_alloc(__UNVOLATILE(pm));
 		}
 		ctx = pm->pm_ctx;
 		if (srr1 & PSL_SE) {
@@ -410,7 +402,7 @@ ctx_setup(int ctx, int srr1)
 				 *
 				 * XXX this is also used by jtag debuggers...
 				 */
-			__asm __volatile("mfspr %0,0x3f2;"
+			__asm volatile("mfspr %0,0x3f2;"
 			    "or %0,%0,%1;"
 			    "mtspr 0x3f2,%0;" :
 			    "=&r" (dbreg) : "r" (mask));
@@ -452,7 +444,7 @@ copyin(const void *udaddr, void *kaddr, size_t len)
 		ctx = pm->pm_ctx;
 	}
 
-	asm volatile("addi %6,%6,1; mtctr %6;"	/* Set up counter */
+	__asm volatile("addi %6,%6,1; mtctr %6;"	/* Set up counter */
 		"mfmsr %0;"			/* Save MSR */
 		"li %1,0x20; "
 		"andc %1,%0,%1; mtmsr %1;"	/* Disable IMMU */
@@ -496,7 +488,7 @@ bigcopyin(const void *udaddr, void *kaddr, size_t len)
 	 * Stolen from physio():
 	 */
 	PHOLD(l);
-	error = uvm_vslock(p, (caddr_t)udaddr, len, VM_PROT_READ);
+	error = uvm_vslock(p, __UNCONST(udaddr), len, VM_PROT_READ);
 	if (error) {
 		PRELE(l);
 		return EFAULT;
@@ -505,7 +497,7 @@ bigcopyin(const void *udaddr, void *kaddr, size_t len)
 
 	memcpy(kp, up, len);
 	vunmaprange((vaddr_t)up, len);
-	uvm_vsunlock(p, (caddr_t)udaddr, len);
+	uvm_vsunlock(p, __UNCONST(udaddr), len);
 	PRELE(l);
 
 	return 0;
@@ -533,7 +525,7 @@ copyout(const void *kaddr, void *udaddr, size_t len)
 		ctx = pm->pm_ctx;
 	}
 
-	asm volatile("addi %6,%6,1; mtctr %6;"	/* Set up counter */
+	__asm volatile("addi %6,%6,1; mtctr %6;"	/* Set up counter */
 		"mfmsr %0;"			/* Save MSR */
 		"li %1,0x20; "
 		"andc %1,%0,%1; mtmsr %1;"	/* Disable IMMU */
@@ -562,7 +554,7 @@ static int
 bigcopyout(const void *kaddr, void *udaddr, size_t len)
 {
 	char *up;
-	const char *kp = (char *)kaddr;
+	const char *kp = (const char *)kaddr;
 	struct lwp *l = curlwp;
 	struct proc *p;
 	int error;
@@ -634,15 +626,15 @@ badaddr_read(void *addr, size_t size, int *rptr)
 	int x;
 
 	/* Get rid of any stale machine checks that have been waiting.  */
-	__asm __volatile ("sync; isync");
+	__asm volatile ("sync; isync");
 
 	if (setfault(&env)) {
 		curpcb->pcb_onfault = 0;
-		__asm __volatile ("sync");
+		__asm volatile ("sync");
 		return 1;
 	}
 
-	__asm __volatile ("sync");
+	__asm volatile ("sync");
 
 	switch (size) {
 	case 1:
@@ -659,10 +651,10 @@ badaddr_read(void *addr, size_t size, int *rptr)
 	}
 
 	/* Make sure we took the machine check, if we caused one. */
-	__asm __volatile ("sync; isync");
+	__asm volatile ("sync; isync");
 
 	curpcb->pcb_onfault = 0;
-	__asm __volatile ("sync");	/* To be sure. */
+	__asm volatile ("sync");	/* To be sure. */
 
 	/* Use the value to avoid reorder. */
 	if (rptr)

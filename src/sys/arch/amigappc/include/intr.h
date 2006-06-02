@@ -1,4 +1,4 @@
-/*	$NetBSD: intr.h,v 1.14 2003/12/10 01:26:24 jmc Exp $	*/
+/*	$NetBSD: intr.h,v 1.18 2006/02/16 20:17:13 perry Exp $	*/
 
 /*-
  * Copyright (c) 1997 The NetBSD Foundation, Inc.
@@ -120,10 +120,10 @@ splraise(ncpl)
 {
 	int ocpl;
 
-	__asm__ volatile("sync; eieio\n");	/* don't reorder.... */
+	__asm volatile("sync; eieio\n");	/* don't reorder.... */
 	ocpl = cpl;
 	cpl = ocpl | ncpl;
-	__asm__ volatile("sync; eieio\n");	/* reorder protect */
+	__asm volatile("sync; eieio\n");	/* reorder protect */
 	return (ocpl);
 }
 
@@ -131,11 +131,11 @@ static __inline void
 splx(ncpl)
 	int ncpl;
 {
-	__asm__ volatile("sync; eieio\n");	/* reorder protect */
+	__asm volatile("sync; eieio\n");	/* reorder protect */
 	cpl = ncpl;
 	if (ipending & ~ncpl)
 		do_pending_int();
-	__asm__ volatile("sync; eieio\n");	/* reorder protect */
+	__asm volatile("sync; eieio\n");	/* reorder protect */
 }
 
 static __inline int
@@ -144,12 +144,12 @@ spllower(ncpl)
 {
 	int ocpl;
 
-	__asm__ volatile("sync; eieio\n");	/* reorder protect */
+	__asm volatile("sync; eieio\n");	/* reorder protect */
 	ocpl = cpl;
 	cpl = ncpl;
 	if (ipending & ~ncpl)
 		do_pending_int();
-	__asm__ volatile("sync; eieio\n");	/* reorder protect */
+	__asm volatile("sync; eieio\n");	/* reorder protect */
 	return (ocpl);
 }
 
@@ -161,10 +161,10 @@ softintr(ipl)
 {
 	int msrsave;
 
-	__asm__ volatile("mfmsr %0" : "=r"(msrsave));
-	__asm__ volatile("mtmsr %0" :: "r"(msrsave & ~PSL_EE));
+	__asm volatile("mfmsr %0" : "=r"(msrsave));
+	__asm volatile("mtmsr %0" :: "r"(msrsave & ~PSL_EE));
 	ipending |= 1 << ipl;
-	__asm__ volatile("mtmsr %0" :: "r"(msrsave));
+	__asm volatile("mtmsr %0" :: "r"(msrsave));
 }
 
 #define	ICU_LEN		32

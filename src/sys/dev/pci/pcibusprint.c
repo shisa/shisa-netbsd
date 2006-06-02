@@ -1,4 +1,6 @@
-/* $NetBSD: pcibusprint.c,v 1.1 2004/08/30 10:30:38 drochner Exp $ */
+
+#include <sys/cdefs.h>
+__KERNEL_RCSID(0, "$NetBSD: pcibusprint.c,v 1.3 2005/12/11 12:22:50 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>

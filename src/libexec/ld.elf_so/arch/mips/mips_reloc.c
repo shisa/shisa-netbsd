@@ -1,4 +1,4 @@
-/*	$NetBSD: mips_reloc.c,v 1.46 2004/12/15 10:26:29 skrll Exp $	*/
+/*	$NetBSD: mips_reloc.c,v 1.51 2006/04/03 13:23:15 skrll Exp $	*/
 
 /*
  * Copyright 1997 Michael L. Hitch <mhitch@montana.edu>
@@ -28,6 +28,11 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <sys/cdefs.h>
+#ifndef lint
+__RCSID("$NetBSD: mips_reloc.c,v 1.51 2006/04/03 13:23:15 skrll Exp $");
+#endif /* not lint */
+
 #include <sys/types.h>
 #include <sys/stat.h>
 
@@ -50,7 +55,7 @@ caddr_t _rtld_bind(Elf_Word, Elf_Addr, Elf_Addr, Elf_Addr);
 #define	RELOC_ALIGNED_P(x) \
 	(((uintptr_t)(x) & (sizeof(void *) - 1)) == 0)
 
-static __inline Elf_Addr
+static inline Elf_Addr
 load_ptr(void *where)
 {
 	Elf_Addr res;
@@ -60,7 +65,7 @@ load_ptr(void *where)
 	return res;
 }
 
-static __inline void
+static inline void
 store_ptr(void *where, Elf_Addr val)
 {
 
@@ -82,9 +87,9 @@ _rtld_relocate_nonplt_self(Elf_Dyn *dynp, Elf_Addr relocbase)
 	const Elf_Rel *rel = 0, *rellim;
 	Elf_Addr relsz = 0;
 	Elf_Addr *where;
-	const Elf_Sym *symtab, *sym;
-	Elf_Addr *got;
-	Elf_Word local_gotno, symtabno, gotsym;
+	const Elf_Sym *symtab = NULL, *sym;
+	Elf_Addr *got = NULL;
+	Elf_Word local_gotno = 0, symtabno = 0, gotsym = 0;
 	int i;
 
 	for (; dynp->d_tag != DT_NULL; dynp++) {
@@ -333,22 +338,54 @@ _rtld_relocate_plt_lazy(const Obj_Entry *obj)
 	return 0;
 }
 
+static inline int
+_rtld_relocate_plt_object(const Obj_Entry *obj, Elf_Word sym, Elf_Addr *tp)
+{
+	Elf_Addr *got = obj->pltgot;
+	const Elf_Sym *def;
+	const Obj_Entry *defobj;
+	Elf_Addr new_value;
+
+	def = _rtld_find_symdef(sym, obj, &defobj, true);
+	if (def == NULL)
+		return -1;
+
+	new_value = (Elf_Addr)(defobj->relocbase + def->st_value);
+	rdbg(("bind now/fixup in %s --> new=%p",
+	    defobj->strtab + def->st_name, (void *)new_value));
+	got[obj->local_gotno + sym - obj->gotsym] = new_value;
+
+	if (tp)
+		*tp = new_value;
+	return 0;
+}
+
 caddr_t
 _rtld_bind(Elf_Word a0, Elf_Addr a1, Elf_Addr a2, Elf_Addr a3)
 {
 	Elf_Addr *got = (Elf_Addr *)(a2 - 0x7ff0);
 	const Obj_Entry *obj = (Obj_Entry *)(got[1] & 0x7fffffff);
-	const Elf_Sym *def;
-	const Obj_Entry *defobj;
 	Elf_Addr new_value;
+	int err;
 
-	def = _rtld_find_symdef(a0, obj, &defobj, true);
-	if (def == NULL)
+	err = _rtld_relocate_plt_object(obj, a0, &new_value);
+	if (err)
 		_rtld_die();
 
-	new_value = (Elf_Addr)(defobj->relocbase + def->st_value);
-	rdbg(("bind now/fixup in %s --> new=%p",
-	    defobj->strtab + def->st_name, (void *)new_value));
-	got[obj->local_gotno + a0 - obj->gotsym] = new_value;
-	return ((caddr_t)new_value);
+	return (caddr_t)new_value;
+}
+
+int
+_rtld_relocate_plt_objects(const Obj_Entry *obj)
+{
+	const Elf_Sym *sym = obj->symtab + obj->gotsym;
+	int i;
+
+	for (i = obj->gotsym; i < obj->symtabno; i++, sym++) {
+		if (ELF_ST_TYPE(sym->st_info) == STT_FUNC)
+			if (_rtld_relocate_plt_object(obj, i, NULL) < 0)
+				return -1;
+	}
+
+	return 0;
 }

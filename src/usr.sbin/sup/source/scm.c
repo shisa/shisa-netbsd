@@ -1,4 +1,4 @@
-/*	$NetBSD: scm.c,v 1.20 2004/11/16 06:00:37 itojun Exp $	*/
+/*	$NetBSD: scm.c,v 1.23 2006/05/09 20:18:10 mrg Exp $	*/
 
 /*
  * Copyright (c) 1992 Carnegie Mellon University
@@ -283,7 +283,8 @@ int
 service(void)
 {
 	struct sockaddr_storage from;
-	int x, len;
+	int x;
+	socklen_t len;
 
 	remotename = NULL;
 	len = sizeof(from);
@@ -429,8 +430,12 @@ request(char *server, char *hostname, int *retry)
 			break;
 	}
 
+	if (res == NULL) {
+		freeaddrinfo(res0);
+		return (SCMERR);
+	}
 	memcpy(&remoteaddr, res->ai_addr, res->ai_addrlen);
-	remotename = salloc(hostname);
+	remotename = estrdup(hostname);
 	x = 0x01020304;
 	(void) write(netfile, (char *) &x, sizeof(int));
 	swapmode = 0;		/* swap only on server, not client */
@@ -487,7 +492,7 @@ remotehost(void)
 #endif
 			h1, sizeof(h1), NULL, 0, 0))
 			return ("UNKNOWN");
-		remotename = salloc(h1);
+		remotename = estrdup(h1);
 		if (remotename == NULL)
 			return ("UNKNOWN");
 	}

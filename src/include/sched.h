@@ -1,4 +1,4 @@
-/*	$NetBSD: sched.h,v 1.7.2.1 2005/10/10 11:32:28 tron Exp $	*/
+/*	$NetBSD: sched.h,v 1.8 2005/10/09 11:17:28 kleink Exp $	*/
 
 /*-
  * Copyright (c) 2001 The NetBSD Foundation, Inc.

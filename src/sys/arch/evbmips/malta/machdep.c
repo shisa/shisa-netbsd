@@ -1,4 +1,4 @@
-/*	$NetBSD: machdep.c,v 1.19 2004/04/03 06:43:59 simonb Exp $	*/
+/*	$NetBSD: machdep.c,v 1.22 2005/12/24 20:07:03 perry Exp $	*/
 
 /*
  * Copyright 2001, 2002 Wasabi Systems, Inc.
@@ -112,7 +112,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.19 2004/04/03 06:43:59 simonb Exp $");
+__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.22 2005/12/24 20:07:03 perry Exp $");
 
 #include "opt_ddb.h"
 #include "opt_execfmt.h"
@@ -157,7 +157,7 @@ int	comcnrate = 38400;	/* XXX should be config option */
 #endif /* NCOM > 0 */
 
 
-#define REGVAL(x)       *((__volatile u_int32_t *)(MIPS_PHYS_TO_KSEG1((x))))
+#define REGVAL(x)       *((volatile u_int32_t *)(MIPS_PHYS_TO_KSEG1((x))))
 
 struct malta_config malta_configuration;
 
@@ -361,7 +361,7 @@ cpu_startup()
 	/*
 	 * Good {morning,afternoon,evening,night}.
 	 */
-	printf(version);
+	printf("%s%s", copyright, version);
 	format_bytes(pbuf, sizeof(pbuf), ctob(physmem));
 	printf("total memory = %s\n", pbuf);
 

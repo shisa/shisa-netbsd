@@ -1,5 +1,4 @@
-.\" $NetBSD: user.8,v 1.18 2005/02/05 15:26:50 wiz Exp $ */
-.\"
+.\" $NetBSD: user.8,v 1.23 2005/11/25 08:00:18 agc Exp $ */
 .\"
 .\" Copyright (c) 1999 Alistair G. Crooks.  All rights reserved.
 .\"
@@ -11,10 +10,7 @@
 .\" 2. Redistributions in binary form must reproduce the above copyright
 .\"    notice, this list of conditions and the following disclaimer in the
 .\"    documentation and/or other materials provided with the distribution.
-.\" 3. All advertising materials mentioning features or use of this software
-.\"    must display the following acknowledgement:
-.\"	This product includes software developed by Alistair G. Crooks.
-.\" 4. The name of the author may not be used to endorse or promote
+.\" 3. The name of the author may not be used to endorse or promote
 .\"    products derived from this software without specific prior written
 .\"    permission.
 .\"
@@ -31,7 +27,7 @@
 .\" SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 .\"
 .\"
-.Dd January 14, 2004
+.Dd November 16, 2005
 .Dt USER 8
 .Os
 .Sh NAME
@@ -41,55 +37,26 @@
 .Nm
 .Cm add
 .Fl D
-.Op Fl b Ar base-dir
-.Op Fl e Ar expiry-time
-.Op Fl f Ar inactive-time
-.Op Fl g Ar gid/name/=uid
-.Op Fl L Ar login-class
-.Op Fl r Ar lowuid..highuid
+.Op options
 .Nm
 .Cm add
-.Op Fl Smov
-.Op Fl G Ar secondary-group
-.Op Fl b Ar base-dir
-.Op Fl c Ar comment
-.Op Fl d Ar home-dir
-.Op Fl e Ar expiry-time
-.Op Fl f Ar inactive-time
-.Op Fl g Ar gid/name/=uid
-.Op Fl k Ar skel-dir
-.Op Fl L Ar login-class
-.Op Fl p Ar password
-.Op Fl r Ar lowuid..highuid
-.Op Fl s Ar shell
-.Op Fl u Ar uid
+.Op options
 .Ar user
 .Nm
 .Cm del
 .Fl D
-.Op Fl p Ar preserve-value
+.Op options
 .Nm
 .Cm del
-.Op Fl Sprv
+.Op options
 .Ar user
 .Nm
 .Cm info
-.Op Fl ev
+.Op options
 .Ar user
 .Nm
 .Cm mod
-.Op Fl Smov
-.Op Fl G Ar secondary-group
-.Op Fl c Ar comment
-.Op Fl d Ar home-dir
-.Op Fl e Ar expiry-time
-.Op Fl f Ar inactive-time
-.Op Fl g Ar gid/name/=uid
-.Op Fl L Ar login-class
-.Op Fl l Ar new-login
-.Op Fl p Ar password
-.Op Fl s Ar shell
-.Op Fl u Ar uid
+.Op options
 .Ar user
 .Sh DESCRIPTION
 The
@@ -101,12 +68,13 @@ utility acts as a frontend to the
 and
 .Xr userdel 8
 commands.
+The utilities by default are built with
+.Dv EXTENSIONS .
+This allows for further functionality.
 .Pp
-For a full explanation of the options, please see the relevant manual page.
-.Pp
-The
-.Nm
-utility exits 0 on success, and \*[Gt]0 if an error occurs.
+For a full explanation of the options available, please see the relevant manual page.
+.Sh EXIT STATUS
+.Ex -std user
 .Sh FILES
 .Bl -tag -width /usr/share/examples/usermgmt -compact
 .It Pa /etc/skel/.[A-z]*
@@ -115,12 +83,12 @@ Skeleton files for new user
 Configuration file for
 .Nm ,
 .Xr group 8
-and those backend commands
-.It Pa /usr/share/examples/usermgmt
-A directory containing examples for
-.Nm
-and
-.Xr group 8
+and the backend commands mentioned above.
+.\" .It Pa /usr/share/examples/usermgmt
+.\" A directory containing examples for
+.\" .Nm
+.\" and
+.\" .Xr group 8 .
 .El
 .Sh SEE ALSO
 .Xr chpass 1 ,
@@ -144,4 +112,4 @@ The
 .Nm
 utility was written by
 .An Alistair G. Crooks
-.An agc@NetBSD.org .
+.Aq agc@NetBSD.org .

@@ -1,4 +1,4 @@
-/*	$NetBSD: miscbltin.c,v 1.34.2.1 2005/04/07 11:34:20 tron Exp $	*/
+/*	$NetBSD: miscbltin.c,v 1.36 2005/10/01 20:23:54 christos Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -37,7 +37,7 @@
 #if 0
 static char sccsid[] = "@(#)miscbltin.c	8.4 (Berkeley) 5/4/95";
 #else
-__RCSID("$NetBSD: miscbltin.c,v 1.34.2.1 2005/04/07 11:34:20 tron Exp $");
+__RCSID("$NetBSD: miscbltin.c,v 1.36 2005/10/01 20:23:54 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -281,7 +281,8 @@ umaskcmd(int argc, char **argv)
 			}
 			INTON;
 			if (!set)
-				error("Illegal mode: %s", ap);
+				error("Cannot set mode `%s' (%s)", ap,
+				    strerror(errno));
 
 			umask(~mask & 0777);
 		}

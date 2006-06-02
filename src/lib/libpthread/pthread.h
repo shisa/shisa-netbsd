@@ -1,4 +1,4 @@
-/*	$NetBSD: pthread.h,v 1.20.2.1 2005/03/22 15:23:08 tron Exp $	*/
+/*	$NetBSD: pthread.h,v 1.21 2005/03/21 17:55:07 kleink Exp $	*/
 
 /*-
  * Copyright (c) 2001 The NetBSD Foundation, Inc.

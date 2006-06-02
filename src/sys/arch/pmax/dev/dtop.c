@@ -1,4 +1,4 @@
-/*	$NetBSD: dtop.c,v 1.67 2003/08/07 16:29:08 agc Exp $	*/
+/*	$NetBSD: dtop.c,v 1.72 2006/05/14 21:56:32 elad Exp $	*/
 
 /*-
  * Copyright (c) 1992, 1993
@@ -90,7 +90,7 @@ SOFTWARE.
 ********************************************************/
 
 #include <sys/cdefs.h>			/* RCS ID & Copyright macro defns */
-__KERNEL_RCSID(0, "$NetBSD: dtop.c,v 1.67 2003/08/07 16:29:08 agc Exp $");
+__KERNEL_RCSID(0, "$NetBSD: dtop.c,v 1.72 2006/05/14 21:56:32 elad Exp $");
 
 #include "opt_ddb.h"
 #include "rasterconsole.h"
@@ -103,6 +103,7 @@ __KERNEL_RCSID(0, "$NetBSD: dtop.c,v 1.67 2003/08/07 16:29:08 agc Exp $");
 #include <sys/file.h>
 #include <sys/kernel.h>
 #include <sys/device.h>
+#include <sys/kauth.h>
 
 #include <dev/cons.h>
 #include <dev/dec/lk201.h>
@@ -301,10 +302,10 @@ dtopattach(parent, self, aux)
 
 
 int
-dtopopen(dev, flag, mode, p)
+dtopopen(dev, flag, mode, l)
 	dev_t dev;
 	int flag, mode;
-	struct proc *p;
+	struct lwp *l;
 {
 	struct tty *tp;
 	int unit;
@@ -335,7 +336,7 @@ dtopopen(dev, flag, mode, p)
 		(void) dtopparam(tp, &tp->t_termios);
 		ttsetwater(tp);
 	} else if ((tp->t_state & TS_XCLUDE)
-	    && curproc->p_ucred->cr_uid != 0)
+	    && kauth_authorize_generic(l->l_proc->p_cred, KAUTH_GENERIC_ISSUSER, &l->l_proc->p_acflag) != 0)
 		return (EBUSY);
 	s = spltty();
 	while (!(flag & O_NONBLOCK) && !(tp->t_cflag & CLOCAL) &&
@@ -363,10 +364,10 @@ dtopopen(dev, flag, mode, p)
 
 /*ARGSUSED*/
 int
-dtopclose(dev, flag, mode, p)
+dtopclose(dev, flag, mode, l)
 	dev_t dev;
 	int flag, mode;
-	struct proc *p;
+	struct lwp *l;
 {
 	struct tty *tp;
 	int unit;
@@ -400,15 +401,15 @@ dtopwrite(dev, uio, flag)
 }
 
 int
-dtoppoll(dev, events, p)
+dtoppoll(dev, events, l)
 	dev_t dev;
 	int events;
-	struct proc *p;
+	struct lwp *l;
 {
 	struct tty *tp;
 
 	tp = DTOP_TTY(minor(dev));
-	return ((*tp->t_linesw->l_poll)(tp, events, p));
+	return ((*tp->t_linesw->l_poll)(tp, events, l));
 }
 
 struct tty *
@@ -421,12 +422,12 @@ dtoptty(dev)
 
 /*ARGSUSED*/
 int
-dtopioctl(dev, cmd, data, flag, p)
+dtopioctl(dev, cmd, data, flag, l)
 	dev_t dev;
 	u_long cmd;
 	caddr_t data;
 	int flag;
-	struct proc *p;
+	struct lwp *l;
 {
 	struct tty *tp;
 	int unit = minor(dev);
@@ -434,11 +435,11 @@ dtopioctl(dev, cmd, data, flag, p)
 
 	tp = DTOP_TTY(unit);
 
-	error = (*tp->t_linesw->l_ioctl)(tp, cmd, data, flag, p);
+	error = (*tp->t_linesw->l_ioctl)(tp, cmd, data, flag, l);
 	if (error != EPASSTHROUGH)
 		return (error);
 
-	error = ttioctl(tp, cmd, data, flag, p);
+	error = ttioctl(tp, cmd, data, flag, l);
 	if (error != EPASSTHROUGH)
 		return (error);
 
@@ -629,7 +630,7 @@ dtop_get_packet(dtop, pkt)
 {
 	poll_reg_t	poll;
 	data_reg_t	data;
-	int		max, i, len;
+	int		ctr, i, len;
 	unsigned char	c;
 	int state;
 	int escaped;
@@ -648,10 +649,10 @@ dtop_get_packet(dtop, pkt)
 	len = 0;		/* packet data length */
 	i = 0;			/* packet data index */
 	while (1) {
-		for (max = 0; (max < DTOP_MAX_POLL) && !DTOP_RX_AVAIL(poll);
-		    max++)
+		for (ctr = 0; (ctr < DTOP_MAX_POLL) && !DTOP_RX_AVAIL(poll);
+		    ctr++)
 			DELAY(1);
-		if (max == DTOP_MAX_POLL) {
+		if (ctr == DTOP_MAX_POLL) {
 			++dtop->bad_pkts;
 			return (-1);
 		}
@@ -860,7 +861,7 @@ dtop_keyboard_handler(dev, msg, event, outc)
 	u_char *ls, *le, *ns, *ne;
 	u_char save[11], retc;
 	int msg_len, c, s, cl;
-	char *cp;
+	const char *cp;
 #ifdef RCONS_BRAINDAMAGE
 	struct tty *tp = DTOP_TTY(0);
 #endif
@@ -1003,7 +1004,7 @@ dtop_keyboard_repeat(arg)
 {
 	dtop_device_t dev = (dtop_device_t)arg;
 	int i, c, cl;
-	char *cp;
+	const char *cp;
 #if 0
 	struct tty *tp = DTOP_TTY(0);
 #endif

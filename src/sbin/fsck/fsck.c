@@ -1,4 +1,4 @@
-/*	$NetBSD: fsck.c,v 1.40 2005/01/19 17:48:15 xtraeme Exp $	*/
+/*	$NetBSD: fsck.c,v 1.42 2006/03/20 01:27:44 christos Exp $	*/
 
 /*
  * Copyright (c) 1996 Christos Zoulas. All rights reserved.
@@ -36,7 +36,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: fsck.c,v 1.40 2005/01/19 17:48:15 xtraeme Exp $");
+__RCSID("$NetBSD: fsck.c,v 1.42 2006/03/20 01:27:44 christos Exp $");
 #endif /* not lint */
 
 #include <sys/param.h>
@@ -292,6 +292,7 @@ checkfs(const char *vfstype, const char *spec, const char *mntpt, void *auxarg,
 		warn("vfork");
 		if (optbuf)
 			free(optbuf);
+		free(argv);
 		return (1);
 
 	case 0:					/* Child. */
@@ -324,7 +325,7 @@ checkfs(const char *vfstype, const char *spec, const char *mntpt, void *auxarg,
 		do {
 			(void)snprintf(execname,
 			    sizeof(execname), "%s/%s", *edir, execbase);
-			execv(execname, (char * const *)argv);
+			execv(execname, (char * const *)__UNCONST(argv));
 			if (errno != ENOENT) {
 				if (spec)
 					warn("exec %s for %s", execname, spec);
@@ -345,6 +346,7 @@ checkfs(const char *vfstype, const char *spec, const char *mntpt, void *auxarg,
 	default:				/* Parent. */
 		if (optbuf)
 			free(optbuf);
+		free(argv);
 
 		if (pidp) {
 			*pidp = pid;

@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_lkm.c,v 1.83.2.1 2005/04/13 16:01:38 tron Exp $	*/
+/*	$NetBSD: kern_lkm.c,v 1.89 2006/01/16 21:45:38 yamt Exp $	*/
 
 /*
  * Copyright (c) 1994 Christopher G. Demetriou
@@ -41,7 +41,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_lkm.c,v 1.83.2.1 2005/04/13 16:01:38 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_lkm.c,v 1.89 2006/01/16 21:45:38 yamt Exp $");
 
 #include "opt_ddb.h"
 #include "opt_malloclog.h"
@@ -63,6 +63,7 @@ __KERNEL_RCSID(0, "$NetBSD: kern_lkm.c,v 1.83.2.1 2005/04/13 16:01:38 tron Exp $
 #include <sys/conf.h>
 #include <sys/ksyms.h>
 #include <sys/device.h>
+#include <sys/once.h>
 
 #include <sys/lkm.h>
 #include <sys/syscall.h>
@@ -75,8 +76,10 @@ __KERNEL_RCSID(0, "$NetBSD: kern_lkm.c,v 1.83.2.1 2005/04/13 16:01:38 tron Exp $
 
 struct vm_map *lkm_map;
 
-#define	LKM_SPACE_ALLOC(size)		uvm_km_alloc(lkm_map, (size))
-#define	LKM_SPACE_FREE(addr, size)	uvm_km_free(lkm_map, (addr), (size))
+#define	LKM_SPACE_ALLOC(size) \
+	uvm_km_alloc(lkm_map, (size), 0, UVM_KMF_WIRED)
+#define	LKM_SPACE_FREE(addr, size) \
+	uvm_km_free(lkm_map, (addr), (size), UVM_KMF_WIRED)
 
 #if !defined(DEBUG) && defined(LKMDEBUG)
 # define DEBUG
@@ -98,7 +101,8 @@ int	lkmdebug = 0;
 static int	lkm_v = 0;
 static int	lkm_state = LKMS_IDLE;
 
-static TAILQ_HEAD(lkms_head, lkm_table) lkmods;	/* table of loaded modules */
+static TAILQ_HEAD(lkms_head, lkm_table) lkmods = /* table of loaded modules */
+		TAILQ_HEAD_INITIALIZER(lkmods);
 static struct lkm_table	*curp;			/* global for in-progress ops */
 
 static struct lkm_table *lkmlookup(int, char *, int, int *);
@@ -126,7 +130,9 @@ const struct cdevsw lkm_cdevsw = {
 	nostop, notty, nopoll, nommap, nokqfilter,
 };
 
-void
+static ONCE_DECL(lkm_init_once);
+
+static int
 lkm_init(void)
 {
 	/*
@@ -136,14 +142,16 @@ lkm_init(void)
 	if (lkm_map == NULL)
 		lkm_map = kernel_map;
 
-	TAILQ_INIT(&lkmods);
+	return 0;
 }
 
 /*ARGSUSED*/
 int
-lkmopen(dev_t dev, int flag, int devtype, struct proc *p)
+lkmopen(dev_t dev, int flag, int devtype, struct lwp *l)
 {
 	int error;
+
+	RUN_ONCE(&lkm_init_once, lkm_init);
 
 	if (minor(dev) != 0)
 		return (ENXIO);		/* bad minor # */
@@ -294,7 +302,7 @@ lkmunreserve(int delsymtab)
 }
 
 int
-lkmclose(dev_t dev, int flag, int mode, struct proc *p)
+lkmclose(dev_t dev, int flag, int mode, struct lwp *l)
 {
 
 	if (!(lkm_v & LKM_ALLOC)) {
@@ -324,7 +332,7 @@ lkmclose(dev_t dev, int flag, int mode, struct proc *p)
 
 /*ARGSUSED*/
 int
-lkmioctl(dev_t dev, u_long cmd, caddr_t data, int flag, struct proc *p)
+lkmioctl(dev_t dev, u_long cmd, caddr_t data, int flag, struct lwp *l)
 {
 	int i, error = 0;
 	struct lmc_resrv *resrvp;
@@ -407,6 +415,9 @@ lkmioctl(dev_t dev, u_long cmd, caddr_t data, int flag, struct proc *p)
 		if (error)
 			break;
 
+#ifdef PMAP_NEED_PROCWR
+		pmap_procwr(&proc0, curp->area + curp->offset, i);
+#endif
 		if ((curp->offset + i) < curp->size) {
 			lkm_state = LKMS_LOADING;
 #ifdef DEBUG

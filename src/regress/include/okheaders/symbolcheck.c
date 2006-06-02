@@ -99,7 +99,6 @@
 #include <sys/pool.h>
 #include <sys/power.h>
 #include <sys/proc.h>
-#include <sys/properties.h>
 #include <sys/protosw.h>
 #include <sys/ptrace.h>
 #include <sys/queue.h>
@@ -131,15 +130,12 @@
 #include <sys/sysctl.h>
 #include <sys/syslimits.h>
 #include <sys/syslog.h>
-#include <sys/systm.h>
-#include <sys/tablet.h>
 #include <sys/termios.h>
 #include <sys/time.h>
 #include <sys/timeb.h>
 #include <sys/timepps.h>
 #include <sys/times.h>
 #include <sys/timex.h>
-#include <sys/tprintf.h>
 #include <sys/trace.h>
 #include <sys/tree.h>
 #include <sys/tty.h>
@@ -300,7 +296,7 @@
 #endif
 #include <regexp.h>
 #include <resolv.h>
-#include <rmd160.h>
+#include <crypto/rmd160.h>
 /* without this rmt.h re-defines ioctl which is also defined in soundcard.h */
 #define __RMTLIB_PRIVATE
 #include <rmt.h>

@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile.glx,v 1.5.8.2 2005/05/18 14:32:58 tron Exp $
+#	$NetBSD: Makefile.glx,v 1.7 2005/05/14 19:27:56 martin Exp $
 
 LIB=		glx
 

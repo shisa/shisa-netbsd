@@ -1,4 +1,4 @@
-/* $NetBSD: start.c,v 1.5 2003/12/30 12:33:13 pk Exp $ */
+/* $NetBSD: start.c,v 1.7 2005/12/11 12:16:03 christos Exp $ */
 /*-
  * Copyright (c) 1998, 2000 Ben Harris
  * All rights reserved.
@@ -31,7 +31,7 @@
 
 #include <sys/param.h>
 
-__KERNEL_RCSID(0, "$NetBSD: start.c,v 1.5 2003/12/30 12:33:13 pk Exp $");
+__KERNEL_RCSID(0, "$NetBSD: start.c,v 1.7 2005/12/11 12:16:03 christos Exp $");
 
 #include <sys/msgbuf.h>
 #include <sys/user.h>
@@ -69,8 +69,8 @@ struct user *proc0paddr;
 extern i2c_tag_t acorn26_i2c_tag;
 
 /* We don't pass a command line yet. */
-char *boot_args = "";
-char *boot_file = "";
+const char *boot_args = "";
+const char *boot_file = "";
 
 #ifdef DIAGNOSTIC
 #define BOOT_SANITY 0x89345846

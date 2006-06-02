@@ -1,4 +1,4 @@
-/*	$NetBSD: db_interface.c,v 1.26 2005/03/08 22:04:22 uwe Exp $	*/
+/*	$NetBSD: db_interface.c,v 1.32 2005/12/24 23:24:02 perry Exp $	*/
 
 /*-
  * Copyright (C) 2002 UCHIYAMA Yasushi.  All rights reserved.
@@ -28,7 +28,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: db_interface.c,v 1.26 2005/03/08 22:04:22 uwe Exp $");
+__KERNEL_RCSID(0, "$NetBSD: db_interface.c,v 1.32 2005/12/24 23:24:02 perry Exp $");
 
 #include "opt_ddb.h"
 #include "opt_kgdb.h"
@@ -51,6 +51,9 @@ __KERNEL_RCSID(0, "$NetBSD: db_interface.c,v 1.26 2005/03/08 22:04:22 uwe Exp $"
 extern char *exp_type[];
 extern int exp_types;
 
+db_regs_t ddb_regs;		/* register state */
+
+
 #ifndef KGDB
 #include <sh3/cache.h>
 #include <sh3/cache_sh3.h>
@@ -67,16 +70,16 @@ extern int exp_types;
 
 void kdb_printtrap(u_int, int);
 
-void db_tlbdump_cmd(db_expr_t, int, db_expr_t, char *);
+void db_tlbdump_cmd(db_expr_t, int, db_expr_t, const char *);
 void __db_tlbdump_page_size_sh4(uint32_t);
 void __db_tlbdump_pfn(uint32_t);
-void db_cachedump_cmd(db_expr_t, int, db_expr_t, char *);
+void db_cachedump_cmd(db_expr_t, int, db_expr_t, const char *);
 
 void __db_cachedump_sh3(vaddr_t);
 void __db_cachedump_sh4(vaddr_t);
 
-void db_stackcheck_cmd(db_expr_t, int, db_expr_t, char *);
-void db_frame_cmd(db_expr_t, int, db_expr_t, char *);
+void db_stackcheck_cmd(db_expr_t, int, db_expr_t, const char *);
+void db_frame_cmd(db_expr_t, int, db_expr_t, const char *);
 void __db_print_symbol(db_expr_t);
 char *__db_procname_by_asid(int);
 
@@ -149,7 +152,7 @@ void
 cpu_Debugger()
 {
 
-	__asm__ __volatile__("trapa %0" :: "i"(_SH_TRA_BREAK));
+	__asm volatile("trapa %0" :: "i"(_SH_TRA_BREAK));
 }
 #endif /* !KGDB */
 
@@ -218,7 +221,8 @@ db_clear_single_step(db_regs_t *regs)
  */
 #define	ON(x, c)	((x) & (c) ? '|' : '.')
 void
-db_tlbdump_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
+db_tlbdump_cmd(db_expr_t addr, int have_addr, db_expr_t count,
+    const char *modif)
 {
 	static const char *pr[] = { "_r", "_w", "rr", "ww" };
 	static const char title[] =
@@ -386,7 +390,8 @@ __db_tlbdump_page_size_sh4(uint32_t r)
  * CACHE
  */
 void
-db_cachedump_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
+db_cachedump_cmd(db_expr_t addr, int have_addr, db_expr_t count,
+    const char *modif)
 {
 #ifdef SH3
 	if (CPU_IS_SH3)
@@ -496,7 +501,7 @@ __db_cachedump_sh4(vaddr_t va)
 #undef ON
 
 void
-db_frame_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
+db_frame_cmd(db_expr_t addr, int have_addr, db_expr_t count, const char *modif)
 {
 	struct switchframe *sf = &curpcb->pcb_sf;
 	struct trapframe *tf, *tftop;
@@ -523,7 +528,7 @@ db_frame_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
 
 	/* Print trap frame stack */
 	db_printf("[trap frame]\n");
-	__asm__("stc r6_bank, %0" : "=r"(tf));
+	__asm("stc r6_bank, %0" : "=r"(tf));
 	for (; tf != tftop; tf++) {
 		db_printf("-- %p-%p --\n", tf, tf + 1);
 		db_printf("tf_expevt\t0x%08x\n", tf->tf_expevt);
@@ -558,7 +563,7 @@ db_frame_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
 void
 __db_print_symbol(db_expr_t value)
 {
-	char *name;
+	const char *name;
 	db_expr_t offset;
 
 	db_find_xtrn_sym_and_offset((db_addr_t)value, &name, &offset);
@@ -575,7 +580,8 @@ __db_print_symbol(db_expr_t value)
  * Stack overflow check
  */
 void
-db_stackcheck_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
+db_stackcheck_cmd(db_expr_t addr, int have_addr, db_expr_t count,
+		  const char *modif)
 {
 	struct lwp *l;
 	struct user *u;

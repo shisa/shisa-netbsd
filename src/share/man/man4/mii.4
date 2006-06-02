@@ -1,4 +1,4 @@
-.\"	$NetBSD: mii.4,v 1.17 2005/02/20 16:58:59 jdolecek Exp $
+.\"	$NetBSD: mii.4,v 1.20 2006/03/25 17:46:09 xtraeme Exp $
 .\"
 .\" Copyright (c) 1998, 2002 The NetBSD Foundation, Inc.
 .\" All rights reserved.
@@ -35,7 +35,7 @@
 .\" ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 .\" POSSIBILITY OF SUCH DAMAGE.
 .\"
-.Dd February 20, 2005
+.Dd March 25, 2006
 .Dt MII 4
 .Os
 .Sh NAME
@@ -61,6 +61,8 @@
 .Cd "nsphyter* at mii? phy ?		# NatSemi DP83843/DP83815 PHYs"
 .Cd "pnaphy*   at mii? phy ?		# Generic HomePNA PHYs"
 .Cd "qsphy*    at mii? phy ?		# Quality Semiconductor QS6612 PHYs"
+.Cd "rgephy*   at mii? phy ?		# Realtek 8169S/8110S internal PHYs"
+.Cd "rlphy*    at mii? phy ?		# Realtek 8139/8201L PHYs"
 .Cd "sqphy*    at mii? phy ?		# Seeq 80220/80221/80223/80225 PHYs"
 .Cd "tlphy*    at mii? phy ?		# ThunderLAN internal PHYs"
 .Cd "tqphy*    at mii? phy ?		# TSC Semiconductor 78Q2120 PHYs"
@@ -121,9 +123,14 @@ program.
 .Xr nsphyter 4 ,
 .Xr pnaphy 4 ,
 .Xr qsphy 4 ,
+.Xr rgephy 4 ,
+.Xr rlphy 4 ,
 .Xr sqphy 4 ,
 .Xr tlphy 4 ,
 .Xr tqphy 4 ,
 .Xr ukphy 4 ,
 .Xr urlphy 4 ,
 .Xr ifconfig 8
+.Pp
+The OUI assignments list can be found at:
+.D1 http://standards.ieee.org/regauth/oui/index.shtml

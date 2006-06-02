@@ -1,4 +1,4 @@
-/*	$NetBSD: fortune.c,v 1.44 2004/11/05 21:30:32 dsl Exp $	*/
+/*	$NetBSD: fortune.c,v 1.49 2006/05/13 22:28:04 christos Exp $	*/
 
 /*-
  * Copyright (c) 1986, 1993
@@ -42,7 +42,7 @@ __COPYRIGHT("@(#) Copyright (c) 1986, 1993\n\
 #if 0
 static char sccsid[] = "@(#)fortune.c	8.1 (Berkeley) 5/31/93";
 #else
-__RCSID("$NetBSD: fortune.c,v 1.44 2004/11/05 21:30:32 dsl Exp $");
+__RCSID("$NetBSD: fortune.c,v 1.49 2006/05/13 22:28:04 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -507,36 +507,37 @@ add_file(percent, file, dir, head, tail, parent)
 	FILEDESC	*fp;
 	int		fd;
 	const char	*path;
-	char		*tpath, *offensive;
-	bool		was_malloc;
+	char		*tpath, *offensive, *tfile = strdup(file), *tf;
 	bool		isdir;
 
 	if (dir == NULL) {
-		path = file;
+		path = tfile;
 		tpath = NULL;
-		was_malloc = FALSE;
 	}
 	else {
 		tpath = do_malloc((unsigned int) (strlen(dir) + strlen(file) + 2));
 		(void) strcat(strcat(strcpy(tpath, dir), "/"), file);
 		path = tpath;
-		was_malloc = TRUE;
 	}
 	if ((isdir = is_dir(path)) && parent != NULL) {
-		if (was_malloc)
+		if (tpath)
 			free(tpath);
+		free(tfile);
 		return FALSE;	/* don't recurse */
 	}
 	offensive = NULL;
 	if (!isdir && parent == NULL && (All_forts || Offend) &&
 	    !is_off_name(path)) {
 		offensive = off_name(path);
-		was_malloc = TRUE;
 		if (Offend) {
-			if (was_malloc)
+			if (tpath) {
 				free(tpath);
+				tpath = NULL;
+			}
 			path = offensive;
-			file = off_name(file);
+			tf = off_name(tfile);
+			free(tfile);
+			tfile = tf;
 		}
 	}
 
@@ -551,23 +552,35 @@ over:
 		 * individual files -- if we're scanning a directory,
 		 * we'll pick up the -o file anyway.
 		 */
-		if (All_forts && offensive != NULL) {
+		if (All_forts && offensive != NULL && path != offensive) {
 			path = offensive;
-			if (was_malloc)
+			if (tpath) {
 				free(tpath);
-			offensive = NULL;
-			was_malloc = TRUE;
-			DPRINTF(1, (stderr, "\ttrying \"%s\"\n", path));
-			file = off_name(file);
+				tpath = NULL;
+			}
+			DPRINTF(1, (stderr, "\ttrying \"%s\"\n", tfile));
+			tf = off_name(tfile);
+			free(tfile);
+			tfile = tf;
 			goto over;
 		}
-		if (dir == NULL && file[0] != '/')
-			return add_file(percent, file, FORTDIR, head, tail,
+		if (dir == NULL && tfile[0] != '/') {
+			int n = add_file(percent, tfile, FORTDIR, head, tail,
 					parent);
+			free(tfile);
+			if (offensive)
+				free(offensive);
+			return n;
+		}
 		if (parent == NULL)
 			warn("Cannot open `%s'", path);
-		if (was_malloc)
+		if (tpath) {
 			free(tpath);
+			tpath = NULL;
+		}
+		free(tfile);
+		if (offensive)
+			free(offensive);
 		return FALSE;
 	}
 
@@ -576,7 +589,7 @@ over:
 	fp = new_fp();
 	fp->fd = fd;
 	fp->percent = percent;
-	fp->name = file;
+	fp->name = tfile;
 	fp->path = path;
 	fp->parent = parent;
 
@@ -586,8 +599,10 @@ over:
 	{
 		if (parent == NULL)
 			warnx("`%s' not a fortune file or directory", path);
-		if (was_malloc)
+		if (tpath) {
 			free(tpath);
+			tpath = NULL;
+		}
 		do_free(fp->datfile);
 		do_free(fp->posfile);
 		free(fp);
@@ -600,7 +615,7 @@ over:
 	 * we are scanning a directory, since the scan will pick up the
 	 * -o file anyway.
 	 */
-	if (All_forts && parent == NULL && !is_off_name(path))
+	if (All_forts && parent == NULL && !is_off_name(path) && offensive)
 		all_forts(fp, offensive);
 	if (*head == NULL)
 		*head = *tail = fp;

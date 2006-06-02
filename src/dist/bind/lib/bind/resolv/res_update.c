@@ -1,4 +1,4 @@
-/*	$NetBSD: res_update.c,v 1.1.1.1 2004/05/17 23:44:48 christos Exp $	*/
+/*	$NetBSD: res_update.c,v 1.1.1.3 2005/12/21 23:15:59 christos Exp $	*/
 
 #if !defined(lint) && !defined(SABER)
 static const char rcsid[] = "Id: res_update.c,v 1.6.2.4.4.2 2004/03/16 12:34:20 marka Exp";

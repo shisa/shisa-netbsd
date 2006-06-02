@@ -1,4 +1,4 @@
-#	$NetBSD: list,v 1.16 2005/01/13 03:50:08 lukem Exp $
+#	$NetBSD: list,v 1.23 2005/12/06 14:02:58 skrll Exp $
 
 SRCDIRS	bin
 
@@ -52,6 +52,7 @@ PROG	dkctl
 PROG	dmesg
 PROG	dump		rdump
 PROG	dump_lfs	rdump_lfs
+PROG	fdisk
 PROG	fsck
 PROG	fsck_ext2fs
 PROG	fsck_ffs
@@ -61,7 +62,7 @@ PROG	fsdb
 PROG	fsirand
 PROG	ifconfig
 PROG	init		init.bak
-PROG	lmcctl
+PROG	lmcconfig
 PROG	mbrlabel
 PROG	mknod
 PROG	modload
@@ -98,6 +99,7 @@ PROG	rndctl
 PROG	route
 PROG	routed
 PROG	savecore
+PROG	scan_ffs
 PROG	scsictl
 PROG	setkey
 PROG	shutdown
@@ -108,6 +110,7 @@ PROG	ttyflags
 PROG	tunefs
 PROG	umount
 PROG	wdogctl
+PROG	veriexecctl
 PROG	wsconsctl
 
 SRCDIRS	usr.bin
@@ -133,6 +136,11 @@ SRCDIRS	usr.sbin
 PROG	chown		chgrp
 PROG	chroot
 PROG	installboot
+PROG	vnconfig
+
+SRCDIRS	games
+
+PROG	tetris
 
 LIBS	liboverride.o
 LIBS	-lbz2 -lcrypt -ledit -lipsec -lkvm -ll -lm -lrmt -lcurses -ltermcap -lutil -lz -levent

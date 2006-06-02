@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile.pswrap,v 1.2.8.2 2005/04/06 20:56:43 tron Exp $
+#	$NetBSD: Makefile.pswrap,v 1.4 2005/03/20 23:49:06 lukem Exp $
 
 .SUFFIXES: .psw .c .h
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: ds1307.c,v 1.1 2003/09/30 00:35:31 thorpej Exp $	*/
+/*	$NetBSD: ds1307.c,v 1.5 2006/03/29 06:41:24 thorpej Exp $	*/
 
 /*
  * Copyright (c) 2003 Wasabi Systems, Inc.
@@ -76,8 +76,8 @@ const struct cdevsw dsrtc_cdevsw = {
 
 static int dsrtc_clock_read(struct dsrtc_softc *, struct clock_ymdhms *);
 static int dsrtc_clock_write(struct dsrtc_softc *, struct clock_ymdhms *);
-static int dsrtc_gettime(struct todr_chip_handle *, struct timeval *);
-static int dsrtc_settime(struct todr_chip_handle *, struct timeval *);
+static int dsrtc_gettime(struct todr_chip_handle *, volatile struct timeval *);
+static int dsrtc_settime(struct todr_chip_handle *, volatile struct timeval *);
 static int dsrtc_getcal(struct todr_chip_handle *, int *);
 static int dsrtc_setcal(struct todr_chip_handle *, int);
 
@@ -95,7 +95,7 @@ dsrtc_match(struct device *parent, struct cfdata *cf, void *arg)
 static void
 dsrtc_attach(struct device *parent, struct device *self, void *arg)
 {
-	struct dsrtc_softc *sc = (struct dsrtc_softc *)self;
+	struct dsrtc_softc *sc = device_private(self);
 	struct i2c_attach_args *ia = arg;
 
 	aprint_naive(": Real-time Clock/NVRAM\n");
@@ -116,7 +116,7 @@ dsrtc_attach(struct device *parent, struct device *self, void *arg)
 
 /*ARGSUSED*/
 int
-dsrtc_open(dev_t dev, int flag, int fmt, struct proc *p)
+dsrtc_open(dev_t dev, int flag, int fmt, struct lwp *l)
 {
 	struct dsrtc_softc *sc;
 
@@ -134,7 +134,7 @@ dsrtc_open(dev_t dev, int flag, int fmt, struct proc *p)
 
 /*ARGSUSED*/
 int
-dsrtc_close(dev_t dev, int flag, int fmt, struct proc *p)
+dsrtc_close(dev_t dev, int flag, int fmt, struct lwp *l)
 {
 	struct dsrtc_softc *sc;
 
@@ -222,7 +222,7 @@ dsrtc_write(dev_t dev, struct uio *uio, int flags)
 }
 
 static int
-dsrtc_gettime(struct todr_chip_handle *ch, struct timeval *tv)
+dsrtc_gettime(struct todr_chip_handle *ch, volatile struct timeval *tv)
 {
 	struct dsrtc_softc *sc = ch->cookie;
 	struct clock_ymdhms dt, check;
@@ -248,7 +248,7 @@ dsrtc_gettime(struct todr_chip_handle *ch, struct timeval *tv)
 }
 
 static int
-dsrtc_settime(struct todr_chip_handle *ch, struct timeval *tv)
+dsrtc_settime(struct todr_chip_handle *ch, volatile struct timeval *tv)
 {
 	struct dsrtc_softc *sc = ch->cookie;
 	struct clock_ymdhms dt;

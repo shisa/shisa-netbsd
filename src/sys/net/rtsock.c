@@ -1,4 +1,4 @@
-/*	$NetBSD: rtsock.c,v 1.75 2005/02/26 22:45:09 perry Exp $	*/
+/*	$NetBSD: rtsock.c,v 1.85 2006/05/27 23:08:11 elad Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -61,7 +61,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: rtsock.c,v 1.75 2005/02/26 22:45:09 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: rtsock.c,v 1.85 2006/05/27 23:08:11 elad Exp $");
 
 #include "opt_inet.h"
 
@@ -74,6 +74,7 @@ __KERNEL_RCSID(0, "$NetBSD: rtsock.c,v 1.75 2005/02/26 22:45:09 perry Exp $");
 #include <sys/domain.h>
 #include <sys/protosw.h>
 #include <sys/sysctl.h>
+#include <sys/kauth.h>
 
 #include <net/if.h>
 #include <net/route.h>
@@ -101,10 +102,12 @@ struct walkarg {
 static struct mbuf *rt_msg1(int, struct rt_addrinfo *, caddr_t, int);
 static int rt_msg2(int, struct rt_addrinfo *, caddr_t, struct walkarg *, int *);
 static int rt_xaddrs(u_char, const char *, const char *, struct rt_addrinfo *);
+static struct mbuf *rt_makeifannouncemsg(struct ifnet *, int, int,
+    struct rt_addrinfo *);
 static int sysctl_dumpentry(struct radix_node *, void *);
 static int sysctl_iflist(int, struct walkarg *, int);
 static int sysctl_rtable(SYSCTLFN_PROTO);
-static __inline void rt_adjustcount(int, int);
+static inline void rt_adjustcount(int, int);
 
 /* Sleazy use of local variables throughout file, warning!!!! */
 #define dst	info.rti_info[RTAX_DST]
@@ -115,7 +118,7 @@ static __inline void rt_adjustcount(int, int);
 #define ifaaddr	info.rti_info[RTAX_IFA]
 #define brdaddr	info.rti_info[RTAX_BRD]
 
-static __inline void
+static inline void
 rt_adjustcount(int af, int cnt)
 {
 	route_cb.any_count += cnt;
@@ -143,7 +146,7 @@ rt_adjustcount(int af, int cnt)
 /*ARGSUSED*/
 int
 route_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
-	struct mbuf *control, struct proc *p)
+	struct mbuf *control, struct lwp *l)
 {
 	int error = 0;
 	struct rawcb *rp = sotorawcb(so);
@@ -165,12 +168,12 @@ route_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
 	 * and send "safe" commands to the routing socket.
 	 */
 	if (req == PRU_ATTACH) {
-		if (p == 0)
+		if (l == 0)
 			error = EACCES;
 		else
 			error = raw_attach(so, (int)(long)nam);
 	} else
-		error = raw_usrreq(so, req, m, nam, control, p);
+		error = raw_usrreq(so, req, m, nam, control, l);
 
 	rp = sotorawcb(so);
 	if (req == PRU_ATTACH && rp) {
@@ -244,11 +247,11 @@ route_output(struct mbuf *m, ...)
 		senderr(EINVAL);
 	if (genmask) {
 		struct radix_node *t;
-		t = rn_addmask((caddr_t)genmask, 0, 1);
-		if (t && genmask->sa_len >= ((struct sockaddr *)t->rn_key)->sa_len &&
-		    Bcmp((caddr_t *)genmask + 1, (caddr_t *)t->rn_key + 1,
-		    ((struct sockaddr *)t->rn_key)->sa_len) - 1)
-			genmask = (struct sockaddr *)(t->rn_key);
+		t = rn_addmask(genmask, 0, 1);
+		if (t && genmask->sa_len >= ((const struct sockaddr *)t->rn_key)->sa_len &&
+		    Bcmp((const char *const *)genmask + 1, (const char *const *)t->rn_key + 1,
+		    ((const struct sockaddr *)t->rn_key)->sa_len) - 1)
+			genmask = (const struct sockaddr *)(t->rn_key);
 		else
 			senderr(ENOBUFS);
 	}
@@ -258,7 +261,7 @@ route_output(struct mbuf *m, ...)
 	 * is the only operation the non-superuser is allowed.
 	 */
 	if (rtm->rtm_type != RTM_GET &&
-	    suser(curproc->p_ucred, &curproc->p_acflag) != 0)
+	    kauth_authorize_generic(curproc->p_cred, KAUTH_GENERIC_ISSUSER, &curproc->p_acflag) != 0)
 		senderr(EACCES);
 
 	switch (rtm->rtm_type) {
@@ -296,20 +299,20 @@ route_output(struct mbuf *m, ...)
 		rt = (struct rtentry *)rn;
 		rt->rt_refcnt++;
 		if (rtm->rtm_type != RTM_GET) {/* XXX: too grotty */
-			struct radix_node *rn;
+			struct radix_node *rnn;
 			extern struct radix_node_head *mask_rnhead;
 
 			if (Bcmp(dst, rt_key(rt), dst->sa_len) != 0)
 				senderr(ESRCH);
-			if (netmask && (rn = rn_search(netmask,
+			if (netmask && (rnn = rn_search(netmask,
 					    mask_rnhead->rnh_treetop)))
-				netmask = (struct sockaddr *)rn->rn_key;
-			for (rn = rt->rt_nodes; rn; rn = rn->rn_dupedkey)
-				if (netmask == (struct sockaddr *)rn->rn_mask)
+				netmask = (const struct sockaddr *)rnn->rn_key;
+			for (rnn = rt->rt_nodes; rnn; rnn = rnn->rn_dupedkey)
+				if (netmask == (const struct sockaddr *)rnn->rn_mask)
 					break;
-			if (rn == 0)
+			if (rnn == 0)
 				senderr(ETOOMANYREFS);
-			rt = (struct rtentry *)rn;
+			rt = (struct rtentry *)rnn;
 		}
 
 		switch (rtm->rtm_type) {
@@ -478,7 +481,7 @@ rt_xaddrs(u_char rtmtype, const char *cp, const char *cplim, struct rt_addrinfo 
 	for (i = 0; (i < RTAX_MAX) && (cp < cplim); i++) {
 		if ((rtinfo->rti_addrs & (1 << i)) == 0)
 			continue;
-		rtinfo->rti_info[i] = sa = (struct sockaddr *)cp;
+		rtinfo->rti_info[i] = sa = (const struct sockaddr *)cp;
 		ADVANCE(cp, sa);
 	}
 
@@ -492,7 +495,7 @@ rt_xaddrs(u_char rtmtype, const char *cp, const char *cplim, struct rt_addrinfo 
 	}
 	/* Check for bad data length.  */
 	if (cp != cplim) {
-		if (i == RTAX_NETMASK + 1 &&
+		if (i == RTAX_NETMASK + 1 && sa &&
 		    cp - ROUNDUP(sa->sa_len) + sa->sa_len == cplim)
 			/*
 			 * The last sockaddr was netmask.
@@ -537,6 +540,7 @@ rt_msg1(int type, struct rt_addrinfo *rtinfo, caddr_t data, int datalen)
 		break;
 
 	case RTM_IFANNOUNCE:
+	case RTM_IEEE80211:
 		len = sizeof(struct if_announcemsghdr);
 		break;
 
@@ -566,7 +570,7 @@ rt_msg1(int type, struct rt_addrinfo *rtinfo, caddr_t data, int datalen)
 			continue;
 		rtinfo->rti_addrs |= (1 << i);
 		dlen = ROUNDUP(sa->sa_len);
-		m_copyback(m, len, dlen, (caddr_t)sa);
+		m_copyback(m, len, dlen, sa);
 		len += dlen;
 	}
 	if (m->m_pkthdr.len != len) {
@@ -819,6 +823,20 @@ rt_newaddrmsg(int cmd, struct ifaddr *ifa, int error, struct rtentry *rt)
 	}
 }
 
+static struct mbuf *
+rt_makeifannouncemsg(struct ifnet *ifp, int type, int what,
+    struct rt_addrinfo *info)
+{
+	struct if_announcemsghdr ifan;
+
+	memset(info, 0, sizeof(*info));
+	memset(&ifan, 0, sizeof(ifan));
+	ifan.ifan_index = ifp->if_index;
+	strlcpy(ifan.ifan_name, ifp->if_xname, sizeof(ifan.ifan_name));
+	ifan.ifan_what = what;
+	return rt_msg1(type, info, (caddr_t)&ifan, sizeof(ifan));
+}
+
 /*
  * This is called to generate routing socket messages indicating
  * network interface arrival and departure.
@@ -826,20 +844,57 @@ rt_newaddrmsg(int cmd, struct ifaddr *ifa, int error, struct rtentry *rt)
 void
 rt_ifannouncemsg(struct ifnet *ifp, int what)
 {
-	struct if_announcemsghdr ifan;
 	struct mbuf *m;
 	struct rt_addrinfo info;
 
 	if (route_cb.any_count == 0)
 		return;
-	memset(&info, 0, sizeof(info));
-	memset(&ifan, 0, sizeof(ifan));
-	ifan.ifan_index = ifp->if_index;
-	strlcpy(ifan.ifan_name, ifp->if_xname, sizeof(ifan.ifan_name));
-	ifan.ifan_what = what;
-	m = rt_msg1(RTM_IFANNOUNCE, &info, (caddr_t)&ifan, sizeof(ifan));
-	if (m == 0)
+	m = rt_makeifannouncemsg(ifp, RTM_IFANNOUNCE, what, &info);
+	if (m == NULL)
 		return;
+	route_proto.sp_protocol = 0;
+	raw_input(m, &route_proto, &route_src, &route_dst);
+}
+
+/*
+ * This is called to generate routing socket messages indicating
+ * IEEE80211 wireless events.
+ * XXX we piggyback on the RTM_IFANNOUNCE msg format in a clumsy way.
+ */
+void
+rt_ieee80211msg(struct ifnet *ifp, int what, void *data, size_t data_len)
+{
+	struct mbuf *m;
+	struct rt_addrinfo info;
+
+	if (route_cb.any_count == 0)
+		return;
+	m = rt_makeifannouncemsg(ifp, RTM_IEEE80211, what, &info);
+	if (m == NULL)
+		return;
+	/*
+	 * Append the ieee80211 data.  Try to stick it in the
+	 * mbuf containing the ifannounce msg; otherwise allocate
+	 * a new mbuf and append.
+	 *
+	 * NB: we assume m is a single mbuf.
+	 */
+	if (data_len > M_TRAILINGSPACE(m)) {
+		struct mbuf *n = m_get(M_NOWAIT, MT_DATA);
+		if (n == NULL) {
+			m_freem(m);
+			return;
+		}
+		(void)memcpy(mtod(n, void *), data, data_len);
+		n->m_len = data_len;
+		m->m_next = n;
+	} else if (data_len > 0) {
+		(void)memcpy(mtod(m, u_int8_t *) + m->m_len, data, data_len);
+		m->m_len += data_len;
+	}
+	if (m->m_flags & M_PKTHDR)
+		m->m_pkthdr.len += data_len;
+	mtod(m, struct if_announcemsghdr *)->ifan_msglen += data_len;
 	route_proto.sp_protocol = 0;
 	raw_input(m, &route_proto, &route_src, &route_dst);
 }
@@ -876,6 +931,7 @@ sysctl_dumpentry(struct radix_node *rn, void *v)
 		rtm->rtm_flags = rt->rt_flags;
 		rtm->rtm_use = rt->rt_use;
 		rtm->rtm_rmx = rt->rt_rmx;
+		KASSERT(rt->rt_ifp != NULL);
 		rtm->rtm_index = rt->rt_ifp->if_index;
 		rtm->rtm_errno = rtm->rtm_pid = rtm->rtm_seq = 0;
 		rtm->rtm_addrs = info.rti_addrs;
@@ -900,6 +956,8 @@ sysctl_iflist(int af, struct walkarg *w, int type)
 		if (w->w_arg && w->w_arg != ifp->if_index)
 			continue;
 		ifa = TAILQ_FIRST(&ifp->if_addrlist);
+		if (ifa == NULL)
+			continue;
 		ifpaddr = ifa->ifa_addr;
 		switch (type) {
 		case NET_RT_IFLIST:
@@ -1109,13 +1167,15 @@ struct domain routedomain = {
 
 SYSCTL_SETUP(sysctl_net_route_setup, "sysctl net.route subtree setup")
 {
+	const struct sysctlnode *rnode = NULL;
+
 	sysctl_createv(clog, 0, NULL, NULL,
 		       CTLFLAG_PERMANENT,
 		       CTLTYPE_NODE, "net", NULL,
 		       NULL, 0, NULL, 0,
 		       CTL_NET, CTL_EOL);
 
-	sysctl_createv(clog, 0, NULL, NULL,
+	sysctl_createv(clog, 0, NULL, &rnode,
 		       CTLFLAG_PERMANENT,
 		       CTLTYPE_NODE, "route",
 		       SYSCTL_DESCR("PF_ROUTE information"),
@@ -1127,4 +1187,10 @@ SYSCTL_SETUP(sysctl_net_route_setup, "sysctl net.route subtree setup")
 		       SYSCTL_DESCR("Routing table information"),
 		       sysctl_rtable, 0, NULL, 0,
 		       CTL_NET, PF_ROUTE, 0 /* any protocol */, CTL_EOL);
+	sysctl_createv(clog, 0, &rnode, NULL,
+		       CTLFLAG_PERMANENT,
+		       CTLTYPE_STRUCT, "stats",
+		       SYSCTL_DESCR("Routing statistics"),
+		       NULL, 0, &rtstat, sizeof(rtstat),
+		       CTL_CREATE, CTL_EOL);
 }

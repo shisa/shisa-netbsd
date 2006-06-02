@@ -1,4 +1,4 @@
-/*	$NetBSD: ntfs.c,v 1.8 2003/02/02 02:35:58 christos Exp $	*/
+/*	$NetBSD: ntfs.c,v 1.10 2006/05/11 11:56:38 yamt Exp $	*/
 
 /*-
  * Copyright (c) 1999 The NetBSD Foundation, Inc.
@@ -37,17 +37,14 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: ntfs.c,v 1.8 2003/02/02 02:35:58 christos Exp $");
+__RCSID("$NetBSD: ntfs.c,v 1.10 2006/05/11 11:56:38 yamt Exp $");
 
 #include <sys/param.h>
 #include <sys/time.h>
 #include <sys/proc.h>
-#include <sys/user.h>
 #include <sys/stat.h>
 #include <sys/vnode.h>
-#define _KERNEL
 #include <sys/mount.h>
-#undef _KERNEL
 
 #include <ntfs/ntfs.h>
 #undef dprintf
@@ -58,9 +55,7 @@ __RCSID("$NetBSD: ntfs.c,v 1.8 2003/02/02 02:35:58 christos Exp $");
 #include "fstat.h"
 
 int
-ntfs_filestat(vp, fsp)
-	struct vnode *vp;
-	struct filestat *fsp;
+ntfs_filestat(struct vnode *vp, struct filestat *fsp)
 {
 	struct ntnode ntnode;
 	struct fnode fn;

@@ -1,4 +1,4 @@
-/*	$NetBSD: common.c,v 1.27 2004/11/16 06:00:37 itojun Exp $	*/
+/*	$NetBSD: common.c,v 1.37 2006/05/25 02:53:10 christos Exp $	*/
 
 /*
  * Copyright (c) 1983, 1993
@@ -39,7 +39,7 @@
 #if 0
 static char sccsid[] = "@(#)common.c	8.5 (Berkeley) 4/28/95";
 #else
-__RCSID("$NetBSD: common.c,v 1.27 2004/11/16 06:00:37 itojun Exp $");
+__RCSID("$NetBSD: common.c,v 1.37 2006/05/25 02:53:10 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -60,53 +60,54 @@ __RCSID("$NetBSD: common.c,v 1.27 2004/11/16 06:00:37 itojun Exp $");
 #include <string.h>
 #include <ifaddrs.h>
 #include "lp.h"
+#include "lp.local.h"
 #include "pathnames.h"
 
 /*
  * Routines and data common to all the line printer functions.
  */
 
-char	*AF;		/* accounting file */
-long	 BR;		/* baud rate if lp is a tty */
-char	*CF;		/* name of cifplot filter (per job) */
-char	*DF;		/* name of tex filter (per job) */
-long	 DU;		/* daeomon user-id */
-long	 FC;		/* flags to clear if lp is a tty */
-char	*FF;		/* form feed string */
-long	 FS;		/* flags to set if lp is a tty */
-char	*GF;		/* name of graph(1G) filter (per job) */
-long	 HL;		/* print header last */
-char	*IF;		/* name of input filter (created per job) */
-char	*LF;		/* log file for error messages */
-char	*LO;		/* lock file name */
-char	*LP;		/* line printer device name */
-long	 MC;		/* maximum number of copies allowed */
-char	*MS;		/* stty flags to set if lp is a tty */
-long	 MX;		/* maximum number of blocks to copy */
-char	*NF;		/* name of ditroff filter (per job) */
-char	*OF;		/* name of output filter (created once) */
-char	*PF;		/* name of vrast filter (per job) */
-long	 PL;		/* page length */
-long	 PW;		/* page width */
-long	 PX;		/* page width in pixels */
-long	 PY;		/* page length in pixels */
-char	*RF;		/* name of fortran text filter (per job) */
-char    *RG;		/* resricted group */
-char	*RM;		/* remote machine name */
-char	*RP;		/* remote printer name */
-long	 RS;		/* restricted to those with local accounts */
-long	 RW;		/* open LP for reading and writing */
-long	 SB;		/* short banner instead of normal header */
-long	 SC;		/* suppress multiple copies */
-char	*SD;		/* spool directory */
-long	 SF;		/* suppress FF on each print job */
-long	 SH;		/* suppress header page */
-char	*ST;		/* status file name */
-char	*TF;		/* name of troff filter (per job) */
-char	*TR;		/* trailer string to be output when Q empties */
-char	*VF;		/* name of vplot filter (per job) */
-long	 XC;		/* flags to clear for local mode */
-long	 XS;		/* flags to set for local mode */
+const char	*AF;		/* accounting file */
+long		 BR;		/* baud rate if lp is a tty */
+const char	*CF;		/* name of cifplot filter (per job) */
+const char	*DF;		/* name of tex filter (per job) */
+long		 DU;		/* daeomon user-id */
+long		 FC;		/* flags to clear if lp is a tty */
+const char	*FF;		/* form feed string */
+long		 FS;		/* flags to set if lp is a tty */
+const char	*GF;		/* name of graph(1G) filter (per job) */
+long		 HL;		/* print header last */
+const char	*IF;		/* name of input filter (created per job) */
+const char	*LF;		/* log file for error messages */
+const char	*LO;		/* lock file name */
+const char	*LP;		/* line printer device name */
+long		 MC;		/* maximum number of copies allowed */
+const char	*MS;		/* stty flags to set if lp is a tty */
+long		 MX;		/* maximum number of blocks to copy */
+const char	*NF;		/* name of ditroff filter (per job) */
+const char	*OF;		/* name of output filter (created once) */
+const char	*PF;		/* name of postscript filter (per job) */
+long		 PL;		/* page length */
+long		 PW;		/* page width */
+long		 PX;		/* page width in pixels */
+long		 PY;		/* page length in pixels */
+const char	*RF;		/* name of fortran text filter (per job) */
+const char	*RG;		/* resricted group */
+const char	*RM;		/* remote machine name */
+const char	*RP;		/* remote printer name */
+long		 RS;		/* restricted to those with local accounts */
+long		 RW;		/* open LP for reading and writing */
+long		 SB;		/* short banner instead of normal header */
+long		 SC;		/* suppress multiple copies */
+const char	*SD;		/* spool directory */
+long		 SF;		/* suppress FF on each print job */
+long		 SH;		/* suppress header page */
+const char	*ST;		/* status file name */
+const char	*TF;		/* name of troff filter (per job) */
+const char	*TR;		/* trailer string to be output when Q empties */
+const char	*VF;		/* name of vplot/vrast filter (per job) */
+long		 XC;		/* flags to clear for local mode */
+long		 XS;		/* flags to set for local mode */
 
 char	line[BUFSIZ];
 int	remote;		/* true if sending files to a remote host */
@@ -115,34 +116,47 @@ extern uid_t	uid, euid;
 
 static int compar(const void *, const void *);
 
+const char *
+gethost(const char *hname)
+{
+	const char *p = strchr(hname, '@');
+	return p ? ++p : hname;
+}
+
 /*
- * Create a TCP connection to host "rhost" at port "rport".
- * If rport == 0, then use the printer service port.
- * Most of this code comes from rcmd.c.
+ * Create a TCP connection to host "rhost". If "rhost" is of the
+ * form port@host, use the specified port. Otherwise use the
+ * default printer port. Most of this code comes from rcmd.c.
  */
 int
-getport(char *rhost, int rport)
+getport(const char *rhost)
 {
 	struct addrinfo hints, *res, *r;
 	u_int timo = 1;
 	int s, lport = IPPORT_RESERVED - 1;
 	int error;
 	int refuse, trial;
-	char pbuf[NI_MAXSERV];
+	char hbuf[NI_MAXSERV], *ptr;
+	const char *port = "printer";
+	const char *hostname = rhost;
 
 	/*
 	 * Get the host address and port number to connect to.
 	 */
 	if (rhost == NULL)
 		fatal("no remote host to connect to");
-	memset(&hints, 0, sizeof(hints));
+	(void)strlcpy(hbuf, rhost, sizeof(hbuf));
+	for (ptr = hbuf; *ptr; ptr++) 
+		if (*ptr == '@') {
+			*ptr++ = '\0';
+			port = hbuf;
+			hostname = ptr;
+			break;
+		}
+	(void)memset(&hints, 0, sizeof(hints));
 	hints.ai_family = PF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
-	if (rport)
-		snprintf(pbuf, sizeof(pbuf), "%d", rport);
-	else
-		snprintf(pbuf, sizeof(pbuf), "printer");
-	error = getaddrinfo(rhost, pbuf, &hints, &res);
+	error = getaddrinfo(hostname, port, &hints, &res);
 	if (error)
 		fatal("printer/tcp: %s", gai_strerror(error));
 
@@ -221,10 +235,10 @@ int
 getq(struct queue **namelist[])
 {
 	struct dirent *d;
-	struct queue *q, **queue, **nqueue;
+	struct queue *q, **queue = NULL, **nqueue;
 	struct stat stbuf;
 	DIR *dirp;
-	u_int nitems, arraysz;
+	u_int nitems = 0, arraysz;
 
 	seteuid(euid);
 	dirp = opendir(SD);
@@ -239,11 +253,10 @@ getq(struct queue **namelist[])
 	 * and dividing it by a multiple of the minimum size entry. 
 	 */
 	arraysz = (int)(stbuf.st_size / 24);
-	queue = (struct queue **)malloc(arraysz * sizeof(struct queue *));
+	queue = calloc(arraysz, sizeof(struct queue *));
 	if (queue == NULL)
 		goto errdone;
 
-	nitems = 0;
 	while ((d = readdir(dirp)) != NULL) {
 		if (d->d_name[0] != 'c' || d->d_name[1] != 'f')
 			continue;	/* daemon control files only */
@@ -265,8 +278,12 @@ getq(struct queue **namelist[])
 		if (++nitems > arraysz) {
 			nqueue = (struct queue **)realloc(queue,
 				arraysz * 2 * sizeof(struct queue *));
-			if (nqueue == NULL)
+			if (nqueue == NULL) {
+				free(q);
 				goto errdone;
+			}
+			(void)memset(&nqueue[arraysz], 0,
+			    arraysz * sizeof(struct queueue *));
 			queue = nqueue;
 			arraysz *= 2;
 		}
@@ -279,8 +296,21 @@ getq(struct queue **namelist[])
 	return(nitems);
 
 errdone:
+	freeq(queue, nitems);
 	closedir(dirp);
 	return(-1);
+}
+
+void
+freeq(struct queue **namelist, u_int nitems)
+{
+	u_int i;
+	if (namelist == NULL)
+		return;
+	for (i = 0; i < nitems; i++)
+		if (namelist[i])
+			free(namelist[i]);
+	free(namelist);
 }
 
 /*
@@ -289,18 +319,21 @@ errdone:
 static int
 compar(const void *p1, const void *p2)
 {
-	if ((*(struct queue **)p1)->q_time < (*(struct queue **)p2)->q_time)
-		return(-1);
-	if ((*(struct queue **)p1)->q_time > (*(struct queue **)p2)->q_time)
-		return(1);
-	return(0);
+	const struct queue *const *q1 = p1;
+	const struct queue *const *q2 = p2;
+
+	if ((*q1)->q_time < (*q2)->q_time)
+		return -1;
+	if ((*q1)->q_time > (*q2)->q_time)
+		return 1;
+	return 0;
 }
 
 /*
  * Figure out whether the local machine is the same
  * as the remote machine (RM) entry (if it exists).
  */
-char *
+const char *
 checkremote(void)
 {
 	char lname[NI_MAXHOST], rname[NI_MAXHOST];
@@ -333,7 +366,7 @@ checkremote(void)
 	hints.ai_family = PF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
 	res = NULL;
-	error = getaddrinfo(RM, NULL, &hints, &res0);
+	error = getaddrinfo(gethost(RM), NULL, &hints, &res0);
 	if (error) {
 		(void)snprintf(errbuf, sizeof(errbuf),
 		    "unable to resolve remote machine %s: %s",
@@ -394,4 +427,60 @@ delay(int n)
 	tdelay.tv_sec = n / 1000;
 	tdelay.tv_nsec = (n % 1000) * 1000000;
 	nanosleep(&tdelay, NULL);
+}
+
+void
+getprintcap(const char *pr)
+{
+	char *cp;
+	const char *dp;
+	int i;
+
+	if ((i = cgetent(&bp, printcapdb, pr)) == -2)
+		fatal("can't open printer description file");
+	else if (i == -1)
+		fatal("unknown printer: %s", pr);
+	else if (i == -3)
+		fatal("potential reference loop detected in printcap file");
+
+	LP = cgetstr(bp, DEFLP, &cp) == -1 ? _PATH_DEFDEVLP : cp;
+	RP = cgetstr(bp, "rp", &cp) == -1 ? DEFLP : cp;
+	SD = cgetstr(bp, "sd", &cp) == -1 ? _PATH_DEFSPOOL : cp;
+	LO = cgetstr(bp, "lo", &cp) == -1 ? DEFLOCK : cp;
+	ST = cgetstr(bp, "st", &cp) == -1 ? DEFSTAT : cp;
+	RM = cgetstr(bp, "rm", &cp) == -1 ? NULL : cp;
+	if ((dp = checkremote()) != NULL)
+		printf("Warning: %s\n", dp);
+	LF = cgetstr(bp, "lf", &cp) == -1 ? _PATH_CONSOLE : cp;
+}
+
+/*
+ * Make sure there's some work to do before forking off a child
+ */
+int
+ckqueue(char *cap)
+{
+	struct dirent *d;
+	DIR *dirp;
+	const char *spooldir;
+	char *sd = NULL;
+	int rv = 0;
+
+	spooldir = cgetstr(cap, "sd", &sd) == -1 ? _PATH_DEFSPOOL : sd;
+	if ((dirp = opendir(spooldir)) == NULL) {
+		rv = -1;
+		goto out;
+	}
+	while ((d = readdir(dirp)) != NULL) {
+		if (d->d_name[0] != 'c' || d->d_name[1] != 'f')
+			continue;	/* daemon control files only */
+		rv = 1;
+		break;
+	}
+out:
+	if (dirp != NULL)
+		closedir(dirp);
+	if (spooldir != sd)
+		free(sd);
+	return (rv);
 }

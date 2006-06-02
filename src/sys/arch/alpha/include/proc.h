@@ -1,4 +1,4 @@
-/* $NetBSD: proc.h,v 1.14 2003/09/21 15:14:54 skd Exp $ */
+/* $NetBSD: proc.h,v 1.16 2005/12/24 20:06:46 perry Exp $ */
 
 /*
  * Copyright (c) 1994, 1995 Carnegie-Mellon University.
@@ -68,7 +68,7 @@ struct lwp;
 struct mdproc {
 					/* this process's syscall vector */
 	void	(*md_syscall)(struct lwp *, u_int64_t, struct trapframe *);
-	__volatile int md_astpending;	/* AST pending for this process */
+	volatile int md_astpending;	/* AST pending for this process */
 };
 
 

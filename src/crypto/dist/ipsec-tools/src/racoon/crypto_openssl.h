@@ -1,4 +1,4 @@
-/*	$NetBSD: crypto_openssl.h,v 1.1.1.2.2.2 2005/11/21 21:12:30 tron Exp $	*/
+/*	$NetBSD: crypto_openssl.h,v 1.3 2005/11/21 14:20:29 manu Exp $	*/
 
 /* Id: crypto_openssl.h,v 1.11 2004/11/13 11:28:01 manubsd Exp */
 

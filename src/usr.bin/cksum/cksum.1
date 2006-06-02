@@ -1,4 +1,4 @@
-.\"	$NetBSD: cksum.1,v 1.25.2.1 2005/09/12 12:17:35 tron Exp $
+.\"	$NetBSD: cksum.1,v 1.38 2006/05/05 22:07:22 elad Exp $
 .\"
 .\" Copyright (c) 1991, 1993
 .\"	The Regents of the University of California.  All rights reserved.
@@ -32,7 +32,7 @@
 .\"
 .\"	@(#)cksum.1	8.2 (Berkeley) 4/28/95
 .\"
-.Dd August 24, 2005
+.Dd April 24, 2006
 .Dt CKSUM 1
 .Os
 .Sh NAME
@@ -46,17 +46,21 @@
 .Nd display file checksums and block counts
 .Sh SYNOPSIS
 .Nm
-.Op Fl n
+.Op Fl nw
 .Oo
 .Fl a Ar algorithm |
+.Fl c Oo Ar file Oc |
 .Op Fl o Ar 1 | Ar 2
 .Oc
 .Op Ar
 .Nm sum
+.Op Fl w
+.Op Fl c Op Ar file
 .Op Ar
 .Nm md2
-.Op Fl n
+.Op Fl nw
 .Oo
+.Fl c Oo Ar file Oc |
 .Fl p |
 .Fl t |
 .Fl x |
@@ -64,8 +68,9 @@
 .Oc
 .Op Ar
 .Nm md4
-.Op Fl n
+.Op Fl nw
 .Oo
+.Fl c Oo Ar file Oc |
 .Fl p |
 .Fl t |
 .Fl x |
@@ -73,8 +78,9 @@
 .Oc
 .Op Ar
 .Nm md5
-.Op Fl n
+.Op Fl nw
 .Oo
+.Fl c Oo Ar file Oc |
 .Fl p |
 .Fl t |
 .Fl x |
@@ -82,8 +88,9 @@
 .Oc
 .Op Ar
 .Nm sha1
-.Op Fl n
+.Op Fl nw
 .Oo
+.Fl c Oo Ar file Oc |
 .Fl p |
 .Fl t |
 .Fl x |
@@ -91,8 +98,9 @@
 .Oc
 .Op Ar
 .Nm rmd160
-.Op Fl n
+.Op Fl nw
 .Oo
+.Fl c Oo Ar file Oc |
 .Fl p |
 .Fl t |
 .Fl x |
@@ -154,46 +162,11 @@ two programs is 160 bits in length, as opposed to 128.
 .Pp
 The options are as follows:
 .Bl -tag -width indent
-.It Fl 1
-Use the SHA1 algorithm.
-.Em This flag is deprecated and should not be used as it will be removed
-.Em in the future.
-.Em Please use the
-.Fl a
-.Em flag.
-.It Fl 2
-Use the MD2 algorithm.
-.Em This flag is deprecated and should not be used as it will be removed
-.Em in the future.
-.Em Please use the
-.Fl a
-.Em flag.
-.It Fl 4
-Use the MD4 algorithm.
-.Em This flag is deprecated and should not be used as it will be removed
-.Em in the future.
-.Em Please use the
-.Fl a
-.Em flag.
-.It Fl 5 , Fl m
-Use the MD5 algorithm.
-.Em This flag is deprecated and should not be used as it will be removed
-.Em in the future.
-.Em Please use the
-.Fl a
-.Em flag.
-.It Fl 6
-Use the RMD160 algorithm.
-.Em This flag is deprecated and should not be used as it will be removed
-.Em in the future.
-.Em Please use the
-.Fl a
-.Em flag.
 .It Fl a Ar algorithm
 When invoked as
 .Nm cksum ,
 use the specified
-.Pa algorithm .
+.Ar algorithm .
 Valid algorithms are MD2, MD4, MD5, SHA1, RMD160, SHA256, SHA384, SHA512,
 CRC, old1, and old2.
 Old1 and old2 are equal to
@@ -202,6 +175,20 @@ and
 .Fl o Ar 2 ,
 respectively.
 The default is CRC.
+.It Fl c Op Ar file
+Verify (check) files against a list of checksums.
+The list is read from
+.Ar file ,
+or from stdin if no filename is given.
+E.g. first run
+.Dl Ic md5 *.tgz \*[Gt] MD5
+.Dl Ic sha1 *.tgz \*[Gt] SHA1
+to generate a list of MD5 checksums in
+.Pa MD5 ,
+then use the following command to verify them:
+.Dl Ic cat MD5 SHA1 | cksum -c
+If an error is found during checksum verification, an error
+message is printed, and the program returns an error code of 1.
 .It Fl o
 Use historic algorithms instead of the (superior) default one.
 .Pp
@@ -238,6 +225,10 @@ replaced with the size of the file in blocks.
 For historic reasons, the block size is 1024 for algorithm 1 and 512
 for algorithm 2.
 Partial blocks are rounded up.
+.It Fl w
+Print warnings about malformed checksum files when verifying
+checksums with
+.Fl c .
 .El
 .Pp
 The following options apply only when using the one of the message
@@ -314,6 +305,9 @@ and
 .Nm sum
 utilities exit 0 on success, and \*[Gt]0 if an error occurs.
 .Sh SEE ALSO
+.Xr openssl 1 ,
+.Xr mtree 8
+.Pp
 The default calculation is identical to that given in pseudo-code
 in the following
 .Tn ACM
@@ -362,6 +356,10 @@ and
 .Nm rmd160
 was added in
 .Nx 1.6 .
+The functionality to verify checksum stored in a file
+.Pq Fl c
+first appeared in
+.Nx 4.0 .
 .\" .Pp
 .\" The
 .\" .Nm sum

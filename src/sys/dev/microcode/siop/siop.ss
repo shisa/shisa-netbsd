@@ -1,4 +1,4 @@
-;	$NetBSD: siop.ss,v 1.19.2.1 2005/11/21 20:55:44 tron Exp $
+;	$NetBSD: siop.ss,v 1.20 2005/11/18 23:10:32 bouyer Exp $
 
 ;
 ;  Copyright (c) 2000 Manuel Bouyer.

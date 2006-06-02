@@ -1,4 +1,4 @@
-#	$NetBSD: asn1.inc,v 1.5 2003/07/24 14:16:31 itojun Exp $
+#	$NetBSD: asn1.inc,v 1.7 2006/03/17 20:47:45 dsl Exp $
 #
 #	@(#) Copyright (c) 1995 Simon J. Gerraty
 #
@@ -7,9 +7,8 @@
 
 .PATH:	${OPENSSLSRC}/crypto/asn1
 
-CPPFLAGS+=	-I${OPENSSLSRC}/crypto/asn1
 
-SRCS+=	a_object.c a_bitstr.c a_utctm.c a_gentm.c a_time.c a_int.c a_octet.c \
+ASN1_SRCS = a_object.c a_bitstr.c a_utctm.c a_gentm.c a_time.c a_int.c a_octet.c \
 	a_print.c a_type.c a_set.c a_dup.c a_d2i_fp.c a_i2d_fp.c \
 	a_enum.c a_utf8.c a_sign.c a_digest.c a_verify.c a_mbstr.c a_strex.c \
 	x_algor.c x_val.c x_pubkey.c x_sig.c x_req.c x_attrib.c x_bignum.c \
@@ -20,4 +19,10 @@ SRCS+=	a_object.c a_bitstr.c a_utctm.c a_gentm.c a_time.c a_int.c a_octet.c \
 	f_int.c f_string.c n_pkey.c \
 	f_enum.c a_hdr.c x_pkey.c a_bool.c x_exten.c \
 	asn1_par.c asn1_lib.c asn1_err.c a_meth.c a_bytes.c a_strnid.c \
-	evp_asn1.c asn_pack.c p5_pbe.c p5_pbev2.c p8_pkey.c asn_moid.c
+	evp_asn1.c asn_pack.c p5_pbe.c p5_pbev2.c p8_pkey.c asn_moid.c \
+	asn1_gen.c
+SRCS += ${ASN1_SRCS}
+
+.for cryptosrc in ${ASN1_SRCS}
+CPPFLAGS.${cryptosrc} = -I${OPENSSLSRC}/crypto/asn1
+.endfor

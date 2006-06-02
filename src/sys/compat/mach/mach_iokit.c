@@ -1,4 +1,4 @@
-/*	$NetBSD: mach_iokit.c,v 1.31 2005/02/26 23:10:19 perry Exp $ */
+/*	$NetBSD: mach_iokit.c,v 1.34 2006/03/07 03:32:06 thorpej Exp $ */
 
 /*-
  * Copyright (c) 2003 The NetBSD Foundation, Inc.
@@ -36,10 +36,9 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "opt_ktrace.h"
 #include "opt_compat_darwin.h"
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mach_iokit.c,v 1.31 2005/02/26 23:10:19 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: mach_iokit.c,v 1.34 2006/03/07 03:32:06 thorpej Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -698,7 +697,7 @@ mach_io_registry_entry_get_properties(args)
 		return mach_iokit_error(args, MACH_IOKIT_EINVAL);
 	size = strlen(mid->mid_properties) + 1; /* Include trailing zero */
 
-	if ((error = mach_ool_copyout(l->l_proc,
+	if ((error = mach_ool_copyout(l,
 	    mid->mid_properties, &uaddr, size, MACH_OOL_TRACE)) != 0) {
 #ifdef DEBUG_MACH
 		printf("pid %d.%d: copyout iokit properties failed\n",
@@ -766,8 +765,8 @@ mach_io_registry_entry_get_property(args)
 	size = strlen(mip->mip_value) + 1; /* Include trailing zero */
 
 	/* And copyout its associated value */
-	if ((error = mach_ool_copyout(l->l_proc,
-	    (void *)mip->mip_value, &uaddr, size, MACH_OOL_TRACE)) != 0) {
+	if ((error = mach_ool_copyout(l,
+	    mip->mip_value, &uaddr, size, MACH_OOL_TRACE)) != 0) {
 #ifdef DEBUG_MACH
 		printf("pid %d.%d: copyout iokit property failed\n",
 		    l->l_proc->p_pid, l->l_lid);

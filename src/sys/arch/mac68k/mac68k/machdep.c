@@ -1,4 +1,4 @@
-/*	$NetBSD: machdep.c,v 1.303.2.1 2005/11/01 22:33:25 tron Exp $	*/
+/*	$NetBSD: machdep.c,v 1.308 2005/12/24 20:07:15 perry Exp $	*/
 
 /*
  * Copyright (c) 1982, 1990 The Regents of the University of California.
@@ -107,7 +107,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.303.2.1 2005/11/01 22:33:25 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.308 2005/12/24 20:07:15 perry Exp $");
 
 #include "opt_adb.h"
 #include "opt_ddb.h"
@@ -266,7 +266,7 @@ int	cpu_dump(int (*)(dev_t, daddr_t, caddr_t, size_t), daddr_t *);
 void	cpu_init_kcore_hdr(void);
 
 void		getenvvars(u_long, char *);
-static long	getenv(char *);
+static long	getenv(const char *);
 
 /* functions called from locore.s */
 void	dumpsys(void);
@@ -423,7 +423,7 @@ cpu_startup(void)
 {
 	int vers;
 	vaddr_t minaddr, maxaddr;
-	int delay;
+	int xdelay;
 	char pbuf[9];
 
 	/*
@@ -434,7 +434,7 @@ cpu_startup(void)
 	/*
 	 * Good {morning,afternoon,evening,night}.
 	 */
-	printf(version);
+	printf("%s%s", copyright, version);
 	identifycpu();
 
 	vers = mac68k_machine.booter_version;
@@ -448,7 +448,7 @@ cpu_startup(void)
 		printf("Booter version %d.%d is necessary to fully support\n",
 		    CURRENTBOOTERVER / 100, CURRENTBOOTERVER % 100);
 		printf("this kernel.\n\n");
-		for (delay = 0; delay < 1000000; delay++);
+		for (xdelay = 0; xdelay < 1000000; xdelay++);
 	}
 	format_bytes(pbuf, sizeof(pbuf), ctob(physmem));
 	printf("total memory = %s\n", pbuf);
@@ -974,14 +974,14 @@ SYSCTL_SETUP(sysctl_machdep_setup, "sysctl machdep subtree setup")
 }
 
 int
-cpu_exec_aout_makecmds(struct proc *p, struct exec_package *epp)
+cpu_exec_aout_makecmds(struct lwp *l, struct exec_package *epp)
 {
 	int error = ENOEXEC;
 
 #ifdef COMPAT_NOMID
 	/* Check to see if MID == 0. */
 	if (((struct exec *)epp->ep_hdr)->a_midmag == ZMAGIC)
-		return exec_aout_prep_oldzmagic(p, epp);
+		return exec_aout_prep_oldzmagic(l->l_proc, epp);
 #endif
 
 	return error;
@@ -1156,7 +1156,7 @@ getenvvars(u_long flag, char *buf)
 }
 
 static long
-getenv(char *str)
+getenv(const char *str)
 {
 	/*
 	 * Returns the value of the environment variable "str".
@@ -1167,7 +1167,8 @@ getenv(char *str)
 	 * there without an "=val".
 	 */
 
-	char *s, *s1;
+	char *s;
+	const char *s1;
 	int val, base;
 
 	s = envbuf;
@@ -2027,7 +2028,7 @@ static void
 identifycpu(void)
 {
 	extern u_int delay_factor;
-	char *mpu;
+	const char *mpu;
 
 	switch (cputype) {
 	case CPU_68020:
@@ -2339,7 +2340,7 @@ gray_bar(void)
    	3) restore regs
 */
 
-	__asm __volatile (
+	__asm volatile (
 			"	movl %a0,%sp@-;"
 			"	movl %a1,%sp@-;"
 			"	movl %d0,%sp@-;"
@@ -2355,7 +2356,7 @@ gray_bar(void)
 			((u_long *)videoaddr)[gray_nextaddr++] = 0x00000000;
 	}
 
-	__asm __volatile (
+	__asm volatile (
 			"	movl %sp@+,%d1;"
 			"	movl %sp@+,%d0;"
 			"	movl %sp@+,%a1;"
@@ -2429,10 +2430,10 @@ get_physical(u_int addr, u_long * phys)
 	return 1;
 }
 
-static void	check_video(char *, u_long, u_long);
+static void	check_video(const char *, u_long, u_long);
 
 static void
-check_video(char *id, u_long limit, u_long maxm)
+check_video(const char *id, u_long limit, u_long maxm)
 {
 	u_long addr, phys;
 
@@ -2747,7 +2748,7 @@ printstar(void)
 	 * Be careful as we assume that no registers are clobbered
 	 * when we call this from assembly.
 	 */
-	__asm __volatile (
+	__asm volatile (
 			"	movl %a0,%sp@-;"
 			"	movl %a1,%sp@-;"
 			"	movl %d0,%sp@-;"
@@ -2755,7 +2756,7 @@ printstar(void)
 
 	/* printf("*"); */
 
-	__asm __volatile (
+	__asm volatile (
 			"	movl %sp@+,%d1;"
 			"	movl %sp@+,%d0;"
 			"	movl %sp@+,%a1;"

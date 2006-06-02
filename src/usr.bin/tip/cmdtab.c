@@ -1,4 +1,4 @@
-/*	$NetBSD: cmdtab.c,v 1.5 2003/08/07 11:16:17 agc Exp $	*/
+/*	$NetBSD: cmdtab.c,v 1.7 2006/04/03 02:06:44 tls Exp $	*/
 
 /*
  * Copyright (c) 1983, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)cmdtab.c	8.1 (Berkeley) 6/6/93";
 #endif
-__RCSID("$NetBSD: cmdtab.c,v 1.5 2003/08/07 11:16:17 agc Exp $");
+__RCSID("$NetBSD: cmdtab.c,v 1.7 2006/04/03 02:06:44 tls Exp $");
 #endif /* not lint */
 
 #include "tip.h"
@@ -47,9 +47,8 @@ esctable_t etable[] = {
 	{ 'p',	NORM,	"put file to remote UNIX",	 cu_put },
 	{ '|',	NORM,	"pipe remote file",		 pipefile },
 	{ '$',	NORM,	"pipe local command to remote host", pipeout },
-#ifdef CONNECT
 	{ 'C',  NORM,	"connect program to remote host",consh },
-#endif
+	{ '+',	NORM,	"connect program to remote host",consh },
 	{ 'c',	NORM,	"change directory",		 chdirectory },
 	{ '.',	NORM,	"exit from tip",		 finish },
 	{CTRL('d'),NORM,"exit from tip",		 finish },

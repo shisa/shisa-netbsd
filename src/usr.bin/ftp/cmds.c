@@ -1,4 +1,4 @@
-/*	$NetBSD: cmds.c,v 1.111.2.5 2005/07/24 10:32:29 tron Exp $	*/
+/*	$NetBSD: cmds.c,v 1.118 2006/01/31 20:05:35 christos Exp $	*/
 
 /*-
  * Copyright (c) 1996-2005 The NetBSD Foundation, Inc.
@@ -103,7 +103,7 @@
 #if 0
 static char sccsid[] = "@(#)cmds.c	8.6 (Berkeley) 10/9/94";
 #else
-__RCSID("$NetBSD: cmds.c,v 1.111.2.5 2005/07/24 10:32:29 tron Exp $");
+__RCSID("$NetBSD: cmds.c,v 1.118 2006/01/31 20:05:35 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -264,7 +264,7 @@ changetype(int newtype, int show)
 		newtype = TYPE_I;
 	if (newtype == curtype)
 		return;
-	if (debug == 0 && show == 0)
+	if (ftp_debug == 0 && show == 0)
 		verbose = 0;
 	for (p = types; p->t_name; p++)
 		if (newtype == p->t_type)
@@ -1046,7 +1046,7 @@ setgate(int argc, char *argv[])
 			gatemode = 0;
 		else {
 			if (argc == 3)
-				gateport = xstrdup(argv[2]);
+				gateport = ftp_strdup(argv[2]);
 			(void)strlcpy(gsbuf, argv[1], sizeof(gsbuf));
 			gateserver = gsbuf;
 			gatemode = 1;
@@ -1099,9 +1099,9 @@ setdebug(int argc, char *argv[])
 		return;
 	} else if (argc == 2) {
 		if (strcasecmp(argv[1], "on") == 0)
-			debug = 1;
+			ftp_debug = 1;
 		else if (strcasecmp(argv[1], "off") == 0)
-			debug = 0;
+			ftp_debug = 0;
 		else {
 			int val;
 
@@ -1112,16 +1112,16 @@ setdebug(int argc, char *argv[])
 				code = -1;
 				return;
 			}
-			debug = val;
+			ftp_debug = val;
 		}
 	} else
-		debug = !debug;
-	if (debug)
+		ftp_debug = !ftp_debug;
+	if (ftp_debug)
 		options |= SO_DEBUG;
 	else
 		options &= ~SO_DEBUG;
-	fprintf(ttyout, "Debugging %s (debug=%d).\n", onoff(debug), debug);
-	code = debug > 0;
+	fprintf(ttyout, "Debugging %s (ftp_debug=%d).\n", onoff(ftp_debug), ftp_debug);
+	code = ftp_debug > 0;
 }
 
 /*
@@ -1332,7 +1332,7 @@ ls(int argc, char *argv[])
 		if (EMPTYSTRING(p))
 			p = DEFAULTPAGER;
 		len = strlen(p) + 2;
-		locfile = xmalloc(len);
+		locfile = ftp_malloc(len);
 		locfile[0] = '|';
 		(void)strlcpy(locfile + 1, p, len - 1);
 		freelocfile = 1;
@@ -1436,7 +1436,7 @@ shell(int argc, char *argv[])
 		else
 			namep++;
 		(void)strlcpy(shellnam, namep, sizeof(shellnam));
-		if (debug) {
+		if (ftp_debug) {
 			fputs(shell, ttyout);
 			putc('\n', ttyout);
 		}
@@ -2534,7 +2534,7 @@ lpage(int argc, char *argv[])
 	if (EMPTYSTRING(p))
 		p = DEFAULTPAGER;
 	len = strlen(p) + strlen(locfile) + 2;
-	pager = xmalloc(len);
+	pager = ftp_malloc(len);
 	(void)strlcpy(pager, p,		len);
 	(void)strlcat(pager, " ",	len);
 	(void)strlcat(pager, locfile,	len);
@@ -2564,7 +2564,7 @@ page(int argc, char *argv[])
 	if (EMPTYSTRING(p))
 		p = DEFAULTPAGER;
 	len = strlen(p) + 2;
-	pager = xmalloc(len);
+	pager = ftp_malloc(len);
 	pager[0] = '|';
 	(void)strlcpy(pager + 1, p, len - 1);
 
@@ -2646,7 +2646,7 @@ setoption(int argc, char *argv[])
 			return;
 		}
 		FREEPTR(o->value);
-		o->value = xstrdup(argv[2]);
+		o->value = ftp_strdup(argv[2]);
 		if (verbose)
 			fprintf(ttyout, "Setting `%s' to `%s'.\n",
 			    o->name, o->value);

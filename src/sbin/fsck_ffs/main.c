@@ -1,4 +1,4 @@
-/*	$NetBSD: main.c,v 1.57 2005/01/20 15:29:40 xtraeme Exp $	*/
+/*	$NetBSD: main.c,v 1.60 2005/09/23 12:10:34 jmmv Exp $	*/
 
 /*
  * Copyright (c) 1980, 1986, 1993
@@ -39,7 +39,7 @@ __COPYRIGHT("@(#) Copyright (c) 1980, 1986, 1993\n\
 #if 0
 static char sccsid[] = "@(#)main.c	8.6 (Berkeley) 5/14/95";
 #else
-__RCSID("$NetBSD: main.c,v 1.57 2005/01/20 15:29:40 xtraeme Exp $");
+__RCSID("$NetBSD: main.c,v 1.60 2005/09/23 12:10:34 jmmv Exp $");
 #endif
 #endif /* not lint */
 
@@ -70,7 +70,7 @@ __RCSID("$NetBSD: main.c,v 1.57 2005/01/20 15:29:40 xtraeme Exp $");
 int	returntosingle;
 int	progress = 0;
 
-static int	argtoi(int, char *, char *, int);
+static int	argtoi(int, const char *, const char *, int);
 static int	checkfilesys(const char *, char *, long, int);
 static void	usage(void);
 
@@ -204,7 +204,7 @@ main(int argc, char *argv[])
 }
 
 static int
-argtoi(int flag, char *req, char *str, int base)
+argtoi(int flag, const char *req, const char *str, int base)
 {
 	char *cp;
 	int ret;
@@ -332,8 +332,8 @@ checkfilesys(const char *filesys, char *mntpt, long auxdata, int child)
 	 */
 	n_ffree = sblock->fs_cstotal.cs_nffree;
 	n_bfree = sblock->fs_cstotal.cs_nbfree;
-	pwarn("%d files, %lld used, %lld free ",
-	    n_files, (long long)n_blks,
+	pwarn("%llu files, %lld used, %lld free ",
+	    (unsigned long long)n_files, (long long)n_blks,
 	    (long long)(n_ffree + sblock->fs_frag * n_bfree));
 	printf("(%lld frags, %lld blocks, %lld.%lld%% fragmentation)\n",
 	    (long long)n_ffree, (long long)n_bfree,
@@ -342,7 +342,7 @@ checkfilesys(const char *filesys, char *mntpt, long auxdata, int child)
 		/ (daddr_t)sblock->fs_dsize) % 10));
 	if (debug &&
 	    (n_files -= maxino - ROOTINO - sblock->fs_cstotal.cs_nifree))
-		printf("%d files missing\n", n_files);
+		printf("%llu files missing\n", (unsigned long long)n_files);
 	if (debug) {
 		n_blks += sblock->fs_ncg *
 			(cgdmin(sblock, 0) - cgsblock(sblock, 0));
@@ -359,7 +359,8 @@ checkfilesys(const char *filesys, char *mntpt, long auxdata, int child)
 		if (zlnhead != NULL) {
 			printf("The following zero link count inodes remain:");
 			for (zlnp = zlnhead; zlnp; zlnp = zlnp->next)
-				printf(" %u,", zlnp->zlncnt);
+				printf(" %llu,",
+				    (unsigned long long)zlnp->zlncnt);
 			printf("\n");
 		}
 	}
@@ -421,8 +422,6 @@ checkfilesys(const char *filesys, char *mntpt, long auxdata, int child)
 
 			if (flags & MNT_RDONLY) {
 				args.fspec = 0;
-				args.export.ex_flags = 0;
-				args.export.ex_root = 0;
 				flags |= MNT_UPDATE | MNT_RELOAD;
 				ret = mount(MOUNT_FFS, "/", flags, &args);
 				if (ret == 0)

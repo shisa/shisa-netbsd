@@ -1,4 +1,4 @@
-/*	$NetBSD: sequencer.c,v 1.27 2005/02/27 00:26:58 perry Exp $	*/
+/*	$NetBSD: sequencer.c,v 1.30 2005/12/11 12:20:53 christos Exp $	*/
 
 /*
  * Copyright (c) 1998 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: sequencer.c,v 1.27 2005/02/27 00:26:58 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: sequencer.c,v 1.30 2005/12/11 12:20:53 christos Exp $");
 
 #include "sequencer.h"
 
@@ -127,8 +127,8 @@ int seq_drain(struct sequencer_softc *);
 void seq_startoutput(struct sequencer_softc *);
 void seq_timeout(void *);
 int seq_to_new(seq_event_rec *, struct uio *);
-static int seq_sleep_timo(int *, char *, int);
-static int seq_sleep(int *, char *);
+static int seq_sleep_timo(int *, const char *, int);
+static int seq_sleep(int *, const char *);
 static void seq_wakeup(int *);
 
 struct midi_softc;
@@ -171,10 +171,10 @@ sequencerattach(n)
 }
 
 int
-sequenceropen(dev, flags, ifmt, p)
+sequenceropen(dev, flags, ifmt, l)
 	dev_t dev;
 	int flags, ifmt;
-	struct proc *p;
+	struct lwp *l;
 {
 	int unit = SEQUENCERUNIT(dev);
 	struct sequencer_softc *sc;
@@ -233,7 +233,7 @@ sequenceropen(dev, flags, ifmt, p)
 static int
 seq_sleep_timo(chan, label, timo)
 	int *chan;
-	char *label;
+	const char *label;
 	int timo;
 {
 	int st;
@@ -255,7 +255,7 @@ seq_sleep_timo(chan, label, timo)
 static int
 seq_sleep(chan, label)
 	int *chan;
-	char *label;
+	const char *label;
 {
 	return seq_sleep_timo(chan, label, 0);
 }
@@ -319,10 +319,10 @@ seq_startoutput(sc)
 }
 
 int
-sequencerclose(dev, flags, ifmt, p)
+sequencerclose(dev, flags, ifmt, l)
 	dev_t dev;
 	int flags, ifmt;
-	struct proc *p;
+	struct lwp *l;
 {
 	struct sequencer_softc *sc = &seqdevs[SEQUENCERUNIT(dev)];
 	int n, s;
@@ -488,12 +488,12 @@ sequencerwrite(dev, uio, ioflag)
 }
 
 int
-sequencerioctl(dev, cmd, addr, flag, p)
+sequencerioctl(dev, cmd, addr, flag, l)
 	dev_t dev;
 	u_long cmd;
 	caddr_t addr;
 	int flag;
-	struct proc *p;
+	struct lwp *l;
 {
 	struct sequencer_softc *sc = &seqdevs[SEQUENCERUNIT(dev)];
 	struct synth_info *si;
@@ -514,8 +514,8 @@ sequencerioctl(dev, cmd, addr, flag, p)
 		if (*(int *)addr) {
 			if (sc->async)
 				return EBUSY;
-			sc->async = p;
-			DPRINTF(("sequencer_ioctl: FIOASYNC %p\n", p));
+			sc->async = l->l_proc;
+			DPRINTF(("sequencer_ioctl: FIOASYNC %p\n", l));
 		} else
 			sc->async = 0;
 		break;
@@ -625,12 +625,12 @@ sequencerioctl(dev, cmd, addr, flag, p)
 	case SEQUENCER_GETTIME:
 	{
 		struct timeval now;
-		u_long t;
+		u_long tx;
 		microtime(&now);
 		SUBTIMEVAL(&now, &sc->timer.start);
-		t = now.tv_sec * 1000000 + now.tv_usec;
-		t /= sc->timer.tick;
-		*(int *)addr = t;
+		tx = now.tv_sec * 1000000 + now.tv_usec;
+		tx /= sc->timer.tick;
+		*(int *)addr = tx;
 		break;
 	}
 
@@ -643,10 +643,10 @@ sequencerioctl(dev, cmd, addr, flag, p)
 }
 
 int
-sequencerpoll(dev, events, p)
+sequencerpoll(dev, events, l)
 	dev_t dev;
 	int events;
-	struct proc *p;
+	struct lwp *l;
 {
 	struct sequencer_softc *sc = &seqdevs[SEQUENCERUNIT(dev)];
 	int revents = 0;
@@ -663,10 +663,10 @@ sequencerpoll(dev, events, p)
 
 	if (revents == 0) {
 		if (events & (POLLIN | POLLRDNORM))
-			selrecord(p, &sc->rsel);
+			selrecord(l, &sc->rsel);
 
 		if (events & (POLLOUT | POLLWRNORM))
-			selrecord(p, &sc->wsel);
+			selrecord(l, &sc->wsel);
 	}
 
 	return revents;
@@ -932,7 +932,7 @@ seq_do_sysex(sc, b)
 {
 	int dev, i;
 	struct midi_dev *md;
-	u_int8_t c, *buf = &b->arr[2];
+	u_int8_t c, *bf = &b->arr[2];
 
 	dev = SEQ_EDEV(b);
 	if (dev < 0 || dev >= sc->nmidi)
@@ -946,10 +946,10 @@ seq_do_sysex(sc, b)
 		sc->doingsysex = 1;
 	}
 
-	for (i = 0; i < 6 && buf[i] != 0xff; i++)
+	for (i = 0; i < 6 && bf[i] != 0xff; i++)
 		;
-	midiseq_out(md, buf, i, 0);
-	if (i < 6 || (i > 0 && buf[i-1] == MIDI_SYSEX_END))
+	midiseq_out(md, bf, i, 0);
+	if (i < 6 || (i > 0 && bf[i-1] == MIDI_SYSEX_END))
 		sc->doingsysex = 0;
 	return (0);
 }
@@ -1068,7 +1068,7 @@ seq_to_new(ev, uio)
 	struct uio *uio;
 {
 	int cmd, chan, note, parm;
-	u_int32_t delay;
+	u_int32_t tmp_delay;
 	int error;
 
 	cmd = SEQ_CMD(ev);
@@ -1103,10 +1103,10 @@ seq_to_new(ev, uio)
 		SEQ_EPARM(ev) = parm;
 		break;
 	case SEQOLD_WAIT:
-		delay = *(u_int32_t *)ev->arr >> 8;
+		tmp_delay = *(u_int32_t *)ev->arr >> 8;
 		SEQ_CMD(ev) = SEQ_TIMING;
 		SEQ_TCMD(ev) = TMR_WAIT_REL;
-		*(u_int32_t *)&ev->arr[4] = delay;
+		*(u_int32_t *)&ev->arr[4] = tmp_delay;
 		break;
 	case SEQOLD_SYNCTIMER:
 		SEQ_CMD(ev) = SEQ_TIMING;
@@ -1234,21 +1234,21 @@ midiseq_reset(md)
 }
 
 int
-midiseq_out(md, buf, cc, chk)
+midiseq_out(md, bf, cc, chk)
 	struct midi_dev *md;
-	u_char *buf;
+	u_char *bf;
 	u_int cc;
 	int chk;
 {
-	DPRINTFN(5, ("midiseq_out: m=%p, unit=%d, buf[0]=0x%02x, cc=%d\n",
-		     md->msc, md->unit, buf[0], cc));
+	DPRINTFN(5, ("midiseq_out: m=%p, unit=%d, bf[0]=0x%02x, cc=%d\n",
+		     md->msc, md->unit, bf[0], cc));
 
 	/* The MIDI "status" byte does not have to be repeated. */
-	if (chk && md->last_cmd == buf[0])
-		buf++, cc--;
+	if (chk && md->last_cmd == bf[0])
+		bf++, cc--;
 	else
-		md->last_cmd = buf[0];
-	return midi_writebytes(md->unit, buf, cc);
+		md->last_cmd = bf[0];
+	return midi_writebytes(md->unit, bf, cc);
 }
 
 int
@@ -1256,7 +1256,7 @@ midiseq_noteon(md, chan, note, vel)
 	struct midi_dev *md;
 	int chan, note, vel;
 {
-	u_char buf[3];
+	u_char bf[3];
 
 	DPRINTFN(6, ("midiseq_noteon 0x%02x %d %d\n",
 		     MIDI_NOTEON | chan, note, vel));
@@ -1265,10 +1265,10 @@ midiseq_noteon(md, chan, note, vel)
 		return EINVAL;
 	if (vel < 0) vel = 0;
 	if (vel > 127) vel = 127;
-	buf[0] = MIDI_NOTEON | chan;
-	buf[1] = note;
-	buf[2] = vel;
-	return midiseq_out(md, buf, 3, 1);
+	bf[0] = MIDI_NOTEON | chan;
+	bf[1] = note;
+	bf[2] = vel;
+	return midiseq_out(md, bf, 3, 1);
 }
 
 int
@@ -1276,17 +1276,17 @@ midiseq_noteoff(md, chan, note, vel)
 	struct midi_dev *md;
 	int chan, note, vel;
 {
-	u_char buf[3];
+	u_char bf[3];
 
 	if (chan < 0 || chan > 15 ||
 	    note < 0 || note > 127)
 		return EINVAL;
 	if (vel < 0) vel = 0;
 	if (vel > 127) vel = 127;
-	buf[0] = MIDI_NOTEOFF | chan;
-	buf[1] = note;
-	buf[2] = vel;
-	return midiseq_out(md, buf, 3, 1);
+	bf[0] = MIDI_NOTEOFF | chan;
+	bf[1] = note;
+	bf[2] = vel;
+	return midiseq_out(md, bf, 3, 1);
 }
 
 int
@@ -1294,17 +1294,17 @@ midiseq_keypressure(md, chan, note, vel)
 	struct midi_dev *md;
 	int chan, note, vel;
 {
-	u_char buf[3];
+	u_char bf[3];
 
 	if (chan < 0 || chan > 15 ||
 	    note < 0 || note > 127)
 		return EINVAL;
 	if (vel < 0) vel = 0;
 	if (vel > 127) vel = 127;
-	buf[0] = MIDI_KEY_PRESSURE | chan;
-	buf[1] = note;
-	buf[2] = vel;
-	return midiseq_out(md, buf, 3, 1);
+	bf[0] = MIDI_KEY_PRESSURE | chan;
+	bf[1] = note;
+	bf[2] = vel;
+	return midiseq_out(md, bf, 3, 1);
 }
 
 int
@@ -1312,14 +1312,14 @@ midiseq_pgmchange(md, chan, parm)
 	struct midi_dev *md;
 	int chan, parm;
 {
-	u_char buf[2];
+	u_char bf[2];
 
 	if (chan < 0 || chan > 15 ||
 	    parm < 0 || parm > 127)
 		return EINVAL;
-	buf[0] = MIDI_PGM_CHANGE | chan;
-	buf[1] = parm;
-	return midiseq_out(md, buf, 2, 1);
+	bf[0] = MIDI_PGM_CHANGE | chan;
+	bf[1] = parm;
+	return midiseq_out(md, bf, 2, 1);
 }
 
 int
@@ -1327,14 +1327,14 @@ midiseq_chnpressure(md, chan, parm)
 	struct midi_dev *md;
 	int chan, parm;
 {
-	u_char buf[2];
+	u_char bf[2];
 
 	if (chan < 0 || chan > 15 ||
 	    parm < 0 || parm > 127)
 		return EINVAL;
-	buf[0] = MIDI_CHN_PRESSURE | chan;
-	buf[1] = parm;
-	return midiseq_out(md, buf, 2, 1);
+	bf[0] = MIDI_CHN_PRESSURE | chan;
+	bf[1] = parm;
+	return midiseq_out(md, bf, 2, 1);
 }
 
 int
@@ -1342,15 +1342,15 @@ midiseq_ctlchange(md, chan, parm, w14)
 	struct midi_dev *md;
 	int chan, parm, w14;
 {
-	u_char buf[3];
+	u_char bf[3];
 
 	if (chan < 0 || chan > 15 ||
 	    parm < 0 || parm > 127)
 		return EINVAL;
-	buf[0] = MIDI_CTL_CHANGE | chan;
-	buf[1] = parm;
-	buf[2] = w14 & 0x7f;
-	return midiseq_out(md, buf, 3, 1);
+	bf[0] = MIDI_CTL_CHANGE | chan;
+	bf[1] = parm;
+	bf[2] = w14 & 0x7f;
+	return midiseq_out(md, bf, 3, 1);
 }
 
 int
@@ -1358,14 +1358,14 @@ midiseq_pitchbend(md, chan, parm)
 	struct midi_dev *md;
 	int chan, parm;
 {
-	u_char buf[3];
+	u_char bf[3];
 
 	if (chan < 0 || chan > 15)
 		return EINVAL;
-	buf[0] = MIDI_PITCH_BEND | chan;
-	buf[1] = parm & 0x7f;
-	buf[2] = (parm >> 7) & 0x7f;
-	return midiseq_out(md, buf, 3, 1);
+	bf[0] = MIDI_PITCH_BEND | chan;
+	bf[1] = parm & 0x7f;
+	bf[2] = (parm >> 7) & 0x7f;
+	return midiseq_out(md, bf, 3, 1);
 }
 
 int
@@ -1374,7 +1374,7 @@ midiseq_loadpatch(md, sysex, uio)
 	struct sysex_info *sysex;
 	struct uio *uio;
 {
-	u_char c, buf[128];
+	u_char c, bf[128];
 	int i, cc, error;
 
 	if (sysex->key != SEQ_SYSEX_PATCH) {
@@ -1400,14 +1400,14 @@ midiseq_loadpatch(md, sysex, uio)
 	--sysex->len;
 	while (sysex->len > 0) {
 		cc = sysex->len;
-		if (cc > sizeof buf)
-			cc = sizeof buf;
-		error = uiomove(buf, cc, uio);
+		if (cc > sizeof bf)
+			cc = sizeof bf;
+		error = uiomove(bf, cc, uio);
 		if (error)
 			break;
-		for(i = 0; i < cc && !MIDI_IS_STATUS(buf[i]); i++)
+		for(i = 0; i < cc && !MIDI_IS_STATUS(bf[i]); i++)
 			;
-		error = midiseq_out(md, buf, i, 0);
+		error = midiseq_out(md, bf, i, 0);
 		if (error)
 			break;
 		sysex->len -= i;
@@ -1454,10 +1454,10 @@ midi_unit_count()
 }
 
 int
-midiopen(dev, flags, ifmt, p)
+midiopen(dev, flags, ifmt, l)
 	dev_t dev;
 	int flags, ifmt;
-	struct proc *p;
+	struct lwp *l;
 {
 	return (ENXIO);
 }
@@ -1472,18 +1472,18 @@ midi_getinfo(dev, mi)
 }
 
 int
-midiclose(dev, flags, ifmt, p)
+midiclose(dev, flags, ifmt, l)
 	dev_t dev;
 	int flags, ifmt;
-	struct proc *p;
+	struct lwp *l;
 {
 	return (ENXIO);
 }
 
 int
-midi_writebytes(unit, buf, cc)
+midi_writebytes(unit, bf, cc)
 	int unit;
-	u_char *buf;
+	u_char *bf;
 	int cc;
 {
 	return (ENXIO);

@@ -1,4 +1,4 @@
-/*	$NetBSD: ncr53c9x.c,v 1.114 2005/02/27 00:27:02 perry Exp $	*/
+/*	$NetBSD: ncr53c9x.c,v 1.119 2006/03/29 04:16:49 thorpej Exp $	*/
 
 /*-
  * Copyright (c) 1998, 2002 The NetBSD Foundation, Inc.
@@ -77,7 +77,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ncr53c9x.c,v 1.114 2005/02/27 00:27:02 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ncr53c9x.c,v 1.119 2006/03/29 04:16:49 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -301,7 +301,7 @@ ncr53c9x_attach(sc)
 	}
 
 	/* Reset state & bus */
-	sc->sc_cfflags = sc->sc_dev.dv_cfdata->cf_flags;
+	sc->sc_cfflags = device_cfdata(&sc->sc_dev)->cf_flags;
 	sc->sc_state = 0;
 	ncr53c9x_init(sc, 1);
 
@@ -543,7 +543,7 @@ ncr53c9x_init(sc, doreset)
  * only make sense when he DMA CSR has an interrupt showing. Call only
  * if an interrupt is pending.
  */
-__inline__ void
+inline void
 ncr53c9x_readregs(sc)
 	struct ncr53c9x_softc *sc;
 {
@@ -694,6 +694,8 @@ ncr53c9x_select(sc, ecb)
 			sc->sc_cmdlen = clen;
 			sc->sc_cmdp = (caddr_t)&ecb->cmd.cmd;
 
+			NCRDMA_SETUP(sc, &sc->sc_cmdp, &sc->sc_cmdlen, 0,
+			    &dmasize);
 			/* Program the SCSI counter */
 			NCR_SET_COUNT(sc, dmasize);
 
@@ -702,8 +704,6 @@ ncr53c9x_select(sc, ecb)
 
 			/* And get the targets attention */
 			NCRCMD(sc, NCRCMD_SELNATN | NCRCMD_DMA);
-			NCRDMA_SETUP(sc, &sc->sc_cmdp, &sc->sc_cmdlen, 0,
-			    &dmasize);
 			NCRDMA_GO(sc);
 		} else {
 			ncr53c9x_wrfifo(sc, (u_char *)&ecb->cmd.cmd, ecb->clen);
@@ -751,6 +751,7 @@ ncr53c9x_select(sc, ecb)
 		sc->sc_cmdlen = clen;
 		sc->sc_cmdp = cmd;
 
+		NCRDMA_SETUP(sc, &sc->sc_cmdp, &sc->sc_cmdlen, 0, &dmasize);
 		/* Program the SCSI counter */
 		NCR_SET_COUNT(sc, dmasize);
 
@@ -765,7 +766,6 @@ ncr53c9x_select(sc, ecb)
 			NCRCMD(sc, NCRCMD_SELATN3 | NCRCMD_DMA);
 		} else
 			NCRCMD(sc, NCRCMD_SELATN | NCRCMD_DMA);
-		NCRDMA_SETUP(sc, &sc->sc_cmdp, &sc->sc_cmdlen, 0, &dmasize);
 		NCRDMA_GO(sc);
 		return;
 	}
@@ -1351,15 +1351,15 @@ static int
 ncr53c9x_rdfifo(struct ncr53c9x_softc *sc, int how)
 {
 	int i, n;
-	u_char *buf;
+	u_char *ibuf;
 
 	switch(how) {
 	case NCR_RDFIFO_START:
-		buf = sc->sc_imess;
+		ibuf = sc->sc_imess;
 		sc->sc_imlen = 0;
 		break;
 	case NCR_RDFIFO_CONTINUE:
-		buf = sc->sc_imess + sc->sc_imlen;
+		ibuf = sc->sc_imess + sc->sc_imlen;
 		break;
 	default:
 		panic("ncr53c9x_rdfifo: bad flag");
@@ -1376,12 +1376,12 @@ ncr53c9x_rdfifo(struct ncr53c9x_softc *sc, int how)
 		n *= 2;
 
 		for (i = 0; i < n; i++)
-			buf[i] = NCR_READ_REG(sc, NCR_FIFO);
+			ibuf[i] = NCR_READ_REG(sc, NCR_FIFO);
 
 		if (sc->sc_espstat2 & NCRFAS_STAT2_ISHUTTLE) {
 
 			NCR_WRITE_REG(sc, NCR_FIFO, 0);
-			buf[i++] = NCR_READ_REG(sc, NCR_FIFO);
+			ibuf[i++] = NCR_READ_REG(sc, NCR_FIFO);
 
 			NCR_READ_REG(sc, NCR_FIFO);
 
@@ -1389,7 +1389,7 @@ ncr53c9x_rdfifo(struct ncr53c9x_softc *sc, int how)
 		}
 	} else {
 		for (i = 0; i < n; i++)
-			buf[i] = NCR_READ_REG(sc, NCR_FIFO);
+			ibuf[i] = NCR_READ_REG(sc, NCR_FIFO);
 	}
 
 	sc->sc_imlen += i;

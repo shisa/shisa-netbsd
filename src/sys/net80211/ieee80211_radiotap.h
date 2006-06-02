@@ -1,5 +1,5 @@
-/* $FreeBSD: src/sys/net80211/ieee80211_radiotap.h,v 1.3 2004/04/05 22:13:21 sam Exp $ */
-/* $NetBSD: ieee80211_radiotap.h,v 1.10 2005/01/04 00:34:58 dyoung Exp $ */
+/* $FreeBSD: src/sys/net80211/ieee80211_radiotap.h,v 1.5 2005/01/22 20:12:05 sam Exp $ */
+/* $NetBSD: ieee80211_radiotap.h,v 1.15 2006/03/12 03:22:02 dyoung Exp $ */
 
 /*-
  * Copyright (c) 2003, 2004 David Young.  All rights reserved.
@@ -29,14 +29,14 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY
  * OF SUCH DAMAGE.
  */
-#ifndef _NET_IF_IEEE80211RADIOTAP_H_
-#define _NET_IF_IEEE80211RADIOTAP_H_
+#ifndef _NET80211_IEEE80211_RADIOTAP_H_
+#define _NET80211_IEEE80211_RADIOTAP_H_
 
-/* A generic radio capture format is desirable. There is one for
- * Linux, but it is neither rigidly defined (there were not even
- * units given for some fields) nor easily extensible.
+/* A generic radio capture format is desirable. It must be
+ * rigidly defined (e.g., units for fields should be given),
+ * and easily extensible.
  *
- * I suggest the following extensible radio capture format. It is
+ * The following is an extensible radio capture format. It is
  * based on a bitmap indicating which fields are present.
  *
  * I am trying to describe precisely what the application programmer
@@ -46,18 +46,22 @@
  * function of...") that I cannot set false expectations for lawyerly
  * readers.
  */
-#ifdef _KERNEL
+#if defined(__KERNEL__) || defined(_KERNEL)
 #ifndef DLT_IEEE802_11_RADIO
 #define	DLT_IEEE802_11_RADIO	127	/* 802.11 plus WLAN header */
 #endif
-#endif /* _KERNEL */
+#endif /* defined(__KERNEL__) || defined(_KERNEL) */
 
 /* XXX tcpdump/libpcap do not tolerate variable-length headers,
  * yet, so we pad every radiotap header to 64 bytes. Ugh.
  */
 #define IEEE80211_RADIOTAP_HDRLEN	64
 
-/* The radio capture header precedes the 802.11 header. */
+/*
+ * The radio capture header precedes the 802.11 header.
+ *
+ * Note well: all radiotap fields are little-endian.
+ */
 struct ieee80211_radiotap_header {
 	u_int8_t	it_version;	/* Version 0. Only increases
 					 * for drastic changes,
@@ -79,7 +83,8 @@ struct ieee80211_radiotap_header {
 					 */
 } __attribute__((__packed__));
 
-/* Name                                 Data type       Units
+/*
+ * Name                                 Data type       Units
  * ----                                 ---------       -----
  *
  * IEEE80211_RADIOTAP_TSFT              u_int64_t       microseconds
@@ -158,10 +163,6 @@ struct ieee80211_radiotap_header {
  *
  *      Unitless indication of the Rx/Tx antenna for this packet.
  *      The first antenna is antenna 0.
- *
- * IEEE80211_RADIOTAP_FCS           	u_int32_t       data
- *
- *	FCS from frame in network byte order.
  */
 enum ieee80211_radiotap_type {
 	IEEE80211_RADIOTAP_TSFT = 0,
@@ -178,7 +179,6 @@ enum ieee80211_radiotap_type {
 	IEEE80211_RADIOTAP_ANTENNA = 11,
 	IEEE80211_RADIOTAP_DB_ANTSIGNAL = 12,
 	IEEE80211_RADIOTAP_DB_ANTNOISE = 13,
-	IEEE80211_RADIOTAP_FCS = 14,
 	IEEE80211_RADIOTAP_EXT = 31,
 };
 
@@ -208,5 +208,11 @@ enum ieee80211_radiotap_type {
 #define	IEEE80211_RADIOTAP_F_FRAG	0x08	/* sent/received
 						 * with fragmentation
 						 */
+#define	IEEE80211_RADIOTAP_F_FCS	0x10	/* frame includes FCS */
+#define	IEEE80211_RADIOTAP_F_DATAPAD	0x20	/* frame has padding between
+						 * 802.11 header and payload
+						 * (to 32-bit boundary)
+						 */
+#define	IEEE80211_RADIOTAP_F_BADFCS	0x40	/* does not pass FCS check */
 
-#endif /* _NET_IF_IEEE80211RADIOTAP_H_ */
+#endif /* !_NET80211_IEEE80211_RADIOTAP_H_ */

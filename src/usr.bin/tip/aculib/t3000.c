@@ -1,4 +1,4 @@
-/*	$NetBSD: t3000.c,v 1.11 2004/04/23 22:11:44 christos Exp $	*/
+/*	$NetBSD: t3000.c,v 1.13 2006/04/03 02:25:27 perry Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)t3000.c	8.1 (Berkeley) 6/6/93";
 #endif
-__RCSID("$NetBSD: t3000.c,v 1.11 2004/04/23 22:11:44 christos Exp $");
+__RCSID("$NetBSD: t3000.c,v 1.13 2006/04/03 02:25:27 perry Exp $");
 #endif /* not lint */
 
 /*
@@ -49,24 +49,19 @@ static	int timeout = 0;
 static	int connected = 0;
 static	jmp_buf timeoutbuf;
 
-static	void	sigALRM __P((int));
-static	int	t3000_connect __P((void));
-static	void	t3000_nap __P((void));
-static	void	t3000_napx __P((int));
-static	int	t3000_swallow __P((const char *));
-static	int	t3000_sync __P((void));
-static	void	t3000_write __P((int, const char *, int));
+static	void	sigALRM(int);
+static	int	t3000_connect(void);
+static	void	t3000_nap(void);
+static	void	t3000_napx(int);
+static	int	t3000_swallow(const char *);
+static	int	t3000_sync(void);
+static	void	t3000_write(int, const char *, int);
 
 int
-t3000_dialer(num, acu)
-	char *num;
-	char *acu;
+t3000_dialer(char *num, char *acu)
 {
 	char *cp;
 	struct termios cntrl;
-#ifdef ACULOG
-	char line[80];
-#endif
 
 	if (boolean(value(VERBOSE)))
 		printf("Using \"%s\"\n", acu);
@@ -80,9 +75,6 @@ t3000_dialer(num, acu)
 	if (!t3000_sync()) {
 badsynch:
 		printf("can't synchronize with t3000\n");
-#ifdef ACULOG
-		logent(value(HOST), num, "t3000", "can't synch up");
-#endif
 		return (0);
 	}
 	t3000_write(FD, "AT E0\r", 6);	/* turn off echoing */
@@ -103,20 +95,13 @@ badsynch:
 	t3000_write(FD, num, strlen(num));
 	t3000_write(FD, "\r", 1);
 	connected = t3000_connect();
-#ifdef ACULOG
-	if (timeout) {
-		(void)snprintf(line, sizeof line, "%d second dial timeout",
-			(int)number(value(DIALTIMEOUT)));
-		logent(value(HOST), num, "t3000", line);
-	}
-#endif
 	if (timeout)
 		t3000_disconnect();
 	return (connected);
 }
 
 void
-t3000_disconnect()
+t3000_disconnect(void)
 {
 	 /* first hang up the modem*/
 	ioctl(FD, TIOCCDTR, 0);
@@ -127,15 +112,14 @@ t3000_disconnect()
 }
 
 void
-t3000_abort()
+t3000_abort(void)
 {
 	t3000_write(FD, "\r", 1);	/* send anything to abort the call */
 	t3000_disconnect();
 }
 
 static void
-sigALRM(dummy)
-	int dummy;
+sigALRM(int dummy)
 {
 	printf("\07timeout waiting for reply\n");
 	timeout = 1;
@@ -143,8 +127,7 @@ sigALRM(dummy)
 }
 
 static int
-t3000_swallow(match)
-	const char *match;
+t3000_swallow(const char *match)
 {
 	sig_t f;
 	char c;
@@ -208,7 +191,7 @@ struct tbaud_msg {
 };
 
 static int
-t3000_connect()
+t3000_connect(void)
 {
 	char c;
 	int nc, nl, n;
@@ -285,7 +268,7 @@ again:
  * the t3000 in sync.
  */
 static int
-t3000_sync()
+t3000_sync(void)
 {
 	int already = 0;
 	int len;
@@ -306,7 +289,7 @@ if (len == 0) len = 1;
 			buf[len] = '\0';
 			printf("t3000_sync: (\"%s\")\n\r", buf);
 #endif
-			if (strchr(buf, '0') || 
+			if (strchr(buf, '0') ||
 		   	   (strchr(buf, 'O') && strchr(buf, 'K')))
 				return(1);
 		}
@@ -330,10 +313,7 @@ if (len == 0) len = 1;
 }
 
 static void
-t3000_write(fd, cp, n)
-	int fd;
-	const char *cp;
-	int n;
+t3000_write(int fd, const char *cp, int n)
 {
 
 #ifdef notdef
@@ -350,7 +330,7 @@ t3000_write(fd, cp, n)
 }
 
 #ifdef DEBUG
-t3000_verbose_read()
+t3000_verbose_read(void)
 {
 	int n = 0;
 	char buf[BUFSIZ];
@@ -373,9 +353,9 @@ static int napms = 50; /* Give the t3000 50 milliseconds between characters */
 static int ringring;
 
 void
-t3000_nap()
+t3000_nap(void)
 {
-	
+
 	struct itimerval itv, oitv;
 	struct itimerval *itp = &itv;
 	struct sigaction sa, osa;
@@ -410,8 +390,7 @@ t3000_nap()
 }
 
 static void
-t3000_napx(dummy)
-	int dummy;
+t3000_napx(int dummy)
 {
 
         ringring = 1;

@@ -1,4 +1,4 @@
-/* $NetBSD: utils.c,v 1.5.2.1 2005/06/14 21:43:33 tron Exp $ */
+/* $NetBSD: utils.c,v 1.14 2006/05/11 00:42:08 mrg Exp $ */
 
 /*-
  * Copyright (c) 2002, 2003 The NetBSD Foundation, Inc.
@@ -38,13 +38,14 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: utils.c,v 1.5.2.1 2005/06/14 21:43:33 tron Exp $");
+__RCSID("$NetBSD: utils.c,v 1.14 2006/05/11 00:42:08 mrg Exp $");
 #endif
 
 #include <sys/param.h>
 
 #include <stdlib.h>
 #include <string.h>
+#include <err.h>
 
 /* include the resolver gunk in order that we can use b64 routines */
 #include <netinet/in.h>
@@ -52,6 +53,34 @@ __RCSID("$NetBSD: utils.c,v 1.5.2.1 2005/06/14 21:43:33 tron Exp $");
 #include <resolv.h>
 
 #include "utils.h"
+
+
+void *
+emalloc(size_t len)
+{
+	void *ptr = malloc(len);
+	if (ptr == NULL)
+		err(1, NULL);
+	return ptr;
+}
+
+void *
+ecalloc(size_t nel, size_t len)
+{
+	void *ptr = calloc(nel, len);
+	if (ptr == NULL)
+		err(1, NULL);
+	return ptr;
+}
+
+char *
+estrdup(const char *str)
+{
+	char *ptr = strdup(str);
+	if (ptr == NULL)
+		err(1, NULL);
+	return ptr;
+}
 
 /* just strsep(3), but skips empty fields. */
 
@@ -78,11 +107,11 @@ words(const char *line, int *num)
 	int	  nwords = 0;
 	char	 *cur;
 	char	**ret;
-	char	 *tmp;
-	char	 *tmp1;
+	const char	 *tmp;
+	char	 *tmp1, *tmpf;
 
 	*num = 0;
-	tmp = (char *)line;
+	tmp = line;
 	if (tmp[0] == '\0')
 		return NULL;
 	while (tmp[0]) {
@@ -91,10 +120,10 @@ words(const char *line, int *num)
 			nwords++;
 		tmp++;
 	}
-	ret = malloc((nwords+1) * sizeof(char *));
-	tmp1 = tmp = strdup(line);
-	while ((cur = strsep_getnext(&tmp, " \t")) != NULL)
-		ret[i++] = strdup(cur);
+	ret = emalloc((nwords+1) * sizeof(char *));
+	tmp1 = tmpf = estrdup(line);
+	while ((cur = strsep_getnext(&tmpf, " \t")) != NULL)
+		ret[i++] = estrdup(cur);
 	ret[i] = NULL;
 	free(tmp1);
 	*num = nwords;
@@ -147,9 +176,9 @@ string_new(const char *intext, int inlength)
 {
 	string_t *out;
 
-	out = malloc(sizeof(*out));
+	out = emalloc(sizeof(*out));
 	out->length = inlength;
-	out->text = malloc(out->length + 1);
+	out->text = emalloc(out->length + 1);
 	memcpy(out->text, intext, out->length);
 	out->text[out->length] = '\0';
 	return out;
@@ -168,7 +197,7 @@ string_free(string_t *s)
 
 	if (!s)
 		return;
-	free_notnull(s->text);
+	free(s->text);
 	free(s);
 }
 
@@ -185,9 +214,9 @@ string_add(const string_t *a1, const string_t *a2)
 {
 	string_t *sum;
 
-	sum = malloc(sizeof(*sum));
+	sum = emalloc(sizeof(*sum));
 	sum->length = a1->length + a2->length;
-	sum->text = malloc(sum->length + 1);
+	sum->text = emalloc(sum->length + 1);
 	memcpy(sum->text, a1->text, a1->length);
 	memcpy(sum->text + a1->length, a2->text, a2->length);
 	sum->text[sum->length] = '\0';
@@ -224,14 +253,10 @@ string_fromint(int in)
 {
 	string_t *ret;
 
-	ret = malloc(sizeof(*ret));
-	if (!ret)
-		return NULL;
+	ret = emalloc(sizeof(*ret));
 	ret->length = asprintf(&ret->text, "%d", in);
-	if (ret->length == -1) {
-		free(ret);
-		ret = NULL;
-	}
+	if (ret->length == -1)
+		err(1, NULL);
 	return ret;
 }
 
@@ -252,10 +277,9 @@ bits_new(const void *buf, int len)
 {
 	bits_t	*b;
 
-	/* XXX do some level of error checking here */
-	b = malloc(sizeof(*b));
+	b = emalloc(sizeof(*b));
 	b->length = len;
-	b->text = malloc(BITS2BYTES(b->length));
+	b->text = emalloc(BITS2BYTES(b->length));
 	memcpy(b->text, buf, BITS2BYTES(b->length));
 	return b;
 }
@@ -273,7 +297,7 @@ bits_free(bits_t *b)
 
 	if (!b)
 		return;
-	free_notnull(b->text);
+	free(b->text);
 	free(b);
 }
 
@@ -320,10 +344,9 @@ bits_xor(const bits_t *x1, const bits_t *x2)
 	bits_t	*b;
 	int	 i;
 
-	/* XXX do some level of error checking here */
-	b = malloc(sizeof(*b));
+	b = emalloc(sizeof(*b));
 	b->length = MAX(x1->length, x2->length);
-	b->text = calloc(1, BITS2BYTES(b->length));
+	b->text = ecalloc(1, BITS2BYTES(b->length));
 	for (i=0; i < BITS2BYTES(MIN(x1->length, x2->length)); i++)
 		b->text[i] = x1->text[i] ^ x2->text[i];
 	return b;
@@ -353,18 +376,17 @@ bits_decode(const string_t *in)
 	bits_t	*ret;
 	int	 len;
 	int	 nbits;
-	char	*tmp;
+	u_char	*tmp;
 
 	len = in->length;
-	tmp = malloc(len);
-	if (!tmp)
-		return NULL;
+	tmp = emalloc(len);
 
 	len = __b64_pton(in->text, tmp, len);
 
 	if (len == -1) {
 		fprintf(stderr, "bits_decode: mangled base64 stream\n");
 		fprintf(stderr, "  %s\n", in->text);
+		free(tmp);
 		return NULL;
 	}
 
@@ -373,6 +395,7 @@ bits_decode(const string_t *in)
 		fprintf(stderr, "bits_decode: encoded bits claim to be "
 		    "longer than they are (nbits=%u, stream len=%u bytes)\n",
 		    (unsigned)nbits, (unsigned)len);
+		free(tmp);
 		return NULL;
 	}
 
@@ -397,7 +420,7 @@ bits_encode(const bits_t *in)
 	string_t *ret;
 	int	 len;
 	char	*out;
-	char	*tmp;
+	u_char	*tmp;
 
 	if (!in)
 		return NULL;
@@ -405,19 +428,17 @@ bits_encode(const bits_t *in)
 	/* compute the total size of the input stream */
 	len = BITS2BYTES(in->length) + 4;
 
-	tmp = malloc(len);
-	out = malloc(len * 2);
-	if (!tmp || !out) {
-		free_notnull(tmp);
-		free_notnull(out);
-		return NULL;
-	}
-
+	tmp = emalloc(len);
+	out = emalloc(len * 2);
 	/* stuff the length up front */
 	*((u_int32_t *)tmp) = htonl(in->length);
 	memcpy(tmp + 4, in->text, len - 4);
 
-	len = __b64_ntop(tmp, len, out, len * 2);
+	if ((len = __b64_ntop(tmp, len, out, len * 2)) == -1) {
+		free(out);
+		free(tmp);
+		return NULL;
+	}
 	ret = string_new(out, len);
 	free(tmp);
 	free(out);
@@ -440,15 +461,9 @@ bits_fget(FILE *f, int len)
 	bits_t	*bits;
 	int	 ret;
 
-	bits = malloc(sizeof(*bits));
-	if (!bits)
-		return NULL;
+	bits = emalloc(sizeof(*bits));
 	bits->length = len;
-	bits->text = malloc(BITS2BYTES(bits->length));
-	if (!bits->text) {
-		free(bits);
-		return NULL;
-	}
+	bits->text = emalloc(BITS2BYTES(bits->length));
 	ret = fread(bits->text, BITS2BYTES(bits->length), 1, f);
 	if (ret != 1) {
 		bits_free(bits);
@@ -487,12 +502,4 @@ bits_fprint(FILE *f, const bits_t *bits)
 	s = bits_encode(bits);
 	string_fprint(f, s);
 	free(s);
-}
-
-void
-free_notnull(void *b)
-{
-
-	if (b)
-		free(b);
 }

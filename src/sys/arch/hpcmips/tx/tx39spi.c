@@ -1,4 +1,4 @@
-/*	$NetBSD: tx39spi.c,v 1.1.2.1 2005/05/07 11:34:57 tron Exp $	*/
+/*	$NetBSD: tx39spi.c,v 1.4 2005/12/11 12:17:34 christos Exp $	*/
 
 /*-
  * Copyright (c) 2005 HAMAJIMA Katsuomi. All rights reserved.
@@ -31,7 +31,7 @@
 
 #include <sys/cdefs.h>
 
-__KERNEL_RCSID(0, "$NetBSD: tx39spi.c,v 1.1.2.1 2005/05/07 11:34:57 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: tx39spi.c,v 1.4 2005/12/11 12:17:34 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -51,7 +51,8 @@ struct tx39spi_softc {
 
 static int tx39spi_match(struct device *, struct cfdata *, void *);
 static void tx39spi_attach(struct device *, struct device *, void *);
-static int tx39spi_search(struct device *, struct cfdata *, void *);
+static int tx39spi_search(struct device *, struct cfdata *,
+			  const int *, void *);
 static int tx39spi_print(void *, const char *);
 #ifndef USE_POLL
 static int tx39spi_intr(void *);
@@ -88,11 +89,12 @@ tx39spi_attach(struct device *parent, struct device *self, void *aux)
 #endif
 	printf("\n");
 
-	config_search(tx39spi_search, self, tx39spi_print);
+	config_search_ia(tx39spi_search, self, "txspiif", tx39spi_print);
 }
 
 int
-tx39spi_search(struct device *parent, struct cfdata *cf, void *aux)
+tx39spi_search(struct device *parent, struct cfdata *cf,
+	       const int *ldesc, void *aux)
 {
 	struct tx39spi_softc *sc = (void*)parent;
 	struct txspi_attach_args sa;

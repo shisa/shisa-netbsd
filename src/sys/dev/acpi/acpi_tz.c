@@ -1,4 +1,4 @@
-/* $NetBSD: acpi_tz.c,v 1.14 2004/06/06 17:27:05 martin Exp $ */
+/* $NetBSD: acpi_tz.c,v 1.18 2006/02/20 12:17:49 kochi Exp $ */
 
 /*
  * Copyright (c) 2003 Jared D. McNeill <jmcneill@invisible.ca>
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: acpi_tz.c,v 1.14 2004/06/06 17:27:05 martin Exp $");
+__KERNEL_RCSID(0, "$NetBSD: acpi_tz.c,v 1.18 2006/02/20 12:17:49 kochi Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -131,7 +131,7 @@ static void	acpitz_sane_temp(UINT32 *tmp);
 static ACPI_STATUS
 		acpitz_switch_cooler(ACPI_OBJECT *, void *);
 static void	acpitz_notify_handler(ACPI_HANDLE, UINT32, void *);
-static int	acpitz_get_integer(struct acpitz_softc *, char *, UINT32 *);
+static int	acpitz_get_integer(struct acpitz_softc *, const char *, UINT32 *);
 static void	acpitz_tick(void *);
 static void	acpitz_init_envsys(struct acpitz_softc *);
 static int	acpitz_gtredata(struct sysmon_envsys *,
@@ -172,18 +172,19 @@ acpitz_attach(struct device *parent, struct device *self, void *aux)
 #endif
 	sc->sc_devnode = aa->aa_node;
 
-	printf(": ACPI Thermal Zone\n");
+	aprint_naive(": ACPI Thermal Zone\n");
+	aprint_normal(": ACPI Thermal Zone\n");
 
 	rv = acpi_eval_integer(sc->sc_devnode->ad_handle, "_TZP", &v);
 	if (ACPI_FAILURE(rv)) {
-		printf("%s: unable to get polling interval; using default of",
+		aprint_verbose("%s: unable to get polling interval; using default of",
 		    sc->sc_dev.dv_xname);
 		sc->sc_zone.tzp = ATZ_TZP_RATE;
 	} else {
 		sc->sc_zone.tzp = v;
-		printf("%s: polling interval is", sc->sc_dev.dv_xname);
+		aprint_verbose("%s: polling interval is", sc->sc_dev.dv_xname);
 	}
-	printf(" %d.%ds\n", sc->sc_zone.tzp / 10, sc->sc_zone.tzp % 10);
+	aprint_verbose(" %d.%ds\n", sc->sc_zone.tzp / 10, sc->sc_zone.tzp % 10);
 
 	/* XXX a value of 0 means "polling is not necessary" */
 	if (sc->sc_zone.tzp == 0)
@@ -197,7 +198,7 @@ acpitz_attach(struct device *parent, struct device *self, void *aux)
 	rv = AcpiInstallNotifyHandler(sc->sc_devnode->ad_handle,
 	    ACPI_SYSTEM_NOTIFY, acpitz_notify_handler, sc);
 	if (ACPI_FAILURE(rv)) {
-		printf("%s: unable to install SYSTEM NOTIFY handler: %s\n",
+		aprint_error("%s: unable to install SYSTEM NOTIFY handler: %s\n",
 		    sc->sc_dev.dv_xname, AcpiFormatException(rv));
 		return;
 	}
@@ -508,7 +509,7 @@ static void
 acpitz_notify_handler(ACPI_HANDLE hdl, UINT32 notify, void *opaque)
 {
 	struct acpitz_softc *sc = opaque;
-	OSD_EXECUTION_CALLBACK func = NULL;
+	ACPI_OSD_EXEC_CALLBACK func = NULL;
 	const char *name;
 	int rv;
 
@@ -546,7 +547,7 @@ acpitz_sane_temp(UINT32 *tmp)
 }
 
 static int
-acpitz_get_integer(struct acpitz_softc *sc, char *cm, UINT32 *val)
+acpitz_get_integer(struct acpitz_softc *sc, const char *cm, UINT32 *val)
 {
 	ACPI_STATUS rv;
 	ACPI_INTEGER tmp;

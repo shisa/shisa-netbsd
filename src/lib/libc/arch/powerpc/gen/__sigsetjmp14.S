@@ -1,4 +1,4 @@
-/*	$NetBSD: __sigsetjmp14.S,v 1.2 2002/07/30 06:07:57 matt Exp $	*/
+/*	$NetBSD: __sigsetjmp14.S,v 1.4 2006/02/18 00:45:22 matt Exp $	*/
 
 #include <sys/syscall.h>
 
@@ -6,7 +6,7 @@
 
 #if defined(LIBC_SCCS)
 	.text
-	.asciz "$NetBSD: __sigsetjmp14.S,v 1.2 2002/07/30 06:07:57 matt Exp $"
+	.asciz "$NetBSD: __sigsetjmp14.S,v 1.4 2006/02/18 00:45:22 matt Exp $"
 #endif
 
 ENTRY(__sigsetjmp14)

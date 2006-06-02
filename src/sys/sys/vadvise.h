@@ -1,4 +1,4 @@
-/*	$NetBSD: vadvise.h,v 1.8 2003/08/07 16:34:22 agc Exp $	*/
+/*	$NetBSD: vadvise.h,v 1.10 2005/12/11 12:25:21 christos Exp $	*/
 
 /*-
  * Copyright (c) 1982, 1986, 1993
@@ -48,5 +48,11 @@
 #define	VA_ANOM		1
 #define	VA_SEQL		2
 #define	VA_FLUSH 	3
+
+#ifndef _KERNEL
+__BEGIN_DECLS
+int vadvise(int);
+__END_DECLS
+#endif
 
 #endif /* !_SYS_VADVISE_H_ */

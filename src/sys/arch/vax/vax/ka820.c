@@ -1,4 +1,4 @@
-/*	$NetBSD: ka820.c,v 1.40 2004/02/13 11:36:20 wiz Exp $	*/
+/*	$NetBSD: ka820.c,v 1.45 2005/12/24 22:45:40 perry Exp $	*/
 /*
  * Copyright (c) 1988 Regents of the University of California.
  * All rights reserved.
@@ -39,7 +39,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ka820.c,v 1.40 2004/02/13 11:36:20 wiz Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ka820.c,v 1.45 2005/12/24 22:45:40 perry Exp $");
 
 #include "opt_multiprocessor.h"
 
@@ -90,8 +90,8 @@ static void vaxbierr(void *);
 #if defined(MULTIPROCESSOR)
 static void ka820_startslave(struct device *, struct cpu_info *);
 static void ka820_send_ipi(struct device *);
-static void ka820_txrx(int, char *, int);
-static void ka820_sendstr(int, char *);
+static void ka820_txrx(int, const char *, int);
+static void ka820_sendstr(int, const char *);
 static void ka820_sergeant(int);
 static int rxchar(void);
 static void ka820_putc(int);
@@ -348,7 +348,7 @@ ka820_memerr()
 {
 	struct mem_bi_softc *sc;
 	int m, hard, csr1, csr2;
-	char *type;
+	const char *type;
 
 static char b1[] = "\20\40ERRSUM\37ECCDIAG\36ECCDISABLE\20CRDINH\17VALID\
 \16INTLK\15BROKE\13MWRITEERR\12CNTLERR\11INTLV";
@@ -393,7 +393,7 @@ static char b2[] = "\20\40RDS\37HIERR\36CRD\35ADRS";
 }
 
 /* these are bits 0 to 6 in the summary field */
-char *mc8200[] = {
+const char *mc8200[] = {
 	"cpu bad ipl",		"ucode lost err",
 	"ucode par err",	"DAL par err",
 	"BI bus err",		"BTB tag par",
@@ -563,7 +563,7 @@ ka820_startslave(struct device *dev, struct cpu_info *ci)
 	ka820_txrx(id, "D/I 10 %x\r", (int)ci->ci_pcb);	/* PCB for idle proc */
 	ka820_txrx(id, "D/I 11 %x\r", mfpr(PR_SCBB));	/* SCB */
 	ka820_txrx(id, "D/I 38 %x\r", mfpr(PR_MAPEN));	/* Enable MM */
-	ka820_txrx(id, "S %x\r", (int)&tramp);	/* Start! */
+	ka820_txrx(id, "S %x\r", (int)&vax_mp_tramp);	/* Start! */
 	expect = 0;
 	for (i = 0; i < 10000; i++)
 		if ((volatile int)ci->ci_flags & CI_RUNNING)
@@ -574,7 +574,7 @@ ka820_startslave(struct device *dev, struct cpu_info *ci)
 }
 
 void
-ka820_txrx(int id, char *fmt, int arg)
+ka820_txrx(int id, const char *fmt, int arg)
 {
 	char buf[20];
 
@@ -590,11 +590,11 @@ ka820_sendchr(int chr)
 	 * It seems like mtpr to TXCD sets the V flag if it fails.
 	 * Cannot check that flag in C...
 	 */
-	asm __volatile("1:;mtpr %0,$92;bvs 1b" :: "g"(chr));
+	__asm volatile("1:;mtpr %0,$92;bvs 1b" :: "g"(chr));
 }
 
 void
-ka820_sendstr(int id, char *buf)
+ka820_sendstr(int id, const char *buf)
 {
 	u_int utchr;
 	int ch, i;

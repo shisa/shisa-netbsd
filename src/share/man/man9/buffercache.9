@@ -1,4 +1,4 @@
-.\"     $NetBSD: buffercache.9,v 1.13.2.1 2005/09/15 20:47:12 tron Exp $
+.\"     $NetBSD: buffercache.9,v 1.19 2006/01/16 22:26:41 yamt Exp $
 .\"
 .\" Copyright (c)2003 YAMAMOTO Takashi,
 .\" All rights reserved.
@@ -101,7 +101,7 @@
 .\"
 .\"
 .\" ------------------------------------------------------------
-.Dd September 8, 2005
+.Dd January 17, 2006
 .Dt BUFFERCACHE 9
 .Os
 .Sh NAME
@@ -123,7 +123,7 @@
 .\" ------------------------------------------------------------
 .Sh SYNOPSIS
 .In sys/buf.h
-.Ft void
+.Ft int
 .Fn bread "struct vnode *vp" "daddr_t blkno" "int size" \
 "struct ucred *cred" "struct buf **bpp"
 .Ft int
@@ -181,14 +181,26 @@ and
 .Fa blkno .
 The buffer is returned via
 .Fa bpp .
+The units of
 .Fa blkno
-is in units of 
-.Dv DEV_BSIZE .
-Both
+are specifically the units used by the
+.Fn VOP_STRATEGY
+routine for the
+.Fa vp
+vnode.
+For device special files,
+.Fa blkno
+is in units of
+.Dv DEV_BSIZE
+and both
 .Fa blkno
 and
 .Fa size
 must be multiples of the underlying device's block size.
+For other files,
+.Fa blkno
+is in units chosen by the file system containing
+.Fa vp .
 .Pp
 If the buffer is not found (i.e. the block is not cached in memory),
 .Fn bread
@@ -360,3 +372,11 @@ In the current implementation,
 .Fn bread
 and its variants
 don't use a specified credential.
+.Pp
+Because
+.Fn biodone
+and
+.Fn biowait
+do not really belong to
+.Nm ,
+they shouldn't be documented here.

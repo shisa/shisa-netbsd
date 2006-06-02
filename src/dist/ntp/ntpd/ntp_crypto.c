@@ -1,4 +1,4 @@
-/*	$NetBSD: ntp_crypto.c,v 1.4 2003/12/04 17:06:12 drochner Exp $	*/
+/*	$NetBSD: ntp_crypto.c,v 1.9 2006/05/02 09:24:19 kardel Exp $	*/
 
 /*
  * ntp_crypto.c - NTP version 4 public key routines
@@ -377,7 +377,7 @@ crypto_recv(
 	char	statstr[NTP_MAXSTRLEN]; /* statistics for filegen */
 	keyid_t	cookie;		/* crumbles */
 	int	rval = XEVNT_OK;
-	u_char	*ptr;
+	const u_char	*ptr;
 	u_int32 temp32;
 #ifdef KERNEL_PLL
 #if NTP_API > 3
@@ -1576,7 +1576,7 @@ crypto_encrypt(
 	tstamp_t tstamp;	/* NTP timestamp */
 	u_int32	temp32;
 	u_int	len;
-	u_char	*ptr;
+	const u_char	*ptr;
 
 	/*
 	 * Extract the public key from the request.
@@ -2910,7 +2910,7 @@ cert_parse(
 	BIO	*bp;
 	X509V3_EXT_METHOD *method;
 	char	pathbuf[MAXFILENAME];
-	u_char	*uptr;
+	const u_char	*uptr;
 	char	*ptr;
 	int	temp, cnt, i;
 
@@ -3097,7 +3097,7 @@ cert_sign(
 	EVP_MD_CTX ctx;		/* message digest context */
 	tstamp_t tstamp;	/* NTP timestamp */
 	u_int	len;
-	u_char	*ptr;
+	const u_char	*ptr;
 	int	i, temp;
 
 	/*
@@ -3172,7 +3172,7 @@ cert_sign(
 	vp->vallen = htonl(len);
 	vp->ptr = emalloc(len);
 	ptr = vp->ptr;
-	i2d_X509(cert, &ptr);
+	i2d_X509(cert, (unsigned char **)&ptr);
 	vp->siglen = 0;
 	vp->sig = emalloc(sign_siglen);
 	EVP_SignInit(&ctx, sign_digest);
@@ -3207,13 +3207,13 @@ cert_valid(
 	)
 {
 	X509	*cert;		/* X509 certificate */
-	u_char	*ptr;
+	const u_char	*ptr;
 
 	if (cinf->flags & CERT_SIGN)
 		return (XEVNT_OK);
 	ptr = (u_char *)cinf->cert.ptr;
 	cert = d2i_X509(NULL, &ptr, ntohl(cinf->cert.vallen));
-	if (!X509_verify(cert, pkey))
+	if (cert == NULL || !X509_verify(cert, pkey))
 		return (XEVNT_VFY);
 	cinf->flags |= CERT_SIGN;
 	X509_free(cert);
@@ -3434,16 +3434,19 @@ crypto_key(
 	if ((ptr = fgets(linkname, MAXFILENAME, str)) == NULL) {
 		msyslog(LOG_ERR, "crypto_key: no data %s\n",
 		    filename);
+		(void)fclose(str);
 		return (NULL);
 	}
 	if ((ptr = strrchr(ptr, '.')) == NULL) {
 		msyslog(LOG_ERR, "crypto_key: no filestamp %s\n",
 		    filename);
+		(void)fclose(str);
 		return (NULL);
 	}
 	if (sscanf(++ptr, "%u", fstamp) != 1) {
 		msyslog(LOG_ERR, "crypto_key: invalid timestamp %s\n",
 		    filename);
+		(void)fclose(str);
 		return (NULL);
 	}
 
@@ -3525,16 +3528,19 @@ crypto_cert(
 	if ((ptr = fgets(linkname, MAXFILENAME, str)) == NULL) {
 		msyslog(LOG_ERR, "crypto_cert: no data %s\n",
 		    filename);
+		(void)fclose(str);
 		return (NULL);
 	}
 	if ((ptr = strrchr(ptr, '.')) == NULL) {
 		msyslog(LOG_ERR, "crypto_cert: no filestamp %s\n",
 		    filename);
+		(void)fclose(str);
 		return (NULL);
 	}
 	if (sscanf(++ptr, "%u", &fstamp) != 1) {
 		msyslog(LOG_ERR, "crypto_cert: invalid filestamp %s\n",
 		    filename);
+		(void)fclose(str);
 		return (NULL);
 	}
 
@@ -3544,6 +3550,7 @@ crypto_cert(
 	if (!PEM_read(str, &name, &header, &data, &len)) {
 		msyslog(LOG_ERR, "crypto_cert %s\n",
 		    ERR_error_string(ERR_get_error(), NULL));
+		(void)fclose(str);
 		return (NULL);
 	}
 	free(header);
@@ -3552,6 +3559,7 @@ crypto_cert(
 		    name);
 		free(name);
 		free(data);
+		(void)fclose(str);
 		return (NULL);
 	}
 	free(name);
@@ -3561,6 +3569,7 @@ crypto_cert(
 	 */
 	ret = cert_parse(data, len, fstamp);
 	free(data);
+	(void)fclose(str);
 	if (ret == NULL)
 		return (NULL);
 	if ((ptr = strrchr(linkname, '\n')) != NULL)

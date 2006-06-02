@@ -1,7 +1,8 @@
-#	$NetBSD: std.hpcmips,v 1.17 2003/08/30 22:44:39 chs Exp $
+#	$NetBSD: std.hpcmips,v 1.19 2005/12/11 12:17:33 christos Exp $
 # standard, required hpcmips info
 
 machine hpcmips mips
+include		"conf/std"	# MI standard options
 makeoptions	MACHINE_ARCH="mipsel"
 
 options 	NOFPU			# No FPU

@@ -1,5 +1,5 @@
 %{
-/*	$NetBSD: arith_lex.l,v 1.12.6.1 2005/04/07 11:38:58 tron Exp $	*/
+/*	$NetBSD: arith_lex.l,v 1.13 2005/03/21 22:37:09 dsl Exp $	*/
 
 /*-
  * Copyright (c) 1993
@@ -38,7 +38,7 @@
 #if 0
 static char sccsid[] = "@(#)arith_lex.l	8.3 (Berkeley) 5/4/95";
 #else
-__RCSID("$NetBSD: arith_lex.l,v 1.12.6.1 2005/04/07 11:38:58 tron Exp $");
+__RCSID("$NetBSD: arith_lex.l,v 1.13 2005/03/21 22:37:09 dsl Exp $");
 #endif
 #endif /* not lint */
 

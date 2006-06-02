@@ -1,4 +1,4 @@
-/*	$NetBSD: move.c,v 1.6 2003/08/07 09:37:38 agc Exp $	*/
+/*	$NetBSD: move.c,v 1.8 2006/05/14 03:15:50 christos Exp $	*/
 
 /*
  * Copyright (c) 1988, 1993
@@ -37,7 +37,7 @@
 #if 0
 static char sccsid[] = "@(#)move.c	8.1 (Berkeley) 5/31/93";
 #else
-__RCSID("$NetBSD: move.c,v 1.6 2003/08/07 09:37:38 agc Exp $");
+__RCSID("$NetBSD: move.c,v 1.8 2006/05/14 03:15:50 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -66,7 +66,7 @@ one_move_rogue(dirch, pickup)
 	short row, col;
 	object *obj;
 	char desc[DCOLS];
-	short n, status, d;
+	short n, status, d = 0;	/* XXX: GCC */
 
 	row = rogue.row;
 	col = rogue.col;
@@ -105,6 +105,8 @@ one_move_rogue(dirch, pickup)
 	if (dungeon[row][col] & DOOR) {
 		if (cur_room == PASSAGE) {
 			cur_room = get_room_number(row, col);
+			if (cur_room == NO_ROOM)
+				clean_up("one_move_rogue: door to nowhere");
 			light_up_room(cur_room);
 			wake_room(cur_room, 1, row, col);
 		} else {

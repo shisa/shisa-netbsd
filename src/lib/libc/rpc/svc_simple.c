@@ -1,4 +1,4 @@
-/*	$NetBSD: svc_simple.c,v 1.26 2003/09/09 03:56:40 itojun Exp $	*/
+/*	$NetBSD: svc_simple.c,v 1.29 2006/03/21 23:58:24 christos Exp $	*/
 
 /*
  * Sun RPC is a product of Sun Microsystems, Inc. and is provided for
@@ -48,7 +48,7 @@
 
 #include <sys/cdefs.h>
 #if defined(LIBC_SCCS) && !defined(lint)
-__RCSID("$NetBSD: svc_simple.c,v 1.26 2003/09/09 03:56:40 itojun Exp $");
+__RCSID("$NetBSD: svc_simple.c,v 1.29 2006/03/21 23:58:24 christos Exp $");
 #endif
 
 #include "namespace.h"
@@ -124,7 +124,7 @@ rpc_reg(prognum, versnum, procnum, progname, inproc, outproc, nettype)
 	}
 
 	if (nettype == NULL)
-		nettype = "netpath";		/* The default behavior */
+		nettype = __UNCONST("netpath");	/* The default behavior */
 	if ((handle = __rpc_setconf(nettype)) == NULL) {
 		warnx(rpc_reg_err, rpc_reg_msg, __reg_err1);
 		return (-1);
@@ -141,6 +141,9 @@ rpc_reg(prognum, versnum, procnum, progname, inproc, outproc, nettype)
 
 		madenow = FALSE;
 		svcxprt = NULL;
+		recvsz = 0;
+		xdrbuf = NULL;
+		netid = NULL;
 		for (pl = proglst; pl; pl = pl->p_nxt)
 			if (strcmp(pl->p_netid, nconf->nc_netid) == 0) {
 				svcxprt = pl->p_transp;
@@ -170,6 +173,10 @@ rpc_reg(prognum, versnum, procnum, progname, inproc, outproc, nettype)
 			if (((xdrbuf = malloc((unsigned)recvsz)) == NULL) ||
 				((netid = strdup(nconf->nc_netid)) == NULL)) {
 				warnx(rpc_reg_err, rpc_reg_msg, __no_mem_str);
+				if (xdrbuf != NULL)
+					free(xdrbuf);
+				if (netid != NULL)
+					free(netid);
 				SVC_DESTROY(svcxprt);
 				break;
 			}

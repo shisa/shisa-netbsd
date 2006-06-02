@@ -1,4 +1,4 @@
-/*	$NetBSD: interact.c,v 1.23 2003/12/29 21:21:25 jdc Exp $	*/
+/*	$NetBSD: interact.c,v 1.29 2006/03/18 12:48:35 dsl Exp $	*/
 
 /*
  * Copyright (c) 1997 Christos Zoulas.  All rights reserved.
@@ -29,21 +29,31 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#if HAVE_NBTOOL_CONFIG_H
+#include "nbtool_config.h"
+#endif
+
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: interact.c,v 1.23 2003/12/29 21:21:25 jdc Exp $");
+__RCSID("$NetBSD: interact.c,v 1.29 2006/03/18 12:48:35 dsl Exp $");
 #endif /* lint */
 
 #include <sys/param.h>
 #define FSTYPENAMES
 #define DKTYPENAMES
-#include <sys/disklabel.h>
 
 #include <err.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+
+#if HAVE_NBTOOL_CONFIG_H
+#define	getmaxpartitions()	MAXPARTITIONS
+#include <nbinclude/sys/disklabel.h>
+#else
 #include <util.h>
+#include <sys/disklabel.h>
+#endif /* HAVE_NBTOOL_CONFIG_H */
 
 #include "extern.h"
 
@@ -419,9 +429,11 @@ cmd_round(struct disklabel *lp, char *s, int fd)
 
 	switch (line[0]) {
 	case 'c':
+	case 'C':
 		rounding = 1;
 		return;
 	case 's':
+	case 'S':
 		rounding = 0;
 		return;
 	default:
@@ -559,7 +571,7 @@ cmd_label(struct disklabel *lp, char *s, int fd)
 		return;
 	}
 
-	if (writelabel(fd, bootarea, lp) != 0) {
+	if (writelabel(fd, lp) != 0) {
 		printf("Label not written\n");
 		return;
 	}
@@ -621,19 +633,21 @@ static int
 alphacmp(const void *a, const void *b)
 {
 
-	return (strcasecmp(*(const char **)a, *(const char **)b));
+	return (strcasecmp(*(const char * const*)a, *(const char * const*)b));
 }
 
 
 static void
 dumpnames(const char *prompt, const char * const *olist, size_t numentries)
 {
-	int	i, j, w;
+	int	i, w;
+	int	entry;
 	int	columns, width, lines;
 	const char *p;
 	const char **list;
 
-	list = (const char **)malloc(sizeof(char *) * numentries);
+	if ((list = (const char **)malloc(sizeof(char *) * numentries)) == NULL)
+		err(1, "malloc");
 	width = 0;
 	printf("%s:\n", prompt);
 	for (i = 0; i < numentries; i++) {
@@ -657,24 +671,23 @@ dumpnames(const char *prompt, const char * const *olist, size_t numentries)
 	if (columns == 0)
 		columns = 1;
 	lines = (numentries + columns - 1) / columns;
+	/* Output sorted by columns */
 	for (i = 0; i < lines; i++) {
-		for (j = 0; j < columns; j++) {
-			p = list[j * lines + i];
-			if (j == 0)
-				putc('\t', stdout);
-			if (p) {
-				fputs(p, stdout);
-			}
-			if (j * lines + i + lines >= numentries) {
-				putc('\n', stdout);
+		putc('\t', stdout);
+		entry = i;
+		for (;;) {
+			p = list[entry];
+			fputs(p, stdout);
+			entry += lines;
+			if (entry >= numentries)
 				break;
-			}
 			w = strlen(p);
 			while (w < width) {
-				w = (w + 8) &~ 7;
+				w = (w + 8) & ~7;
 				putc('\t', stdout);
 			}
 		}
+		putc('\n', stdout);
 	}
 	free(list);
 }
@@ -710,11 +723,18 @@ getnum(struct disklabel *lp, char *buf, int max)
 	switch (*ep) {
 	case '\0':
 	case 's':
+	case 'S':
 		rv = (int) d;
 		break;
 
 	case 'c':
+	case 'C':
 		rv = (int) (d * lp->d_secpercyl);
+		break;
+
+	case 'k':
+	case 'K':
+		rv =  (int) (d * 1024 / lp->d_secsize);
 		break;
 
 	case 'm':
@@ -722,8 +742,20 @@ getnum(struct disklabel *lp, char *buf, int max)
 		rv =  (int) (d * 1024 * 1024 / lp->d_secsize);
 		break;
 
+	case 'g':
+	case 'G':
+		rv =  (int) (d * 1024 * 1024 * 1024 / lp->d_secsize);
+		break;
+
+	case 't':
+	case 'T':
+		rv =  (int) (d * 1024 * 1024 * 1024 * 1024 / lp->d_secsize);
+		break;
+
 	default:
 		printf("Unit error %c\n", *ep);
+		printf("Valid units: (S)ectors, (C)ylinders, (K)ilo, (M)ega, "
+		    "(G)iga, (T)era");
 		return -1;
 	}
 

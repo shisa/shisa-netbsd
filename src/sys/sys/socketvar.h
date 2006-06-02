@@ -1,4 +1,4 @@
-/*	$NetBSD: socketvar.h,v 1.80 2004/09/03 18:14:09 darrenr Exp $	*/
+/*	$NetBSD: socketvar.h,v 1.87 2006/05/14 21:38:18 elad Exp $	*/
 
 /*-
  * Copyright (c) 1982, 1986, 1990, 1993
@@ -34,12 +34,14 @@
 #ifndef _SYS_SOCKETVAR_H_
 #define	_SYS_SOCKETVAR_H_
 
-#include <sys/select.h>			/* for struct selinfo */
+#include <sys/select.h>
+#include <sys/selinfo.h>		/* for struct selinfo */
 #include <sys/queue.h>
 
 #if !defined(_KERNEL) || defined(LKM)
 struct uio;
-struct proc;
+struct lwp;
+struct uidinfo;
 #endif
 
 TAILQ_HEAD(soqhead, socket);
@@ -124,13 +126,13 @@ struct socket {
 	caddr_t		so_upcallarg;	/* Arg for above */
 	int		(*so_send) (struct socket *, struct mbuf *,
 					struct uio *, struct mbuf *,
-					struct mbuf *, int, struct proc *);
+					struct mbuf *, int, struct lwp *);
 	int		(*so_receive) (struct socket *,
 					struct mbuf **,
 					struct uio *, struct mbuf **,
 					struct mbuf **, int *);
 	struct mowner	*so_mowner;	/* who owns mbufs for this socket */
-	uid_t		so_uid;		/* who opened the socket */
+	struct uidinfo	*so_uidinfo;	/* who opened the socket */
 };
 
 #define	SB_EMPTY_FIXUP(sb)						\
@@ -160,7 +162,7 @@ do {									\
 					 * hint from sosend to lower layer;
 					 * more data coming
 					 */
-#define 	SS_ISAPIPE 		0x800 /* socket is implementing a pipe */
+#define	SS_ISAPIPE 		0x800	/* socket is implementing a pipe */
 
 
 /*
@@ -263,7 +265,7 @@ extern struct pool	socket_pool;
 
 struct mbuf;
 struct sockaddr;
-struct proc;
+struct lwp;
 struct msghdr;
 struct stat;
 struct knote;
@@ -271,14 +273,14 @@ struct knote;
 /*
  * File operations on sockets.
  */
-int	soo_read(struct file *, off_t *, struct uio *, struct ucred *, int);
-int	soo_write(struct file *, off_t *, struct uio *, struct ucred *, int);
-int	soo_fcntl(struct file *, u_int cmd, void *, struct proc *);
-int	soo_ioctl(struct file *, u_long cmd, void *, struct proc *);
-int	soo_poll(struct file *, int, struct proc *);
+int	soo_read(struct file *, off_t *, struct uio *, kauth_cred_t, int);
+int	soo_write(struct file *, off_t *, struct uio *, kauth_cred_t, int);
+int	soo_fcntl(struct file *, u_int cmd, void *, struct lwp *);
+int	soo_ioctl(struct file *, u_long cmd, void *, struct lwp *);
+int	soo_poll(struct file *, int, struct lwp *);
 int	soo_kqfilter(struct file *, struct knote *);
-int 	soo_close(struct file *, struct proc *);
-int	soo_stat(struct file *, struct stat *, struct proc *);
+int 	soo_close(struct file *, struct lwp *);
+int	soo_stat(struct file *, struct stat *, struct lwp *);
 void	sbappend(struct sockbuf *, struct mbuf *);
 void	sbappendstream(struct sockbuf *, struct mbuf *);
 int	sbappendaddr(struct sockbuf *, const struct sockaddr *, struct mbuf *,
@@ -303,13 +305,13 @@ int	sb_max_set(u_long);
 void	soinit(void);
 int	soabort(struct socket *);
 int	soaccept(struct socket *, struct mbuf *);
-int	sobind(struct socket *, struct mbuf *, struct proc *);
+int	sobind(struct socket *, struct mbuf *, struct lwp *);
 void	socantrcvmore(struct socket *);
 void	socantsendmore(struct socket *);
 int	soclose(struct socket *);
-int	soconnect(struct socket *, struct mbuf *, struct proc *);
+int	soconnect(struct socket *, struct mbuf *, struct lwp *);
 int	soconnect2(struct socket *, struct socket *);
-int	socreate(int, struct socket **, int, int, struct proc *);
+int	socreate(int, struct socket **, int, int, struct lwp *);
 int	sodisconnect(struct socket *);
 void	sofree(struct socket *);
 int	sogetopt(struct socket *, int, int, struct mbuf **);
@@ -328,14 +330,14 @@ int	soreceive(struct socket *, struct mbuf **, struct uio *,
 int	soreserve(struct socket *, u_long, u_long);
 void	sorflush(struct socket *);
 int	sosend(struct socket *, struct mbuf *, struct uio *,
-	    struct mbuf *, struct mbuf *, int, struct proc *);
+	    struct mbuf *, struct mbuf *, int, struct lwp *);
 int	sosetopt(struct socket *, int, int, struct mbuf *);
 int	soshutdown(struct socket *, int);
 void	sowakeup(struct socket *, struct sockbuf *, int);
 int	sockargs(struct mbuf **, const void *, size_t, int);
 
-int	sendit(struct proc *, int, struct msghdr *, int, register_t *);
-int	recvit(struct proc *, int, struct msghdr *, caddr_t, register_t *);
+int	sendit(struct lwp *, int, struct msghdr *, int, register_t *);
+int	recvit(struct lwp *, int, struct msghdr *, caddr_t, register_t *);
 
 #ifdef SOCKBUF_DEBUG
 /*

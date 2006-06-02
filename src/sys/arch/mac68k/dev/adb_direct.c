@@ -1,4 +1,4 @@
-/*	$NetBSD: adb_direct.c,v 1.50 2005/01/15 16:00:59 chs Exp $	*/
+/*	$NetBSD: adb_direct.c,v 1.53 2005/12/24 20:07:15 perry Exp $	*/
 
 /* From: adb_direct.c 2.02 4/18/97 jpw */
 
@@ -62,7 +62,7 @@
 #ifdef __NetBSD__
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: adb_direct.c,v 1.50 2005/01/15 16:00:59 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: adb_direct.c,v 1.53 2005/12/24 20:07:15 perry Exp $");
 
 #include "opt_adb.h"
 
@@ -213,7 +213,7 @@ struct adbCommand {
 /*
  * Text representations of each hardware class
  */
-char	*adbHardwareDescr[MAX_ADB_HW + 1] = {
+const char	*adbHardwareDescr[MAX_ADB_HW + 1] = {
 	"unknown",
 	"II series",
 	"IIsi series",
@@ -1788,7 +1788,7 @@ adb_soft_intr(void)
 		/* call default completion routine if it's valid */
 		if (comprout) {
 #ifdef __NetBSD__
-			__asm __volatile (
+			__asm volatile (
 			"	movml #0xffff,%%sp@- \n" /* save all regs */
 			"	movl %0,%%a2	\n" 	/* compdata */
 			"	movl %1,%%a1	\n" 	/* comprout */
@@ -2362,7 +2362,7 @@ adb_comp_exec(void)
 {
 	if ((long)0 != adbCompRout) /* don't call if empty return location */
 #ifdef __NetBSD__
-		__asm __volatile(
+		__asm volatile(
 		"	movml #0xffff,%%sp@- \n" /* save all registers */
 		"	movl %0,%%a2 \n"	/* adbCompData */
 		"	movl %1,%%a1 \n"	/* adbCompRout */
@@ -2724,7 +2724,7 @@ adb_read_date_time(unsigned long *time)
 		output[1] = 0x01;	/* to pram/rtc device */
 		output[2] = 0x03;	/* read date/time */
 		result = send_adb_IIsi((u_char *)output, (u_char *)output,
-		    (void *)adb_op_comprout, (int *)&flag, (int)0);
+		    (void *)adb_op_comprout, __UNVOLATILE(&flag), (int)0);
 		if (result != 0)	/* exit if not sent */
 			return -1;
 
@@ -2742,7 +2742,7 @@ adb_read_date_time(unsigned long *time)
 		output[1] = 0x01;	/* to pram/rtc device */
 		output[2] = 0x03;	/* read date/time */
 		result = send_adb_cuda((u_char *)output, (u_char *)output,
-		    (void *)adb_op_comprout, (void *)&flag, (int)0);
+		    (void *)adb_op_comprout, __UNVOLATILE(&flag), (int)0);
 		if (result != 0)	/* exit if not sent */
 			return -1;
 
@@ -2783,7 +2783,7 @@ adb_set_date_time(unsigned long time)
 		output[5] = (u_char)(time >> 8);
 		output[6] = (u_char)(time);
 		result = send_adb_IIsi((u_char *)output, (u_char *)0,
-		    (void *)adb_op_comprout, (void *)&flag, (int)0);
+		    (void *)adb_op_comprout, __UNVOLATILE(&flag), (int)0);
 		if (result != 0)	/* exit if not sent */
 			return -1;
 
@@ -2804,7 +2804,7 @@ adb_set_date_time(unsigned long time)
 		output[5] = (u_char)(time >> 8);
 		output[6] = (u_char)(time);
 		result = send_adb_cuda((u_char *)output, (u_char *)0,
-		    (void *)adb_op_comprout, (void *)&flag, (int)0);
+		    (void *)adb_op_comprout, __UNVOLATILE(&flag), (int)0);
 		if (result != 0)	/* exit if not sent */
 			return -1;
 
@@ -2883,7 +2883,7 @@ adb_prog_switch_enable(void)
 		output[2] = 0x1c;	/* prog. switch control */
 		output[3] = 0x01;	/* enable */
 		result = send_adb_IIsi((u_char *)output, (u_char *)0,
-		    (void *)adb_op_comprout, (void *)&flag, (int)0);
+		    (void *)adb_op_comprout, __UNVOLATILE(&flag), (int)0);
 		if (result != 0)	/* exit if not sent */
 			return -1;
 
@@ -2918,7 +2918,7 @@ adb_prog_switch_disable(void)
 		output[2] = 0x1c;	/* prog. switch control */
 		output[3] = 0x01;	/* disable */
 		result = send_adb_IIsi((u_char *)output, (u_char *)0,
-			(void *)adb_op_comprout, (void *)&flag, (int)0);
+			(void *)adb_op_comprout, __UNVOLATILE(&flag), (int)0);
 		if (result != 0)	/* exit if not sent */
 			return -1;
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: pci_machdep.c,v 1.9.14.2 2005/11/21 20:19:52 tron Exp $	*/
+/*	$NetBSD: pci_machdep.c,v 1.14 2006/02/07 20:38:43 bouyer Exp $	*/
 
 /*-
  * Copyright (c) 1997, 1998 The NetBSD Foundation, Inc.
@@ -80,7 +80,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: pci_machdep.c,v 1.9.14.2 2005/11/21 20:19:52 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pci_machdep.c,v 1.14 2006/02/07 20:38:43 bouyer Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -96,7 +96,6 @@ __KERNEL_RCSID(0, "$NetBSD: pci_machdep.c,v 1.9.14.2 2005/11/21 20:19:52 tron Ex
 #include <machine/bus_private.h>
 
 #include <machine/pio.h>
-#include <machine/intr.h>
 
 #include <dev/isa/isareg.h>
 #include <dev/isa/isavar.h>
@@ -104,16 +103,8 @@ __KERNEL_RCSID(0, "$NetBSD: pci_machdep.c,v 1.9.14.2 2005/11/21 20:19:52 tron Ex
 #include <dev/pci/pcireg.h>
 #include <dev/pci/pcidevs.h>
 
-#include "ioapic.h"
-#include "eisa.h"
 #include "opt_mpbios.h"
 #include "opt_mpacpi.h"
-
-#if NIOAPIC > 0
-#include <machine/i82093var.h>
-#include <machine/mpbiosvar.h>
-#include <machine/pic.h>
-#endif
 
 #ifdef MPBIOS
 #include <machine/mpbiosvar.h>
@@ -126,6 +117,13 @@ __KERNEL_RCSID(0, "$NetBSD: pci_machdep.c,v 1.9.14.2 2005/11/21 20:19:52 tron Ex
 #include "opt_pci_conf_mode.h"
 
 int pci_mode = -1;
+
+static void pci_bridge_hook(pci_chipset_tag_t, pcitag_t, void *);
+struct pci_bridge_hook_arg {
+	void (*func)(pci_chipset_tag_t, pcitag_t, void *); 
+	void *arg; 
+}; 
+
 
 struct simplelock pci_conf_slock = SIMPLELOCK_INITIALIZER;
 
@@ -529,156 +527,6 @@ not2:
 #endif
 }
 
-int
-pci_intr_map(pa, ihp)
-	struct pci_attach_args *pa;
-	pci_intr_handle_t *ihp;
-{
-	int pin = pa->pa_intrpin;
-	int line = pa->pa_intrline;
-#if NIOAPIC > 0
-	int rawpin = pa->pa_rawintrpin;
-	pci_chipset_tag_t pc = pa->pa_pc;
-	int bus, dev, func;
-#endif
-
-	if (pin == 0) {
-		/* No IRQ used. */
-		goto bad;
-	}
-
-	if (pin > PCI_INTERRUPT_PIN_MAX) {
-		printf("pci_intr_map: bad interrupt pin %d\n", pin);
-		goto bad;
-	}
-
-#if NIOAPIC > 0
-	pci_decompose_tag(pc, pa->pa_tag, &bus, &dev, &func);
-	if (mp_busses != NULL) {
-		if (intr_find_mpmapping(bus, (dev<<2)|(rawpin-1), ihp) == 0) {
-			*ihp |= line;
-			return 0;
-		}
-		/*
-		 * No explicit PCI mapping found. This is not fatal,
-		 * we'll try the ISA (or possibly EISA) mappings next.
-		 */
-	}
-#endif
-
-	/*
-	 * Section 6.2.4, `Miscellaneous Functions', says that 255 means
-	 * `unknown' or `no connection' on a PC.  We assume that a device with
-	 * `no connection' either doesn't have an interrupt (in which case the
-	 * pin number should be 0, and would have been noticed above), or
-	 * wasn't configured by the BIOS (in which case we punt, since there's
-	 * no real way we can know how the interrupt lines are mapped in the
-	 * hardware).
-	 *
-	 * XXX
-	 * Since IRQ 0 is only used by the clock, and we can't actually be sure
-	 * that the BIOS did its job, we also recognize that as meaning that
-	 * the BIOS has not configured the device.
-	 */
-	if (line == 0 || line == X86_PCI_INTERRUPT_LINE_NO_CONNECTION) {
-		printf("pci_intr_map: no mapping for pin %c (line=%02x)\n",
-		       '@' + pin, line);
-		goto bad;
-	} else {
-		if (line >= NUM_LEGACY_IRQS) {
-			printf("pci_intr_map: bad interrupt line %d\n", line);
-			goto bad;
-		}
-		if (line == 2) {
-			printf("pci_intr_map: changed line 2 to line 9\n");
-			line = 9;
-		}
-	}
-#if NIOAPIC > 0
-	if (mp_busses != NULL) {
-		if (intr_find_mpmapping(mp_isa_bus, line, ihp) == 0) {
-			*ihp |= line;
-			return 0;
-		}
-#if NEISA > 0
-		if (intr_find_mpmapping(mp_eisa_bus, line, ihp) == 0) {
-			*ihp |= line;
-			return 0;
-		}
-#endif
-		printf("pci_intr_map: bus %d dev %d func %d pin %d; line %d\n",
-		    bus, dev, func, pin, line);
-		printf("pci_intr_map: no MP mapping found\n");
-	}
-#endif
-
-	*ihp = line;
-	return 0;
-
-bad:
-	*ihp = -1;
-	return 1;
-}
-
-const char *
-pci_intr_string(pc, ih)
-	pci_chipset_tag_t pc;
-	pci_intr_handle_t ih;
-{
-	return intr_string(ih);
-}
-
-
-const struct evcnt *
-pci_intr_evcnt(pc, ih)
-	pci_chipset_tag_t pc;
-	pci_intr_handle_t ih;
-{
-
-	/* XXX for now, no evcnt parent reported */
-	return NULL;
-}
-
-void *
-pci_intr_establish(pc, ih, level, func, arg)
-	pci_chipset_tag_t pc;
-	pci_intr_handle_t ih;
-	int level, (*func) __P((void *));
-	void *arg;
-{
-	int pin, irq;
-	struct pic *pic;
-
-	pic = &i8259_pic;
-	pin = irq = ih;
-
-#if NIOAPIC > 0
-	if (ih & APIC_INT_VIA_APIC) {
-		pic = (struct pic *)ioapic_find(APIC_IRQ_APIC(ih));
-		if (pic == NULL) {
-			printf("pci_intr_establish: bad ioapic %d\n",
-			    APIC_IRQ_APIC(ih));
-			return NULL;
-		}
-		pin = APIC_IRQ_PIN(ih);
-		irq = APIC_IRQ_LEGACY_IRQ(ih);
-		if (irq < 0 || irq >= NUM_LEGACY_IRQS)
-			irq = -1;
-	}
-#endif
-
-	return intr_establish(irq, pic, pin, IST_LEVEL, level, func, arg);
-}
-
-void
-pci_intr_disestablish(pc, cookie)
-	pci_chipset_tag_t pc;
-	void *cookie;
-{
-
-	intr_disestablish(cookie);
-}
-
 /*
  * Determine which flags should be passed to the primary PCI bus's
  * autoconfiguration node.  We use this to detect broken chipsets
@@ -724,4 +572,90 @@ pci_bus_flags()
 	rval &= ~(PCI_FLAGS_MEM_ENABLED|PCI_FLAGS_MRL_OKAY|PCI_FLAGS_MRM_OKAY|
 	    PCI_FLAGS_MWI_OKAY);
 	return (rval);
+}
+
+void
+pci_device_foreach(pci_chipset_tag_t pc, int maxbus,
+	void (*func)(pci_chipset_tag_t, pcitag_t, void *), void *context)
+{
+	pci_device_foreach_min(pc, 0, maxbus, func, context);
+}
+
+void
+pci_device_foreach_min(pci_chipset_tag_t pc, int minbus, int maxbus,
+	void (*func)(pci_chipset_tag_t, pcitag_t, void *), void *context)
+{
+	const struct pci_quirkdata *qd;
+	int bus, device, function, maxdevs, nfuncs;
+	pcireg_t id, bhlcr;
+	pcitag_t tag;
+
+	for (bus = minbus; bus <= maxbus; bus++) {
+		maxdevs = pci_bus_maxdevs(pc, bus);
+		for (device = 0; device < maxdevs; device++) {
+			tag = pci_make_tag(pc, bus, device, 0);
+			id = pci_conf_read(pc, tag, PCI_ID_REG);
+
+			/* Invalid vendor ID value? */
+			if (PCI_VENDOR(id) == PCI_VENDOR_INVALID)
+				continue;
+			/* XXX Not invalid, but we've done this ~forever. */
+			if (PCI_VENDOR(id) == 0)
+				continue;
+
+			qd = pci_lookup_quirkdata(PCI_VENDOR(id),
+				PCI_PRODUCT(id));
+
+			bhlcr = pci_conf_read(pc, tag, PCI_BHLC_REG);
+			if (PCI_HDRTYPE_MULTIFN(bhlcr) ||
+			     (qd != NULL &&
+		  	     (qd->quirks & PCI_QUIRK_MULTIFUNCTION) != 0))
+				nfuncs = 8;
+			else
+				nfuncs = 1;
+
+			for (function = 0; function < nfuncs; function++) {
+				tag = pci_make_tag(pc, bus, device, function);
+				id = pci_conf_read(pc, tag, PCI_ID_REG);
+
+				/* Invalid vendor ID value? */
+				if (PCI_VENDOR(id) == PCI_VENDOR_INVALID)
+					continue;
+				/*
+				 * XXX Not invalid, but we've done this
+				 * ~forever.
+				 */
+				if (PCI_VENDOR(id) == 0)
+					continue;
+				(*func)(pc, tag, context);
+			}
+		}
+	}
+}
+
+void
+pci_bridge_foreach(pci_chipset_tag_t pc, int minbus, int maxbus,
+	void (*func)(pci_chipset_tag_t, pcitag_t, void *), void *ctx)
+{
+	struct pci_bridge_hook_arg bridge_hook;
+
+	bridge_hook.func = func;
+	bridge_hook.arg = ctx;  
+
+	pci_device_foreach_min(pc, minbus, maxbus, pci_bridge_hook,
+		&bridge_hook);      
+}
+
+static void
+pci_bridge_hook(pci_chipset_tag_t pc, pcitag_t tag, void *ctx)
+{
+	struct pci_bridge_hook_arg *bridge_hook = (void *)ctx;
+	pcireg_t reg;
+
+	reg = pci_conf_read(pc, tag, PCI_CLASS_REG);
+	if (PCI_CLASS(reg) == PCI_CLASS_BRIDGE &&
+ 	     (PCI_SUBCLASS(reg) == PCI_SUBCLASS_BRIDGE_PCI ||
+		PCI_SUBCLASS(reg) == PCI_SUBCLASS_BRIDGE_CARDBUS)) {
+		(*bridge_hook->func)(pc, tag, bridge_hook->arg);
+	}
 }

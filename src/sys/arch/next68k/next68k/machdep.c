@@ -1,4 +1,4 @@
-/*	$NetBSD: machdep.c,v 1.71.4.1 2005/11/01 22:33:25 tron Exp $	*/
+/*	$NetBSD: machdep.c,v 1.74 2005/12/11 12:18:29 christos Exp $	*/
 
 /*
  * Copyright (c) 1998 Darrin B. Jewell
@@ -79,7 +79,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.71.4.1 2005/11/01 22:33:25 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.74 2005/12/11 12:18:29 christos Exp $");
 
 #include "opt_ddb.h"
 #include "opt_kgdb.h"
@@ -341,7 +341,7 @@ cpu_startup(void)
 	/*
 	 * Good {morning,afternoon,evening,night}.
 	 */
-	printf(version);
+	printf("%s%s", copyright, version);
 	identifycpu();
 	format_bytes(pbuf, sizeof(pbuf), ctob(physmem));
 	printf("total memory = %s\n", pbuf);
@@ -952,7 +952,7 @@ nmihand(void *frame)
  * understand and, if so, set up the vmcmds for it.
  */
 int
-cpu_exec_aout_makecmds(struct proc *p, struct exec_package *epp)
+cpu_exec_aout_makecmds(struct lwp *l, struct exec_package *epp)
 {
 	return ENOEXEC;
 }

@@ -1,4 +1,4 @@
-/*	$NetBSD: pcivar.h,v 1.69 2005/02/04 02:10:45 perry Exp $	*/
+/*	$NetBSD: pcivar.h,v 1.71 2006/03/01 18:53:40 gdamore Exp $	*/
 
 /*
  * Copyright (c) 1996, 1997 Christopher G. Demetriou.  All rights reserved.
@@ -191,6 +191,9 @@ int	pci_mapreg_map(struct pci_attach_args *, int, pcireg_t, int,
 	    bus_space_tag_t *, bus_space_handle_t *, bus_addr_t *,
 	    bus_size_t *);
 
+int pci_find_rom(struct pci_attach_args *, bus_space_tag_t, bus_space_handle_t,
+	    int, bus_space_handle_t *, bus_size_t *);
+
 int pci_get_capability(pci_chipset_tag_t, pcitag_t, int, int *, pcireg_t *);
 
 /*
@@ -209,7 +212,7 @@ const struct pci_quirkdata *
  */
 struct proc;
 int	pci_devioctl(pci_chipset_tag_t, pcitag_t, u_long, caddr_t,
-	    int flag, struct proc *);
+	    int flag, struct lwp *);
 
 /*
  * Power Management (PCI 2.2)

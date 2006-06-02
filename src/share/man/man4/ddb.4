@@ -1,4 +1,4 @@
-.\"	$NetBSD: ddb.4,v 1.81 2005/02/14 18:14:27 fredb Exp $
+.\"	$NetBSD: ddb.4,v 1.95 2006/04/28 06:04:27 wiz Exp $
 .\"
 .\" Copyright (c) 1997 - 2003 The NetBSD Foundation, Inc.
 .\" All rights reserved.
@@ -63,7 +63,7 @@
 .\" any improvements or extensions that they make and grant Carnegie Mellon
 .\" the rights to redistribute these changes.
 .\"
-.Dd February 14, 2005
+.Dd April 27, 2006
 .Dt DDB 4
 .Os
 .Sh NAME
@@ -86,6 +86,11 @@ To enable teeing all
 .Ic ddb
 output to the kernel msgbuf:
 .Cd options DDB_TEE_MSGBUF=1
+.Pp
+To specify commands which will be executed on each entry to
+.Ic ddb :
+.Cd options DDB_COMMANDONENTER="trace;show registers"
+In this case, "trace" and then "show registers" will be executed automatically.
 .Sh DESCRIPTION
 .Nm
 is the in-kernel debugger.
@@ -159,6 +164,9 @@ keyboard.
 \*[Lt]Esc\*[Gt]-\*[Lt]Shift\*[Gt]-D on serial console.
 .It x68k
 Interrupt switch on the body.
+.It xen
++++++
+(five plus signs)
 .El
 .Pp
 The key sequence to activate
@@ -243,9 +251,9 @@ displays
 .Dq "--db more--"
 and waits for a response, which may be one of:
 .Bl -tag -offset indent -width "\*[Lt]return\*[Gt]"
-.It \*[Lt]return\*[Gt]
+.It Aq return
 one more line.
-.It \*[Lt]space\*[Gt]
+.It Aq space
 one more page.
 .It Ic q
 abort the current command, and return to the command input mode.
@@ -530,14 +538,14 @@ ecx = yyyyyy
 .Sm on
 .Xc
 A synonym for
-.Ic "show all procs" .
+.Ic show all procs .
 .It Ic reboot Op Ar flags
 Reboot, using the optionally supplied boot
 .Ar flags ,
 which is a bitmask supporting the same values as for
 .Xr reboot 2 .
 Some of the more useful flags:
-.Bl -column "Value" "RB_AUTOBOOT" "Description"
+.Bl -column "Value" "RB_POWERDOWN" "Description"
 .It Sy "Value" Ta Sy "Name" Ta Sy "Description"
 .It 0x1 Ta RB_ASKNAME Ta Ask for file name to reboot from
 .It 0x2 Ta RB_SINGLE Ta Reboot to single user mode
@@ -590,6 +598,14 @@ Set the named variable or register to the value of
 .Ar expression .
 Valid variable names are described in
 .Sx VARIABLES .
+.It Ic show all pages
+Display basic information about all physical pages managed by the VM system.
+For more detailed information about a single page, use
+.Ic show page .
+.It Ic show all pools Ns Op Cm /clp
+Display all pool information.
+Modifiers are the same as
+.Ic show pool .
 .It Xo
 .Sm off
 .Ic "show\ all\ procs"
@@ -613,16 +629,16 @@ show the kernel virtual addresses of each process'
 proc structure, u-area, and vmspace structure.
 The vmspace address is also the address of the process'
 vm_map structure, and can be used in the
-.Ic "show map"
+.Ic show map
 command.
 .It Cm /w
 show each process' PID, command, system call emulation, wait channel
 address, and wait channel message.
 .El
-.It Ic "show breaks"
+.It Ic show breaks
 Display all breakpoints.
 .It Xo
-.Ic "show buf" Ns Op Cm /f
+.Ic show buf Ns Op Cm /f
 .Ar address
 .Xc
 Print the struct buf at
@@ -631,7 +647,7 @@ The
 .Cm /f
 does nothing at this time.
 .It Xo
-.Ic "show event" Ns Op Cm /f
+.Ic show event Ns Op Cm /f
 .Xc
 Print all the non-zero
 .Xr evcnt 9
@@ -640,7 +656,7 @@ If
 .Cm /f
 is specified, all event counters with a count of zero are printed as well.
 .It Xo
-.Ic "show map" Ns Op Cm /f
+.Ic show map Ns Op Cm /f
 .Ar address
 .Xc
 Print the vm_map at
@@ -649,7 +665,7 @@ If
 .Cm /f
 is specified, the complete map is printed.
 .It Xo
-.Ic "show mount" Ns Op Cm /f
+.Ic show mount Ns Op Cm /f
 .Ar address
 .Xc
 Print the mount structure at
@@ -657,11 +673,20 @@ Print the mount structure at
 If
 .Cm /f
 is specified, the complete vnode list is printed.
-.It Ic "show ncache" Ar address
+.It Xo
+.Ic show mbuf Ns Op Cm /c
+.Ar address
+.Xc
+Print the mbuf structure at
+.Ar address .
+If
+.Cm /c
+is specified, the mbufs in the chain are followed.
+.It Ic show ncache Ar address
 Dump the namecache list associated with vnode at
 .Ar address .
 .It Xo
-.Ic "show object" Ns Op Cm /f
+.Ic show object Ns Op Cm /f
 .Ar address
 .Xc
 Print the vm_object at
@@ -670,7 +695,7 @@ If
 .Cm /f
 is specified, the complete object is printed.
 .It Xo
-.Ic "show page" Ns Op Cm /f
+.Ic show page Ns Op Cm /f
 .Ar address
 .Xc
 Print the vm_page at
@@ -679,7 +704,7 @@ If
 .Cm /f
 is specified, the complete page is printed.
 .It Xo
-.Ic "show pool" Ns Op Cm /clp
+.Ic show pool Ns Op Cm /clp
 .Ar address
 .Xc
 Print the pool at
@@ -693,7 +718,7 @@ Print the log entries for this pool.
 .It Cm /p
 Print the pagelist for this pool.
 .El
-.It Ic "show registers" Ns Op Cm /u
+.It Ic show registers Ns Op Cm /u
 Display the register set.
 If
 .Cm /u
@@ -704,17 +729,17 @@ Warning: support for
 .Cm /u
 is machine dependent.
 If not supported, incorrect information will be displayed.
-.It Ic "show sched_qs"
+.It Ic show sched_qs
 Print the state of the scheduler's run queues.
 For each run queue that has an LWP, the run queue index and the list
 of LWPs will be shown.
 If the run queue has LWPs, but the sched_whichqs bit is not set for that
 queue, the queue index will be prefixed with a
 .Sq \&! .
-.It Ic "show uvmexp"
+.It Ic show uvmexp
 Print a selection of UVM counters and statistics.
 .It Xo
-.Ic "show vnode" Ns Op Cm /f
+.Ic show vnode Ns Op Cm /f
 .Ar address
 .Xc
 Print the vnode at
@@ -722,7 +747,7 @@ Print the vnode at
 If
 .Cm /f
 is specified, the complete vnode is printed.
-.It Ic "show watches"
+.It Ic show watches
 Display all watchpoints.
 .It Xo
 .Ic sifting Ns Op Cm /F
@@ -930,7 +955,7 @@ All of these commands are preceded by the command word
 .Em machine
 to indicate that they are part of the machine-specific command
 set (e.g.
-.Ic "machine reboot" ) .
+.Ic machine reboot ) .
 Some of these commands are:
 .Ss ALPHA
 .Bl -tag -width "intrchain" -compact
@@ -1076,7 +1101,7 @@ Page Table Entry (PTE).
 accesses registers and variables as
 .Cm $ Ns Ar name .
 Register names are as per the
-.Ic "show registers"
+.Ic show registers
 command.
 Some variables are suffixed with numbers, and may have a modifier
 following a colon immediately after the variable name.
@@ -1126,7 +1151,7 @@ Input and output radix.
 .It Va tabstops
 Tab stop width.
 .It Va tee_msgbuf
-If explictly set to non zero (zero is the default) all
+If explicitly set to non zero (zero is the default) all
 .Nm
 output will not only be displayed on screen but
 also be fed to the msgbuf.
@@ -1173,13 +1198,17 @@ If supported by an object format dependent routine,
 .Xo
 .Oo Ar filename : Oc
 .Ar function
-.Oo : Ar "line number" Oc ,
+.Oo : Ar line\ number Oc ,
 .Xc
+.Sm on
+.Sm off
 .Xo
 .Oo Ar filename : Oc
 .Ar variable ,
 .Xc
+.Sm on
 and
+.Sm off
 .Xo
 .Ar filename
 .Oo : Ar "line number" Oc ,
@@ -1187,7 +1216,7 @@ and
 .Sm on
 can be accepted as a symbol.
 The symbol may be prefixed with
-.Ar symbol_table_name : :
+.Ar symbol_table_name\^ : :
 (e.g.,
 .Li emulator::mach_msg_trap )
 to specify other than kernel symbols.
@@ -1216,7 +1245,7 @@ this is only changed by the
 or
 .Ic write
 commands.
-.It Cm \&"
+.It Cm \&" \"" XXX: emacs highlighting
 last address explicitly specified.
 .It Cm $ Ns Ar name
 register name or variable.
@@ -1224,8 +1253,9 @@ It is translated to the value of it.
 It may be followed by a
 .Sq \&:
 and modifiers as described above.
-.It Cm a
-multiple of right-hand side.
+.It Cm #
+a binary operator which rounds up the left hand side to the next
+multiple of right hand side.
 .It Cm * Ns Ar expr
 expression indirection.
 It may be followed by a
@@ -1233,8 +1263,8 @@ It may be followed by a
 and modifiers as described above.
 .El
 .Sh SEE ALSO
-.Xr options 4 ,
 .Xr reboot 2 ,
+.Xr options 4 ,
 .Xr reboot 8 ,
 .Xr sysctl 8 ,
 .Xr cnmagic 9

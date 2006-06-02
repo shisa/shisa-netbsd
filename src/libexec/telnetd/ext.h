@@ -1,4 +1,4 @@
-/*	$NetBSD: ext.h,v 1.19.2.1 2005/06/27 09:20:19 tron Exp $	*/
+/*	$NetBSD: ext.h,v 1.20 2005/06/21 22:29:53 lha Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993

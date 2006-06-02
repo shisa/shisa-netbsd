@@ -1,4 +1,4 @@
-/*	$NetBSD: heap.c,v 1.2 2004/05/18 00:04:00 christos Exp $	*/
+/*	$NetBSD: heap.c,v 1.4 2005/12/22 00:26:24 christos Exp $	*/
 
 /*
  * Copyright (C) 2004  Internet Systems Consortium, Inc. ("ISC")

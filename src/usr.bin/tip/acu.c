@@ -1,4 +1,4 @@
-/*	$NetBSD: acu.c,v 1.9 2004/04/23 22:11:44 christos Exp $	*/
+/*	$NetBSD: acu.c,v 1.12 2006/04/03 02:25:27 perry Exp $	*/
 
 /*
  * Copyright (c) 1983, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)acu.c	8.1 (Berkeley) 6/6/93";
 #endif
-__RCSID("$NetBSD: acu.c,v 1.9 2004/04/23 22:11:44 christos Exp $");
+__RCSID("$NetBSD: acu.c,v 1.12 2006/04/03 02:25:27 perry Exp $");
 #endif /* not lint */
 
 #include "tip.h"
@@ -43,8 +43,8 @@ static acu_t *acu = NULL;
 static int conflag;
 static jmp_buf jmpbuf;
 
-static void	acuabort __P((int));
-static acu_t   *acutype __P((char *));
+static void	acuabort(int);
+static acu_t   *acutype(char *);
 
 /*
  * Establish connection for tip
@@ -63,7 +63,7 @@ static acu_t   *acutype __P((char *));
  *   found in the file).
  */
 const char *
-connect()
+connect(void)
 {
 	char *cp = PN;
 	char *phnum, string[256];
@@ -78,7 +78,6 @@ connect()
 	if (!DU) {		/* regular connect message */
 		if (CM != NULL)
 			xpwrite(FD, CM, strlen(CM));
-		logent(value(HOST), "", DV, "call completed");
 		return (NULL);
 	}
 	/*
@@ -91,7 +90,6 @@ connect()
 		signal(SIGINT, SIG_IGN);
 		signal(SIGQUIT, SIG_IGN);
 		printf("\ncall aborted\n");
-		logent(value(HOST), "", "", "call aborted");
 		if (acu != NULL) {
 			setboolean(value(VERBOSE), FALSE);
 			if (conflag)
@@ -109,16 +107,12 @@ connect()
 				;
 			if (*cp)
 				*cp++ = '\0';
-			
+
 			if ((conflag = (*acu->acu_dialer)(phnum, CU)) != 0) {
 				if (CM != NULL)
 					xpwrite(FD, CM, strlen(CM));
-				logent(value(HOST), phnum, acu->acu_name,
-					"call completed");
 				return (NULL);
 			} else
-				logent(value(HOST), phnum, acu->acu_name,
-					"call failed");
 			tried++;
 		}
 	} else {
@@ -146,49 +140,40 @@ connect()
 				;
 			if (*cp)
 				*cp++ = '\0';
-			
+
 			if ((conflag = (*acu->acu_dialer)(phnum, CU)) != 0) {
 				fclose(fd);
 				if (CM != NULL)
 					xpwrite(FD, CM, strlen(CM));
-				logent(value(HOST), phnum, acu->acu_name,
-					"call completed");
 				return (NULL);
 			} else
-				logent(value(HOST), phnum, acu->acu_name,
-					"call failed");
 			tried++;
 		}
 		fclose(fd);
 	}
-	if (!tried)
-		logent(value(HOST), "", acu->acu_name, "missing phone number");
+	if (!tried) {
+	}
 	else
 		(*acu->acu_abort)();
 	return (tried ? "call failed" : "missing phone number");
 }
 
 void
-disconnect(reason)
-	const char *reason;
+disconnect(const char *reason)
 {
 
 	if (!conflag) {
-		logent(value(HOST), "", DV, "call terminated");
 		return;
 	}
 	if (reason == NULL) {
-		logent(value(HOST), "", acu->acu_name, "call terminated");
 		if (boolean(value(VERBOSE)))
 			printf("\r\ndisconnecting...");
-	} else 
-		logent(value(HOST), "", acu->acu_name, reason);
+	} else
 	(*acu->acu_disconnect)();
 }
 
 static void
-acuabort(s)
-	int s;
+acuabort(int s)
 {
 
 	signal(s, SIG_IGN);
@@ -196,8 +181,7 @@ acuabort(s)
 }
 
 static acu_t *
-acutype(s)
-	char *s;
+acutype(char *s)
 {
 	acu_t *p;
 

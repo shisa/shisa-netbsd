@@ -1,4 +1,4 @@
-/*	$NetBSD: sysdep.c,v 1.1.2.1 2005/05/01 22:03:34 tron Exp $	*/
+/*	$NetBSD: sysdep.c,v 1.2 2005/04/27 09:50:26 yamt Exp $	*/
 
 /*-
  * Copyright (c)2004 Citrus Project,
@@ -28,7 +28,7 @@
 
 #include <sys/cdefs.h>
 #if defined(LIBC_SCCS) && !defined(lint)
-__RCSID("$NetBSD: sysdep.c,v 1.1.2.1 2005/05/01 22:03:34 tron Exp $");
+__RCSID("$NetBSD: sysdep.c,v 1.2 2005/04/27 09:50:26 yamt Exp $");
 #endif /* LIBC_SCCS and not lint */
 
 #include <sys/param.h>

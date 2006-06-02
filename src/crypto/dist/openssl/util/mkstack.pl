@@ -75,6 +75,7 @@ while(<IN>) {
 #define sk_${type_thing}_push(st, val) SKM_sk_push($type_thing, (st), (val))
 #define sk_${type_thing}_unshift(st, val) SKM_sk_unshift($type_thing, (st), (val))
 #define sk_${type_thing}_find(st, val) SKM_sk_find($type_thing, (st), (val))
+#define sk_${type_thing}_find_ex(st, val) SKM_sk_find_ex($type_thing, (st), (val))
 #define sk_${type_thing}_delete(st, i) SKM_sk_delete($type_thing, (st), (i))
 #define sk_${type_thing}_delete_ptr(st, ptr) SKM_sk_delete_ptr($type_thing, (st), (ptr))
 #define sk_${type_thing}_insert(st, val, i) SKM_sk_insert($type_thing, (st), (val), (i))
@@ -84,6 +85,7 @@ while(<IN>) {
 #define sk_${type_thing}_shift(st) SKM_sk_shift($type_thing, (st))
 #define sk_${type_thing}_pop(st) SKM_sk_pop($type_thing, (st))
 #define sk_${type_thing}_sort(st) SKM_sk_sort($type_thing, (st))
+#define sk_${type_thing}_is_sorted(st) SKM_sk_is_sorted($type_thing, (st))
 EOF
 	}
 	foreach $type_thing (sort @asn1setlst) {

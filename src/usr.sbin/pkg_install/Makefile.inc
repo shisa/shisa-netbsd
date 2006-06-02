@@ -1,4 +1,4 @@
-# $NetBSD: Makefile.inc,v 1.25.6.1 2005/11/06 13:43:18 tron Exp $
+# $NetBSD: Makefile.inc,v 1.26 2005/11/05 13:11:02 wiz Exp $
 # Original from FreeBSD, no rcs id.
 
 .include <bsd.own.mk>

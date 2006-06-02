@@ -1,4 +1,4 @@
-/*	$NetBSD: profile.h,v 1.3.14.1 2005/09/30 22:48:11 tron Exp $	*/
+/*	$NetBSD: profile.h,v 1.6 2006/02/03 07:27:05 skrll Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -65,7 +65,7 @@ __asm(" .globl __mcount		\n"			\
 "	movq	0(%rbp),%r11	\n"			\
 "	movq	8(%r11),%rdi	\n"			\
 "	movq	8(%rbp),%rsi	\n"			\
-"	call	_mcount		\n"			\
+"	call	_mcount"__MCPLT "	\n"			\
 "	movq	0(%rsp),%rdi	\n"			\
 "	movq	8(%rsp),%rsi	\n"			\
 "	movq	16(%rsp),%rdx	\n"			\

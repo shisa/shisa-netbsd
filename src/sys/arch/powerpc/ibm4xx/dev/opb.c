@@ -1,4 +1,4 @@
-/* $NetBSD: opb.c,v 1.17 2004/02/13 11:36:16 wiz Exp $ */
+/* $NetBSD: opb.c,v 1.23 2006/03/13 15:31:11 shige Exp $ */
 
 /*
  * Copyright 2001,2002 Wasabi Systems, Inc.
@@ -66,7 +66,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: opb.c,v 1.17 2004/02/13 11:36:16 wiz Exp $");
+__KERNEL_RCSID(0, "$NetBSD: opb.c,v 1.23 2006/03/13 15:31:11 shige Exp $");
 
 #include "locators.h"
 
@@ -87,23 +87,24 @@ const struct opb_dev {
 	int pvr;
 	const char *name;
 	bus_addr_t addr;
+	int instance;
 	int irq;
 } opb_devs [] = {
 	/* IBM405GP */
-	{ IBM405GP,	"com",	IBM405GP_UART0_BASE,	 0 },
-	{ IBM405GP,	"com",	IBM405GP_UART1_BASE,	 1 },
-	{ IBM405GP,	"emac",	IBM405GP_EMAC0_BASE,	 9 }, /* XXX: really irq 9..15 */
-	{ IBM405GP,	"gpio",	IBM405GP_GPIO0_BASE,	-1 },
-	{ IBM405GP,	"gpiic",IBM405GP_IIC0_BASE,	 2 },
-	{ IBM405GP,	"wdog",	-1,	        	-1 },
+	{ IBM405GP,	"com",	IBM405GP_UART0_BASE,	 0, 0 },
+	{ IBM405GP,	"com",	IBM405GP_UART1_BASE,	 1, 1 },
+	{ IBM405GP,	"emac",	IBM405GP_EMAC0_BASE,	 0, 9 }, /* XXX: really irq 9..15 */
+	{ IBM405GP,	"opbgpio",	IBM405GP_GPIO0_BASE,	0, -1 },
+	{ IBM405GP,	"gpiic",IBM405GP_IIC0_BASE,	0,  2 },
+	{ IBM405GP,	"wdog",	-1,	        	0, -1 },
 
 	/* IBM405GPR */
-	{ IBM405GPR,	"com",	IBM405GP_UART0_BASE,	 0 },
-	{ IBM405GPR,	"com",	IBM405GP_UART1_BASE,	 1 },
-	{ IBM405GPR,	"emac",	IBM405GP_EMAC0_BASE,	 9 }, /* XXX: really irq 9..15 */
-	{ IBM405GPR,	"gpio",	IBM405GP_GPIO0_BASE,	-1 },
-	{ IBM405GPR,	"gpiic",IBM405GP_IIC0_BASE,	 2 },
-	{ IBM405GPR,	"wdog",	-1,	        	-1 },
+	{ IBM405GPR,	"com",	IBM405GP_UART0_BASE,	 0, 0 },
+	{ IBM405GPR,	"com",	IBM405GP_UART1_BASE,	 1, 1 },
+	{ IBM405GPR,	"emac",	IBM405GP_EMAC0_BASE,	 0, 9 }, /* XXX: really irq 9..15 */
+	{ IBM405GPR,	"opbgpio",	IBM405GP_GPIO0_BASE,	0, -1 },
+	{ IBM405GPR,	"gpiic",IBM405GP_IIC0_BASE,	0, 2 },
+	{ IBM405GPR,	"wdog",	-1,	        	0, -1 },
 	{ 0,		 NULL }
 };
 
@@ -119,14 +120,15 @@ const struct opb_limit {
 
 static int	opb_match(struct device *, struct cfdata *, void *);
 static void	opb_attach(struct device *, struct device *, void *);
-static int	opb_submatch(struct device *, struct cfdata *, void *);
+static int	opb_submatch(struct device *, struct cfdata *,
+			     const int *, void *);
 static int	opb_print(void *, const char *);
 
 CFATTACH_DECL(opb, sizeof(struct device),
     opb_match, opb_attach, NULL, NULL);
 
 static struct powerpc_bus_space opb_tag = {
-	_BUS_SPACE_LITTLE_ENDIAN|_BUS_SPACE_MEM_TYPE,
+	_BUS_SPACE_BIG_ENDIAN|_BUS_SPACE_MEM_TYPE,
 	0x0, IBM405GP_UART0_BASE, 0x1000
 };
 static char ex_storage[EXTENT_FIXED_STORAGE_SIZE(8)]
@@ -149,7 +151,8 @@ opb_match(struct device *parent, struct cfdata *cf, void *aux)
 }
 
 static int
-opb_submatch(struct device *parent, struct cfdata *cf, void *aux)
+opb_submatch(struct device *parent, struct cfdata *cf,
+	     const int *ldesc, void *aux)
 {
 	struct opb_attach_args *oaa = aux;
 
@@ -181,11 +184,13 @@ opb_attach(struct device *parent, struct device *self, void *aux)
 			continue;
 		oaa.opb_name = opb_devs[i].name;
 		oaa.opb_addr = opb_devs[i].addr;
+		oaa.opb_instance = opb_devs[i].instance;
 		oaa.opb_irq = opb_devs[i].irq;
 		oaa.opb_bt = tag;
 		oaa.opb_dmat = paa->plb_dmat;
 
-		(void) config_found_sm(self, &oaa, opb_print, opb_submatch);
+		(void) config_found_sm_loc(self, "opb", NULL, &oaa, opb_print,
+					   opb_submatch);
 	}
 }
 

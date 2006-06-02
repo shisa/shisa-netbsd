@@ -1,4 +1,4 @@
-/*	$NetBSD: malloc.c,v 1.43 2003/10/05 04:49:46 junyoung Exp $	*/
+/*	$NetBSD: malloc.c,v 1.46 2005/12/24 21:42:02 perry Exp $	*/
 
 /*
  * ----------------------------------------------------------------------------
@@ -69,6 +69,9 @@ void utrace(struct ut *, int);
 #   define HAS_UTRACE
 #   define UTRACE_LABEL "malloc",
 #include <sys/cdefs.h>
+#if defined(LIBC_SCCS) && !defined(lint)
+__RCSID("$NetBSD: malloc.c,v 1.46 2005/12/24 21:42:02 perry Exp $");
+#endif /* LIBC_SCCS and not lint */
 #include <sys/types.h>
 int utrace(const char *, void *, size_t);
 
@@ -264,7 +267,7 @@ static struct pgfree *px;
 char *malloc_options;
 
 /* Name of the current public function */
-static char *malloc_func;
+static const char *malloc_func;
 
 /* Macro for mmap */
 #define MMAP(size) \
@@ -280,10 +283,10 @@ static void ifree(void *ptr);
 static void *irealloc(void *ptr, size_t size);
 
 static void
-wrterror(char *p)
+wrterror(const char *p)
 {
     const char *progname = getprogname();
-    char *q = " error: ";
+    const char *q = " error: ";
     write(STDERR_FILENO, progname, strlen(progname));
     write(STDERR_FILENO, malloc_func, strlen(malloc_func));
     write(STDERR_FILENO, q, strlen(q));
@@ -293,10 +296,10 @@ wrterror(char *p)
 }
 
 static void
-wrtwarning(char *p)
+wrtwarning(const char *p)
 {
     const char *progname = getprogname();
-    char *q = " warning: ";
+    const char *q = " warning: ";
     if (malloc_abort)
 	wrterror(p);
     write(STDERR_FILENO, progname, strlen(progname));
@@ -624,7 +627,7 @@ malloc_pages(size_t size)
  * Allocate a page of fragments
  */
 
-static __inline__ int
+static inline int
 malloc_make_chunks(int bits)
 {
     struct  pginfo *bp;
@@ -871,7 +874,7 @@ irealloc(void *ptr, size_t size)
  * Free a sequence of pages
  */
 
-static __inline__ void
+static inline void
 free_pages(void *ptr, size_t idx, struct pginfo *info)
 {
     size_t i;
@@ -1002,7 +1005,7 @@ free_pages(void *ptr, size_t idx, struct pginfo *info)
  * Free a chunk, and possibly the page it's on, if the page becomes empty.
  */
 
-static __inline__ void
+static inline void
 free_bytes(void *ptr, size_t idx, struct pginfo *info)
 {
     size_t i;

@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.sys.mk,v 1.115.2.2 2005/09/04 20:04:04 tron Exp $
+#	$NetBSD: bsd.sys.mk,v 1.131 2006/05/22 00:43:04 uwe Exp $
 #
 # Build definitions used for NetBSD source tree builds.
 
@@ -16,18 +16,25 @@ CFLAGS+=	-Wall -Wstrict-prototypes -Wmissing-prototypes -Wpointer-arith
 # differently in traditional and ansi environments' which is the warning
 # we wanted, and now we don't get anymore.
 CFLAGS+=	-Wno-sign-compare -Wno-traditional
-# XXX Delete -Wuninitialized by default for now -- the compiler doesn't
-# XXX always get it right.
+.if !defined(HAVE_GCC) || (${HAVE_GCC} == 2)
 CFLAGS+=	-Wno-uninitialized
+.endif
 .endif
 .if ${WARNS} > 1
 CFLAGS+=	-Wreturn-type -Wswitch -Wshadow
 .endif
 .if ${WARNS} > 2
 CFLAGS+=	-Wcast-qual -Wwrite-strings
+.if defined(HAVE_GCC) && (${HAVE_GCC} > 2)
+CXXFLAGS+=	-Wabi
+CXXFLAGS+=	-Wold-style-cast
 .endif
-.if ${WARNS} > 3
-CFLAGS+=	-std=c99
+CXXFLAGS+=	-Wctor-dtor-privacy -Wnon-virtual-dtor -Wreorder \
+		-Wno-deprecated -Wno-non-template-friend \
+		-Woverloaded-virtual -Wno-pmf-conversions -Wsign-promo -Wsynth
+.endif
+.if ${WARNS} > 3 && ${MACHINE_ARCH} != "vax"
+CFLAGS+=	-std=gnu99
 .endif
 .endif
 
@@ -110,6 +117,7 @@ TOOL_CTAGS?=		ctags
 TOOL_DB?=		db
 TOOL_EQN?=		eqn
 TOOL_FGEN?=		fgen
+TOOL_GENASSYM?=		genassym
 TOOL_GENCAT?=		gencat
 TOOL_GROFF?=		groff
 TOOL_HEXDUMP?=		hexdump
@@ -149,7 +157,7 @@ TOOL_UUDECODE?=		uudecode
 TOOL_VGRIND?=		vgrind -f
 TOOL_ZIC?=		zic
 
-.SUFFIXES:	.o .ln .lo .c .cc .cpp .cxx .C ${YHEADER:D.h}
+.SUFFIXES:	.o .ln .lo .c .cc .cpp .cxx .C .m ${YHEADER:D.h}
 
 # C
 .c.o:
@@ -173,7 +181,7 @@ TOOL_ZIC?=		zic
 #  used for Objective C source)
 .m.o:
 	${_MKTARGET_COMPILE}
-	${COMPILE.m} ${.IMPSRC}
+	${COMPILE.m} ${OBJCOPTS} ${OBJCOPTS.${.IMPSRC:T}} ${.IMPSRC}
 
 # Host-compiled C objects
 # The intermediate step is necessary for Sun CC, which objects to calling

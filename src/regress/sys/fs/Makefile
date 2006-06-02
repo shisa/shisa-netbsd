@@ -1,5 +1,5 @@
-#	$NetBSD: Makefile,v 1.3 2004/10/03 12:35:15 yamt Exp $
+#	$NetBSD: Makefile,v 1.5 2005/12/19 17:50:02 rpaulo Exp $
 
-SUBDIR= mkdir getdents
+SUBDIR= mkdir getdents posix_fadvise tmpfs
 
 .include <bsd.subdir.mk>

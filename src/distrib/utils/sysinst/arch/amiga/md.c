@@ -1,4 +1,4 @@
-/*	$NetBSD: md.c,v 1.17 2004/08/14 16:06:40 dsl Exp $ */
+/*	$NetBSD: md.c,v 1.19 2006/04/05 16:55:05 garbled Exp $ */
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.
@@ -47,9 +47,6 @@
 #include "md.h"
 #include "msg_defs.h"
 #include "menu_defs.h"
-
-
-const char *fdtype = "ados";
 
 /* prototypes */
 
@@ -130,4 +127,10 @@ md_pre_update()
 void
 md_init()
 {
+}
+
+int
+md_post_extract(void)
+{
+	return 0;
 }

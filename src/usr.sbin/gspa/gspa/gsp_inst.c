@@ -1,4 +1,4 @@
-/*	$NetBSD: gsp_inst.c,v 1.4 2002/08/08 13:24:15 soren Exp $	*/
+/*	$NetBSD: gsp_inst.c,v 1.7 2006/05/25 02:50:50 christos Exp $	*/
 /*
  * TMS34010 GSP assembler - Instruction encoding
  *
@@ -33,7 +33,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: gsp_inst.c,v 1.4 2002/08/08 13:24:15 soren Exp $");
+__RCSID("$NetBSD: gsp_inst.c,v 1.7 2006/05/25 02:50:50 christos Exp $");
 #endif
 
 #include <string.h>
@@ -302,9 +302,14 @@ do_statement(char *opcode, operand operands)
 			perr("Inappropriate type for operand %d", nop+1);
 			return;
 		}
-		if( (req & ~OPTOPRN) == SPEC )
+		if( (req & ~OPTOPRN) == SPEC ) {
+			if (nop >= sizeof(spec) / sizeof(spec[0])) {
+				perr("Spec out of bounds");
+				return;
+			}
 			/* operand is a field/type/length specifier */
 			spec[nop] = specifier(op);
+		}
 		++nop;
 	}
 	if( nop < 4 && ip->optypes[nop] != 0
@@ -455,7 +460,7 @@ encode_instr(struct inst *ip, operand ops, int *spec, u_int16_t *iwords)
 		op1 = NULL;
 	class = ip->class & CLASS;
 	flags = ip->class & ~CLASS;
-	if( class == MOVE && op1->type == REG ){
+	if( class == MOVE && op0 && op1 && op1->type == REG ){
 		if (op0->type == REG ){
 			class = DYADIC;
 			if( (op0->reg_no & op1->reg_no & REGFILE) == 0 ){
@@ -486,7 +491,7 @@ encode_instr(struct inst *ip, operand ops, int *spec, u_int16_t *iwords)
 		   && spec[2] != 0 && op1->next->next == NULL )
 			perr("Extra operands ignored");
 	} else if( class == KREG ){
-		if( op0->type == REG ){
+		if( op0 && op0->type == REG ){
 			class = TWOREG;
 			if( opc < 0x2000 )
 				opc = 0x4A00;	/* BTST */
@@ -552,7 +557,7 @@ encode_instr(struct inst *ip, operand ops, int *spec, u_int16_t *iwords)
 		opc |= (rs & 0x1F) << 5;
 		break;
 	case CALL:			/* reg or address */
-		if( op0->type == REG ){
+		if( op0 && op0->type == REG ){
 			opc |= rs & 0x1F;
 			break;
 		}
@@ -575,7 +580,7 @@ encode_instr(struct inst *ip, operand ops, int *spec, u_int16_t *iwords)
 		}
 		break;
 	case JUMP:
-		if( op0->type == REG ){
+		if( op0 && op0->type == REG ){
 			opc |= rs & 0x1F;
 			break;
 		}
@@ -703,7 +708,7 @@ encode_instr(struct inst *ip, operand ops, int *spec, u_int16_t *iwords)
 	case PIXT:
 	case MOVB:
 	case MOVE:
-		ms = op0->type == REG? M_REG: op0->mode;
+		ms = op0 && op0->type == REG? M_REG: op0->mode;
 		md = op1->type == REG? M_REG: op1->mode;
 		opc = class == MOVE? move_opc[md][ms]:
 		      class == MOVB? movb_opc[md][ms]: pixt_opc[md][ms];

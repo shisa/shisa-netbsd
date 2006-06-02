@@ -1,4 +1,4 @@
-/*	$NetBSD: db_variables.c,v 1.32 2004/09/29 23:54:11 reinoud Exp $	*/
+/*	$NetBSD: db_variables.c,v 1.35 2006/05/14 05:30:31 christos Exp $	*/
 
 /*
  * Mach Operating System
@@ -27,7 +27,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: db_variables.c,v 1.32 2004/09/29 23:54:11 reinoud Exp $");
+__KERNEL_RCSID(0, "$NetBSD: db_variables.c,v 1.35 2006/05/14 05:30:31 christos Exp $");
 
 #include "opt_ddbparam.h"
 
@@ -166,6 +166,13 @@ SYSCTL_SETUP(sysctl_ddb_setup, "sysctl ddb subtree setup")
 		       SYSCTL_DESCR("Whether to tee ddb output to the msgbuf"),
 		       NULL, 0, &db_tee_msgbuf, 0,
 		       CTL_DDB, CTL_CREATE, CTL_EOL);
+
+	sysctl_createv(clog, 0, NULL, NULL,
+		       CTLFLAG_PERMANENT|CTLFLAG_READWRITE,
+		       CTLTYPE_STRING, "commandonenter",
+		       SYSCTL_DESCR("Command to be executed on each ddb enter"),
+		       NULL, 0, &db_cmd_on_enter, DB_LINE_MAXLEN,
+		       CTL_DDB, CTL_CREATE, CTL_EOL);
 }
 
 int
@@ -245,11 +252,11 @@ db_write_variable(const struct db_variable *vp, db_expr_t *valuep)
 
 /*ARGSUSED*/
 void
-db_set_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
+db_set_cmd(db_expr_t addr, int have_addr, db_expr_t count, const char *modif)
 {
 	db_expr_t	value;
 	db_expr_t	old_value;
-	const struct db_variable *vp;
+	const struct db_variable *vp = NULL;	/* XXX: GCC */
 	int	t;
 
 	t = db_read_token();

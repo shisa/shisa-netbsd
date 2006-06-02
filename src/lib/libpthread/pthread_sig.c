@@ -1,4 +1,4 @@
-/*	$NetBSD: pthread_sig.c,v 1.39.2.3 2005/11/01 20:01:38 jmc Exp $	*/
+/*	$NetBSD: pthread_sig.c,v 1.45 2006/04/24 19:00:30 snj Exp $	*/
 
 /*-
  * Copyright (c) 2001 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: pthread_sig.c,v 1.39.2.3 2005/11/01 20:01:38 jmc Exp $");
+__RCSID("$NetBSD: pthread_sig.c,v 1.45 2006/04/24 19:00:30 snj Exp $");
 
 /* We're interposing a specific version of the signal interface. */
 #define	__LIBC12_SOURCE__
@@ -54,6 +54,7 @@ __RCSID("$NetBSD: pthread_sig.c,v 1.39.2.3 2005/11/01 20:01:38 jmc Exp $");
 #include <string.h>		/* for memcpy() */
 #include <ucontext.h>
 #include <unistd.h>
+#include <compat/include/signal.h>
 #include <sys/syscall.h>
 
 #include <sched.h>
@@ -428,7 +429,7 @@ sigtimedwait(const sigset_t * __restrict set, siginfo_t * __restrict info,
 				PTQ_REMOVE(&pt_sigwaiting, self, pt_sleep);
 
 				/*
-				 * Signal master. It will rebuild it's wait set.
+				 * Signal master. It will rebuild its wait set.
 				 */
 				_lwp_wakeup(pt_sigwmaster->pt_blockedlwp);
 

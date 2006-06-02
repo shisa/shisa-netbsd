@@ -1,4 +1,4 @@
-/*	$NetBSD: lock.h,v 1.5 2003/09/26 22:46:01 nathanw Exp $	*/
+/*	$NetBSD: lock.h,v 1.8 2005/12/28 19:09:29 perry Exp $	*/
 
 /*-
  * Copyright (c) 2001 The NetBSD Foundation, Inc.
@@ -49,7 +49,7 @@ static __inline void
 __cpu_simple_lock_init(__cpu_simple_lock_t *lp)
 {
 
-	__asm __volatile(
+	__asm volatile(
 		"# -- BEGIN __cpu_simple_lock_init\n"
 		"	.set push		\n"
 		"	.set mips2		\n"
@@ -72,7 +72,7 @@ __cpu_simple_lock(__cpu_simple_lock_t *lp)
 	 * some work.
 	 */
 
-	__asm __volatile(
+	__asm volatile(
 		"# -- BEGIN __cpu_simple_lock	\n"
 		"	.set push		\n"
 		"	.set mips2		\n"
@@ -105,7 +105,7 @@ __cpu_simple_lock_try(__cpu_simple_lock_t *lp)
 {
 	unsigned long t0, v0;
 
-	__asm __volatile(
+	__asm volatile(
 		"# -- BEGIN __cpu_simple_lock_try\n"
 		"	.set push		\n"
 		"	.set mips2		\n"
@@ -135,7 +135,7 @@ static __inline void
 __cpu_simple_unlock(__cpu_simple_lock_t *lp)
 {
 
-	__asm __volatile(
+	__asm volatile(
 		"# -- BEGIN __cpu_simple_unlock \n"
 		"	.set push		\n"
 		"	.set mips2		\n"

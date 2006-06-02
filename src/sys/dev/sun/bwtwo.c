@@ -1,4 +1,4 @@
-/*	$NetBSD: bwtwo.c,v 1.12 2003/12/04 12:42:54 keihan Exp $ */
+/*	$NetBSD: bwtwo.c,v 1.14 2005/12/11 12:23:56 christos Exp $ */
 
 /*-
  * Copyright (c) 1996, 1997 The NetBSD Foundation, Inc.
@@ -86,7 +86,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: bwtwo.c,v 1.12 2003/12/04 12:42:54 keihan Exp $");
+__KERNEL_RCSID(0, "$NetBSD: bwtwo.c,v 1.14 2005/12/11 12:23:56 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -150,7 +150,7 @@ bwtwo_pfour_probe(vaddr, arg)
 void
 bwtwoattach(sc, name, isconsole)
 	struct	bwtwo_softc *sc;
-	char	*name;
+	const char *name;
 	int	isconsole;
 {
 	struct fbdevice *fb = &sc->sc_fb;
@@ -183,7 +183,7 @@ bwtwoattach(sc, name, isconsole)
 		printf("\n");
 
 	if ((fb->fb_flags & FB_PFOUR) && (sc->sc_ovtype != BWO_NONE)) {
-		char *ovnam;
+		const char *ovnam;
 
 		switch (sc->sc_ovtype) {
 		case BWO_CGFOUR:
@@ -215,10 +215,10 @@ bwtwoattach(sc, name, isconsole)
 }
 
 int
-bwtwoopen(dev, flags, mode, p)
+bwtwoopen(dev, flags, mode, l)
 	dev_t dev;
 	int flags, mode;
-	struct proc *p;
+	struct lwp *l;
 {
 	int unit = minor(dev);
 
@@ -229,12 +229,12 @@ bwtwoopen(dev, flags, mode, p)
 }
 
 int
-bwtwoioctl(dev, cmd, data, flags, p)
+bwtwoioctl(dev, cmd, data, flags, l)
 	dev_t dev;
 	u_long cmd;
 	caddr_t data;
 	int flags;
-	struct proc *p;
+	struct lwp *l;
 {
 	struct bwtwo_softc *sc = bwtwo_cd.cd_devs[minor(dev)];
 

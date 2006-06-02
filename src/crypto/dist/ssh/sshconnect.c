@@ -1,4 +1,4 @@
-/*	$NetBSD: sshconnect.c,v 1.30 2005/02/13 05:57:27 christos Exp $	*/
+/*	$NetBSD: sshconnect.c,v 1.34 2006/03/01 15:39:00 is Exp $	*/
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -14,8 +14,8 @@
  */
 
 #include "includes.h"
-RCSID("$OpenBSD: sshconnect.c,v 1.158 2004/06/21 17:36:31 avsm Exp $");
-__RCSID("$NetBSD: sshconnect.c,v 1.30 2005/02/13 05:57:27 christos Exp $");
+RCSID("$OpenBSD: sshconnect.c,v 1.171 2005/12/06 22:38:27 reyk Exp $");
+__RCSID("$NetBSD: sshconnect.c,v 1.34 2006/03/01 15:39:00 is Exp $");
 
 #include <openssl/bn.h>
 
@@ -33,13 +33,12 @@ __RCSID("$NetBSD: sshconnect.c,v 1.30 2005/02/13 05:57:27 christos Exp $");
 #include "readconf.h"
 #include "atomicio.h"
 #include "misc.h"
-
 #include "dns.h"
 
 char *client_version_string = NULL;
 char *server_version_string = NULL;
 
-int matching_host_key_dns = 0;
+static int matching_host_key_dns = 0;
 
 /* import */
 extern Options options;
@@ -57,12 +56,11 @@ static void warn_changed_key(Key *);
 static int
 ssh_proxy_connect(const char *host, u_short port, const char *proxy_command)
 {
-	Buffer command;
-	const char *cp;
-	char *command_string;
+	char *command_string, *tmp;
 	int pin[2], pout[2];
 	pid_t pid;
 	char strport[NI_MAXSERV];
+	size_t len;
 
 	/* Convert the port number into a string. */
 	snprintf(strport, sizeof strport, "%hu", port);
@@ -74,31 +72,13 @@ ssh_proxy_connect(const char *host, u_short port, const char *proxy_command)
 	 * Use "exec" to avoid "sh -c" processes on some platforms
 	 * (e.g. Solaris)
 	 */
-	buffer_init(&command);
-	buffer_append(&command, "exec ", 5);
-
-	for (cp = proxy_command; *cp; cp++) {
-		if (cp[0] == '%' && cp[1] == '%') {
-			buffer_append(&command, "%", 1);
-			cp++;
-			continue;
-		}
-		if (cp[0] == '%' && cp[1] == 'h') {
-			buffer_append(&command, host, strlen(host));
-			cp++;
-			continue;
-		}
-		if (cp[0] == '%' && cp[1] == 'p') {
-			buffer_append(&command, strport, strlen(strport));
-			cp++;
-			continue;
-		}
-		buffer_append(&command, cp, 1);
-	}
-	buffer_append(&command, "\0", 1);
-
-	/* Get the final command string. */
-	command_string = buffer_ptr(&command);
+	len = strlen(proxy_command) + 6;
+	tmp = xmalloc(len);
+	strlcpy(tmp, "exec ", len);
+	strlcat(tmp, proxy_command, len);
+	command_string = percent_expand(tmp, "h", host,
+	    "p", strport, (char *)NULL);
+	xfree(tmp);
 
 	/* Create pipes for communicating with the proxy. */
 	if (pipe(pin) < 0 || pipe(pout) < 0)
@@ -152,7 +132,7 @@ ssh_proxy_connect(const char *host, u_short port, const char *proxy_command)
 	close(pout[1]);
 
 	/* Free the command name. */
-	buffer_free(&command);
+	xfree(command_string);
 
 	/* Set the connection file descriptors. */
 	packet_set_connection(pout[0], pin[1]);
@@ -187,9 +167,17 @@ ssh_create_socket(int privileged, struct addrinfo *ai)
 		return sock;
 	}
 	sock = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
-	if (sock < 0)
-		error("socket: %.100s", strerror(errno));
-
+	if (sock < 0) {
+		switch (errno) {
+		case EPROTONOSUPPORT:
+			debug("socket: %.100s", strerror(errno));
+			break;
+		default:
+			error("socket: %.100s", strerror(errno));
+		}
+		return -1;
+	}
+  
 	/* Bind the socket to an alternative local IP address */
 	if (options.bind_address == NULL)
 		return sock;
@@ -245,13 +233,13 @@ timeout_connect(int sockfd, const struct sockaddr *serv_addr,
 	tv.tv_sec = timeout;
 	tv.tv_usec = 0;
 
-	for(;;) {
+	for (;;) {
 		rc = select(sockfd + 1, NULL, fdset, NULL, &tv);
 		if (rc != -1 || errno != EINTR)
 			break;
 	}
 
-	switch(rc) {
+	switch (rc) {
 	case 0:
 		/* Timed out */
 		errno = ETIMEDOUT;
@@ -295,12 +283,6 @@ timeout_connect(int sockfd, const struct sockaddr *serv_addr,
  * second).  If proxy_command is non-NULL, it specifies the command (with %h
  * and %p substituted for host and port, respectively) to use to contact
  * the daemon.
- * Return values:
- *    0 for OK
- *    ECONNREFUSED if we got a "Connection Refused" by the peer on any address
- *    ECONNABORTED if we failed without a "Connection refused"
- * Suitable error messages for the connection failure will already have been
- * printed.
  */
 int
 ssh_connect(const char *host, struct sockaddr_storage * hostaddr,
@@ -312,24 +294,9 @@ ssh_connect(const char *host, struct sockaddr_storage * hostaddr,
 	int sock = -1, attempt;
 	char ntop[NI_MAXHOST], strport[NI_MAXSERV];
 	struct addrinfo hints, *ai, *aitop;
-	struct servent *sp;
-	/*
-	 * Did we get only other errors than "Connection refused" (which
-	 * should block fallback to rsh and similar), or did we get at least
-	 * one "Connection refused"?
-	 */
-	int full_failure = 1;
 
 	debug2("ssh_connect: needpriv %d", needpriv);
 
-	/* Get default port if port has not been set. */
-	if (port == 0) {
-		sp = getservbyname(SSH_SERVICE_NAME, "tcp");
-		if (sp)
-			port = ntohs(sp->s_port);
-		else
-			port = SSH_DEFAULT_PORT;
-	}
 	/* If a proxy command is given, connect using it. */
 	if (proxy_command != NULL)
 		return ssh_proxy_connect(host, port, proxy_command);
@@ -370,7 +337,10 @@ ssh_connect(const char *host, struct sockaddr_storage * hostaddr,
 			/* Create a socket for connecting. */
 			sock = ssh_create_socket(needpriv, ai);
 			if (sock < 0)
-				/* Any error is already output */
+				/*
+				 * Any serious error is already output,
+				 * at least in the debug case.
+				 */
 				continue;
 
 			if (timeout_connect(sock, ai->ai_addr, ai->ai_addrlen,
@@ -379,8 +349,6 @@ ssh_connect(const char *host, struct sockaddr_storage * hostaddr,
 				memcpy(hostaddr, ai->ai_addr, ai->ai_addrlen);
 				break;
 			} else {
-				if (errno == ECONNREFUSED)
-					full_failure = 0;
 				debug("connect to address %s port %s: %s",
 				    ntop, strport, strerror(errno));
 				/*
@@ -406,9 +374,9 @@ ssh_connect(const char *host, struct sockaddr_storage * hostaddr,
 
 	/* Return failure if we didn't get a successful connection. */
 	if (attempt >= connection_attempts) {
-		logit("ssh: connect to host %s port %s: %s",
+		error("ssh: connect to host %s port %s: %s",
 		    host, strport, strerror(errno));
-		return full_failure ? ECONNABORTED : ECONNREFUSED;
+		return (-1);
 	}
 
 	debug("Connection established.");
@@ -433,19 +401,21 @@ static void
 ssh_exchange_identification(void)
 {
 	char buf[256], remote_version[256];	/* must be same size! */
-	int remote_major, remote_minor, i, mismatch;
+	int remote_major, remote_minor, mismatch;
 	int connection_in = packet_get_connection_in();
 	int connection_out = packet_get_connection_out();
 	int minor1 = PROTOCOL_MINOR_1;
+	u_int i;
 
-	/* Read other side\'s version identification. */
+	/* Read other side's version identification. */
 	for (;;) {
 		for (i = 0; i < sizeof(buf) - 1; i++) {
-			int len = atomicio(read, connection_in, &buf[i], 1);
-			if (len < 0)
-				fatal("ssh_exchange_identification: read: %.100s", strerror(errno));
-			if (len != 1)
+			size_t len = atomicio(read, connection_in, &buf[i], 1);
+
+			if (len != 1 && errno == EPIPE)
 				fatal("ssh_exchange_identification: Connection closed by remote host");
+			else if (len != 1)
+				fatal("ssh_exchange_identification: read: %.100s", strerror(errno));
 			if (buf[i] == '\r') {
 				buf[i] = '\n';
 				buf[i + 1] = 0;
@@ -566,7 +536,7 @@ check_host_key(char *host, struct sockaddr *hostaddr, Key *host_key,
 	char hostline[1000], *hostp, *fp;
 	HostStatus host_status;
 	HostStatus ip_status;
-	int local = 0, host_ip_differ = 0;
+	int r, local = 0, host_ip_differ = 0;
 	char ntop[NI_MAXHOST];
 	char msg[1024];
 	int len, host_line, ip_line;
@@ -584,7 +554,7 @@ check_host_key(char *host, struct sockaddr *hostaddr, Key *host_key,
 	switch (hostaddr->sa_family) {
 	case AF_INET:
 		local = (ntohl(((struct sockaddr_in *)hostaddr)->
-		   sin_addr.s_addr) >> 24) == IN_LOOPBACKNET;
+		    sin_addr.s_addr) >> 24) == IN_LOOPBACKNET;
 		break;
 	case AF_INET6:
 		local = IN6_IS_ADDR_LOOPBACK(
@@ -638,7 +608,7 @@ check_host_key(char *host, struct sockaddr *hostaddr, Key *host_key,
 	file_key = key_new(host_key->type);
 
 	/*
-	 * Check if the host key is present in the user\'s list of known
+	 * Check if the host key is present in the user's list of known
 	 * hosts or in the systemwide list.
 	 */
 	host_file = user_hostfile;
@@ -686,7 +656,7 @@ check_host_key(char *host, struct sockaddr *hostaddr, Key *host_key,
 				    "'%.128s' not in list of known hosts.",
 				    type, ip);
 			else if (!add_host_to_hostfile(user_hostfile, ip,
-			    host_key))
+			    host_key, options.hash_known_hosts))
 				logit("Failed to add the %s host key for IP "
 				    "address '%.128s' to the list of known "
 				    "hosts (%.30s).", type, ip, user_hostfile);
@@ -714,8 +684,8 @@ check_host_key(char *host, struct sockaddr *hostaddr, Key *host_key,
 
 			if (show_other_keys(host, host_key))
 				snprintf(msg1, sizeof(msg1),
-				   "\nbut keys of different type are already"
-				   " known for this host.");
+				    "\nbut keys of different type are already"
+				    " known for this host.");
 			else
 				snprintf(msg1, sizeof(msg1), ".");
 			/* The default */
@@ -742,17 +712,33 @@ check_host_key(char *host, struct sockaddr *hostaddr, Key *host_key,
 			if (!confirm(msg))
 				goto fail;
 		}
-		if (options.check_host_ip && ip_status == HOST_NEW) {
-			snprintf(hostline, sizeof(hostline), "%s,%s", host, ip);
-			hostp = hostline;
-		} else
-			hostp = host;
-
 		/*
 		 * If not in strict mode, add the key automatically to the
 		 * local known_hosts file.
 		 */
-		if (!add_host_to_hostfile(user_hostfile, hostp, host_key))
+		if (options.check_host_ip && ip_status == HOST_NEW) {
+			snprintf(hostline, sizeof(hostline), "%s,%s",
+			    host, ip);
+			hostp = hostline;
+			if (options.hash_known_hosts) {
+				/* Add hash of host and IP separately */
+				r = add_host_to_hostfile(user_hostfile, host,
+				    host_key, options.hash_known_hosts) &&
+				    add_host_to_hostfile(user_hostfile, ip,
+				    host_key, options.hash_known_hosts);
+			} else {
+				/* Add unhashed "host,ip" */
+				r = add_host_to_hostfile(user_hostfile,
+				    hostline, host_key,
+				    options.hash_known_hosts);
+			}
+		} else {
+			r = add_host_to_hostfile(user_hostfile, host, host_key,
+			    options.hash_known_hosts);
+			hostp = host;
+		}
+
+		if (!r)
 			logit("Failed to add the host to the list of known "
 			    "hosts (%.500s).", user_hostfile);
 		else
@@ -1052,4 +1038,40 @@ warn_changed_key(Key *host_key)
 	error("Please contact your system administrator.");
 
 	xfree(fp);
+}
+
+/*
+ * Execute a local command
+ */
+int
+ssh_local_cmd(const char *args)
+{
+	char *shell;
+	pid_t pid;
+	int status;
+
+	if (!options.permit_local_command ||
+	    args == NULL || !*args)
+		return (1);
+
+	if ((shell = getenv("SHELL")) == NULL)
+		shell = _PATH_BSHELL;
+
+	pid = fork();
+	if (pid == 0) {
+		debug3("Executing %s -c \"%s\"", shell, args);
+		execl(shell, shell, "-c", args, (char *)NULL);
+		error("Couldn't execute %s -c \"%s\": %s",
+		    shell, args, strerror(errno));
+		_exit(1);
+	} else if (pid == -1)
+		fatal("fork failed: %.100s", strerror(errno));
+	while (waitpid(pid, &status, 0) == -1)
+		if (errno != EINTR)
+			fatal("Couldn't wait for child: %s", strerror(errno));
+
+	if (!WIFEXITED(status))
+		return (1);
+
+	return (WEXITSTATUS(status));
 }

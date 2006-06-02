@@ -1,4 +1,4 @@
-/*	$NetBSD: progress.c,v 1.1.2.1 2005/05/11 12:22:16 tron Exp $	*/
+/*	$NetBSD: progress.c,v 1.2 2005/05/10 00:39:04 atatat Exp $	*/
 
 /*-
  * Copyright (c) 1997-2004 The NetBSD Foundation, Inc.
@@ -38,7 +38,7 @@
 
 #ifndef SMALL
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: progress.c,v 1.1.2.1 2005/05/11 12:22:16 tron Exp $");
+__RCSID("$NetBSD: progress.c,v 1.2 2005/05/10 00:39:04 atatat Exp $");
 
 /*
  * File system independent fsck progress bar routines.

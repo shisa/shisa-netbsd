@@ -1,4 +1,4 @@
-/*	$NetBSD: execl.c,v 1.11 2003/08/07 16:42:47 agc Exp $	*/
+/*	$NetBSD: execl.c,v 1.15 2006/03/20 09:27:30 he Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -34,11 +34,12 @@
 #if 0
 static char sccsid[] = "@(#)exec.c	8.1 (Berkeley) 6/4/93";
 #else
-__RCSID("$NetBSD: execl.c,v 1.11 2003/08/07 16:42:47 agc Exp $");
+__RCSID("$NetBSD: execl.c,v 1.15 2006/03/20 09:27:30 he Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
 #include "namespace.h"
+#include <errno.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -56,8 +57,8 @@ execl(const char *name, const char *arg, ...)
 {
 	int r;
 #if defined(__i386__) || defined(__m68k__) || defined(__ns32k__)
-	r = execve(name, (char **) &arg, environ);
-	return (r);
+	r = execve(name, __UNCONST(&arg), environ);
+	return r;
 #else
 	va_list ap;
 	char **argv;
@@ -65,18 +66,21 @@ execl(const char *name, const char *arg, ...)
 
 	va_start(ap, arg);
 	for (i = 2; va_arg(ap, char *) != NULL; i++)
-		;
+		continue;
 	va_end(ap);
 
-	argv = alloca (i * sizeof (char *));
+	if ((argv = alloca(i * sizeof (char *))) == NULL) {
+		errno = ENOMEM;
+		return -1;
+	}
 	
 	va_start(ap, arg);
-	argv[0] = (char *) arg;
-	for (i = 1; (argv[i] = (char *) va_arg(ap, char *)) != NULL; i++) 
-		;
+	argv[0] = __UNCONST(arg);
+	for (i = 1; (argv[i] = va_arg(ap, char *)) != NULL; i++) 
+		continue;
 	va_end(ap);
 	
 	r = execve(name, argv, environ);
-	return (r);
+	return r;
 #endif
 }

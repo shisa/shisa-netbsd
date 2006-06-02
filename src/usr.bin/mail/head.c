@@ -1,4 +1,4 @@
-/*	$NetBSD: head.c,v 1.12 2003/08/07 11:14:38 agc Exp $	*/
+/*	$NetBSD: head.c,v 1.15 2006/01/05 02:13:41 christos Exp $	*/
 
 /*
  * Copyright (c) 1980, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)head.c	8.2 (Berkeley) 4/20/95";
 #else
-__RCSID("$NetBSD: head.c,v 1.12 2003/08/07 11:14:38 agc Exp $");
+__RCSID("$NetBSD: head.c,v 1.15 2006/01/05 02:13:41 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -53,9 +53,9 @@ __RCSID("$NetBSD: head.c,v 1.12 2003/08/07 11:14:38 agc Exp $");
  * accomodate all funny formats.
  */
 int
-ishead(char linebuf[])
+ishead(const char linebuf[])
 {
-	char *cp;
+	const char *cp;
 	struct headline hl;
 	char parbuf[BUFSIZ];
 
@@ -80,14 +80,14 @@ ishead(char linebuf[])
 
 /*ARGSUSED*/
 void
-fail(char linebuf[], char reason[])
+fail(const char linebuf[], const char reason[])
 {
-
-	/*
+#if 0
 	if (value("debug") == NULL)
 		return;
-	fprintf(stderr, "\"%s\"\nnot a header because %s\n", linebuf, reason);
-	*/
+	(void)fprintf(stderr, "\"%s\"\nnot a header because %s\n", linebuf,
+	    reason);
+#endif
 }
 
 /*
@@ -97,9 +97,9 @@ fail(char linebuf[], char reason[])
  * structure.  Actually, it scans.
  */
 void
-parse(char line[], struct headline *hl, char pbuf[])
+parse(const char line[], struct headline *hl, char pbuf[])
 {
-	char *cp;
+	const char *cp;
 	char *sp;
 	char word[LINESIZE];
 
@@ -130,7 +130,7 @@ parse(char line[], struct headline *hl, char pbuf[])
  * the left string into it.
  */
 char *
-copyin(char *src, char **space)
+copyin(const char *src, char **space)
 {
 	char *cp;
 	char *begin;
@@ -165,7 +165,7 @@ char tmztype[] = "Aaa Aaa O0 00:00:00 AAA 0000";
 char SysV_tmztype[] = "Aaa Aaa O0 00:00 AAA 0000";
 
 int
-isdate(char date[])
+isdate(const char date[])
 {
 
 	return cmatch(date, ctype) || 
@@ -178,7 +178,7 @@ isdate(char date[])
  * Return 1 if they match, 0 if they don't
  */
 int
-cmatch(char *cp, char *tp)
+cmatch(const char *cp, char *tp)
 {
 
 	while (*cp && *tp)
@@ -223,8 +223,8 @@ cmatch(char *cp, char *tp)
  * passed.  Also, return a pointer to the next word following that,
  * or NULL if none follow.
  */
-char *
-nextword(char *wp, char *wbuf)
+const char *
+nextword(const char *wp, char *wbuf)
 {
 	int c;
 

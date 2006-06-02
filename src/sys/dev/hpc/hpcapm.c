@@ -1,4 +1,4 @@
-/*	$NetBSD: hpcapm.c,v 1.2.2.1 2005/08/04 18:32:40 tron Exp $	*/
+/*	$NetBSD: hpcapm.c,v 1.7 2006/03/29 06:37:35 thorpej Exp $	*/
 
 /*
  * Copyright (c) 2000 Takemura Shin
@@ -29,7 +29,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: hpcapm.c,v 1.2.2.1 2005/08/04 18:32:40 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: hpcapm.c,v 1.7 2006/03/29 06:37:35 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/device.h>
@@ -39,7 +39,6 @@ __KERNEL_RCSID(0, "$NetBSD: hpcapm.c,v 1.2.2.1 2005/08/04 18:32:40 tron Exp $");
 #include <dev/hpc/apm/apmvar.h>
 
 #include <machine/bus.h>
-#include <machine/autoconf.h>
 #include <machine/config_hook.h>
 #include <machine/platid.h>
 #include <machine/platid_mask.h>
@@ -105,12 +104,7 @@ extern struct cfdriver hpcapm_cd;
 static int
 hpcapm_match(struct device *parent, struct cfdata *cf, void *aux)
 {
-	struct mainbus_attach_args *ma = aux;
-
-	if (strcmp(ma->ma_name, hpcapm_cd.cd_name) != 0) {
-		return (0);
-	}
-	return (1);
+	return 1;
 }
 
 static void
@@ -119,7 +113,7 @@ hpcapm_attach(struct device *parent, struct device *self, void *aux)
 	struct apmhpc_softc *sc;
 	struct apmdev_attach_args aaa;
 
-	sc = (struct apmhpc_softc *)self;
+	sc = device_private(self);
 	printf(": pseudo power management module\n");
 
 	sc->events = 0;
@@ -151,7 +145,7 @@ hpcapm_attach(struct device *parent, struct device *self, void *aux)
 	aaa.accesscookie = sc;
 	aaa.apm_detail = 0x0102;
 
-	sc->sc_apmdev = config_found(self, &aaa, apmprint);
+	sc->sc_apmdev = config_found_ia(self, "apmdevif", &aaa, apmprint);
 }
 
 static int

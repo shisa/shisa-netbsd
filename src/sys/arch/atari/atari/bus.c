@@ -1,4 +1,4 @@
-/*	$NetBSD: bus.c,v 1.38 2005/03/10 18:16:01 matt Exp $	*/
+/*	$NetBSD: bus.c,v 1.42 2006/03/01 12:38:11 yamt Exp $	*/
 
 /*-
  * Copyright (c) 1998 The NetBSD Foundation, Inc.
@@ -38,7 +38,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: bus.c,v 1.38 2005/03/10 18:16:01 matt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: bus.c,v 1.42 2006/03/01 12:38:11 yamt Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -59,7 +59,7 @@ int  bus_dmamem_alloc_range __P((bus_dma_tag_t tag, bus_size_t size,
 		bus_dma_segment_t *segs, int nsegs, int *rsegs, int flags,
 		paddr_t low, paddr_t high));
 static int  _bus_dmamap_load_buffer __P((bus_dma_tag_t tag, bus_dmamap_t,
-		void *, bus_size_t, struct proc *, int, paddr_t *,
+		void *, bus_size_t, struct vmspace *, int, paddr_t *,
 		int *, int));
 static int  bus_mem_add_mapping __P((bus_space_tag_t t, bus_addr_t bpa,
 		bus_size_t size, int flags, bus_space_handle_t *bsph));
@@ -263,7 +263,8 @@ bus_space_handle_t	*bshp;
 		return (0);
 	}
 
-	va = uvm_km_valloc(kernel_map, endpa - pa);
+	va = uvm_km_alloc(kernel_map, endpa - pa, 0,
+	    UVM_KMF_VAONLY | UVM_KMF_NOWAIT);
 	if (va == 0)
 		return (ENOMEM);
 
@@ -312,8 +313,11 @@ bus_size_t		size;
 	/*
 	 * Free the kernel virtual mapping.
 	 */
-	if (!bootm_free(va, endva - va))
-		uvm_km_free(kernel_map, va, endva - va);
+	if (!bootm_free(va, endva - va)) {
+		pmap_remove(pmap_kernel(), va, endva);
+		pmap_update(pmap_kernel());
+		uvm_km_free(kernel_map, va, endva - va, UVM_KMF_VAONLY);
+	}
 
 	/*
 	 * Mark as free in the extent map.
@@ -436,6 +440,7 @@ _bus_dmamap_load(t, map, buf, buflen, p, flags)
 {
 	paddr_t lastaddr;
 	int seg, error;
+	struct vmspace *vm;
 
 	/*
 	 * Make sure that on error condition we return "no valid mappings".
@@ -447,8 +452,14 @@ _bus_dmamap_load(t, map, buf, buflen, p, flags)
 	if (buflen > map->_dm_size)
 		return (EINVAL);
 
+	if (p != NULL) {
+		vm = p->p_vmspace;
+	} else {
+		vm = vmspace_kernel();
+	}
+
 	seg = 0;
-	error = _bus_dmamap_load_buffer(t, map, buf, buflen, p, flags,
+	error = _bus_dmamap_load_buffer(t, map, buf, buflen, vm, flags,
 	    &lastaddr, &seg, 1);
 	if (error == 0) {
 		map->dm_mapsize = buflen;
@@ -493,7 +504,7 @@ _bus_dmamap_load_mbuf(t, map, m0, flags)
 		if (m->m_len == 0)
 			continue;
 		error = _bus_dmamap_load_buffer(t, map, m->m_data, m->m_len,
-		    NULL, flags, &lastaddr, &seg, first);
+		    vmspace_kernel(), flags, &lastaddr, &seg, first);
 		first = 0;
 	}
 	if (error == 0) {
@@ -516,7 +527,6 @@ _bus_dmamap_load_uio(t, map, uio, flags)
 	paddr_t lastaddr;
 	int seg, i, error, first;
 	bus_size_t minlen, resid;
-	struct proc *p = NULL;
 	struct iovec *iov;
 	caddr_t addr;
 
@@ -530,14 +540,6 @@ _bus_dmamap_load_uio(t, map, uio, flags)
 	resid = uio->uio_resid;
 	iov = uio->uio_iov;
 
-	if (uio->uio_segflg == UIO_USERSPACE) {
-		p = uio->uio_procp;
-#ifdef DIAGNOSTIC
-		if (p == NULL)
-			panic("_bus_dmamap_load_uio: USERSPACE but no proc");
-#endif
-	}
-
 	first = 1;
 	seg = 0;
 	error = 0;
@@ -550,7 +552,7 @@ _bus_dmamap_load_uio(t, map, uio, flags)
 		addr = (caddr_t)iov[i].iov_base;
 
 		error = _bus_dmamap_load_buffer(t, map, addr, minlen,
-		    p, flags, &lastaddr, &seg, first);
+		    uio->uio_vmspace, flags, &lastaddr, &seg, first);
 		first = 0;
 
 		resid -= minlen;
@@ -716,12 +718,14 @@ bus_dmamem_map(t, segs, nsegs, size, kvap, flags)
 	vaddr_t va;
 	bus_addr_t addr, offset;
 	int curseg;
+	const uvm_flag_t kmflags =
+	    (flags & BUS_DMA_NOWAIT) != 0 ? UVM_KMF_NOWAIT : 0;
 
 	offset = t->_displacement;
 
 	size = round_page(size);
 
-	va = uvm_km_valloc(kernel_map, size);
+	va = uvm_km_alloc(kernel_map, size, 0, UVM_KMF_VAONLY | kmflags);
 
 	if (va == 0)
 		return (ENOMEM);
@@ -762,7 +766,9 @@ bus_dmamem_unmap(t, kva, size)
 
 	size = round_page(size);
 
-	uvm_km_free(kernel_map, (vaddr_t)kva, size);
+	pmap_remove(pmap_kernel(), (vaddr_t)kva, (vaddr_t)kva + size);
+	pmap_update(pmap_kernel());
+	uvm_km_free(kernel_map, (vaddr_t)kva, size, UVM_KMF_VAONLY);
 }
 
 /*
@@ -814,12 +820,12 @@ bus_dmamem_mmap(t, segs, nsegs, off, prot, flags)
  * first indicates if this is the first invocation of this function.
  */
 static int
-_bus_dmamap_load_buffer(t, map, buf, buflen, p, flags, lastaddrp, segp, first)
+_bus_dmamap_load_buffer(t, map, buf, buflen, vm, flags, lastaddrp, segp, first)
 	bus_dma_tag_t t;
 	bus_dmamap_t map;
 	void *buf;
 	bus_size_t buflen;
-	struct proc *p;
+	struct vmspace *vm;
 	int flags;
 	paddr_t *lastaddrp;
 	int *segp;
@@ -833,10 +839,7 @@ _bus_dmamap_load_buffer(t, map, buf, buflen, p, flags, lastaddrp, segp, first)
 
 	offset = t->_displacement;
 
-	if (p != NULL)
-		pmap = p->p_vmspace->vm_map.pmap;
-	else
-		pmap = pmap_kernel();
+	pmap = vm_map_pmap(&vm->vm_map);
 
 	lastaddr = *lastaddrp;
 	bmask = ~(map->_dm_boundary - 1);

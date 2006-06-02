@@ -57,13 +57,11 @@ static Cell dollar1 = { OCELL, CFLD, NULL, "", 0.0, FLD|STR|DONTFREE };
 
 void recinit(unsigned int n)
 {
-	record = (char *) malloc(n);
-	fields = (char *) malloc(n);
-	fldtab = (Cell **) malloc((nfields+1) * sizeof(Cell *));
-	if (record == NULL || fields == NULL || fldtab == NULL)
+	if ( (record = (char *) malloc(n)) == NULL
+	  || (fields = (char *) malloc(n)) == NULL
+	  || (fldtab = (Cell **) malloc((nfields+1) * sizeof(Cell *))) == NULL
+	  || (fldtab[0] = (Cell *) malloc(sizeof(Cell))) == NULL )
 		FATAL("out of space for $0 and fields");
-
-	fldtab[0] = (Cell *) malloc(sizeof (Cell));
 	*fldtab[0] = dollar0;
 	fldtab[0]->sval = record;
 	fldtab[0]->nval = tostring("0");
@@ -80,7 +78,7 @@ void makefields(int n1, int n2)		/* create $n1..$n2 inclusive */
 		if (fldtab[i] == NULL)
 			FATAL("out of space in makefields %d", i);
 		*fldtab[i] = dollar1;
-		snprintf(temp, sizeof(temp), "%d", i);
+		sprintf(temp, "%d", i);
 		fldtab[i]->nval = tostring(temp);
 	}
 }
@@ -101,12 +99,14 @@ void initgetrec(void)
 	infile = stdin;		/* no filenames, so use stdin */
 }
 
+static int firsttime = 1;
+
 int getrec(uschar **pbuf, int *pbufsize, int isrecord)	/* get next input record */
 {			/* note: cares whether buf == record */
 	int c;
-	static int firsttime = 1;
 	uschar *buf = *pbuf;
-	int bufsize = *pbufsize;
+	uschar saveb0;
+	int bufsize = *pbufsize, savebufsize = bufsize;
 
 	if (firsttime) {
 		firsttime = 0;
@@ -118,6 +118,7 @@ int getrec(uschar **pbuf, int *pbufsize, int isrecord)	/* get next input record 
 		donefld = 0;
 		donerec = 1;
 	}
+	saveb0 = buf[0];
 	buf[0] = 0;
 	while (argno < *ARGC || infile == stdin) {
 		   dprintf( ("argno=%d, file=|%s|\n", argno, file) );
@@ -164,8 +165,9 @@ int getrec(uschar **pbuf, int *pbufsize, int isrecord)	/* get next input record 
 		infile = NULL;
 		argno++;
 	}
+	buf[0] = saveb0;
 	*pbuf = buf;
-	*pbufsize = bufsize;
+	*pbufsize = savebufsize;
 	return 0;	/* true end of file */
 }
 
@@ -185,8 +187,7 @@ int readrec(uschar **pbuf, int *pbufsize, FILE *inf)	/* read one record into buf
 
 	if (strlen(*FS) >= sizeof(inputFS))
 		FATAL("field separator %.10s... is too long", *FS);
-	/* for subsequent field splitting */
-	strlcpy(inputFS, *FS, sizeof(inputFS));
+	strcpy(inputFS, *FS);	/* for subsequent field splitting */
 	if ((sep = **RS) == 0) {
 		sep = '\n';
 		while ((c=getc(inf)) == '\n' && c != EOF)	/* skip leading \n's */
@@ -225,7 +226,7 @@ char *getargv(int n)	/* get ARGV[n] */
 	char *s, temp[50];
 	extern Array *ARGVtab;
 
-	snprintf(temp, sizeof(temp), "%d", n);
+	sprintf(temp, "%d", n);
 	x = setsymtab(temp, "", 0.0, STR, ARGVtab);
 	s = getsval(x);
 	   dprintf( ("getargv(%d) returns |%s|\n", n, s) );
@@ -379,7 +380,7 @@ void newfld(int n)	/* add field n after end of existing lastfld */
 Cell *fieldadr(int n)	/* get nth field */
 {
 	if (n < 0)
-		FATAL("trying to access field %d", n);
+		FATAL("trying to access out of range field %d", n);
 	if (n > nfields)	/* fields after NF are empty */
 		growfldtab(n);	/* but does not increase NF */
 	return(fldtab[n]);
@@ -388,10 +389,15 @@ Cell *fieldadr(int n)	/* get nth field */
 void growfldtab(int n)	/* make new fields up to at least $n */
 {
 	int nf = 2 * nfields;
+	size_t s;
 
 	if (n > nf)
 		nf = n;
-	fldtab = (Cell **) realloc(fldtab, (nf+1) * (sizeof (struct Cell *)));
+	s = (nf+1) * (sizeof (struct Cell *));  /* freebsd: how much do we need? */
+	if (s / sizeof(struct Cell *) - 1 == nf) /* didn't overflow */
+		fldtab = (Cell **) realloc(fldtab, s);
+	else					/* overflow sizeof int */
+		xfree(fldtab);	/* make it null */
 	if (fldtab == NULL)
 		FATAL("out of space creating %d fields", nf);
 	makefields(nfields+1, nf);
@@ -486,7 +492,7 @@ int	errorflag	= 0;
 
 void yyerror(const char *s)
 {
-	SYNTAX(s);
+	SYNTAX("%s", s);
 }
 
 void SYNTAX(const char *fmt, ...)

@@ -1,4 +1,4 @@
-/*	$NetBSD: servent.h,v 1.1.2.1 2005/04/21 16:59:35 tron Exp $	*/
+/*	$NetBSD: servent.h,v 1.1 2005/04/18 19:39:45 kleink Exp $	*/
 
 /*-
  * Copyright (c) 2004 The NetBSD Foundation, Inc.

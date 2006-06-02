@@ -1,4 +1,4 @@
-/*	$NetBSD: tx39biureg.h,v 1.3.38.1 2005/08/04 18:29:53 tron Exp $ */
+/*	$NetBSD: tx39biureg.h,v 1.5 2005/12/11 12:17:34 christos Exp $ */
 
 /*-
  * Copyright (c) 1999, 2000 The NetBSD Foundation, Inc.

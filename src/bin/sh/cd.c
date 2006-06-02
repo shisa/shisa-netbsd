@@ -1,4 +1,4 @@
-/*	$NetBSD: cd.c,v 1.34 2003/11/14 20:00:28 dsl Exp $	*/
+/*	$NetBSD: cd.c,v 1.39 2006/05/04 11:16:53 simonb Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -37,7 +37,7 @@
 #if 0
 static char sccsid[] = "@(#)cd.c	8.2 (Berkeley) 5/4/95";
 #else
-__RCSID("$NetBSD: cd.c,v 1.34 2003/11/14 20:00:28 dsl Exp $");
+__RCSID("$NetBSD: cd.c,v 1.39 2006/05/04 11:16:53 simonb Exp $");
 #endif
 #endif /* not lint */
 
@@ -66,9 +66,9 @@ __RCSID("$NetBSD: cd.c,v 1.34 2003/11/14 20:00:28 dsl Exp $");
 #include "show.h"
 #include "cd.h"
 
-STATIC int docd(char *, int);
+STATIC int docd(const char *, int);
 STATIC char *getcomponent(void);
-STATIC void updatepwd(char *);
+STATIC void updatepwd(const char *);
 STATIC void find_curdir(int noerror);
 
 char *curdir = NULL;		/* current working directory */
@@ -79,8 +79,8 @@ int
 cdcmd(int argc, char **argv)
 {
 	const char *dest;
-	const char *path;
-	char *p, *d;
+	const char *path, *p;
+	char *d;
 	struct stat statb;
 	int print = cdprint;	/* set -cdprint to enable */
 
@@ -119,7 +119,10 @@ cdcmd(int argc, char **argv)
 	}
 	if (*dest == '\0')
 	        dest = ".";
-	if (*dest == '/' || (path = bltinlookup("CDPATH", 1)) == NULL)
+	p = dest;
+	if (*p == '.' && *++p == '.')
+	    p++;
+	if (*p == 0 || *p == '/' || (path = bltinlookup("CDPATH", 1)) == NULL)
 		path = nullstr;
 	while ((p = padvance(&path, dest)) != NULL) {
 		if (stat(p, &statb) >= 0 && S_ISDIR(statb.st_mode)) {
@@ -128,8 +131,9 @@ cdcmd(int argc, char **argv)
 				 * XXX - rethink
 				 */
 				if (p[0] == '.' && p[1] == '/' && p[2] != '\0')
-					p += 2;
-				print = strcmp(p, dest);
+					print = strcmp(p + 2, dest);
+				else
+					print = strcmp(p, dest);
 			}
 			if (docd(p, print) >= 0)
 				return 0;
@@ -147,7 +151,7 @@ cdcmd(int argc, char **argv)
  */
 
 STATIC int
-docd(char *dest, int print)
+docd(const char *dest, int print)
 {
 	char *p;
 	char *q;
@@ -199,7 +203,7 @@ docd(char *dest, int print)
 	}
 	updatepwd(badstat ? NULL : dest);
 	INTON;
-	if (print && iflag && curdir)
+	if (print && iflag == 1 && curdir)
 		out1fmt("%s\n", curdir);
 	return 0;
 }
@@ -211,7 +215,7 @@ docd(char *dest, int print)
  */
 
 STATIC char *
-getcomponent()
+getcomponent(void)
 {
 	char *p;
 	char *start;
@@ -239,7 +243,7 @@ getcomponent()
  */
 
 STATIC void
-updatepwd(char *dir)
+updatepwd(const char *dir)
 {
 	char *new;
 	char *p;
@@ -328,6 +332,15 @@ pwdcmd(int argc, char **argv)
 
 
 
+void
+initpwd(void)
+{
+	getpwd(1);
+	if (curdir)
+		setvar("PWD", curdir, VEXPORT);
+	else
+		sh_warnx("Cannot determine current working directory");
+}
 
 #define MAXPWD 256
 

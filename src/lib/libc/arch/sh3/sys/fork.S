@@ -1,4 +1,4 @@
-/*	$NetBSD: fork.S,v 1.8 2003/08/07 16:42:21 agc Exp $	*/
+/*	$NetBSD: fork.S,v 1.10 2006/01/06 05:11:29 uwe Exp $	*/
 
 /*-
  * Copyright (c) 1990 The Regents of the University of California.
@@ -36,32 +36,28 @@
 
 #include <machine/asm.h>
 #if defined(SYSLIBC_SCCS) && !defined(lint)
-	RCSID("$NetBSD: fork.S,v 1.8 2003/08/07 16:42:21 agc Exp $")
+	RCSID("$NetBSD: fork.S,v 1.10 2006/01/06 05:11:29 uwe Exp $")
 #endif /* SYSLIBC_SCCS and not lint */
 
 #include "SYS.h"
 
-	.text
-	.align	2
-2:	mov.l	1f, r3
-#ifdef PIC
-	braf	r3
-#else
-	jmp	@r3
-#endif
-	nop
-4:
-	_SYSCALL_NOERROR(__fork,fork)
-	bf	2b
-	bra	3f
-	nop
-	.align	2
-#ifdef PIC
-1:	.long	cerror-4b
-#else
-1:	.long	cerror
-#endif
-3:
+/*
+ * pid = fork();
+ *
+ * r1 == 0 in parent process, r1 == 1 in child process.
+ * r0 == pid of child in parent, r0 == pid of parent in child.
+ *
+ */
+ENTRY(__fork)
+	mov	#SYS_fork, r0
+	trapa	#0x80
+	bf	err
+
 	add	#0xff, r1	/* from 1 to 0 in child, 0 to -1 in parent */
-	rts			/* pid = fork(); */
-	and	r1, r0
+	rts
+	 and	r1, r0		/* 0 in child, child pid in parent */
+
+err:
+	JUMP_CERROR
+
+	SET_ENTRY_SIZE(__fork)

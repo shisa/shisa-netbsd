@@ -1,4 +1,4 @@
-/*	$NetBSD: crtbegin.c,v 1.26 2004/08/28 00:19:22 thorpej Exp $	*/
+/*	$NetBSD: crtbegin.c,v 1.28 2006/05/19 19:11:12 christos Exp $	*/
 
 /*-
  * Copyright (c) 1998, 2001, 2002 The NetBSD Foundation, Inc.
@@ -69,7 +69,7 @@
 #ifdef DWARF2_EH
 #include "dwarf2_eh.h"
 #endif
-#include "dot_init.h"
+#include <dot_init.h>
 
 static void (*__CTOR_LIST__[1])(void)
     __attribute__((section(".ctors"))) = { (void *)-1 };	/* XXX */
@@ -113,9 +113,9 @@ extern void __cxa_finalize(void *) __attribute__((weak));
 static void __attribute__((__unused__))					\
 __call_##func(void)							\
 {									\
-	__asm __volatile (".section " #section);			\
+	__asm volatile (".section " #section);			\
 	func();								\
-	__asm __volatile (".previous");					\
+	__asm volatile (".previous");					\
 }
 #else
 #error Need MD_CALL_STATIC_FUNCTION

@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_resource.c,v 1.87.2.1 2005/09/18 20:09:50 tron Exp $	*/
+/*	$NetBSD: kern_resource.c,v 1.101 2006/05/14 21:15:11 elad Exp $	*/
 
 /*-
  * Copyright (c) 1982, 1986, 1991, 1993
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_resource.c,v 1.87.2.1 2005/09/18 20:09:50 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_resource.c,v 1.101 2006/05/14 21:15:11 elad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -45,9 +45,11 @@ __KERNEL_RCSID(0, "$NetBSD: kern_resource.c,v 1.87.2.1 2005/09/18 20:09:50 tron 
 #include <sys/file.h>
 #include <sys/resourcevar.h>
 #include <sys/malloc.h>
+#include <sys/namei.h>
 #include <sys/pool.h>
 #include <sys/proc.h>
 #include <sys/sysctl.h>
+#include <sys/kauth.h>
 
 #include <sys/mount.h>
 #include <sys/sa.h>
@@ -64,20 +66,15 @@ rlim_t maxsmap = MAXSSIZ;
 
 struct uihashhead *uihashtbl;
 u_long uihash;		/* size of hash table - 1 */
+struct simplelock uihashtbl_slock = SIMPLELOCK_INITIALIZER;
 
-static struct uidinfo *getuidinfo(uid_t);
-static void freeuidinfo(struct uidinfo *);
-static struct uidinfo *allocuidinfo(uid_t);
 
 /*
  * Resource controls and accounting.
  */
 
 int
-sys_getpriority(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+sys_getpriority(struct lwp *l, void *v, register_t *retval)
 {
 	struct sys_getpriority_args /* {
 		syscallarg(int) which;
@@ -114,10 +111,10 @@ sys_getpriority(l, v, retval)
 
 	case PRIO_USER:
 		if (SCARG(uap, who) == 0)
-			SCARG(uap, who) = curp->p_ucred->cr_uid;
+			SCARG(uap, who) = kauth_cred_geteuid(curp->p_cred);
 		proclist_lock_read();
 		PROCLIST_FOREACH(p, &allproc) {
-			if (p->p_ucred->cr_uid == (uid_t) SCARG(uap, who) &&
+			if (kauth_cred_geteuid(p->p_cred) == (uid_t) SCARG(uap, who) &&
 			    p->p_nice < low)
 				low = p->p_nice;
 		}
@@ -135,10 +132,7 @@ sys_getpriority(l, v, retval)
 
 /* ARGSUSED */
 int
-sys_setpriority(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+sys_setpriority(struct lwp *l, void *v, register_t *retval)
 {
 	struct sys_setpriority_args /* {
 		syscallarg(int) which;
@@ -177,10 +171,10 @@ sys_setpriority(l, v, retval)
 
 	case PRIO_USER:
 		if (SCARG(uap, who) == 0)
-			SCARG(uap, who) = curp->p_ucred->cr_uid;
+			SCARG(uap, who) = kauth_cred_geteuid(curp->p_cred);
 		proclist_lock_read();
 		PROCLIST_FOREACH(p, &allproc) {
-			if (p->p_ucred->cr_uid == (uid_t) SCARG(uap, who)) {
+			if (kauth_cred_geteuid(p->p_cred) == (uid_t) SCARG(uap, who)) {
 				error = donice(curp, p, SCARG(uap, prio));
 				found++;
 			}
@@ -197,23 +191,22 @@ sys_setpriority(l, v, retval)
 }
 
 int
-donice(curp, chgp, n)
-	struct proc *curp, *chgp;
-	int n;
+donice(struct proc *curp, struct proc *chgp, int n)
 {
-	struct pcred *pcred = curp->p_cred;
+	kauth_cred_t cred = curp->p_cred;
 	int s;
 
-	if (pcred->pc_ucred->cr_uid && pcred->p_ruid &&
-	    pcred->pc_ucred->cr_uid != chgp->p_ucred->cr_uid &&
-	    pcred->p_ruid != chgp->p_ucred->cr_uid)
+	if (kauth_cred_geteuid(cred) && kauth_cred_getuid(cred) &&
+	    kauth_cred_geteuid(cred) != kauth_cred_geteuid(chgp->p_cred) &&
+	    kauth_cred_getuid(cred) != kauth_cred_geteuid(chgp->p_cred))
 		return (EPERM);
 	if (n > PRIO_MAX)
 		n = PRIO_MAX;
 	if (n < PRIO_MIN)
 		n = PRIO_MIN;
 	n += NZERO;
-	if (n < chgp->p_nice && suser(pcred->pc_ucred, &curp->p_acflag))
+	if (n < chgp->p_nice && kauth_authorize_generic(cred, KAUTH_GENERIC_ISSUSER,
+						  &curp->p_acflag))
 		return (EACCES);
 	chgp->p_nice = n;
 	SCHED_LOCK(s);
@@ -224,10 +217,7 @@ donice(curp, chgp, n)
 
 /* ARGSUSED */
 int
-sys_setrlimit(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+sys_setrlimit(struct lwp *l, void *v, register_t *retval)
 {
 	struct sys_setrlimit_args /* {
 		syscallarg(int) which;
@@ -245,11 +235,7 @@ sys_setrlimit(l, v, retval)
 }
 
 int
-dosetrlimit(p, cred, which, limp)
-	struct proc *p;
-	struct  pcred *cred;
-	int which;
-	struct rlimit *limp;
+dosetrlimit(struct proc *p, kauth_cred_t cred, int which, struct rlimit *limp)
 {
 	struct rlimit *alimp;
 	struct plimit *oldplim;
@@ -275,7 +261,8 @@ dosetrlimit(p, cred, which, limp)
 		return (EINVAL);
 	}
 	if (limp->rlim_max > alimp->rlim_max
-	    && (error = suser(cred->pc_ucred, &p->p_acflag)) != 0)
+	    && (error = kauth_authorize_generic(cred, KAUTH_GENERIC_ISSUSER,
+					  &p->p_acflag)) != 0)
 			return (error);
 
 	if (p->p_limit->p_refcnt > 1 &&
@@ -363,10 +350,7 @@ dosetrlimit(p, cred, which, limp)
 
 /* ARGSUSED */
 int
-sys_getrlimit(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+sys_getrlimit(struct lwp *l, void *v, register_t *retval)
 {
 	struct sys_getrlimit_args /* {
 		syscallarg(int) which;
@@ -386,11 +370,8 @@ sys_getrlimit(l, v, retval)
  * system, and interrupt time usage.
  */
 void
-calcru(p, up, sp, ip)
-	struct proc *p;
-	struct timeval *up;
-	struct timeval *sp;
-	struct timeval *ip;
+calcru(struct proc *p, struct timeval *up, struct timeval *sp,
+    struct timeval *ip)
 {
 	u_quad_t u, st, ut, it, tot;
 	unsigned long sec;
@@ -451,10 +432,7 @@ calcru(p, up, sp, ip)
 
 /* ARGSUSED */
 int
-sys_getrusage(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+sys_getrusage(struct lwp *l, void *v, register_t *retval)
 {
 	struct sys_getrusage_args /* {
 		syscallarg(int) who;
@@ -481,8 +459,7 @@ sys_getrusage(l, v, retval)
 }
 
 void
-ruadd(ru, ru2)
-	struct rusage *ru, *ru2;
+ruadd(struct rusage *ru, struct rusage *ru2)
 {
 	long *ip, *ip2;
 	int i;
@@ -502,8 +479,7 @@ ruadd(ru, ru2)
  * and copy when a limit is changed.
  */
 struct plimit *
-limcopy(lim)
-	struct plimit *lim;
+limcopy(struct plimit *lim)
 {
 	struct plimit *newlim;
 	size_t l = 0;
@@ -533,8 +509,7 @@ limcopy(lim)
 }
 
 void
-limfree(lim)
-	struct plimit *lim;
+limfree(struct plimit *lim)
 {
 	int n;
 
@@ -553,8 +528,7 @@ limfree(lim)
 }
 
 struct pstats *
-pstatscopy(ps)
-	struct pstats *ps;
+pstatscopy(struct pstats *ps)
 {
 
 	struct pstats *newps;
@@ -573,8 +547,7 @@ pstatscopy(ps)
 }
 
 void
-pstatsfree(ps)
-	struct pstats *ps;
+pstatsfree(struct pstats *ps)
 {
 
 	pool_put(&pstats_pool, ps);
@@ -592,7 +565,7 @@ static int
 sysctl_proc_findproc(struct proc *p, struct proc **p2, pid_t pid)
 {
 	struct proc *ptmp;
-	int i, error = 0;
+	int error = 0;
 
 	if (pid == PROC_CURPROC)
 		ptmp = p;
@@ -602,28 +575,31 @@ sysctl_proc_findproc(struct proc *p, struct proc **p2, pid_t pid)
 		/*
 		 * suid proc of ours or proc not ours
 		 */
-		if (p->p_cred->p_ruid != ptmp->p_cred->p_ruid ||
-		    p->p_cred->p_ruid != ptmp->p_cred->p_svuid)
-			error = suser(p->p_ucred, &p->p_acflag);
+		if (kauth_cred_getuid(p->p_cred) != kauth_cred_getuid(ptmp->p_cred) ||
+		    kauth_cred_getuid(p->p_cred) != kauth_cred_getsvuid(ptmp->p_cred))
+			error = kauth_authorize_generic(p->p_cred,
+				    KAUTH_GENERIC_ISSUSER, &p->p_acflag);
 
 		/*
 		 * sgid proc has sgid back to us temporarily
 		 */
-		else if (ptmp->p_cred->p_rgid != ptmp->p_cred->p_svgid)
-			error = suser(p->p_ucred, &p->p_acflag);
+		else if (kauth_cred_getgid(ptmp->p_cred) != kauth_cred_getsvgid(ptmp->p_cred))
+			error = kauth_authorize_generic(p->p_cred,
+			    KAUTH_GENERIC_ISSUSER, &p->p_acflag);
 
 		/*
 		 * our rgid must be in target's group list (ie,
 		 * sub-processes started by a sgid process)
 		 */
 		else {
-			for (i = 0; i < p->p_ucred->cr_ngroups; i++) {
-				if (p->p_ucred->cr_groups[i] ==
-				    ptmp->p_cred->p_rgid)
-					break;
+			int ismember = 0;
+
+			if (kauth_cred_ismember_gid(p->p_cred,
+			    kauth_cred_getgid(ptmp->p_cred), &ismember) != 0 ||
+			    !ismember) {
+				error = kauth_authorize_generic(p->p_cred,
+				    KAUTH_GENERIC_ISSUSER, &p->p_acflag);
 			}
-			if (i == p->p_ucred->cr_ngroups)
-				error = suser(p->p_ucred, &p->p_acflag);
 		}
 	}
 
@@ -642,7 +618,8 @@ sysctl_proc_corename(SYSCTLFN_ARGS)
 	struct proc *ptmp, *p;
 	struct plimit *lim;
 	int error = 0, len;
-	char cname[MAXPATHLEN], *tmp;
+	char *cname;
+	char *tmp;
 	struct sysctlnode node;
 
 	/*
@@ -661,11 +638,12 @@ sysctl_proc_corename(SYSCTLFN_ARGS)
 	if (error)
 		return (error);
 
+	cname = PNBUF_GET();
 	/*
 	 * let them modify a temporary copy of the core name
 	 */
 	node = *rnode;
-	strlcpy(cname, ptmp->p_limit->pl_corename, sizeof(cname));
+	strlcpy(cname, ptmp->p_limit->pl_corename, MAXPATHLEN);
 	node.sysctl_data = cname;
 	error = sysctl_lookup(SYSCTLFN_CALL(&node));
 
@@ -674,8 +652,9 @@ sysctl_proc_corename(SYSCTLFN_ARGS)
 	 * heard it before...
 	 */
 	if (error || newp == NULL ||
-	    strcmp(cname, ptmp->p_limit->pl_corename) == 0)
-		return (error);
+	    strcmp(cname, ptmp->p_limit->pl_corename) == 0) {
+		goto done;
+	}
 
 	/*
 	 * no error yet and cname now has the new core name in it.
@@ -683,19 +662,25 @@ sysctl_proc_corename(SYSCTLFN_ARGS)
 	 * or end in ".core" or "/core".
 	 */
 	len = strlen(cname);
-	if (len < 4)
-		return (EINVAL);
-	if (strcmp(cname + len - 4, "core") != 0)
-		return (EINVAL);
-	if (len > 4 && cname[len - 5] != '/' && cname[len - 5] != '.')
-		return (EINVAL);
+	if (len < 4) {
+		error = EINVAL;
+	} else if (strcmp(cname + len - 4, "core") != 0) {
+		error = EINVAL;
+	} else if (len > 4 && cname[len - 5] != '/' && cname[len - 5] != '.') {
+		error = EINVAL;
+	}
+	if (error != 0) {
+		goto done;
+	}
 
 	/*
 	 * hmm...looks good.  now...where do we put it?
 	 */
 	tmp = malloc(len + 1, M_TEMP, M_WAITOK|M_CANFAIL);
-	if (tmp == NULL)
-		return (ENOMEM);
+	if (tmp == NULL) {
+		error = ENOMEM;
+		goto done;
+	}
 	strlcpy(tmp, cname, len + 1);
 
 	lim = ptmp->p_limit;
@@ -707,8 +692,9 @@ sysctl_proc_corename(SYSCTLFN_ARGS)
 	if (lim->pl_corename != defcorename)
 		free(lim->pl_corename, M_TEMP);
 	lim->pl_corename = tmp;
-
-	return (error);
+done:
+	PNBUF_PUT(cname);
+	return error;
 }
 
 /*
@@ -893,39 +879,37 @@ SYSCTL_SETUP(sysctl_proc_setup, "sysctl proc subtree setup")
 		       CTL_PROC, PROC_CURPROC, PROC_PID_STOPEXIT, CTL_EOL);
 }
 
-static struct uidinfo *
-getuidinfo(uid_t uid)
+struct uidinfo *
+uid_find(uid_t uid)
 {
 	struct uidinfo *uip;
+	struct uidinfo *newuip = NULL;
 	struct uihashhead *uipp;
 
 	uipp = UIHASH(uid);
 
+again:
+	simple_lock(&uihashtbl_slock);
 	LIST_FOREACH(uip, uipp, ui_hash)
-		if (uip->ui_uid == uid)
+		if (uip->ui_uid == uid) {
+			simple_unlock(&uihashtbl_slock);
+			if (newuip)
+				free(newuip, M_PROC);
 			return uip;
-	return NULL;
-}
+		}
 
-static void
-freeuidinfo(struct uidinfo *uip)
-{
-	LIST_REMOVE(uip, ui_hash);
-	FREE(uip, M_PROC);
-}
+	if (newuip == NULL) {
+		simple_unlock(&uihashtbl_slock);
+		newuip = malloc(sizeof(*uip), M_PROC, M_WAITOK | M_ZERO);
+		goto again;
+	}
+	uip = newuip;
 
-static struct uidinfo *
-allocuidinfo(uid_t uid)
-{
-	struct uidinfo *uip;
-	struct uihashhead *uipp;
-
-	uipp = UIHASH(uid);
-	MALLOC(uip, struct uidinfo *, sizeof(*uip), M_PROC, M_WAITOK);
 	LIST_INSERT_HEAD(uipp, uip, ui_hash);
 	uip->ui_uid = uid;
-	uip->ui_proccnt = 0;
-	uip->ui_sbsize = 0;
+	simple_lock_init(&uip->ui_slock);
+	simple_unlock(&uihashtbl_slock);
+
 	return uip;
 }
 
@@ -937,51 +921,35 @@ int
 chgproccnt(uid_t uid, int diff)
 {
 	struct uidinfo *uip;
+	int s;
 
 	if (diff == 0)
 		return 0;
 
-	if ((uip = getuidinfo(uid)) != NULL) {
-		uip->ui_proccnt += diff;
-		KASSERT(uip->ui_proccnt >= 0);
-		if (uip->ui_proccnt > 0)
-			return uip->ui_proccnt;
-		else {
-			if (uip->ui_sbsize == 0)
-				freeuidinfo(uip);
-			return 0;
-		}
-	} else {
-		if (diff < 0)
-			panic("chgproccnt: lost user %lu", (unsigned long)uid);
-		uip = allocuidinfo(uid);
-		uip->ui_proccnt = diff;
-		return uip->ui_proccnt;
-	}
+	uip = uid_find(uid);
+	UILOCK(uip, s);
+	uip->ui_proccnt += diff;
+	KASSERT(uip->ui_proccnt >= 0);
+	UIUNLOCK(uip, s);
+	return uip->ui_proccnt;
 }
 
 int
-chgsbsize(uid_t uid, u_long *hiwat, u_long to, rlim_t max)
+chgsbsize(struct uidinfo *uip, u_long *hiwat, u_long to, rlim_t xmax)
 {
-	*hiwat = to;
-	return 1;
-#ifdef notyet
-	struct uidinfo *uip;
 	rlim_t nsb;
-	int rv = 0;
+	int s;
 
-	if ((uip = getuidinfo(uid)) == NULL)
-		uip = allocuidinfo(uid);
+	UILOCK(uip, s);
 	nsb = uip->ui_sbsize + to - *hiwat;
-	if (to > *hiwat && nsb > max)
-		goto done;
+	if (to > *hiwat && nsb > xmax) {
+		UIUNLOCK(uip, s);
+		splx(s);
+		return 0;
+	}
 	*hiwat = to;
 	uip->ui_sbsize = nsb;
-	rv = 1;
 	KASSERT(uip->ui_sbsize >= 0);
-done:
-	if (uip->ui_sbsize == 0 && uip->ui_proccnt == 0)
-		freeuidinfo(uip);
-	return rv;
-#endif
+	UIUNLOCK(uip, s);
+	return 1;
 }

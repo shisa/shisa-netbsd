@@ -1,4 +1,4 @@
-/*	$NetBSD: sci.c,v 1.31 2004/03/28 18:59:39 mhitch Exp $ */
+/*	$NetBSD: sci.c,v 1.33 2005/11/26 13:54:18 tsutsui Exp $ */
 
 /*
  * Copyright (c) 1990 The Regents of the University of California.
@@ -68,7 +68,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: sci.c,v 1.31 2004/03/28 18:59:39 mhitch Exp $");
+__KERNEL_RCSID(0, "$NetBSD: sci.c,v 1.33 2005/11/26 13:54:18 tsutsui Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -98,7 +98,7 @@ __KERNEL_RCSID(0, "$NetBSD: sci.c,v 1.31 2004/03/28 18:59:39 mhitch Exp $");
 int  sciicmd(struct sci_softc *, int, void *, int, void *, int,u_char);
 int  scigo(struct sci_softc *, struct scsipi_xfer *);
 int  sciselectbus(struct sci_softc *, u_char, u_char);
-void sciabort(struct sci_softc *, char *);
+void sciabort(struct sci_softc *, const char *);
 void scierror(struct sci_softc *, u_char);
 void scisetdelay(int);
 void sci_scsidone(struct sci_softc *, int);
@@ -246,7 +246,7 @@ sci_scsidone(struct sci_softc *dev, int stat)
 		switch(stat) {
 		case SCSI_CHECK:
 			xs->resid = 0;
-			/* FALLTHOUGH */
+			/* FALLTHROUGH */
 		case SCSI_BUSY:
 			xs->error = XS_BUSY;
 			break;
@@ -262,7 +262,7 @@ sci_scsidone(struct sci_softc *dev, int stat)
 }
 
 void
-sciabort(struct sci_softc *dev, char *where)
+sciabort(struct sci_softc *dev, const char *where)
 {
 	printf ("%s: abort %s: csr = 0x%02x, bus = 0x%02x\n",
 	  dev->sc_dev.dv_xname, where, *dev->sci_csr, *dev->sci_bus_csr);

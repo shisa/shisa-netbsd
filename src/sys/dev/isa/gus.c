@@ -1,4 +1,4 @@
-/*	$NetBSD: gus.c,v 1.88 2005/02/27 00:27:17 perry Exp $	*/
+/*	$NetBSD: gus.c,v 1.93 2006/04/14 22:52:00 christos Exp $	*/
 
 /*-
  * Copyright (c) 1996, 1999 The NetBSD Foundation, Inc.
@@ -95,7 +95,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: gus.c,v 1.88 2005/02/27 00:27:17 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: gus.c,v 1.93 2006/04/14 22:52:00 christos Exp $");
 
 #include "gus.h"
 #if NGUS > 0
@@ -825,7 +825,8 @@ gusattach(struct device *parent, struct device *self, void *aux)
 	bus_space_tag_t iot;
 	bus_space_handle_t ioh1, ioh2, ioh3, ioh4;
 	int		iobase, i;
-	unsigned char	c,d,m;
+	unsigned char	c, m;
+	int d = -1;
 	const struct audio_hw_if *hwif;
 
 	sc = (void *) self;
@@ -892,12 +893,17 @@ gusattach(struct device *parent, struct device *self, void *aux)
 	c = ((unsigned char) gus_irq_map[ia->ia_irq[0].ir_irq]) |
 	    GUSMASK_BOTH_RQ;
 
-	if (sc->sc_recdrq == sc->sc_playdrq)
-		d = (unsigned char) (gus_drq_map[sc->sc_playdrq] |
-				GUSMASK_BOTH_RQ);
-	else
-		d = (unsigned char) (gus_drq_map[sc->sc_playdrq] |
-				gus_drq_map[sc->sc_recdrq] << 3);
+	if (sc->sc_playdrq != -1) {
+		if (sc->sc_recdrq == sc->sc_playdrq)
+			d = (unsigned char) (gus_drq_map[sc->sc_playdrq] |
+			    GUSMASK_BOTH_RQ);
+		else if (sc->sc_recdrq != -1)
+			d = (unsigned char) (gus_drq_map[sc->sc_playdrq] |
+			    gus_drq_map[sc->sc_recdrq] << 3);
+	}
+	if (d == -1)
+		printf("%s: WARNING: Cannot initialize drq\n",
+		    sc->sc_dev.dv_xname);
 
 	/*
 	 * Program the IRQ and DMA channels on the GUS.  Note that we hardwire
@@ -1136,7 +1142,7 @@ gusmaxopen(void *addr, int flags)
 }
 
 STATIC void
-gus_deinterleave(struct gus_softc *sc, void *buf, int size)
+gus_deinterleave(struct gus_softc *sc, void *tbuf, int size)
 {
 	/* deinterleave the stereo data.  We can use sc->sc_deintr_buf
 	   for scratch space. */
@@ -1154,7 +1160,7 @@ gus_deinterleave(struct gus_softc *sc, void *buf, int size)
 	 */
 	if (sc->sc_precision == 16) {
 		u_short *dei = sc->sc_deintr_buf;
-		u_short *sbuf = buf;
+		u_short *sbuf = tbuf;
 		size >>= 1;		/* bytecnt to shortcnt */
 		/* copy 2nd of each pair of samples to the staging area, while
 		   compacting the 1st of each pair into the original area. */
@@ -1175,7 +1181,7 @@ gus_deinterleave(struct gus_softc *sc, void *buf, int size)
 		memcpy(&sbuf[size/2], dei, i * sizeof(short));
 	} else {
 		u_char *dei = sc->sc_deintr_buf;
-		u_char *sbuf = buf;
+		u_char *sbuf = tbuf;
 		for (i = 0; i < size/2-1; i++)  {
 			dei[i] = sbuf[i*2+1];
 			sbuf[i+1] = sbuf[i*2+2];
@@ -1189,13 +1195,13 @@ gus_deinterleave(struct gus_softc *sc, void *buf, int size)
  */
 
 int
-gusmax_dma_output(void *addr, void *buf, int size,
+gusmax_dma_output(void *addr, void *tbuf, int size,
 		  void (*intr)(void *), void *arg)
 {
 	struct ad1848_isa_softc *ac;
 
 	ac = addr;
-	return gus_dma_output(ac->sc_ad1848.parent, buf, size, intr, arg);
+	return gus_dma_output(ac->sc_ad1848.parent, tbuf, size, intr, arg);
 }
 
 /*
@@ -1246,7 +1252,7 @@ stereo_dmaintr(void *arg)
  * generic audio code.
  */
 int
-gus_dma_output(void *addr, void *buf, int size,
+gus_dma_output(void *addr, void *tbuf, int size,
 	       void (*intr)(void *), void *arg)
 {
 	struct gus_softc *sc;
@@ -1254,9 +1260,9 @@ gus_dma_output(void *addr, void *buf, int size,
 	u_long boarddma;
 	int flags;
 
-	DMAPRINTF(("gus_dma_output %d @ %p\n", size, buf));
+	DMAPRINTF(("gus_dma_output %d @ %p\n", size, tbuf));
 	sc = addr;
-	buffer = buf;
+	buffer = tbuf;
 
 	if (size != sc->sc_blocksize) {
 		DPRINTF(("gus_dma_output reqsize %d not sc_blocksize %d\n",
@@ -1472,7 +1478,7 @@ gus_dmaout_timeout(void *arg)
 	bus_space_write_1(iot, ioh2, GUS_DATA_HIGH, 0);
 #if 0
 	/* XXX we will dmadone below? */
-	isa_dmaabort(sc->sc_dev.dv_parent, sc->sc_playdrq);
+	isa_dmaabort(device_parent(&sc->sc_dev), sc->sc_playdrq);
 #endif
 
 	gus_dmaout_dointr(sc);
@@ -1604,13 +1610,13 @@ gus_dmaout_dointr(struct gus_softc *sc)
 			 */
 			if (sc->sc_dmabuf == 0 &&
 			    sc->sc_playbuf == sc->sc_nbufs - 1) {
-				/* player is just at the last buf, we're at the
+				/* player is just at the last tbuf, we're at the
 				   first.  Turn on looping, turn off rolling. */
 				sc->sc_voc[GUS_VOICE_LEFT].voccntl |= GUSMASK_LOOP_ENABLE;
 				sc->sc_voc[GUS_VOICE_LEFT].volcntl &= ~GUSMASK_VOICE_ROLL;
 				playstats[playcntr].vaction = 3;
 			} else {
-				/* player is at previous buf:
+				/* player is at previous tbuf:
 				   turn on rolling, turn off looping */
 				sc->sc_voc[GUS_VOICE_LEFT].voccntl &= ~GUSMASK_LOOP_ENABLE;
 				sc->sc_voc[GUS_VOICE_LEFT].volcntl |= GUSMASK_VOICE_ROLL;
@@ -2390,7 +2396,7 @@ gus_round_blocksize(void * addr, int blocksize,
 		FREE(sc->sc_deintr_buf, M_DEVBUF);
 		sc->sc_deintr_buf = NULL;
 	}
-	MALLOC(sc->sc_deintr_buf, void *, blocksize>>1, M_DEVBUF, M_WAITOK);
+	sc->sc_deintr_buf = malloc(blocksize>>1, M_DEVBUF, M_WAITOK);
 
 	sc->sc_blocksize = blocksize;
 	/* multi-buffering not quite working yet. */
@@ -3016,13 +3022,13 @@ gus_get_in_gain(caddr_t addr)
 }
 
 int
-gusmax_dma_input(void *addr, void *buf, int size,
+gusmax_dma_input(void *addr, void *tbuf, int size,
 		 void (*callback)(void *), void *arg)
 {
 	struct ad1848_isa_softc *sc;
 
 	sc = addr;
-	return gus_dma_input(sc->sc_ad1848.parent, buf, size, callback, arg);
+	return gus_dma_input(sc->sc_ad1848.parent, tbuf, size, callback, arg);
 }
 
 /*
@@ -3030,7 +3036,7 @@ gusmax_dma_input(void *addr, void *buf, int size,
  * Called at splgus(), either from top-half or from interrupt handler.
  */
 int
-gus_dma_input(void *addr, void *buf, int size,
+gus_dma_input(void *addr, void *tbuf, int size,
 	      void (*callback)(void *), void *arg)
 {
 	struct gus_softc *sc;
@@ -3061,7 +3067,7 @@ gus_dma_input(void *addr, void *buf, int size,
 		dmac |= GUSMASK_SAMPLE_INVBIT;
 	if (sc->sc_channels == 2)
 		dmac |= GUSMASK_SAMPLE_STEREO;
-	isa_dmastart(sc->sc_ic, sc->sc_recdrq, buf, size,
+	isa_dmastart(sc->sc_ic, sc->sc_recdrq, tbuf, size,
 	    NULL, DMAMODE_READ, BUS_DMA_NOWAIT);
 
 	DMAPRINTF(("gus_dma_input isa_dmastarted\n"));
@@ -3069,7 +3075,7 @@ gus_dma_input(void *addr, void *buf, int size,
 	sc->sc_dmainintr = callback;
 	sc->sc_inarg = arg;
 	sc->sc_dmaincnt = size;
-	sc->sc_dmainaddr = buf;
+	sc->sc_dmainaddr = tbuf;
 
 	SELECT_GUS_REG(iot, ioh2, GUSREG_SAMPLE_CONTROL);
 	bus_space_write_1(iot, ioh2, GUS_DATA_HIGH, dmac);	/* Go! */

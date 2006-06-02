@@ -1,4 +1,4 @@
-/*	$NetBSD: main.c,v 1.106 2005/02/16 15:11:52 christos Exp $	*/
+/*	$NetBSD: main.c,v 1.126 2006/05/19 17:21:46 christos Exp $	*/
 
 /*
  * Copyright (c) 1988, 1989, 1990, 1993
@@ -69,7 +69,7 @@
  */
 
 #ifndef MAKE_NATIVE
-static char rcsid[] = "$NetBSD: main.c,v 1.106 2005/02/16 15:11:52 christos Exp $";
+static char rcsid[] = "$NetBSD: main.c,v 1.126 2006/05/19 17:21:46 christos Exp $";
 #else
 #include <sys/cdefs.h>
 #ifndef lint
@@ -81,7 +81,7 @@ __COPYRIGHT("@(#) Copyright (c) 1988, 1989, 1990, 1993\n\
 #if 0
 static char sccsid[] = "@(#)main.c	8.3 (Berkeley) 3/19/94";
 #else
-__RCSID("$NetBSD: main.c,v 1.106 2005/02/16 15:11:52 christos Exp $");
+__RCSID("$NetBSD: main.c,v 1.126 2006/05/19 17:21:46 christos Exp $");
 #endif
 #endif /* not lint */
 #endif
@@ -156,9 +156,9 @@ static Lst		makefiles;	/* ordered list of makefiles to read */
 static Boolean		printVars;	/* print value of one or more vars */
 static Lst		variables;	/* list of variables to print */
 int			maxJobs;	/* -j argument */
-static int		maxLocal;	/* -L argument */
+int			maxJobTokens;	/* -j argument */
 Boolean			compatMake;	/* -B argument */
-Boolean			debug;		/* -d flag */
+int			debug;		/* -d argument */
 Boolean			noExecute;	/* -n flag */
 Boolean			noRecursiveExecute;	/* -N flag */
 Boolean			keepgoing;	/* -k flag */
@@ -205,26 +205,21 @@ static void
 MainParseArgs(int argc, char **argv)
 {
 	char *p;
-	int c;
+	int c = '?';
 	int arginc;
-	char *argvalue;
+	char *argvalue, *modules;
 	const char *getopt_def;
 	char *optscan;
 	Boolean inOption, dashDash = FALSE;
 	char found_path[MAXPATHLEN + 1];	/* for searching for sys.mk */
 
-#ifdef REMOTE
-# define OPTFLAGS "BD:I:J:L:NPST:V:WXd:ef:ij:km:nqrst"
-#else
-# define OPTFLAGS "BD:I:J:NPST:V:WXd:ef:ij:km:nqrst"
-#endif
-#undef optarg
-#define optarg argvalue	
+#define OPTFLAGS "BD:I:J:NPST:V:WXd:ef:ij:km:nqrst"
 /* Can't actually use getopt(3) because rescanning is not portable */
 
 	getopt_def = OPTFLAGS;
 rearg:	
 	inOption = FALSE;
+	optscan = NULL;
 	while(argc > 1) {
 		char *getopt_spec;
 		if(!inOption)
@@ -252,16 +247,13 @@ rearg:
 			arginc = 1;
 			argvalue = optscan;
 			if(*argvalue == '\0') {
-				if (argc < 3) {
-					(void)fprintf(stderr,
-					    "%s: option requires "
-					    "an argument -- %c\n",
-					    progname, c);
-					usage();
-				}
+				if (argc < 3)
+					goto noarg;
 				argvalue = argv[2];
 				arginc = 2;
 			}
+		} else {
+			argvalue = NULL; 
 		}
 		switch(c) {
 		case '\0':
@@ -273,51 +265,43 @@ rearg:
 			Var_Append(MAKEFLAGS, "-B", VAR_GLOBAL);
 			break;
 		case 'D':
-			Var_Set(optarg, "1", VAR_GLOBAL, 0);
+			if (argvalue == NULL) goto noarg;
+			Var_Set(argvalue, "1", VAR_GLOBAL, 0);
 			Var_Append(MAKEFLAGS, "-D", VAR_GLOBAL);
-			Var_Append(MAKEFLAGS, optarg, VAR_GLOBAL);
+			Var_Append(MAKEFLAGS, argvalue, VAR_GLOBAL);
 			break;
 		case 'I':
-			Parse_AddIncludeDir(optarg);
+			if (argvalue == NULL) goto noarg;
+			Parse_AddIncludeDir(argvalue);
 			Var_Append(MAKEFLAGS, "-I", VAR_GLOBAL);
-			Var_Append(MAKEFLAGS, optarg, VAR_GLOBAL);
+			Var_Append(MAKEFLAGS, argvalue, VAR_GLOBAL);
 			break;
 		case 'J':
-			if (sscanf(optarg, "%d,%d", &job_pipe[0], &job_pipe[1]) != 2) {
+			if (argvalue == NULL) goto noarg;
+			if (sscanf(argvalue, "%d,%d", &job_pipe[0], &job_pipe[1]) != 2) {
 			    /* backslash to avoid trigraph ??) */
 			    (void)fprintf(stderr,
 				"%s: internal error -- J option malformed (%s?\?)\n",
-				progname, optarg);
+				progname, argvalue);
 				usage();
 			}
 			if ((fcntl(job_pipe[0], F_GETFD, 0) < 0) ||
 			    (fcntl(job_pipe[1], F_GETFD, 0) < 0)) {
 #if 0
 			    (void)fprintf(stderr,
-				"%s: warning -- J descriptors were closed!\n",
+				"%s: ###### warning -- J descriptors were closed!\n",
 				progname);
+			    exit(2);
 #endif
 			    job_pipe[0] = -1;
 			    job_pipe[1] = -1;
 			    compatMake = TRUE;
 			} else {
 			    Var_Append(MAKEFLAGS, "-J", VAR_GLOBAL);
-			    Var_Append(MAKEFLAGS, optarg, VAR_GLOBAL);
+			    Var_Append(MAKEFLAGS, argvalue, VAR_GLOBAL);
 			    jobServer = TRUE;
 			}
 			break;
-#ifdef REMOTE
-		case 'L':
-			maxLocal = strtol(optarg, &p, 0);
-			if (*p != '\0' || maxLocal < 1) {
-			    (void) fprintf(stderr, "%s: illegal argument to -L -- must be positive integer!\n",
-				progname);
-			    exit(1);
-			}
-			Var_Append(MAKEFLAGS, "-L", VAR_GLOBAL);
-			Var_Append(MAKEFLAGS, optarg, VAR_GLOBAL);
-			break;
-#endif
 		case 'N':
 			noExecute = TRUE;
 			noRecursiveExecute = TRUE;
@@ -332,15 +316,17 @@ rearg:
 			Var_Append(MAKEFLAGS, "-S", VAR_GLOBAL);
 			break;
 		case 'T':
-			tracefile = estrdup(optarg);
+			if (argvalue == NULL) goto noarg;
+			tracefile = estrdup(argvalue);
 			Var_Append(MAKEFLAGS, "-T", VAR_GLOBAL);
-			Var_Append(MAKEFLAGS, optarg, VAR_GLOBAL);
+			Var_Append(MAKEFLAGS, argvalue, VAR_GLOBAL);
 			break;
 		case 'V':
+			if (argvalue == NULL) goto noarg;
 			printVars = TRUE;
-			(void)Lst_AtEnd(variables, (ClientData)optarg);
+			(void)Lst_AtEnd(variables, (ClientData)argvalue);
 			Var_Append(MAKEFLAGS, "-V", VAR_GLOBAL);
-			Var_Append(MAKEFLAGS, optarg, VAR_GLOBAL);
+			Var_Append(MAKEFLAGS, argvalue, VAR_GLOBAL);
 			break;
 		case 'W':
 			parseWarnFatal = TRUE;
@@ -350,9 +336,8 @@ rearg:
 			Var_Append(MAKEFLAGS, "-X", VAR_GLOBAL);
 			break;
 		case 'd': {
-			char *modules = optarg;
-
-			for (; *modules; ++modules)
+			if (argvalue == NULL) goto noarg;
+			for (modules = argvalue; *modules; ++modules)
 				switch (*modules) {
 				case 'A':
 					debug = ~0;
@@ -392,6 +377,12 @@ rearg:
 				case 'm':
 					debug |= DEBUG_MAKE;
 					break;
+				case 'n':
+					debug |= DEBUG_SCRIPT;
+					break;
+				case 'p':
+					debug |= DEBUG_PARSE;
+					break;
 				case 's':
 					debug |= DEBUG_SUFF;
 					break;
@@ -411,7 +402,7 @@ rearg:
 					usage();
 				}
 			Var_Append(MAKEFLAGS, "-d", VAR_GLOBAL);
-			Var_Append(MAKEFLAGS, optarg, VAR_GLOBAL);
+			Var_Append(MAKEFLAGS, argvalue, VAR_GLOBAL);
 			break;
 		}
 		case 'e':
@@ -419,43 +410,44 @@ rearg:
 			Var_Append(MAKEFLAGS, "-e", VAR_GLOBAL);
 			break;
 		case 'f':
-			(void)Lst_AtEnd(makefiles, (ClientData)optarg);
+			if (argvalue == NULL) goto noarg;
+			(void)Lst_AtEnd(makefiles, (ClientData)argvalue);
 			break;
 		case 'i':
 			ignoreErrors = TRUE;
 			Var_Append(MAKEFLAGS, "-i", VAR_GLOBAL);
 			break;
 		case 'j':
+			if (argvalue == NULL) goto noarg;
 			forceJobs = TRUE;
-			maxJobs = strtol(optarg, &p, 0);
+			maxJobs = strtol(argvalue, &p, 0);
 			if (*p != '\0' || maxJobs < 1) {
-				(void) fprintf(stderr, "%s: illegal argument to -j -- must be positive integer!\n",
+				(void)fprintf(stderr, "%s: illegal argument to -j -- must be positive integer!\n",
 				    progname);
 				exit(1);
 			}
-#ifndef REMOTE
-			maxLocal = maxJobs;
-#endif
 			Var_Append(MAKEFLAGS, "-j", VAR_GLOBAL);
-			Var_Append(MAKEFLAGS, optarg, VAR_GLOBAL);
+			Var_Append(MAKEFLAGS, argvalue, VAR_GLOBAL);
+			maxJobTokens = maxJobs;
 			break;
 		case 'k':
 			keepgoing = TRUE;
 			Var_Append(MAKEFLAGS, "-k", VAR_GLOBAL);
 			break;
 		case 'm':
+			if (argvalue == NULL) goto noarg;
 			/* look for magic parent directory search string */
-			if (strncmp(".../", optarg, 4) == 0) {
-				if (!Dir_FindHereOrAbove(curdir, optarg+4,
+			if (strncmp(".../", argvalue, 4) == 0) {
+				if (!Dir_FindHereOrAbove(curdir, argvalue+4,
 				    found_path, sizeof(found_path)))
 					break;		/* nothing doing */
-				(void) Dir_AddDir(sysIncPath, found_path);
+				(void)Dir_AddDir(sysIncPath, found_path);
 				
 			} else {
-				(void) Dir_AddDir(sysIncPath, optarg);
+				(void)Dir_AddDir(sysIncPath, argvalue);
 			}
 			Var_Append(MAKEFLAGS, "-m", VAR_GLOBAL);
-			Var_Append(MAKEFLAGS, optarg, VAR_GLOBAL);
+			Var_Append(MAKEFLAGS, argvalue, VAR_GLOBAL);
 			break;
 		case 'n':
 			noExecute = TRUE;
@@ -506,6 +498,12 @@ rearg:
 				goto rearg;
 			(void)Lst_AtEnd(create, (ClientData)estrdup(argv[1]));
 		}
+
+	return;
+noarg:
+	(void)fprintf(stderr, "%s: option requires an argument -- %c\n",
+	    progname, c);
+	usage();
 }
 
 /*-
@@ -594,6 +592,18 @@ Main_SetObjdir(const char *path)
 	return rc;
 }
 
+/*-
+ * ReadAllMakefiles --
+ *	wrapper around ReadMakefile() to read all.
+ *
+ * Results:
+ *	TRUE if ok, FALSE on error
+ */
+static int
+ReadAllMakefiles(ClientData p, ClientData q)
+{
+	return (ReadMakefile(p, q) == 0);
+}
 
 /*-
  * main --
@@ -628,6 +638,17 @@ main(int argc, char **argv)
 					/* avoid faults on read-only strings */
 	static char defsyspath[] = _PATH_DEFSYSPATH;
 	char found_path[MAXPATHLEN + 1];	/* for searching for sys.mk */
+	struct timeval rightnow;		/* to initialize random seed */
+#ifdef MAKE_NATIVE
+	struct utsname utsname;
+#endif
+
+	/*
+	 * Set the seed to produce a different random sequences
+	 * on each program execution.
+	 */
+	gettimeofday(&rightnow, NULL);
+	srandom(rightnow.tv_sec + rightnow.tv_usec);
 	
 	if ((progname = strrchr(argv[0], '/')) != NULL)
 		progname++;
@@ -642,7 +663,7 @@ main(int argc, char **argv)
 		if (getrlimit(RLIMIT_NOFILE, &rl) != -1 &&
 		    rl.rlim_cur != rl.rlim_max) {
 			rl.rlim_cur = rl.rlim_max;
-			(void) setrlimit(RLIMIT_NOFILE, &rl);
+			(void)setrlimit(RLIMIT_NOFILE, &rl);
 		}
 	}
 #endif
@@ -677,7 +698,7 @@ main(int argc, char **argv)
 		if (makeobjdir == NULL || !strchr(makeobjdir, '$')) {
 			if (stat(pwd, &sb) == 0 && sa.st_ino == sb.st_ino &&
 			    sa.st_dev == sb.st_dev)
-				(void) strncpy(curdir, pwd, MAXPATHLEN);
+				(void)strncpy(curdir, pwd, MAXPATHLEN);
 		}
 	}
 
@@ -691,8 +712,6 @@ main(int argc, char **argv)
 	 */
 	if (!machine) {
 #ifdef MAKE_NATIVE
-	    struct utsname utsname;
-
 	    if (uname(&utsname) == -1) {
 		(void)fprintf(stderr, "%s: uname failed (%s).\n", progname,
 		    strerror(errno));
@@ -743,19 +762,19 @@ main(int argc, char **argv)
 	 * of these paths exist, just use .CURDIR.
 	 */
 	Dir_Init(curdir);
-	(void) Main_SetObjdir(curdir);
+	(void)Main_SetObjdir(curdir);
 
 	if ((path = getenv("MAKEOBJDIRPREFIX")) != NULL) {
-		(void) snprintf(mdpath, MAXPATHLEN, "%s%s", path, curdir);
-		(void) Main_SetObjdir(mdpath);
+		(void)snprintf(mdpath, MAXPATHLEN, "%s%s", path, curdir);
+		(void)Main_SetObjdir(mdpath);
 	} else if ((path = getenv("MAKEOBJDIR")) != NULL) {
-		(void) Main_SetObjdir(path);
+		(void)Main_SetObjdir(path);
 	} else {
-		(void) snprintf(mdpath, MAXPATHLEN, "%s.%s", _PATH_OBJDIR, machine);
+		(void)snprintf(mdpath, MAXPATHLEN, "%s.%s", _PATH_OBJDIR, machine);
 		if (!Main_SetObjdir(mdpath) && !Main_SetObjdir(_PATH_OBJDIR)) {
-			(void) snprintf(mdpath, MAXPATHLEN, "%s%s", 
+			(void)snprintf(mdpath, MAXPATHLEN, "%s%s", 
 					_PATH_OBJDIRPREFIX, curdir);
-			(void) Main_SetObjdir(mdpath);
+			(void)Main_SetObjdir(mdpath);
 		}
 	}
 
@@ -776,12 +795,8 @@ main(int argc, char **argv)
 	debug = 0;			/* No debug verbosity, please. */
 	jobsRunning = FALSE;
 
-	maxLocal = DEFMAXLOCAL;		/* Set default local max concurrency */
-#ifdef REMOTE
-	maxJobs = DEFMAXJOBS;		/* Set default max concurrency */
-#else
-	maxJobs = maxLocal;
-#endif
+	maxJobs = DEFMAXLOCAL;		/* Set default local max concurrency */
+	maxJobTokens = maxJobs;
 	compatMake = FALSE;		/* No compat mode */
 
 
@@ -876,11 +891,11 @@ main(int argc, char **argv)
 		}
 		/* look for magic parent directory search string */
 		if (strncmp(".../", start, 4) != 0) {
-			(void) Dir_AddDir(defIncPath, start);
+			(void)Dir_AddDir(defIncPath, start);
 		} else {
 			if (Dir_FindHereOrAbove(curdir, start+4, 
 			    found_path, sizeof(found_path))) {
-				(void) Dir_AddDir(defIncPath, found_path);
+				(void)Dir_AddDir(defIncPath, found_path);
 			}
 		}
 	}
@@ -889,7 +904,7 @@ main(int argc, char **argv)
 
 	/*
 	 * Read in the built-in rules first, followed by the specified
-	 * makefile, if it was (makefile != (char *) NULL), or the default
+	 * makefile, if it was (makefile != NULL), or the default
 	 * makefile and Makefile, in that order, if it wasn't.
 	 */
 	if (!noBuiltins) {
@@ -903,7 +918,7 @@ main(int argc, char **argv)
 			Fatal("%s: no system rules (%s).", progname,
 			    _PATH_DEFSYSMK);
 		ln = Lst_Find(sysMkPath, (ClientData)NULL, ReadMakefile);
-		if (ln != NILLNODE)
+		if (ln == NILLNODE)
 			Fatal("%s: cannot open %s.", progname,
 			    (char *)Lst_Datum(ln));
 	}
@@ -911,11 +926,11 @@ main(int argc, char **argv)
 	if (!Lst_IsEmpty(makefiles)) {
 		LstNode ln;
 
-		ln = Lst_Find(makefiles, (ClientData)NULL, ReadMakefile);
+		ln = Lst_Find(makefiles, (ClientData)NULL, ReadAllMakefiles);
 		if (ln != NILLNODE)
 			Fatal("%s: cannot open %s.", progname, 
 			    (char *)Lst_Datum(ln));
-	} else if (!ReadMakefile(UNCONST("makefile"), NULL))
+	} else if (ReadMakefile(UNCONST("makefile"), NULL) != 0)
 		(void)ReadMakefile(UNCONST("Makefile"), NULL);
 
 	(void)ReadMakefile(UNCONST(".depend"), NULL);
@@ -925,10 +940,10 @@ main(int argc, char **argv)
 	    free(p1);
 
 	if (!jobServer && !compatMake)
-	    Job_ServerStart(maxJobs);
+	    Job_ServerStart();
 	if (DEBUG(JOB))
-	    printf("job_pipe %d %d, maxjobs %d maxlocal %d compat %d\n", job_pipe[0], job_pipe[1], maxJobs,
-	           maxLocal, compatMake);
+	    printf("job_pipe %d %d, maxjobs %d, tokens %d, compat %d\n",
+		job_pipe[0], job_pipe[1], maxJobs, maxJobTokens, compatMake);
 
 	Main_ExportMAKEFLAGS(TRUE);	/* initial export */
 
@@ -960,11 +975,11 @@ main(int argc, char **argv)
 			savec = *cp;
 			*cp = '\0';
 			/* Add directory to search path */
-			(void) Dir_AddDir(dirSearchPath, path);
+			(void)Dir_AddDir(dirSearchPath, path);
 			*cp = savec;
 			path = cp + 1;
 		} while (savec == ':');
-		(void)free((Address)vpath);
+		free(vpath);
 	}
 
 	/*
@@ -975,6 +990,8 @@ main(int argc, char **argv)
 
 	/*
 	 * Propagate attributes through :: dependency lists.
+	 *
+	 * Also propagate recursive dependencies for .WAIT.
 	 */
 	Targ_Propagate();
 
@@ -1020,9 +1037,7 @@ main(int argc, char **argv)
 		 * being executed should it exist).
 		 */
 		if (!queryFlag) {
-			if (maxLocal == -1)
-				maxLocal = maxJobs;
-			Job_Init(maxJobs, maxLocal);
+			Job_Init();
 			jobsRunning = TRUE;
 		}
 
@@ -1040,7 +1055,7 @@ main(int argc, char **argv)
 	Lst_Destroy(targs, NOFREE);
 	Lst_Destroy(variables, NOFREE);
 	Lst_Destroy(makefiles, NOFREE);
-	Lst_Destroy(create, (void (*)(ClientData))) free;
+	Lst_Destroy(create, (FreeProc *)free);
 #endif
 
 	/* print the graph now it's been processed if the user requested it */
@@ -1069,12 +1084,12 @@ main(int argc, char **argv)
  *	Open and parse the given makefile.
  *
  * Results:
- *	TRUE if ok. FALSE if couldn't open file.
+ *	0 if ok. -1 if couldn't open file.
  *
  * Side Effects:
  *	lots
  */
-static Boolean
+static int
 ReadMakefile(ClientData p, ClientData q __unused)
 {
 	char *fname = p;		/* makefile to read */
@@ -1117,9 +1132,11 @@ ReadMakefile(ClientData p, ClientData q __unused)
 		if (!name)
 			name = Dir_FindFile(fname,
 				Lst_IsEmpty(sysIncPath) ? defIncPath : sysIncPath);
-		if (!name || !(stream = fopen(name, "r"))) {
+		if (!name || (stream = fopen(name, "r")) == NULL) {
+			if (name)
+				free(name);
 			free(path);
-			return(FALSE);
+			return(-1);
 		}
 		fname = name;
 		/*
@@ -1134,7 +1151,7 @@ found:
 		(void)fclose(stream);
 	}
 	free(path);
-	return(TRUE);
+	return(0);
 }
 
 
@@ -1289,10 +1306,10 @@ Check_Cwd_Cmd(const char *cmd)
 	bp = NULL;
     }
     cp = Check_Cwd_av(ac, av, 1);
-    if (bp) {
-	free(av);
+    if (bp)
 	free(bp);
-    }
+    if (av)
+	free(av);
     return cp;
 }
 
@@ -1371,17 +1388,17 @@ Cmd_Exec(const char *cmd, const char **err)
 	/*
 	 * Close input side of pipe
 	 */
-	(void) close(fds[0]);
+	(void)close(fds[0]);
 
 	/*
 	 * Duplicate the output stream to the shell's output, then
 	 * shut the extra thing down. Note we don't fetch the error
 	 * stream...why not? Why?
 	 */
-	(void) dup2(fds[1], 1);
-	(void) close(fds[1]);
+	(void)dup2(fds[1], 1);
+	(void)close(fds[1]);
 
-	(void) execv(shellPath, UNCONST(args));
+	(void)execv(shellPath, UNCONST(args));
 	_exit(1);
 	/*NOTREACHED*/
 
@@ -1393,7 +1410,7 @@ Cmd_Exec(const char *cmd, const char **err)
 	/*
 	 * No need for the writing half
 	 */
-	(void) close(fds[1]);
+	(void)close(fds[1]);
 
 	buf = Buf_Init(MAKE_BSIZE);
 
@@ -1401,14 +1418,14 @@ Cmd_Exec(const char *cmd, const char **err)
 	    char   result[BUFSIZ];
 	    cc = read(fds[0], result, sizeof(result));
 	    if (cc > 0)
-		Buf_AddBytes(buf, cc, (Byte *) result);
+		Buf_AddBytes(buf, cc, (Byte *)result);
 	}
 	while (cc > 0 || (cc == -1 && errno == EINTR));
 
 	/*
 	 * Close the input side of the pipe.
 	 */
-	(void) close(fds[0]);
+	(void)close(fds[0]);
 
 	/*
 	 * Wait for the process to exit.
@@ -1416,7 +1433,7 @@ Cmd_Exec(const char *cmd, const char **err)
 	while(((pid = wait(&status)) != cpid) && (pid >= 0))
 	    continue;
 
-	res = (char *)Buf_GetAll (buf, &cc);
+	res = (char *)Buf_GetAll(buf, &cc);
 	Buf_Destroy(buf, FALSE);
 
 	if (cc == 0)
@@ -1497,7 +1514,6 @@ Fatal(const char *fmt, ...)
 	va_start(ap, fmt);
 	if (jobsRunning)
 		Job_Wait();
-	Job_TokenFlush();
 
 	(void)vfprintf(stderr, fmt, ap);
 	va_end(ap);
@@ -1665,7 +1681,7 @@ execError(const char *af, const char *av)
 	    iov[i].iov_len = strlen(iov[i].iov_base), \
 	    i++)
 #else
-#define	IOADD (void)write(2, s, strlen(s))
+#define	IOADD(void)write(2, s, strlen(s))
 #endif
 
 	IOADD(progname);

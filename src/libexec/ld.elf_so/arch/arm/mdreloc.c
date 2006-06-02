@@ -1,4 +1,9 @@
-/*	$NetBSD: mdreloc.c,v 1.25 2004/12/17 10:53:27 mycroft Exp $	*/
+/*	$NetBSD: mdreloc.c,v 1.27 2005/12/24 20:59:30 perry Exp $	*/
+
+#include <sys/cdefs.h>
+#ifndef lint
+__RCSID("$NetBSD: mdreloc.c,v 1.27 2005/12/24 20:59:30 perry Exp $");
+#endif /* not lint */
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -50,7 +55,7 @@ _rtld_relocate_nonplt_self(Elf_Dyn *dynp, Elf_Addr relocbase)
 #define	RELOC_ALIGNED_P(x) \
 	(((uintptr_t)(x) & (sizeof(void *) - 1)) == 0)
 
-static __inline Elf_Addr
+static inline Elf_Addr
 load_ptr(void *where)
 {
 	Elf_Addr res;
@@ -60,7 +65,7 @@ load_ptr(void *where)
 	return (res);
 }
 
-static __inline void
+static inline void
 store_ptr(void *where, Elf_Addr val)
 {
 

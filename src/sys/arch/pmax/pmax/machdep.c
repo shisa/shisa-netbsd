@@ -1,4 +1,4 @@
-/*	$NetBSD: machdep.c,v 1.209 2005/01/11 08:05:14 simonb Exp $	*/
+/*	$NetBSD: machdep.c,v 1.214 2006/04/15 17:51:34 matt Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -77,7 +77,7 @@
  */
 
 #include <sys/cdefs.h>			/* RCS ID & Copyright macro defns */
-__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.209 2005/01/11 08:05:14 simonb Exp $");
+__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.214 2006/04/15 17:51:34 matt Exp $");
 
 #include "fs_mfs.h"
 #include "opt_ddb.h"
@@ -121,9 +121,6 @@ __KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.209 2005/01/11 08:05:14 simonb Exp $")
 #include "opt_dec_maxine.h"
 #include "opt_dec_3maxplus.h"
 #include "ksyms.h"
-
-/* the following is used externally (sysctl_hw) */
-extern char	cpu_model[];
 
 unsigned ssir;				/* simulated interrupt register */
 
@@ -201,7 +198,8 @@ mach_init(argc, argv, code, cv, bim, bip)
 	u_int bim;
 	char *bip;
 {
-	char *cp, *bootinfo_msg;
+	char *cp;
+	const char *bootinfo_msg;
 	u_long first, last;
 	int i;
 	caddr_t kernend;
@@ -242,6 +240,7 @@ mach_init(argc, argv, code, cv, bim, bip)
 	/* XXX: Backwards compatibility with old bootblocks - this should
 	 * go soon...
 	 */
+#ifdef EXEC_AOUT
 	/* Exec header and symbols? */
 	else if (aout->a_midmag == 0x07018b00 && (i = aout->a_syms) != 0) {
 		ssym = end;
@@ -250,6 +249,7 @@ mach_init(argc, argv, code, cv, bim, bip)
 		kernend = (caddr_t)mips_round_page(esym);
 		memset(edata, 0, end - edata);
 	} else
+#endif
 #endif
 	{
 		kernend = (caddr_t)mips_round_page(end);
@@ -445,7 +445,7 @@ cpu_startup()
 	/*
 	 * Good {morning,afternoon,evening,night}.
 	 */
-	printf(version);
+	printf("%s%s", copyright, version);
 	printf("%s\n", cpu_model);
 	format_bytes(pbuf, sizeof(pbuf), ctob(physmem));
 	printf("total memory = %s\n", pbuf);

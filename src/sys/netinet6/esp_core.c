@@ -1,4 +1,4 @@
-/*	$NetBSD: esp_core.c,v 1.33.14.1 2005/08/24 18:03:01 riz Exp $	*/
+/*	$NetBSD: esp_core.c,v 1.35 2005/12/11 12:25:02 christos Exp $	*/
 /*	$KAME: esp_core.c,v 1.53 2001/11/27 09:47:30 sakane Exp $	*/
 
 /*
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: esp_core.c,v 1.33.14.1 2005/08/24 18:03:01 riz Exp $");
+__KERNEL_RCSID(0, "$NetBSD: esp_core.c,v 1.35 2005/12/11 12:25:02 christos Exp $");
 
 #include "opt_inet.h"
 

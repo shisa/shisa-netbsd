@@ -1,4 +1,4 @@
-/*	$NetBSD: execlp.c,v 1.8 2003/08/07 16:42:47 agc Exp $	*/
+/*	$NetBSD: execlp.c,v 1.10 2005/11/29 13:30:49 christos Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)exec.c	8.1 (Berkeley) 6/4/93";
 #else
-__RCSID("$NetBSD: execlp.c,v 1.8 2003/08/07 16:42:47 agc Exp $");
+__RCSID("$NetBSD: execlp.c,v 1.10 2005/11/29 13:30:49 christos Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
@@ -51,7 +51,7 @@ int
 execlp(const char *name, const char *arg, ...)
 {
 #if defined(__i386__) || defined(__m68k__) || defined(__ns32k__)
-	return execvp(name, (char **) &arg);
+	return execvp(name, __UNCONST(&arg));
 #else
 	va_list ap;
 	char **argv;
@@ -59,15 +59,15 @@ execlp(const char *name, const char *arg, ...)
 
 	va_start(ap, arg);
 	for (i = 2; va_arg(ap, char *) != NULL; i++)
-		;
+		continue;
 	va_end(ap);
 
-	argv = alloca (i * sizeof (char *));
+	argv = alloca(i * sizeof (char *));
 	
 	va_start(ap, arg);
-	argv[0] = (char *) arg;
+	argv[0] = __UNCONST(arg);
 	for (i = 1; (argv[i] = va_arg(ap, char *)) != NULL; i++) 
-		;
+		continue;
 	va_end(ap);
 	
 	return execvp(name, argv);

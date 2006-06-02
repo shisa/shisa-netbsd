@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.3 2004/06/30 03:37:48 jmc Exp $
+#	$NetBSD: Makefile,v 1.5 2006/03/23 20:01:20 wiz Exp $
 
 SUBDIR+=man-adosfs-catman
 SUBDIR+=man-adosfs-man
@@ -47,7 +47,6 @@ SUBDIR+=man-ipf-catman
 SUBDIR+=man-ipf-man
 SUBDIR+=man-isdn-catman
 SUBDIR+=man-isdn-man
-SUBDIR+=man-krb4-info
 SUBDIR+=man-krb5-catman
 SUBDIR+=man-krb5-info
 SUBDIR+=man-krb5-man
@@ -101,8 +100,6 @@ SUBDIR+=man-slip-catman
 SUBDIR+=man-slip-man
 SUBDIR+=man-sup-catman
 SUBDIR+=man-sup-man
-SUBDIR+=man-sushi-catman
-SUBDIR+=man-sushi-man
 SUBDIR+=man-sys-catman
 SUBDIR+=man-sys-info
 SUBDIR+=man-sys-man

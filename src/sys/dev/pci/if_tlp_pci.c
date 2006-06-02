@@ -1,4 +1,4 @@
-/*	$NetBSD: if_tlp_pci.c,v 1.78.2.3 2005/07/19 22:00:36 riz Exp $	*/
+/*	$NetBSD: if_tlp_pci.c,v 1.91 2006/05/20 14:23:07 rpaulo Exp $	*/
 
 /*-
  * Copyright (c) 1998, 1999, 2000, 2002 The NetBSD Foundation, Inc.
@@ -43,7 +43,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_tlp_pci.c,v 1.78.2.3 2005/07/19 22:00:36 riz Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_tlp_pci.c,v 1.91 2006/05/20 14:23:07 rpaulo Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -172,6 +172,9 @@ static const struct tulip_pci_product {
 	{ PCI_VENDOR_ASIX,		PCI_PRODUCT_ASIX_AX88140A,
 	  TULIP_CHIP_AX88140 },
 
+	{ PCI_VENDOR_CONEXANT,		PCI_PRODUCT_CONEXANT_LANFINITY,
+	  TULIP_CHIP_RS7112 },
+
 	{ 0,				0,
 	  TULIP_CHIP_INVALID },
 };
@@ -256,6 +259,11 @@ tlp_pci_lookup(const struct pci_attach_args *pa)
 {
 	const struct tulip_pci_product *tpp;
 
+	/* Don't match lmc cards */
+	if (PCI_VENDOR(pci_conf_read(pa->pa_pc, pa->pa_tag,
+	    PCI_SUBSYS_ID_REG)) == PCI_VENDOR_LMC)
+		return NULL;
+
 	for (tpp = tlp_pci_products;
 	     tlp_chip_names[tpp->tpp_chip] != NULL;
 	     tpp++) {
@@ -296,7 +304,8 @@ tlp_pci_check_slaved(struct tulip_pci_softc *psc, int shared, int slaved)
 	for (i = 0; i < tlp_cd.cd_ndevs; i++) {
 		if ((cur = tlp_cd.cd_devs[i]) == NULL)
 			continue;
-		if (cur->sc_tulip.sc_dev.dv_parent != sc->sc_dev.dv_parent)
+		if (device_parent(&cur->sc_tulip.sc_dev) !=
+		    device_parent(&sc->sc_dev))
 			continue;
 		if ((cur->sc_flags & shared) == 0)
 			continue;
@@ -337,6 +346,7 @@ tlp_pci_attach(struct device *parent, struct device *self, void *aux)
 	bus_space_handle_t ioh, memh;
 	int ioh_valid, memh_valid, i, j;
 	const struct tulip_pci_product *tpp;
+	prop_data_t ea;
 	u_int8_t enaddr[ETHER_ADDR_LEN];
 	u_int32_t val = 0;
 	pcireg_t reg;
@@ -486,6 +496,7 @@ tlp_pci_attach(struct device *parent, struct device *self, void *aux)
 	case TULIP_CHIP_DM9102A:
 	case TULIP_CHIP_AX88140:
 	case TULIP_CHIP_AX88141:
+	case TULIP_CHIP_RS7112:
 		/*
 		 * Clear the "sleep mode" bit in the CFDA register.
 		 */
@@ -624,17 +635,28 @@ tlp_pci_attach(struct device *parent, struct device *self, void *aux)
 	    }
 
 	default:
-#ifdef algor
 		/*
-		 * XXX This should be done with device properties, but
-		 * XXX we don't have those yet.
+		 * XXX This isn't quite the right way to do this; we should
+		 * XXX be attempting to fetch the mac-addr property in the
+		 * XXX bus-agnostic part of the driver independently.  But
+		 * XXX that requires a larger change in the SROM handling
+		 * XXX logic, and for now we can at least remove a machine-
+		 * XXX dependent wart from the PCI front-end.
 		 */
-		if (algor_get_ethaddr(pa, NULL)) {
+		ea = prop_dictionary_get(device_properties(&sc->sc_dev),
+					 "mac-addr");
+		if (ea != NULL) {
 			extern int tlp_srom_debug;
+			KASSERT(prop_object_type(ea) == PROP_TYPE_DATA);
+			KASSERT(prop_data_size(ea) == ETHER_ADDR_LEN);
+
+			memcpy(enaddr, prop_data_data_nocopy(ea),
+			       ETHER_ADDR_LEN);
+
 			sc->sc_srom_addrbits = 6;
 			sc->sc_srom = malloc(TULIP_ROM_SIZE(6), M_DEVBUF,
 			    M_NOWAIT|M_ZERO);
-			algor_get_ethaddr(pa, sc->sc_srom);
+			memcpy(sc->sc_srom, enaddr, sizeof(enaddr));
 			if (tlp_srom_debug) {
 				printf("SROM CONTENTS:");
 				for (i = 0; i < TULIP_ROM_SIZE(6); i++) {
@@ -646,7 +668,6 @@ tlp_pci_attach(struct device *parent, struct device *self, void *aux)
 			}
 			break;
 		}
-#endif /* algor */
 
 		/* Check for a slaved ROM on a multi-port board. */
 		tlp_pci_check_slaved(psc, TULIP_PCI_SHAREDROM,
@@ -943,6 +964,17 @@ tlp_pci_attach(struct device *parent, struct device *self, void *aux)
 		 * an external MII interface.
 		 */
 		sc->sc_mediasw = &tlp_asix_mediasw;
+		break;
+
+	case TULIP_CHIP_RS7112:
+		/*
+		 * RS7112 Ethernet Address is located of offset 0x19a
+		 * of the SROM
+		 */
+		memcpy(enaddr, &sc->sc_srom[0x19a], ETHER_ADDR_LEN);
+
+		/* RS7112 chip has a PHY at MII address 1 */
+		sc->sc_mediasw = &tlp_rs7112_mediasw;
 		break;
 
 	default:

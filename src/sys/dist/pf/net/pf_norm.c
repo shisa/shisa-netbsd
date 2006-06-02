@@ -1,5 +1,5 @@
-/*	$NetBSD: pf_norm.c,v 1.7.10.1 2005/06/17 13:32:39 tron Exp $	*/
-/*	$OpenBSD: pf_norm.c,v 1.96 2004/07/17 00:17:27 frantzen Exp $ */
+/*	$NetBSD: pf_norm.c,v 1.13 2006/05/11 01:08:19 mrg Exp $	*/
+/*	$OpenBSD: pf_norm.c,v 1.97 2004/09/21 16:59:12 aaron Exp $ */
 
 /*
  * Copyright 2001 Niels Provos <provos@citi.umich.edu>
@@ -646,11 +646,7 @@ pf_fragcache(struct mbuf **m0, struct ip *h, struct pf_fragment **frag, int mff,
 				 * than this mbuf magic.  For my next trick,
 				 * I'll pull a rabbit out of my laptop.
 				 */
-#ifdef __OpenBSD__
 				*m0 = m_copym2(m, 0, h->ip_hl << 2, M_NOWAIT);
-#else
-				*m0 = m_dup(m, 0, h->ip_hl << 2, M_NOWAIT);
-#endif
 				if (*m0 == NULL)
 					goto no_mem;
 				KASSERT((*m0)->m_next == NULL);
@@ -732,7 +728,7 @@ pf_fragcache(struct mbuf **m0, struct ip *h, struct pf_fragment **frag, int mff,
 			} else {
 				hosed++;
 			}
-		} else {
+		} else if (frp == NULL) {
 			/* There is a gap between fragments */
 			DPFPRINTF(("fragcache[%d]: gap %d %d-%d (%d-%d)\n",
 			    h->ip_id, -aftercut, off, max, fra->fr_off,
@@ -1272,7 +1268,7 @@ pf_normalize_tcp(int dir, struct pfi_kif *kif, struct mbuf *m, int ipoff,
 		}
 	}
 
-	if (rm == NULL)
+	if (rm == NULL || rm->action == PF_NOSCRUB)
 		return (PF_PASS);
 	else
 		r->packets++;
@@ -1670,7 +1666,7 @@ pf_normalize_tcp_stateful(struct mbuf *m, int off, struct pf_pdesc *pd,
 
 
 		/* Calculate max ticks since the last timestamp */
-#define TS_MAXFREQ	1100		/* RFC max TS freq of 1Khz + 10% skew */
+#define TS_MAXFREQ	1100		/* RFC max TS freq of 1 kHz + 10% skew */
 #define TS_MICROSECS	1000000		/* microseconds per second */
 		timersub(&uptime, &src->scrub->pfss_last, &delta_ts);
 		tsval_from_last = (delta_ts.tv_sec + ts_fudge) * TS_MAXFREQ;
@@ -1840,7 +1836,7 @@ pf_normalize_tcpopt(struct pf_rule *r, struct mbuf *m, struct tcphdr *th,
 
 	thoff = th->th_off << 2;
 	cnt = thoff - sizeof(struct tcphdr);
-	optp = mtod(m, caddr_t) + off + sizeof(struct tcphdr);
+	optp = mtod(m, u_char *) + off + sizeof(struct tcphdr);
 
 	for (; cnt > 0; cnt -= optlen, optp += optlen) {
 		opt = optp[0];

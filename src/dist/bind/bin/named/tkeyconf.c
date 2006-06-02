@@ -1,4 +1,4 @@
-/*	$NetBSD: tkeyconf.c,v 1.1.1.2 2004/11/06 23:53:36 christos Exp $	*/
+/*	$NetBSD: tkeyconf.c,v 1.1.1.4 2005/12/21 23:08:06 christos Exp $	*/
 
 /*
  * Copyright (C) 2004  Internet Systems Consortium, Inc. ("ISC")

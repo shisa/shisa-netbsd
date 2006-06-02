@@ -1,4 +1,4 @@
-/*	$NetBSD: if_ath_cardbus.c,v 1.6 2005/02/27 00:26:59 perry Exp $ */
+/*	$NetBSD: if_ath_cardbus.c,v 1.12 2006/05/14 21:42:26 elad Exp $ */
 /*
  * Copyright (c) 2003
  *	Ichiro FUKUHARA <ichiro@ichiro.org>.
@@ -36,7 +36,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_ath_cardbus.c,v 1.6 2005/02/27 00:26:59 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_ath_cardbus.c,v 1.12 2006/05/14 21:42:26 elad Exp $");
 
 #include "opt_inet.h"
 #include "opt_ns.h"
@@ -59,7 +59,7 @@ __KERNEL_RCSID(0, "$NetBSD: if_ath_cardbus.c,v 1.6 2005/02/27 00:26:59 perry Exp
 #include <net/if_media.h>
 #include <net/if_ether.h>
 
-#include <net80211/ieee80211_compat.h>
+#include <net80211/ieee80211_netbsd.h>
 #include <net80211/ieee80211_var.h>
 
 #if NBPFILTER > 0
@@ -82,9 +82,9 @@ __KERNEL_RCSID(0, "$NetBSD: if_ath_cardbus.c,v 1.6 2005/02/27 00:26:59 perry Exp
 #include <dev/mii/miivar.h>
 #include <dev/mii/mii_bitbang.h>
 
-#include <dev/ic/athcompat.h>
+#include <dev/ic/ath_netbsd.h>
 #include <dev/ic/athvar.h>
-#include <../contrib/sys/dev/ic/athhal.h>
+#include <contrib/dev/ath/ah.h>
 
 #include <dev/pci/pcivar.h>
 #include <dev/pci/pcireg.h>
@@ -145,7 +145,7 @@ void
 ath_cardbus_attach(struct device *parent, struct device *self,
 	void *aux)
 {
-	struct ath_cardbus_softc *csc = (void *)self;
+	struct ath_cardbus_softc *csc = device_private(self);
 	struct ath_softc *sc = &csc->sc_ath;
 	struct cardbus_attach_args *ca = aux;
 	cardbus_devfunc_t ct = ca->ca_ct;
@@ -195,16 +195,18 @@ ath_cardbus_attach(struct device *parent, struct device *self,
 	 */
 	ath_attach(PCI_PRODUCT(ca->ca_id), sc);
 
+#ifdef ath_powerdown
 	/*
 	 * Power down the socket.
 	 */
 	Cardbus_function_disable(csc->sc_ct);
+#endif /* ath_powerdown */
 }
 
 int
 ath_cardbus_detach(struct device *self, int flags)
 {
-	struct ath_cardbus_softc *csc = (void *)self;
+	struct ath_cardbus_softc *csc = device_private(self);
 	struct ath_softc *sc = &csc->sc_ath;
 	struct cardbus_devfunc *ct = csc->sc_ct;
 	int rv;
@@ -281,8 +283,10 @@ ath_cardbus_disable(struct ath_softc *sc)
 	cardbus_intr_disestablish(cc, cf, csc->sc_ih);
 	csc->sc_ih = NULL;
 
+#ifdef ath_powerdown
 	/* Power down the socket. */
 	Cardbus_function_disable(ct);
+#endif /* ath_powerdown */
 }
 
 void

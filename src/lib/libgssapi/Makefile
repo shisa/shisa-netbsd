@@ -1,4 +1,4 @@
-# $NetBSD: Makefile,v 1.14 2005/01/10 03:11:17 lukem Exp $
+# $NetBSD: Makefile,v 1.16 2006/05/11 23:16:28 mrg Exp $
 
 NOLINT=		# defined
 
@@ -10,6 +10,11 @@ DIST=		${NETBSDSRCDIR}/crypto/dist
 WARNS?=		1
 
 LIB=		gssapi
+
+LIBDPLIBS=	crypto	${.CURDIR}/../libcrypto \
+		krb5	${.CURDIR}/../libkrb5 \
+		asn1	${.CURDIR}/../libasn1 \
+		roken	${.CURDIR}/../libroken
 
 SRCS	 =			\
 	8003.c			\
@@ -123,6 +128,10 @@ CPPFLAGS+= -I.					\
 
 .if (${USE_INET6} != "no")
 CPPFLAGS+=-DHAVE_IPV6
+.endif
+
+.if ${HAVE_GCC} == 4
+COPTS+=	-Wno-pointer-sign
 .endif
 
 .include <bsd.lib.mk>

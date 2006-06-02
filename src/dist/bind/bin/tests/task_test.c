@@ -1,4 +1,4 @@
-/*	$NetBSD: task_test.c,v 1.1.1.1 2004/05/17 23:43:27 christos Exp $	*/
+/*	$NetBSD: task_test.c,v 1.1.1.3 2005/12/21 23:08:26 christos Exp $	*/
 
 /*
  * Copyright (C) 2004  Internet Systems Consortium, Inc. ("ISC")

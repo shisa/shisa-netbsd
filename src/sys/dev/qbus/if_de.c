@@ -1,4 +1,4 @@
-/*	$NetBSD: if_de.c,v 1.16 2005/02/26 12:45:06 simonb Exp $	*/
+/*	$NetBSD: if_de.c,v 1.20 2006/03/29 18:17:36 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1989 Regents of the University of California.
@@ -81,7 +81,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_de.c,v 1.16 2005/02/26 12:45:06 simonb Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_de.c,v 1.20 2006/03/29 18:17:36 thorpej Exp $");
 
 #include "opt_inet.h"
 #include "bpfilter.h"
@@ -176,7 +176,7 @@ struct	de_softc {
 
 static	int dematch(struct device *, struct cfdata *, void *);
 static	void deattach(struct device *, struct device *, void *);
-static	void dewait(struct de_softc *, char *);
+static	void dewait(struct de_softc *, const char *);
 static	int deinit(struct ifnet *);
 static	int deioctl(struct ifnet *, u_long, caddr_t);
 static	void dereset(struct device *);
@@ -209,11 +209,11 @@ void
 deattach(struct device *parent, struct device *self, void *aux)
 {
 	struct uba_attach_args *ua = aux;
-	struct de_softc *sc = (struct de_softc *)self;
+	struct de_softc *sc = device_private(self);
 	struct ifnet *ifp = &sc->sc_if;
 	u_int8_t myaddr[ETHER_ADDR_LEN];
 	int csr1, error;
-	char *c;
+	const char *c;
 
 	sc->sc_iot = ua->ua_iot;
 	sc->sc_ioh = ua->ua_ioh;
@@ -328,14 +328,15 @@ deinit(struct ifnet *ifp)
 	if (ifp->if_flags & IFF_RUNNING)
 		return 0;
 	if ((sc->sc_flags & DSF_MAPPED) == 0) {
-		if (if_ubaminit(&sc->sc_ifuba, (void *)sc->sc_dev.dv_parent,
+		if (if_ubaminit(&sc->sc_ifuba,
+		    (void *)device_parent(&sc->sc_dev),
 		    MCLBYTES, sc->sc_ifr, NRCV, sc->sc_ifw, NXMT)) {
 			printf("%s: can't initialize\n", sc->sc_dev.dv_xname);
 			ifp->if_flags &= ~IFF_UP;
 			return 0;
 		}
 		sc->sc_ui.ui_size = sizeof(struct de_cdata);
-		if ((error = ubmemalloc((void *)sc->sc_dev.dv_parent,
+		if ((error = ubmemalloc((void *)device_parent(&sc->sc_dev),
 		    &sc->sc_ui, 0))) {
 			printf(": unable to ubmemalloc(), error = %d\n", error);
 			return 0;
@@ -601,7 +602,7 @@ deioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
  * and check for errors.
  */
 void
-dewait(struct de_softc *sc, char *fn)
+dewait(struct de_softc *sc, const char *fn)
 {
 	int csr0;
 

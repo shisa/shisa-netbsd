@@ -1,4 +1,4 @@
-/*	$NetBSD: main.c,v 1.48 2004/10/30 20:56:20 dsl Exp $	*/
+/*	$NetBSD: main.c,v 1.53 2006/05/28 16:51:40 elad Exp $	*/
 
 /*
  * Copyright (c) 1983, 1988, 1993
@@ -39,7 +39,7 @@ __COPYRIGHT("@(#) Copyright (c) 1983, 1988, 1993\n\
 #if 0
 static char sccsid[] = "from: @(#)main.c	8.4 (Berkeley) 3/1/94";
 #else
-__RCSID("$NetBSD: main.c,v 1.48 2004/10/30 20:56:20 dsl Exp $");
+__RCSID("$NetBSD: main.c,v 1.53 2006/05/28 16:51:40 elad Exp $");
 #endif
 #endif /* not lint */
 
@@ -204,6 +204,8 @@ struct nlist nl[] = {
 	{ "_hardclock_ticks" },
 #define N_PIMSTAT	68
 	{ "_pimstat" },
+#define N_CARPSTAT	69
+	{ "_carpstats" },
 	{ "" },
 };
 
@@ -231,6 +233,8 @@ struct protox {
 	  icmp_stats,	NULL,		0,	"icmp" },
 	{ -1,		N_IGMPSTAT,	1,	0,
 	  igmp_stats,	NULL,		0,	"igmp" },
+	{ -1,		N_CARPSTAT,	1,	0,
+	  carp_stats,	NULL,		0,	"carp" },
 #ifdef IPSEC
 	{ -1,		N_IPSECSTAT,	1,	0,
 	  ipsec_switch,	NULL,		0,	"ipsec" },
@@ -379,7 +383,7 @@ main(argc, argv)
 	pcbaddr = 0;
 
 	while ((ch = getopt(argc, argv,
-	    "Aabdf:ghI:LliM:mN:nP:p:qrsStuvw:")) != -1)
+	    "AabBdf:ghI:LliM:mN:nP:p:qrsStuvw:")) != -1)
 		switch (ch) {
 		case 'A':
 			Aflag = 1;
@@ -389,6 +393,9 @@ main(argc, argv)
 			break;
 		case 'b':
 			bflag = 1;
+			break;
+		case 'B':
+			Bflag = 1;
 			break;
 		case 'd':
 			dflag = 1;
@@ -443,7 +450,7 @@ main(argc, argv)
 			nlistf = optarg;
 			break;
 		case 'n':
-			numeric_addr = numeric_port = 1;
+			numeric_addr = numeric_port = nflag = 1;
 			break;
 		case 'P':
 			errno = 0;
@@ -522,7 +529,7 @@ main(argc, argv)
 
 	use_sysctl = (nlistf == NULL && memf == NULL);
 
-	if ((kvmd = kvm_openfiles(nlistf, memf, NULL, O_RDONLY,
+	if (!use_sysctl && (kvmd = kvm_openfiles(nlistf, memf, NULL, O_RDONLY,
 	    buf)) == NULL)
 		errx(1, "%s", buf);
 
@@ -530,7 +537,17 @@ main(argc, argv)
 	if (nlistf == NULL && memf == NULL)
 		(void)setgid(getgid());
 
-	if (kvm_nlist(kvmd, nl) < 0 || nl[0].n_type == 0) {
+#ifndef SMALL
+	if (Bflag) {
+		if (sflag)
+			bpf_stats();
+		else
+			bpf_dump(interface);
+		exit(0);
+	}
+#endif
+
+	if (!use_sysctl && (kvm_nlist(kvmd, nl) < 0 || nl[0].n_type == 0)) {
 		if (nlistf)
 			errx(1, "%s: no namelist", nlistf);
 		else
@@ -582,9 +599,13 @@ main(argc, argv)
 	}
 	if (rflag) {
 		if (sflag)
-			rt_stats(nl[N_RTSTAT].n_value);
-		else
-			routepr(nl[N_RTREE].n_value);
+			rt_stats(use_sysctl ? 0 : nl[N_RTSTAT].n_value);
+		else {
+			if (use_sysctl)
+				p_rttables(af);
+			else
+				routepr(nl[N_RTREE].n_value);
+		}
 		exit(0);
 	}
 #ifndef SMALL
@@ -691,8 +712,9 @@ printproto(tp, name)
 		pr = tp->pr_cblocks;
 		off = nl[tp->pr_index].n_value;
 	}
-	if (pr != NULL && (off || af != AF_UNSPEC))
+	if (pr != NULL && ((off || af != AF_UNSPEC) || use_sysctl)) {
 		(*pr)(off, name);
+	}
 }
 
 /*
@@ -828,5 +850,7 @@ usage()
 "       %s [-p protocol] [-i] [-I Interface] \n", progname);
 	(void)fprintf(stderr,
 "       %s [-s] [-f address_family] [-i] [-I Interface]\n", progname);
+	(void)fprintf(stderr,
+"       %s [-s] [-B] [-I interface]\n", progname);
 	exit(1);
 }

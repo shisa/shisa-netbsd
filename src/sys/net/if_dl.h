@@ -1,4 +1,4 @@
-/*	$NetBSD: if_dl.h,v 1.14 2005/02/26 22:45:09 perry Exp $	*/
+/*	$NetBSD: if_dl.h,v 1.18 2005/12/11 23:05:24 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1990, 1993
@@ -74,17 +74,19 @@ struct sockaddr_dl {
 				     contains both if name and ll address */
 };
 
-#define LLADDR(s) ((caddr_t)((s)->sdl_data + (s)->sdl_nlen))
+/* We do arithmetic directly with these, so keep them char instead of void */
+#define LLADDR(s) ((char *)((s)->sdl_data + (s)->sdl_nlen))
+#define CLLADDR(s) ((const char *)((s)->sdl_data + (s)->sdl_nlen))
 
 #ifndef _KERNEL
 
 #include <sys/cdefs.h>
 
 __BEGIN_DECLS
-void	link_addr __P((const char *, struct sockaddr_dl *));
-char	*link_ntoa __P((const struct sockaddr_dl *));
+void	link_addr(const char *, struct sockaddr_dl *);
+char	*link_ntoa(const struct sockaddr_dl *);
 __END_DECLS
 
 #endif /* !_KERNEL */
 
-#endif /* _NET_IF_DL_H_ */
+#endif /* !_NET_IF_DL_H_ */

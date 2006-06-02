@@ -1,4 +1,4 @@
-/*	$NetBSD: installboot.c,v 1.17 2004/08/15 22:00:12 dsl Exp $	*/
+/*	$NetBSD: installboot.c,v 1.26 2006/04/22 19:57:04 christos Exp $	*/
 
 /*-
  * Copyright (c) 2002 The NetBSD Foundation, Inc.
@@ -42,9 +42,10 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID) && !defined(__lint)
-__RCSID("$NetBSD: installboot.c,v 1.17 2004/08/15 22:00:12 dsl Exp $");
+__RCSID("$NetBSD: installboot.c,v 1.26 2006/04/22 19:57:04 christos Exp $");
 #endif	/* !__lint */
 
+#include <sys/ioctl.h>
 #include <sys/utsname.h>
 
 #include <assert.h>
@@ -117,7 +118,7 @@ main(int argc, char *argv[])
 	if ((p = getenv("MACHINE")) != NULL)
 		getmachine(params, p, "$MACHINE");
 
-	while ((ch = getopt(argc, argv, "b:B:cm:no:t:v")) != -1) {
+	while ((ch = getopt(argc, argv, "b:B:cem:no:t:v")) != -1) {
 		switch (ch) {
 
 		case 'b':
@@ -140,6 +141,10 @@ main(int argc, char *argv[])
 
 		case 'c':
 			params->flags |= IB_CLEAR;
+			break;
+
+		case 'e':
+			params->flags |= IB_EDIT;
 			break;
 
 		case 'm':
@@ -172,11 +177,12 @@ main(int argc, char *argv[])
 	argc -= optind;
 	argv += optind;
 
-	if (((params->flags & IB_CLEAR) != 0 && argc != 1) ||
-	    ((params->flags & IB_CLEAR) == 0 && (argc < 2 || argc > 3)))
+	if (params->flags & IB_CLEAR && params->flags & IB_EDIT)
+		usage();
+	if (argc < 1 || argc + 2 * !!(params->flags & (IB_CLEAR | IB_EDIT)) > 3)
 		usage();
 
-		/* set missing defaults */
+	/* set missing defaults */
 	if (params->machine == NULL) {
 		if (uname(&utsname) == -1)
 			err(1, "Determine uname");
@@ -185,7 +191,7 @@ main(int argc, char *argv[])
 
 	/* Check that options are supported by this system */
 	unsupported_flags = params->flags & ~params->machine->valid_flags;
-	unsupported_flags &= ~(IB_VERBOSE | IB_NOWRITE |IB_CLEAR);
+	unsupported_flags &= ~(IB_VERBOSE | IB_NOWRITE | IB_CLEAR | IB_EDIT);
 	if (unsupported_flags != 0) {
 		int ndx;
 		for (ndx = 0; options[ndx].name != NULL; ndx++) {
@@ -212,6 +218,10 @@ main(int argc, char *argv[])
 		exit(1);
 	}
 
+	if (argc >= 3) {
+		params->stage2 = argv[2];
+	}
+
 	params->filesystem = argv[0];
 	if (params->flags & IB_NOWRITE) {
 		op = "only";
@@ -227,51 +237,56 @@ main(int argc, char *argv[])
 		err(1, "Examining file system `%s'", params->filesystem);
 	if (params->fstype != NULL) {
 		if (! params->fstype->match(params))
-			err(1, "File system `%s' is not of type %s",
+			errx(1, "File system `%s' is not of type %s",
 			    params->filesystem, params->fstype->name);
 	} else {
-		params->fstype = &fstypes[0];
-		while (params->fstype->name != NULL &&
-			! params->fstype->match(params))
-			params->fstype++;
-		if (params->fstype->name == NULL)
-			errx(1, "File system `%s' is of an unknown type",
-			    params->filesystem);
+		if (params->stage2 != NULL) {
+			params->fstype = &fstypes[0];
+			while (params->fstype->name != NULL &&
+				    !params->fstype->match(params))
+				params->fstype++;
+			if (params->fstype->name == NULL)
+				errx(1, "File system `%s' is of an unknown type",
+				    params->filesystem);
+		}
 	}
 
 	if (argc >= 2) {
-		params->stage1 = argv[1];
-		if ((params->s1fd = open(params->stage1, O_RDONLY, 0600))
-		    == -1)
-			err(1, "Opening primary bootstrap `%s'",
-			    params->stage1);
+		if ((params->s1fd = open(argv[1], O_RDONLY, 0600)) == -1)
+			err(1, "Opening primary bootstrap `%s'", argv[1]);
 		if (fstat(params->s1fd, &params->s1stat) == -1)
-			err(1, "Examining primary bootstrap `%s'",
-			    params->stage1);
+			err(1, "Examining primary bootstrap `%s'", argv[1]);
 		if (!S_ISREG(params->s1stat.st_mode))
-			err(1, "`%s' must be a regular file", params->stage1);
-	}
-	if (argc == 3) {
-		params->stage2 = argv[2];
+			errx(1, "`%s' must be a regular file", argv[1]);
+		params->stage1 = argv[1];
 	}
 	assert(params->machine != NULL);
 
 	if (params->flags & IB_VERBOSE) {
 		printf("File system:         %s\n", params->filesystem);
-		printf("File system type:    %s (blocksize %u, needswap %d)\n",
-		    params->fstype->name,
-		    params->fstype->blocksize, params->fstype->needswap);
-		printf("Primary bootstrap:   %s\n",
-		    (params->flags & IB_CLEAR) ? "(to be cleared)"
-		    : params->stage1);
+		if (params->fstype) 
+			printf("File system type:    %s (blocksize %u, "
+				"needswap %d)\n",
+			    params->fstype->name, params->fstype->blocksize,
+			    params->fstype->needswap);
+		if (!(params->flags & IB_EDIT))
+			printf("Primary bootstrap:   %s\n",
+			    (params->flags & IB_CLEAR) ? "(to be cleared)"
+			    : params->stage1 ? params->stage1 : "(none)" );
 		if (params->stage2 != NULL)
 			printf("Secondary bootstrap: %s\n", params->stage2);
 	}
 
-	if (params->flags & IB_CLEAR) {
+	if (params->flags & IB_EDIT) {
+		op = "Edit";
+		rv = params->machine->editboot(params);
+	} else if (params->flags & IB_CLEAR) {
 		op = "Clear";
 		rv = params->machine->clearboot(params);
 	} else {
+		if (argc < 2)
+			errx(EXIT_FAILURE, "Please specify the primary "
+			    "bootstrap file");
 		op = "Set";
 		rv = params->machine->setboot(params);
 	}
@@ -404,7 +419,6 @@ no_setboot(ib_params *params)
 
 	assert(params != NULL);
 
-		/* bootstrap installation is not supported */
 	warnx("%s: bootstrap installation is not supported",
 	    params->machine->name);
 	return (0);
@@ -416,8 +430,18 @@ no_clearboot(ib_params *params)
 
 	assert(params != NULL);
 
-		/* bootstrap removal is not supported */
 	warnx("%s: bootstrap removal is not supported",
+	    params->machine->name);
+	return (0);
+}
+
+int
+no_editboot(ib_params *params)
+{
+
+	assert(params != NULL);
+
+	warnx("%s: bootstrap editing is not supported",
 	    params->machine->name);
 	return (0);
 }
@@ -432,9 +456,11 @@ getmachine(ib_params *param, const char *mach, const char *provider)
 	assert(mach != NULL);
 	assert(provider != NULL);
 
-	for (i = 0; machines[i].name != NULL; i++) {
-		if (strcmp(machines[i].name, mach) == 0) {
-			param->machine = &machines[i];
+	for (i = 0; machines[i] != NULL; i++) {
+		if (machines[i]->name == NULL)
+			continue;
+		if (strcmp(machines[i]->name, mach) == 0) {
+			param->machine = machines[i];
 			return;
 		}
 	}
@@ -448,18 +474,30 @@ machine_usage(void)
 {
 	const char *prefix;
 	int	i;
+	int col, len;
+	const char *name;
+	int	wincol=80;
+#ifdef TIOCGWINSZ
+	struct winsize win;
+
+	if (ioctl(fileno(stderr), TIOCGWINSZ, &win) == 0)
+		wincol = win.ws_col;
+#endif
 
 	warnx("Supported machines are:");
-#define MACHS_PER_LINE	9
-	prefix="";
-	for (i = 0; machines[i].name != NULL; i++) {
-		if (i == 0)
-			prefix="\t";
-		else if (i % MACHS_PER_LINE)
-			prefix=", ";
-		else
+	prefix="\t";
+	col = 8 + 3;
+	for (i = 0; machines[i] != NULL; i++) {
+		name = machines[i]->name;
+		if (name == NULL)
+			continue;
+		len = strlen(name);
+		if (col + len > wincol) {
 			prefix=",\n\t";
-		fprintf(stderr, "%s%s", prefix, machines[i].name);
+			col = -2 + 8 + 3;
+		}
+		col += fprintf(stderr, "%s%s", prefix, name);
+		prefix=", ";
 	}
 	fputs("\n", stderr);
 }
@@ -492,15 +530,12 @@ fstype_usage(void)
 
 	warnx("Supported file system types are:");
 #define FSTYPES_PER_LINE	9
-	prefix="";
+	prefix="\t";
 	for (i = 0; fstypes[i].name != NULL; i++) {
-		if (i == 0)
-			prefix="\t";
-		else if (i % FSTYPES_PER_LINE)
-			prefix=", ";
-		else
+		if (i && (i % FSTYPES_PER_LINE) == 0)
 			prefix=",\n\t";
 		fprintf(stderr, "%s%s", prefix, fstypes[i].name);
+		prefix=", ";
 	}
 	fputs("\n", stderr);
 }
@@ -512,10 +547,11 @@ usage(void)
 
 	prog = getprogname();
 	fprintf(stderr,
-"usage: %s [-nv] [-m machine] [-o options] [-t fstype]\n"
-"\t\t   [-b s1start] [-B s2start] filesystem primary [secondary]\n"
-"usage: %s -c [-nv] [-m machine] [-o options] [-t fstype] filesystem\n",
-	    prog, prog);
+"usage: %s [-nv] [-B s2bno] [-b s1bno] [-m machine] [-o options]\n"
+"\t\t   [-t fstype] filesystem primary [secondary]\n"
+"usage: %s -c [-nv] [-m machine] [-o options] [-t fstype] filesystem\n"
+"usage: %s -e [-nv] [-m machine] [-o options] bootstrap\n",
+	    prog, prog, prog);
 	machine_usage();
 	fstype_usage();
 	options_usage();

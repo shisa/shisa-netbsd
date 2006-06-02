@@ -1,6 +1,6 @@
-#	$NetBSD: Makefile.inc,v 1.16.6.1 2005/04/19 12:32:00 tron Exp $
+#	$NetBSD: Makefile.inc,v 1.21 2006/04/07 19:38:58 mrg Exp $
 
-SRCS+=	_setjmp.S setjmp.S sigsetjmp.S __setjmp14.S __sigsetjmp14.S
+SRCS+=	setjmp.S _setjmp.S sigsetjmp.S
 
 SRCS+=	makecontext.c resumecontext.c swapcontext.S
 
@@ -22,7 +22,7 @@ SRCS+=	nanf.c
 
 # In gcc3 dynamic world these functions must be ".hidden" in libgcc*.a,
 # as they are gcc "millicode" with different calling conventions.
-.if ${HAVE_GCC3} == "no"
+.if ${HAVE_GCC} == "2"
 SRCS+=	ashiftrt.S ashlsi3.S ashrsi3.S lshrsi3.S movstr.S movstr_i4.S \
 	movstrSI.S mulsi3.S sdivsi3.S udivsi3.S
 .endif
@@ -30,7 +30,9 @@ SRCS+=	ashiftrt.S ashlsi3.S ashrsi3.S lshrsi3.S movstr.S movstr_i4.S \
 KMSRCS+= ashiftrt.S ashlsi3.S ashrsi3.S lshrsi3.S movstr.S movstr_i4.S \
 	movstrSI.S mulsi3.S sdivsi3.S udivsi3.S
 
-SRCS.sh3.gen=	Lint_swapcontext.c
+SRCS.sh3.gen=	Lint__setjmp.c Lint___setjmp14.c Lint___sigsetjmp14.c \
+		Lint_swapcontext.c
+
 LSRCS+=		${SRCS.sh3.gen}
 DPSRCS+=	${SRCS.sh3.gen}
 CLEANFILES+=	${SRCS.sh3.gen}

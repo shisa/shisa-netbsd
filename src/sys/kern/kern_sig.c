@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_sig.c,v 1.202.2.2 2005/11/13 13:55:27 tron Exp $	*/
+/*	$NetBSD: kern_sig.c,v 1.220 2006/05/14 21:15:11 elad Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1989, 1991, 1993
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_sig.c,v 1.202.2.2 2005/11/13 13:55:27 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_sig.c,v 1.220 2006/05/14 21:15:11 elad Exp $");
 
 #include "opt_ktrace.h"
 #include "opt_compat_sunos.h"
@@ -70,6 +70,8 @@ __KERNEL_RCSID(0, "$NetBSD: kern_sig.c,v 1.202.2.2 2005/11/13 13:55:27 tron Exp 
 #include <sys/sa.h>
 #include <sys/savar.h>
 #include <sys/exec.h>
+#include <sys/sysctl.h>
+#include <sys/kauth.h>
 
 #include <sys/mount.h>
 #include <sys/syscallargs.h>
@@ -81,7 +83,6 @@ __KERNEL_RCSID(0, "$NetBSD: kern_sig.c,v 1.202.2.2 2005/11/13 13:55:27 tron Exp 
 #include <uvm/uvm.h>
 #include <uvm/uvm_extern.h>
 
-static void	child_psignal(struct proc *, int);
 static int	build_corename(struct proc *, char *, const char *, size_t);
 static void	ksiginfo_exithook(struct proc *, void *);
 static void	ksiginfo_put(struct proc *, const ksiginfo_t *);
@@ -100,15 +101,16 @@ static void *
 sigacts_poolpage_alloc(struct pool *pp, int flags)
 {
 
-	return (void *)uvm_km_kmemalloc1(kernel_map,
-	    uvm.kernel_object, (PAGE_SIZE)*2, (PAGE_SIZE)*2, UVM_UNKNOWN_OFFSET,
-	    (flags & PR_WAITOK) ? 0 : UVM_KMF_NOWAIT | UVM_KMF_TRYLOCK);
+	return (void *)uvm_km_alloc(kernel_map,
+	    (PAGE_SIZE)*2, (PAGE_SIZE)*2,
+	    ((flags & PR_WAITOK) ? 0 : UVM_KMF_NOWAIT | UVM_KMF_TRYLOCK)
+	    | UVM_KMF_WIRED);
 }
 
 static void
 sigacts_poolpage_free(struct pool *pp, void *v)
 {
-        uvm_km_free(kernel_map, (vaddr_t)v, (PAGE_SIZE)*2);
+        uvm_km_free(kernel_map, (vaddr_t)v, (PAGE_SIZE)*2, UVM_KMF_WIRED);
 }
 
 static struct pool_allocator sigactspool_allocator = {
@@ -118,17 +120,6 @@ static struct pool_allocator sigactspool_allocator = {
 POOL_INIT(siginfo_pool, sizeof(siginfo_t), 0, 0, 0, "siginfo",
     &pool_allocator_nointr);
 POOL_INIT(ksiginfo_pool, sizeof(ksiginfo_t), 0, 0, 0, "ksiginfo", NULL);
-
-/*
- * Can process p, with pcred pc, send the signal signum to process q?
- */
-#define	CANSIGNAL(p, pc, q, signum) \
-	((pc)->pc_ucred->cr_uid == 0 || \
-	    (pc)->p_ruid == (q)->p_cred->p_ruid || \
-	    (pc)->pc_ucred->cr_uid == (q)->p_cred->p_ruid || \
-	    (pc)->p_ruid == (q)->p_ucred->cr_uid || \
-	    (pc)->pc_ucred->cr_uid == (q)->p_ucred->cr_uid || \
-	    ((signum) == SIGCONT && (q)->p_session == (p)->p_session))
 
 /*
  * Remove and return the first ksiginfo element that matches our requested
@@ -361,6 +352,18 @@ sigaction1(struct proc *p, int signum, const struct sigaction *nsa,
 					p->p_flag |= P_NOCLDWAIT;
 			} else
 				p->p_flag &= ~P_NOCLDWAIT;
+
+			if (nsa->sa_handler == SIG_IGN) {
+				/*
+				 * Paranoia: same as above.
+				 */
+				if (p->p_pid == 1)
+					p->p_flag &= ~P_CLDSIGIGN;
+				else
+					p->p_flag |= P_CLDSIGIGN;
+			} else
+				p->p_flag &= ~P_CLDSIGIGN;
+				
 		}
 		if ((nsa->sa_flags & SA_NODEFER) == 0)
 			sigaddset(&SIGACTION_PS(ps, signum).sa_mask, signum);
@@ -538,7 +541,13 @@ execsigs(struct proc *p)
 	}
 	sigemptyset(&p->p_sigctx.ps_sigcatch);
 	p->p_sigctx.ps_sigwaited = NULL;
-	p->p_flag &= ~P_NOCLDSTOP;
+
+	/*
+	 * Reset no zombies if child dies flag as Solaris does.
+	 */
+	p->p_flag &= ~(P_NOCLDWAIT | P_CLDSIGIGN);
+	if (SIGACTION_PS(ps, SIGCHLD).sa_handler == SIG_IGN)
+		SIGACTION_PS(ps, SIGCHLD).sa_handler = SIG_DFL;
 
 	/*
 	 * Reset stack state to the user stack.
@@ -759,7 +768,7 @@ sys_kill(struct lwp *l, void *v, register_t *retval)
 		syscallarg(int)	signum;
 	} */ *uap = v;
 	struct proc	*cp, *p;
-	struct pcred	*pc;
+	kauth_cred_t	pc;
 	ksiginfo_t	ksi;
 
 	cp = l->l_proc;
@@ -770,12 +779,14 @@ sys_kill(struct lwp *l, void *v, register_t *retval)
 	ksi.ksi_signo = SCARG(uap, signum);
 	ksi.ksi_code = SI_USER;
 	ksi.ksi_pid = cp->p_pid;
-	ksi.ksi_uid = cp->p_ucred->cr_uid;
+	ksi.ksi_uid = kauth_cred_geteuid(cp->p_cred);
 	if (SCARG(uap, pid) > 0) {
 		/* kill single process */
 		if ((p = pfind(SCARG(uap, pid))) == NULL)
 			return (ESRCH);
-		if (!CANSIGNAL(cp, pc, p, SCARG(uap, signum)))
+		if (kauth_authorize_process(pc, KAUTH_PROCESS_CANSIGNAL, cp,
+		    p->p_cred, p,
+		    (void *)(unsigned long)SCARG(uap, signum)) != 0)
 			return (EPERM);
 		if (SCARG(uap, signum))
 			kpsignal2(p, &ksi, 1);
@@ -800,7 +811,7 @@ int
 killpg1(struct proc *cp, ksiginfo_t *ksi, int pgid, int all)
 {
 	struct proc	*p;
-	struct pcred	*pc;
+	kauth_cred_t	pc;
 	struct pgrp	*pgrp;
 	int		nfound;
 	int		signum = ksi->ksi_signo;
@@ -814,7 +825,10 @@ killpg1(struct proc *cp, ksiginfo_t *ksi, int pgid, int all)
 		proclist_lock_read();
 		PROCLIST_FOREACH(p, &allproc) {
 			if (p->p_pid <= 1 || p->p_flag & P_SYSTEM ||
-			    p == cp || !CANSIGNAL(cp, pc, p, signum))
+			    p == cp ||
+			    kauth_authorize_process(pc,
+			    KAUTH_PROCESS_CANSIGNAL, cp, p->p_cred, p,
+			    (void *)(unsigned long)signum) != 0)
 				continue;
 			nfound++;
 			if (signum)
@@ -834,7 +848,9 @@ killpg1(struct proc *cp, ksiginfo_t *ksi, int pgid, int all)
 		}
 		LIST_FOREACH(p, &pgrp->pg_members, p_pglist) {
 			if (p->p_pid <= 1 || p->p_flag & P_SYSTEM ||
-			    !CANSIGNAL(cp, pc, p, signum))
+			    kauth_authorize_process(pc,
+			    KAUTH_PROCESS_CANSIGNAL, cp, p->p_cred, p,
+			    (void *)(unsigned long)signum) != 0)
 				continue;
 			nfound++;
 			if (signum && P_ZOMBIE(p) == 0)
@@ -911,7 +927,7 @@ trapsignal(struct lwp *l, const ksiginfo_t *ksi)
 		p->p_stats->p_ru.ru_nsignals++;
 #ifdef KTRACE
 		if (KTRPOINT(p, KTR_PSIG))
-			ktrpsig(p, signum, SIGACTION_PS(ps, signum).sa_handler,
+			ktrpsig(l, signum, SIGACTION_PS(ps, signum).sa_handler,
 			    &p->p_sigctx.ps_sigmask, ksi);
 #endif
 		kpsendsig(l, ksi, &p->p_sigctx.ps_sigmask);
@@ -937,7 +953,7 @@ trapsignal(struct lwp *l, const ksiginfo_t *ksi)
 /*
  * Fill in signal information and signal the parent for a child status change.
  */
-static void
+void
 child_psignal(struct proc *p, int dolock)
 {
 	ksiginfo_t ksi;
@@ -946,7 +962,7 @@ child_psignal(struct proc *p, int dolock)
 	ksi.ksi_signo = SIGCHLD;
 	ksi.ksi_code = p->p_xstat == SIGCONT ? CLD_CONTINUED : CLD_STOPPED;
 	ksi.ksi_pid = p->p_pid;
-	ksi.ksi_uid = p->p_ucred->cr_uid;
+	ksi.ksi_uid = kauth_cred_geteuid(p->p_cred);
 	ksi.ksi_status = p->p_xstat;
 	ksi.ksi_utime = p->p_stats->p_ru.ru_utime.tv_sec;
 	ksi.ksi_stime = p->p_stats->p_ru.ru_stime.tv_sec;
@@ -1406,9 +1422,9 @@ kpsendsig(struct lwp *l, const ksiginfo_t *ksi, const sigset_t *mask)
 	(*p->p_emul->e_sendsig)(ksi, mask);
 }
 
-static __inline int firstsig(const sigset_t *);
+static inline int firstsig(const sigset_t *);
 
-static __inline int
+static inline int
 firstsig(const sigset_t *ss)
 {
 	int sig;
@@ -1641,7 +1657,7 @@ issignal(struct lwp *l)
  * on the run queue.
  */
 void
-proc_stop(struct proc *p, int wakeup)
+proc_stop(struct proc *p, int dowakeup)
 {
 	struct lwp *l;
 	struct proc *parent;
@@ -1735,7 +1751,7 @@ proc_stop(struct proc *p, int wakeup)
  out:
 	/* XXX unlock process LWP state */
 
-	if (wakeup)
+	if (dowakeup)
 		sched_wakeup((caddr_t)p->p_pptr);
 }
 
@@ -1843,7 +1859,7 @@ postsig(int signum)
 	if (action == SIG_DFL) {
 #ifdef KTRACE
 		if (KTRPOINT(p, KTR_PSIG))
-			ktrpsig(p, signum, action,
+			ktrpsig(l, signum, action,
 			    p->p_sigctx.ps_flags & SAS_OLDMASK ?
 			    &p->p_sigctx.ps_oldmask : &p->p_sigctx.ps_sigmask,
 			    NULL);
@@ -1882,7 +1898,7 @@ postsig(int signum)
 		ksi = ksiginfo_get(p, signum);
 #ifdef KTRACE
 		if (KTRPOINT(p, KTR_PSIG))
-			ktrpsig(p, signum, action,
+			ktrpsig(l, signum, action,
 			    p->p_sigctx.ps_flags & SAS_OLDMASK ?
 			    &p->p_sigctx.ps_oldmask : &p->p_sigctx.ps_sigmask,
 			    ksi);
@@ -2018,8 +2034,8 @@ sigexit(struct lwp *l, int signum)
 
 		if (kern_logsigexit) {
 			/* XXX What if we ever have really large UIDs? */
-			int uid = p->p_cred && p->p_ucred ?
-				(int) p->p_ucred->cr_uid : -1;
+			int uid = p->p_cred && p->p_cred ?
+				(int) kauth_cred_geteuid(p->p_cred) : -1;
 
 			if (error)
 				log(LOG_INFO, lognocoredump, p->p_pid,
@@ -2035,6 +2051,35 @@ sigexit(struct lwp *l, int signum)
 	/* NOTREACHED */
 }
 
+struct coredump_iostate {
+	struct lwp *io_lwp;
+	struct vnode *io_vp;
+	kauth_cred_t io_cred;
+	off_t io_offset;
+};
+
+int
+coredump_write(void *cookie, enum uio_seg segflg, const void *data, size_t len)
+{
+	struct coredump_iostate *io = cookie;
+	int error;
+
+	error = vn_rdwr(UIO_WRITE, io->io_vp, __UNCONST(data), len,
+	    io->io_offset, segflg,
+	    IO_NODELOCKED|IO_UNIT, io->io_cred, NULL,
+	    segflg == UIO_USERSPACE ? io->io_lwp : NULL);
+	if (error) {
+		printf("pid %d (%s): %s write of %zu@%p at %lld failed: %d\n",
+		    io->io_lwp->l_proc->p_pid, io->io_lwp->l_proc->p_comm,
+		    segflg == UIO_USERSPACE ? "user" : "system",
+		    len, data, (long long) io->io_offset, error);
+		return (error);
+	}
+
+	io->io_offset += len;
+	return (0);
+}
+
 /*
  * Dump core, into a file named "progname.core" or "core" (depending on the
  * value of shortcorename), unless the process was setuid/setgid.
@@ -2045,22 +2090,24 @@ coredump(struct lwp *l, const char *pattern)
 	struct vnode		*vp;
 	struct proc		*p;
 	struct vmspace		*vm;
-	struct ucred		*cred;
+	kauth_cred_t		cred;
 	struct nameidata	nd;
 	struct vattr		vattr;
 	struct mount		*mp;
+	struct coredump_iostate	io;
 	int			error, error1;
-	char			name[MAXPATHLEN];
+	char			*name = NULL;
 
 	p = l->l_proc;
 	vm = p->p_vmspace;
-	cred = p->p_cred->pc_ucred;
+	cred = p->p_cred;
 
 	/*
-	 * Make sure the process has not set-id, to prevent data leaks.
+	 * Make sure the process has not set-id, to prevent data leaks,
+	 * unless it was specifically requested to allow set-id coredumps.
 	 */
-	if (p->p_flag & P_SUGID)
-		return (EPERM);
+	if ((p->p_flag & P_SUGID) && !security_setidcore_dump)
+		return EPERM;
 
 	/*
 	 * Refuse to core if the data + stack + user size is larger than
@@ -2069,7 +2116,7 @@ coredump(struct lwp *l, const char *pattern)
 	 */
 	if (USPACE + ctob(vm->vm_dsize + vm->vm_ssize) >=
 	    p->p_rlimit[RLIMIT_CORE].rlim_cur)
-		return (EFBIG);		/* better error code? */
+		return EFBIG;		/* better error code? */
 
 restart:
 	/*
@@ -2079,51 +2126,73 @@ restart:
 	 */
 	vp = p->p_cwdi->cwdi_cdir;
 	if (vp->v_mount == NULL ||
-	    (vp->v_mount->mnt_flag & MNT_NOCOREDUMP) != 0)
-		return (EPERM);
+	    (vp->v_mount->mnt_flag & MNT_NOCOREDUMP) != 0) {
+		error = EPERM;
+		goto done;
+	}
+
+	if ((p->p_flag & P_SUGID) && security_setidcore_dump)
+		pattern = security_setidcore_path;
 
 	if (pattern == NULL)
 		pattern = p->p_limit->pl_corename;
-	if ((error = build_corename(p, name, pattern, sizeof(name))) != 0)
-		return error;
-
-	NDINIT(&nd, LOOKUP, NOFOLLOW, UIO_SYSSPACE, name, p);
-	error = vn_open(&nd, O_CREAT | O_NOFOLLOW | FWRITE, S_IRUSR | S_IWUSR);
-	if (error)
-		return (error);
+	if (name == NULL) {
+		name = PNBUF_GET();
+	}
+	if ((error = build_corename(p, name, pattern, MAXPATHLEN)) != 0)
+		goto done;
+	NDINIT(&nd, LOOKUP, NOFOLLOW, UIO_SYSSPACE, name, l);
+	if ((error = vn_open(&nd, O_CREAT | O_NOFOLLOW | FWRITE,
+	    S_IRUSR | S_IWUSR)) != 0)
+		goto done;
 	vp = nd.ni_vp;
 
 	if (vn_start_write(vp, &mp, V_NOWAIT) != 0) {
 		VOP_UNLOCK(vp, 0);
-		if ((error = vn_close(vp, FWRITE, cred, p)) != 0)
-			return (error);
+		if ((error = vn_close(vp, FWRITE, cred, l)) != 0)
+			goto done;
 		if ((error = vn_start_write(NULL, &mp,
 		    V_WAIT | V_SLEEPONLY | V_PCATCH)) != 0)
-			return (error);
+			goto done;
 		goto restart;
 	}
 
 	/* Don't dump to non-regular files or files with links. */
 	if (vp->v_type != VREG ||
-	    VOP_GETATTR(vp, &vattr, cred, p) || vattr.va_nlink != 1) {
+	    VOP_GETATTR(vp, &vattr, cred, l) || vattr.va_nlink != 1) {
 		error = EINVAL;
 		goto out;
 	}
 	VATTR_NULL(&vattr);
 	vattr.va_size = 0;
-	VOP_LEASE(vp, p, cred, LEASE_WRITE);
-	VOP_SETATTR(vp, &vattr, cred, p);
+
+	if ((p->p_flag & P_SUGID) && security_setidcore_dump) {
+		vattr.va_uid = security_setidcore_owner;
+		vattr.va_gid = security_setidcore_group;
+		vattr.va_mode = security_setidcore_mode;
+	}
+
+	VOP_LEASE(vp, l, cred, LEASE_WRITE);
+	VOP_SETATTR(vp, &vattr, cred, l);
 	p->p_acflag |= ACORE;
 
+	io.io_lwp = l;
+	io.io_vp = vp;
+	io.io_cred = cred;
+	io.io_offset = 0;
+
 	/* Now dump the actual core file. */
-	error = (*p->p_execsw->es_coredump)(l, vp, cred);
+	error = (*p->p_execsw->es_coredump)(l, &io);
  out:
 	VOP_UNLOCK(vp, 0);
 	vn_finished_write(mp, 0);
-	error1 = vn_close(vp, FWRITE, cred, p);
+	error1 = vn_close(vp, FWRITE, cred, l);
 	if (error == 0)
 		error = error1;
-	return (error);
+done:
+	if (name != NULL)
+		PNBUF_PUT(name);
+	return error;
 }
 
 /*
@@ -2284,6 +2353,13 @@ sys_setcontext(struct lwp *l, void *v, register_t *retval)
 int
 sys___sigtimedwait(struct lwp *l, void *v, register_t *retval)
 {
+	return __sigtimedwait1(l, v, retval, copyout, copyin, copyout);
+}
+
+int
+__sigtimedwait1(struct lwp *l, void *v, register_t *retval,
+    copyout_t put_info, copyin_t fetch_timeout, copyout_t put_timeout)
+{
 	struct sys___sigtimedwait_args /* {
 		syscallarg(const sigset_t *) set;
 		syscallarg(siginfo_t *) info;
@@ -2296,6 +2372,8 @@ sys___sigtimedwait(struct lwp *l, void *v, register_t *retval)
 	struct timeval tvstart;
 	struct timespec ts;
 	ksiginfo_t *ksi;
+
+	memset(&tvstart, 0, sizeof tvstart);	 /* XXX gcc */
 
 	MALLOC(waitset, sigset_t *, sizeof(sigset_t), M_TEMP, M_WAITOK);
 
@@ -2338,7 +2416,7 @@ sys___sigtimedwait(struct lwp *l, void *v, register_t *retval)
 	if (SCARG(uap, timeout)) {
 		uint64_t ms;
 
-		if ((error = copyin(SCARG(uap, timeout), &ts, sizeof(ts))))
+		if ((error = (*fetch_timeout)(SCARG(uap, timeout), &ts, sizeof(ts))))
 			return (error);
 
 		ms = (ts.tv_sec * 1000) + (ts.tv_nsec / 1000000);
@@ -2423,7 +2501,8 @@ sys___sigtimedwait(struct lwp *l, void *v, register_t *retval)
 			TIMEVAL_TO_TIMESPEC(&tvtimo, &ts);
 
 			/* copy updated timeout to userland */
-			if ((err = copyout(&ts, SCARG(uap, timeout), sizeof(ts)))) {
+			if ((err = (*put_timeout)(&ts, SCARG(uap, timeout),
+			    sizeof(ts)))) {
 				error = err;
 				goto fail;
 			}
@@ -2438,7 +2517,7 @@ sys___sigtimedwait(struct lwp *l, void *v, register_t *retval)
 	 * left unchanged (userland is not supposed to touch it anyway).
 	 */
  sig:
-	error = copyout(&ksi->ksi_info, SCARG(uap, info), sizeof(ksi->ksi_info));
+	return (*put_info)(&ksi->ksi_info, SCARG(uap, info), sizeof(ksi->ksi_info));
 
  fail:
 	FREE(waitset, M_TEMP);

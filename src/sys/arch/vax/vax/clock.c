@@ -1,4 +1,4 @@
-/*	$NetBSD: clock.c,v 1.41 2003/07/15 02:15:03 lukem Exp $	 */
+/*	$NetBSD: clock.c,v 1.44 2005/12/24 22:45:40 perry Exp $	 */
 /*
  * Copyright (c) 1995 Ludd, University of Lule}, Sweden.
  * All rights reserved.
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: clock.c,v 1.41 2003/07/15 02:15:03 lukem Exp $");
+__KERNEL_RCSID(0, "$NetBSD: clock.c,v 1.44 2005/12/24 22:45:40 perry Exp $");
 
 #include <sys/param.h>
 #include <sys/kernel.h>
@@ -63,7 +63,7 @@ microtime(tvp)
 	static struct timeval lasttime;
 
 	s = splhigh();
-	bcopy((caddr_t)&time, tvp, sizeof(struct timeval));
+	*tvp = time;
 
 	switch (vax_boardtype) {
 #if VAX46 || VAXANY
@@ -165,7 +165,7 @@ void
 delay(i)
 	int i;
 {
-	asm ("1: sobgtr %0, 1b" : : "r" (dep_call->cpu_vups * i));
+	__asm ("1: sobgtr %0, 1b" : : "r" (dep_call->cpu_vups * i));
 }
 
 /*

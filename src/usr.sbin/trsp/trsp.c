@@ -1,4 +1,4 @@
-/*	$NetBSD: trsp.c,v 1.9 2003/08/07 11:25:49 agc Exp $	*/
+/*	$NetBSD: trsp.c,v 1.12 2006/03/30 21:05:07 dsl Exp $	*/
 
 /*-
  * Copyright (c) 1997 The NetBSD Foundation, Inc.
@@ -77,7 +77,7 @@ __COPYRIGHT(
 #if 0
 static char sccsid[] = "@(#)trsp.c	8.1 (Berkeley) 6/6/93";
 #else
-__RCSID("$NetBSD: trsp.c,v 1.9 2003/08/07 11:25:49 agc Exp $");
+__RCSID("$NetBSD: trsp.c,v 1.12 2006/03/30 21:05:07 dsl Exp $");
 #endif
 #endif /* not lint */
 
@@ -85,6 +85,7 @@ __RCSID("$NetBSD: trsp.c,v 1.9 2003/08/07 11:25:49 agc Exp $");
 #include <sys/param.h>
 #include <sys/socket.h>
 #include <sys/socketvar.h>
+#include <sys/sysctl.h>
 #define PRUREQUESTS
 #include <sys/protosw.h>
 
@@ -139,24 +140,20 @@ int	spp_debx;
 
 kvm_t	*kd;
 
-int	main __P((int, char *[]));
-void	dotrace __P((caddr_t));
-int	numeric __P((const void *, const void *));
-void	spp_trace __P((short, short, struct sppcb *, struct sppcb *,
-	    struct spidp *, int));
-void	usage __P((void));
+int	main(int, char *[]);
+void	dotrace(caddr_t);
+int	numeric(const void *, const void *);
+void	spp_trace(short, short, struct sppcb *, struct sppcb *,
+	    struct spidp *, int);
+void	usage(void);
 
 int
-main(argc, argv)
-	int argc;
-	char *argv[];
+main(int argc, char *argv[])
 {
-	int ch, i, npcbs = 0;
+	int ch, i, npcbs = 0, use_sysctl;
 	char *system, *core, *cp, errbuf[_POSIX2_LINE_MAX];
-	gid_t egid = getegid();
 	unsigned long l;
 
-	(void)setegid(getgid());
 	system = core = NULL;
 
 	while ((ch = getopt(argc, argv, "azstjp:N:M:")) != -1) {
@@ -204,35 +201,38 @@ main(argc, argv)
 	if (argc)
 		usage();
 
-	/*
-	 * Discard setgid privileges if not the running kernel so that bad
-	 * guys can't print interesting stuff from kernel memory.
-	 */
-	if (core != NULL || system != NULL)
-		setgid(getgid());
-	else
-		setegid(egid);
+	use_sysctl = (system == NULL && core == NULL);
 
-	kd = kvm_openfiles(system, core, NULL, zflag ? O_RDWR : O_RDONLY,
-	    errbuf);
-	if (kd == NULL)
-		errx(1, "can't open kmem: %s", errbuf);
+	if (use_sysctl) {
+		size_t lenx = sizeof(spp_debx);
+		size_t lend = sizeof(spp_debug);
 
-	/* get rid of it now anyway */
-	if (core == NULL && system == NULL)
-		setgid(getgid());
+		if (sysctlbyname("net.ns.spp.debx", &spp_debx, &lenx, NULL, 
+		    0) == -1)
+			err(1, "net.ns.spp.debx");
+		if (sysctlbyname("net.ns.spp.debug", &spp_debug, &lend, NULL,
+		    0) == -1)
+			err(1, "net.ns.spp.debug");
+		
+	} else {
+		kd = kvm_openfiles(system, core, NULL, 
+		    zflag ? O_RDWR : O_RDONLY, errbuf);
+		if (kd == NULL)
+			errx(1, "can't open kmem: %s", errbuf);
 
-	if (kvm_nlist(kd, nl))
-		errx(2, "%s: no namelist", system ? system : _PATH_UNIX);
+		if (kvm_nlist(kd, nl))
+			errx(2, "%s: no namelist", system);
 
-	if (kvm_read(kd, nl[N_SPP_DEBX].n_value, &spp_debx,
-	    sizeof(spp_debx)) != sizeof(spp_debx))
-		errx(3, "spp_debx: %s", kvm_geterr(kd));
+		if (kvm_read(kd, nl[N_SPP_DEBX].n_value, &spp_debx,
+		    sizeof(spp_debx)) != sizeof(spp_debx))
+			errx(3, "spp_debx: %s", kvm_geterr(kd));
+
+		if (kvm_read(kd, nl[N_SPP_DEBUG].n_value, spp_debug,
+		    sizeof(spp_debug)) != sizeof(spp_debug))
+			errx(3, "spp_debug: %s", kvm_geterr(kd));
+	}
+
 	printf("spp_debx=%d\n", spp_debx);
-
-	if (kvm_read(kd, nl[N_SPP_DEBUG].n_value, spp_debug,
-	    sizeof(spp_debug)) != sizeof(spp_debug))
-		errx(3, "spp_debug: %s", kvm_geterr(kd));
 
 	/*
 	 * Here, we just want to clear out the old trace data and start over.
@@ -241,14 +241,22 @@ main(argc, argv)
 		spp_debx = 0;
 		(void) memset(spp_debug, 0, sizeof(spp_debug));
 
-		if (kvm_write(kd, nl[N_SPP_DEBX].n_value, &spp_debx,
-		    sizeof(spp_debx)) != sizeof(spp_debx))
-			errx(4, "write spp_debx: %s", kvm_geterr(kd));
+		if (use_sysctl) {
+			if (sysctlbyname("net.ns.spp.debx", NULL, 0, 
+			    &spp_debx, sizeof(spp_debx)) == -1)
+				err(1, "write spp_debx");
+			if (sysctlbyname("net.ns.spp.debug", NULL, 0,
+			    &spp_debug, sizeof(spp_debug)) == -1)
+				err(1, "write spp_debug");
+		} else {
+			if (kvm_write(kd, nl[N_SPP_DEBX].n_value, &spp_debx,
+			    sizeof(spp_debx)) != sizeof(spp_debx))
+				errx(4, "write spp_debx: %s", kvm_geterr(kd));
 		
-		if (kvm_write(kd, nl[N_SPP_DEBUG].n_value, spp_debug,
-		    sizeof(spp_debug)) != sizeof(spp_debug))
-			errx(4, "write spp_debug: %s", kvm_geterr(kd));
-
+			if (kvm_write(kd, nl[N_SPP_DEBUG].n_value, spp_debug,
+			    sizeof(spp_debug)) != sizeof(spp_debug))
+				errx(4, "write spp_debug: %s", kvm_geterr(kd));
+		}
 		exit(0);
 	}
 
@@ -292,8 +300,7 @@ main(argc, argv)
 }
 
 void
-dotrace(sppcb)
-	caddr_t sppcb;
+dotrace(caddr_t sppcb)
 {
 	struct spp_debug *sd;
 	int i;
@@ -317,8 +324,7 @@ dotrace(sppcb)
 }
 
 int
-numeric(v1, v2)
-	const void *v1, *v2;
+numeric(const void *v1, const void *v2)
 {
 	const caddr_t *c1 = v1;
 	const caddr_t *c2 = v2;
@@ -335,11 +341,8 @@ numeric(v1, v2)
 }
 
 void
-spp_trace(act, ostate, asp, sp, si, req)
-	short act, ostate;
-	struct sppcb *asp, *sp;
-	struct spidp *si;
-	int req;
+spp_trace(short act, short ostate, struct sppcb *asp, struct sppcb *sp,
+	struct spidp *si, int req)
 {
 	u_int16_t seq, ack, len, alo;
 	int flags;
@@ -410,12 +413,9 @@ spp_trace(act, ostate, asp, sp, si, req)
 		if ((req & 0xff) == PRU_SLOWTIMO)
 			printf("<%s>", tcptimers[req>>8]);
 	}
-	printf(" -> %s", tcpstates[sp->s_state]);
+	printf(" -> %s\n", tcpstates[sp->s_state]);
 
 	/* print out internal state of sp !?! */
-	printf("\n");
-	if (sp == 0)
-		return;
 #define p3(name, f)  { \
 	printf("%s = %x, ", name, f); \
 }
@@ -474,7 +474,7 @@ spp_trace(act, ostate, asp, sp, si, req)
 }
 
 void
-usage()
+usage(void)
 {
 
 	fprintf(stderr, "usage: %s [-azstj] [-p hex-address]"

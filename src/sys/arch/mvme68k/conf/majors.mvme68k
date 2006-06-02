@@ -1,4 +1,4 @@
-#	$NetBSD: majors.mvme68k,v 1.11 2003/12/10 02:04:01 jmc Exp $
+#	$NetBSD: majors.mvme68k,v 1.16 2005/12/11 12:18:17 christos Exp $
 #
 # Device majors for mvme68k
 #
@@ -6,7 +6,7 @@
 device-major	cons		char 0
 device-major	ctty		char 1
 device-major	mem		char 2
-device-major	swap		char 3   block 3
+device-major	swap		char 3   block 3	vmswap
 device-major	pts		char 4			pty
 device-major	ptc		char 5			pty
 device-major	log		char 6
@@ -39,6 +39,8 @@ device-major	clockctl	char 39			clockctl
 device-major	systrace	char 40			systrace
 device-major	cgd		char 41  block 17	cgd
 device-major	ksyms		char 42			ksyms
+
+device-major	nsmb		char 98			nsmb
 
 # Majors up to 143 are reserved for machine-dependant drivers.
 # New machine-independant driver majors are assigned in 

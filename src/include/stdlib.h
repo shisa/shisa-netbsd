@@ -1,4 +1,4 @@
-/*	$NetBSD: stdlib.h,v 1.69 2005/02/03 04:39:32 perry Exp $	*/
+/*	$NetBSD: stdlib.h,v 1.76 2006/03/15 17:35:17 kleink Exp $	*/
 
 /*-
  * Copyright (c) 1990, 1993
@@ -179,9 +179,11 @@ void	 srandom(unsigned long);
 
 char	*mkdtemp(char *);
 int	 mkstemp(char *);
-#ifndef __AUDIT__
-char	*mktemp(char *);
+char	*mktemp(char *)
+#ifdef __MKTEMP_OK__
+	__RENAME(_mktemp)
 #endif
+	;
 
 int	 setkey(const char *);
 
@@ -212,6 +214,8 @@ long long int	strtoll(const char * __restrict, char ** __restrict, int);
 /* LONGLONG */
 unsigned long long int
 		strtoull(const char * __restrict, char ** __restrict, int);
+float		strtof(const char * __restrict, char ** __restrict);
+long double	strtold(const char * __restrict, char ** __restrict);
 #endif
 
 /*
@@ -220,10 +224,7 @@ unsigned long long int
 #if (_POSIX_C_SOURCE - 0) >= 200112L || (_XOPEN_SOURCE - 0) >= 600 || \
     defined(_NETBSD_SOURCE)
 int	 setenv(const char *, const char *, int);
-#ifdef __LIBC12_SOURCE__
-void	 unsetenv(const char *);
-int	 __unsetenv13(const char *);
-#else
+#ifndef __LIBC12_SOURCE__
 int	 unsetenv(const char *) __RENAME(__unsetenv13);
 #endif
 
@@ -240,7 +241,7 @@ void	*alloca(int);     /* built-in for gcc */
 void	*alloca(size_t); 
 #endif /* __GNUC__ */ 
 
-u_int32_t arc4random(void);
+uint32_t arc4random(void);
 void	 arc4random_stir(void);
 void	 arc4random_addrandom(u_char *, int);
 char	*getbsize(int *, long *);
@@ -260,6 +261,8 @@ __aconst char *devname(dev_t, mode_t);
 dev_t	 getdevmajor(const char *, mode_t);
 int	 getloadavg(double [], int);
 
+int	 getenv_r(const char *, char *, size_t);
+
 void	 cfree(void *);
 
 int	 heapsort(void *, size_t, size_t, int (*)(const void *, const void *));
@@ -272,7 +275,7 @@ int	 sradixsort(const unsigned char **, int, const unsigned char *,
 
 void	 setproctitle(const char *, ...)
 	    __attribute__((__format__(__printf__, 1, 2)));
-const char *getprogname(void) __attribute__((__const__));
+const char *getprogname(void) __attribute__((const));
 void	setprogname(const char *);
 
 quad_t	 qabs(quad_t);

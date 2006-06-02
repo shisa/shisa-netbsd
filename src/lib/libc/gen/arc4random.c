@@ -1,4 +1,4 @@
-/*	$NetBSD: arc4random.c,v 1.7 2005/02/09 21:35:46 kleink Exp $	*/
+/*	$NetBSD: arc4random.c,v 1.9 2005/12/24 21:11:16 perry Exp $	*/
 /*	$OpenBSD: arc4random.c,v 1.6 2001/06/05 05:05:38 pvalchev Exp $	*/
 
 /*
@@ -25,6 +25,11 @@
  * RC4 is a registered trademark of RSA Laboratories.
  */
 
+#include <sys/cdefs.h>
+#if defined(LIBC_SCCS) && !defined(lint)
+__RCSID("$NetBSD: arc4random.c,v 1.9 2005/12/24 21:11:16 perry Exp $");
+#endif /* LIBC_SCCS and not lint */
+
 #include "namespace.h"
 #include <fcntl.h>
 #include <stdlib.h>
@@ -37,12 +42,6 @@
 #ifdef __weak_alias
 __weak_alias(arc4random,_arc4random)
 #endif
-
-#ifdef __GNUC__
-#define inline __inline
-#else				/* !__GNUC__ */
-#define inline
-#endif				/* !__GNUC__ */
 
 struct arc4_stream {
 	u_int8_t i;

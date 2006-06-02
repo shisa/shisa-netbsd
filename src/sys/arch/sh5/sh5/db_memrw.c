@@ -1,4 +1,4 @@
-/*	$NetBSD: db_memrw.c,v 1.3 2003/08/10 22:22:31 scw Exp $	*/
+/*	$NetBSD: db_memrw.c,v 1.6 2005/12/24 22:45:36 perry Exp $	*/
 
 /*
  * Copyright 2002 Wasabi Systems, Inc.
@@ -72,7 +72,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: db_memrw.c,v 1.3 2003/08/10 22:22:31 scw Exp $");
+__KERNEL_RCSID(0, "$NetBSD: db_memrw.c,v 1.6 2005/12/24 22:45:36 perry Exp $");
 
 #include <sys/param.h>
 #include <sys/proc.h>
@@ -116,7 +116,7 @@ db_read_bytes(db_addr_t addr, size_t size, char *data)
  * Write bytes to kernel address space for debugger.
  */
 void
-db_write_bytes(db_addr_t addr, size_t size, char *data)
+db_write_bytes(db_addr_t addr, size_t size, const char *data)
 {
 	char *dst = (char *)(intptr_t)addr;
 	extern char etext[];
@@ -125,29 +125,29 @@ db_write_bytes(db_addr_t addr, size_t size, char *data)
 	if (dst < etext && (dst + size) >= (char *)SH5_KSEG0_BASE) {
 		char *dp;
 		for (dp = dst; dp < &dst[size]; dp += 32)
-			asm volatile("ocbp %0, 0; icbi %0, 0; synci"
+			__asm volatile("ocbp %0, 0; icbi %0, 0; synci"
 			    : : "r"(dp));
 		in_text = 1;
 	}
 
 	if (size == 8) {
-		*((register_t*)dst) = *((register_t*)data);
+		*((register_t*)dst) = *((const register_t*)data);
 		if (in_text)
-			asm volatile("ocbp %0, 0; synci" :: "r"(dst));
+			__asm volatile("ocbp %0, 0; synci" :: "r"(dst));
 		return;
 	}
 
 	if (size == 4) {
-		*((int*)dst) = *((int*)data);
+		*((int*)dst) = *((const int*)data);
 		if (in_text)
-			asm volatile("ocbp %0, 0; synci" :: "r"(dst));
+			__asm volatile("ocbp %0, 0; synci" :: "r"(dst));
 		return;
 	}
 
 	if (size == 2) {
-		*((short*)dst) = *((short*)data);
+		*((short*)dst) = *((const short*)data);
 		if (in_text)
-			asm volatile("ocbp %0, 0; synci" :: "r"(dst));
+			__asm volatile("ocbp %0, 0; synci" :: "r"(dst));
 		return;
 	}
 
@@ -155,7 +155,7 @@ db_write_bytes(db_addr_t addr, size_t size, char *data)
 		--size;
 		*dst = *data++;
 		if (in_text)
-			asm volatile("ocbp %0, 0; synci" :: "r"(dst));
+			__asm volatile("ocbp %0, 0; synci" :: "r"(dst));
 		dst++;
 	}
 }

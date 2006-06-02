@@ -1,4 +1,4 @@
-/* 	$NetBSD: binary.c,v 1.2.2.1 2005/07/03 21:17:21 tron Exp $	*/
+/* 	$NetBSD: binary.c,v 1.3 2005/04/22 21:02:42 christos Exp $	*/
 
 /*-
  * Copyright (c) 1999 James Howard and Dag-Erling Coïdan Smørgrav
@@ -29,7 +29,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: binary.c,v 1.2.2.1 2005/07/03 21:17:21 tron Exp $");
+__RCSID("$NetBSD: binary.c,v 1.3 2005/04/22 21:02:42 christos Exp $");
 #endif /* not lint */
 
 #include <ctype.h>

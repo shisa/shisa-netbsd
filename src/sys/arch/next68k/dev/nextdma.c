@@ -1,4 +1,4 @@
-/*	$NetBSD: nextdma.c,v 1.37 2005/01/19 01:58:21 chs Exp $	*/
+/*	$NetBSD: nextdma.c,v 1.42 2006/05/14 21:55:39 elad Exp $	*/
 /*
  * Copyright (c) 1998 Darrin B. Jewell
  * All rights reserved.
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: nextdma.c,v 1.37 2005/01/19 01:58:21 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: nextdma.c,v 1.42 2006/05/14 21:55:39 elad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -66,7 +66,7 @@ __KERNEL_RCSID(0, "$NetBSD: nextdma.c,v 1.37 2005/01/19 01:58:21 chs Exp $");
 
 extern int turbo;
 
-#define panic		__asm __volatile("trap  #15"); printf
+#define panic		__asm volatile("trap  #15"); printf
 
 #define NEXTDMA_DEBUG nextdma_debug
 /* (nsc->sc_chan->nd_intr == NEXT_I_SCSI_DMA) && nextdma_debug */
@@ -135,7 +135,7 @@ static int nnextdma_channels = (sizeof(nextdma_channel)/sizeof(nextdma_channel[0
 static int attached = 0;
 
 struct nextdma_softc *
-nextdma_findchannel(char *name)
+nextdma_findchannel(const char *name)
 {
 	struct device *dev = TAILQ_FIRST(&alldevs);
 
@@ -230,8 +230,8 @@ nextdma_init(struct nextdma_softc *nsc)
 		state = nd_bsr4 (DD_CSR);
 
 #if 1
-		/* mourning (a 25Mhz 68040 mono slab) appears to set BUSEXC
-		 * milo (a 25Mhz 68040 mono cube) didn't have this problem
+		/* mourning (a 25 MHz 68040 mono slab) appears to set BUSEXC
+		 * milo (a 25 MHz 68040 mono cube) didn't have this problem
 		 * Darrin B. Jewell <jewell@mit.edu>  Mon May 25 07:53:05 1998
 		 */
 		state &= (DMACSR_COMPLETE | DMACSR_SUPDATE | DMACSR_ENABLE);

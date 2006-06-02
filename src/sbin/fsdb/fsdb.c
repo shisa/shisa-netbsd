@@ -1,4 +1,4 @@
-/*	$NetBSD: fsdb.c,v 1.31 2005/02/05 14:26:05 xtraeme Exp $	*/
+/*	$NetBSD: fsdb.c,v 1.35 2006/05/19 14:50:32 christos Exp $	*/
 
 /*-
  * Copyright (c) 1996 The NetBSD Foundation, Inc.
@@ -38,7 +38,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: fsdb.c,v 1.31 2005/02/05 14:26:05 xtraeme Exp $");
+__RCSID("$NetBSD: fsdb.c,v 1.35 2006/05/19 14:50:32 christos Exp $");
 #endif /* not lint */
 
 #include <sys/types.h>
@@ -243,7 +243,8 @@ static char *
 prompt(EditLine *el)
 {
 	static char pstring[64];
-	snprintf(pstring, sizeof(pstring), "fsdb (inum: %d)> ", curinum);
+	snprintf(pstring, sizeof(pstring), "fsdb (inum: %llu)> ",
+	    (unsigned long long)curinum);
 	return pstring;
 }
 
@@ -323,10 +324,11 @@ cmdloop(void)
 
 static ino_t ocurrent;
 
-#define GETINUM(ac,inum)    inum = strtoul(argv[ac], &cp, 0); \
+#define GETINUM(ac,inum)    inum = strtoull(argv[ac], &cp, 0); \
     if (inum < ROOTINO || inum >= maxino || cp == argv[ac] || *cp != '\0' ) { \
-	printf("inode %d out of range; range is [%d,%d]\n", \
-	       inum, ROOTINO, maxino); \
+	printf("inode %llu out of range; range is [%llu,%llu]\n", \
+	   (unsigned long long)inum, (unsigned long long)ROOTINO, \
+	   (unsigned long long)maxino); \
 	return 1; \
     }
 
@@ -388,8 +390,9 @@ CMDFUNCSTART(uplink)
 		return 1;
 	nlink = iswap16(DIP(curinode, nlink));
 	nlink++;
-	DIP(curinode, nlink) = iswap16(nlink);
-	printf("inode %d link count now %d\n", curinum, nlink);
+	DIP_SET(curinode, nlink, iswap16(nlink));
+	printf("inode %llu link count now %d\n", (unsigned long long)curinum,
+	    nlink);
 	inodirty();
 	return 0;
 }
@@ -402,8 +405,9 @@ CMDFUNCSTART(downlink)
 		return 1;
 	nlink = iswap16(DIP(curinode, nlink));
 	nlink--;
-	DIP(curinode, nlink) = iswap16(nlink);
-	printf("inode %d link count now %d\n", curinum, nlink);
+	DIP_SET(curinode, nlink, iswap16(nlink));
+	printf("inode %llu link count now %d\n", (unsigned long long)curinum,
+	    nlink);
 	inodirty();
 	return 0;
 }
@@ -466,14 +470,15 @@ CMDFUNCSTART(blks)
 	}
 	type = iswap16(DIP(curinode, mode)) & IFMT;
 	if (type != IFDIR && type != IFREG) {
-		warnx("inode %d not a file or directory", curinum);
+		warnx("inode %llu not a file or directory",
+		    (unsigned long long)curinum);
 		return 0;
 	}
 	if (is_ufs2) {
-		printf("I=%d %lld blocks\n", curinum,
+		printf("I=%llu %lld blocks\n", (unsigned long long)curinum,
 		    (long long)(iswap64(curinode->dp2.di_blocks)));
 	} else {
-		printf("I=%d %d blocks\n", curinum,
+		printf("I=%llu %d blocks\n", (unsigned long long)curinum,
 		    iswap32(curinode->dp1.di_blocks));
 	}
 	printf("Direct blocks:\n");
@@ -499,8 +504,8 @@ static int wantedblksize;
 CMDFUNCSTART(findblk)
 {
 	ino_t   inum, inosused;
-	uint32_t *wantedblk32;
-	uint64_t *wantedblk64;
+	uint32_t *wantedblk32 = NULL;
+	uint64_t *wantedblk64 = NULL;
 	struct cg *cgp = cgrp;
 	int i, c;
 
@@ -545,10 +550,12 @@ CMDFUNCSTART(findblk)
 			        ino_to_fsba(sblock, inum)) :
 			    compare_blk32(wantedblk32,
 			        ino_to_fsba(sblock, inum))) {
-				printf("block %llu: inode block (%d-%d)\n",
+				printf("block %llu: inode block (%llu-%llu)\n",
 				    (unsigned long long)fsbtodb(sblock,
 					ino_to_fsba(sblock, inum)),
+				    (unsigned long long)
 				    (inum / INOPB(sblock)) * INOPB(sblock),
+				    (unsigned long long)
 				    (inum / INOPB(sblock) + 1) * INOPB(sblock));
 				findblk_numtofind--;
 				if (findblk_numtofind == 0)
@@ -605,6 +612,10 @@ CMDFUNCSTART(findblk)
 		}
 	}
 end:
+	if (wantedblk32)
+		free(wantedblk32);
+	if (wantedblk64)
+		free(wantedblk64);
 	curinum = ocurrent;
 	curinode = ginode(curinum);
 	return 0;
@@ -639,8 +650,9 @@ compare_blk64(uint64_t *wantedblk, uint64_t curblk)
 static int
 founddatablk(uint64_t blk)
 {
-	printf("%llu: data block of inode %d\n",
-	    (unsigned long long)fsbtodb(sblock, blk), curinum);
+	printf("%llu: data block of inode %llu\n",
+	    (unsigned long long)fsbtodb(sblock, blk),
+	    (unsigned long long)curinum);
 	findblk_numtofind--;
 	if (findblk_numtofind == 0)
 		return 1;
@@ -913,7 +925,8 @@ CMDFUNCSTART(ln)
 		return 1;
 	rval = makeentry(curinum, inum, argv[2]);
 	if (rval)
-		printf("Ino %d entered as `%s'\n", inum, argv[2]);
+		printf("Ino %llu entered as `%s'\n", (unsigned long long)inum,
+		    argv[2]);
 	else
 		printf("could not enter name? weird.\n");
 	curinode = ginode(curinum);
@@ -1069,7 +1082,7 @@ CMDFUNCSTART(newtype)
 		warnx("try one of `file', `dir', `socket', `fifo'");
 		return 1;
 	}
-	DIP(curinode, mode)  = iswap16((mode & ~IFMT) | type);
+	DIP_SET(curinode, mode, iswap16((mode & ~IFMT) | type));
 	inodirty();
 	printactive();
 	return 0;
@@ -1090,7 +1103,7 @@ CMDFUNCSTART(chmode)
 		return 1;
 	}
 	mode = iswap16(DIP(curinode, mode));
-	DIP(curinode, mode) = iswap16((mode & ~07777) | modebits);
+	DIP_SET(curinode, mode, iswap16((mode & ~07777) | modebits));
 	inodirty();
 	printactive();
 	return 0;
@@ -1109,7 +1122,7 @@ CMDFUNCSTART(chlen)
 		warnx("bad length '%s'", argv[1]);
 		return 1;
 	}
-	DIP(curinode, size) = iswap64(len);
+	DIP_SET(curinode, size, iswap64(len));
 	inodirty();
 	printactive();
 	return 0;
@@ -1133,7 +1146,7 @@ CMDFUNCSTART(chaflags)
 		    flags);
 		return (1);
 	}
-	DIP(curinode, flags) = iswap32(flags);
+	DIP_SET(curinode, flags, iswap32(flags));
 	inodirty();
 	printactive();
 	return 0;
@@ -1156,7 +1169,7 @@ CMDFUNCSTART(chgen)
 		warnx("gen set beyond 32-bit range of field (0x%lx)", gen);
 		return (1);
 	}
-	DIP(curinode, gen) = iswap32(gen);
+	DIP_SET(curinode, gen, iswap32(gen));
 	inodirty();
 	printactive();
 	return 0;
@@ -1179,7 +1192,7 @@ CMDFUNCSTART(linkcount)
 		warnx("max link count is %d", USHRT_MAX);
 		return 1;
 	}
-	DIP(curinode, nlink) = iswap16(lcnt);
+	DIP_SET(curinode, nlink, iswap16(lcnt));
 	inodirty();
 	printactive();
 	return 0;
@@ -1207,7 +1220,7 @@ CMDFUNCSTART(chowner)
 	if (!is_ufs2 && sblock->fs_old_inodefmt < FS_44INODEFMT)
 		curinode->dp1.di_ouid = iswap32(uid);
 	else
-		DIP(curinode, uid) = iswap32(uid);
+		DIP_SET(curinode, uid, iswap32(uid));
 	inodirty();
 	printactive();
 	return 0;
@@ -1234,7 +1247,7 @@ CMDFUNCSTART(chgroup)
 	if (sblock->fs_old_inodefmt < FS_44INODEFMT)
 		curinode->dp1.di_ogid = iswap32(gid);
 	else
-		DIP(curinode, gid) = iswap32(gid);
+		DIP_SET(curinode, gid, iswap32(gid));
 	inodirty();
 	printactive();
 	return 0;
@@ -1300,8 +1313,8 @@ CMDFUNCSTART(chmtime)
 
 	if (dotime(argv[1], &rsec, &nsec))
 		return 1;
-	DIP(curinode, mtime) = rsec;
-	DIP(curinode, mtimensec) = nsec;
+	DIP_SET(curinode, mtime, rsec);
+	DIP_SET(curinode, mtimensec, nsec);
 	inodirty();
 	printactive();
 	return 0;
@@ -1313,8 +1326,8 @@ CMDFUNCSTART(chatime)
 
 	if (dotime(argv[1], &rsec, &nsec))
 		return 1;
-	DIP(curinode, atime) = rsec;
-	DIP(curinode, atimensec) = nsec;
+	DIP_SET(curinode, atime, rsec);
+	DIP_SET(curinode, atimensec, nsec);
 	inodirty();
 	printactive();
 	return 0;
@@ -1326,8 +1339,8 @@ CMDFUNCSTART(chctime)
 
 	if (dotime(argv[1], &rsec, &nsec))
 		return 1;
-	DIP(curinode, ctime) = rsec;
-	DIP(curinode, ctimensec) = nsec;
+	DIP_SET(curinode, ctime, rsec);
+	DIP_SET(curinode, ctimensec, nsec);
 	inodirty();
 	printactive();
 	return 0;

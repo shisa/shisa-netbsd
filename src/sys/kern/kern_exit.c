@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_exit.c,v 1.145.2.3 2005/10/04 14:16:42 tron Exp $	*/
+/*	$NetBSD: kern_exit.c,v 1.156 2006/05/14 21:15:11 elad Exp $	*/
 
 /*-
  * Copyright (c) 1998, 1999 The NetBSD Foundation, Inc.
@@ -74,7 +74,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_exit.c,v 1.145.2.3 2005/10/04 14:16:42 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_exit.c,v 1.156 2006/05/14 21:15:11 elad Exp $");
 
 #include "opt_ktrace.h"
 #include "opt_perfctrs.h"
@@ -113,6 +113,7 @@ __KERNEL_RCSID(0, "$NetBSD: kern_exit.c,v 1.145.2.3 2005/10/04 14:16:42 tron Exp
 #include <sys/mount.h>
 #include <sys/syscallargs.h>
 #include <sys/systrace.h>
+#include <sys/kauth.h>
 
 #include <machine/cpu.h>
 
@@ -151,7 +152,7 @@ exit_psignal(struct proc *p, struct proc *pp, ksiginfo_t *ksi)
 	 * we fill those in, even for non-SIGCHLD.
 	 */
 	ksi->ksi_pid = p->p_pid;
-	ksi->ksi_uid = p->p_ucred->cr_uid;
+	ksi->ksi_uid = kauth_cred_geteuid(p->p_cred);
 	ksi->ksi_status = p->p_xstat;
 	/* XXX: is this still valid? */
 	ksi->ksi_utime = p->p_ru->ru_utime.tv_sec;
@@ -202,8 +203,6 @@ exit1(struct lwp *l, int rv)
 
 	p->p_flag |= P_WEXIT;
 	if (p->p_flag & P_STOPEXIT) {
-		int s;
-
 		sigminusset(&contsigmask, &p->p_sigctx.ps_siglist);
 		SCHED_LOCK(s);
 		p->p_stat = SSTOP;
@@ -264,7 +263,7 @@ exit1(struct lwp *l, int rv)
 	 * Close open files and release open-file table.
 	 * This may block!
 	 */
-	fdfree(p);
+	fdfree(l);
 	cwdfree(p->p_cwdi);
 	p->p_cwdi = 0;
 
@@ -275,7 +274,6 @@ exit1(struct lwp *l, int rv)
 		struct tty *tp;
 
 		if (sp->s_ttyvp) {
-			int s;
 			/*
 			 * Controlling process.
 			 * Signal foreground pgrp,
@@ -317,7 +315,7 @@ exit1(struct lwp *l, int rv)
 		sp->s_leader = NULL;
 	}
 	fixjobc(p, p->p_pgrp, 0);
-	(void)acct_process(p);
+	(void)acct_process(l);
 #ifdef KTRACE
 	/*
 	 * release trace file
@@ -426,8 +424,8 @@ exit1(struct lwp *l, int rv)
 				q->p_opptr = NULL;
 			} else
 				proc_reparent(q, initproc);
-			q->p_flag &= ~(P_TRACED|P_WAITED|P_FSTRACE);
-			psignal(q, SIGKILL);
+			q->p_flag &= ~(P_TRACED|P_WAITED|P_FSTRACE|P_SYSCALL);
+			killproc(q, "orphaned traced process");
 		} else {
 			proc_reparent(q, initproc);
 		}
@@ -446,7 +444,7 @@ exit1(struct lwp *l, int rv)
 
 	LIST_REMOVE(l, l_list);
 	LIST_REMOVE(l, l_sibling);
-	l->l_flag |= L_DETACHED|L_PROCEXIT;	/* detached from proc too */
+	l->l_flag |= L_DETACHED;	/* detached from proc too */
 	l->l_stat = LSDEAD;
 
 	KASSERT(p->p_nrlwps == 1);
@@ -468,7 +466,7 @@ exit1(struct lwp *l, int rv)
 	 * flag set, notify init instead (and hope it will handle
 	 * this situation).
 	 */
-	if (q->p_flag & P_NOCLDWAIT) {
+	if (q->p_flag & (P_NOCLDWAIT|P_CLDSIGIGN)) {
 		proc_reparent(p, initproc);
 
 		/*
@@ -625,7 +623,7 @@ retry:
 			goto retry;
 		}
 		if (error)
-			panic("exit_lwps: lwp_wait1 failed with error %d\n",
+			panic("exit_lwps: lwp_wait1 failed with error %d",
 			    error);
 		DPRINTF(("exit_lwps: Got LWP %d from lwp_wait1()\n", waited));
 	}
@@ -806,7 +804,7 @@ proc_free(struct proc *p)
 			parent = initproc;
 		proc_reparent(p, parent);
 		p->p_opptr = NULL;
-		p->p_flag &= ~(P_TRACED|P_WAITED|P_FSTRACE);
+		p->p_flag &= ~(P_TRACED|P_WAITED|P_FSTRACE|P_SYSCALL);
 		if (p->p_exitsig != 0) {
 			exit_psignal(p, parent, &ksi);
 			kpsignal(parent, &ksi, NULL);
@@ -846,15 +844,12 @@ proc_free(struct proc *p)
 	/*
 	 * Decrement the count of procs running with this uid.
 	 */
-	(void)chgproccnt(p->p_cred->p_ruid, -1);
+	(void)chgproccnt(kauth_cred_getuid(p->p_cred), -1);
 
 	/*
 	 * Free up credentials.
 	 */
-	if (--p->p_cred->p_refcnt == 0) {
-		crfree(p->p_cred->pc_ucred);
-		pool_put(&pcred_pool, p->p_cred);
-	}
+	kauth_cred_free(p->p_cred);
 
 	/*
 	 * Release reference to text vnode

@@ -1,4 +1,4 @@
-/*	$NetBSD: expr.c,v 1.6 2004/07/07 19:20:09 mycroft Exp $	*/
+/*	$NetBSD: expr.c,v 1.8 2005/06/26 19:09:00 christos Exp $	*/
 
 /*
  * Korn expression evaluation
@@ -9,7 +9,7 @@
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: expr.c,v 1.6 2004/07/07 19:20:09 mycroft Exp $");
+__RCSID("$NetBSD: expr.c,v 1.8 2005/06/26 19:09:00 christos Exp $");
 #endif
 
 
@@ -425,21 +425,21 @@ evalexpr(es, prec)
 			break;
 		case O_TERN:
 			{
-				int e = vl->val.i != 0;
-				if (!e)
+				int ex = vl->val.i != 0;
+				if (!ex)
 					es->noassign++;
 				vl = evalexpr(es, MAX_PREC);
-				if (!e)
+				if (!ex)
 					es->noassign--;
 				if (es->tok != CTERN)
 					evalerr(es, ET_STR, "missing :");
 				token(es);
-				if (e)
+				if (ex)
 					es->noassign++;
 				vr = evalexpr(es, P_TERN);
-				if (e)
+				if (ex)
 					es->noassign--;
-				vl = e ? vl : vr;
+				vl = ex ? vl : vr;
 			}
 			break;
 		case O_ASN:
@@ -471,7 +471,7 @@ token(es)
 	char *tvar;
 
 	/* skip white space */
-	for (cp = es->tokp; (c = *cp), isspace(c); cp++)
+	for (cp = es->tokp; (c = *cp), isspace((unsigned char)c); cp++)
 		;
 	es->tokp = cp;
 

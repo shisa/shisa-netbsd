@@ -1,4 +1,4 @@
-/*	$NetBSD: machdep.c,v 1.173 2005/01/22 15:36:10 chs Exp $	*/
+/*	$NetBSD: machdep.c,v 1.176 2005/12/11 12:19:27 christos Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1990, 1993
@@ -78,7 +78,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.173 2005/01/22 15:36:10 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.176 2005/12/11 12:19:27 christos Exp $");
 
 #include "opt_ddb.h"
 #include "opt_kgdb.h"
@@ -240,7 +240,7 @@ cpu_startup(void)
 	/*
 	 * Good {morning,afternoon,evening,night}.
 	 */
-	printf(version);
+	printf("%s%s", copyright, version);
 	identifycpu();
 	initfpu();	/* also prints FPU type */
 
@@ -250,7 +250,8 @@ cpu_startup(void)
 	/*
 	 * Get scratch page for dumpsys().
 	 */
-	if ((dumppage = uvm_km_alloc(kernel_map, PAGE_SIZE)) == 0)
+	dumppage = uvm_km_alloc(kernel_map, PAGE_SIZE, 0, UVM_KMF_WIRED);
+	if (dumppage == 0)
 		panic("startup: alloc dumppage");
 
 
@@ -283,7 +284,8 @@ cpu_startup(void)
 	 * This page is handed to pmap_enter() therefore
 	 * it has to be in the normal kernel VA range.
 	 */
-	vmmap = uvm_km_valloc_wait(kernel_map, PAGE_SIZE);
+	vmmap = uvm_km_alloc(kernel_map, PAGE_SIZE, 0,
+	    UVM_KMF_VAONLY | UVM_KMF_WAITVA);
 
 	/*
 	 * Create the DVMA maps.
@@ -740,7 +742,7 @@ initcpu(void)
  * understand and, if so, set up the vmcmds for it.
  */
 int 
-cpu_exec_aout_makecmds(struct proc *p, struct exec_package *epp)
+cpu_exec_aout_makecmds(struct lwp *l, struct exec_package *epp)
 {
 	return ENOEXEC;
 }

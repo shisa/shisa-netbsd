@@ -1,4 +1,4 @@
-/*	$NetBSD: uvm_page.h,v 1.39 2004/10/07 10:56:26 yamt Exp $	*/
+/*	$NetBSD: uvm_page.h,v 1.45 2006/04/06 07:18:23 uebayasi Exp $	*/
 
 /*
  * Copyright (c) 1997 Charles D. Cranor and Washington University.
@@ -141,7 +141,7 @@ struct vm_page {
 #if defined(UVM_PAGE_TRKOWN)
 	/* debugging fields to track page ownership */
 	pid_t			owner;		/* proc that set PG_BUSY */
-	char			*owner_tag;	/* why it was set busy */
+	const char		*owner_tag;	/* why it was set busy */
 #endif
 };
 
@@ -169,6 +169,7 @@ struct vm_page {
 #define	PG_FAKE		0x0040		/* page is not yet initialized */
 #define	PG_RDONLY	0x0080		/* page must be mapped read-only */
 #define	PG_ZERO		0x0100		/* page is pre-zero'd */
+#define	PG_SPECULATIVE	0x0200		/* page has been read speculatively */
 
 #define PG_PAGER1	0x1000		/* pager-specific flag */
 
@@ -199,7 +200,7 @@ struct vm_page {
 #define VM_PSTRAT_BIGFIRST	3
 
 /*
- * vm_physmemseg: describes one segment of physical memory
+ * vm_physseg: describes one segment of physical memory
  */
 struct vm_physseg {
 	paddr_t	start;			/* PF# of first page in segment */
@@ -230,22 +231,12 @@ extern struct vm_physseg vm_physmem[VM_PHYSSEG_MAX];
 extern int vm_nphysseg;
 
 /*
- * handle inline options
- */
-
-#ifdef UVM_PAGE_INLINE
-#define PAGE_INLINE static __inline
-#else
-#define PAGE_INLINE /* nothing */
-#endif /* UVM_PAGE_INLINE */
-
-/*
  * prototypes: the following prototypes define the interface to pages
  */
 
 void uvm_page_init(vaddr_t *, vaddr_t *);
 #if defined(UVM_PAGE_TRKOWN)
-void uvm_page_own(struct vm_page *, char *);
+void uvm_page_own(struct vm_page *, const char *);
 #endif
 #if !defined(PMAP_STEAL_MEMORY)
 boolean_t uvm_page_physget(paddr_t *);
@@ -254,24 +245,24 @@ void uvm_page_rehash(void);
 void uvm_page_recolor(int);
 void uvm_pageidlezero(void);
 
-PAGE_INLINE int uvm_lock_fpageq(void);
-PAGE_INLINE void uvm_unlock_fpageq(int);
+int uvm_lock_fpageq(void);
+void uvm_unlock_fpageq(int);
 
-PAGE_INLINE void uvm_pageactivate(struct vm_page *);
+void uvm_pageactivate(struct vm_page *);
 vaddr_t uvm_pageboot_alloc(vsize_t);
-PAGE_INLINE void uvm_pagecopy(struct vm_page *, struct vm_page *);
-PAGE_INLINE void uvm_pagedeactivate(struct vm_page *);
-PAGE_INLINE void uvm_pagedequeue(struct vm_page *);
+void uvm_pagecopy(struct vm_page *, struct vm_page *);
+void uvm_pagedeactivate(struct vm_page *);
+void uvm_pagedequeue(struct vm_page *);
 void uvm_pagefree(struct vm_page *);
 void uvm_page_unbusy(struct vm_page **, int);
-PAGE_INLINE struct vm_page *uvm_pagelookup(struct uvm_object *, voff_t);
-PAGE_INLINE void uvm_pageunwire(struct vm_page *);
-PAGE_INLINE void uvm_pagewait(struct vm_page *, int);
-PAGE_INLINE void uvm_pagewake(struct vm_page *);
-PAGE_INLINE void uvm_pagewire(struct vm_page *);
-PAGE_INLINE void uvm_pagezero(struct vm_page *);
+struct vm_page *uvm_pagelookup(struct uvm_object *, voff_t);
+void uvm_pageunwire(struct vm_page *);
+void uvm_pagewait(struct vm_page *, int);
+void uvm_pagewake(struct vm_page *);
+void uvm_pagewire(struct vm_page *);
+void uvm_pagezero(struct vm_page *);
 
-PAGE_INLINE int uvm_page_lookup_freelist(struct vm_page *);
+int uvm_page_lookup_freelist(struct vm_page *);
 
 static struct vm_page *PHYS_TO_VM_PAGE(paddr_t);
 static int vm_physseg_find(paddr_t, int *);

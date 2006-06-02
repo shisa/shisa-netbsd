@@ -1,4 +1,4 @@
-/*	$NetBSD: machdep.c,v 1.126.6.1 2005/11/01 22:33:25 tron Exp $	*/
+/*	$NetBSD: machdep.c,v 1.131 2005/12/24 22:45:40 perry Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1990, 1993
@@ -77,7 +77,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.126.6.1 2005/11/01 22:33:25 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.131 2005/12/24 22:45:40 perry Exp $");
 
 #include "opt_ddb.h"
 #include "opt_kgdb.h"
@@ -148,8 +148,6 @@ __KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.126.6.1 2005/11/01 22:33:25 tron Exp $
 void initcpu(void);
 void identifycpu(void);
 void doboot(void) __attribute__((__noreturn__));
-int badaddr(caddr_t);
-int badbaddr(caddr_t);
 
 /* the following is used externally (sysctl_hw) */
 char	machine[] = MACHINE;	/* from <machine/param.h> */
@@ -295,7 +293,7 @@ cpu_startup(void)
 	/*
 	 * Good {morning,afternoon,evening,night}.
 	 */
-	printf(version);
+	printf("%s%s", copyright, version);
 	identifycpu();
 	format_bytes(pbuf, sizeof(pbuf), ctob(physmem));
 	printf("total memory = %s\n", pbuf);
@@ -370,7 +368,7 @@ setregs(struct lwp *l, struct exec_package *pack, u_long stack)
  * Info for CTL_HW
  */
 char	cpu_model[96];		/* max 85 chars */
-static char *fpu_descr[] = {
+static const char *fpu_descr[] = {
 #ifdef	FPU_EMULATE
 	", emulator FPU", 	/* 0 */
 #else
@@ -386,7 +384,7 @@ void
 identifycpu(void)
 {
         /* there's alot of XXX in here... */
-	char *cpu_type, *mach, *mmu, *fpu;
+	const char *cpu_type, *mach, *mmu, *fpu;
 	char clock[16];
 
 	/*
@@ -873,7 +871,7 @@ straytrap(int pc, u_short evec)
 int	*nofault;
 
 int
-badaddr(caddr_t addr)
+badaddr(volatile void* addr)
 {
 	int i;
 	label_t	faultbuf;
@@ -889,7 +887,7 @@ badaddr(caddr_t addr)
 }
 
 int
-badbaddr(caddr_t addr)
+badbaddr(volatile void *addr)
 {
 	int i;
 	label_t	faultbuf;
@@ -1005,7 +1003,7 @@ nmihand(struct frame frame)
  *	done on little-endian machines...  -- cgd
  */
 int
-cpu_exec_aout_makecmds(struct proc *p, struct exec_package *epp)
+cpu_exec_aout_makecmds(struct lwp *l, struct exec_package *epp)
 {
 #if defined(COMPAT_NOMID) || defined(COMPAT_44)
 	u_long midmag, magic;
@@ -1022,12 +1020,12 @@ cpu_exec_aout_makecmds(struct proc *p, struct exec_package *epp)
 	switch (midmag) {
 #ifdef COMPAT_NOMID
 	case (MID_ZERO << 16) | ZMAGIC:
-		error = exec_aout_prep_oldzmagic(p, epp);
+		error = exec_aout_prep_oldzmagic(l->l_proc, epp);
 		break;
 #endif
 #ifdef COMPAT_44
 	case (MID_HP300 << 16) | ZMAGIC:
-		error = exec_aout_prep_oldzmagic(p, epp);
+		error = exec_aout_prep_oldzmagic(l->l_proc, epp);
 		break;
 #endif
 	default:
@@ -1094,8 +1092,8 @@ mem_exists(caddr_t mem, u_long basemax)
 	b = (void*)base_v;
 
 	/* This is somewhat paranoid -- avoid overwriting myself */
-	asm("lea %%pc@(begin_check_mem),%0" : "=a"(begin_check));
-	asm("lea %%pc@(end_check_mem),%0" : "=a"(end_check));
+	__asm("lea %%pc@(begin_check_mem),%0" : "=a"(begin_check));
+	__asm("lea %%pc@(end_check_mem),%0" : "=a"(end_check));
 	if (base >= begin_check && base < end_check) {
 		size_t off = end_check - begin_check;
 
@@ -1131,7 +1129,7 @@ mem_exists(caddr_t mem, u_long basemax)
 		save_b = *b;
 	save_m = *m;
 
-asm("begin_check_mem:");
+__asm("begin_check_mem:");
 	/*
 	 * stack and other data segment variables are unusable
 	 * til end_check_mem, because they may be clobbered.
@@ -1158,7 +1156,7 @@ out:
 	if (baseismem)
 		*b = save_b;
 
-asm("end_check_mem:");
+__asm("end_check_mem:");
 
 	nofault = (int *)0;
 	pmap_remove(pmap_kernel(), mem_v, mem_v+PAGE_SIZE);
@@ -1176,7 +1174,7 @@ static void
 setmemrange(void)
 {
 	int i;
-	psize_t s, min, max;
+	psize_t s, minimum, maximum;
 	struct memlist *mlist = memlist;
 	u_long h;
 	int basemax = ctob(physmem);
@@ -1203,13 +1201,13 @@ setmemrange(void)
 			cacr = CACHE60_OFF;
 			break;
 		}
-		asm volatile ("movc %0,%%cacr"::"d"(cacr));
+		__asm volatile ("movc %0,%%cacr"::"d"(cacr));
 	}
 
 	/* discover extended memory */
 	for (i = 0; i < sizeof(memlist) / sizeof(memlist[0]); i++) {
-		min = mlist[i].min;
-		max = mlist[i].max;
+		minimum = mlist[i].min;
+		maximum = mlist[i].max;
 		/*
 		 * Normally, x68k hardware is NOT 32bit-clean.
 		 * But some type of extended memory is in 32bit address space.
@@ -1219,7 +1217,7 @@ setmemrange(void)
 			continue;
 		h = 0;
 		/* range check */
-		for (s = min; s <= max; s += 0x00100000) {
+		for (s = minimum; s <= maximum; s += 0x00100000) {
 			if (!mem_exists(mlist[i].base + s - 4, basemax))
 				break;
 			h = (u_long)(mlist[i].base + s);
@@ -1248,7 +1246,7 @@ setmemrange(void)
 			cacr = CACHE60_ON;
 			break;
 		}
-		asm volatile ("movc %0,%%cacr"::"d"(cacr));
+		__asm volatile ("movc %0,%%cacr"::"d"(cacr));
 	}
 
 	physmem = m68k_btop(mem_size);

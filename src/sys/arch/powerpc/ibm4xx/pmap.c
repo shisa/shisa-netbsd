@@ -1,4 +1,4 @@
-/*	$NetBSD: pmap.c,v 1.33 2005/03/02 09:02:42 chs Exp $	*/
+/*	$NetBSD: pmap.c,v 1.39 2005/12/24 22:45:36 perry Exp $	*/
 
 /*
  * Copyright 2001 Wasabi Systems, Inc.
@@ -67,7 +67,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.33 2005/03/02 09:02:42 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.39 2005/12/24 22:45:36 perry Exp $");
 
 #include <sys/param.h>
 #include <sys/malloc.h>
@@ -211,7 +211,8 @@ pte_enter(struct pmap *pm, vaddr_t va, u_int pte)
 			return (0);
 		/* Allocate a page XXXX this will sleep! */
 		pm->pm_ptbl[seg] =
-		    (uint *)uvm_km_zalloc(kernel_map, PAGE_SIZE);
+		    (uint *)uvm_km_alloc(kernel_map, PAGE_SIZE, 0,
+		    UVM_KMF_WIRED | UVM_KMF_ZERO);
 	}
 	oldpte = pm->pm_ptbl[seg][ptn];
 	pm->pm_ptbl[seg][ptn] = pte;
@@ -443,7 +444,7 @@ pmap_init(void)
 
 	sz = (vsize_t)((sizeof(struct pv_entry) + 1) * npgs);
 	sz = round_page(sz);
-	addr = uvm_km_zalloc(kernel_map, sz);
+	addr = uvm_km_alloc(kernel_map, sz, 0, UVM_KMF_WIRED | UVM_KMF_ZERO);
 	s = splvm();
 	pv = pv_table = (struct pv_entry *)addr;
 	for (i = npgs; --i >= 0;)
@@ -565,21 +566,21 @@ vm_page_alloc1(void)
  *	Object and page must be locked prior to entry.
  */
 void
-vm_page_free1(struct vm_page *mem)
+vm_page_free1(struct vm_page *pg)
 {
 #ifdef DIAGNOSTIC
-	if (mem->flags != (PG_CLEAN|PG_FAKE)) {
-		printf("Freeing invalid page %p\n", mem);
-		printf("pa = %llx\n", (unsigned long long)VM_PAGE_TO_PHYS(mem));
+	if (pg->flags != (PG_CLEAN|PG_FAKE)) {
+		printf("Freeing invalid page %p\n", pg);
+		printf("pa = %llx\n", (unsigned long long)VM_PAGE_TO_PHYS(pg));
 #ifdef DDB
 		Debugger();
 #endif
 		return;
 	}
 #endif
-	mem->flags |= PG_BUSY;
-	mem->wire_count = 0;
-	uvm_pagefree(mem);
+	pg->flags |= PG_BUSY;
+	pg->wire_count = 0;
+	uvm_pagefree(pg);
 }
 #endif
 
@@ -624,7 +625,7 @@ pmap_destroy(struct pmap *pm)
 	for (i = 0; i < STSZ; i++)
 		if (pm->pm_ptbl[i]) {
 			uvm_km_free(kernel_map, (vaddr_t)pm->pm_ptbl[i],
-			    PAGE_SIZE);
+			    PAGE_SIZE, UVM_KMF_WIRED);
 			pm->pm_ptbl[i] = NULL;
 		}
 	if (pm->pm_ctx)
@@ -680,7 +681,7 @@ pmap_zero_page(paddr_t pa)
 	int i;
 
 	for (i = PAGE_SIZE/CACHELINESIZE; i > 0; i--) {
-		__asm __volatile ("dcbz 0,%0" :: "r"(pa));
+		__asm volatile ("dcbz 0,%0" :: "r"(pa));
 		pa += CACHELINESIZE;
 	}
 #endif
@@ -1155,7 +1156,7 @@ pmap_procwr(struct proc *p, vaddr_t va, size_t len)
 		ctx_alloc(pm);
 		ctx = pm->pm_ctx;
 	}
-	__asm __volatile("mfmsr %0;"
+	__asm volatile("mfmsr %0;"
 		"li %1, %7;"
 		"andc %1,%0,%1;"
 		"mtmsr %1;"
@@ -1189,7 +1190,7 @@ ppc4xx_tlb_flush(vaddr_t va, int pid)
 	if (!pid)
 		return;
 
-	asm("mfpid %1;"			/* Save PID */
+	__asm("mfpid %1;"			/* Save PID */
 		"mfmsr %2;"		/* Save MSR */
 		"li %0,0;"		/* Now clear MSR */
 		"mtmsr %0;"
@@ -1209,7 +1210,7 @@ ppc4xx_tlb_flush(vaddr_t va, int pid)
 	if (found && !TLB_LOCKED(i)) {
 
 		/* Now flush translation */
-		asm volatile(
+		__asm volatile(
 			"tlbwe %0,%1,0;"
 			"sync;isync;"
 			: : "r" (0), "r" (i));
@@ -1229,7 +1230,7 @@ ppc4xx_tlb_flush_all(void)
 
 	for (i = 0; i < NTLB; i++)
 		if (!TLB_LOCKED(i)) {
-			asm volatile(
+			__asm volatile(
 				"tlbwe %0,%1,0;"
 				"sync;isync;"
 				: : "r" (0), "r" (i));
@@ -1237,7 +1238,7 @@ ppc4xx_tlb_flush_all(void)
 			tlb_info[i].ti_flags = 0;
 		}
 
-	asm volatile("sync;isync");
+	__asm volatile("sync;isync");
 }
 
 /* Find a TLB entry to evict. */
@@ -1300,7 +1301,7 @@ ppc4xx_tlb_enter(int ctx, vaddr_t va, u_int pte)
 	tlb_info[idx].ti_ctx = ctx;
 	tlb_info[idx].ti_flags = TLBF_USED | TLBF_REF;
 
-	asm volatile(
+	__asm volatile(
 		"mfmsr %0;"			/* Save MSR */
 		"li %1,0;"
 		"tlbwe %1,%3,0;"		/* Invalidate old entry. */
@@ -1349,7 +1350,7 @@ ppc4xx_tlb_init(void)
 	 * Z3 - full access regardless of TLB entry permissions
 	 */
 
-	asm volatile(
+	__asm volatile(
 		"mtspr %0,%1;"
 		"sync;"
 		::  "K"(SPR_ZPR), "r" (0x1b000000));
@@ -1371,7 +1372,7 @@ pmap_tlbmiss(vaddr_t va, int ctx)
 	 * XXXX We will reserve 0-0x80000000 for va==pa mappings.
 	 */
 	if (ctx != KERNEL_PID || (va & 0x80000000)) {
-		pte = pte_find((struct pmap *)ctxbusy[ctx], va);
+		pte = pte_find((struct pmap *)__UNVOLATILE(ctxbusy[ctx]), va);
 		if (pte == NULL) {
 			/* Map unmanaged addresses directly for kernel access */
 			return 1;
@@ -1422,7 +1423,7 @@ ctx_flush(int cnum)
 				panic("TLB entry %d not locked", i);
 #endif
 			/* Invalidate particular TLB entry regardless of locked status */
-			asm volatile("tlbwe %0,%1,0" : :"r"(0),"r"(i));
+			__asm volatile("tlbwe %0,%1,0" : :"r"(0),"r"(i));
 			tlb_info[i].ti_flags = 0;
 		}
 	}
@@ -1527,14 +1528,15 @@ pmap_testout()
 	int ref, mod;
 
 	/* Allocate a page */
-	va = (vaddr_t)uvm_km_zalloc(kernel_map, PAGE_SIZE);
+	va = (vaddr_t)uvm_km_alloc(kernel_map, PAGE_SIZE, 0,
+	    UVM_KMF_WIRED | UVM_KMF_ZERO);
 	loc = (int*)va;
 
 	pmap_extract(pmap_kernel(), va, &pa);
 	pg = PHYS_TO_VM_PAGE(pa);
 	pmap_unwire(pmap_kernel(), va);
 
-	pmap_remove(pmap_kernel(), va, va+1);
+	pmap_kremove(va, PAGE_SIZE);
 	pmap_enter(pmap_kernel(), va, pa, VM_PROT_ALL, 0);
 	pmap_update(pmap_kernel());
 
@@ -1781,8 +1783,8 @@ pmap_testout()
 	printf("Checking cleared page: ref %d, mod %d\n",
 	       ref, mod);
 
-	pmap_enter(pmap_kernel(), va, pa, VM_PROT_ALL,
-		VM_PROT_ALL|PMAP_WIRED);
-	uvm_km_free(kernel_map, (vaddr_t)va, PAGE_SIZE);
+	pmap_remove(pmap_kernel(), va, va + PAGE_SIZE);
+	pmap_kenter_pa(va, pa, VM_PROT_ALL);
+	uvm_km_free(kernel_map, (vaddr_t)va, PAGE_SIZE, UVM_KMF_WIRED);
 }
 #endif

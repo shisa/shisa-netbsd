@@ -1,4 +1,4 @@
-/*	$NetBSD: lex.c,v 1.10 2004/07/07 19:20:09 mycroft Exp $	*/
+/*	$NetBSD: lex.c,v 1.12 2005/09/11 22:16:00 christos Exp $	*/
 
 /*
  * lexical analysis and source input
@@ -6,7 +6,7 @@
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: lex.c,v 1.10 2004/07/07 19:20:09 mycroft Exp $");
+__RCSID("$NetBSD: lex.c,v 1.12 2005/09/11 22:16:00 christos Exp $");
 #endif
 
 
@@ -221,7 +221,7 @@ yylex(cf)
 			  case '\\':
 				c = getsc();
 #ifdef OS2
-				if (isalnum(c)) {
+				if (isalnum((unsigned char)c)) {
 					*wp++ = CHAR, *wp++ = '\\';
 					*wp++ = CHAR, *wp++ = c;
 				} else
@@ -248,10 +248,16 @@ yylex(cf)
 			  case '\\':
 				c = getsc();
 				switch (c) {
-				  case '"': case '\\':
+				  case '\\':
 				  case '$': case '`':
 					*wp++ = QCHAR, *wp++ = c;
 					break;
+				  case '"':
+					if ((cf & HEREDOC) == 0) {
+						*wp++ = QCHAR, *wp++ = c;
+						break;
+					}
+					/* FALLTROUGH */
 				  default:
 					Xcheck(ws, wp);
 					if (c) { /* trailing \ is lost */

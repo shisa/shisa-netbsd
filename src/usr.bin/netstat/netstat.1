@@ -1,4 +1,4 @@
-.\"	$NetBSD: netstat.1,v 1.40 2003/08/07 11:15:21 agc Exp $
+.\"	$NetBSD: netstat.1,v 1.45 2005/12/28 22:53:59 rpaulo Exp $
 .\"
 .\" Copyright (c) 1983, 1990, 1992, 1993
 .\"	The Regents of the University of California.  All rights reserved.
@@ -29,7 +29,7 @@
 .\"
 .\"	@(#)netstat.1	8.8 (Berkeley) 4/18/94
 .\"
-.Dd December 13, 1999
+.Dd December 28, 2005
 .Dt NETSTAT 1
 .Os
 .Sh NAME
@@ -70,6 +70,10 @@
 .Op Fl f Ar address_family
 .Op Fl i
 .Op Fl I Ar Interface
+.Nm
+.Op Fl s
+.Op Fl I Ar Interface
+.Fl B
 .Sh DESCRIPTION
 The
 .Nm
@@ -101,6 +105,20 @@ for debugging.
 With the default display,
 show the state of all sockets; normally sockets used by
 server processes are not shown.
+.It Fl B
+With the default display,
+show the current
+.Xr bpf 4
+peers.
+To show only the peers listening to a specific interface,
+use the
+.Fl I
+option.
+If the
+.Fl s
+option is present, show the current
+.Xr bpf 4
+statistics.
 .It Fl b
 With the interface display (option
 .Fl i ) ,
@@ -113,7 +131,7 @@ show the number of dropped packets.
 .It Fl f Ar address_family
 Limit statistics or address control block reports to those
 of the specified
-.Ar address family  .
+.Ar address_family  .
 The following address families
 are recognized:
 .Ar inet ,
@@ -206,7 +224,7 @@ symbolically).
 This option may be used with any of the display formats.
 .It Fl S
 Show network addresses as numbers (as with
-.Fl n )
+.Fl n ,
 but show ports symbolically).
 .It Fl P Ar pcbaddr
 Dump the contents of the protocol control block (PCB) located at kernel
@@ -356,12 +374,25 @@ The first line of each screen of information contains a summary since the
 system was last rebooted.
 Subsequent lines of output show values
 accumulated over the preceding interval.
+.Pp
+The first character of the flags column in the
+.Fl B
+option shows the status of the
+.Xr bpf 4
+descriptor which has three different values:
+Idle ('I'), Waiting ('W') and Timed Out ('T').
+The second character indicates wheter the promisc flag is set.
+The third character indicates the status of the immediate mode.
+The fourth character indicates whether the peer will have the ability
+to see the packets sent.
+And the fifth character shows the header complete flag status.
 .Sh SEE ALSO
 .Xr fstat 1 ,
 .Xr nfsstat 1 ,
 .Xr ps 1 ,
 .Xr vmstat 1 ,
 .Xr inet 3 ,
+.Xr bpf 4 ,
 .Xr hosts 5 ,
 .Xr networks 5 ,
 .Xr protocols 5 ,

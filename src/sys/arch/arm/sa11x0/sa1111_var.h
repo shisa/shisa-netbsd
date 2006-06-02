@@ -1,4 +1,4 @@
-/*	$NetBSD: sa1111_var.h,v 1.5 2003/08/08 12:29:23 bsh Exp $	*/
+/*	$NetBSD: sa1111_var.h,v 1.9 2006/03/04 17:24:13 peter Exp $	*/
 
 /*-
  * Copyright (c) 2001 The NetBSD Foundation, Inc.
@@ -46,8 +46,8 @@ struct sacc_intrhand {
 };
 
 struct sacc_intrvec {
-	u_int32_t lo;	/* bits 0..31 */
-	u_int32_t hi;	/* bits 32..54 */
+	uint32_t lo;	/* bits 0..31 */
+	uint32_t hi;	/* bits 32..54 */
 };
 
 struct sacc_softc {
@@ -57,7 +57,7 @@ struct sacc_softc {
 	bus_space_tag_t sc_piot;	/* parent(SA1110)'s iot */
 	bus_space_handle_t sc_gpioh;
 
-	u_int32_t sc_gpiomask;	/* SA1110 GPIO mask */
+	uint32_t sc_gpiomask;	/* SA1110 GPIO mask */
 
 	struct sacc_intrvec sc_imask;
 	struct sacc_intrhand *sc_intrhand[SACCIC_LEN];
@@ -79,6 +79,7 @@ void *sacc_intr_establish(sacc_chipset_tag_t *, int, int, int,
 			  int (*)(void *), void *);
 void sacc_intr_disestablish(sacc_chipset_tag_t *, void *);
 int	sacc_probe(struct device *, struct cfdata *, void *);
-int	sa1111_search(struct device *, struct cfdata *, void *);
+int	sa1111_search(struct device *, struct cfdata *,
+		      const int *, void *);
 
 #endif /* _SA1111_VAR_H */

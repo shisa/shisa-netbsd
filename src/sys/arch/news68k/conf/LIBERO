@@ -1,4 +1,4 @@
-# 	$NetBSD: LIBERO,v 1.29.4.1 2005/07/18 21:13:38 riz Exp $
+# 	$NetBSD: LIBERO,v 1.39 2006/03/28 20:58:40 pavel Exp $
 
 #	NEWS1750 config file;
 #
@@ -29,7 +29,8 @@ options 	LKM			# loadable kernel modules
 
 # Enable experimental buffer queue strategy for better responsiveness under 
 # high disk I/O load. Use it with caution - it's not proven to be stable yet.
-#options 	NEW_BUFQ_STRATEGY
+#options 	BUFQ_READPRIO
+#options 	BUFQ_PRIOCSCAN
 
 # Debugging options
 options 	DDB			# kernel dynamic debugger
@@ -45,6 +46,7 @@ options 	COMPAT_13		# NetBSD 1.3 binary compatibility
 options 	COMPAT_14		# NetBSD 1.4 binary compatibility
 options 	COMPAT_16		# NetBSD 1.6 binary compatibility
 options 	COMPAT_20		# NetBSD 2.0 binary compatibility
+options 	COMPAT_30		# NetBSD 3.0 compatibility.
 options 	COMPAT_AOUT_M68K	# compatibility with NetBSD/m68k a.out
 
 #options 	COMPAT_SVR4		# binary compatibility with SVR4
@@ -65,12 +67,13 @@ file-system	PROCFS		# /proc
 file-system	FDESC		# /dev/fd/*
 file-system	NULLFS		# loopback file system
 #file-system	UNION		# union file system
+file-system	PTYFS		# /dev/pts/N support
 
 options 	NFSSERVER	# nfs server support
 #options 	QUOTA		# ffs quotas
 #options 	FFS_EI		# ffs endian independant support
 options 	SOFTDEP		# ffs soft updates support
-options 	FFS_NO_SNAPSHOT	# ffs snapshots
+options 	FFS_NO_SNAPSHOT	# FFS snapshot support
 
 # Networking options
 options 	INET		# Internet protocols
@@ -154,19 +157,20 @@ cd*	at scsibus? target ? lun ?		# SCSI CD-ROMs
 pseudo-device	loop			# loopback interface; required
 pseudo-device	pty			# pseudo-terminals
 pseudo-device	md		1	# memory disk device
-pseudo-device	vnd		4	# disk-like interface to files
+pseudo-device	vnd			# disk-like interface to files
 #pseudo-device	ccd		4	# concatenated and striped disks
 #pseudo-device	raid		4	# RAIDframe disk driver
 #pseudo-device	fss		4	# file system snapshot device
-#pseudo-device	sl		2	# SLIP interfaces
-#pseudo-device	ppp		2	# PPP interfaces
-#pseudo-device	tun		4	# Network "tunnel" device
-#pseudo-device	gre		2	# generic L3 over IP tunnel
-pseudo-device	bpfilter	8	# Berkeley Packet Filter
+#pseudo-device	sl			# SLIP interfaces
+#pseudo-device	ppp			# PPP interfaces
+#pseudo-device	tun			# Network "tunnel" device
+#pseudo-device	gre			# generic L3 over IP tunnel
+pseudo-device	bpfilter		# Berkeley Packet Filter
 #pseudo-device	ipfilter		# ip filter
-#pseudo-device	strip		1	# Starmode Radio IP (Metricom)
-pseudo-device	gif		4	# IPv[46] over IPv[46] tunnel (RFC1933)
-#pseudo-device	faith		1	# IPv[46] tcp relay translation i/f
+#pseudo-device	strip			# Starmode Radio IP (Metricom)
+pseudo-device	gif			# IPv[46] over IPv[46] tunnel (RFC1933)
+#pseudo-device	faith			# IPv[46] tcp relay translation i/f
+pseudo-device	stf			# 6to4 IPv6 over IPv4 encapsulation
 pseudo-device	rnd			# /dev/random and in-kernle generator
 pseudo-device	clockctl		# user control of clock subsystem
 pseudo-device	wsmux

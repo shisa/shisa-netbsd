@@ -1,4 +1,4 @@
-/*	$NetBSD: ncr5380.c,v 1.58 2005/02/21 00:29:06 thorpej Exp $	*/
+/*	$NetBSD: ncr5380.c,v 1.62 2006/02/25 00:58:35 wiz Exp $	*/
 
 /*
  * Copyright (c) 1995 Leo Weppelman.
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ncr5380.c,v 1.58 2005/02/21 00:29:06 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ncr5380.c,v 1.62 2006/02/25 00:58:35 wiz Exp $");
 
 /*
  * Bit mask of targets you want debugging to be shown
@@ -103,7 +103,7 @@ static SC_REQ	*free_head = NULL;	/* Free request structures	*/
  *
  * -- A sleeping Fujitsu M2512 is even worse; try 2.5 sec     -hf 20 Jun
  */
-extern __inline__ int wait_req_true(void)
+extern inline int wait_req_true(void)
 {
 	int	timeout = 2500000;
 
@@ -116,7 +116,7 @@ extern __inline__ int wait_req_true(void)
  * Wait for request-line to become inactive. When it doesn't return 0.
  * Otherwise return != 0.
  */
-extern __inline__ int wait_req_false(void)
+extern inline int wait_req_false(void)
 {
 	int	timeout = 2500000;
 
@@ -125,18 +125,18 @@ extern __inline__ int wait_req_false(void)
 	return (!(GET_5380_REG(NCR5380_IDSTAT) & SC_S_REQ));
 }
 
-extern __inline__ void ack_message(void)
+extern inline void ack_message(void)
 {
 	SET_5380_REG(NCR5380_ICOM, 0);
 }
 
-extern __inline__ void nack_message(SC_REQ *reqp, u_char msg)
+extern inline void nack_message(SC_REQ *reqp, u_char msg)
 {
 	SET_5380_REG(NCR5380_ICOM, SC_A_ATN);
 	reqp->msgout = msg;
 }
 
-extern __inline__ void finish_req(SC_REQ *reqp)
+extern inline void finish_req(SC_REQ *reqp)
 {
 	int			sps;
 	struct scsipi_xfer	*xs = reqp->xs;
@@ -873,7 +873,7 @@ scsi_select(SC_REQ *reqp, int code)
 
 	/*
 	 * Here we prepare to send an 'IDENTIFY' message.
-	 * Allow disconnect only when interrups are allowed.
+	 * Allow disconnect only when interrupts are allowed.
 	 */
 	tmp[0] = MSG_IDENTIFY(reqp->targ_lun,
 			(reqp->dr_flag & DRIVER_NOINT) ? 0 : 1);
@@ -908,10 +908,10 @@ scsi_select(SC_REQ *reqp, int code)
 		 */
 		if (!reach_msg_out(sc, sizeof(struct scsipi_generic))) {
 			u_long	len   = 1;
-			u_char	phase = PH_MSGOUT;
+			u_char	tphase = PH_MSGOUT;
 			u_char	msg   = MSG_ABORT;
 
-			transfer_pio(&phase, &msg, &len, 0);
+			transfer_pio(&tphase, &msg, &len, 0);
 		}
 		else scsi_reset_verbose(sc, "Connected to unidentified target");
 
@@ -1884,7 +1884,7 @@ run_main(struct ncr_softc *sc)
  * Prefix message with full target info.
  */
 static void
-ncr_tprint(SC_REQ *reqp, char *fmt, ...)
+ncr_tprint(SC_REQ *reqp, const char *fmt, ...)
 {
 	va_list	ap;
 
@@ -1898,7 +1898,7 @@ ncr_tprint(SC_REQ *reqp, char *fmt, ...)
  * Prefix message with adapter info.
  */
 static void
-ncr_aprint(struct ncr_softc *sc, char *fmt, ...)
+ncr_aprint(struct ncr_softc *sc, const char *fmt, ...)
 {
 	va_list	ap;
 
@@ -1930,7 +1930,7 @@ show_data_sense(struct scsipi_xfer *xs)
 }
 
 static void
-show_request(SC_REQ *reqp, char *qtxt)
+show_request(SC_REQ *reqp, const char *qtxt)
 {
 	printf("REQ-%s: %d %p[%ld] cmd[0]=%x S=%x M=%x R=%x resid=%d dr_flag=%x %s\n",
 			qtxt, reqp->targ_id, reqp->xdata_ptr, reqp->xdata_len,
@@ -1941,7 +1941,7 @@ show_request(SC_REQ *reqp, char *qtxt)
 		show_data_sense(reqp->xs);
 }
 
-static char *sig_names[] = {
+static const char *sig_names[] = {
 	"PAR", "SEL", "I/O", "C/D", "MSG", "REQ", "BSY", "RST",
 	"ACK", "ATN", "LBSY", "PMATCH", "IRQ", "EPAR", "DREQ", "EDMA"
 };

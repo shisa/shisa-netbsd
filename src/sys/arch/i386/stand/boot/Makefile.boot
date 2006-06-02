@@ -1,4 +1,4 @@
-# $NetBSD: Makefile.boot,v 1.18.10.2 2005/09/27 20:04:22 tron Exp $
+# $NetBSD: Makefile.boot,v 1.27 2006/05/13 12:02:54 lukem Exp $
 
 S=	${.CURDIR}/../../../../../
 
@@ -46,7 +46,11 @@ LIBKERN_ARCH=i386
 KERNMISCMAKEFLAGS="LIBKERN_ARCH=i386"
 CPPFLAGS+= -DBOOT_ELF64
 .else
+.if ${HAVE_GCC} == 3
 CPUFLAGS=  -mcpu=i386
+.else
+CPUFLAGS=  -march=i386 -mtune=i386
+.endif
 .endif
 
 COPTS+=    -ffreestanding
@@ -62,6 +66,7 @@ CPPFLAGS+= -DCONSPEED=boot_params.bp_conspeed
 CPPFLAGS+= -DCONSADDR=boot_params.bp_consaddr
 CPPFLAGS+= -DCONSOLE_KEYMAP=boot_params.bp_keymap
 
+CPPFLAGS+= -DSUPPORT_CD9660
 CPPFLAGS+= -DSUPPORT_USTARFS
 CPPFLAGS+= -DSUPPORT_DOSFS
 CPPFLAGS+= -DPASS_BIOSGEOM
@@ -76,6 +81,9 @@ SAMISCCPPFLAGS+= -DHEAP_START=0x20000 -DHEAP_LIMIT=0x50000
 SAMISCMAKEFLAGS+= SA_USE_CREAD=yes	# Read compressed kernels
 SAMISCMAKEFLAGS+= SA_INCLUDE_NET=no	# Netboot via TFTP, NFS
 
+.if ${HAVE_GCC} == 4
+CPPFLAGS+=	-Wno-pointer-sign
+.endif
 
 # CPPFLAGS+= -DBOOTXX_RAID1_SUPPORT
 
@@ -125,13 +133,14 @@ LIBLIST= ${LIBI386} ${LIBSA} ${LIBZ} ${LIBKERN} ${LIBI386} ${LIBSA}
 
 CLEANFILES+= ${PROG}.tmp ${PROG}.map vers.c
 
-vers.c: ${VERSIONFILE} ${SOURCES} ${.CURDIR}/../Makefile.boot
+vers.c: ${VERSIONFILE} ${SOURCES} ${LIBLIST} ${.CURDIR}/../Makefile.boot
 	${HOST_SH} ${S}conf/newvers_stand.sh ${VERSIONFILE} ${MACHINE} ${NEWVERSWHAT}
 
 # Anything that calls 'real_to_prot' must have a %pc < 0x10000.
 # We link the program, find the callers (all in libi386), then
 # explicitely pull in the required objects before any other library code.
 ${PROG}: ${OBJS} ${LIBLIST} ${.CURDIR}/../Makefile.boot
+	${_MKTARGET_LINK}
 	bb="$$( ${LD} -o ${PROG}.tmp ${LDFLAGS} -Ttext 0 -cref \
 	    ${OBJS} ${LIBLIST} | ( \
 		while read symbol file; do \

@@ -1,4 +1,4 @@
-/*	$NetBSD: if_aue.c,v 1.89 2004/11/03 22:59:31 rjs Exp $	*/
+/*	$NetBSD: if_aue.c,v 1.93 2006/03/13 16:29:58 christos Exp $	*/
 /*
  * Copyright (c) 1997, 1998, 1999, 2000
  *	Bill Paul <wpaul@ee.columbia.edu>.  All rights reserved.
@@ -77,7 +77,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_aue.c,v 1.89 2004/11/03 22:59:31 rjs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_aue.c,v 1.93 2006/03/13 16:29:58 christos Exp $");
 
 #if defined(__NetBSD__)
 #include "opt_inet.h"
@@ -186,6 +186,7 @@ Static const struct aue_type aue_devs[] = {
  {{ USB_VENDOR_ADMTEK,		USB_PRODUCT_ADMTEK_PEGASUS},	  PNA },
  {{ USB_VENDOR_ADMTEK,		USB_PRODUCT_ADMTEK_PEGASUSII},	  PII },
  {{ USB_VENDOR_ADMTEK,		USB_PRODUCT_ADMTEK_PEGASUSII_2},  PII },
+ {{ USB_VENDOR_ADMTEK,		USB_PRODUCT_ADMTEK_PEGASUSII_3},  PII },
  {{ USB_VENDOR_AEI,		USB_PRODUCT_AEI_USBTOLAN},	  PII },
  {{ USB_VENDOR_BELKIN,		USB_PRODUCT_BELKIN_USB2LAN},	  PII },
  {{ USB_VENDOR_BILLIONTON,	USB_PRODUCT_BILLIONTON_USB100},	  0 },
@@ -230,7 +231,7 @@ Static const struct aue_type aue_devs[] = {
  {{ USB_VENDOR_SMC,		USB_PRODUCT_SMC_2206USB},	  PII },
  {{ USB_VENDOR_SOHOWARE,	USB_PRODUCT_SOHOWARE_NUB100},	  0 },
 };
-#define aue_lookup(v, p) ((struct aue_type *)usb_lookup(aue_devs, v, p))
+#define aue_lookup(v, p) ((const struct aue_type *)usb_lookup(aue_devs, v, p))
 
 USB_DECLARE_DRIVER(aue);
 
@@ -722,7 +723,7 @@ USB_MATCH(aue)
 USB_ATTACH(aue)
 {
 	USB_ATTACH_START(aue, sc, uaa);
-	char			devinfo[1024];
+	char			*devinfop;
 	int			s;
 	u_char			eaddr[ETHER_ADDR_LEN];
 	struct ifnet		*ifp;
@@ -736,9 +737,10 @@ USB_ATTACH(aue)
 
 	DPRINTFN(5,(" : aue_attach: sc=%p", sc));
 
-	usbd_devinfo(dev, 0, devinfo, sizeof(devinfo));
+	devinfop = usbd_devinfo_alloc(uaa->device, 0);
 	USB_ATTACH_SETUP;
-	printf("%s: %s\n", USBDEVNAME(sc->aue_dev), devinfo);
+	printf("%s: %s\n", USBDEVNAME(sc->aue_dev), devinfop);
+	usbd_devinfo_free(devinfop);
 
 	err = usbd_set_config_no(dev, AUE_CONFIG_NO, 1);
 	if (err) {
@@ -1060,7 +1062,7 @@ aue_intr(usbd_xfer_handle xfer, usbd_private_handle priv, usbd_status status)
 			sc->aue_intr_errs = 0;
 		}
 		if (status == USBD_STALLED)
-			usbd_clear_endpoint_stall(sc->aue_ep[AUE_ENDPT_RX]);
+			usbd_clear_endpoint_stall_async(sc->aue_ep[AUE_ENDPT_RX]);
 		return;
 	}
 
@@ -1105,7 +1107,7 @@ aue_rxeof(usbd_xfer_handle xfer, usbd_private_handle priv, usbd_status status)
 			sc->aue_rx_errs = 0;
 		}
 		if (status == USBD_STALLED)
-			usbd_clear_endpoint_stall(sc->aue_ep[AUE_ENDPT_RX]);
+			usbd_clear_endpoint_stall_async(sc->aue_ep[AUE_ENDPT_RX]);
 		goto done;
 	}
 
@@ -1206,7 +1208,7 @@ aue_txeof(usbd_xfer_handle xfer, usbd_private_handle priv, usbd_status status)
 		printf("%s: usb error on tx: %s\n", USBDEVNAME(sc->aue_dev),
 		    usbd_errstr(status));
 		if (status == USBD_STALLED)
-			usbd_clear_endpoint_stall(sc->aue_ep[AUE_ENDPT_TX]);
+			usbd_clear_endpoint_stall_async(sc->aue_ep[AUE_ENDPT_TX]);
 		splx(s);
 		return;
 	}

@@ -1,4 +1,4 @@
-/*	$NetBSD: dbdma.c,v 1.5 2003/07/15 02:43:28 lukem Exp $	*/
+/*	$NetBSD: dbdma.c,v 1.7 2005/12/24 23:24:01 perry Exp $	*/
 
 /*
  * Copyright 1991-1998 by Open Software Foundation, Inc. 
@@ -23,7 +23,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: dbdma.c,v 1.5 2003/07/15 02:43:28 lukem Exp $");
+__KERNEL_RCSID(0, "$NetBSD: dbdma.c,v 1.7 2005/12/24 23:24:01 perry Exp $");
 
 #include <sys/param.h>
 #include <sys/malloc.h>
@@ -34,7 +34,7 @@ __KERNEL_RCSID(0, "$NetBSD: dbdma.c,v 1.5 2003/07/15 02:43:28 lukem Exp $");
 #include <machine/pio.h>
 #include <macppc/dev/dbdma.h>
 
-#define eieio() __asm__ volatile("eieio")
+#define eieio() __asm volatile("eieio")
 
 
 dbdma_command_t	*dbdma_alloc_commands = NULL;

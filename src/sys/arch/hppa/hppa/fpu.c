@@ -1,4 +1,4 @@
-/*	$NetBSD: fpu.c,v 1.8 2004/07/24 19:04:53 chs Exp $	*/
+/*	$NetBSD: fpu.c,v 1.12 2005/12/24 20:07:04 perry Exp $	*/
 
 /*
  * Copyright (c) 2002 The NetBSD Foundation, Inc.
@@ -41,7 +41,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: fpu.c,v 1.8 2004/07/24 19:04:53 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: fpu.c,v 1.12 2005/12/24 20:07:04 perry Exp $");
 
 #include <sys/param.h>       
 #include <sys/systm.h>
@@ -147,7 +147,7 @@ void
 hppa_fpu_bootstrap(u_int ccr_enable)
 {
 	u_int32_t junk[2];
-	u_int32_t version[2];
+	u_int32_t vers[2];
 	extern u_int hppa_fpu_nop0;
 	extern u_int hppa_fpu_nop1;
 
@@ -182,13 +182,13 @@ hppa_fpu_bootstrap(u_int ccr_enable)
 		 * wrapped in double word stores of fr0, 
 		 * otherwise its operation is undefined.
 		 */
-		__asm __volatile(
+		__asm volatile(
 			"	ldo	%0, %%r22	\n"
 			"	fstds	%%fr0, 0(%%r22)	\n"
 			"	ldo	%1, %%r22	\n"
 			"	copr,0,0		\n"
 			"	fstds	%%fr0, 0(%%r22)	\n"
-			: "=m" (junk), "=m" (version) : : "r22");
+			: "=m" (junk), "=m" (vers) : : "r22");
 
 		/*
 		 * Now mark that no process has the FPU,
@@ -209,9 +209,9 @@ hppa_fpu_bootstrap(u_int ccr_enable)
 		 * proc0, we dispatch the copr,0,0 opcode 
 		 * into the emulator directly.  
 		 */
-		decode_0c(OPCODE_COPR_0_0, 0, 0, version);
+		decode_0c(OPCODE_COPR_0_0, 0, 0, vers);
 #endif /* FPEMUL */
-	fpu_version = version[0];
+	fpu_version = vers[0];
 }
 
 /*
@@ -263,7 +263,7 @@ hppa_fpu_ls(struct trapframe *frame, struct lwp *l)
 	 * and t is a five-bit field starting at bit 31.
 	 */
 	inst = frame->tf_iir;
-	__asm __volatile(
+	__asm volatile(
 		"	extru %4, 10, 5, %1	\n"
 		"	extru %4, 15, 5, %2	\n"
 		"	extru %4, 17, 2, %3	\n"
@@ -375,7 +375,7 @@ hppa_fpu_emulate(struct trapframe *frame, struct lwp *l, u_int inst)
 	 * it is a three bit field starting at bit 18.
 	 */
 #if 0
-	__asm __volatile(
+	__asm volatile(
 		"	extru %3, 22, 2, %1	\n"
 		"	extru %3, 5, 6, %0	\n"
 		"	extru %3, 18, 3, %2	\n"
@@ -426,8 +426,6 @@ hppa_fpu_emulate(struct trapframe *frame, struct lwp *l, u_int inst)
 		break;
         }
 
-	fdcache(HPPA_SID_KERNEL, (vaddr_t)fpregs,
-		sizeof(l->l_addr->u_pcb.pcb_fpregs));
 	if (exception) {
 		KSI_INIT_TRAP(&ksi);
 		if (exception & UNIMPLEMENTEDEXCEPTION) {
@@ -451,6 +449,8 @@ hppa_fpu_emulate(struct trapframe *frame, struct lwp *l, u_int inst)
 		ksi.ksi_addr = (void *)frame->tf_iioq_head;
 		trapsignal(l, &ksi);
 	}
+	fdcache(HPPA_SID_KERNEL, (vaddr_t)fpregs,
+		sizeof(l->l_addr->u_pcb.pcb_fpregs));
 }
 
 #endif /* FPEMUL */

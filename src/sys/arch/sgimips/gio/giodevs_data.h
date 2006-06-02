@@ -1,15 +1,17 @@
-/*	$NetBSD: giodevs_data.h,v 1.1 2004/01/11 01:48:46 sekiya Exp $	*/
+/*	$NetBSD: giodevs_data.h,v 1.4 2005/12/11 12:18:53 christos Exp $	*/
 
 /*
  * THIS FILE AUTOMATICALLY GENERATED.  DO NOT EDIT.
  */
 
+
 struct gio_knowndev {
 	int productid;
-	char *product;
+	const char *product;
 };
 
 struct gio_knowndev gio_knowndevs[] = {
+	{ 0x01, "XPI low cost FDDI" },
 	{ 0x02, "GTR TokenRing" },
 	{ 0x04, "Synchronous ISDN" },
 	{ 0x06, "Canon Interface" },

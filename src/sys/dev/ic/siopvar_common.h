@@ -1,4 +1,4 @@
-/*	$NetBSD: siopvar_common.h,v 1.32.2.1 2005/11/21 20:55:44 tron Exp $	*/
+/*	$NetBSD: siopvar_common.h,v 1.33 2005/11/18 23:10:32 bouyer Exp $	*/
 
 /*
  * Copyright (c) 2000 Manuel Bouyer.

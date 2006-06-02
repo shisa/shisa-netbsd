@@ -1,4 +1,4 @@
-/*	$NetBSD: linux_misc_notalpha.c,v 1.73 2005/02/26 23:10:19 perry Exp $	*/
+/*	$NetBSD: linux_misc_notalpha.c,v 1.79 2006/05/14 21:24:50 elad Exp $	*/
 
 /*-
  * Copyright (c) 1995, 1998 The NetBSD Foundation, Inc.
@@ -38,7 +38,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: linux_misc_notalpha.c,v 1.73 2005/02/26 23:10:19 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: linux_misc_notalpha.c,v 1.79 2006/05/14 21:24:50 elad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -54,6 +54,7 @@ __KERNEL_RCSID(0, "$NetBSD: linux_misc_notalpha.c,v 1.73 2005/02/26 23:10:19 per
 #include <sys/resourcevar.h>
 #include <sys/time.h>
 #include <sys/wait.h>
+#include <sys/kauth.h>
 
 #include <sys/sa.h>
 #include <sys/syscallargs.h>
@@ -81,7 +82,8 @@ __KERNEL_RCSID(0, "$NetBSD: linux_misc_notalpha.c,v 1.73 2005/02/26 23:10:19 per
 #define DPRINTF(a)
 #endif
 
-#ifndef __m68k__
+#ifndef COMPAT_LINUX32
+#if !defined(__m68k__)
 static void bsd_to_linux_statfs64(const struct statvfs *,
 	struct linux_statfs64  *);
 #endif
@@ -178,7 +180,9 @@ linux_sys_alarm(l, v, retval)
 
 	return 0;
 }
+#endif /* !COMPAT_LINUX32 */
 
+#if !defined(__amd64__) || defined(COMPAT_LINUX32)
 int
 linux_sys_nice(l, v, retval)
 	struct lwp *l;
@@ -195,7 +199,10 @@ linux_sys_nice(l, v, retval)
 	SCARG(&bsa, prio) = SCARG(uap, incr);
         return sys_setpriority(l, &bsa, retval);
 }
+#endif /* !__amd64__ || COMPAT_LINUX32 */
 
+#ifndef COMPAT_LINUX32
+#ifndef __amd64__
 /*
  * The old Linux readdir was only able to read one entry at a time,
  * even though it had a 'count' argument. In fact, the emulation
@@ -220,6 +227,7 @@ linux_sys_readdir(l, v, retval)
 	SCARG(uap, count) = 1;
 	return linux_sys_getdents(l, uap, retval);
 }
+#endif /* !amd64 */
 
 /*
  * I wonder why Linux has gettimeofday() _and_ time().. Still, we
@@ -271,7 +279,7 @@ linux_sys_utime(l, v, retval)
 
 	sg = stackgap_init(p, 0);
 	tvp = (struct timeval *) stackgap_alloc(p, &sg, sizeof(tv));
-	CHECK_ALT_EXIST(p, &sg, SCARG(uap, path));
+	CHECK_ALT_EXIST(l, &sg, SCARG(uap, path));
 
 	SCARG(&ua, path) = SCARG(uap, path);
 
@@ -291,6 +299,7 @@ linux_sys_utime(l, v, retval)
 	return sys_utimes(l, &ua, retval);
 }
 
+#ifndef __amd64__
 /*
  * waitpid(2).  Just forward on to linux_sys_wait4 with a NULL rusage.
  */
@@ -314,6 +323,7 @@ linux_sys_waitpid(l, v, retval)
 
 	return linux_sys_wait4(l, &linux_w4a, retval);
 }
+#endif /* !amd64 */
 
 int
 linux_sys_setresgid(l, v, retval)
@@ -351,8 +361,9 @@ linux_sys_getresgid(l, v, retval)
 		syscallarg(gid_t *) sgid;
 	} */ *uap = v;
 	struct proc *p = l->l_proc;
-	struct pcred *pc = p->p_cred;
+	kauth_cred_t pc = p->p_cred;
 	int error;
+	gid_t gid;
 
 	/*
 	 * Linux copies these values out to userspace like so:
@@ -361,17 +372,20 @@ linux_sys_getresgid(l, v, retval)
 	 *	2. If that succeeds, copy out egid.
 	 *	3. If both of those succeed, copy out sgid.
 	 */
-	if ((error = copyout(&pc->p_rgid, SCARG(uap, rgid),
-			     sizeof(gid_t))) != 0)
+	gid = kauth_cred_getgid(pc);
+	if ((error = copyout(&gid, SCARG(uap, rgid), sizeof(gid_t))) != 0)
 		return (error);
 
-	if ((error = copyout(&pc->pc_ucred->cr_gid, SCARG(uap, egid),
-			     sizeof(gid_t))) != 0)
+	gid = kauth_cred_getegid(pc);
+	if ((error = copyout(&gid, SCARG(uap, egid), sizeof(gid_t))) != 0)
 		return (error);
 
-	return (copyout(&pc->p_svgid, SCARG(uap, sgid), sizeof(gid_t)));
+	gid = kauth_cred_getsvgid(pc);
+
+	return (copyout(&gid, SCARG(uap, sgid), sizeof(gid_t)));
 }
 
+#ifndef __amd64__
 /*
  * I wonder why Linux has settimeofday() _and_ stime().. Still, we
  * need to deal with it.
@@ -386,26 +400,27 @@ linux_sys_stime(l, v, retval)
 		linux_time_t *t;
 	} */ *uap = v;
 	struct proc *p = l->l_proc;
-	struct timeval atv;
+	struct timespec ats;
 	linux_time_t tt;
 	int error;
 
-	if ((error = suser(p->p_ucred, &p->p_acflag)) != 0)
+	if ((error = kauth_authorize_generic(p->p_cred, KAUTH_GENERIC_ISSUSER, &p->p_acflag)) != 0)
 		return (error);
 
 	if ((error = copyin(&tt, SCARG(uap, t), sizeof tt)) != 0)
 		return error;
 
-	atv.tv_sec = tt;
-	atv.tv_usec = 0;
+	ats.tv_sec = tt;
+	ats.tv_nsec = 0;
 
-	if ((error = settime(&atv)))
+	if ((error = settime(p, &ats)))
 		return (error);
 
 	return 0;
 }
+#endif /* !amd64 */
 
-#ifndef __m68k__
+#if !defined(__m68k__) 
 /*
  * Convert NetBSD statvfs structure to Linux statfs64 structure.
  * See comments in bsd_to_linux_statfs() for further background.
@@ -462,7 +477,7 @@ linux_sys_statfs64(l, v, retval)
 		syscallarg(struct linux_statfs64 *) sp;
 	} */ *uap = v;
 	struct proc *p = l->l_proc;
-	struct statvfs btmp, *bsp;
+	struct statvfs *btmp, *bsp;
 	struct linux_statfs64 ltmp;
 	struct sys_statvfs1_args bsa;
 	caddr_t sg;
@@ -472,9 +487,9 @@ linux_sys_statfs64(l, v, retval)
 		return (EINVAL);
 
 	sg = stackgap_init(p, 0);
-	bsp = (struct statvfs *) stackgap_alloc(p, &sg, sizeof (struct statvfs));
+	bsp = stackgap_alloc(p, &sg, sizeof (struct statvfs));
 
-	CHECK_ALT_EXIST(p, &sg, SCARG(uap, path));
+	CHECK_ALT_EXIST(l, &sg, SCARG(uap, path));
 
 	SCARG(&bsa, path) = SCARG(uap, path);
 	SCARG(&bsa, buf) = bsp;
@@ -483,12 +498,16 @@ linux_sys_statfs64(l, v, retval)
 	if ((error = sys_statvfs1(l, &bsa, retval)))
 		return error;
 
-	if ((error = copyin((caddr_t) bsp, (caddr_t) &btmp, sizeof btmp)))
-		return error;
-
-	bsd_to_linux_statfs64(&btmp, &ltmp);
-
-	return copyout((caddr_t) &ltmp, (caddr_t) SCARG(uap, sp), sizeof ltmp);
+	btmp = STATVFSBUF_GET();
+	error = copyin(bsp, btmp, sizeof(*btmp));
+	if (error) {
+		goto out;
+	}
+	bsd_to_linux_statfs64(btmp, &ltmp);
+	error = copyout(&ltmp, SCARG(uap, sp), sizeof ltmp);
+out:
+	STATVFSBUF_PUT(btmp);
+	return error;
 }
 
 int
@@ -503,7 +522,7 @@ linux_sys_fstatfs64(l, v, retval)
 		syscallarg(struct linux_statfs64 *) sp;
 	} */ *uap = v;
 	struct proc *p = l->l_proc;
-	struct statvfs btmp, *bsp;
+	struct statvfs *btmp, *bsp;
 	struct linux_statfs64 ltmp;
 	struct sys_fstatvfs1_args bsa;
 	caddr_t sg;
@@ -513,7 +532,7 @@ linux_sys_fstatfs64(l, v, retval)
 		return (EINVAL);
 
 	sg = stackgap_init(p, 0);
-	bsp = (struct statvfs *) stackgap_alloc(p, &sg, sizeof (struct statvfs));
+	bsp = stackgap_alloc(p, &sg, sizeof (struct statvfs));
 
 	SCARG(&bsa, fd) = SCARG(uap, fd);
 	SCARG(&bsa, buf) = bsp;
@@ -522,11 +541,16 @@ linux_sys_fstatfs64(l, v, retval)
 	if ((error = sys_fstatvfs1(l, &bsa, retval)))
 		return error;
 
-	if ((error = copyin((caddr_t) bsp, (caddr_t) &btmp, sizeof btmp)))
-		return error;
-
-	bsd_to_linux_statfs64(&btmp, &ltmp);
-
-	return copyout((caddr_t) &ltmp, (caddr_t) SCARG(uap, sp), sizeof ltmp);
+	btmp = STATVFSBUF_GET();
+	error = copyin(bsp, btmp, sizeof(*btmp));
+	if (error) {
+		goto out;
+	}
+	bsd_to_linux_statfs64(btmp, &ltmp);
+	error = copyout(&ltmp, SCARG(uap, sp), sizeof ltmp);
+out:
+	STATVFSBUF_PUT(btmp);
+	return error;
 }
 #endif /* !__m68k__ */
+#endif /* !COMPAT_LINUX32 */

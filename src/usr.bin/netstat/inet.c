@@ -1,4 +1,4 @@
-/*	$NetBSD: inet.c,v 1.63 2004/09/06 14:51:32 martin Exp $	*/
+/*	$NetBSD: inet.c,v 1.72 2006/05/28 16:51:40 elad Exp $	*/
 
 /*
  * Copyright (c) 1983, 1988, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "from: @(#)inet.c	8.4 (Berkeley) 4/20/94";
 #else
-__RCSID("$NetBSD: inet.c,v 1.63 2004/09/06 14:51:32 martin Exp $");
+__RCSID("$NetBSD: inet.c,v 1.72 2006/05/28 16:51:40 elad Exp $");
 #endif
 #endif /* not lint */
 
@@ -44,6 +44,7 @@ __RCSID("$NetBSD: inet.c,v 1.63 2004/09/06 14:51:32 martin Exp $");
 #include <sys/socketvar.h>
 #include <sys/mbuf.h>
 #include <sys/protosw.h>
+#include <sys/sysctl.h>
 
 #include <net/if_arp.h>
 #include <net/route.h>
@@ -71,13 +72,17 @@ __RCSID("$NetBSD: inet.c,v 1.63 2004/09/06 14:51:32 martin Exp $");
 #include <netinet/tcp_var.h>
 #include <netinet/tcp_debug.h>
 #include <netinet/udp.h>
+#include <netinet/ip_carp.h>
 #include <netinet/udp_var.h>
 
 #include <arpa/inet.h>
+#include <kvm.h>
 #include <netdb.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdlib.h>
+#include <err.h>
 #include "netstat.h"
 
 struct	inpcb inpcb;
@@ -94,6 +99,63 @@ void	inetprint __P((struct in_addr *, u_int16_t, const char *, int));
  * -a (all) flag is specified.
  */
 static int width;
+static int compact;
+
+static void
+protoprhdr(void)
+{
+	printf("Active Internet connections");
+	if (aflag)
+		printf(" (including servers)");
+	putchar('\n');
+	if (Aflag)
+		printf("%-8.8s ", "PCB");
+	printf("%-5.5s %-6.6s %-6.6s %s%-*.*s %-*.*s %s\n",
+		"Proto", "Recv-Q", "Send-Q", compact ? "" : " ",
+		width, width, "Local Address",
+		width, width, "Foreign Address",
+		"State");
+}
+
+static void
+protopr0(intptr_t ppcb, u_long rcv_sb_cc, u_long snd_sb_cc,
+	 struct in_addr *laddr, u_int16_t lport,
+	 struct in_addr *faddr, u_int16_t fport,
+	 short t_state, char *name)
+{
+	static char *shorttcpstates[] = {
+		"CLOSED",	"LISTEN",	"SYNSEN",	"SYSRCV",
+		"ESTABL",	"CLWAIT",	"FWAIT1",	"CLOSNG",
+		"LASTAK",	"FWAIT2",	"TMWAIT",
+	};
+	int istcp;
+
+	istcp = strcmp(name, "tcp") == 0;
+
+	if (Aflag) {
+		printf("%8" PRIxPTR " ", ppcb);
+	}
+	printf("%-5.5s %6ld %6ld%s", name, rcv_sb_cc, snd_sb_cc,
+	       compact ? "" : " ");
+	if (numeric_port) {
+		inetprint(laddr, lport, name, 1);
+		inetprint(faddr, fport, name, 1);
+	} else if (inpcb.inp_flags & INP_ANONPORT) {
+		inetprint(laddr, lport, name, 1);
+		inetprint(faddr, fport, name, 0);
+	} else {
+		inetprint(laddr, lport, name, 0);
+		inetprint(faddr, fport, name, 0);
+	}
+	if (istcp) {
+		if (t_state < 0 || t_state >= TCP_NSTATES)
+			printf(" %d", t_state);
+		else
+			printf(" %s", compact ? shorttcpstates[t_state] :
+			       tcpstates[t_state]);
+	}
+	putchar('\n');
+}
 
 void
 protopr(off, name)
@@ -103,21 +165,8 @@ protopr(off, name)
 	struct inpcbtable table;
 	struct inpcb *head, *next, *prev;
 	struct inpcb inpcb;
-	int istcp, compact;
+	int istcp;
 	static int first = 1;
-	static char *shorttcpstates[] = {
-		"CLOSED",	"LISTEN",	"SYNSEN",	"SYSRCV",
-		"ESTABL",	"CLWAIT",	"FWAIT1",	"CLOSNG",
-		"LASTAK",	"FWAIT2",	"TMWAIT",
-	};
-
-	if (off == 0)
-		return;
-	istcp = strcmp(name, "tcp") == 0;
-	kread(off, (char *)&table, sizeof table);
-	prev = head =
-	    (struct inpcb *)&((struct inpcbtable *)off)->inpt_queue.cqh_first;
-	next = (struct inpcb *)table.inpt_queue.cqh_first;
 
 	compact = 0;
 	if (Aflag) {
@@ -129,6 +178,67 @@ protopr(off, name)
 		}
 	} else
 		width = 22;
+
+	if (use_sysctl) {
+		struct kinfo_pcb *pcblist;
+		int mib[8];
+		size_t namelen = 0, size = 0, i;
+		char *mibname = NULL;
+
+		memset(mib, 0, sizeof(mib));
+
+		if (asprintf(&mibname, "net.inet.%s.pcblist", name) == -1)
+			err(1, "asprintf");
+
+		/* get dynamic pcblist node */
+		if (sysctlnametomib(mibname, mib, &namelen) == -1)
+			err(1, "sysctlnametomib");
+
+		if (sysctl(mib, sizeof(mib) / sizeof(*mib), NULL, &size,
+			   NULL, 0) == -1)
+			err(1, "sysctl (query)");
+
+		if ((pcblist = malloc(size)) == NULL)
+			err(1, "malloc");
+		memset(pcblist, 0, size);
+
+	        mib[6] = sizeof(*pcblist);
+        	mib[7] = size / sizeof(*pcblist);
+
+		if (sysctl(mib, sizeof(mib) / sizeof(*mib), pcblist,
+			   &size, NULL, 0) == -1)
+			err(1, "sysctl (copy)");
+
+		for (i = 0; i < size / sizeof(*pcblist); i++) {
+			struct sockaddr_in src, dst;
+
+			memcpy(&src, &pcblist[i].ki_s, sizeof(src));
+			memcpy(&dst, &pcblist[i].ki_d, sizeof(dst));
+
+			if (first) {
+				protoprhdr();
+				first = 0;
+			}
+
+	                protopr0((intptr_t) pcblist[i].ki_ppcbaddr,
+				 pcblist[i].ki_rcvq, pcblist[i].ki_sndq,
+				 &src.sin_addr, src.sin_port,
+				 &dst.sin_addr, dst.sin_port,
+				 pcblist[i].ki_tstate, name);
+		}
+
+		free(pcblist);
+		return;
+	}
+
+	if (off == 0)
+		return;
+	istcp = strcmp(name, "tcp") == 0;
+	kread(off, (char *)&table, sizeof table);
+	prev = head =
+	    (struct inpcb *)&((struct inpcbtable *)off)->inpt_queue.cqh_first;
+	next = (struct inpcb *)table.inpt_queue.cqh_first;
+
 	while (next != head) {
 		kread((u_long)next, (char *)&inpcb, sizeof inpcb);
 		if ((struct inpcb *)inpcb.inp_queue.cqe_prev != prev) {
@@ -149,47 +259,17 @@ protopr(off, name)
 			kread((u_long)inpcb.inp_ppcb,
 			    (char *)&tcpcb, sizeof (tcpcb));
 		}
+
 		if (first) {
-			printf("Active Internet connections");
-			if (aflag)
-				printf(" (including servers)");
-			putchar('\n');
-			if (Aflag)
-				printf("%-8.8s ", "PCB");
-			printf("%-5.5s %-6.6s %-6.6s %s%-*.*s %-*.*s %s\n",
-				"Proto", "Recv-Q", "Send-Q",
-				compact ? "" : " ",
-				width, width, "Local Address",
-				width, width, "Foreign Address", "State");
+			protoprhdr();
 			first = 0;
 		}
-		if (Aflag) {
-			if (istcp)
-				printf("%8lx ", (u_long) inpcb.inp_ppcb);
-			else
-				printf("%8lx ", (u_long) prev);
-		}
-		printf("%-5.5s %6ld %6ld%s", name, sockb.so_rcv.sb_cc,
-			sockb.so_snd.sb_cc, compact ? "" : " ");
-		if (numeric_port) {
-			inetprint(&inpcb.inp_laddr, inpcb.inp_lport, name, 1);
-			inetprint(&inpcb.inp_faddr, inpcb.inp_fport, name, 1);
-		} else if (inpcb.inp_flags & INP_ANONPORT) {
-			inetprint(&inpcb.inp_laddr, inpcb.inp_lport, name, 1);
-			inetprint(&inpcb.inp_faddr, inpcb.inp_fport, name, 0);
-		} else {
-			inetprint(&inpcb.inp_laddr, inpcb.inp_lport, name, 0);
-			inetprint(&inpcb.inp_faddr, inpcb.inp_fport, name, 0);
-		}
-		if (istcp) {
-			if (tcpcb.t_state < 0 || tcpcb.t_state >= TCP_NSTATES)
-				printf(" %d", tcpcb.t_state);
-			else
-				printf(" %s", compact ?
-				    shorttcpstates[tcpcb.t_state] :
-				    tcpstates[tcpcb.t_state]);
-		}
-		putchar('\n');
+
+		protopr0(istcp ? (intptr_t) inpcb.inp_ppcb : (intptr_t) prev,
+			 sockb.so_rcv.sb_cc, sockb.so_snd.sb_cc,
+			 &inpcb.inp_laddr, inpcb.inp_lport,
+			 &inpcb.inp_faddr, inpcb.inp_fport,
+			 tcpcb.t_state, name);
 	}
 }
 
@@ -203,10 +283,19 @@ tcp_stats(off, name)
 {
 	struct tcpstat tcpstat;
 
-	if (off == 0)
-		return;
+	if (use_sysctl) {
+		size_t size = sizeof(tcpstat);
+
+		if (sysctlbyname("net.inet.tcp.stats", &tcpstat, &size,
+				 NULL, 0) == -1)
+			err(1, "net.inet.tcp.stats");
+	} else {
+		if (off == 0)
+			return;
+		kread(off, (char *)&tcpstat, sizeof (tcpstat));
+	}
+
 	printf ("%s:\n", name);
-	kread(off, (char *)&tcpstat, sizeof (tcpstat));
 
 #define	ps(f, m) if (tcpstat.f || sflag <= 1) \
     printf(m, (unsigned long long)tcpstat.f)
@@ -320,10 +409,19 @@ udp_stats(off, name)
 	struct udpstat udpstat;
 	u_quad_t delivered;
 
-	if (off == 0)
-		return;
-	printf("%s:\n", name);
-	kread(off, (char *)&udpstat, sizeof (udpstat));
+	if (use_sysctl) {
+		size_t size = sizeof(udpstat);
+
+		if (sysctlbyname("net.inet.udp.stats", &udpstat, &size,
+				 NULL, 0) == -1)
+			err(1, "net.inet.udp.stats");
+	} else {
+		if (off == 0)
+			return;
+		kread(off, (char *)&udpstat, sizeof (udpstat));
+	}
+
+	printf ("%s:\n", name);
 
 #define	ps(f, m) if (udpstat.f || sflag <= 1) \
     printf(m, (unsigned long long)udpstat.f)
@@ -366,9 +464,18 @@ ip_stats(off, name)
 {
 	struct ipstat ipstat;
 
-	if (off == 0)
-		return;
-	kread(off, (char *)&ipstat, sizeof (ipstat));
+	if (use_sysctl) {
+		size_t size = sizeof(ipstat);
+
+		if (sysctlbyname("net.inet.ip.stats", &ipstat, &size,
+				 NULL, 0) == -1)
+			err(1, "net.inet.ip.stats");
+	} else {
+		if (off == 0)
+			return;
+		kread(off, (char *)&ipstat, sizeof (ipstat));
+	}
+
 	printf("%s:\n", name);
 
 #define	ps(f, m) if (ipstat.f || sflag <= 1) \
@@ -445,9 +552,18 @@ icmp_stats(off, name)
 	struct icmpstat icmpstat;
 	int i, first;
 
-	if (off == 0)
-		return;
-	kread(off, (char *)&icmpstat, sizeof (icmpstat));
+	if (use_sysctl) {
+		size_t size = sizeof(icmpstat);
+
+		if (sysctlbyname("net.inet.icmp.stats", &icmpstat, &size,
+				 NULL, 0) == -1)
+			err(1, "net.inet.icmp.stats");
+	} else {
+		if (off == 0)
+			return;
+		kread(off, (char *)&icmpstat, sizeof (icmpstat));
+	}
+
 	printf("%s:\n", name);
 
 #define	p(f, m) if (icmpstat.f || sflag <= 1) \
@@ -513,6 +629,59 @@ igmp_stats(off, name)
         p(igps_snd_reports, "\t%llu membership report%s sent\n");
 #undef p
 #undef py
+}
+
+/*
+ * Dump CARP statistics structure.
+ */
+void
+carp_stats(u_long off, char *name)
+{
+	struct carpstats carpstat;
+
+	if (use_sysctl) {
+		size_t size = sizeof(carpstat);
+
+		if (sysctlbyname("net.inet.carp.stats", &carpstat, &size,
+				 NULL, 0) == -1)
+			err(1, "net.inet.carp.stats");
+	} else {
+		if (off == 0)
+			return;
+		kread(off, (char *)&carpstat, sizeof(carpstat));
+	}
+
+	printf("%s:\n", name);
+
+#define p(f, m) if (carpstat.f || sflag <= 1) \
+	printf(m, carpstat.f, plural(carpstat.f))
+#define p2(f, m) if (carpstat.f || sflag <= 1) \
+	printf(m, carpstat.f)
+
+	p(carps_ipackets, "\t%" PRIu64 " packet%s received (IPv4)\n");
+	p(carps_ipackets6, "\t%" PRIu64 " packet%s received (IPv6)\n");
+	p(carps_badif,
+	    "\t\t%" PRIu64 " packet%s discarded for bad interface\n");
+	p(carps_badttl,
+	    "\t\t%" PRIu64 " packet%s discarded for wrong TTL\n");
+	p(carps_hdrops, "\t\t%" PRIu64 " packet%s shorter than header\n");
+	p(carps_badsum, "\t\t%" PRIu64
+		" packet%s discarded for bad checksum\n");
+	p(carps_badver,
+	    "\t\t%" PRIu64 " packet%s discarded with a bad version\n");
+	p2(carps_badlen,
+	    "\t\t%" PRIu64 " discarded because packet was too short\n");
+	p(carps_badauth,
+	    "\t\t%" PRIu64 " packet%s discarded for bad authentication\n");
+	p(carps_badvhid, "\t\t%" PRIu64 " packet%s discarded for bad vhid\n");
+	p(carps_badaddrs, "\t\t%" PRIu64
+		" packet%s discarded because of a bad address list\n");
+	p(carps_opackets, "\t%" PRIu64 " packet%s sent (IPv4)\n");
+	p(carps_opackets6, "\t%" PRIu64 " packet%s sent (IPv6)\n");
+	p2(carps_onomem,
+	    "\t\t%" PRIu64 " send failed due to mbuf memory error\n");
+#undef p
+#undef p2
 }
 
 /*

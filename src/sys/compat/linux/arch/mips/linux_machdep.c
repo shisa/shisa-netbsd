@@ -1,4 +1,4 @@
-/*	$NetBSD: linux_machdep.c,v 1.22 2005/02/26 23:10:19 perry Exp $ */
+/*	$NetBSD: linux_machdep.c,v 1.26 2006/05/15 13:11:29 yamt Exp $ */
 
 /*-
  * Copyright (c) 1995, 2000, 2001 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: linux_machdep.c,v 1.22 2005/02/26 23:10:19 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: linux_machdep.c,v 1.26 2006/05/15 13:11:29 yamt Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -64,6 +64,7 @@ __KERNEL_RCSID(0, "$NetBSD: linux_machdep.c,v 1.22 2005/02/26 23:10:19 perry Exp
 #include <sys/disklabel.h>
 #include <sys/ioctl.h>
 #include <sys/sysctl.h>
+#include <sys/kauth.h>
 #include <miscfs/specfs/specdev.h>
 
 #include <compat/linux/common/linux_types.h>
@@ -428,7 +429,7 @@ linux_sys_sysmips(l, v, retval)
 		int name[2];
 		size_t len;
 
-		if ((error = suser(p->p_ucred, &p->p_acflag)) != 0)
+		if ((error = kauth_authorize_generic(p->p_cred, KAUTH_GENERIC_ISSUSER, &p->p_acflag)) != 0)
 			return error;
 		if ((error = copyinstr((char *)SCARG(uap, arg1), nodename,
 		    LINUX___NEW_UTS_LEN, &len)) != 0)
@@ -479,5 +480,11 @@ linux_sys_sysmips(l, v, retval)
 	printf("linux_sys_sysmips(): unimplemented command %d\n",
 	    SCARG(uap,cmd));
 #endif /* DEBUG_LINUX */
+	return 0;
+}
+
+int
+linux_usertrap(struct lwp *l, vaddr_t trapaddr, void *arg)
+{
 	return 0;
 }

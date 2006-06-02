@@ -1,4 +1,4 @@
-/*	$NetBSD: console.c,v 1.11 2003/07/15 00:24:43 lukem Exp $	*/
+/*	$NetBSD: console.c,v 1.16 2006/05/14 21:55:10 elad Exp $	*/
 
 /*
  * Copyright (c) 1994-1995 Melvyn Tang-Richardson
@@ -42,7 +42,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: console.c,v 1.11 2003/07/15 00:24:43 lukem Exp $");
+__KERNEL_RCSID(0, "$NetBSD: console.c,v 1.16 2006/05/14 21:55:10 elad Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -60,6 +60,7 @@ __KERNEL_RCSID(0, "$NetBSD: console.c,v 1.11 2003/07/15 00:24:43 lukem Exp $");
 #include <sys/user.h>
 #include <sys/syslog.h>
 #include <sys/kernel.h>
+#include <sys/kauth.h>
 
 #include <dev/cons.h>
 
@@ -290,8 +291,8 @@ vconsole_spawn(dev, vc)
 	new->SPAWN ( new );
 	new->vtty = 1;
 
-	MALLOC (new->charmap, int *, sizeof(int)*((new->xchars)*(new->ychars)), 
-	    M_DEVBUF, M_NOWAIT );
+	new->charmap = (int *)malloc(sizeof(int)*((new->xchars)*(new->ychars)), 
+	    M_DEVBUF, M_NOWAIT);
 /*	printf("spawn:charmap=%08x\n", new->charmap);*/
 
 	if (new->charmap==0)
@@ -312,19 +313,19 @@ vconsole_addcharmap(vc)
 {
 	int counter=0;
 
-	MALLOC (vc->charmap, int *, sizeof(int)*((vc->xchars)*(vc->ychars)),
-	    M_DEVBUF, M_NOWAIT );
+	vc->charmap = (int *)malloc(sizeof(int)*((vc->xchars)*(vc->ychars)),
+	    M_DEVBUF, M_NOWAIT);
 /*	printf("vc=%08x charmap=%08x\n", vc, vc->charmap);*/
 	for ( counter=0; counter<((vc->xchars)*(vc->ychars)); counter++ )
 		(vc->charmap)[counter]=' ';
 }
 
 int
-physconopen(dev, flag, mode, p)
+physconopen(dev, flag, mode, l)
 	dev_t dev;
 	int flag;
 	int mode;
-	struct proc *p;
+	struct lwp *l;
 {
 	struct vconsole *new;
 
@@ -381,7 +382,7 @@ physconopen(dev, flag, mode, p)
 	else
 		new = vc;
 
-	new->proc = p;
+	new->proc = l->l_proc;
 
     /* Initialise the terminal subsystem for this device */
 
@@ -404,7 +405,8 @@ physconopen(dev, flag, mode, p)
 		TP->t_ispeed = TP->t_ospeed = TTYDEF_SPEED;
 		physconparam(TP, &TP->t_termios);
 		ttsetwater(TP);
-	} else if (TP->t_state&TS_XCLUDE && p->p_ucred->cr_uid != 0)
+	} else if (TP->t_state&TS_XCLUDE &&
+		   kauth_authorize_generic(l->l_proc->p_cred, KAUTH_GENERIC_ISSUSER, &l->l_proc->p_acflag) != 0)
 		return EBUSY;
 	TP->t_state |= TS_CARR_ON;
 
@@ -489,17 +491,17 @@ physconopen(dev, flag, mode, p)
 }
 
 /*
- * int physconclose(dev_t dev, int flag, int mode, struct proc *p)
+ * int physconclose(dev_t dev, int flag, int mode, struct lwp *l)
  *
  * Close the physical console
  */
 
 int
-physconclose(dev, flag, mode, p)
+physconclose(dev, flag, mode, l)
 	dev_t dev;
 	int flag;
 	int mode;
-	struct proc *p;
+	struct lwp *l;
 {
 	register struct tty *tp;
 
@@ -547,10 +549,10 @@ physconwrite(dev, uio, flag)
 }
 
 int
-physconpoll(dev, events, p)
+physconpoll(dev, events, l)
 	dev_t dev;
 	int events;
-	struct proc *p;
+	struct lwp *l;
 {
 	register struct tty *tp;
 
@@ -561,7 +563,7 @@ physconpoll(dev, events, p)
 		return(ENXIO);
 	}
  
-	return ((*tp->t_linesw->l_poll)(tp, events, p));
+	return ((*tp->t_linesw->l_poll)(tp, events, l));
 }
 
 struct tty *
@@ -574,12 +576,12 @@ physcontty(dev)
 int ioctlconsolebug;
 
 int
-physconioctl(dev, cmd, data, flag, p)
+physconioctl(dev, cmd, data, flag, l)
 	dev_t dev;
 	u_long cmd;
 	caddr_t data;
 	int flag;
-	struct proc *p;
+	struct lwp *l;
 {
 	struct vconsole vconsole_new;
 	struct tty *tp=(struct tty *)0xDEADDEAD ;
@@ -670,7 +672,7 @@ physconioctl(dev, cmd, data, flag, p)
 
 	case CONSOLE_BLANKTIME:
 		{
-		int time = (*(int *)data);
+		int blanktime = (*(int *)data);
 		struct vidc_mode *vm = &((struct vidc_info *)vc->r_data)->mode;
 
 		/*
@@ -680,18 +682,18 @@ physconioctl(dev, cmd, data, flag, p)
 		 */
 
 		if (vm->frame_rate)
-			time *= vm->frame_rate;
+			blanktime *= vm->frame_rate;
 		else
-			time *= 70;
+			blanktime *= 70;
 
-		if (time == 0) {
+		if (blanktime == 0) {
 			if (vc == vconsole_current)
 				vconsole_current->BLANK(vconsole_current, BLANK_OFF);
 		} else {
 			if (vc == vconsole_current)
-				vconsole_blankinit = time;
-			vc->blanktime = time;
-			if (time < 0)
+				vconsole_blankinit = blanktime;
+			vc->blanktime = blanktime;
+			if (blanktime < 0)
 				vconsole_current->BLANK(vconsole_current, BLANK_NONE);
 		}
 		return 0;
@@ -715,13 +717,13 @@ physconioctl(dev, cmd, data, flag, p)
 		}
 		
 	default: 
-		error = vc->IOCTL ( vc, dev, cmd, data, flag, p );
+		error = vc->IOCTL ( vc, dev, cmd, data, flag, l );
 		if (error != EPASSTHROUGH)
 			return error;
-		error = (*tp->t_linesw->l_ioctl)(tp, cmd, data, flag, p);
+		error = (*tp->t_linesw->l_ioctl)(tp, cmd, data, flag, l);
 		if (error != EPASSTHROUGH)
 			return error;
-		error = ttioctl(tp, cmd, data, flag, p);
+		error = ttioctl(tp, cmd, data, flag, l);
 		if (error != EPASSTHROUGH)
 			return error;
 	} 
@@ -828,7 +830,7 @@ int
 physconkbd(key)
 	int key;
 {
-	char *string;
+	const char *string;
 	register struct tty *tp;
 	int s;
 

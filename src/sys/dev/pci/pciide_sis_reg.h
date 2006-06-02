@@ -1,4 +1,4 @@
-/*	$NetBSD: pciide_sis_reg.h,v 1.12.2.1 2005/06/26 11:24:27 tron Exp $ */
+/*	$NetBSD: pciide_sis_reg.h,v 1.14 2005/12/11 12:22:50 christos Exp $ */
 
 /*
  * Copyright (c) 1998 Manuel Bouyer.

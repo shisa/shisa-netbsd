@@ -1,4 +1,4 @@
-# $NetBSD: xserver,v 1.2.2.1 2005/03/19 17:51:05 tron Exp $
+# $NetBSD: xserver,v 1.3 2005/03/18 15:15:25 christos Exp $
 #
 # PAM configuration for the "X Windows Server"
 #

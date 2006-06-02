@@ -1,7 +1,7 @@
-/*	$NetBSD: machines.c,v 1.25 2004/08/15 22:00:12 dsl Exp $	*/
+/*	$NetBSD: machines.c,v 1.33 2006/02/18 12:43:36 dsl Exp $	*/
 
 /*-
- * Copyright (c) 2002 The NetBSD Foundation, Inc.
+ * Copyright (c) 2002-2005 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
  * This code is derived from software contributed to The NetBSD Foundation
@@ -42,48 +42,33 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID) && !defined(__lint)
-__RCSID("$NetBSD: machines.c,v 1.25 2004/08/15 22:00:12 dsl Exp $");
+__RCSID("$NetBSD: machines.c,v 1.33 2006/02/18 12:43:36 dsl Exp $");
 #endif	/* !__lint */
 
 #include <sys/types.h>
 #include "installboot.h"
 
-struct ib_mach machines[] = {
-	{ "alpha",	alpha_setboot,	alpha_clearboot,
-		IB_STAGE1START | IB_ALPHASUM | IB_APPEND | IB_SUNSUM },
-	{ "amd64",	i386_setboot,	no_clearboot,
-		IB_RESETVIDEO | IB_CONSOLE | IB_CONSPEED |
-		IB_KEYMAP | IB_PASSWORD | IB_TIMEOUT },
-	{ "amiga",	amiga_setboot,	no_clearboot,
-		IB_STAGE1START | IB_STAGE2START | IB_COMMAND },
-#if 0
-	{ "hp300",	hp300_setboot,	no_clearboot,
-		IB_APPEND },
-#endif
-	{ "i386",	i386_setboot,	no_clearboot,
-		IB_RESETVIDEO | IB_CONSOLE | IB_CONSPEED | IB_CONSADDR |
-		IB_KEYMAP | IB_PASSWORD | IB_TIMEOUT },
-	{ "macppc",	macppc_setboot,	macppc_clearboot,
-		IB_STAGE2START },
-	{ "news68k",	news68k_setboot, news68k_clearboot,
-		IB_STAGE2START },
-	{ "newsmips",	newsmips_setboot, newsmips_clearboot,
-		IB_STAGE2START },
-	{ "next68k",	next68k_setboot, no_clearboot,
-		0 },
-	{ "pmax",	pmax_setboot,	pmax_clearboot,
-		IB_STAGE1START | IB_APPEND | IB_SUNSUM },
-	{ "shark",	no_setboot,	no_clearboot, },
-	{ "sparc",	sparc_setboot,	sparc_clearboot,
-		IB_STAGE2START },
-	{ "sparc64",	sparc64_setboot, sparc64_clearboot },
-	{ "sun2",	sun68k_setboot,	sun68k_clearboot,
-		IB_STAGE2START },
-	{ "sun3",	sun68k_setboot,	sun68k_clearboot,
-		IB_STAGE2START },
-	{ "vax",	vax_setboot,	vax_clearboot,
-		IB_STAGE1START | IB_APPEND | IB_SUNSUM },
-	{ "x68k",	x68k_setboot,	x68k_clearboot,
-		IB_STAGE1START | IB_STAGE2START },
-	{ 0, 0, 0, 0 },
+/*
+ * Define these here so they end up as zero-filled bss if installboot
+ * isn't built with all the architectures defined.
+ * A lot simpler that conditionally including the definitions themselves.
+ */
+struct ib_mach 
+    ib_mach_alpha,   ib_mach_amd64,    ib_mach_amiga,   ib_mach_ews4800mips,
+    ib_mach_hp300,   ib_mach_hp700,    ib_mach_i386,    ib_mach_macppc,
+    ib_mach_news68k, ib_mach_newsmips, ib_mach_next68k, ib_mach_pmax,
+    ib_mach_sparc,   ib_mach_sparc64,  ib_mach_sun2,    ib_mach_sun3,
+    ib_mach_vax,     ib_mach_x68k;
+
+struct ib_mach *machines[] = {
+    &ib_mach_alpha,   &ib_mach_amd64,    &ib_mach_amiga,   &ib_mach_ews4800mips,
+    &ib_mach_hp300,   &ib_mach_hp700,    &ib_mach_i386,    &ib_mach_macppc,
+    &ib_mach_news68k, &ib_mach_newsmips, &ib_mach_next68k, &ib_mach_pmax,
+    &ib_mach_sparc,   &ib_mach_sparc64,  &ib_mach_sun2,    &ib_mach_sun3,
+    &ib_mach_vax,     &ib_mach_x68k,
+    NULL
 };
+
+#if 0
+	{ "shark",	no_setboot,	no_clearboot,	no_editboot, 0 },
+#endif

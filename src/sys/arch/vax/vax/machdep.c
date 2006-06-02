@@ -1,4 +1,4 @@
-/* $NetBSD: machdep.c,v 1.146 2004/04/24 04:56:59 atatat Exp $	 */
+/* $NetBSD: machdep.c,v 1.152 2005/12/24 22:45:40 perry Exp $	 */
 
 /*
  * Copyright (c) 1982, 1986, 1990 The Regents of the University of California.
@@ -83,7 +83,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.146 2004/04/24 04:56:59 atatat Exp $");
+__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.152 2005/12/24 22:45:40 perry Exp $");
 
 #include "opt_ddb.h"
 #include "opt_compat_netbsd.h"
@@ -192,7 +192,8 @@ cpu_startup()
 	 * Good {morning,afternoon,evening,night}.
 	 * Also call CPU init on systems that need that.
 	 */
-	printf("%s\n%s\n", version, cpu_model);
+	printf("%s%s", copyright, version);
+	printf("%s\n", cpu_model);
         if (dep_call->cpu_conf)
                 (*dep_call->cpu_conf)();
 
@@ -395,7 +396,7 @@ cpu_reboot(howto, b)
 		 * rely on that.
 		 */
 #ifdef notyet
-		asm(	"\tmovl	%sp, (0x80000200)\n"
+		__asm(	"\tmovl	%sp, (0x80000200)\n"
 			"\tmovl	0x80000200, %sp\n"
 			"\tmfpr	$0x10, -(%sp)\n"	/* PR_PCBB */
 			"\tmfpr	$0x11, -(%sp)\n"	/* PR_SCBB */
@@ -416,9 +417,9 @@ cpu_reboot(howto, b)
 
 		mtpr(GC_CONS|GC_BTFL, PR_TXDB);
 	}
-	asm("movl %0, %%r5":: "g" (showto)); /* How to boot */
-	asm("movl %0, %%r11":: "r"(showto)); /* ??? */
-	asm("halt");
+	__asm("movl %0, %%r5":: "g" (showto)); /* How to boot */
+	__asm("movl %0, %%r11":: "r"(showto)); /* ??? */
+	__asm("halt");
 	panic("Halt sket sej");
 }
 
@@ -489,7 +490,7 @@ process_read_regs(l, regs)
 int
 process_write_regs(l, regs)
 	struct lwp    *l;
-	struct reg     *regs;
+	const struct reg     *regs;
 {
 	struct trapframe *tf = l->l_addr->u_pcb.framep;
 
@@ -571,7 +572,8 @@ vax_map_physmem(phys, size)
 		panic("vax_map_physmem: called before rminit()?!?");
 #endif
 	if (size >= LTOHPN) {
-		addr = uvm_km_valloc(kernel_map, size * VAX_NBPG);
+		addr = uvm_km_alloc(kernel_map, size * VAX_NBPG, 0,
+		    UVM_KMF_VAONLY);
 		if (addr == 0)
 			panic("vax_map_physmem: kernel map full");
 	} else {
@@ -607,7 +609,7 @@ vax_unmap_physmem(addr, size)
 	addr &= ~VAX_PGOFSET;
 	iounaccess(addr, size);
 	if (size >= LTOHPN)
-		uvm_km_free(kernel_map, addr, size * VAX_NBPG);
+		uvm_km_free(kernel_map, addr, size * VAX_NBPG, UVM_KMF_VAONLY);
 	else if (extent_free(iomap_ex, addr, size * VAX_NBPG,
 			     EX_NOWAIT |
 			     (iomap_ex_malloc_safe ? EX_MALLOCOK : 0)))
@@ -680,48 +682,50 @@ krnunlock()
 }
 #endif
 
-/*
- * This is an argument list pushed onto the stack, and given to
- * a CALLG instruction in the trampoline.
- */
-struct saframe {
-	int	sa_type;
-	void	*sa_sas;
-	int	sa_events;
-	int	sa_interrupted;
-	void	*sa_ap;
-
-	int	sa_argc;
-};
-
 void
 cpu_upcall(struct lwp *l, int type, int nevents, int ninterrupted,
     void *sas, void *ap, void *sp, sa_upcall_t upcall)
 {
-	struct proc *p = l->l_proc;
 	struct trapframe *tf = l->l_addr->u_pcb.framep;
-	struct saframe *sf, frame;
-	extern char sigcode[], upcallcode[];
+	uint32_t saframe[11], *fp = saframe;
 
-	frame.sa_type = type;
-	frame.sa_sas = sas;
-	frame.sa_events = nevents;
-	frame.sa_interrupted = ninterrupted;
-	frame.sa_ap = ap;
-	frame.sa_argc = 5;
+	sp = (void *)((uintptr_t)sp - sizeof(saframe));
 
-	sf = ((struct saframe *)sp) - 1;
-	if (copyout(&frame, sf, sizeof(frame)) != 0) {
+	/*
+	 * We don't bother to save the callee's register mask
+	 * since the function is never expected to return.
+	 */
+
+	/*
+	 * Fake a CALLS stack frame.
+	 */
+	*fp++ = 0;			/* condition handler */
+	*fp++ = 0x20000000;		/* saved regmask & PSW */
+	*fp++ = 0;			/* saved AP */
+	*fp++ = 0;			/* saved FP, new call stack */
+	*fp++ = 0;			/* saved PC, new call stack */
+
+	/*
+	 * Now create the argument list.
+	 */
+	*fp++ = 5;			/* argc = 5 */
+	*fp++ = type;
+	*fp++ = (uintptr_t) sas;
+	*fp++ = nevents;
+	*fp++ = ninterrupted;
+	*fp++ = (uintptr_t) ap;
+
+	if (copyout(&saframe, sp, sizeof(saframe)) != 0) {
 		/* Copying onto the stack didn't work, die. */
 		sigexit(l, SIGILL);
 		/* NOTREACHED */
 	}
 
-	tf->r0 = (long) upcall;
-	tf->sp = (long) sf;
-	tf->pc = (long) ((caddr_t)p->p_sigctx.ps_sigcode +
-			 ((caddr_t)upcallcode - (caddr_t)sigcode));
-	tf->psl = (long)PSL_U | PSL_PREVU;
+	tf->ap = (uintptr_t) sp + 20;
+	tf->sp = (long) sp;
+	tf->fp = (long) sp;
+	tf->pc = (long) upcall + 2;
+	tf->psl = (long) PSL_U | PSL_PREVU;
 }
 
 void
@@ -791,7 +795,7 @@ void
 generic_halt()
 {
 	if (cpmbx == NULL)  /* Too late to complain here, but avoid panic */
-		asm("halt");
+		__asm("halt");
 
 	if (cpmbx->user_halt != UHALT_DEFAULT) {
 		if (cpmbx->mbox_halt != 0)
@@ -799,14 +803,14 @@ generic_halt()
 	} else if (cpmbx->mbox_halt != MHALT_HALT)
 		cpmbx->mbox_halt = MHALT_HALT;  /* the os decides */
 
-	asm("halt");
+	__asm("halt");
 }
 
 void
 generic_reboot(int arg)
 {
 	if (cpmbx == NULL)  /* Too late to complain here, but avoid panic */
-		asm("halt");
+		__asm("halt");
 
 	if (cpmbx->user_halt != UHALT_DEFAULT) {
 		if (cpmbx->mbox_halt != 0)
@@ -814,6 +818,6 @@ generic_reboot(int arg)
 	} else if (cpmbx->mbox_halt != MHALT_REBOOT)
 		cpmbx->mbox_halt = MHALT_REBOOT;
 
-	asm("halt");
+	__asm("halt");
 }
 

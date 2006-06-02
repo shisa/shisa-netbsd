@@ -1,4 +1,4 @@
-/*	$NetBSD: tfind.c,v 1.3.18.2 2005/03/23 11:12:21 tron Exp $	*/
+/*	$NetBSD: tfind.c,v 1.5 2005/03/23 08:16:53 kleink Exp $	*/
 
 /*
  * Tree search generalized from Knuth (6.2.2) Algorithm T just like
@@ -13,7 +13,7 @@
 
 #include <sys/cdefs.h>
 #if defined(LIBC_SCCS) && !defined(lint)
-__RCSID("$NetBSD: tfind.c,v 1.3.18.2 2005/03/23 11:12:21 tron Exp $");
+__RCSID("$NetBSD: tfind.c,v 1.5 2005/03/23 08:16:53 kleink Exp $");
 #endif /* LIBC_SCCS and not lint */
 
 #include <assert.h>

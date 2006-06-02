@@ -1,4 +1,4 @@
-/*	$NetBSD: netdb.h,v 1.48.2.2 2005/04/21 16:59:28 tron Exp $	*/
+/*	$NetBSD: netdb.h,v 1.53 2006/02/17 15:55:01 ginsbach Exp $	*/
 
 /*
  * Copyright (c) 1980, 1983, 1988, 1993
@@ -140,7 +140,7 @@ struct	hostent {
 	int	h_addrtype;	/* host address type */
 	int	h_length;	/* length of address */
 	char	**h_addr_list;	/* list of addresses from name server */
-#define	h_addr	h_addr_list[0]	/* address, for backward compatiblity */
+#define	h_addr	h_addr_list[0]	/* address, for backward compatibility */
 };
 
 /*
@@ -216,7 +216,7 @@ struct addrinfo {
 #define	NETDB_SUCCESS	0	/* no problem */
 #endif
 #define	HOST_NOT_FOUND	1 /* Authoritative Answer Host not found */
-#define	TRY_AGAIN	2 /* Non-Authoritive Host not found, or SERVERFAIL */
+#define	TRY_AGAIN	2 /* Non-Authoritative Host not found, or SERVERFAIL */
 #define	NO_RECOVERY	3 /* Non recoverable errors, FORMERR, REFUSED, NOTIMP */
 #define	NO_DATA		4 /* Valid name, no data record of requested type */
 #if defined(_NETBSD_SOURCE)
@@ -239,9 +239,10 @@ struct addrinfo {
 #define	EAI_SERVICE	 9	/* servname not supported for ai_socktype */
 #define	EAI_SOCKTYPE	10	/* ai_socktype not supported */
 #define	EAI_SYSTEM	11	/* system error returned in errno */
-#define	EAI_BADHINTS	12
-#define	EAI_PROTOCOL	13
-#define	EAI_MAX		14
+#define	EAI_BADHINTS	12	/* invalid value for hints */
+#define	EAI_PROTOCOL	13	/* resolved protocol is unknown */
+#define	EAI_OVERFLOW	14	/* argument buffer overflow */
+#define	EAI_MAX		15
 #endif /* _POSIX_C_SOURCE >= 200112 || _XOPEN_SOURCE >= 520 || _NETBSD_SOURCE */
 
 /*
@@ -256,16 +257,6 @@ struct addrinfo {
 /* valid flags for addrinfo (not a standard def, apps should not use it) */
 #define	AI_MASK	\
     (AI_PASSIVE | AI_CANONNAME | AI_NUMERICHOST | AI_NUMERICSERV)
-
-#if 0
-/*
- * Flag values for getipnodebyname()
- */
-#define	AI_V4MAPPED	0x00000008
-#define	AI_ALL		0x00000010
-#define	AI_ADDRCONFIG	0x00000020
-#define	AI_DEFAULT	(AI_V4MAPPED|AI_ADDRCONFIG)
-#endif
 #endif
 
 #if (_POSIX_C_SOURCE - 0) >= 200112L || (_XOPEN_SOURCE - 0) >= 520 || \
@@ -313,13 +304,6 @@ struct hostent	*gethostbyname(const char *);
 struct hostent	*gethostbyname2(const char *, int);
 #endif
 struct hostent	*gethostent(void);
-#if (_XOPEN_SOURCE - 0) >= 520 && (_XOPEN_SOURCE - 0) < 600 || \
-    defined(_NETBSD_SOURCE)
-#if 0 /* we do not ship these */
-struct hostent	*getipnodebyaddr(const void *, size_t, int, int *);
-struct hostent	*getipnodebyname(const char *, int, int, int *);
-#endif
-#endif
 struct netent	*getnetbyaddr(uint32_t, int);
 struct netent	*getnetbyname(const char *);
 struct netent	*getnetent(void);

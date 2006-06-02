@@ -1,4 +1,4 @@
-/*	$NetBSD: if_sn_nubus.c,v 1.24 2005/01/15 16:00:59 chs Exp $	*/
+/*	$NetBSD: if_sn_nubus.c,v 1.26 2005/12/11 12:18:03 christos Exp $	*/
 
 /*
  * Copyright (C) 1997 Allen Briggs
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_sn_nubus.c,v 1.24 2005/01/15 16:00:59 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_sn_nubus.c,v 1.26 2005/12/11 12:18:03 christos Exp $");
 
 #include "opt_inet.h"
 
@@ -114,7 +114,7 @@ sn_nubus_attach(struct device *parent, struct device *self, void *aux)
 	bus_space_tag_t	bst;
 	bus_space_handle_t bsh, tmp_bsh;
 	u_int8_t myaddr[ETHER_ADDR_LEN];
-	char *cardtype;
+	const char *cardtype;
 
 	(void)(&offset);	/* Work around lame gcc initialization bug */
 

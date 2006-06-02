@@ -1,4 +1,4 @@
-/*	$NetBSD: load.c,v 1.29 2004/10/22 05:39:56 skrll Exp $	 */
+/*	$NetBSD: load.c,v 1.31 2006/03/21 17:48:10 christos Exp $	 */
 
 /*
  * Copyright 1996 John D. Polstra.
@@ -40,7 +40,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: load.c,v 1.29 2004/10/22 05:39:56 skrll Exp $");
+__RCSID("$NetBSD: load.c,v 1.31 2006/03/21 17:48:10 christos Exp $");
 #endif /* not lint */
 
 #include <err.h>
@@ -93,15 +93,13 @@ _rtld_objlist_find(Objlist *list, const Obj_Entry *obj)
 #endif
 
 /*
- * Load a shared object into memory, if it is not already loaded.  The
- * argument must be a string allocated on the heap.  This function assumes
- * responsibility for freeing it when necessary.
+ * Load a shared object into memory, if it is not already loaded.
  *
  * Returns a pointer to the Obj_Entry for the object.  Returns NULL
  * on failure.
  */
 Obj_Entry *
-_rtld_load_object(char *filepath, int mode)
+_rtld_load_object(const char *filepath, int mode)
 {
 	Obj_Entry *obj;
 	int fd = -1;
@@ -141,10 +139,8 @@ _rtld_load_object(char *filepath, int mode)
 	if (obj == NULL) { /* First use of this object, so we must map it in */
 		obj = _rtld_map_object(filepath, fd, &sb);
 		(void)close(fd);
-		if (obj == NULL) {
-			free(filepath);
+		if (obj == NULL)
 			return NULL;
-		}
 		_rtld_digest_dynamic(obj);
 
 		*_rtld_objtail = obj;
@@ -156,8 +152,7 @@ _rtld_load_object(char *filepath, int mode)
 		    obj->mapbase + obj->mapsize - 1, obj->path));
 		if (obj->textrel)
 			dbg(("  WARNING: %s has impure text", obj->path));
-	} else
-		free(filepath);
+	}
 
 	++obj->refcount;
 #ifdef RTLD_LOADER
@@ -303,7 +298,7 @@ _rtld_preload(const char *preload_path)
 	if (preload_path != NULL && *preload_path != '\0') {
 		cp = buf = xstrdup(preload_path);
 		while ((path = strsep(&cp, " :")) != NULL && status == 0) {
-			if (!_rtld_load_object(xstrdup(path), RTLD_MAIN))
+			if (!_rtld_load_object(path, RTLD_MAIN))
 				status = -1;
 			else
 				dbg((" preloaded \"%s\"", path));

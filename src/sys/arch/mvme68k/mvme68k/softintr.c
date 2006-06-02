@@ -1,4 +1,4 @@
-/*	$NetBSD: softintr.c,v 1.6 2003/07/15 02:43:50 lukem Exp $	*/
+/*	$NetBSD: softintr.c,v 1.8 2005/12/24 20:07:19 perry Exp $	*/
 
 /*-
  * Copyright (c) 2000 The NetBSD Foundation, Inc.
@@ -42,7 +42,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: softintr.c,v 1.6 2003/07/15 02:43:50 lukem Exp $");
+__KERNEL_RCSID(0, "$NetBSD: softintr.c,v 1.8 2005/12/24 20:07:19 perry Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -68,12 +68,12 @@ static struct mvme68k_soft_intr mvme68k_soft_intrs[IPL_NSOFT];
 static void dummy_softintr_assert(void);
 #endif
 
-static __inline int
+static inline int
 ssir_pending(volatile unsigned char *ssptr)
 {
 	int __rv;
 
-	__asm __volatile(
+	__asm volatile(
 		"	moveq	#0, %0	\n"
 		"	tas	%1	\n"
 		"	jne	1f	\n"

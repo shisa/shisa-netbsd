@@ -1,4 +1,4 @@
-/*	$NetBSD: t_master.c,v 1.1.1.1 2004/05/17 23:43:31 christos Exp $	*/
+/*	$NetBSD: t_master.c,v 1.1.1.3 2005/12/21 23:08:39 christos Exp $	*/
 
 /*
  * Copyright (C) 2004  Internet Systems Consortium, Inc. ("ISC")

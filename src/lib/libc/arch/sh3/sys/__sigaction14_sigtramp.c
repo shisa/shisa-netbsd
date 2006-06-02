@@ -1,4 +1,4 @@
-/*	$NetBSD: __sigaction14_sigtramp.c,v 1.4 2004/03/23 16:19:41 drochner Exp $	*/
+/*	$NetBSD: __sigaction14_sigtramp.c,v 1.7 2006/05/18 17:54:19 christos Exp $	*/
 
 /*-
  * Copyright (c) 2003 The NetBSD Foundation, Inc.
@@ -36,7 +36,10 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#define	__LIBC12_SOURCE__
+#include <sys/cdefs.h>
+#if defined(LIBC_SCCS) && !defined(lint)
+__RCSID("$NetBSD: __sigaction14_sigtramp.c,v 1.7 2006/05/18 17:54:19 christos Exp $");
+#endif /* LIBC_SCCS and not lint */
 
 #include <sys/types.h>
 #include <signal.h>
@@ -45,21 +48,25 @@
 #include "extern.h"
 
 __weak_alias(__sigaction14, __libc_sigaction14)
+#ifdef __LIBC12_SOURCE__
+extern const int __sigtramp_sigcontext_1[]
+    __weak_reference(__sigtramp_sigcontext_1);
+#endif
 
 int
 __libc_sigaction14(int sig, const struct sigaction *act, struct sigaction *oact)
 {
-	extern int __sigtramp_sigcontext_1[];
 	extern int __sigtramp_siginfo_2[];
-	int rv;
 
+#ifdef __LIBC12_SOURCE__
 	/*
 	 * We select the compatibility SIGCONTEXT trampoline if SA_SIGINFO
 	 * is not set in the sigaction.
 	 */
 	if (act && (act->sa_flags & SA_SIGINFO) == 0) {
+		extern int __sigtramp_sigcontext_1[];
 		int sav = errno;
-		rv =  __sigaction_sigtramp(sig, act, oact,
+		int rv =  __sigaction_sigtramp(sig, act, oact,
 					   __sigtramp_sigcontext_1, 1);
 		/*
 		 * EINVAL might indicate that trampoline version 1 is
@@ -70,6 +77,7 @@ __libc_sigaction14(int sig, const struct sigaction *act, struct sigaction *oact)
 			return rv;
 		errno = sav;
 	}
+#endif
 
 	return __sigaction_sigtramp(sig, act, oact, __sigtramp_siginfo_2, 2);
 }

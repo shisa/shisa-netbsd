@@ -1,4 +1,4 @@
-/*	$NetBSD: dlfcn.h,v 1.17.2.1 2005/03/21 21:25:37 jwise Exp $	*/
+/*	$NetBSD: dlfcn.h,v 1.18 2005/03/21 13:25:22 kleink Exp $	*/
 
 /*-
  * Copyright (c) 1998 The NetBSD Foundation, Inc.

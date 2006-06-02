@@ -1,4 +1,4 @@
-/*	$NetBSD: pass1.c,v 1.36.2.2 2005/12/07 19:37:52 riz Exp $	*/
+/*	$NetBSD: pass1.c,v 1.41 2006/04/21 15:00:49 skrll Exp $	*/
 
 /*
  * Copyright (c) 1980, 1986, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)pass1.c	8.6 (Berkeley) 4/28/95";
 #else
-__RCSID("$NetBSD: pass1.c,v 1.36.2.2 2005/12/07 19:37:52 riz Exp $");
+__RCSID("$NetBSD: pass1.c,v 1.41 2006/04/21 15:00:49 skrll Exp $");
 #endif
 #endif /* not lint */
 
@@ -234,7 +234,8 @@ checkinode(ino_t inumber, struct inodesc *idesc)
 		    memcmp(dp->dp1.di_ib, ufs1_zino.di_ib,
 			NIADDR * sizeof(int32_t)))) ||
 		    mode || size) {
-			pfatal("PARTIALLY ALLOCATED INODE I=%u", inumber);
+			pfatal("PARTIALLY ALLOCATED INODE I=%llu",
+			    (unsigned long long)inumber);
 			if (reply("CLEAR") == 1) {
 				dp = ginode(inumber);
 				clearinode(dp);
@@ -259,9 +260,9 @@ checkinode(ino_t inumber, struct inodesc *idesc)
 	}
 	if (!preen && mode == IFMT && reply("HOLD BAD BLOCK") == 1) {
 		dp = ginode(inumber);
-		DIP(dp, size) = iswap64(sblock->fs_fsize);
+		DIP_SET(dp, size, iswap64(sblock->fs_fsize));
 		size = sblock->fs_fsize;
-		DIP(dp, mode) = iswap16(IFREG|0600);
+		DIP_SET(dp, mode, iswap16(IFREG|0600));
 		inodirty();
 	}
 	ndb = howmany(size, sblock->fs_bsize);
@@ -290,13 +291,14 @@ checkinode(ino_t inumber, struct inodesc *idesc)
 				errx(EEXIT, "cannot read symlink");
 			if (debug) {
 				symbuf[size] = 0;
-				printf("convert symlink %u(%s) of size %lld\n",
-				    inumber, symbuf,
+				printf("convert symlink %llu(%s) "
+				    "of size %lld\n",
+				    (unsigned long long)inumber, symbuf,
 				    (unsigned long long)size);
 			}
 			dp = ginode(inumber);
 			memmove(dp->dp1.di_db, symbuf, (long)size);
-			DIP(dp, blocks) = 0;
+			DIP_SET(dp, blocks, 0);
 			inodirty();
 		}
 		/*
@@ -397,14 +399,36 @@ checkinode(ino_t inumber, struct inodesc *idesc)
 	else
 		idesc->id_type = ADDR;
 	(void)ckinode(dp, idesc);
+#ifdef notyet
+	if (is_ufs2 && iswap32(dp->dp2.di_extsize) > 0) {
+		int ret, offset;
+		idesc->id_type = ADDR;
+		ndb = howmany(iswap32(dp->dp2.di_extsize), sblock->fs_bsize);
+		for (j = 0; j < NXADDR; j++) {
+			if (--ndb == 0 &&
+			    (offset = blkoff(sblock, iswap32(dp->dp2.di_extsize))) != 0)
+				idesc->id_numfrags = numfrags(sblock,
+				    fragroundup(sblock, offset));
+			else
+				idesc->id_numfrags = sblock->fs_frag;
+			if (dp->dp2.di_extb[j] == 0)
+				continue;
+			idesc->id_blkno = iswap64(dp->dp2.di_extb[j]);
+			ret = (*idesc->id_func)(idesc);
+			if (ret & STOP)
+				break;
+		}
+	}
+#endif
 	idesc->id_entryno *= btodb(sblock->fs_fsize);
 	if (is_ufs2)
 		blocks = iswap64(dp->dp2.di_blocks);
 	else
 		blocks = iswap32(dp->dp1.di_blocks);
 	if (blocks != idesc->id_entryno) {
-		pwarn("INCORRECT BLOCK COUNT I=%u (%lld should be %lld)",
-		    inumber, (long long)blocks, (long long)idesc->id_entryno);
+		pwarn("INCORRECT BLOCK COUNT I=%llu (%lld should be %lld)",
+		    (unsigned long long)inumber, (long long)blocks,
+		    (long long)idesc->id_entryno);
 		if (preen)
 			printf(" (CORRECTED)\n");
 		else if (reply("CORRECT") == 0) {
@@ -420,7 +444,7 @@ checkinode(ino_t inumber, struct inodesc *idesc)
 	}
 	return;
 unknown:
-	pfatal("UNKNOWN FILE TYPE I=%u", inumber);
+	pfatal("UNKNOWN FILE TYPE I=%llu", (unsigned long long)inumber);
 	info->ino_state = FCLEAR;
 	if (reply("CLEAR") == 1) {
 		info->ino_state = USTATE;
@@ -447,8 +471,8 @@ pass1check(struct inodesc *idesc)
 	if ((anyout = chkrange(blkno, idesc->id_numfrags)) != 0) {
 		blkerror(idesc->id_number, "BAD", blkno);
 		if (badblk++ >= MAXBAD) {
-			pwarn("EXCESSIVE BAD BLKS I=%u",
-				idesc->id_number);
+			pwarn("EXCESSIVE BAD BLKS I=%llu",
+			    (unsigned long long)idesc->id_number);
 			if (preen)
 				printf(" (SKIPPING)\n");
 			else if (reply("CONTINUE") == 0) {
@@ -468,8 +492,8 @@ pass1check(struct inodesc *idesc)
 		} else {
 			blkerror(idesc->id_number, "DUP", blkno);
 			if (dupblk++ >= MAXDUP) {
-				pwarn("EXCESSIVE DUP BLKS I=%u",
-					idesc->id_number);
+				pwarn("EXCESSIVE DUP BLKS I=%llu",
+				    (unsigned long long)idesc->id_number);
 				if (preen)
 					printf(" (SKIPPING)\n");
 				else if (reply("CONTINUE") == 0) {

@@ -59,7 +59,7 @@ extern char dirpath[];
 static struct event listen_ev;
 static struct event uilisten_ev;
 
-static int	cradle_server(char *path, char *uipath, char *guipath);
+static int	cradle_server(const char *, const char *, const char *);
 static void	listen_cb(int, short, void *);
 static void	msg_cb(int, short, void *);
 static void	ui_cb(int, short, void *);
@@ -69,7 +69,7 @@ static FILE *ui_fl = NULL;
 static struct event ui_ev, sigterm_ev, sigint_ev;
 static char buffer[4096];
 static char title[4096];
-static char *xuipath, *xpath;
+static const char *xuipath, *xpath;
 static volatile int got_sigusr1 = 0;
 
 struct client {
@@ -100,9 +100,10 @@ gensig_cb(int sig, short ev, void *data)
 }
 
 static int
-mkunserv(char *path)
+mkunserv(const char *path)
 {
 	int s;
+	mode_t old_umask;
 	struct sockaddr_un sun;
 
 	if ((s = socket(AF_UNIX, SOCK_STREAM, 0)) == -1)
@@ -115,8 +116,10 @@ mkunserv(char *path)
 	    sizeof (sun.sun_path))
 		errx(1, "Path too long: %s", path);
 
+	old_umask = umask(S_IRUSR|S_IWUSR);
 	if (bind(s, (struct sockaddr *)&sun, sizeof(sun)) == -1)
 		err(1, "bind()");
+	umask(old_umask);
 
 	if (chmod(path, S_IRUSR | S_IWUSR) == -1)
 		err(1, "chmod()");
@@ -128,7 +131,7 @@ mkunserv(char *path)
 }
 
 static int
-cradle_server(char *path, char *uipath, char *guipath)
+cradle_server(const char *path, const char *uipath, const char *guipath)
 {
 	int s, uis;
 	pid_t pid, newpid;
@@ -209,7 +212,7 @@ cradle_server(char *path, char *uipath, char *guipath)
 }
 
 void
-cradle_start(char *path, char *uipath, char *guipath)
+cradle_start(const char *path, const char *uipath, const char *guipath)
 {
 	int s;
 	struct sockaddr_un sun;

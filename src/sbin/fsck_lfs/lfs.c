@@ -1,4 +1,4 @@
-/* $NetBSD: lfs.c,v 1.8.2.1 2005/05/07 11:21:29 tron Exp $ */
+/* $NetBSD: lfs.c,v 1.21 2006/04/17 19:05:16 perseant Exp $ */
 /*-
  * Copyright (c) 2003 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -94,7 +94,7 @@
 
 #include "bufcache.h"
 #include "vnode.h"
-#include "lfs.h"
+#include "lfs_user.h"
 #include "segwrite.h"
 
 #define panic call_panic
@@ -240,6 +240,8 @@ ufs_getlbns(struct lfs * fs, struct uvnode * vp, daddr_t bn, struct indir * ap, 
 	int i, numlevels, off;
 	int lognindir, indir;
 
+	metalbn = 0;    /* XXXGCC -Wuninitialized [sh3] */
+
 	if (nump)
 		*nump = 0;
 	numlevels = 0;
@@ -269,10 +271,7 @@ ufs_getlbns(struct lfs * fs, struct uvnode * vp, daddr_t bn, struct indir * ap, 
 	}
 
 	/* Calculate the address of the first meta-block. */
-	if (realbn >= 0)
-		metalbn = -(realbn - bn + NIADDR - i);
-	else
-		metalbn = -(-realbn - bn + NIADDR - i);
+	metalbn = -((realbn >= 0 ? realbn : -realbn) - bn + NIADDR - i);
 
 	/* At each iteration, off is the offset into the bap array which is an
 	 * array of disk addresses at the current level of indirection. The
@@ -344,6 +343,8 @@ lfs_raw_vget(struct lfs * fs, ino_t ino, int fd, ufs_daddr_t daddr)
 	int i, hash;
 
 	vp = (struct uvnode *) malloc(sizeof(*vp));
+	if (vp == NULL)
+		err(1, NULL);
 	memset(vp, 0, sizeof(*vp));
 	vp->v_fd = fd;
 	vp->v_fs = fs;
@@ -355,14 +356,20 @@ lfs_raw_vget(struct lfs * fs, ino_t ino, int fd, ufs_daddr_t daddr)
 	LIST_INIT(&vp->v_dirtyblkhd);
 
 	ip = (struct inode *) malloc(sizeof(*ip));
+	if (ip == NULL)
+		err(1, NULL);
 	memset(ip, 0, sizeof(*ip));
 
 	ip->i_din.ffs1_din = (struct ufs1_dinode *)
 	    malloc(sizeof(struct ufs1_dinode));
+	if (ip->i_din.ffs1_din == NULL)
+		err(1, NULL);
 	memset(ip->i_din.ffs1_din, 0, sizeof (struct ufs1_dinode));
 
 	/* Initialize the inode -- from lfs_vcreate. */
 	ip->inode_ext.lfs = malloc(sizeof(struct lfs_inode_ext));
+	if (ip->inode_ext.lfs == NULL)
+		err(1, NULL);
 	memset(ip->inode_ext.lfs, 0, sizeof(struct lfs_inode_ext));
 	vp->v_data = ip;
 	/* ip->i_vnode = vp; */
@@ -424,7 +431,7 @@ lfs_vget(void *vfs, ino_t ino)
 	LFS_IENTRY(ifp, fs, ino, bp);
 	daddr = ifp->if_daddr;
 	brelse(bp);
-	if (daddr == 0)
+	if (daddr <= 0 || dtosn(fs, daddr) >= fs->lfs_nseg)
 		return NULL;
 	return lfs_raw_vget(fs, ino, fs->lfs_ivnode->v_fd, daddr);
 }
@@ -464,6 +471,8 @@ lfs_init(int devfd, daddr_t sblkno, daddr_t idaddr, int dummy_read, int debug)
 	vfs_init();
 
 	devvp = (struct uvnode *) malloc(sizeof(*devvp));
+	if (devvp == NULL)
+		err(1, NULL);
 	memset(devvp, 0, sizeof(*devvp));
 	devvp->v_fs = NULL;
 	devvp->v_fd = devfd;
@@ -478,6 +487,8 @@ lfs_init(int devfd, daddr_t sblkno, daddr_t idaddr, int dummy_read, int debug)
 		if (sblkno == 0)
 			sblkno = btodb(LFS_LABELPAD);
 		fs = (struct lfs *) malloc(sizeof(*fs));
+		if (fs == NULL)
+			err(1, NULL);
 		memset(fs, 0, sizeof(*fs));
 		fs->lfs_devvp = devvp;
 	} else {
@@ -489,6 +500,8 @@ lfs_init(int devfd, daddr_t sblkno, daddr_t idaddr, int dummy_read, int debug)
 		}
 		error = bread(devvp, sblkno, LFS_SBPAD, NOCRED, &bp);
 		fs = (struct lfs *) malloc(sizeof(*fs));
+		if (fs == NULL)
+			err(1, NULL);
 		memset(fs, 0, sizeof(*fs));
 		fs->lfs_dlfs = *((struct dlfs *) bp->b_data);
 		fs->lfs_devvp = devvp;
@@ -499,6 +512,8 @@ lfs_init(int devfd, daddr_t sblkno, daddr_t idaddr, int dummy_read, int debug)
 			error = bread(devvp, fsbtodb(fs, fs->lfs_sboffs[1]),
 		    	LFS_SBPAD, NOCRED, &bp);
 			altfs = (struct lfs *) malloc(sizeof(*altfs));
+			if (altfs == NULL)
+				err(1, NULL);
 			memset(altfs, 0, sizeof(*altfs));
 			altfs->lfs_dlfs = *((struct dlfs *) bp->b_data);
 			altfs->lfs_devvp = devvp;
@@ -543,8 +558,14 @@ lfs_init(int devfd, daddr_t sblkno, daddr_t idaddr, int dummy_read, int debug)
 
 	if (!dummy_read) {
 		fs->lfs_suflags = (u_int32_t **) malloc(2 * sizeof(u_int32_t *));
+		if (fs->lfs_suflags == NULL)
+			err(1, NULL);
 		fs->lfs_suflags[0] = (u_int32_t *) malloc(fs->lfs_nseg * sizeof(u_int32_t));
+		if (fs->lfs_suflags[0] == NULL)
+			err(1, NULL);
 		fs->lfs_suflags[1] = (u_int32_t *) malloc(fs->lfs_nseg * sizeof(u_int32_t));
+		if (fs->lfs_suflags[1] == NULL)
+			err(1, NULL);
 	}
 
 	if (idaddr == 0)
@@ -555,6 +576,8 @@ lfs_init(int devfd, daddr_t sblkno, daddr_t idaddr, int dummy_read, int debug)
 	fs->lfs_ivnode = lfs_raw_vget(fs,
 		(dummy_read ? LFS_IFILE_INUM : fs->lfs_ifile), devvp->v_fd,
 		idaddr);
+	if (fs->lfs_ivnode == NULL)
+		return NULL;
 
 	register_vget((void *)fs, lfs_vget);
 
@@ -648,6 +671,7 @@ lfs_verify(struct lfs *sb0, struct lfs *sb1, struct uvnode *devvp, int debug)
 	 * different.
 	 */
 
+	osb = NULL;
 	if (debug)
 		printf("sb0 %lld, sb1 %lld\n", (long long) sb0->lfs_serial,
 		    (long long) sb1->lfs_serial);
@@ -729,6 +753,8 @@ check_summary(struct lfs *fs, SEGSUM *sp, ufs_daddr_t pseg_addr, int debug,
 		fp = (FINFO *) (fp->fi_blocks + fp->fi_nblocks);
 	}
 	datap = (u_int32_t *) malloc(nblocks * sizeof(*datap));
+	if (datap == NULL)
+		err(1, NULL);
 	datac = 0;
 
 	dp = (ufs_daddr_t *) sp;
@@ -809,3 +835,98 @@ call_panic(const char *fmt, ...)
         panic_func(1, fmt, ap);
 	va_end(ap);
 }
+
+/* Allocate a new inode. */
+struct uvnode *
+lfs_valloc(struct lfs *fs, ino_t ino)
+{
+	struct ubuf *bp, *cbp;
+	struct ifile *ifp;
+	ino_t new_ino;
+	int error;
+	int new_gen;
+	CLEANERINFO *cip;
+
+	/* Get the head of the freelist. */
+	LFS_GET_HEADFREE(fs, cip, cbp, &new_ino);
+
+	/*
+	 * Remove the inode from the free list and write the new start
+	 * of the free list into the superblock.
+	 */
+	LFS_IENTRY(ifp, fs, new_ino, bp);
+	if (ifp->if_daddr != LFS_UNUSED_DADDR)
+		panic("lfs_valloc: inuse inode %d on the free list", new_ino);
+	LFS_PUT_HEADFREE(fs, cip, cbp, ifp->if_nextfree);
+
+	new_gen = ifp->if_version; /* version was updated by vfree */
+	brelse(bp);
+
+	/* Extend IFILE so that the next lfs_valloc will succeed. */
+	if (fs->lfs_freehd == LFS_UNUSED_INUM) {
+		if ((error = extend_ifile(fs)) != 0) {
+			LFS_PUT_HEADFREE(fs, cip, cbp, new_ino);
+			return NULL;
+		}
+	}
+
+	/* Set superblock modified bit and increment file count. */
+        sbdirty();
+	++fs->lfs_nfiles;
+
+        return lfs_raw_vget(fs, ino, fs->lfs_devvp->v_fd, 0x0);
+}
+
+/*
+ * Add a new block to the Ifile, to accommodate future file creations.
+ */
+int
+extend_ifile(struct lfs *fs)
+{
+	struct uvnode *vp;
+	struct inode *ip;
+	IFILE *ifp;
+	IFILE_V1 *ifp_v1;
+	struct ubuf *bp, *cbp;
+	daddr_t i, blkno, max;
+	ino_t oldlast;
+	CLEANERINFO *cip;
+
+	vp = fs->lfs_ivnode;
+	ip = VTOI(vp);
+	blkno = lblkno(fs, ip->i_ffs1_size);
+
+	bp = getblk(vp, blkno, fs->lfs_bsize);	/* XXX VOP_BALLOC() */
+	ip->i_ffs1_size += fs->lfs_bsize;
+	
+	i = (blkno - fs->lfs_segtabsz - fs->lfs_cleansz) *
+		fs->lfs_ifpb;
+	LFS_GET_HEADFREE(fs, cip, cbp, &oldlast);
+	LFS_PUT_HEADFREE(fs, cip, cbp, i);
+	max = i + fs->lfs_ifpb;
+	fs->lfs_bfree -= btofsb(fs, fs->lfs_bsize);
+
+	if (fs->lfs_version == 1) {
+		for (ifp_v1 = (IFILE_V1 *)bp->b_data; i < max; ++ifp_v1) {
+			ifp_v1->if_version = 1;
+			ifp_v1->if_daddr = LFS_UNUSED_DADDR;
+			ifp_v1->if_nextfree = ++i;
+		}
+		ifp_v1--;
+		ifp_v1->if_nextfree = oldlast;
+	} else {
+		for (ifp = (IFILE *)bp->b_data; i < max; ++ifp) {
+			ifp->if_version = 1;
+			ifp->if_daddr = LFS_UNUSED_DADDR;
+			ifp->if_nextfree = ++i;
+		}
+		ifp--;
+		ifp->if_nextfree = oldlast;
+	}
+	LFS_PUT_TAILFREE(fs, cip, cbp, max - 1);
+
+	LFS_BWRITE_LOG(bp);
+
+	return 0;
+}
+

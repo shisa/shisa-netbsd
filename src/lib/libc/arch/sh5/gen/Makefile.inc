@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile.inc,v 1.14.6.1 2005/04/19 12:31:47 tron Exp $
+#	$NetBSD: Makefile.inc,v 1.15 2005/04/15 22:39:11 kleink Exp $
 
 SRCS+=	__setjmp14.S __sigsetjmp14.S _setjmp.S \
 	alloca.S \

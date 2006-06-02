@@ -1,4 +1,4 @@
-/*	$NetBSD: pci_usrreq.c,v 1.8 2003/06/29 22:30:27 fvdl Exp $	*/
+/*	$NetBSD: pci_usrreq.c,v 1.10 2005/12/11 12:22:50 christos Exp $	*/
 
 /*
  * Copyright 2001 Wasabi Systems, Inc.
@@ -40,7 +40,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: pci_usrreq.c,v 1.8 2003/06/29 22:30:27 fvdl Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pci_usrreq.c,v 1.10 2005/12/11 12:22:50 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/conf.h>
@@ -55,17 +55,8 @@ __KERNEL_RCSID(0, "$NetBSD: pci_usrreq.c,v 1.8 2003/06/29 22:30:27 fvdl Exp $");
 #include <dev/pci/pcivar.h>
 #include <dev/pci/pciio.h>
 
-dev_type_open(pciopen);
-dev_type_ioctl(pciioctl);
-dev_type_mmap(pcimmap);
-
-const struct cdevsw pci_cdevsw = {
-	pciopen, nullclose, noread, nowrite, pciioctl,
-	nostop, notty, nopoll, pcimmap, nokqfilter,
-};
-
-int
-pciopen(dev_t dev, int flags, int mode, struct proc *p)
+static int
+pciopen(dev_t dev, int flags, int mode, struct lwp *l)
 {
 	struct pci_softc *sc;
 	int unit;
@@ -78,8 +69,8 @@ pciopen(dev_t dev, int flags, int mode, struct proc *p)
 	return (0);
 }
 
-int
-pciioctl(dev_t dev, u_long cmd, caddr_t data, int flag, struct proc *p)
+static int
+pciioctl(dev_t dev, u_long cmd, caddr_t data, int flag, struct lwp *l)
 {
 	struct pci_softc *sc = device_lookup(&pci_cd, minor(dev));
 	struct pciio_bdf_cfgreg *bdfr = (void *) data;
@@ -117,7 +108,7 @@ pciioctl(dev_t dev, u_long cmd, caddr_t data, int flag, struct proc *p)
 	return (0);
 }
 
-paddr_t
+static paddr_t
 pcimmap(dev_t dev, off_t offset, int prot)
 {
 #if 0
@@ -137,6 +128,11 @@ pcimmap(dev_t dev, off_t offset, int prot)
 #endif
 }
 
+const struct cdevsw pci_cdevsw = {
+	pciopen, nullclose, noread, nowrite, pciioctl,
+	    nostop, notty, nopoll, pcimmap, nokqfilter,
+};
+
 /*
  * pci_devioctl:
  *
@@ -144,7 +140,7 @@ pcimmap(dev_t dev, off_t offset, int prot)
  */
 int
 pci_devioctl(pci_chipset_tag_t pc, pcitag_t tag, u_long cmd, caddr_t data,
-    int flag, struct proc *p)
+    int flag, struct lwp *l)
 {
 	struct pciio_cfgreg *r = (void *) data;
 

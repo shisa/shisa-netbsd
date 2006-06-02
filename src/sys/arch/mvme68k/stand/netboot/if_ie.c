@@ -1,4 +1,4 @@
-/*	$NetBSD: if_ie.c,v 1.9 2003/12/10 12:06:25 agc Exp $	*/
+/*	$NetBSD: if_ie.c,v 1.11 2005/12/24 22:45:35 perry Exp $	*/
 
 /*
  * Copyright (c) 1995 Theo de Raadt
@@ -305,7 +305,7 @@ ie_poll(desc, pkt, len)
 	int     length = 0;
 	u_short status;
 
-	asm(".word	0xf518\n");
+	__asm(".word	0xf518\n");
 	status = iem->im_rfd[slot].ie_fd_status;
 	if (status & IE_FD_BUSY)
 		return (0);

@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.4.4.1 2005/04/06 21:01:43 tron Exp $
+#	$NetBSD: Makefile,v 1.5 2005/03/21 00:49:17 rtr Exp $
 
 LIB=		ext
 SRCS=		EVI.c appgroup.c bigreq.c cup.c dpms.c fontcache.c mitmisc.c \

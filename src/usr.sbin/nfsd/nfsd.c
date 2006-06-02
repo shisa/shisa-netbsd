@@ -1,4 +1,4 @@
-/*	$NetBSD: nfsd.c,v 1.44 2003/12/06 03:01:16 jonathan Exp $	*/
+/*	$NetBSD: nfsd.c,v 1.47 2006/05/09 20:18:09 mrg Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993, 1994
@@ -42,7 +42,7 @@ __COPYRIGHT("@(#) Copyright (c) 1989, 1993, 1994\n\
 #if 0
 static char sccsid[] = "@(#)nfsd.c	8.9 (Berkeley) 3/29/95";
 #else
-__RCSID("$NetBSD: nfsd.c,v 1.44 2003/12/06 03:01:16 jonathan Exp $");
+__RCSID("$NetBSD: nfsd.c,v 1.47 2006/05/09 20:18:09 mrg Exp $");
 #endif
 #endif /* not lint */
 
@@ -68,11 +68,6 @@ __RCSID("$NetBSD: nfsd.c,v 1.44 2003/12/06 03:01:16 jonathan Exp $");
 #include <nfs/nfsproto.h>
 #include <nfs/nfs.h>
 
-#ifdef NFSKERB
-#include <des.h>
-#include <kerberosIV/krb.h>
-#endif
-
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -95,18 +90,6 @@ int	debug = 0;
 #endif
 
 struct	nfsd_srvargs nsd;
-
-#ifdef NFSKERB
-char		lnam[ANAME_SZ];
-KTEXT_ST	kt;
-AUTH_DAT	kauth;
-char		inst[INST_SZ];
-struct nfsrpc_fullblock kin, kout;
-struct nfsrpc_fullverf kverf;
-NFSKERBKEY_T	kivec;
-struct timeval	ktv;
-NFSKERBKEYSCHED_T kerb_keysched;
-#endif
 
 int	main __P((int, char **));
 void	nonfs __P((int));
@@ -147,25 +130,20 @@ main(argc, argv)
 	struct sockaddr_iso isoaddr, isopeer;
 #endif
 	struct pollfd set[4];
-	int ch, cltpflag, connect_type_cnt, i, len, maxsock, msgsock;
+	socklen_t len;
+	int ch, cltpflag, connect_type_cnt, i, maxsock, msgsock;
 	int nfsdcnt, nfssvc_flag, on = 1, reregister, sock, tcpflag, tcpsock;
 	int tcp6sock, ip6flag;
 	int tp4cnt, tp4flag, tpipcnt, tpipflag, udpflag, ecode, s;
-#ifdef NFSKERB
-	struct group *grp;
-	struct passwd *pwd;
-	struct ucred *cr;
-	struct timeval ktv;
-	int tp4sock, tpipsock;
-	char *cp, **cpp;
-#endif
 
 #define	MAXNFSDCNT	1024
 #define	DEFNFSDCNT	 4
 	nfsdcnt = DEFNFSDCNT;
 	cltpflag = reregister = tcpflag = tp4cnt = tp4flag = tpipcnt = 0;
 	tpipflag = udpflag = ip6flag = 0;
-	maxsock = tcpsock = 0;
+	nconf_udp = nconf_tcp = nconf_udp6 = nconf_tcp6 = NULL;
+	maxsock = 0;
+	tcpsock = tcp6sock = -1;
 #ifdef ISO
 #define	GETOPT	"6cn:rtu"
 #define	USAGE	"[-crtu] [-n num_servers]"
@@ -370,100 +348,12 @@ main(argc, argv)
 		setproctitle("server");
 		nfssvc_flag = NFSSVC_NFSD;
 		nsd.nsd_nfsd = NULL;
-#ifdef NFSKERB
-		if (sizeof (struct nfsrpc_fullverf) != RPCX_FULLVERF ||
-		    sizeof (struct nfsrpc_fullblock) != RPCX_FULLBLOCK)
-			syslog(LOG_ERR, "Yikes NFSKERB structs not packed!");
-		nsd.nsd_authstr = (u_char *)&kt;
-		nsd.nsd_authlen = sizeof (kt);
-		nsd.nsd_verfstr = (u_char *)&kverf;
-		nsd.nsd_verflen = sizeof (kverf);
-#endif
 		while (nfssvc(nfssvc_flag, &nsd) < 0) {
 			if (errno != ENEEDAUTH) {
 				syslog(LOG_ERR, "nfssvc: %m");
 				exit(1);
 			}
 			nfssvc_flag = NFSSVC_NFSD | NFSSVC_AUTHINFAIL;
-#ifdef NFSKERB
-			/*
-			 * Get the Kerberos ticket out of the authenticator
-			 * verify it and convert the principal name to a user
-			 * name. The user name is then converted to a set of
-			 * user credentials via the password and group file.
-			 * Finally, decrypt the timestamp and validate it.
-			 * For more info see the IETF Draft "Authentication
-			 * in ONC RPC".
-			 */
-			kt.length = ntohl(kt.length);
-			if (gettimeofday(&ktv, (struct timezone *)0) == 0 &&
-			    kt.length > 0 && kt.length <=
-			    (RPCAUTH_MAXSIZ - 3 * NFSX_UNSIGNED)) {
-				kin.w1 = NFS_KERBW1(kt);
-				kt.mbz = 0;
-				(void)strcpy(inst, "*");
-				if (krb_rd_req(&kt, NFS_KERBSRV,
-				     inst, nsd.nsd_haddr, &kauth, "") ==
-				     RD_AP_OK &&
-				    krb_kntoln(&kauth, lnam) == KSUCCESS &&
-				    (pwd = getpwnam(lnam)) != NULL) {
-					cr = &nsd.nsd_cr;
-					cr->cr_uid = pwd->pw_uid;
-					cr->cr_groups[0] = pwd->pw_gid;
-					cr->cr_ngroups = 1;
-					setgrent();
-					while ((grp = getgrent()) != NULL) {
-						if (grp->gr_gid ==
-						    cr->cr_groups[0])
-							continue;
-						for (cpp = grp->gr_mem;
-						    *cpp != NULL; ++cpp)
-							if (!strcmp(*cpp, lnam))
-								break;
-						if (*cpp == NULL)
-							continue;
-						cr->cr_groups[cr->cr_ngroups++]
-						    = grp->gr_gid;
-						if (cr->cr_ngroups == NGROUPS)
-							break;
-					}
-					endgrent();
-
-					/*
-					 * Get the timestamp verifier out of
-					 * the authenticator and verifier
-					 * strings.
-					 */
-					kin.t1 = kverf.t1;
-					kin.t2 = kverf.t2;
-					kin.w2 = kverf.w2;
-					memset((caddr_t)kivec, 0,
-					    sizeof(kivec));
-					memmove((caddr_t)nsd.nsd_key,
-					    (caddr_t)kauth.session,
-					    sizeof(kauth.session));
-
-					/*
-					 * Decrypt the timestamp verifier
-					 * in CBC mode.
-					 */
-					XXX
-
-					/*
-					 * Validate the timestamp verifier, to
-					 * check that the session key is ok.
-					 */
-					nsd.nsd_timestamp.tv_sec =
-					    ntohl(kout.t1);
-					nsd.nsd_timestamp.tv_usec =
-					    ntohl(kout.t2);
-					nsd.nsd_ttl = ntohl(kout.w1);
-					if ((nsd.nsd_ttl - 1) == ntohl(kout.w2))
-					    nfssvc_flag =
-					        NFSSVC_NFSD | NFSSVC_AUTHIN;
-				}
-			}
-#endif /* NFSKERB */
 		}
 		exit(0);
 	}
@@ -808,7 +698,6 @@ main(argc, argv)
 void
 usage()
 {
-
 	(void)fprintf(stderr, "usage: nfsd %s\n", USAGE);
 	exit(1);
 }
@@ -817,7 +706,6 @@ void
 nonfs(signo)
 	int signo;
 {
-
 	syslog(LOG_ERR, "missing system call: NFS not available.");
 }
 
@@ -825,6 +713,5 @@ void
 reapchild(signo)
 	int signo;
 {
-
 	while (wait3(NULL, WNOHANG, NULL) > 0);
 }

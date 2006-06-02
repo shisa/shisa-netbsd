@@ -1,4 +1,4 @@
-/*	$NetBSD: spc.c,v 1.27 2005/01/18 07:12:15 chs Exp $	*/
+/*	$NetBSD: spc.c,v 1.30 2006/02/23 05:37:49 thorpej Exp $	*/
 
 /*-
  * Copyright (c) 1998 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: spc.c,v 1.27 2005/01/18 07:12:15 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: spc.c,v 1.30 2006/02/23 05:37:49 thorpej Exp $");
 
 #include "opt_ddb.h"
 
@@ -75,14 +75,14 @@ spc_intio_match(struct device *parent, struct cfdata *cf, void *aux)
 
 	ia->ia_size=0x20;
 
-	if (intio_map_allocate_region(parent->dv_parent, ia,
+	if (intio_map_allocate_region(device_parent(parent), ia,
 				      INTIO_MAP_TESTONLY) < 0)
 		return 0;
 
 	if (bus_space_map(iot, ia->ia_addr, 0x20, BUS_SPACE_MAP_SHIFTED,
 			  &ioh) < 0)
 		return 0;
-	if (badaddr ((caddr_t)INTIO_ADDR(ia->ia_addr + BDID)))
+	if (badaddr(INTIO_ADDR(ia->ia_addr + BDID)))
 		return 0;
 	bus_space_unmap(iot, ioh, 0x20);
 
@@ -99,7 +99,7 @@ spc_intio_attach(struct device *parent, struct device *self, void *aux)
 
 	printf ("\n");
 
-	intio_map_allocate_region(parent->dv_parent, ia,
+	intio_map_allocate_region(device_parent(parent), ia,
 				  INTIO_MAP_ALLOCATE);
 	if (bus_space_map(iot, ia->ia_addr, 0x20, BUS_SPACE_MAP_SHIFTED,
 			  &ioh)) {

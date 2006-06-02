@@ -1,4 +1,4 @@
-/*	$NetBSD: sk.h,v 1.1 2000/06/14 19:45:36 thorpej Exp $	*/
+/*	$NetBSD: sk.h,v 1.1.1.1 2000/06/14 19:45:36 thorpej Exp $	*/
 /*	$KAME: sk.h,v 1.3 2000/03/27 04:36:34 sumikawa Exp $	*/
 
 /* crypto/des/sk.h */

@@ -1,4 +1,4 @@
-/*	$NetBSD: consinit.c,v 1.3 2003/07/15 02:54:52 lukem Exp $	*/
+/*	$NetBSD: consinit.c,v 1.5 2006/03/09 20:17:27 garbled Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996 Wolfgang Solfrank.
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: consinit.c,v 1.3 2003/07/15 02:54:52 lukem Exp $");
+__KERNEL_RCSID(0, "$NetBSD: consinit.c,v 1.5 2006/03/09 20:17:27 garbled Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -111,7 +111,7 @@ consinit(void)
 #if (NVGA > 0) || (NGTEN > 0)
 	if (!strcmp(consinfo->devname, "vga")) {
 #if (NGTEN > 0)
-		(*platform->pci_get_chipset_tag)(&pc);
+		prep_pci_get_chipset_tag(&pc);
 #endif
 #if (NGTEN > 0)
 		if (!gten_cnattach(&pc, &prep_mem_space_tag))

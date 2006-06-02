@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.30.2.2 2005/06/18 11:04:44 tron Exp $
+#	$NetBSD: Makefile,v 1.35 2005/12/13 22:07:20 christos Exp $
 #
 
 WARNS=	2
@@ -28,13 +28,17 @@ ARCHDIR=	${.CURDIR}/arch/${ARCHSUBDIR}
 CPPFLAGS+=	-I${ARCHDIR} -I${.CURDIR} -I${.OBJDIR} -D_LIBC
 CPPFLAGS+=	-D__LIBPTHREAD_SOURCE__ -DPTHREAD_MLOCK_KLUDGE
 
+# XXX: This crappy poke at libc's internals needs to be fixed.
+# We need to put this *after our own includes, so that our "assym.h"
+# gets picked, instead of the libc one
+CPPFLAGS+=-I${NETBSDSRCDIR}/sys -I${.CURDIR}/../libc
+
 DPSRCS+=	assym.h
 CLEANFILES+=	assym.h
 
-assym.h: genassym.sh ${ARCHDIR}/genassym.cf \
-		pthread.h pthread_int.h pthread_md.h
+assym.h: ${ARCHDIR}/genassym.cf pthread.h pthread_int.h pthread_md.h
 	${_MKTARGET_CREATE}
-	${HOST_SH} ${.CURDIR}/genassym.sh ${CC} ${CFLAGS} ${CPPFLAGS} ${PROF} \
+	${TOOL_GENASSYM} -- ${CC} ${CFLAGS} ${CPPFLAGS} ${PROF} \
 		< ${ARCHDIR}/genassym.cf > assym.h.tmp && \
 	mv -f assym.h.tmp assym.h
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: dp83932var.h,v 1.4 2003/01/15 22:35:47 bouyer Exp $	*/
+/*	$NetBSD: dp83932var.h,v 1.6 2006/02/16 20:17:16 perry Exp $	*/
 
 /*-
  * Copyright (c) 2001 The NetBSD Foundation, Inc.

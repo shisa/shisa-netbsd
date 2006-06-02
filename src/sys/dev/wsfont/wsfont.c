@@ -1,4 +1,4 @@
-/* 	$NetBSD: wsfont.c,v 1.37 2005/02/27 00:27:52 perry Exp $	*/
+/* 	$NetBSD: wsfont.c,v 1.41 2006/03/17 03:21:57 chris Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2000, 2001, 2002 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: wsfont.c,v 1.37 2005/02/27 00:27:52 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: wsfont.c,v 1.41 2006/03/17 03:21:57 chris Exp $");
 
 #include "opt_wsfont.h"
 
@@ -238,13 +238,13 @@ static struct	font *wsfont_find0(int, int);
 static struct	font *wsfont_add0(struct wsdisplay_font *, int);
 static void	wsfont_revbit(struct wsdisplay_font *);
 static void	wsfont_revbyte(struct wsdisplay_font *);
-static int __inline__ wsfont_make_cookie(int, int, int);
+static int inline wsfont_make_cookie(int, int, int);
 
-static int __inline__
-wsfont_make_cookie(int ident, int bito, int byteo)
+static int inline
+wsfont_make_cookie(int cident, int bito, int byteo)
 {
 
-	return ((ident & WSFONT_IDENT_MASK) |
+	return ((cident & WSFONT_IDENT_MASK) |
 	    (bito << WSFONT_BITO_SHIFT) |
 	    (byteo << WSFONT_BYTEO_SHIFT));
 }
@@ -433,8 +433,8 @@ wsfont_remove(int cookie)
 		return (EBUSY);
 
 	if ((ent->flags & WSFONT_STATIC) == 0) {
-		free((void *)ent->font->data, M_DEVBUF);
-		free((void *)ent->font->name, M_DEVBUF);
+		free(ent->font->data, M_DEVBUF);
+		free(__UNCONST(ent->font->name), M_DEVBUF); /*XXXUNCONST*/
 		free(ent->font, M_DEVBUF);
 	}
 
@@ -714,7 +714,7 @@ wsfont_map_unichar(struct wsdisplay_font *font, int c)
 	if (font->encoding == WSDISPLAY_FONTENC_ISO)
 		return (c);
 
-	if (font->encoding < 0 || font->encoding > MAX_ENCODING)
+	if (font->encoding < 0 || font->encoding >= MAX_ENCODING)
 		return (-1);
 
 	hi = (c >> 8);

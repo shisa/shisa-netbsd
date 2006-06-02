@@ -1,4 +1,4 @@
-/*	$NetBSD: rdisc.c,v 1.15 2004/03/27 20:50:43 christos Exp $	*/
+/*	$NetBSD: rdisc.c,v 1.17 2006/05/09 20:18:09 mrg Exp $	*/
 
 /*
  * Copyright (c) 1995
@@ -39,7 +39,7 @@
 #include <netinet/ip_icmp.h>
 
 #ifdef __NetBSD__
-__RCSID("$NetBSD: rdisc.c,v 1.15 2004/03/27 20:50:43 christos Exp $");
+__RCSID("$NetBSD: rdisc.c,v 1.17 2006/05/09 20:18:09 mrg Exp $");
 #elif defined(__FreeBSD__)
 __RCSID("$FreeBSD$");
 #else
@@ -776,7 +776,7 @@ send_rdisc(union ad_u *p,
 	if (rdisc_sock < 0)
 		get_rdisc_sock();
 
-	trace_rdisc(msg, ifp->int_addr, rsin.sin_addr.s_addr, ifp,
+	trace_rdisc(msg, ifp ? ifp->int_addr : 0, rsin.sin_addr.s_addr, ifp,
 		    p, p_size);
 
 	if (0 > sendto(rdisc_sock, p, p_size, flags,
@@ -957,7 +957,8 @@ read_d(void)
 	static struct msg_limit  bad_name;
 #endif
 	struct sockaddr_in from;
-	int n, fromlen, cc, hlen;
+	socklen_t fromlen;
+	int n, cc, hlen;
 	struct {
 #ifdef USE_PASSIFNAME
 		char	ifname[IFNAMSIZ];

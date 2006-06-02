@@ -1,4 +1,4 @@
-/*	$NetBSD: if_gif.c,v 1.50.2.1 2005/05/28 13:15:32 tron Exp $	*/
+/*	$NetBSD: if_gif.c,v 1.59 2006/05/14 21:19:33 elad Exp $	*/
 /*	$KAME: if_gif.c,v 1.76 2001/08/20 02:01:02 kjc Exp $	*/
 
 /*
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_gif.c,v 1.50.2.1 2005/05/28 13:15:32 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_gif.c,v 1.59 2006/05/14 21:19:33 elad Exp $");
 
 #include "opt_inet.h"
 #include "opt_iso.h"
@@ -48,6 +48,8 @@ __KERNEL_RCSID(0, "$NetBSD: if_gif.c,v 1.50.2.1 2005/05/28 13:15:32 tron Exp $")
 #include <sys/syslog.h>
 #include <sys/proc.h>
 #include <sys/protosw.h>
+#include <sys/kauth.h>
+
 #include <machine/cpu.h>
 #include <machine/intr.h>
 
@@ -62,8 +64,8 @@ __KERNEL_RCSID(0, "$NetBSD: if_gif.c,v 1.50.2.1 2005/05/28 13:15:32 tron Exp $")
 #include <netinet/ip.h>
 #ifdef	INET
 #include <netinet/in_var.h>
-#include <netinet/in_gif.h>
 #endif	/* INET */
+#include <netinet/in_gif.h>
 
 #ifdef INET6
 #ifndef INET
@@ -91,26 +93,26 @@ __KERNEL_RCSID(0, "$NetBSD: if_gif.c,v 1.50.2.1 2005/05/28 13:15:32 tron Exp $")
 
 #include <net/net_osdep.h>
 
-void gifattach __P((int));
+void	gifattach(int);
 #ifndef __HAVE_GENERIC_SOFT_INTERRUPTS
-void gifnetisr __P((void));
+static void	gifnetisr(void);
 #endif
-void gifintr __P((void *));
-void gif_start __P((struct ifnet *));
+static void	gifintr(void *);
+static void	gif_start(struct ifnet *);
 #ifdef ISO
-static struct mbuf *gif_eon_encap __P((struct mbuf *));
-static struct mbuf *gif_eon_decap __P((struct ifnet *, struct mbuf *));
+static struct mbuf *gif_eon_encap(struct mbuf *);
+static struct mbuf *gif_eon_decap(struct ifnet *, struct mbuf *);
 #endif
 
 /*
  * gif global variable definitions
  */
-LIST_HEAD(, gif_softc) gif_softc_list;
+LIST_HEAD(, gif_softc) gif_softc_list;	/* XXX should be static */
 
-int	gif_clone_create __P((struct if_clone *, int));
-int	gif_clone_destroy __P((struct ifnet *));
+static int	gif_clone_create(struct if_clone *, int);
+static int	gif_clone_destroy(struct ifnet *);
 
-struct if_clone gif_cloner =
+static struct if_clone gif_cloner =
     IF_CLONE_INITIALIZER("gif", gif_clone_create, gif_clone_destroy);
 
 #ifndef MAX_GIF_NEST
@@ -128,18 +130,15 @@ static int max_gif_nesting = MAX_GIF_NEST;
 
 /* ARGSUSED */
 void
-gifattach(count)
-	int count;
+gifattach(int count)
 {
 
 	LIST_INIT(&gif_softc_list);
 	if_clone_attach(&gif_cloner);
 }
 
-int
-gif_clone_create(ifc, unit)
-	struct if_clone *ifc;
-	int unit;
+static int
+gif_clone_create(struct if_clone *ifc, int unit)
 {
 	struct gif_softc *sc;
 
@@ -156,8 +155,7 @@ gif_clone_create(ifc, unit)
 }
 
 void
-gifattach0(sc)
-	struct gif_softc *sc;
+gifattach0(struct gif_softc *sc)
 {
 
 	sc->encap_cookie4 = sc->encap_cookie6 = NULL;
@@ -178,9 +176,8 @@ gifattach0(sc)
 #endif
 }
 
-int
-gif_clone_destroy(ifp)
-	struct ifnet *ifp;
+static int
+gif_clone_destroy(struct ifnet *ifp)
 {
 	struct gif_softc *sc = (void *) ifp;
 
@@ -203,9 +200,8 @@ gif_clone_destroy(ifp)
 	return (0);
 }
 
-void
-gif_start(ifp)
-	struct ifnet *ifp;
+static void
+gif_start(struct ifnet *ifp)
 {
 #ifdef __HAVE_GENERIC_SOFT_INTERRUPTS
 	softintr_schedule(((struct gif_softc*)ifp)->gif_si);
@@ -217,11 +213,7 @@ gif_start(ifp)
 
 #ifdef GIF_ENCAPCHECK
 int
-gif_encapcheck(m, off, proto, arg)
-	const struct mbuf *m;
-	int off;
-	int proto;
-	void *arg;
+gif_encapcheck(struct mbuf *m, int off, int proto, void *arg)
 {
 	struct ip ip;
 	struct gif_softc *sc;
@@ -263,8 +255,7 @@ gif_encapcheck(m, off, proto, arg)
 	if (m->m_pkthdr.len < sizeof(ip))
 		return 0;
 
-	/* LINTED const cast */
-	m_copydata((struct mbuf *)m, 0, sizeof(ip), (caddr_t)&ip);
+	m_copydata(m, 0, sizeof(ip), (caddr_t)&ip);
 
 	switch (ip.ip_v) {
 #ifdef INET
@@ -290,11 +281,8 @@ gif_encapcheck(m, off, proto, arg)
 #endif
 
 int
-gif_output(ifp, m, dst, rt)
-	struct ifnet *ifp;
-	struct mbuf *m;
-	struct sockaddr *dst;
-	struct rtentry *rt;	/* added in net2 */
+gif_output(struct ifnet *ifp, struct mbuf *m, struct sockaddr *dst,
+    struct rtentry *rt)
 {
 	struct gif_softc *sc = (struct gif_softc*)ifp;
 	int error = 0;
@@ -377,8 +365,8 @@ gif_output(ifp, m, dst, rt)
 }
 
 #ifndef __HAVE_GENERIC_SOFT_INTERRUPTS
-void
-gifnetisr()
+static void
+gifnetisr(void)
 {
 	struct gif_softc *sc;
 
@@ -389,9 +377,8 @@ gifnetisr()
 }
 #endif
 
-void
-gifintr(arg)
-	void *arg;
+static void
+gifintr(void *arg)
 {
 	struct gif_softc *sc;
 	struct ifnet *ifp;
@@ -468,10 +455,7 @@ gifintr(arg)
 }
 
 void
-gif_input(m, af, ifp)
-	struct mbuf *m;
-	int af;
-	struct ifnet *ifp;
+gif_input(struct mbuf *m, int af, struct ifnet *ifp)
 {
 	int s, isr;
 	struct ifqueue *ifq = NULL;
@@ -538,8 +522,8 @@ gif_input(m, af, ifp)
 		eh = mtod(m, struct ether_header *);
 		m->m_flags &= ~(M_BCAST|M_MCAST);
 		if (eh->ether_dhost[0] & 1) {
-			if (bcmp((caddr_t) etherbroadcastaddr,
-			    (caddr_t)eh->ether_dhost, sizeof(etherbroadcastaddr)) == 0)
+			if (memcmp(etherbroadcastaddr,
+			    eh->ether_dhost, sizeof(etherbroadcastaddr)) == 0)
 				m->m_flags |= M_BCAST;
 			else
 				m->m_flags |= M_MCAST;
@@ -578,10 +562,7 @@ gif_input(m, af, ifp)
 
 /* XXX how should we handle IPv6 scope on SIOC[GS]IFPHYADDR? */
 int
-gif_ioctl(ifp, cmd, data)
-	struct ifnet *ifp;
-	u_long cmd;
-	caddr_t data;
+gif_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 {
 	struct proc *p = curproc;	/* XXX */
 	struct gif_softc *sc  = (struct gif_softc*)ifp;
@@ -622,7 +603,9 @@ gif_ioctl(ifp, cmd, data)
 		break;
 
 	case SIOCSIFMTU:
-		if ((error = suser(p->p_ucred, &p->p_acflag)) != 0)
+		if ((error = kauth_authorize_generic(p->p_cred,
+					       KAUTH_GENERIC_ISSUSER,
+					        &p->p_acflag)) != 0)
 			break;
 		mtu = ifr->ifr_mtu;
 		if (mtu < GIF_MTU_MIN || mtu > GIF_MTU_MAX)
@@ -638,7 +621,7 @@ gif_ioctl(ifp, cmd, data)
 	case SIOCSIFPHYADDR_IN6:
 #endif /* INET6 */
 	case SIOCSLIFPHYADDR:
-		if ((error = suser(p->p_ucred, &p->p_acflag)) != 0)
+		if ((error = kauth_authorize_generic(p->p_cred, KAUTH_GENERIC_ISSUSER, &p->p_acflag)) != 0)
 			break;
 		switch (cmd) {
 #ifdef INET
@@ -727,7 +710,7 @@ gif_ioctl(ifp, cmd, data)
 
 #ifdef SIOCDIFPHYADDR
 	case SIOCDIFPHYADDR:
-		if ((error = suser(p->p_ucred, &p->p_acflag)) != 0)
+		if ((error = kauth_authorize_generic(p->p_cred, KAUTH_GENERIC_ISSUSER, &p->p_acflag)) != 0)
 			break;
 		gif_delete_tunnel(&sc->gif_if);
 		break;
@@ -835,10 +818,7 @@ gif_ioctl(ifp, cmd, data)
 }
 
 int
-gif_set_tunnel(ifp, src, dst)
-	struct ifnet *ifp;
-	struct sockaddr *src;
-	struct sockaddr *dst;
+gif_set_tunnel(struct ifnet *ifp, struct sockaddr *src, struct sockaddr *dst)
 {
 	struct gif_softc *sc = (struct gif_softc *)ifp;
 	struct gif_softc *sc2;
@@ -868,6 +848,13 @@ gif_set_tunnel(ifp, src, dst)
 
 		/* XXX both end must be valid? (I mean, not 0.0.0.0) */
 	}
+
+#ifdef __HAVE_GENERIC_SOFT_INTERRUPTS
+	if (sc->gif_si) {
+		softintr_disestablish(sc->gif_si);
+		sc->gif_si = NULL;
+	}
+#endif
 
 	/* XXX we can detach from both, but be polite just in case */
 	if (sc->gif_psrc)
@@ -956,8 +943,7 @@ gif_set_tunnel(ifp, src, dst)
 }
 
 void
-gif_delete_tunnel(ifp)
-	struct ifnet *ifp;
+gif_delete_tunnel(struct ifnet *ifp)
 {
 	struct gif_softc *sc = (struct gif_softc *)ifp;
 	int s;

@@ -1,4 +1,4 @@
-/*	$NetBSD: otto.c,v 1.8 2004/11/05 21:30:32 dsl Exp $	*/
+/*	$NetBSD: otto.c,v 1.10 2006/03/19 00:00:19 christos Exp $	*/
 # ifdef OTTO
 /*
  * Copyright (c) 1983-2003, Regents of the University of California.
@@ -45,7 +45,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: otto.c,v 1.8 2004/11/05 21:30:32 dsl Exp $");
+__RCSID("$NetBSD: otto.c,v 1.10 2006/03/19 00:00:19 christos Exp $");
 #endif /* not lint */
 
 # include	<sys/time.h>
@@ -335,7 +335,8 @@ ottolook(rel_dir, itemp)
 	cont_north:
 		if (itemp->flags & DEADEND) {
 			itemp->flags |= BEEN;
-			been_there[r][col] |= NORTH;
+			if (r >= 0)
+				been_there[r][col] |= NORTH;
 			for (r = row - 1; r > row - itemp->distance; r--)
 				been_there[r][col] = ALLDIRS;
 		}
@@ -355,7 +356,8 @@ ottolook(rel_dir, itemp)
 	cont_south:
 		if (itemp->flags & DEADEND) {
 			itemp->flags |= BEEN;
-			been_there[r][col] |= SOUTH;
+			if (r < HEIGHT)
+				been_there[r][col] |= SOUTH;
 			for (r = row + 1; r < row + itemp->distance; r++)
 				been_there[r][col] = ALLDIRS;
 		}
@@ -598,12 +600,15 @@ wander()
 		break;
 # endif
 	}
+# ifdef notdef
 	if (dir_count == 0) {
 		duck(random() % NUMDIRECTIONS);
 		num_turns = 0;
 		return;
 	} else if (dir_count == 1)
+# endif
 		rel_dir = ffs(dir_mask) - 1;
+# ifdef notdef
 	else {
 		rel_dir = ffs(dir_mask) - 1;
 		dir_mask &= ~(1 << rel_dir);
@@ -614,6 +619,7 @@ wander()
 			dir_mask &= ~(1 << i);
 		}
 	}
+# endif
 	if (rel_dir == FRONT)
 		num_turns++;
 	else

@@ -1,4 +1,4 @@
-/*	$NetBSD: df.c,v 1.67 2004/12/31 09:54:28 augustss Exp $	*/
+/*	$NetBSD: df.c,v 1.70 2006/03/17 13:53:31 rumble Exp $	*/
 
 /*
  * Copyright (c) 1980, 1990, 1993, 1994
@@ -45,7 +45,7 @@ __COPYRIGHT(
 #if 0
 static char sccsid[] = "@(#)df.c	8.7 (Berkeley) 4/2/94";
 #else
-__RCSID("$NetBSD: df.c,v 1.67 2004/12/31 09:54:28 augustss Exp $");
+__RCSID("$NetBSD: df.c,v 1.70 2006/03/17 13:53:31 rumble Exp $");
 #endif
 #endif /* not lint */
 
@@ -72,7 +72,7 @@ int	 selected(const char *);
 void	 maketypelist(char *);
 long	 regetmntinfo(struct statvfs **, long);
 void	 usage(void);
-void	 prthumanval(int64_t, char *);
+void	 prthumanval(int64_t, const char *);
 void	 prthuman(struct statvfs *, int64_t, int64_t);
 const char *
 	strpct64(uint64_t, uint64_t, u_int);
@@ -137,7 +137,8 @@ main(int argc, char *argv[])
 	if (*argv == NULL) {
 		mntsize = regetmntinfo(&mntbuf, mntsize);
 	} else {
-		mntbuf = malloc(argc * sizeof(*mntbuf));
+		if ((mntbuf = malloc(argc * sizeof(*mntbuf))) == NULL)
+			err(1, "can't allocate statvfs array");
 		mntsize = 0;
 		for (; *argv != NULL; argv++) {
 			if (stat(*argv, &stbuf) < 0) {
@@ -294,7 +295,7 @@ regetmntinfo(struct statvfs **mntbufp, long mntsize)
 }
 
 void
-prthumanval(int64_t bytes, char *pad)
+prthumanval(int64_t bytes, const char *pad)
 {
 	char buf[6];
 
@@ -331,7 +332,7 @@ prtstat(struct statvfs *sfsp, int maxwidth)
 {
 	static long blocksize;
 	static int headerlen, timesthrough;
-	static char *header;
+	static const char *header;
 	static const char full[] = "100%";
 	static const char empty[] = "  0%";
 	int64_t used, availblks, inodes;
@@ -340,7 +341,7 @@ prtstat(struct statvfs *sfsp, int maxwidth)
 	if (maxwidth < 11)
 		maxwidth = 11;
 	if (++timesthrough == 1) {
-		if (kflag) {
+		if (kflag && !hflag) {
 			blocksize = 1024;
 			header = Pflag ? "1024-blocks" : "1K-blocks";
 			headerlen = strlen(header);

@@ -1,4 +1,4 @@
-/*	$NetBSD: seekdir.c,v 1.11 2003/08/07 16:42:56 agc Exp $	*/
+/*	$NetBSD: seekdir.c,v 1.14 2006/05/17 20:36:50 christos Exp $	*/
 
 /*
  * Copyright (c) 1983, 1993
@@ -34,15 +34,18 @@
 #if 0
 static char sccsid[] = "@(#)seekdir.c	8.1 (Berkeley) 6/4/93";
 #else
-__RCSID("$NetBSD: seekdir.c,v 1.11 2003/08/07 16:42:56 agc Exp $");
+__RCSID("$NetBSD: seekdir.c,v 1.14 2006/05/17 20:36:50 christos Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
 #include "namespace.h"
 #include "reentrant.h"
+#include "extern.h"
 #include <sys/param.h>
 
 #include <dirent.h>
+
+#include "dirent_private.h"
 
 #ifdef __weak_alias
 __weak_alias(seekdir,_seekdir)
@@ -50,23 +53,18 @@ __weak_alias(seekdir,_seekdir)
 
 /*
  * Seek to an entry in a directory.
- * __seekdir is in telldir.c so that it can share opaque data structures.
+ * _seekdir_unlocked is in telldir.c so that it can share opaque data structures.
  */
 void
-seekdir(dirp, loc)
-	DIR *dirp;
-	long loc;
+seekdir(DIR *dirp, long loc)
 {
 
 #ifdef _REENTRANT
-	if (__isthreaded)
+	if (__isthreaded) {
 		mutex_lock((mutex_t *)dirp->dd_lock);
-#endif
-
-	__seekdir(dirp, loc);
-
-#ifdef _REENTRANT
-	if (__isthreaded)
+		_seekdir_unlocked(dirp, loc);
 		mutex_unlock((mutex_t *)dirp->dd_lock);
+	} else
 #endif
+		_seekdir_unlocked(dirp, loc);
 }

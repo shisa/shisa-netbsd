@@ -1,4 +1,4 @@
-/*	$NetBSD: kgdb.h,v 1.2 1998/01/05 07:02:54 perry Exp $	*/
+/*	$NetBSD: kgdb.h,v 1.4 2006/02/16 20:17:13 perry Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996 Wolfgang Solfrank.

@@ -1,4 +1,4 @@
-/*	$NetBSD: vm_machdep.c,v 1.46 2005/01/09 17:41:34 tsutsui Exp $	*/
+/*	$NetBSD: vm_machdep.c,v 1.52 2006/05/10 06:24:03 skrll Exp $	*/
 
 /*-
  * Copyright (c) 2002 The NetBSD Foundation, Inc. All rights reserved.
@@ -81,7 +81,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: vm_machdep.c,v 1.46 2005/01/09 17:41:34 tsutsui Exp $");
+__KERNEL_RCSID(0, "$NetBSD: vm_machdep.c,v 1.52 2006/05/10 06:24:03 skrll Exp $");
 
 #include "opt_kstack_debug.h"
 
@@ -139,6 +139,7 @@ cpu_lwp_fork(struct lwp *l1, struct lwp *l2, void *stack,
 	/* Copy flags */
 	l2->l_md.md_flags = l1->l_md.md_flags;
 
+	pcb = NULL;		/* XXXGCC: -Wuninitialized */
 #ifdef SH3
 	/*
 	 * Convert frame pointer top to P1. because SH3 can't make
@@ -169,7 +170,7 @@ cpu_lwp_fork(struct lwp *l1, struct lwp *l2, void *stack,
 	if (SH_HAS_VIRTUAL_ALIAS)
 		sh_dcache_wbinv_range((vaddr_t)l2->l_addr, USPACE);
 	spbase = P1ADDR(spbase);
-#else /* P1_STACK */
+#else /* !P1_STACK */
 	/* Prepare u-area PTEs */
 #ifdef SH3
 	if (CPU_IS_SH3)
@@ -179,7 +180,7 @@ cpu_lwp_fork(struct lwp *l1, struct lwp *l2, void *stack,
 	if (CPU_IS_SH4)
 		sh4_switch_setup(l2);
 #endif
-#endif /* P1_STACK */
+#endif /* !P1_STACK */
 
 #ifdef KSTACK_DEBUG
 	/* Fill magic number for tracking */
@@ -233,6 +234,7 @@ cpu_setfunc(struct lwp *l, void (*func)(void *), void *arg)
 	struct switchframe *sf;
 	vaddr_t fptop, spbase;
 
+	pcb = NULL;		/* XXXGCC: -Wuninitialized */
 #ifdef SH3
 	/*
 	 * Convert frame pointer top to P1. because SH3 can't make
@@ -263,7 +265,7 @@ cpu_setfunc(struct lwp *l, void (*func)(void *), void *arg)
 	if (SH_HAS_VIRTUAL_ALIAS)
 		sh_dcache_wbinv_range((vaddr_t)l->l_addr, USPACE);
 	spbase = P1ADDR(spbase);
-#else /* P1_STACK */
+#else /* !P1_STACK */
 	/* Prepare u-area PTEs */
 #ifdef SH3
 	if (CPU_IS_SH3)
@@ -273,7 +275,7 @@ cpu_setfunc(struct lwp *l, void (*func)(void *), void *arg)
 	if (CPU_IS_SH4)
 		sh4_switch_setup(l);
 #endif
-#endif /* P1_STACK */
+#endif /* !P1_STACK */
 
 #ifdef KSTACK_DEBUG
 	/* Fill magic number for tracking */
@@ -317,42 +319,37 @@ struct md_core {
 };
 
 int
-cpu_coredump(struct lwp *l, struct vnode *vp, struct ucred *cred,
-    struct core *chdr)
+cpu_coredump(struct lwp *l, void *iocookie, struct core *chdr)
 {
 	struct md_core md_core;
 	struct coreseg cseg;
 	int error;
 
-	CORE_SETMAGIC(*chdr, COREMAGIC, MID_MACHINE, 0);
-	chdr->c_hdrsize = ALIGN(sizeof(*chdr));
-	chdr->c_seghdrsize = ALIGN(sizeof(cseg));
-	chdr->c_cpusize = sizeof(md_core);
+	if (iocookie == NULL) {
+		CORE_SETMAGIC(*chdr, COREMAGIC, MID_MACHINE, 0);
+		chdr->c_hdrsize = ALIGN(sizeof(*chdr));
+		chdr->c_seghdrsize = ALIGN(sizeof(cseg));
+		chdr->c_cpusize = sizeof(md_core);
+		chdr->c_nseg++;
+		return 0;
+	}
 
 	/* Save integer registers. */
 	error = process_read_regs(l, &md_core.intreg);
 	if (error)
 		return error;
 
-
 	CORE_SETMAGIC(cseg, CORESEGMAGIC, MID_MACHINE, CORE_CPU);
 	cseg.c_addr = 0;
 	cseg.c_size = chdr->c_cpusize;
 
-	error = vn_rdwr(UIO_WRITE, vp, (caddr_t)&cseg, chdr->c_seghdrsize,
-	    (off_t)chdr->c_hdrsize, UIO_SYSSPACE, IO_NODELOCKED|IO_UNIT, cred,
-	    (int *)0, NULL);
+	error = coredump_write(iocookie, UIO_SYSSPACE, &cseg,
+	    chdr->c_seghdrsize);
 	if (error)
 		return error;
 
-	error = vn_rdwr(UIO_WRITE, vp, (caddr_t)&md_core, sizeof(md_core),
-	    (off_t)(chdr->c_hdrsize + chdr->c_seghdrsize), UIO_SYSSPACE,
-	    IO_NODELOCKED|IO_UNIT, cred, (int *)0, NULL);
-	if (error)
-		return error;
-
-	chdr->c_nseg++;
-	return 0;
+	return coredump_write(iocookie, UIO_SYSSPACE, &md_core,
+	    sizeof(md_core));
 }
 
 /*
@@ -383,10 +380,11 @@ vmapbuf(struct buf *bp, vsize_t len)
 
 	if ((bp->b_flags & B_PHYS) == 0)
 		panic("vmapbuf");
-	faddr = trunc_page((vaddr_t)bp->b_saveaddr = bp->b_data);
+	bp->b_saveaddr = bp->b_data;
+	faddr = trunc_page((vaddr_t)bp->b_data);
 	off = (vaddr_t)bp->b_data - faddr;
 	len = round_page(off + len);
-	taddr= uvm_km_valloc_wait(phys_map, len);
+	taddr = uvm_km_alloc(phys_map, len, 0, UVM_KMF_VAONLY | UVM_KMF_WAITVA);
 	bp->b_data = (caddr_t)(taddr + off);
 	/*
 	 * The region is locked, so we expect that pmap_pte() will return
@@ -431,7 +429,7 @@ vunmapbuf(struct buf *bp, vsize_t len)
 	kpmap = vm_map_pmap(phys_map);
 	pmap_remove(kpmap, addr, addr + len);
 	pmap_update(kpmap);
-	uvm_km_free_wakeup(phys_map, addr, len);
+	uvm_km_free(phys_map, addr, len, UVM_KMF_VAONLY);
 	bp->b_data = bp->b_saveaddr;
 	bp->b_saveaddr = 0;
 }

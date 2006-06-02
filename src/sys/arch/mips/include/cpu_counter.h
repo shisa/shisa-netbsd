@@ -1,4 +1,4 @@
-/*	$NetBSD: cpu_counter.h,v 1.1 2003/02/05 13:57:54 nakayama Exp $	*/
+/*	$NetBSD: cpu_counter.h,v 1.3 2006/02/16 20:17:14 perry Exp $	*/
 
 /*
  * Copyright (c) 2000 Soren S. Jorvang.  All rights reserved.

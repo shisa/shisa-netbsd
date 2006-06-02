@@ -1,4 +1,4 @@
-/*	$NetBSD: siop.c,v 1.78.2.1 2005/11/21 20:55:44 tron Exp $	*/
+/*	$NetBSD: siop.c,v 1.80 2005/12/24 23:41:33 perry Exp $	*/
 
 /*
  * Copyright (c) 2000 Manuel Bouyer.
@@ -33,7 +33,7 @@
 /* SYM53c7/8xx PCI-SCSI I/O Processors driver */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: siop.c,v 1.78.2.1 2005/11/21 20:55:44 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: siop.c,v 1.80 2005/12/24 23:41:33 perry Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -114,8 +114,8 @@ void siop_printstats(void);
 #define INCSTAT(x)
 #endif
 
-static __inline__ void siop_script_sync(struct siop_softc *, int);
-static __inline__ void
+static inline void siop_script_sync(struct siop_softc *, int);
+static inline void
 siop_script_sync(sc, ops)
 	struct siop_softc *sc;
 	int ops;
@@ -125,8 +125,8 @@ siop_script_sync(sc, ops)
 		    PAGE_SIZE, ops);
 }
 
-static __inline__ u_int32_t siop_script_read(struct siop_softc *, u_int);
-static __inline__ u_int32_t
+static inline u_int32_t siop_script_read(struct siop_softc *, u_int);
+static inline u_int32_t
 siop_script_read(sc, offset)
 	struct siop_softc *sc;
 	u_int offset;
@@ -139,9 +139,9 @@ siop_script_read(sc, offset)
 	}
 }
 
-static __inline__ void siop_script_write(struct siop_softc *, u_int,
+static inline void siop_script_write(struct siop_softc *, u_int,
 	u_int32_t);
-static __inline__ void
+static inline void
 siop_script_write(sc, offset, val)
 	struct siop_softc *sc;
 	u_int offset;

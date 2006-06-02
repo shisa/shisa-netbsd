@@ -1,4 +1,4 @@
-/*	$NetBSD: machdep.c,v 1.80 2005/02/06 02:56:15 tsutsui Exp $	*/
+/*	$NetBSD: machdep.c,v 1.83 2006/04/09 01:18:14 tsutsui Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -76,7 +76,7 @@
 
 #include <sys/cdefs.h>			/* RCS ID & Copyright macro defns */
 
-__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.80 2005/02/06 02:56:15 tsutsui Exp $");
+__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.83 2006/04/09 01:18:14 tsutsui Exp $");
 
 /* from: Utah Hdr: machdep.c 1.63 91/04/24 */
 
@@ -140,9 +140,6 @@ __KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.80 2005/02/06 02:56:15 tsutsui Exp $")
 #include <dev/cons.h>
 
 #include "ksyms.h"
-
-/* the following is used externally (sysctl_hw) */
-extern char cpu_model[];
 
 /* Our exported CPU info; we can have only one. */
 struct cpu_info cpu_info_store;
@@ -485,7 +482,7 @@ cpu_startup(void)
 	/*
 	 * Good {morning,afternoon,evening,night}.
 	 */
-	printf(version);
+	printf("%s%s", copyright, version);
 	format_bytes(pbuf, sizeof(pbuf), ctob(physmem));
 	printf("total memory = %s\n", pbuf);
 

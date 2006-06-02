@@ -1,4 +1,4 @@
-/*	$NetBSD: str2val.c,v 1.1.1.2.2.2 2005/11/21 21:12:31 tron Exp $	*/
+/*	$NetBSD: str2val.c,v 1.3 2005/11/21 14:20:29 manu Exp $	*/
 
 /*	$KAME: str2val.c,v 1.11 2001/08/16 14:37:29 itojun Exp $	*/
 

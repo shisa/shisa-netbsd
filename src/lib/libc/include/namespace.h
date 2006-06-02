@@ -1,4 +1,4 @@
-/*	$NetBSD: namespace.h,v 1.98.2.1 2005/07/11 21:22:21 tron Exp $	*/
+/*	$NetBSD: namespace.h,v 1.116 2006/05/05 00:03:21 rpaulo Exp $	*/
 
 /*-
  * Copyright (c) 1997-2004 The NetBSD Foundation, Inc.
@@ -38,6 +38,7 @@
 
 #include <sys/cdefs.h>
 
+#ifndef __lint__
 #define brk		_brk
 #define catclose	_catclose
 #define catgets		_catgets
@@ -47,18 +48,22 @@
 #define errx		_errx
 #ifdef _REENTRANT
 #define fileno		_fileno
-#endif
+#endif /* _REENTRANT */
 #define fork		_fork
 #define fseeko		_fseeko
 #define ftello		_ftello
 #define getcontext	_getcontext
+#define getenv_r	_getenv_r
 #define inet_aton	_inet_aton
 #define inet_pton	_inet_pton
 #define pipe		_pipe
 #define sbrk		_sbrk
+#define strerror_r	_strerror_r
 #define strlcat		_strlcat
 #define strlcpy		_strlcpy
+#define strtof		_strtof
 #define strtoimax	_strtoimax
+#define strtold		_strtold
 #define strtoll		_strtoll
 #define strtoull	_strtoull
 #define strtoumax	_strtoumax
@@ -75,17 +80,33 @@
 #define warnx		_warnx
 
 #ifdef __weak_alias
+#define MD2Data			_MD2Data
+#define MD2End			_MD2End
+#define MD2FileChunk		_MD2FileChunk
+#define MD2File			_MD2File
 #define MD2Final		_MD2Final
 #define MD2Init			_MD2Init
+#define MD2Transform		_MD2Transform
 #define MD2Update		_MD2Update
+#define MD4Data			_MD4Data
+#define MD4End			_MD4End
+#define MD4FileChunk		_MD4FileChunk
+#define MD4File			_MD4File
 #define MD4Final		_MD4Final
 #define MD4Init			_MD4Init
+#define MD4Transform		_MD4Transform
 #define MD4Update		_MD4Update
+#define MD5Data			_MD5Data
+#define MD5End			_MD5End
+#define MD5FileChunk		_MD5FileChunk
+#define MD5File			_MD5File
 #define MD5Final		_MD5Final
 #define MD5Init			_MD5Init
+#define MD5Transform		_MD5Transform
 #define MD5Update		_MD5Update
 #define RMD160Data		_RMD160Data
 #define RMD160End		_RMD160End
+#define RMD160FileChunk		_RMD160FileChunk
 #define RMD160File		_RMD160File
 #define RMD160Final		_RMD160Final
 #define RMD160Init		_RMD160Init
@@ -93,11 +114,36 @@
 #define RMD160Update		_RMD160Update
 #define SHA1Data		_SHA1Data
 #define SHA1End			_SHA1End
+#define SHA1FileChunk		_SHA1FileChunk
 #define SHA1File		_SHA1File
 #define SHA1Final		_SHA1Final
 #define SHA1Init		_SHA1Init
 #define SHA1Transform		_SHA1Transform
 #define SHA1Update		_SHA1Update
+#define SHA256_Data		_SHA256_Data
+#define SHA256_End		_SHA256_End
+#define SHA256_FileChunk	_SHA256_FileChunk
+#define SHA256_File		_SHA256_File
+#define SHA256_Final		_SHA256_Final
+#define SHA256_Init		_SHA256_Init
+#define SHA256_Transform	_SHA256_Transform
+#define SHA256_Update		_SHA256_Update
+#define SHA384_Data		_SHA384_Data
+#define SHA384_End		_SHA384_End
+#define SHA384_FileChunk	_SHA384_FileChunk
+#define SHA384_File		_SHA384_File
+#define SHA384_Final		_SHA384_Final
+#define SHA384_Init		_SHA384_Init
+#define SHA384_Transform	_SHA384_Transform
+#define SHA384_Update		_SHA384_Update
+#define SHA512_Data		_SHA512_Data
+#define SHA512_End		_SHA512_End
+#define SHA512_FileChunk	_SHA512_FileChunk
+#define SHA512_File		_SHA512_File
+#define SHA512_Final		_SHA512_Final
+#define SHA512_Init		_SHA512_Init
+#define SHA512_Transform	_SHA512_Transform
+#define SHA512_Update		_SHA512_Update
 #define a64l			_a64l
 #define adjtime			_adjtime
 #define alarm			_alarm
@@ -190,6 +236,7 @@
 #define execvp			_execvp
 #define fdopen			_fdopen
 #define fgetln			_fgetln
+#define fgetwln			_fgetwln
 #define fhstatvfs		_fhstatvfs
 #define flockfile		_flockfile
 #define ftrylockfile		_ftrylockfile
@@ -308,6 +355,7 @@
 #define if_nametoindex		_if_nametoindex
 #define in6addr_any		_in6addr_any
 #define in6addr_linklocal_allnodes	_in6addr_linklocal_allnodes
+#define in6addr_linklocal_allrouters	_in6addr_linklocal_allrouters
 #define in6addr_loopback	_in6addr_loopback
 #define in6addr_nodelocal_allnodes	_in6addr_nodelocal_allnodes
 #define inet6_option_alloc	_inet6_option_alloc
@@ -316,6 +364,13 @@
 #define inet6_option_init	_inet6_option_init
 #define inet6_option_next	_inet6_option_next
 #define inet6_option_space	_inet6_option_space
+#define inet6_opt_init		_inet6_opt_init
+#define inet6_opt_append	_inet6_opt_append
+#define inet6_opt_finish	_inet6_opt_finish
+#define inet6_opt_set_val	_inet6_opt_set_val
+#define inet6_opt_next		_inet6_opt_next
+#define inet6_opt_find		_inet6_opt_find
+#define inet6_opt_get_val	_inet6_opt_get_val
 #define inet6_rthdr_add		_inet6_rthdr_add
 #define inet6_rthdr_getaddr	_inet6_rthdr_getaddr
 #define inet6_rthdr_getflags	_inet6_rthdr_getflags
@@ -323,6 +378,12 @@
 #define inet6_rthdr_lasthop	_inet6_rthdr_lasthop
 #define inet6_rthdr_segments	_inet6_rthdr_segments
 #define inet6_rthdr_space	_inet6_rthdr_space
+#define inet6_rth_space		_inet6_rth_space
+#define inet6_rth_init		_inet6_rth_init
+#define inet6_rth_add		_inet6_rth_add
+#define inet6_rth_reverse	_inet6_rth_reverse
+#define inet6_rth_segments	_inet6_rth_segments
+#define inet6_rth_getaddr	_inet6_rth_getaddr
 #define inet_cidr_ntop		_inet_cidr_ntop
 #define inet_cidr_pton		_inet_cidr_pton
 #define inet_lnaof		_inet_lnaof
@@ -450,6 +511,7 @@
 #define setservent_r		_setservent_r
 #define setstate		_setstate
 #define setttyent		_setttyent
+#define setttyentpath		_setttyentpath
 #define settimeofday		_settimeofday
 #define setusershell		_setusershell
 #define shm_open		_shm_open
@@ -467,7 +529,7 @@
 #define sradixsort		_sradixsort
 #define srand48			_srand48
 #define srandom			_srandom
-#define statvfs			_statvfs
+#define statvfs(a, b)		_statvfs(a, b)
 #define strcasecmp		_strcasecmp
 #define strdup			_strdup
 #define strncasecmp		_strncasecmp
@@ -538,6 +600,7 @@
 #define timeoff			_timeoff
 #define times			_times
 #define ttyname			_ttyname
+#define ttyname_r		_ttyname_r
 #define ttyslot			_ttyslot
 #define tzname			_tzname
 #define tzset			_tzset
@@ -559,6 +622,9 @@
 #define wait			_wait
 #define wait3			_wait3
 #define waitpid			_waitpid
+#define wcstof			_wcstof
+#define wcstod			_wcstod
+#define wcstold			_wcstold
 #define wcwidth			_wcwidth
 #define xdr_accepted_reply	_xdr_accepted_reply
 #define xdr_array		_xdr_array
@@ -671,7 +737,30 @@
 #define dlerror			__dlerror
 #define dladdr			__dladdr
 #define fmtcheck		__fmtcheck
+
+/* rpc locks */
+#define authdes_lock		__rpc_authdes_lock
+#define authnone_lock		__rpc_authnone_lock
+#define authsvc_lock		__rpc_authsvc_lock
+#define clnt_fd_lock		__rpc_clnt_fd_lock
+#define clntraw_lock		__rpc_clntraw_lock
+#define dname_lock		__rpc_dname_lock
+#define dupreq_lock		__rpc_dupreq_lock
+#define keyserv_lock		__rpc_keyserv_lock
+#define libnsl_trace_lock	__rpc_libnsl_trace_lock
+#define loopnconf_lock		__rpc_loopnconf_lock
+#define ops_lock		__rpc_ops_lock
+#define portnum_lock		__rpc_portnum_lock
+#define proglst_lock		__rpc_proglst_lock
+#define rpcbaddr_cache_lock	__rpc_rpcbaddr_cache_lock
+#define rpcsoc_lock		__rpc_rpcsoc_lock
+#define svc_fd_lock		__rpc_svc_fd_lock
+#define svc_lock		__rpc_svc_lock
+#define svcraw_lock		__rpc_svcraw_lock
+#define xprtlist_lock		__rpc_xprtlist_lock
+
 #define __learn_tree		___learn_tree
 #endif /* __weak_alias */
+#endif /* !__lint__ */
 
 #endif /* _NAMESPACE_H_ */

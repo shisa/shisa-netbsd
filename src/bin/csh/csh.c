@@ -1,4 +1,4 @@
-/* $NetBSD: csh.c,v 1.35 2004/08/19 22:31:38 christos Exp $ */
+/* $NetBSD: csh.c,v 1.37 2006/04/24 19:00:29 snj Exp $ */
 
 /*-
  * Copyright (c) 1980, 1991, 1993
@@ -39,7 +39,7 @@ __COPYRIGHT("@(#) Copyright (c) 1980, 1991, 1993\n\
 #if 0
 static char sccsid[] = "@(#)csh.c	8.2 (Berkeley) 10/12/93";
 #else
-__RCSID("$NetBSD: csh.c,v 1.35 2004/08/19 22:31:38 christos Exp $");
+__RCSID("$NetBSD: csh.c,v 1.37 2006/04/24 19:00:29 snj Exp $");
 #endif
 #endif /* not lint */
 
@@ -98,7 +98,7 @@ static fpos_t seekf(void *, fpos_t, int);
 static int writef(void *, const char *, int);
 static int closef(void *);
 static int srccat(Char *, Char *);
-static int srcfile(char *, bool, bool);
+static int srcfile(const char *, bool, bool);
 static void phup(int);
 static void srcunit(int, bool, bool);
 static void mailchk(void);
@@ -645,7 +645,7 @@ srccat(Char *cp, Char *dp)
  * Source to a file putting the file descriptor in a safe place (> 2).
  */
 static int
-srcfile(char *f, bool onlyown, bool flag)
+srcfile(const char *f, bool onlyown, bool flag)
 {
     int unit;
 
@@ -889,7 +889,7 @@ phup(int sig)
 	    do
 		/*
 		 * If a process is in the foreground; we try to kill
-		 * it's process group. If we succeed, then the 
+		 * its process group. If we succeed, then the 
 		 * whole job is gone. Otherwise we keep going...
 		 * But avoid sending HUP to the shell again.
 		 */

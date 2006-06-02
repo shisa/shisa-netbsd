@@ -1,4 +1,4 @@
-/*	$NetBSD: ventel.c,v 1.12 2004/11/04 07:29:09 dsl Exp $	*/
+/*	$NetBSD: ventel.c,v 1.14 2006/04/03 02:25:27 perry Exp $	*/
 
 /*
  * Copyright (c) 1983, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)ventel.c	8.1 (Berkeley) 6/6/93";
 #endif
-__RCSID("$NetBSD: ventel.c,v 1.12 2004/11/04 07:29:09 dsl Exp $");
+__RCSID("$NetBSD: ventel.c,v 1.14 2006/04/03 02:25:27 perry Exp $");
 #endif /* not lint */
 
 /*
@@ -48,10 +48,10 @@ __RCSID("$NetBSD: ventel.c,v 1.12 2004/11/04 07:29:09 dsl Exp $");
 static	int timeout = 0;
 static	jmp_buf timeoutbuf;
 
-static	void	echo __P((const char *));
-static	int	gobble __P((char, char *));
-static	void	sigALRM __P((int));
-static	int	vensync __P((int));
+static	void	echo(const char *);
+static	int	gobble(char, char *);
+static	void	sigALRM(int);
+static	int	vensync(int);
 
 /*
  * some sleep calls have been replaced by usleep(DELAYUS)
@@ -61,9 +61,7 @@ static	int	vensync __P((int));
 #define	DELAYUS		100000		/* delay in microseconds */
 
 int
-ven_dialer(num, acu)
-	char *num;
-	char *acu;
+ven_dialer(char *num, char *acu)
 {
 	char *cp;
 	int connected = 0;
@@ -75,9 +73,6 @@ ven_dialer(num, acu)
 	 */
 	if (!vensync(FD)) {
 		printf("can't synchronize with ventel\n");
-#ifdef ACULOG
-		logent(value(HOST), num, "ventel", "can't synch up");
-#endif
 		return (0);
 	}
 	if (boolean(value(VERBOSE)))
@@ -97,13 +92,6 @@ ven_dialer(num, acu)
 	if (gobble('\n', line))
 		connected = gobble('!', line);
 	tcflush(FD, TCIOFLUSH);
-#ifdef ACULOG
-	if (timeout) {
-		(void)snprintf(line, sizeof line, "%d second dial timeout",
-			(int)number(value(DIALTIMEOUT)));
-		logent(value(HOST), num, "ventel", line);
-	}
-#endif
 	if (timeout)
 		ven_disconnect();	/* insurance */
 	if (connected || timeout || !boolean(value(VERBOSE)))
@@ -130,14 +118,14 @@ ven_dialer(num, acu)
 }
 
 void
-ven_disconnect()
+ven_disconnect(void)
 {
 
 	close(FD);
 }
 
 void
-ven_abort()
+ven_abort(void)
 {
 
 	write(FD, "\03", 1);
@@ -145,8 +133,7 @@ ven_abort()
 }
 
 static void
-echo(s)
-	const char *s;
+echo(const char *s)
 {
 	char c;
 
@@ -169,8 +156,7 @@ echo(s)
 }
 
 static void
-sigALRM(dummy)
-	int dummy;
+sigALRM(int dummy)
 {
 
 	printf("\07timeout waiting for reply\n");
@@ -179,9 +165,7 @@ sigALRM(dummy)
 }
 
 static int
-gobble(match, response)
-	char match;
-	char response[];
+gobble(char match, char response[])
 {
 	char *cp = response;
 	sig_t f;
@@ -220,8 +204,7 @@ gobble(match, response)
  * there are gory ways to simulate this.
  */
 static int
-vensync(fd)
-	int fd;
+vensync(int fd)
 {
 	int already = 0, nread;
 	char buf[60];

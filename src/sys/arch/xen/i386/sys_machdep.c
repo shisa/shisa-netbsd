@@ -1,4 +1,4 @@
-/*	$NetBSD: sys_machdep.c,v 1.2 2005/03/09 22:39:20 bouyer Exp $	*/
+/*	$NetBSD: sys_machdep.c,v 1.6 2006/05/14 21:57:13 elad Exp $	*/
 /*	NetBSD: sys_machdep.c,v 1.70 2003/10/27 14:11:47 junyoung Exp 	*/
 
 /*-
@@ -38,13 +38,14 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: sys_machdep.c,v 1.2 2005/03/09 22:39:20 bouyer Exp $");
+__KERNEL_RCSID(0, "$NetBSD: sys_machdep.c,v 1.6 2006/05/14 21:57:13 elad Exp $");
 
 #include "opt_compat_netbsd.h"
 #include "opt_mtrr.h"
 #include "opt_perfctrs.h"
 #include "opt_user_ldt.h"
 #include "opt_vm86.h"
+#include "opt_xen.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -58,6 +59,7 @@ __KERNEL_RCSID(0, "$NetBSD: sys_machdep.c,v 1.2 2005/03/09 22:39:20 bouyer Exp $
 #include <sys/buf.h>
 #include <sys/signal.h>
 #include <sys/malloc.h>
+#include <sys/kauth.h>
 
 #include <sys/mount.h>
 #include <sys/sa.h>
@@ -283,7 +285,7 @@ i386_set_ldt(l, args, retval)
 
 		simple_unlock(&pmap->pm_lock);
 		new_ldt = (union descriptor *)uvm_km_alloc(kernel_map,
-		    new_len);
+		    new_len, 0, UVM_KMF_WIRED);
 		simple_lock(&pmap->pm_lock);
 
 		if (pmap->pm_ldt != NULL && ldt_len <= pmap->pm_ldt_len) {
@@ -295,7 +297,8 @@ i386_set_ldt(l, args, retval)
 			 * hey.. not our problem if user applications
 			 * have race conditions like that.
 			 */
-			uvm_km_free(kernel_map, (vaddr_t)new_ldt, new_len);
+			uvm_km_free(kernel_map, (vaddr_t)new_ldt, new_len,
+			    UVM_KMF_WIRED);
 			goto copy;
 		}
 
@@ -312,7 +315,8 @@ i386_set_ldt(l, args, retval)
 		memset((caddr_t)new_ldt + old_len, 0, new_len - old_len);
 
 		if (old_ldt != ldt)
-			uvm_km_free(kernel_map, (vaddr_t)old_ldt, old_len);
+			uvm_km_free(kernel_map, (vaddr_t)old_ldt, old_len,
+			    UVM_KMF_WIRED);
 
 		pmap->pm_ldt = new_ldt;
 		pmap->pm_ldt_len = ldt_len;
@@ -352,7 +356,6 @@ i386_iopl(l, args, retval)
 	struct proc *p = l->l_proc;
 	struct pcb *pcb = &l->l_addr->u_pcb;
 	struct i386_iopl_args ua;
-	dom0_op_t op;
 
 	if ((xen_start_info.flags & SIF_PRIVILEGED) == 0)
 		return EPERM;
@@ -360,7 +363,7 @@ i386_iopl(l, args, retval)
 	if (securelevel > 1)
 		return EPERM;
 
-	if ((error = suser(p->p_ucred, &p->p_acflag)) != 0)
+	if ((error = kauth_authorize_generic(p->p_cred, KAUTH_GENERIC_ISSUSER, &p->p_acflag)) != 0)
 		return error;
 
 	if ((error = copyin(args, &ua, sizeof(ua))) != 0)
@@ -373,10 +376,22 @@ i386_iopl(l, args, retval)
 		pcb->pcb_tss.tss_ioopt |= SEL_KPL; /* i/o pl */
 
 	/* Force the change at ring 0. */
-	op.cmd = DOM0_IOPL;
-	op.u.iopl.domain = DOMID_SELF;
-	op.u.iopl.iopl = pcb->pcb_tss.tss_ioopt & SEL_RPL; /* i/o pl */
-	HYPERVISOR_dom0_op(&op);
+#ifdef XEN3
+	{
+		struct physdev_op physop;
+		physop.cmd = PHYSDEVOP_SET_IOPL;
+		physop.u.set_iopl.iopl = pcb->pcb_tss.tss_ioopt & SEL_RPL;
+		HYPERVISOR_physdev_op(&physop);
+	}
+#else
+	{
+		dom0_op_t op;
+		op.cmd = DOM0_IOPL;
+		op.u.iopl.domain = DOMID_SELF;
+		op.u.iopl.iopl = pcb->pcb_tss.tss_ioopt & SEL_RPL; /* i/o pl */
+		HYPERVISOR_dom0_op(&op);
+	}
+#endif
 
 	return 0;
 }
@@ -411,7 +426,7 @@ i386_set_ioperm(l, args, retval)
 	if (securelevel > 1)
 		return EPERM;
 
-	if ((error = suser(p->p_ucred, &p->p_acflag)) != 0)
+	if ((error = kauth_authorize_generic(p->p_cred, KAUTH_GENERIC_ISSUSER, &p->p_acflag)) != 0)
 		return error;
 
 	if ((error = copyin(args, &ua, sizeof(ua))) != 0)
@@ -456,7 +471,7 @@ i386_set_mtrr(struct lwp *l, void *args, register_t *retval)
 	if (mtrr_funcs == NULL)
 		return ENOSYS;
 
-	error = suser(p->p_ucred, &p->p_acflag);
+	error = kauth_authorize_generic(p->p_cred, KAUTH_GENERIC_ISSUSER, &p->p_acflag);
 	if (error != 0)
 		return error;
 

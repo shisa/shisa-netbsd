@@ -1,4 +1,4 @@
-/*	$NetBSD: auth2-chall.c,v 1.14 2005/02/13 18:14:04 christos Exp $	*/
+/*	$NetBSD: auth2-chall.c,v 1.17 2006/02/04 22:32:13 christos Exp $	*/
 /*
  * Copyright (c) 2001 Markus Friedl.  All rights reserved.
  * Copyright (c) 2001 Per Allansson.  All rights reserved.
@@ -24,8 +24,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include "includes.h"
-RCSID("$OpenBSD: auth2-chall.c,v 1.21 2004/06/01 14:20:45 dtucker Exp $");
-__RCSID("$NetBSD: auth2-chall.c,v 1.14 2005/02/13 18:14:04 christos Exp $");
+RCSID("$OpenBSD: auth2-chall.c,v 1.24 2005/07/17 07:17:54 djm Exp $");
+__RCSID("$NetBSD: auth2-chall.c,v 1.17 2006/02/04 22:32:13 christos Exp $");
 
 #include "ssh2.h"
 #include "auth.h"
@@ -34,6 +34,10 @@ __RCSID("$NetBSD: auth2-chall.c,v 1.14 2005/02/13 18:14:04 christos Exp $");
 #include "xmalloc.h"
 #include "dispatch.h"
 #include "log.h"
+#include "servconf.h"
+
+/* import */    
+extern ServerOptions options;
 
 static int auth2_challenge_start(Authctxt *);
 static int send_userauth_info_request(Authctxt *);
@@ -73,12 +77,33 @@ struct KbdintAuthctxt
 	u_int nreq;
 };
 
+#ifdef USE_PAM
+void remove_kbdint_device(const char *);
+void
+remove_kbdint_device(const char *devname)
+{
+	int i, j;
+
+	for (i = 0; devices[i] != NULL; i++)
+		if (strcmp(devices[i]->name, devname) == 0) {
+			for (j = i; devices[j] != NULL; j++)
+				devices[j] = devices[j+1];
+			i--;
+		}
+}
+#endif
+
 static KbdintAuthctxt *
 kbdint_alloc(const char *devs)
 {
 	KbdintAuthctxt *kbdintctxt;
 	Buffer b;
 	int i;
+
+#ifdef USE_PAM
+	if (!options.use_pam)
+		remove_kbdint_device("pam");
+#endif
 
 	kbdintctxt = xmalloc(sizeof(KbdintAuthctxt));
 	if (strcmp(devs, "") == 0) {
@@ -145,7 +170,7 @@ kbdint_next_device(KbdintAuthctxt *kbdintctxt)
 		kbdintctxt->devices = t[len] ? xstrdup(t+len+1) : NULL;
 		xfree(t);
 		debug2("kbdint_next_device: devices %s", kbdintctxt->devices ?
-		   kbdintctxt->devices : "<empty>");
+		    kbdintctxt->devices : "<empty>");
 	} while (kbdintctxt->devices && !kbdintctxt->device);
 
 	return kbdintctxt->device ? 1 : 0;
@@ -217,8 +242,7 @@ send_userauth_info_request(Authctxt *authctxt)
 {
 	KbdintAuthctxt *kbdintctxt;
 	char *name, *instr, **prompts;
-	int i;
-	u_int *echo_on;
+	u_int i, *echo_on;
 
 	kbdintctxt = authctxt->kbdintctxt;
 	if (kbdintctxt->device->query(kbdintctxt->ctxt,
@@ -251,8 +275,8 @@ input_userauth_info_response(int type, u_int32_t seq, void *ctxt)
 {
 	Authctxt *authctxt = ctxt;
 	KbdintAuthctxt *kbdintctxt;
-	int i, authenticated = 0, res, len;
-	u_int nresp;
+	int authenticated = 0, res, len;
+	u_int i, nresp;
 	char **response = NULL, *method;
 
 	if (authctxt == NULL)
@@ -276,12 +300,7 @@ input_userauth_info_response(int type, u_int32_t seq, void *ctxt)
 	}
 	packet_check_eom();
 
-	if (authctxt->valid) {
-		res = kbdintctxt->device->respond(kbdintctxt->ctxt,
-		    nresp, response);
-	} else {
-		res = -1;
-	}
+	res = kbdintctxt->device->respond(kbdintctxt->ctxt, nresp, response);
 
 	for (i = 0; i < nresp; i++) {
 		memset(response[i], 'r', strlen(response[i]));
@@ -293,7 +312,7 @@ input_userauth_info_response(int type, u_int32_t seq, void *ctxt)
 	switch (res) {
 	case 0:
 		/* Success! */
-		authenticated = 1;
+		authenticated = authctxt->valid ? 1 : 0;
 		break;
 	case 1:
 		/* Authentication needs further interaction */
@@ -332,23 +351,21 @@ privsep_challenge_enable(void)
 #endif
 #ifdef BSD_AUTH
 	extern KbdintDevice mm_bsdauth_device;
-#else
+#endif
 #ifdef USE_PAM
 	extern KbdintDevice mm_sshpam_device;
 #endif
 #ifdef SKEY
 	extern KbdintDevice mm_skey_device;
 #endif
-#endif
 	/* As long as SSHv1 has devices[0] hard coded this is fine */
 #ifdef BSD_AUTH
 	devices[n++] = &mm_bsdauth_device;
-#else
+#endif
 #ifdef USE_PAM
 	devices[n++] = &mm_sshpam_device;
 #endif
 #ifdef SKEY
 	devices[n++] = &mm_skey_device;
-#endif
 #endif
 }

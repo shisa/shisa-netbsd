@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.5.6.1 2005/09/12 12:26:27 tron Exp $
+#	$NetBSD: Makefile,v 1.6 2005/08/26 03:19:14 elad Exp $
 
 HOSTPROGNAME=	${_TOOL_PREFIX}mtree
 HOST_SRCDIR=	usr.sbin/mtree

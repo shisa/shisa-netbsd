@@ -1,4 +1,4 @@
-/* $NetBSD: expr.y,v 1.31 2004/04/20 19:44:51 jdolecek Exp $ */
+/* $NetBSD: expr.y,v 1.33 2006/03/17 14:43:11 rumble Exp $ */
 
 /*_
  * Copyright (c) 2000 The NetBSD Foundation, Inc.
@@ -38,7 +38,7 @@
 %{
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: expr.y,v 1.31 2004/04/20 19:44:51 jdolecek Exp $");
+__RCSID("$NetBSD: expr.y,v 1.33 2006/03/17 14:43:11 rumble Exp $");
 #endif /* not lint */
 
 #include <sys/types.h>
@@ -136,6 +136,8 @@ expr:	item { $$ = $1; }
 				(void) asprintf(&val, "%d",
 					(int)(rm[0].rm_eo - rm[0].rm_so));
 			}
+			if (val == NULL)
+				err(1, NULL);
 			$$ = val;
 		} else {
 			if (rp.re_nsub == 0) {
@@ -153,6 +155,8 @@ expr:	item { $$ = $1; }
 		
 		res = perform_arith_op($1, $2, $3);
 		(void) asprintf(&val, "%lld", (long long int) res);
+		if (val == NULL)
+			err(1, NULL);
 		$$ = val;
                 }
 
@@ -166,6 +170,8 @@ expr:	item { $$ = $1; }
 
 		res = perform_arith_op($1, $2, $3);
 		(void) asprintf(&val, "%lld", (long long int) res);
+		if (val == NULL)
+			err(1, NULL);
 		$$ = val;
 
 		}
@@ -180,6 +186,8 @@ expr:	item { $$ = $1; }
 
 		int64_t l, r;
 		int res;
+
+		res = 0;
 
 		/*
 		 * Slight hack to avoid differences in the compare code
@@ -227,6 +235,8 @@ expr:	item { $$ = $1; }
 		char *ln;
 
 		asprintf(&ln, "%ld", (long) strlen($2));
+		if (ln == NULL)
+			err(1, NULL);
 		$$ = ln;
 		}
 	;
@@ -273,6 +283,8 @@ perform_arith_op(const char *left, const char *op, const char *right)
 {
 	int64_t res, sign, l, r;
 	u_int64_t temp;
+
+	res = 0;
 
 	if (!is_integer(left)) {
 		yyerror("non-integer argument '%s'", left);

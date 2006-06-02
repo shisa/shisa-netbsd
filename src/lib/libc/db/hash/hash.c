@@ -1,4 +1,4 @@
-/*	$NetBSD: hash.c,v 1.20.2.1 2005/03/30 10:26:40 tron Exp $	*/
+/*	$NetBSD: hash.c,v 1.26 2006/03/19 03:36:28 rtr Exp $	*/
 
 /*-
  * Copyright (c) 1990, 1993, 1994
@@ -37,7 +37,7 @@
 #if 0
 static char sccsid[] = "@(#)hash.c	8.9 (Berkeley) 6/16/94";
 #else
-__RCSID("$NetBSD: hash.c,v 1.20.2.1 2005/03/30 10:26:40 tron Exp $");
+__RCSID("$NetBSD: hash.c,v 1.26 2006/03/19 03:36:28 rtr Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
@@ -551,8 +551,7 @@ hash_get(dbp, key, data, flag)
 		hashp->err = errno = EINVAL;
 		return (ERROR);
 	}
-	/* LINTED const castaway */
-	return (hash_access(hashp, HASH_GET, (DBT *)key, data));
+	return (hash_access(hashp, HASH_GET, __UNCONST(key), data));
 }
 
 static int
@@ -575,7 +574,7 @@ hash_put(dbp, key, data, flag)
 	}
 	/* LINTED const castaway */
 	return (hash_access(hashp, flag == R_NOOVERWRITE ?
-	    HASH_PUTNEW : HASH_PUT, (DBT *)key, (DBT *)data));
+	    HASH_PUTNEW : HASH_PUT, __UNCONST(key), __UNCONST(data)));
 }
 
 static int
@@ -595,8 +594,7 @@ hash_delete(dbp, key, flag)
 		hashp->err = errno = EPERM;
 		return (ERROR);
 	}
-	/* LINTED const castaway */
-	return (hash_access(hashp, HASH_DELETE, (DBT *)key, NULL));
+	return hash_access(hashp, HASH_DELETE, __UNCONST(key), NULL);
 }
 
 /*
@@ -740,7 +738,7 @@ hash_seq(dbp, key, data, flag)
 	u_int32_t flag;
 {
 	register u_int32_t bucket;
-	register BUFHEAD *bufp;
+	register BUFHEAD *bufp = NULL; /* XXX: gcc */
 	HTAB *hashp;
 	u_int16_t *bp, ndx;
 
@@ -802,6 +800,8 @@ hash_seq(dbp, key, data, flag)
 		if (__big_keydata(hashp, bufp, key, data, 1))
 			return (ERROR);
 	} else {
+		if (hashp->cpage == NULL)
+			return (ERROR);
 		key->data = (u_char *)hashp->cpage->page + bp[ndx];
 		key->size = (ndx > 1 ? bp[ndx - 1] : hashp->BSIZE) - bp[ndx];
 		data->data = (u_char *)hashp->cpage->page + bp[ndx + 1];
@@ -933,16 +933,18 @@ alloc_segs(hashp, nsegs)
 		errno = save_errno;
 		return (-1);
 	}
+	hashp->nsegs = nsegs;
+	if (nsegs == 0)
+		return 0;
 	/* Allocate segments */
-	if ((store =
-	    (SEGMENT)calloc((size_t)(nsegs << hashp->SSHIFT),
+	if ((store = (SEGMENT)calloc((size_t)(nsegs << hashp->SSHIFT),
 	    sizeof(SEGMENT))) == NULL) {
 		save_errno = errno;
 		(void)hdestroy(hashp);
 		errno = save_errno;
 		return (-1);
 	}
-	for (i = 0; i < nsegs; i++, hashp->nsegs++)
+	for (i = 0; i < nsegs; i++)
 		hashp->dir[i] = &store[i << hashp->SSHIFT];
 	return (0);
 }

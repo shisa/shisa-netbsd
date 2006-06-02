@@ -1,4 +1,4 @@
-/*	$NetBSD: machdep.c,v 1.36 2005/01/22 15:36:09 chs Exp $	*/
+/*	$NetBSD: machdep.c,v 1.41 2005/12/24 20:07:41 perry Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1990, 1993
@@ -160,7 +160,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.36 2005/01/22 15:36:09 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.41 2005/12/24 20:07:41 perry Exp $");
 
 #include "opt_ddb.h"
 #include "opt_kgdb.h"
@@ -235,6 +235,8 @@ __KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.36 2005/01/22 15:36:09 chs Exp $");
 extern char kernel_text[];
 /* Defined by the linker */
 extern char etext[];
+/* Defined in vfs_bio.c */
+extern u_int bufpages;
 
 /* Our exported CPU info; we can have only one. */  
 struct cpu_info cpu_info_store;
@@ -257,7 +259,7 @@ vaddr_t vmmap;
 int	safepri = PSL_LOWIPL;
 
 /* Soft copy of the enable register. */
-__volatile u_short enable_reg_soft = ENABLE_REG_SOFT_UNDEF;
+volatile u_short enable_reg_soft = ENABLE_REG_SOFT_UNDEF;
 
 /*
  * Our no-fault fault handler.
@@ -315,7 +317,7 @@ cpu_startup(void)
 	/*
 	 * Good {morning,afternoon,evening,night}.
 	 */
-	printf(version);
+	printf("%s%s", copyright, version);
 	identifycpu();
 	fputype = FPU_NONE;
 #ifdef  FPU_EMULATE
@@ -338,7 +340,8 @@ cpu_startup(void)
 	/*
 	 * Get scratch page for dumpsys().
 	 */
-	if ((dumppage = uvm_km_alloc(kernel_map, PAGE_SIZE)) == 0)
+	if ((dumppage = uvm_km_alloc(kernel_map, PAGE_SIZE,0, UVM_KMF_WIRED))
+	    == 0)
 		panic("startup: alloc dumppage");
 
 
@@ -371,7 +374,8 @@ cpu_startup(void)
 	 * This page is handed to pmap_enter() therefore
 	 * it has to be in the normal kernel VA range.
 	 */
-	vmmap = uvm_km_valloc_wait(kernel_map, PAGE_SIZE);
+	vmmap = uvm_km_alloc(kernel_map, PAGE_SIZE, 0,
+	    UVM_KMF_VAONLY | UVM_KMF_WAITVA);
 
 	/*
 	 * Allocate DMA map for devices on the bus.
@@ -822,7 +826,7 @@ initcpu(void)
  * understand and, if so, set up the vmcmds for it.
  */
 int 
-cpu_exec_aout_makecmds(struct proc *p, struct exec_package *epp)
+cpu_exec_aout_makecmds(struct lwp *l, struct exec_package *epp)
 {
 	return ENOEXEC;
 }

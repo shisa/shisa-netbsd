@@ -1,4 +1,4 @@
-# $NetBSD: Makefile,v 1.25 2005/01/10 03:11:17 lukem Exp $
+# $NetBSD: Makefile,v 1.27 2006/05/11 23:16:28 mrg Exp $
 
 NOLINT=		# defined
 
@@ -9,6 +9,8 @@ DIST=		${NETBSDSRCDIR}/crypto/dist
 
 WARNS?=		1
 LIB=		asn1
+
+LIBDPLIBS=	com_err	${.CURDIR}/../libcom_err
 
 .if ${USETOOLS} != "yes"
 COMPILEETOBJ!=		cd ${NETBSDSRCDIR}/lib/libcom_err/compile_et && ${PRINTOBJDIR}
@@ -123,6 +125,10 @@ CLEANFILES=	${BUILT_SOURCES} ${gen_files} asn1_files krb5_asn1.h krb5_asn1.hx
 
 .if ${USETOOLS} != "yes"
 SUBDIR=	asn1_compile
+.endif
+
+.if ${HAVE_GCC} == 4
+COPTS.der_get.c+=	-Wno-pointer-sign
 .endif
 
 .include <bsd.lib.mk>

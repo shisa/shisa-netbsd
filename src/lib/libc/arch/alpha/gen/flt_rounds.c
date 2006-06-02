@@ -1,4 +1,4 @@
-/* $NetBSD: flt_rounds.c,v 1.6 2003/07/27 05:04:18 mrg Exp $ */
+/* $NetBSD: flt_rounds.c,v 1.8 2005/12/24 23:10:08 perry Exp $ */
 
 /*
  * Copyright (c) 1995 Christopher G. Demetriou
@@ -34,6 +34,11 @@
  * <<Id: LICENSE,v 1.2 2000/06/14 15:57:33 cgd Exp>>
  */
 
+#include <sys/cdefs.h>
+#if defined(LIBC_SCCS) && !defined(lint)
+__RCSID("$NetBSD: flt_rounds.c,v 1.8 2005/12/24 23:10:08 perry Exp $");
+#endif /* LIBC_SCCS and not lint */
+
 #include <sys/types.h>
 #include <machine/float.h>
 
@@ -50,9 +55,9 @@ __flt_rounds()
 	double fpcrval;
 	u_int64_t old;
 
-	__asm__("trapb");
-	__asm__("mf_fpcr %0" : "=f" (fpcrval));
-	__asm__("trapb");
+	__asm("trapb");
+	__asm("mf_fpcr %0" : "=f" (fpcrval));
+	__asm("trapb");
 	old = *(u_int64_t *)(void *)&fpcrval;
 
 	return map[(old >> 58) & 0x3];

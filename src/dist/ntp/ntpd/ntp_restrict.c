@@ -1,4 +1,4 @@
-/*	$NetBSD: ntp_restrict.c,v 1.2 2003/12/04 16:23:37 drochner Exp $	*/
+/*	$NetBSD: ntp_restrict.c,v 1.4 2006/03/21 10:28:25 kardel Exp $	*/
 
 /*
  * ntp_restrict.c - determine host restrictions
@@ -442,8 +442,13 @@ hack_restrict(
 				rl->mask = mask;
 				rl->mflags = (u_short)mflags;
 
-				rl->next = rlprev->next;
-				rlprev->next = rl;
+				if (rlprev == NULL) {
+					rl->next = restrictlist;
+					restrictlist = rl;
+				} else {
+					rl->next = rlprev->next;
+					rlprev->next = rl;
+				}
 				restrictcount++;
 			}
 			if ((rl->flags ^ (u_short)flags) &
@@ -479,7 +484,11 @@ hack_restrict(
 			if (rl != 0
 			    && rl->addr != htonl(INADDR_ANY)
 			    && !(rl->mflags & RESM_INTERFACE)) {
-				rlprev->next = rl->next;
+				if (rlprev != NULL) {
+					rlprev->next = rl->next;
+				} else {
+					restrictlist = rl->next;
+				}
 				restrictcount--;
 				if (rl->flags & RES_LIMITED) {
 					res_limited_refcnt--;
@@ -529,8 +538,13 @@ hack_restrict(
 				rl6->addr6 = addr6;
 				rl6->mask6 = mask6;
 				rl6->mflags = (u_short)mflags;
-				rl6->next = rlprev6->next;
-				rlprev6->next = rl6;
+                                if (rlprev6) {
+                                        rl6->next = rlprev6->next;
+                                        rlprev6->next = rl6;
+                                } else {
+                                        rl6->next = restrictlist6;
+                                        restrictlist6 = rl6;
+                                }
 				restrictcount6++;
 			}
 			if ((rl6->flags ^ (u_short)flags) &
@@ -566,7 +580,11 @@ hack_restrict(
 			if (rl6 != 0 &&
 			    !IN6_IS_ADDR_UNSPECIFIED(&rl6->addr6)
 			    && !(rl6->mflags & RESM_INTERFACE)) {
-				rlprev6->next = rl6->next;
+                                if (rlprev6) {
+                                        rlprev6->next = rl6->next;
+                                } else {
+                                        restrictlist6 = rl6->next;
+                                }
 				restrictcount6--;
 				if (rl6->flags & RES_LIMITED) {
 					res_limited_refcnt6--;

@@ -1,4 +1,4 @@
-/*	$NetBSD: uhci_pci.c,v 1.28 2005/02/27 00:27:34 perry Exp $	*/
+/*	$NetBSD: uhci_pci.c,v 1.31 2006/03/10 17:21:20 jmcneill Exp $	*/
 
 /*
  * Copyright (c) 1998 The NetBSD Foundation, Inc.
@@ -38,7 +38,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: uhci_pci.c,v 1.28 2005/02/27 00:27:34 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: uhci_pci.c,v 1.31 2006/03/10 17:21:20 jmcneill Exp $");
 
 #include "ehci.h"
 
@@ -62,9 +62,7 @@ __KERNEL_RCSID(0, "$NetBSD: uhci_pci.c,v 1.28 2005/02/27 00:27:34 perry Exp $");
 #include <dev/usb/uhcireg.h>
 #include <dev/usb/uhcivar.h>
 
-int	uhci_pci_match(struct device *, struct cfdata *, void *);
-void	uhci_pci_attach(struct device *, struct device *, void *);
-int	uhci_pci_detach(device_ptr_t, int);
+static void	uhci_pci_powerhook(int, void *);
 
 struct uhci_pci_softc {
 	uhci_softc_t		sc;
@@ -74,12 +72,12 @@ struct uhci_pci_softc {
 	pci_chipset_tag_t	sc_pc;
 	pcitag_t		sc_tag;
 	void 			*sc_ih;		/* interrupt vectoring */
+
+	void			*sc_powerhook;
+	struct pci_conf_state	sc_pciconf;
 };
 
-CFATTACH_DECL(uhci_pci, sizeof(struct uhci_pci_softc),
-    uhci_pci_match, uhci_pci_attach, uhci_pci_detach, uhci_activate);
-
-int
+static int
 uhci_pci_match(struct device *parent, struct cfdata *match, void *aux)
 {
 	struct pci_attach_args *pa = (struct pci_attach_args *) aux;
@@ -92,7 +90,7 @@ uhci_pci_match(struct device *parent, struct cfdata *match, void *aux)
 	return (0);
 }
 
-void
+static void
 uhci_pci_attach(struct device *parent, struct device *self, void *aux)
 {
 	struct uhci_pci_softc *sc = (struct uhci_pci_softc *)self;
@@ -182,16 +180,24 @@ uhci_pci_attach(struct device *parent, struct device *self, void *aux)
 	usb_pci_add(&sc->sc_pci, pa, &sc->sc.sc_bus);
 #endif
 
+	sc->sc_powerhook = powerhook_establish(uhci_pci_powerhook, sc);
+	if (sc->sc_powerhook == NULL)
+		aprint_error("%s: couldn't establish powerhook\n",
+		    devname);
+
 	/* Attach usb device. */
 	sc->sc.sc_child = config_found((void *)sc, &sc->sc.sc_bus,
 				       usbctlprint);
 }
 
-int
+static int
 uhci_pci_detach(device_ptr_t self, int flags)
 {
 	struct uhci_pci_softc *sc = (struct uhci_pci_softc *)self;
 	int rv;
+
+	if (sc->sc_powerhook != NULL)
+		powerhook_disestablish(sc->sc_powerhook);
 
 	rv = uhci_detach(&sc->sc, flags);
 	if (rv)
@@ -209,3 +215,36 @@ uhci_pci_detach(device_ptr_t self, int flags)
 #endif
 	return (0);
 }
+
+static void
+uhci_pci_powerhook(int why, void *opaque)
+{
+	struct uhci_pci_softc *sc;
+	pci_chipset_tag_t pc;
+	pcitag_t tag;
+	pcireg_t reg;
+
+	sc = (struct uhci_pci_softc *)opaque;
+	pc = sc->sc_pc;
+	tag = sc->sc_tag;
+
+	switch (why) {
+	case PWR_SUSPEND:
+	case PWR_STANDBY:
+		pci_conf_capture(pc, tag, &sc->sc_pciconf);
+		break;
+	case PWR_RESUME:
+		pci_conf_restore(pc, tag, &sc->sc_pciconf);
+		/* the BIOS might change this on us */
+		reg = pci_conf_read(pc, tag, PCI_LEGSUP);
+		reg |= PCI_LEGSUP_USBPIRQDEN;
+		reg &= ~PCI_LEGSUP_USBSMIEN;
+		pci_conf_write(pc, tag, PCI_LEGSUP, reg);
+		break;
+	}
+
+	return;
+}
+
+CFATTACH_DECL(uhci_pci, sizeof(struct uhci_pci_softc),
+    uhci_pci_match, uhci_pci_attach, uhci_pci_detach, uhci_activate);

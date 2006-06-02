@@ -1,4 +1,4 @@
-/*	$NetBSD: xd.c,v 1.48 2005/01/22 15:36:10 chs Exp $	*/
+/*	$NetBSD: xd.c,v 1.53 2006/05/14 21:57:13 elad Exp $	*/
 
 /*
  *
@@ -52,7 +52,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: xd.c,v 1.48 2005/01/22 15:36:10 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: xd.c,v 1.53 2006/05/14 21:57:13 elad Exp $");
 
 #undef XDC_DEBUG		/* full debug */
 #define XDC_DIAG		/* extra sanity checks */
@@ -77,6 +77,7 @@ __KERNEL_RCSID(0, "$NetBSD: xd.c,v 1.48 2005/01/22 15:36:10 chs Exp $");
 #include <sys/syslog.h>
 #include <sys/dkbad.h>
 #include <sys/conf.h>
+#include <sys/kauth.h>
 
 #include <uvm/uvm_extern.h>
 
@@ -221,7 +222,7 @@ __KERNEL_RCSID(0, "$NetBSD: xd.c,v 1.48 2005/01/22 15:36:10 chs Exp $");
 
 /* internals */
 int	xdc_cmd(struct xdc_softc *, int, int, int, int, int, char *, int);
-char   *xdc_e2str(int);
+const char *xdc_e2str(int);
 int	xdc_error(struct xdc_softc *, struct xd_iorq *, struct xd_iopb *, int,
 	    int);
 int	xdc_ioctlcmd(struct xd_softc *, dev_t dev, struct xd_iocmd *);
@@ -324,7 +325,7 @@ xdgetdisklabel(struct xd_softc *xd, void *b)
 	/* Required parameter for readdisklabel() */
 	xd->sc_dk.dk_label->d_secsize = XDFM_BPS;
 
-	err = readdisklabel(MAKEDISKDEV(0, xd->sc_dev.dv_unit, RAW_PART),
+	err = readdisklabel(MAKEDISKDEV(0, device_unit(&xd->sc_dev), RAW_PART),
 			    xddummystrat,
 			    xd->sc_dk.dk_label, xd->sc_dk.dk_cpulabel);
 	if (err) {
@@ -446,7 +447,7 @@ xdcattach(struct device *parent, struct device *self, void *aux)
 
 	/* init queue of waiting bufs */
 
-	bufq_alloc(&xdc->sc_wq, BUFQ_FCFS);
+	bufq_alloc(&xdc->sc_wq, "fcfs", 0);
 	callout_init(&xdc->sc_tick_ch);
 
 	/*
@@ -528,7 +529,7 @@ xdmatch(struct device *parent, struct cfdata *cf, void *aux)
 	int xd_unit;
 
 	/* Match only on the "wired-down" controller+disk. */
-	xd_unit = parent->dv_unit * 2 + xa->driveno;
+	xd_unit = device_unit(parent) * 2 + xa->driveno;
 	if (cf->cf_unit != xd_unit)
 		return (0);
 
@@ -739,7 +740,7 @@ done:
  * xdclose: close device
  */
 int 
-xdclose(dev_t dev, int flag, int fmt, struct proc *p)
+xdclose(dev_t dev, int flag, int fmt, struct lwp *l)
 {
 	struct xd_softc *xd = xd_cd.cd_devs[DISKUNIT(dev)];
 	int     part = DISKPART(dev);
@@ -798,7 +799,7 @@ xddump(dev_t dev, daddr_t blkno, caddr_t va, size_t sz)
  * xdioctl: ioctls on XD drives.   based on ioctl's of other netbsd disks.
  */
 int 
-xdioctl(dev_t dev, u_long command, caddr_t addr, int flag, struct proc *p)
+xdioctl(dev_t dev, u_long command, caddr_t addr, int flag, struct lwp *l)
 {
 	struct xd_softc *xd;
 	struct xd_iocmd *xio;
@@ -873,7 +874,9 @@ xdioctl(dev_t dev, u_long command, caddr_t addr, int flag, struct proc *p)
 
 	case DIOSXDCMD:
 		xio = (struct xd_iocmd *) addr;
-		if ((error = suser(p->p_ucred, &p->p_acflag)) != 0)
+		if ((error = kauth_authorize_generic(l->l_proc->p_cred,
+					       KAUTH_GENERIC_ISSUSER,
+					       &l->l_proc->p_acflag)) != 0)
 			return (error);
 		return (xdc_ioctlcmd(xd, dev, xio));
 
@@ -886,7 +889,7 @@ xdioctl(dev_t dev, u_long command, caddr_t addr, int flag, struct proc *p)
  * xdopen: open drive
  */
 int 
-xdopen(dev_t dev, int flag, int fmt, struct proc *p)
+xdopen(dev_t dev, int flag, int fmt, struct lwp *l)
 {
 	int err, unit, part, s;
 	struct xd_softc *xd;
@@ -1047,7 +1050,7 @@ xdstrategy(struct buf *bp)
 
 	/* first, give jobs in front of us a chance */
 	parent = xd->parent;
-	while (parent->nfree > 0 && BUFQ_PEEK(&parent->sc_wq) != NULL)
+	while (parent->nfree > 0 && BUFQ_PEEK(parent->sc_wq) != NULL)
 		if (xdc_startbuf(parent, NULL, NULL) != XD_ERR_AOK)
 			break;
 
@@ -1056,7 +1059,7 @@ xdstrategy(struct buf *bp)
 	 * buffs will get picked up later by xdcintr().
 	 */
 	if (parent->nfree == 0) {
-		BUFQ_PUT(&parent->sc_wq, bp);
+		BUFQ_PUT(parent->sc_wq, bp);
 		splx(s);
 		return;
 	}
@@ -1102,7 +1105,7 @@ xdcintr(void *v)
 	xdc_start(xdcsc, XDC_MAXIOPB);
 
 	/* fill up any remaining iorq's with queue'd buffers */
-	while (xdcsc->nfree > 0 && BUFQ_PEEK(&xdcsc->sc_wq) != NULL)
+	while (xdcsc->nfree > 0 && BUFQ_PEEK(xdcsc->sc_wq) != NULL)
 		if (xdc_startbuf(xdcsc, NULL, NULL) != XD_ERR_AOK)
 			break;
 
@@ -1326,7 +1329,7 @@ xdc_startbuf(struct xdc_softc *xdcsc, struct xd_softc *xdsc, struct buf *bp)
 	/* get buf */
 
 	if (bp == NULL) {
-		bp = BUFQ_GET(&xdcsc->sc_wq);
+		bp = BUFQ_GET(xdcsc->sc_wq);
 		if (bp == NULL)
 			panic("xdc_startbuf bp");
 		xdsc = xdcsc->sc_drives[DISKUNIT(bp->b_dev)];
@@ -1369,7 +1372,7 @@ xdc_startbuf(struct xdc_softc *xdcsc, struct xd_softc *xdsc, struct buf *bp)
 		printf("%s: warning: out of DVMA space\n",
 			   xdcsc->sc_dev.dv_xname);
 		XDC_FREE(xdcsc, rqno);
-		BUFQ_PUT(&xdcsc->sc_wq, bp);
+		BUFQ_PUT(xdcsc->sc_wq, bp);
 		return (XD_ERR_FAIL);	/* XXX: need some sort of
 		                         * call-back scheme here? */
 	}
@@ -1561,7 +1564,7 @@ xdc_piodriver(struct xdc_softc *xdcsc, int iorqno, int freeone)
 	/* now that we've drained everything, start up any bufs that have
 	 * queued */
 
-	while (xdcsc->nfree > 0 && BUFQ_PEEK(&xdcsc->sc_wq) != NULL)
+	while (xdcsc->nfree > 0 && BUFQ_PEEK(xdcsc->sc_wq) != NULL)
 		if (xdc_startbuf(xdcsc, NULL, NULL) != XD_ERR_AOK)
 			break;
 
@@ -1986,27 +1989,28 @@ xdc_tick(void *arg)
 	struct xdc_softc *xdcsc = arg;
 	int     lcv, s, reset = 0;
 #ifdef XDC_DIAG
-	int     wait, run, free, done, whd = 0;
+	int     nwait, nrun, nfree, ndone, whd = 0;
 	u_char  fqc[XDC_MAXIOPB], wqc[XDC_MAXIOPB], mark[XDC_MAXIOPB];
 	s = splbio();
-	wait = xdcsc->nwait;
-	run = xdcsc->nrun;
-	free = xdcsc->nfree;
-	done = xdcsc->ndone;
+	nwait = xdcsc->nwait;
+	nrun = xdcsc->nrun;
+	nfree = xdcsc->nfree;
+	ndone = xdcsc->ndone;
 	memcpy(wqc, xdcsc->waitq, sizeof(wqc));
 	memcpy(fqc, xdcsc->freereq, sizeof(fqc));
 	splx(s);
-	if (wait + run + free + done != XDC_MAXIOPB) {
+	if (nwait + nrun + nfree + ndone != XDC_MAXIOPB) {
 		printf("%s: diag: IOPB miscount (got w/f/r/d %d/%d/%d/%d, wanted %d)\n",
-		    xdcsc->sc_dev.dv_xname, wait, free, run, done, XDC_MAXIOPB);
+		    xdcsc->sc_dev.dv_xname, nwait, nfree, nrun, ndone,
+		    XDC_MAXIOPB);
 		memset(mark, 0, sizeof(mark));
 		printf("FREE: ");
-		for (lcv = free; lcv > 0; lcv--) {
+		for (lcv = nfree; lcv > 0; lcv--) {
 			printf("%d ", fqc[lcv - 1]);
 			mark[fqc[lcv - 1]] = 1;
 		}
 		printf("\nWAIT: ");
-		lcv = wait;
+		lcv = nwait;
 		while (lcv > 0) {
 			printf("%d ", wqc[whd]);
 			mark[wqc[whd]] = 1;
@@ -2025,9 +2029,9 @@ xdc_tick(void *arg)
 				xdcsc->reqs[lcv].buf);
 		}
 	} else
-		if (done > XDC_MAXIOPB - XDC_SUBWAITLIM)
+		if (ndone > XDC_MAXIOPB - XDC_SUBWAITLIM)
 			printf("%s: diag: lots of done jobs (%d)\n",
-				xdcsc->sc_dev.dv_xname, done);
+				xdcsc->sc_dev.dv_xname, ndone);
 
 #endif
 #ifdef XDC_DEBUG
@@ -2197,7 +2201,7 @@ done:
 /*
  * xdc_e2str: convert error code number into an error string
  */
-char *
+const char *
 xdc_e2str(int no)
 {
 	switch (no) {

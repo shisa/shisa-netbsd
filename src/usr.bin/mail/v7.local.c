@@ -1,4 +1,4 @@
-/*	$NetBSD: v7.local.c,v 1.14 2003/08/07 11:14:42 agc Exp $	*/
+/*	$NetBSD: v7.local.c,v 1.17 2006/05/01 23:06:55 christos Exp $	*/
 
 /*
  * Copyright (c) 1980, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)v7.local.c	8.1 (Berkeley) 6/6/93";
 #else
-__RCSID("$NetBSD: v7.local.c,v 1.14 2003/08/07 11:14:42 agc Exp $");
+__RCSID("$NetBSD: v7.local.c,v 1.17 2006/05/01 23:06:55 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -54,7 +54,7 @@ __RCSID("$NetBSD: v7.local.c,v 1.14 2003/08/07 11:14:42 agc Exp $");
  * mail is queued).
  */
 void
-findmail(char *user, char *buf)
+findmail(const char *user, char *buf)
 {
 	char *mbox;
 
@@ -73,13 +73,15 @@ void
 demail(void)
 {
 
+	int fd;
 	/*
 	 * Do not remove the spool file, just truncate it to zero
 	 * bytes if possible, since we wouldn't preserve
 	 * owner/permissions otherwise.
 	 */
-	if (value("keep") != NULL || truncate(mailname, 0) < 0)
-		(void)close(creat(mailname, 0600));
+	if (value("keep") != NULL || truncate(mailname, (off_t)0) < 0)
+		if ((fd = creat(mailname, 0600)) != -1)
+			(void)close(fd);
 }
 
 /*
@@ -95,6 +97,6 @@ username(void)
 		return np;
 	if ((np = getname(uid = getuid())) != NULL)
 		return np;
-	printf("Cannot associate a name with uid %u\n", (unsigned)uid);
+	(void)printf("Cannot associate a name with uid %u\n", (unsigned)uid);
 	return NULL;
 }

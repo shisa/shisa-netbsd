@@ -1,4 +1,4 @@
-/*	$NetBSD: oea_machdep.c,v 1.19 2004/06/26 21:48:30 kleink Exp $	*/
+/*	$NetBSD: oea_machdep.c,v 1.24 2005/12/24 20:07:28 perry Exp $	*/
 
 /*
  * Copyright (C) 2002 Matt Thomas
@@ -33,7 +33,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: oea_machdep.c,v 1.19 2004/06/26 21:48:30 kleink Exp $");
+__KERNEL_RCSID(0, "$NetBSD: oea_machdep.c,v 1.24 2005/12/24 20:07:28 perry Exp $");
 
 #include "opt_compat_netbsd.h"
 #include "opt_ddb.h"
@@ -271,7 +271,7 @@ oea_init(void (*handler)(void))
 	 * Try to set the VEC bit in the MSR.  If it doesn't get set, we are
 	 * not on a AltiVec capable processor.
 	 */
-	__asm __volatile (
+	__asm volatile (
 	    "mfmsr %0; oris %1,%0,%2@h; mtmsr %1; isync; "
 		"mfmsr %1; mtmsr %0; isync"
 	    :	"=r"(msr), "=r"(scratch)
@@ -371,7 +371,7 @@ oea_init(void (*handler)(void))
 	/*
 	 * Now enable translation (and machine checks/recoverable interrupts).
 	 */
-	__asm __volatile ("sync; mfmsr %0; ori %0,%0,%1; mtmsr %0; isync"
+	__asm volatile ("sync; mfmsr %0; ori %0,%0,%1; mtmsr %0; isync"
 	    : "=r"(scratch)
 	    : "K"(PSL_IR|PSL_DR|PSL_ME|PSL_RI));
 
@@ -391,7 +391,7 @@ mpc601_ioseg_add(paddr_t pa, register_t len)
 	 * in pmap_bootstrap().
 	 */
 	iosrtable[i] = SR601(SR601_Ks, SR601_BUID_MEMFORCED, 0, i);
-	__asm __volatile ("mtsrin %0,%1"
+	__asm volatile ("mtsrin %0,%1"
 	    ::	"r"(iosrtable[i]),
 		"r"(pa));
 }
@@ -409,19 +409,19 @@ oea_iobat_add(paddr_t pa, register_t len)
 	 */
 	switch (n) {
 	case 1:
-		__asm __volatile ("mtdbatl 1,%0; mtdbatu 1,%1;"
+		__asm volatile ("mtdbatl 1,%0; mtdbatu 1,%1;"
 		    ::	"r"(battable[i].batl),
 			"r"(battable[i].batu));
 		n = 2;
 		break;
 	case 2:
-		__asm __volatile ("mtdbatl 2,%0; mtdbatu 2,%1;"
+		__asm volatile ("mtdbatl 2,%0; mtdbatu 2,%1;"
 		    ::	"r"(battable[i].batl),
 			"r"(battable[i].batu));
 		n = 3;
 		break;
 	case 3:
-		__asm __volatile ("mtdbatl 3,%0; mtdbatu 3,%1;"
+		__asm volatile ("mtdbatl 3,%0; mtdbatu 3,%1;"
 		    ::	"r"(battable[i].batl),
 			"r"(battable[i].batu));
 		n = 4;
@@ -444,8 +444,8 @@ oea_iobat_remove(paddr_t pa)
 	battable[n].batl = 0;
 	battable[n].batu = 0;
 #define	BAT_RESET(n) \
-	__asm __volatile("mtdbatu %0,%1; mtdbatl %0,%1" :: "n"(n), "r"(0))
-#define	BATU_GET(n, r)	__asm __volatile("mfdbatu %0,%1" : "=r"(r) : "n"(n))
+	__asm volatile("mtdbatu %0,%1; mtdbatl %0,%1" :: "n"(n), "r"(0))
+#define	BATU_GET(n, r)	__asm volatile("mfdbatu %0,%1" : "=r"(r) : "n"(n))
 
 	for (i=1 ; i<4 ; i++) {
 		switch (i) {
@@ -498,19 +498,19 @@ oea_batinit(paddr_t pa, ...)
 	 */
 	if ((msr & (PSL_IR|PSL_DR)) == 0) {
 		if (cpuvers == MPC601) {
-			__asm __volatile ("mtibatl 0,%0" :: "r"(0));
-			__asm __volatile ("mtibatl 1,%0" :: "r"(0));
-			__asm __volatile ("mtibatl 2,%0" :: "r"(0));
-			__asm __volatile ("mtibatl 3,%0" :: "r"(0));
+			__asm volatile ("mtibatl 0,%0" :: "r"(0));
+			__asm volatile ("mtibatl 1,%0" :: "r"(0));
+			__asm volatile ("mtibatl 2,%0" :: "r"(0));
+			__asm volatile ("mtibatl 3,%0" :: "r"(0));
 		} else {
-			__asm __volatile ("mtibatu 0,%0" :: "r"(0));
-			__asm __volatile ("mtibatu 1,%0" :: "r"(0));
-			__asm __volatile ("mtibatu 2,%0" :: "r"(0));
-			__asm __volatile ("mtibatu 3,%0" :: "r"(0));
-			__asm __volatile ("mtdbatu 0,%0" :: "r"(0));
-			__asm __volatile ("mtdbatu 1,%0" :: "r"(0));
-			__asm __volatile ("mtdbatu 2,%0" :: "r"(0));
-			__asm __volatile ("mtdbatu 3,%0" :: "r"(0));
+			__asm volatile ("mtibatu 0,%0" :: "r"(0));
+			__asm volatile ("mtibatu 1,%0" :: "r"(0));
+			__asm volatile ("mtibatu 2,%0" :: "r"(0));
+			__asm volatile ("mtibatu 3,%0" :: "r"(0));
+			__asm volatile ("mtdbatu 0,%0" :: "r"(0));
+			__asm volatile ("mtdbatu 1,%0" :: "r"(0));
+			__asm volatile ("mtdbatu 2,%0" :: "r"(0));
+			__asm volatile ("mtdbatu 3,%0" :: "r"(0));
 		}
 	}
 
@@ -529,16 +529,16 @@ oea_batinit(paddr_t pa, ...)
 			battable[i].batu = BATU601(i << 23,
 			    BAT601_M, BAT601_Ku, BAT601_PP_NONE);
 		}
-		__asm __volatile ("mtibatu 0,%1; mtibatl 0,%0"
+		__asm volatile ("mtibatu 0,%1; mtibatl 0,%0"
 		    :: "r"(battable[0x00000000 >> 23].batl),
 		       "r"(battable[0x00000000 >> 23].batu));
-		__asm __volatile ("mtibatu 1,%1; mtibatl 1,%0"
+		__asm volatile ("mtibatu 1,%1; mtibatl 1,%0"
 		    :: "r"(battable[0x00800000 >> 23].batl),
 		       "r"(battable[0x00800000 >> 23].batu));
-		__asm __volatile ("mtibatu 2,%1; mtibatl 2,%0"
+		__asm volatile ("mtibatu 2,%1; mtibatl 2,%0"
 		    :: "r"(battable[0x01000000 >> 23].batl),
 		       "r"(battable[0x01000000 >> 23].batu));
-		__asm __volatile ("mtibatu 3,%1; mtibatl 3,%0"
+		__asm volatile ("mtibatu 3,%1; mtibatl 3,%0"
 		    :: "r"(battable[0x01800000 >> 23].batl),
 		       "r"(battable[0x01800000 >> 23].batu));
 	} else {
@@ -548,7 +548,7 @@ oea_batinit(paddr_t pa, ...)
 		battable[0].batl = BATL(0x00000000, BAT_M, BAT_PP_RW);
 		battable[0].batu = BATU(0x00000000, BAT_BL_256M, BAT_Vs);
 
-		__asm __volatile ("mtibatl 0,%0; mtibatu 0,%1;"
+		__asm volatile ("mtibatl 0,%0; mtibatu 0,%1;"
 				  "mtdbatl 0,%0; mtdbatu 0,%1;"
 		    ::	"r"(battable[0].batl), "r"(battable[0].batu));
 	}
@@ -589,33 +589,33 @@ oea_batinit(paddr_t pa, ...)
 	mem_regions(&allmem, &availmem);
 	if (cpuvers == MPC601) {
 		for (mp = allmem; mp->size; mp++) {
-			paddr_t pa = mp->start & 0xff800000;
+			paddr_t paddr = mp->start & 0xff800000;
 			paddr_t end = mp->start + mp->size;
 
 			do {
-				u_int i = pa >> 23;
+				u_int ix = paddr >> 23;
 
-				battable[i].batl =
-				    BATL601(pa, BAT601_BSM_8M, BAT601_V);
-				battable[i].batu =
-				    BATU601(pa, BAT601_M, BAT601_Ku, BAT601_PP_NONE);
-				pa += (1 << 23);
-			} while (pa < end);
+				battable[ix].batl =
+				    BATL601(paddr, BAT601_BSM_8M, BAT601_V);
+				battable[ix].batu =
+				    BATU601(paddr, BAT601_M, BAT601_Ku, BAT601_PP_NONE);
+				paddr += (1 << 23);
+			} while (paddr < end);
 		}
 	} else {
 		for (mp = allmem; mp->size; mp++) {
-			paddr_t pa = mp->start & 0xf0000000;
+			paddr_t paddr = mp->start & 0xf0000000;
 			paddr_t end = mp->start + mp->size;
 
 			do {
-				u_int i = pa >> 28;
+				u_int ix = paddr >> 28;
 
-				battable[i].batl =
-				    BATL(pa, BAT_M, BAT_PP_RW);
-				battable[i].batu =
-				    BATU(pa, BAT_BL_256M, BAT_Vs);
-				pa += SEGMENT_LENGTH;
-			} while (pa < end);
+				battable[ix].batl =
+				    BATL(paddr, BAT_M, BAT_PP_RW);
+				battable[ix].batu =
+				    BATU(paddr, BAT_BL_256M, BAT_Vs);
+				paddr += SEGMENT_LENGTH;
+			} while (paddr < end);
 		}
 	}
 }
@@ -633,14 +633,14 @@ oea_install_extint(void (*handler)(void))
 		panic("install_extint: %p too far away (%#lx)", handler,
 		    (unsigned long) offset);
 #endif
-	__asm __volatile ("mfmsr %0; andi. %1,%0,%2; mtmsr %1"
+	__asm volatile ("mfmsr %0; andi. %1,%0,%2; mtmsr %1"
 	    :	"=r" (omsr), "=r" (msr)
 	    :	"K" ((u_short)~PSL_EE));
 	extint_call[0] = (extint_call[0] & 0xfc000003) | offset;
 	memcpy((void *)EXC_EXI, extint, (size_t)extsize);
 	__syncicache((void *)extint_call, sizeof extint_call[0]);
 	__syncicache((void *)EXC_EXI, (int)extsize);
-	__asm __volatile ("mtmsr %0" :: "r"(omsr));
+	__asm volatile ("mtmsr %0" :: "r"(omsr));
 }
 
 /*
@@ -682,7 +682,7 @@ oea_startup(const char *model)
 	}
 	initmsgbuf(v, sz);
 
-	printf("%s", version);
+	printf("%s%s", copyright, version);
 	if (model != NULL)
 		printf("Model: %s\n", model);
 	cpu_identify(NULL, 0);
@@ -802,7 +802,7 @@ mapiodev(paddr_t pa, psize_t len)
 	faddr = trunc_page(pa);
 	off = pa - faddr;
 	len = round_page(off + len);
-	va = taddr = uvm_km_valloc(kernel_map, len);
+	va = taddr = uvm_km_alloc(kernel_map, len, 0, UVM_KMF_VAONLY);
 
 	if (va == 0)
 		return NULL;

@@ -1,4 +1,4 @@
-/*	$NetBSD: auth.c,v 1.2 2005/02/20 10:47:16 cube Exp $	*/
+/*	$NetBSD: auth.c,v 1.4 2006/03/18 03:35:41 christos Exp $	*/
 
 /*
  * auth.c - PPP authentication and phase control.
@@ -75,7 +75,7 @@
 #if 0
 #define RCSID	"Id: auth.c,v 1.101 2004/11/12 10:30:51 paulus Exp"
 #else
-__RCSID("$NetBSD: auth.c,v 1.2 2005/02/20 10:47:16 cube Exp $");
+__RCSID("$NetBSD: auth.c,v 1.4 2006/03/18 03:35:41 christos Exp $");
 #endif
 #endif
 
@@ -427,29 +427,30 @@ setupapfile(argv)
     FILE *ufile;
     int l;
     char u[MAXNAMELEN], p[MAXSECRETLEN];
-    char *fname;
 
     lcp_allowoptions[0].neg_upap = 1;
 
-    /* open user info file */
-    fname = strdup(*argv);
-    if (fname == NULL)
+    if (*argv == NULL)
 	novm("+ua file name");
+
+    if (uafname != NULL)
+	free(uafname);
+    /* open user info file */
+    uafname = strdup(*argv);
     seteuid(getuid());
-    ufile = fopen(fname, "r");
+    ufile = fopen(uafname, "r");
     seteuid(0);
     if (ufile == NULL) {
-	option_error("unable to open user login data file %s", fname);
+	option_error("unable to open user login data file %s", uafname);
 	return 0;
     }
-    check_access(ufile, fname);
-    uafname = fname;
+    check_access(ufile, uafname);
 
     /* get username */
     if (fgets(u, MAXNAMELEN - 1, ufile) == NULL
 	|| fgets(p, MAXSECRETLEN - 1, ufile) == NULL) {
 	fclose(ufile);
-	option_error("unable to read user login data file %s", fname);
+	option_error("unable to read user login data file %s", uafname);
 	return 0;
     }
     fclose(ufile);
@@ -462,9 +463,9 @@ setupapfile(argv)
     if (l > 0 && p[l-1] == '\n')
 	p[l-1] = 0;
 
-    if (override_value("user", option_priority, fname))
+    if (override_value("user", option_priority, uafname))
 	strlcpy(user, u, sizeof(user));
-    if (override_value("passwd", option_priority, fname))
+    if (override_value("passwd", option_priority, uafname))
 	strlcpy(passwd, p, sizeof(passwd));
 
     return (1);
@@ -543,15 +544,25 @@ set_permitted_number(argv)
 
 /*
  * An Open on LCP has requested a change from Dead to Establish phase.
- * Do what's necessary to bring the physical layer up.
  */
 void
 link_required(unit)
     int unit;
 {
+}
+
+/*
+ * Bring the link up to the point of being able to do ppp.
+ */
+void start_link(unit)
+    int unit;
+{
+    char *msg;
+
     new_phase(PHASE_SERIALCONN);
 
     devfd = the_channel->connect();
+    msg = "Connect script failed";
     if (devfd < 0)
 	goto fail;
 
@@ -564,6 +575,7 @@ link_required(unit)
      * gives us.  Thus we don't need the tdb_writelock/tdb_writeunlock.
      */
     fd_ppp = the_channel->establish_ppp(devfd);
+    msg = "ppp establishment failed";
     if (fd_ppp < 0) {
 	status = EXIT_FATAL_ERROR;
 	goto disconnect;
@@ -597,7 +609,6 @@ link_required(unit)
     new_phase(PHASE_DEAD);
     if (the_channel->cleanup)
 	(*the_channel->cleanup)();
-
 }
 
 /*
@@ -659,6 +670,8 @@ link_terminated(unit)
 	the_channel->disconnect();
 	devfd = -1;
     }
+    if (the_channel->cleanup)
+	(*the_channel->cleanup)();
 
     if (doing_multilink && multilink_master) {
 	if (!bundle_terminating)
@@ -1002,10 +1015,12 @@ auth_withpeer_success(unit, protocol, prot_flavor)
     int unit, protocol, prot_flavor;
 {
     int bit;
+    const char *prot = "";
 
     switch (protocol) {
     case PPP_CHAP:
 	bit = CHAP_WITHPEER;
+	prot = "CHAP";
 	switch (prot_flavor) {
 	case CHAP_MD5:
 	    bit |= CHAP_MD5_WITHPEER;
@@ -1024,14 +1039,18 @@ auth_withpeer_success(unit, protocol, prot_flavor)
 	if (passwd_from_file)
 	    BZERO(passwd, MAXSECRETLEN);
 	bit = PAP_WITHPEER;
+	prot = "PAP";
 	break;
     case PPP_EAP:
 	bit = EAP_WITHPEER;
+	prot = "EAP";
 	break;
     default:
 	warn("auth_withpeer_success: unknown protocol %x", protocol);
 	bit = 0;
     }
+
+    notice("%s authentication succeeded", prot);
 
     /* Save the authentication method for later. */
     auth_done[unit] |= bit;
@@ -2566,5 +2585,5 @@ auth_script(script)
     argv[5] = strspeed;
     argv[6] = NULL;
 
-    auth_script_pid = run_program(script, argv, 0, auth_script_done, NULL);
+    auth_script_pid = run_program(script, argv, 0, auth_script_done, NULL, 0);
 }

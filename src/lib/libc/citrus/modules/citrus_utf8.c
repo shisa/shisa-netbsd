@@ -1,4 +1,4 @@
-/*	$NetBSD: citrus_utf8.c,v 1.12 2005/03/11 23:32:03 christos Exp $	*/
+/*	$NetBSD: citrus_utf8.c,v 1.15 2006/03/22 00:08:09 christos Exp $	*/
 
 /*-
  * Copyright (c)2002 Citrus Project,
@@ -60,7 +60,7 @@
 
 #include <sys/cdefs.h>
 #if defined(LIBC_SCCS) && !defined(lint)
-__RCSID("$NetBSD: citrus_utf8.c,v 1.12 2005/03/11 23:32:03 christos Exp $");
+__RCSID("$NetBSD: citrus_utf8.c,v 1.15 2006/03/22 00:08:09 christos Exp $");
 #endif /* LIBC_SCCS and not lint */
 
 #include <assert.h>
@@ -159,7 +159,7 @@ _UTF8_findlen(wchar_t v)
 	u_int32_t c;
 
 	c = (u_int32_t)v;	/*XXX*/
-	for (i = 1; i < sizeof(_UTF8_range) / sizeof(_UTF8_range[0]); i++)
+	for (i = 1; i < sizeof(_UTF8_range) / sizeof(_UTF8_range[0]) - 1; i++)
 		if (c >= _UTF8_range[i] && c < _UTF8_range[i + 1])
 			return i;
 
@@ -258,6 +258,9 @@ _citrus_UTF8_mbrtowc_priv(_UTF8EncodingInfo *ei, wchar_t *pwc, const char **s,
 		_DIAGASSERT(findlen(wchar) == c);
 
 		break;
+	default:
+		/* illegal state */
+		goto ilseq;
 	}
 
 	*s = s0;
@@ -361,6 +364,21 @@ _citrus_UTF8_stdenc_cstowc(_UTF8EncodingInfo * __restrict ei,
 	*wc = (wchar_t)idx;
 
 	return (0);
+}
+
+static __inline int
+/*ARGSUSED*/
+_citrus_UTF8_stdenc_get_state_desc_generic(_UTF8EncodingInfo * __restrict ei,
+					   _UTF8State * __restrict psenc,
+					   int * __restrict rstate)
+{
+
+	if (psenc->chlen == 0)
+		*rstate = _STDENC_SDGEN_INITIAL;
+	else
+		*rstate = _STDENC_SDGEN_INCOMPLETE_CHAR;
+
+	return 0;
 }
 
 static int

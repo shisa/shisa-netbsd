@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_lwp.c,v 1.29.4.2 2005/11/13 13:56:02 tron Exp $	*/
+/*	$NetBSD: kern_lwp.c,v 1.36 2006/05/22 13:43:54 yamt Exp $	*/
 
 /*-
  * Copyright (c) 2001 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_lwp.c,v 1.29.4.2 2005/11/13 13:56:02 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_lwp.c,v 1.36 2006/05/22 13:43:54 yamt Exp $");
 
 #include "opt_multiprocessor.h"
 
@@ -87,7 +87,8 @@ sys__lwp_create(struct lwp *l, void *v, register_t *retval)
 
 	newuc = pool_get(&lwp_uc_pool, PR_WAITOK);
 
-	error = copyin(SCARG(uap, ucp), newuc, sizeof(*newuc));
+	error = copyin(SCARG(uap, ucp), newuc,
+	    l->l_proc->p_emul->e_sa->sae_ucsize);
 	if (error)
 		return (error);
 
@@ -216,7 +217,9 @@ lwp_suspend(struct lwp *l, struct lwp *t)
 
 	if (t == l) {
 		SCHED_LOCK(s);
+		KASSERT(l->l_stat == LSONPROC);
 		l->l_stat = LSSUSPENDED;
+		p->p_nrlwps--;
 		/* XXX NJWLWP check if this makes sense here: */
 		p->p_stats->p_ru.ru_nvcsw++;
 		mi_switch(l, NULL);
@@ -504,7 +507,7 @@ newlwp(struct lwp *l1, struct proc *p2, vaddr_t uaddr, boolean_t inmem,
 	if (rnewlwpp != NULL)
 		*rnewlwpp = l2;
 
-	l2->l_addr = (struct user *)uaddr;
+	l2->l_addr = UAREA_TO_USER(uaddr);
 	uvm_lwp_fork(l1, l2, stack, stacksize, func,
 	    (arg != NULL) ? arg : l2);
 
@@ -566,6 +569,18 @@ lwp_exit(struct lwp *l)
 	cpu_lwp_free(l, 0);
 #endif
 
+	pmap_deactivate(l);
+
+	if (l->l_flag & L_DETACHED) {
+		simple_lock(&p->p_lock);
+		LIST_REMOVE(l, l_sibling);
+		p->p_nlwps--;
+		simple_unlock(&p->p_lock);
+
+		curlwp = NULL;
+		l->l_proc = NULL;
+	}
+
 	SCHED_LOCK(s);
 	p->p_nrlwps--;
 	l->l_stat = LSDEAD;
@@ -573,8 +588,6 @@ lwp_exit(struct lwp *l)
 
 	/* This LWP no longer needs to hold the kernel lock. */
 	KERNEL_PROC_UNLOCK(l);
-
-	pmap_deactivate(l);
 
 	/* cpu_exit() will not return */
 	cpu_exit(l);
@@ -602,13 +615,6 @@ lwp_exit2(struct lwp *l)
 
 	if (l->l_flag & L_DETACHED) {
 		/* Nobody waits for detached LWPs. */
-
-		if ((l->l_flag & L_PROCEXIT) == 0) {
-			LIST_REMOVE(l, l_sibling);
-			p = l->l_proc;
-			p->p_nlwps--;
-		}
-
 		pool_put(&lwp_pool, l);
 		KERNEL_UNLOCK();
 	} else {

@@ -1,4 +1,4 @@
-/*	$NetBSD: locore.S,v 1.7 2004/01/04 16:19:43 wiz Exp $	*/
+/*	$NetBSD: locore.S,v 1.10 2006/03/17 16:06:51 uebayasi Exp $	*/
 
 /*-
  * Copyright (c) 1990 The Regents of the University of California.
@@ -218,8 +218,8 @@ main_label:
 XLInitializeBsc:.long	_C_LABEL(InitializeBsc)
 #endif /* DONT_INIT_BSC */
 ___start:	.long	start
-___etext:	.long	_etext
-___end:		.long	_end
+___etext:	.long	_C_LABEL(etext)
+___end:		.long	_C_LABEL(end)
 XLtmpstk:	.long	INIT_STACK
 _KERNBASE:	.long	0x8c000000
 _ROM_START:	.long	IOM_ROM_BEGIN
@@ -276,11 +276,3 @@ XL_load_and_reset:
 	.long	load_and_reset
 XL_load_and_reset_end:
 	.long	load_and_reset_end
-	.data
-	.align	2
-	.globl	_C_LABEL(intrcnt), _C_LABEL(eintrcnt)
-	.globl	_C_LABEL(intrnames), _C_LABEL(eintrnames)
-_C_LABEL(intrcnt):
-_C_LABEL(eintrcnt):
-_C_LABEL(intrnames):
-_C_LABEL(eintrnames):

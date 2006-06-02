@@ -1,4 +1,4 @@
-/*	$NetBSD: promdev.c,v 1.15.14.1 2005/04/28 11:05:56 tron Exp $ */
+/*	$NetBSD: promdev.c,v 1.18 2006/05/20 07:07:40 mrg Exp $ */
 
 /*
  * Copyright (c) 1993 Paul Kranenburg
@@ -72,8 +72,8 @@ static char	*mygetpropstring __P((int, char *));
 static int	getdevtype __P((int, char *));
 #endif
 
-extern struct filesystem file_system_nfs[];
-extern struct filesystem file_system_ufs[];
+extern struct fs_ops file_system_nfs[];
+extern struct fs_ops file_system_ufs[];
 
 #define null_devopen	(void *)sparc_noop
 #define null_devioctl	(void *)sparc_noop

@@ -1,4 +1,4 @@
-/*	$NetBSD: svc.c,v 1.24 2003/01/18 11:29:06 thorpej Exp $	*/
+/*	$NetBSD: svc.c,v 1.27 2005/12/03 15:16:19 yamt Exp $	*/
 
 /*
  * Sun RPC is a product of Sun Microsystems, Inc. and is provided for
@@ -35,7 +35,7 @@
 static char *sccsid = "@(#)svc.c 1.44 88/02/08 Copyr 1984 Sun Micro";
 static char *sccsid = "@(#)svc.c	2.4 88/08/11 4.0 RPCSRC";
 #else
-__RCSID("$NetBSD: svc.c,v 1.24 2003/01/18 11:29:06 thorpej Exp $");
+__RCSID("$NetBSD: svc.c,v 1.27 2005/12/03 15:16:19 yamt Exp $");
 #endif
 #endif
 
@@ -262,8 +262,7 @@ rpcb_it:
 	rwlock_unlock(&svc_lock);
 	/* now register the information with the local binder service */
 	if (nconf) {
-		/*LINTED const castaway*/
-		dummy = rpcb_set(prog, vers, (struct netconfig *) nconf,
+		dummy = rpcb_set(prog, vers, __UNCONST(nconf),
 		&((SVCXPRT *) xprt)->xp_ltaddr);
 		return (dummy);
 	}
@@ -406,7 +405,7 @@ bool_t
 svc_sendreply(xprt, xdr_results, xdr_location)
 	SVCXPRT *xprt;
 	xdrproc_t xdr_results;
-	caddr_t xdr_location;
+	const char *xdr_location;
 {
 	struct rpc_msg rply; 
 
@@ -753,7 +752,7 @@ svc_getreq_poll(pfdp, pollretval)
 			/*
 			 *	We assume that this function is only called
 			 *	via someone select()ing from svc_fdset or
-			 *	poll()ing from svc_pollset[].  Thus it's safe
+			 *	pollts()ing from svc_pollset[].  Thus it's safe
 			 *	to handle the POLLNVAL event by simply turning
 			 *	the corresponding bit off in svc_fdset.  The
 			 *	svc_pollset[] array is derived from svc_fdset

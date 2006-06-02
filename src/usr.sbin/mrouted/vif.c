@@ -1,4 +1,4 @@
-/*	$NetBSD: vif.c,v 1.15 2003/05/17 19:19:50 itojun Exp $	*/
+/*	$NetBSD: vif.c,v 1.18 2006/05/25 01:43:58 christos Exp $	*/
 
 /*
  * The mrouted program is covered by the license in the accompanying file
@@ -574,8 +574,10 @@ accept_group_report(u_int32_t src, u_int32_t dst, u_int32_t group, int r_type)
      */
     if (g == NULL) {
 	g = (struct listaddr *)malloc(sizeof(struct listaddr));
-	if (g == NULL)
+	if (g == NULL) {
 	    logit(LOG_ERR, 0, "ran out of memory");    /* fatal */
+	    return;
+	}
 
 	g->al_addr   = group;
 	if (r_type == IGMP_v2_HOST_MEMBERSHIP_REPORT)
@@ -699,7 +701,7 @@ accept_neighbor_request(u_int32_t src, u_int32_t dst)
     if (IN_MULTICAST(ntohl(dst))) { /* query sent to a multicast group */
 	int udp;		/* find best interface to reply on */
 	struct sockaddr_in addr;
-	int addrlen = sizeof(addr);
+	socklen_t addrlen = sizeof(addr);
 
 	memset(&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
@@ -786,7 +788,7 @@ accept_neighbor_request2(u_int32_t src, u_int32_t dst)
     if (IN_MULTICAST(ntohl(dst))) { /* query sent to a multicast group */
 	int udp;		/* find best interface to reply on */
 	struct sockaddr_in addr;
-	int addrlen = sizeof(addr);
+	socklen_t addrlen = sizeof(addr);
 
 	memset(&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
@@ -901,7 +903,7 @@ accept_info_request(u_int32_t src, u_int32_t dst, u_char *p, int datalen)
 	len = 0;
 	switch (*p) {
 	    case DVMRP_INFO_VERSION:
-		len = info_version(q,
+		len = info_version((char *)q,
 		    send_buflen - MIN_IP_HEADER_LEN - IGMP_MINLEN);
 		break;
 
@@ -1059,8 +1061,10 @@ update_neighbor(vifi_t vifi, u_int32_t addr, int msgtype, char *p, int datalen, 
 	    level & 0xff, (level >> 8) & 0xff, (level >> 16) & 0xff);
 
 	n = (struct listaddr *)malloc(sizeof(struct listaddr));
-	if (n == NULL)
+	if (n == NULL) {
 	    logit(LOG_ERR, 0, "ran out of memory");    /* fatal */
+	    return FALSE;
+	}
 
 	n->al_addr      = addr;
 	n->al_pv	= level & 0xff;
@@ -1197,10 +1201,7 @@ age_vifs(void)
 		v->uv_flags |= VIFF_LEAF;
 	}
 
-	for (prev_a = (struct listaddr *)&(v->uv_neighbors),
-	     a = v->uv_neighbors;
-	     a != NULL;
-	     prev_a = a, a = a->al_next) {
+	for (prev_a = a = v->uv_neighbors; a != NULL;) {
 
 	    if ((a->al_timer += TIMER_INTERVAL) < NEIGHBOR_EXPIRE_TIME)
 		continue;
@@ -1212,9 +1213,15 @@ age_vifs(void)
 	     * another neighbor with a lower IP address than mine.
 	     */
 	    addr = a->al_addr;
-	    prev_a->al_next = a->al_next;
-	    free((char *)a);
-	    a = prev_a;
+	    if (a == v->uv_neighbors) {
+		v->uv_neighbors = a->al_next;
+		free((char *)a);
+		prev_a = a = v->uv_neighbors;
+	    } else {
+		prev_a->al_next = a->al_next;
+		free((char *)a);
+		prev_a = a = prev_a->al_next;
+	    }
 
 	    delete_neighbor_from_routes(addr, vifi);
 

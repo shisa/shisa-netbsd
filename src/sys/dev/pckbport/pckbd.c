@@ -1,4 +1,4 @@
-/* $NetBSD: pckbd.c,v 1.3 2005/02/27 00:27:42 perry Exp $ */
+/* $NetBSD: pckbd.c,v 1.10 2006/03/29 07:11:08 thorpej Exp $ */
 
 /*-
  * Copyright (c) 1998 The NetBSD Foundation, Inc.
@@ -75,7 +75,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: pckbd.c,v 1.3 2005/02/27 00:27:42 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pckbd.c,v 1.10 2006/03/29 07:11:08 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -87,18 +87,19 @@ __KERNEL_RCSID(0, "$NetBSD: pckbd.c,v 1.3 2005/02/27 00:27:42 perry Exp $");
 
 #include <dev/pckbport/pckbportvar.h>
 
-#include <dev/pckbport/pckbdreg.h>
-#include <dev/pckbport/pckbdvar.h>
-#include <dev/pckbport/wskbdmap_mfii.h>
-
 #include <dev/wscons/wsconsio.h>
 #include <dev/wscons/wskbdvar.h>
 #include <dev/wscons/wsksymdef.h>
 #include <dev/wscons/wsksymvar.h>
 
+#include <dev/pckbport/pckbdreg.h>
+#include <dev/pckbport/pckbdvar.h>
+#include <dev/pckbport/wskbdmap_mfii.h>
+
 #include "locators.h"
 
 #include "opt_pckbd_layout.h"
+#include "opt_pckbd_cnattach_may_fail.h"
 #include "opt_wsdisplay_compat.h"
 
 struct pckbd_internal {
@@ -137,7 +138,7 @@ CFATTACH_DECL(pckbd, sizeof(struct pckbd_softc),
 
 int	pckbd_enable(void *, int);
 void	pckbd_set_leds(void *, int);
-int	pckbd_ioctl(void *, u_long, caddr_t, int, struct proc *);
+int	pckbd_ioctl(void *, u_long, caddr_t, int, struct lwp *);
 
 const struct wskbd_accessops pckbd_accessops = {
 	pckbd_enable,
@@ -209,7 +210,7 @@ pckbd_set_xtscancode(pckbport_tag_t kbctag, pckbport_slot_t kbcslot)
 		cmd[1] = 2;
 		res = pckbport_poll_cmd(kbctag, kbcslot, cmd, 2, 0, 0, 0);
 		if (res) {
-			u_char cmd[1];
+			u_char cmdb[1];
 #ifdef DEBUG
 			printf("pckbd: error setting scanset 2\n");
 #endif
@@ -219,8 +220,8 @@ pckbd_set_xtscancode(pckbport_tag_t kbctag, pckbport_slot_t kbcslot)
 			 * XXX ignore errors, scanset 2 should be
 			 * default anyway.
 			 */
-			cmd[0] = KBC_RESET;
-			(void)pckbport_poll_cmd(kbctag, kbcslot, cmd, 1, 1, 0, 1);
+			cmdb[0] = KBC_RESET;
+			(void)pckbport_poll_cmd(kbctag, kbcslot, cmdb, 1, 1, 0, 1);
 			pckbport_flush(kbctag, kbcslot);
 			res = 0;
 		}
@@ -303,7 +304,7 @@ pckbdprobe(struct device *parent, struct cfdata *cf, void *aux)
 void
 pckbdattach(struct device *parent, struct device *self, void *aux)
 {
-	struct pckbd_softc *sc = (void *)self;
+	struct pckbd_softc *sc = device_private(self);
 	struct pckbport_attach_args *pa = aux;
 	struct wskbddev_attach_args a;
 	int isconsole;
@@ -535,7 +536,7 @@ pckbd_input(void *vsc, int data)
 }
 
 int
-pckbd_ioctl(void *v, u_long cmd, caddr_t data, int flag, struct proc *p)
+pckbd_ioctl(void *v, u_long cmd, caddr_t data, int flag, struct lwp *l)
 {
 	struct pckbd_softc *sc = v;
 
@@ -546,13 +547,13 @@ pckbd_ioctl(void *v, u_long cmd, caddr_t data, int flag, struct proc *p)
 	case WSKBDIO_SETLEDS:
 	{
 		int res;
-		u_char cmd[2];
+		u_char cmdb[2];
 
-		cmd[0] = KBC_MODEIND;
-		cmd[1] = pckbd_led_encode(*(int *)data);
-		sc->sc_ledstate = cmd[1];
+		cmdb[0] = KBC_MODEIND;
+		cmdb[1] = pckbd_led_encode(*(int *)data);
+		sc->sc_ledstate = cmdb[1];
 		res = pckbport_enqueue_cmd(sc->id->t_kbctag, sc->id->t_kbcslot,
-					cmd, 2, 0, 1, 0);
+					cmdb, 2, 0, 1, 0);
 		return res;
 	}
 	case WSKBDIO_GETLEDS:
@@ -602,7 +603,8 @@ pckbd_cnattach(pckbport_tag_t kbctag, int kbcslot)
 	u_char cmd[1];
 
 	res = pckbd_init(&pckbd_consdata, kbctag, kbcslot, 1);
-#if 0 /* we allow the console to be attached if no keyboard is present */
+	/* We may allow the console to be attached if no keyboard is present */
+#if defined(PCKBD_CNATTACH_MAY_FAIL)
 	if (res)
 		return res;
 #endif
@@ -611,7 +613,7 @@ pckbd_cnattach(pckbport_tag_t kbctag, int kbcslot)
 	cmd[0] = KBC_ENABLE;
 	res = pckbport_poll_cmd(kbctag, kbcslot, cmd, 1, 0, 0, 0);
 
-#if 0
+#if defined(PCKBD_CNATTACH_MAY_FAIL)
 	if (res)
 		return res;
 #endif

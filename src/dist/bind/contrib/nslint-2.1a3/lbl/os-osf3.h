@@ -1,4 +1,4 @@
-/*	$NetBSD: os-osf3.h,v 1.1.1.1 2004/05/17 23:43:53 christos Exp $	*/
+/*	$NetBSD: os-osf3.h,v 1.1.1.3 2005/12/21 23:11:08 christos Exp $	*/
 
 /*
  * Copyright (c) 1995, 1996

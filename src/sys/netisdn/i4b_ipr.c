@@ -27,7 +27,7 @@
  *	i4b_ipr.c - isdn4bsd IP over raw HDLC ISDN network driver
  *	---------------------------------------------------------
  *
- *	$Id: i4b_ipr.c,v 1.17 2005/02/26 22:39:49 perry Exp $
+ *	$Id: i4b_ipr.c,v 1.20 2006/05/14 21:19:34 elad Exp $
  *
  * $FreeBSD$
  *
@@ -59,7 +59,7 @@
  *---------------------------------------------------------------------------*/
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: i4b_ipr.c,v 1.17 2005/02/26 22:39:49 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: i4b_ipr.c,v 1.20 2006/05/14 21:19:34 elad Exp $");
 
 #include "irip.h"
 #include "opt_irip.h"
@@ -641,7 +641,9 @@ iripioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 #if defined(__FreeBSD_version) && __FreeBSD_version >= 400005
 			if((error = suser(p)) != 0)
 #else
-			if((error = suser(p->p_ucred, &p->p_acflag)) != 0)
+			if((error = kauth_authorize_generic(p->p_cred,
+						      KAUTH_GENERIC_ISSUSER,
+						      &p->p_acflag)) != 0)
 #endif
 				break;
 		        sl_compress_setup(sc->sc_compr, *(int *)data);
@@ -818,16 +820,16 @@ ipr_connect(void *softc, void *cdp)
 
 	if(sc->sc_cdp->isdntxdelay > 0)
 	{
-		int delay;
+		int xdelay;
 
 		if (hz == 100) {
-			delay = sc->sc_cdp->isdntxdelay;	/* avoid any rounding */
+			xdelay = sc->sc_cdp->isdntxdelay;	/* avoid any rounding */
 		} else {
-			delay = sc->sc_cdp->isdntxdelay*hz;
-			delay /= 100;
+			xdelay = sc->sc_cdp->isdntxdelay*hz;
+			xdelay /= 100;
 		}
 
-		START_TIMER(sc->sc_callout, (TIMEOUT_FUNC_T)i4bipr_connect_startio, (void *)sc,  delay);
+		START_TIMER(sc->sc_callout, (TIMEOUT_FUNC_T)i4bipr_connect_startio, (void *)sc,  xdelay);
 	}
 	else
 	{

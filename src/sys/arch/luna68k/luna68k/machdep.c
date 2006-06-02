@@ -1,4 +1,4 @@
-/* $NetBSD: machdep.c,v 1.39.4.1 2005/11/01 22:33:25 tron Exp $ */
+/* $NetBSD: machdep.c,v 1.44 2005/12/24 22:45:35 perry Exp $ */
 
 /*-
  * Copyright (c) 2000 The NetBSD Foundation, Inc.
@@ -38,7 +38,7 @@
 
 #include <sys/cdefs.h>			/* RCS ID & Copyright macro defns */
 
-__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.39.4.1 2005/11/01 22:33:25 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.44 2005/12/24 22:45:35 perry Exp $");
 
 #include "opt_ddb.h"
 #include "opt_kgdb.h"
@@ -259,7 +259,7 @@ cpu_startup()
 	/*
 	 * Good {morning,afternoon,evening,night}.
 	 */
-	printf(version);
+	printf("%s%s", copyright, version);
 	identifycpu();
 
 	format_bytes(pbuf, sizeof(pbuf), ctob(physmem));
@@ -336,7 +336,7 @@ void
 identifycpu()
 {
 	extern int cputype;
-	char *cpu;
+	const char *cpu;
 
 	bzero(cpu_model, sizeof(cpu_model));
 	switch (cputype) {
@@ -739,7 +739,7 @@ badaddr(addr, nbytes)
 	return (0);
 }
 
-void luna68k_abort __P((char *));
+void luna68k_abort __P((const char *));
 
 static int innmihand;	/* simple mutex */
 
@@ -768,7 +768,7 @@ nmihand(frame)
  */
 void
 luna68k_abort(cp)
-	char *cp;
+	const char *cp;
 {
 #ifdef DDB
 	printf("%s\n", cp);
@@ -790,15 +790,15 @@ luna68k_abort(cp)
  * understand and, if so, set up the vmcmds for it.
  */
 int
-cpu_exec_aout_makecmds(p, epp)
-	struct proc *p;
+cpu_exec_aout_makecmds(l, epp)
+	struct lwp *l;
 	struct exec_package *epp;
 {
 	int error = ENOEXEC;
 #ifdef COMPAT_SUNOS
 	extern sunos_exec_aout_makecmds
 	__P((struct proc *, struct exec_package *));
-	if ((error = sunos_exec_aout_makecmds(p, epp)) == 0)
+	if ((error = sunos_exec_aout_makecmds(l->l_proc, epp)) == 0)
 		return 0;
 #endif
 	return error;
@@ -865,14 +865,14 @@ struct consdev *cn_tab = &romcons;
 #define ROMPUTC(x) \
 ({					\
 	register _r;			\
-	asm volatile ("			\
+	__asm volatile ("			\
 		movc	%%vbr,%0	; \
 		movel	%0,%%sp@-	; \
 		clrl	%0		; \
 		movc	%0,%%vbr"	\
 		: "=r" (_r));		\
 	PUTC(x);			\
-	asm volatile ("			\
+	__asm volatile ("			\
 		movel	%%sp@+,%0	; \
 		movc	%0,%%vbr"	\
 		: "=r" (_r));		\
@@ -881,14 +881,14 @@ struct consdev *cn_tab = &romcons;
 #define ROMGETC() \
 ({					\
 	register _r, _c;		\
-	asm volatile ("			\
+	__asm volatile ("			\
 		movc	%%vbr,%0	; \
 		movel	%0,%%sp@-	; \
 		clrl	%0		; \
 		movc	%0,%%vbr"	\
 		: "=r" (_r));		\
 	_c = GETC();			\
-	asm volatile ("			\
+	__asm volatile ("			\
 		movel	%%sp@+,%0	; \
 		movc	%0,%%vbr"	\
 		: "=r" (_r));		\

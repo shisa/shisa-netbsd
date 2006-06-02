@@ -1,4 +1,4 @@
-/*	$NetBSD: unistd.h,v 1.102 2005/03/05 19:48:38 kleink Exp $	*/
+/*	$NetBSD: unistd.h,v 1.110 2005/12/26 19:01:47 perry Exp $	*/
 
 /*-
  * Copyright (c) 1998, 1999 The NetBSD Foundation, Inc.
@@ -197,6 +197,14 @@ int	 fsync(int);
 
 
 /*
+ * IEEE Std 1003.1c-95, also adopted by X/Open CAE Spec Issue 5 Version 2
+ */
+#if (_POSIX_C_SOURCE - 0) >= 199506L || (_XOPEN_SOURCE - 0) >= 500 || \
+    defined(_REENTRANT) || defined(_NETBSD_SOURCE)
+int	 ttyname_r(int, char *, size_t);
+#endif
+
+/*
  * X/Open Portability Guide, all issues
  */
 #if defined(_XOPEN_SOURCE) || defined(_NETBSD_SOURCE)
@@ -269,23 +277,13 @@ int	 symlink(const char *, const char *);
 void	 sync(void);
 useconds_t ualarm(useconds_t, useconds_t);
 int	 usleep(useconds_t);
-#ifdef __LIBC12_SOURCE__
-pid_t	 vfork(void);
-pid_t	 __vfork14(void);
-#else
+#ifndef __LIBC12_SOURCE__
 pid_t	 vfork(void) __RENAME(__vfork14);
 #endif
 
 #ifndef __AUDIT__
 char	*getwd(char *);				/* obsoleted by getcwd() */
 #endif
-
-/* This must be consistent with <sys/select.h>; for compatibility only. */
-#if __STDC__
-struct timeval;				/* select(2) XXX */
-#endif
-int	 select(int, fd_set * __restrict, fd_set * __restrict,
-	     fd_set * __restrict, struct timeval * __restrict);
 #endif /* _XOPEN_SOURCE_EXTENDED || _XOPEN_SOURCE >= 500 || _NETBSD_SOURCE */
 
 
@@ -317,7 +315,7 @@ mode_t	 getmode(const void *, mode_t);
 int	 getsubopt(char **, char * const *, char **);
 __aconst char *getusershell(void);
 int	 initgroups(const char *, gid_t);
-int	 iruserok(u_int32_t, int, const char *, const char *);
+int	 iruserok(uint32_t, int, const char *, const char *);
 int      issetugid(void);
 int	 nfssvc(int, void *);
 int	 profil(char *, size_t, u_long, u_int);
@@ -342,7 +340,7 @@ int	 setruid(uid_t);
 void	 setusershell(void);
 void	 strmode(mode_t, char *);
 __aconst char *strsignal(int);
-int	 swapctl(int, const void *, int);
+int	 swapctl(int, void *, int);
 int	 swapon(const char *);			/* obsoleted by swapctl() */
 int	 syscall(int, ...);
 quad_t	 __syscall(quad_t, ...);
@@ -358,7 +356,7 @@ int	 iruserok_sa(const void *, int, int, const char *, const char *);
 #ifndef __SYS_SIGLIST_DECLARED
 #define __SYS_SIGLIST_DECLARED
 /* also in signal.h */
-extern __const char *__const *sys_siglist __RENAME(__sys_siglist14);
+extern const char *const *sys_siglist __RENAME(__sys_siglist14);
 #endif /* __SYS_SIGLIST_DECLARED */
 extern	 int optreset;		/* getopt(3) external variable */
 extern	 char *suboptarg;	/* getsubopt(3) external variable */

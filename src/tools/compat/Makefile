@@ -1,18 +1,18 @@
-#	$NetBSD: Makefile,v 1.32.2.1 2005/09/08 19:15:44 tron Exp $
+#	$NetBSD: Makefile,v 1.43 2006/05/20 00:23:39 christos Exp $
 
 HOSTLIB=	nbcompat
 
 SRCS=		atoll.c basename.c dirname.c fgetln.c flock.c fparseln.c \
-		getmode.c getopt_long.c gettemp.c heapsort.c issetugid.c \
-		lchflags.c lchmod.c lchown.c libyywrap.c \
-		md2c.c md2hl.c md4c.c md4hl.c md5c.c md5hl.c mkdtemp.c \
+		getmode.c getopt_long.c gettemp.c heapsort.c \
+		issetugid.c lchflags.c lchmod.c lchown.c libyywrap.c \
+		md2.c md2hl.c md4c.c md4hl.c md5c.c md5hl.c mkdtemp.c \
 		mkstemp.c pread.c putc_unlocked.c pwcache.c pwrite.c \
 		pw_scan.c rmd160.c rmd160hl.c setenv.c setgroupent.c \
 		setpassent.c setprogname.c sha1.c sha1hl.c sha2.c \
 		sha256hl.c sha384hl.c sha512hl.c snprintf.c \
 		strlcat.c strlcpy.c strmode.c strsep.c strsuftoll.c \
-		strtoll.c unvis.c vis.c _err.c _errx.c _verr.c _verrx.c \
-		_vwarn.c _vwarnx.c _warn.c _warnx.c __fts13.c __glob13.c
+		strtoll.c unvis.c vis.c err.c errx.c verr.c verrx.c \
+		vwarn.c vwarnx.c warn.c warnx.c fts.c glob.c
 
 BUILD_OSTYPE!=  uname -s
 
@@ -29,16 +29,22 @@ CPPFLAGS+=	-I. -I./include -I${.CURDIR} -DHAVE_NBTOOL_CONFIG_H=1 \
 
 .PATH:		${.CURDIR}/../../lib/libc/gen \
 		${.CURDIR}/../../lib/libc/hash \
+		${.CURDIR}/../../lib/libc/hash/md2 \
+		${.CURDIR}/../../lib/libc/hash/md5 \
+		${.CURDIR}/../../lib/libc/hash/rmd160 \
+		${.CURDIR}/../../lib/libc/hash/sha1 \
 		${.CURDIR}/../../lib/libc/hash/sha2 \
 		${.CURDIR}/../../lib/libc/md \
 		${.CURDIR}/../../lib/libc/stdio \
 		${.CURDIR}/../../lib/libc/stdlib \
 		${.CURDIR}/../../lib/libc/string \
-		${.CURDIR}/../../usr.bin/lex
+		${.CURDIR}/../../common/lib/libc/string \
+		${.CURDIR}/../../common/lib/libc/hash/sha1 \
+		${.CURDIR}/../../common/lib/libc/md \
+		${.CURDIR}/../../usr.bin/lex \
 
 DPSRCS+=	defs.mk
-CLEANFILES+=	defs.mk
-CLEANFILES+=	config.log config.status configure.lineno confdefs.h *.stamp
+CLEANFILES+=	config.log config.status configure.lineno *.stamp
 
 # Get components of Berkeley DB.
 _CURDIR:=	${.CURDIR}
@@ -46,7 +52,7 @@ _CURDIR:=	${.CURDIR}
 .include "${.CURDIR}/db/Makefile.inc"
 .CURDIR:=	${_CURDIR}
 
-SRCS:=		${SRCS:Nndbm.c:N__ndbm13.c}
+SRCS:=		${SRCS:Nndbm*.c}
 
 config.cache: include/.stamp configure nbtool_config.h.in defs.mk.in
 	rm -f ${.TARGET}
@@ -64,10 +70,10 @@ include/.stamp:
 	mkdir -p include/sys include/machine include/rpc
 	@touch ${.TARGET}
 
-cleandir: compat.clean
-compat.clean:
+cleandir:
+	-rm -f nbtool_config.h confdefs.h defs.mk
 	-rm -r -f include
-	-rm -f config.cache nbtool_config.h
+	-rm -f config.cache
 
 HOST_CPPFLAGS:=	${CPPFLAGS}
 CPPFLAGS:=	# empty

@@ -1,4 +1,4 @@
-/*	$NetBSD: pxa2x0_intr.c,v 1.5 2003/07/15 00:24:55 lukem Exp $	*/
+/*	$NetBSD: pxa2x0_intr.c,v 1.9 2006/04/10 03:36:03 simonb Exp $	*/
 
 /*
  * Copyright (c) 2002  Genetec Corporation.  All rights reserved.
@@ -39,7 +39,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: pxa2x0_intr.c,v 1.5 2003/07/15 00:24:55 lukem Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pxa2x0_intr.c,v 1.9 2006/04/10 03:36:03 simonb Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -49,6 +49,7 @@ __KERNEL_RCSID(0, "$NetBSD: pxa2x0_intr.c,v 1.5 2003/07/15 00:24:55 lukem Exp $"
 #include <machine/intr.h>
 #include <machine/lock.h>
 
+#include <arm/xscale/pxa2x0cpu.h>
 #include <arm/xscale/pxa2x0reg.h>
 #include <arm/xscale/pxa2x0var.h>
 #include <arm/xscale/pxa2x0_intr.h>
@@ -89,9 +90,9 @@ static struct {
 	/* struct evbnt ev; */
 } handler[ICU_LEN];
 
-__volatile int softint_pending;
-__volatile int current_spl_level;
-__volatile int intr_mask;
+volatile int softint_pending;
+volatile int current_spl_level;
+volatile int intr_mask;
 /* interrupt masks for each level */
 int pxa2x0_imask[NIPL];
 static int extirq_level[ICU_LEN];
@@ -145,7 +146,7 @@ pxa2x0_intr_bootstrap(vaddr_t addr)
 	pxaic_base = addr;
 }
 
-static __inline void
+static inline void
 __raise(int ipl)
 {
 
@@ -219,7 +220,7 @@ stray_interrupt(void *cookie)
 	int irqno = (int)cookie;
 	printf("stray interrupt %d\n", irqno);
 
-	if (PXA2X0_IRQ_MIN <= irqno && irqno < ICU_LEN){
+	if (PXA270_IRQ_MIN <= irqno && irqno < ICU_LEN){
 		int save = disable_interrupts(I32_bit);
 		write_icu(SAIPIC_MR,
 		    read_icu(SAIPIC_MR) & ~(1U<<irqno));
@@ -351,7 +352,7 @@ pxa2x0_do_pending(void)
 #define	DO_SOFTINT(si,ipl)						\
 	if ((softint_pending & intr_mask) & SI_TO_IRQBIT(si)) {	\
 		softint_pending &= ~SI_TO_IRQBIT(si);			\
-                __raise(ipl);                                           \
+		__raise(ipl);						\
 		restore_interrupts(oldirqstate);			\
 		softintr_dispatch(si);					\
 		oldirqstate = disable_interrupts(I32_bit);		\
@@ -418,8 +419,9 @@ pxa2x0_intr_establish(int irqno, int level,
     int (*func)(void *), void *cookie)
 {
 	int psw;
+	int irqmin = CPU_IS_PXA250 ? PXA250_IRQ_MIN : PXA270_IRQ_MIN;
 
-	if (irqno < PXA2X0_IRQ_MIN || irqno >= ICU_LEN)
+	if (irqno < irqmin || irqno >= ICU_LEN)
 		panic("intr_establish: bogus irq number %d", irqno);
 
 	psw = disable_interrupts(I32_bit);

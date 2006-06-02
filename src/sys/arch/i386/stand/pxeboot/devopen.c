@@ -1,4 +1,4 @@
-/*	$NetBSD: devopen.c,v 1.5 2003/11/12 18:44:08 drochner Exp $	*/
+/*	$NetBSD: devopen.c,v 1.7 2005/12/11 12:17:49 christos Exp $	*/
 
 /*
  * Copyright 2001, 2002 Wasabi Systems, Inc.
@@ -36,7 +36,7 @@
  */
 
 #include <sys/param.h>
-#include <stand.h>
+#include <lib/libsa/stand.h>
 #include <netinet/in.h>
 #include <netinet/in_systm.h>
 #include <net.h>

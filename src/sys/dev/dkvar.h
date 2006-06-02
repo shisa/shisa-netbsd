@@ -1,4 +1,4 @@
-/* $NetBSD: dkvar.h,v 1.4 2004/03/27 23:23:06 elric Exp $ */
+/* $NetBSD: dkvar.h,v 1.9 2005/12/11 12:20:53 christos Exp $ */
 
 /*-
  * Copyright (c) 2002 The NetBSD Foundation, Inc.
@@ -59,8 +59,7 @@ struct dk_softc {
 #define DK_XNAME_SIZE 8
 	char			 sc_xname[DK_XNAME_SIZE]; /* external name */
 	struct disk		 sc_dkdev;	/* generic disk info */
-	struct lock		 sc_lock;	/* the lock */
-	struct bufq_state	 sc_bufq;	/* buffer queue */
+	struct bufq_state	*sc_bufq;	/* buffer queue */
 };
 
 /* sc_flags:
@@ -85,9 +84,9 @@ struct dk_softc {
  */
 struct dk_intf {
 	int	  di_dtype;			/* disk type */
-	char	 *di_dkname;			/* disk type name */
-	int	(*di_open)(dev_t, int, int, struct proc *);
-	int	(*di_close)(dev_t, int, int, struct proc *);
+	const char *di_dkname;			/* disk type name */
+	int	(*di_open)(dev_t, int, int, struct lwp *);
+	int	(*di_close)(dev_t, int, int, struct lwp *);
 	void	(*di_strategy)(struct buf *);
 	int	(*di_diskstart)(struct dk_softc *, struct buf *);
 };
@@ -104,19 +103,19 @@ struct dk_intf {
 void	dk_sc_init(struct dk_softc *, void *, char *);
 
 int	dk_open(struct dk_intf *, struct dk_softc *, dev_t,
-		int, int, struct proc *);
+		int, int, struct lwp *);
 int	dk_close(struct dk_intf *, struct dk_softc *, dev_t,
-		 int, int, struct proc *);
+		 int, int, struct lwp *);
 void	dk_strategy(struct dk_intf *, struct dk_softc *, struct buf *);
 void	dk_start(struct dk_intf *, struct dk_softc *);
 void	dk_iodone(struct dk_intf *, struct dk_softc *);
 int	dk_size(struct dk_intf *, struct dk_softc *, dev_t);
 int	dk_ioctl(struct dk_intf *, struct dk_softc *, dev_t,
-		 u_long, caddr_t, int, struct proc *);
+		 u_long, caddr_t, int, struct lwp *);
 int	dk_dump(struct dk_intf *, struct dk_softc *, dev_t,
 		daddr_t, caddr_t, size_t);
 void	dk_getdisklabel(struct dk_intf *, struct dk_softc *, dev_t);
 void	dk_getdefaultlabel(struct dk_intf *, struct dk_softc *,
 			   struct disklabel *);
 
-int	dk_lookup(char *, struct proc *, struct vnode **);
+int	dk_lookup(const char *, struct lwp *, struct vnode **);

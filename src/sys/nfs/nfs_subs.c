@@ -1,4 +1,4 @@
-/*	$NetBSD: nfs_subs.c,v 1.148.2.1 2005/09/27 10:28:53 tron Exp $	*/
+/*	$NetBSD: nfs_subs.c,v 1.164 2006/05/19 13:53:11 yamt Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993
@@ -70,7 +70,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: nfs_subs.c,v 1.148.2.1 2005/09/27 10:28:53 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: nfs_subs.c,v 1.164 2006/05/19 13:53:11 yamt Exp $");
 
 #include "fs_nfs.h"
 #include "opt_nfs.h"
@@ -97,6 +97,8 @@ __KERNEL_RCSID(0, "$NetBSD: nfs_subs.c,v 1.148.2.1 2005/09/27 10:28:53 tron Exp 
 #include <sys/filedesc.h>
 #include <sys/time.h>
 #include <sys/dirent.h>
+#include <sys/once.h>
+#include <sys/kauth.h>
 
 #include <uvm/uvm_extern.h>
 
@@ -641,7 +643,7 @@ nfsm_reqh(np, procid, hsiz, bposp)
 struct mbuf *
 nfsm_rpchead(cr, nmflag, procid, auth_type, auth_len, auth_str, verf_len,
 	verf_str, mrest, mrest_len, mbp, xidp)
-	struct ucred *cr;
+	kauth_cred_t cr;
 	int nmflag;
 	int procid;
 	int auth_type;
@@ -708,12 +710,12 @@ nfsm_rpchead(cr, nmflag, procid, auth_type, auth_len, auth_str, verf_len,
 		nfsm_build(tl, u_int32_t *, auth_len);
 		*tl++ = 0;		/* stamp ?? */
 		*tl++ = 0;		/* NULL hostname */
-		*tl++ = txdr_unsigned(cr->cr_uid);
-		*tl++ = txdr_unsigned(cr->cr_gid);
+		*tl++ = txdr_unsigned(kauth_cred_geteuid(cr));
+		*tl++ = txdr_unsigned(kauth_cred_getegid(cr));
 		grpsiz = (auth_len >> 2) - 5;
 		*tl++ = txdr_unsigned(grpsiz);
 		for (i = 0; i < grpsiz; i++)
-			*tl++ = txdr_unsigned(cr->cr_groups[i]);
+			*tl++ = txdr_unsigned(kauth_cred_group(cr, i)); /* XXX elad review */
 		break;
 	case RPCAUTH_KERB4:
 		siz = auth_len;
@@ -824,17 +826,11 @@ nfsm_mbuftouio(mrep, uiop, siz, dpos)
 				len = mp->m_len;
 			}
 			xfer = (left > len) ? len : left;
-#ifdef notdef
-			/* Not Yet.. */
-			if (uiop->uio_iov->iov_op != NULL)
-				(*(uiop->uio_iov->iov_op))
-				(mbufcp, uiocp, xfer);
-			else
-#endif
-			if (uiop->uio_segflg == UIO_SYSSPACE)
-				memcpy(uiocp, mbufcp, xfer);
-			else
-				copyout(mbufcp, uiocp, xfer);
+			error = copyout_vmspace(uiop->uio_vmspace, mbufcp,
+			    uiocp, xfer);
+			if (error) {
+				return error;
+			}
 			left -= xfer;
 			len -= xfer;
 			mbufcp += xfer;
@@ -879,6 +875,7 @@ nfsm_uiotombuf(uiop, mq, siz, bpos)
 	int xfer, left, mlen;
 	int uiosiz, clflg, rem;
 	char *cp;
+	int error;
 
 #ifdef DIAGNOSTIC
 	if (uiop->uio_iovcnt != 1)
@@ -910,17 +907,12 @@ nfsm_uiotombuf(uiop, mq, siz, bpos)
 				mlen = M_TRAILINGSPACE(mp);
 			}
 			xfer = (left > mlen) ? mlen : left;
-#ifdef notdef
-			/* Not Yet.. */
-			if (uiop->uio_iov->iov_op != NULL)
-				(*(uiop->uio_iov->iov_op))
-				(uiocp, mtod(mp, caddr_t)+mp->m_len, xfer);
-			else
-#endif
-			if (uiop->uio_segflg == UIO_SYSSPACE)
-				memcpy(mtod(mp, caddr_t)+mp->m_len, uiocp, xfer);
-			else
-				copyin(uiocp, mtod(mp, caddr_t)+mp->m_len, xfer);
+			cp = mtod(mp, caddr_t) + mp->m_len;
+			error = copyin_vmspace(uiop->uio_vmspace, uiocp, cp,
+			    xfer);
+			if (error) {
+				/* XXX */
+			}
 			mp->m_len += xfer;
 			left -= xfer;
 			uiocp += xfer;
@@ -939,7 +931,7 @@ nfsm_uiotombuf(uiop, mq, siz, bpos)
 			mp->m_len = 0;
 			mp2->m_next = mp;
 		}
-		cp = mtod(mp, caddr_t)+mp->m_len;
+		cp = mtod(mp, caddr_t) + mp->m_len;
 		for (left = 0; left < rem; left++)
 			*cp++ = '\0';
 		mp->m_len += rem;
@@ -1340,8 +1332,8 @@ nfs_searchdircache(vp, off, do32, hashent)
 	 * Zero is always a valid cookie.
 	 */
 	if (off == 0)
-		/* LINTED const cast away */
-		return (struct nfsdircache *)&dzero;
+		/* XXXUNCONST */
+		return (struct nfsdircache *)__UNCONST(&dzero);
 
 	if (!np->n_dircache)
 		return NULL;
@@ -1404,7 +1396,7 @@ nfs_enterdircache(vp, off, blkoff, en, blkno)
 	struct nfsdircache *ndp = NULL;
 	struct nfsdircache *newndp = NULL;
 	struct nfsmount *nmp = VFSTONFS(vp->v_mount);
-	int hashent, gen, overwrite;
+	int hashent = 0, gen, overwrite;	/* XXX: GCC */
 
 	/*
 	 * XXX refuse entries for offset 0. amd(8) erroneously sets
@@ -1412,8 +1404,8 @@ nfs_enterdircache(vp, off, blkoff, en, blkno)
 	 * isn't so bad, as 0 is a special case anyway.
 	 */
 	if (off == 0)
-		/* LINTED const cast away */
-		return (struct nfsdircache *)&dzero;
+		/* XXXUNCONST */
+		return (struct nfsdircache *)__UNCONST(&dzero);
 
 	if (!np->n_dircache)
 		/*
@@ -1459,6 +1451,7 @@ retry:
 			 * We're allocating a new entry, so bump the
 			 * generation number.
 			 */
+			KASSERT(np->n_dirgens);
 			gen = ++np->n_dirgens[hashent];
 			if (gen == 0) {
 				np->n_dirgens[hashent]++;
@@ -1545,8 +1538,8 @@ nfs_invaldircache(vp, flags)
  * Called once before VFS init to initialize shared and
  * server-specific data structures.
  */
-void
-nfs_init()
+static int
+nfs_init0(void)
 {
 	nfsrtt.pos = 0;
 	rpc_vers = txdr_unsigned(RPC_VER2);
@@ -1569,9 +1562,11 @@ nfs_init()
 #ifdef NFSSERVER
 	nfsrv_init(0);			/* Init server data structures */
 	nfsrv_initcache();		/* Init the server request cache */
-	pool_init(&nfs_srvdesc_pool, sizeof(struct nfsrv_descript),
-	    0, 0, 0, "nfsrvdescpl", &pool_allocator_nointr);
 #endif /* NFSSERVER */
+
+#if defined(NFSSERVER) || (defined(NFS) && !defined(NFS_V2_ONLY))
+	nfsdreq_init();
+#endif /* defined(NFSSERVER) || (defined(NFS) && !defined(NFS_V2_ONLY)) */
 
 #if defined(NFSSERVER) || !defined(NFS_V2_ONLY)
 	/*
@@ -1602,6 +1597,15 @@ nfs_init()
 	/* Initialize the iod structures */
 	nfs_iodinit();
 #endif
+	return 0;
+}
+
+void
+nfs_init(void)
+{
+	static ONCE_DECL(nfs_init_once);
+
+	RUN_ONCE(&nfs_init_once, nfs_init0);
 }
 
 #ifdef NFS
@@ -1611,6 +1615,9 @@ nfs_init()
 void
 nfs_vfs_init()
 {
+	/* Initialize NFS server / client shared data. */
+	nfs_init();
+
 	nfs_nhinit();			/* Init the nfsnode table */
 	nfs_commitsize = uvmexp.npages << (PAGE_SHIFT - 4);
 }
@@ -1796,8 +1803,7 @@ nfs_loadattrcache(vpp, fp, vaper, flags)
 		vap->va_gid = gid;
 		vap->va_size = fxdr_hyper(&fp->fa3_size);
 		vap->va_bytes = fxdr_hyper(&fp->fa3_used);
-		vap->va_fileid = fxdr_unsigned(int32_t,
-		    fp->fa3_fileid.nfsuquad[1]);
+		vap->va_fileid = fxdr_hyper(&fp->fa3_fileid);
 		fxdr_nfsv3time(&fp->fa3_atime, &vap->va_atime);
 		vap->va_flags = 0;
 		vap->va_filerev = 0;
@@ -2011,36 +2017,35 @@ nfs_check_wccdata(struct nfsnode *np, const struct timespec *ctime,
  */
 
 void
-nfs_cookieheuristic(vp, flagp, p, cred)
+nfs_cookieheuristic(vp, flagp, l, cred)
 	struct vnode *vp;
 	int *flagp;
-	struct proc *p;
-	struct ucred *cred;
+	struct lwp *l;
+	kauth_cred_t cred;
 {
 	struct uio auio;
 	struct iovec aiov;
-	caddr_t buf, cp;
+	caddr_t tbuf, cp;
 	struct dirent *dp;
 	off_t *cookies = NULL, *cop;
 	int error, eof, nc, len;
 
-	MALLOC(buf, caddr_t, NFS_DIRFRAGSIZ, M_TEMP, M_WAITOK);
+	MALLOC(tbuf, caddr_t, NFS_DIRFRAGSIZ, M_TEMP, M_WAITOK);
 
-	aiov.iov_base = buf;
+	aiov.iov_base = tbuf;
 	aiov.iov_len = NFS_DIRFRAGSIZ;
 	auio.uio_iov = &aiov;
 	auio.uio_iovcnt = 1;
 	auio.uio_rw = UIO_READ;
-	auio.uio_segflg = UIO_SYSSPACE;
-	auio.uio_procp = NULL;
 	auio.uio_resid = NFS_DIRFRAGSIZ;
 	auio.uio_offset = 0;
+	UIO_SETUP_SYSSPACE(&auio);
 
 	error = VOP_READDIR(vp, &auio, cred, &eof, &cookies, &nc);
 
 	len = NFS_DIRFRAGSIZ - auio.uio_resid;
 	if (error || len == 0) {
-		FREE(buf, M_TEMP);
+		FREE(tbuf, M_TEMP);
 		if (cookies)
 			free(cookies, M_TEMP);
 		return;
@@ -2050,14 +2055,14 @@ nfs_cookieheuristic(vp, flagp, p, cred)
 	 * Find the first valid entry and look at its offset cookie.
 	 */
 
-	cp = buf;
+	cp = tbuf;
 	for (cop = cookies; len > 0; len -= dp->d_reclen) {
 		dp = (struct dirent *)cp;
 		if (dp->d_fileno != 0 && len >= dp->d_reclen) {
 			if ((*cop >> 32) != 0 && (*cop & 0xffffffffLL) == 0) {
 				*flagp |= NFSMNT_SWAPCOOKIE;
 				nfs_invaldircache(vp, 0);
-				nfs_vinvalbuf(vp, 0, cred, p, 1);
+				nfs_vinvalbuf(vp, 0, cred, l, 1);
 			}
 			break;
 		}
@@ -2065,11 +2070,12 @@ nfs_cookieheuristic(vp, flagp, p, cred)
 		cp += dp->d_reclen;
 	}
 
-	FREE(buf, M_TEMP);
+	FREE(tbuf, M_TEMP);
 	free(cookies, M_TEMP);
 }
 #endif /* NFS */
 
+#ifdef NFSSERVER
 /*
  * Set up nameidata for a lookup() call and do it.
  *
@@ -2080,7 +2086,7 @@ nfs_cookieheuristic(vp, flagp, p, cred)
  * it is not.
  */
 int
-nfs_namei(ndp, fhp, len, slp, nam, mdp, dposp, retdirp, p, kerbflag, pubflag)
+nfs_namei(ndp, fhp, len, slp, nam, mdp, dposp, retdirp, l, kerbflag, pubflag)
 	struct nameidata *ndp;
 	fhandle_t *fhp;
 	uint32_t len;
@@ -2089,7 +2095,7 @@ nfs_namei(ndp, fhp, len, slp, nam, mdp, dposp, retdirp, p, kerbflag, pubflag)
 	struct mbuf **mdp;
 	caddr_t *dposp;
 	struct vnode **retdirp;
-	struct proc *p;
+	struct lwp *l;
 	int kerbflag, pubflag;
 {
 	int i, rem;
@@ -2225,7 +2231,7 @@ nfs_namei(ndp, fhp, len, slp, nam, mdp, dposp, retdirp, p, kerbflag, pubflag)
 		cnp->cn_flags |= NOCROSSMOUNT;
 	}
 
-	cnp->cn_proc = p;
+	cnp->cn_lwp = l;
 	VREF(dp);
 
     for (;;) {
@@ -2262,7 +2268,7 @@ nfs_namei(ndp, fhp, len, slp, nam, mdp, dposp, retdirp, p, kerbflag, pubflag)
 		}
 		if (ndp->ni_vp->v_mount->mnt_flag & MNT_SYMPERM) {
 			error = VOP_ACCESS(ndp->ni_vp, VEXEC, cnp->cn_cred,
-			    cnp->cn_proc);
+			    cnp->cn_lwp);
 			if (error != 0)
 				break;
 		}
@@ -2276,9 +2282,8 @@ nfs_namei(ndp, fhp, len, slp, nam, mdp, dposp, retdirp, p, kerbflag, pubflag)
 		auio.uio_iovcnt = 1;
 		auio.uio_offset = 0;
 		auio.uio_rw = UIO_READ;
-		auio.uio_segflg = UIO_SYSSPACE;
-		auio.uio_procp = NULL;
 		auio.uio_resid = MAXPATHLEN;
+		UIO_SETUP_SYSSPACE(&auio);
 		error = VOP_READLINK(ndp->ni_vp, &auio, cnp->cn_cred);
 		if (error) {
 		badlink:
@@ -2321,6 +2326,7 @@ out:
 	PNBUF_PUT(cnp->cn_pnbuf);
 	return (error);
 }
+#endif /* NFSSERVER */
 
 /*
  * A fiddled version of m_adj() that ensures null fill to a 32-bit
@@ -2372,6 +2378,7 @@ nfs_zeropad(mp, len, nul)
 			}
 			count -= m->m_len;
 		}
+		KASSERT(m && m->m_next);
 		m_freem(m->m_next);
 		m->m_next = NULL;
 	}
@@ -2485,8 +2492,7 @@ nfsm_srvfattr(nfsd, vap, fp)
 		fp->fa3_rdev.specdata2 = txdr_unsigned(minor(vap->va_rdev));
 		fp->fa3_fsid.nfsuquad[0] = 0;
 		fp->fa3_fsid.nfsuquad[1] = txdr_unsigned(vap->va_fsid);
-		fp->fa3_fileid.nfsuquad[0] = 0;
-		fp->fa3_fileid.nfsuquad[1] = txdr_unsigned(vap->va_fileid);
+		txdr_hyper(vap->va_fileid, &fp->fa3_fileid);
 		txdr_nfsv3time(&vap->va_atime, &fp->fa3_atime);
 		txdr_nfsv3time(&vap->va_mtime, &fp->fa3_mtime);
 		txdr_nfsv3time(&vap->va_ctime, &fp->fa3_ctime);
@@ -2508,6 +2514,7 @@ nfsm_srvfattr(nfsd, vap, fp)
 	}
 }
 
+#ifdef NFSSERVER
 /*
  * nfsrv_fhtovp() - convert a fh to a vnode ptr (optionally locked)
  * 	- look up fsid in mount list (if not found ret error)
@@ -2520,15 +2527,14 @@ nfsrv_fhtovp(fhp, lockflag, vpp, cred, slp, nam, rdonlyp, kerbflag, pubflag)
 	fhandle_t *fhp;
 	int lockflag;
 	struct vnode **vpp;
-	struct ucred *cred;
+	kauth_cred_t cred;
 	struct nfssvc_sock *slp;
 	struct mbuf *nam;
 	int *rdonlyp;
 	int kerbflag;
 {
 	struct mount *mp;
-	int i;
-	struct ucred *credanon;
+	kauth_cred_t credanon;
 	int error, exflags;
 	struct sockaddr_in *saddr;
 
@@ -2540,12 +2546,11 @@ nfsrv_fhtovp(fhp, lockflag, vpp, cred, slp, nam, rdonlyp, kerbflag, pubflag)
 		fhp = &nfs_pub.np_handle;
 	}
 
-	mp = vfs_getvfs(&fhp->fh_fsid);
-	if (!mp)
-		return (ESTALE);
-	error = VFS_CHECKEXP(mp, nam, &exflags, &credanon);
-	if (error)
-		return (error);
+	error = netexport_check(&fhp->fh_fsid, nam, &mp, &exflags, &credanon);
+	if (error) {
+		return error;
+	}
+
 	error = VFS_FHTOVP(mp, &fhp->fh_fid, vpp);
 	if (error)
 		return (error);
@@ -2576,12 +2581,9 @@ nfsrv_fhtovp(fhp, lockflag, vpp, cred, slp, nam, rdonlyp, kerbflag, pubflag)
 	} else if (kerbflag) {
 		vput(*vpp);
 		return (NFSERR_AUTHERR | AUTH_TOOWEAK);
-	} else if (cred->cr_uid == 0 || (exflags & MNT_EXPORTANON)) {
-		cred->cr_uid = credanon->cr_uid;
-		cred->cr_gid = credanon->cr_gid;
-		for (i = 0; i < credanon->cr_ngroups && i < NGROUPS; i++)
-			cred->cr_groups[i] = credanon->cr_groups[i];
-		cred->cr_ngroups = i;
+	} else if (kauth_authorize_generic(cred, KAUTH_GENERIC_ISSUSER,
+		    NULL) == 0 || (exflags & MNT_EXPORTANON)) {
+		kauth_cred_clone(credanon, cred);
 	}
 	if (exflags & MNT_EXRDONLY)
 		*rdonlyp = 1;
@@ -2609,6 +2611,7 @@ nfs_ispublicfh(fhp)
 			return (FALSE);
 	return (TRUE);
 }
+#endif /* NFSSERVER */
 
 /*
  * This function compares two net addresses by family and returns TRUE
@@ -2920,48 +2923,6 @@ nfsrv_errmap(nd, err)
 	if (err <= ELAST)
 		return ((int)nfsrv_v2errmap[err - 1]);
 	return (NFSERR_IO);
-}
-
-/*
- * Sort the group list in increasing numerical order.
- * (Insertion sort by Chris Torek, who was grossed out by the bubble sort
- *  that used to be here.)
- */
-void
-nfsrvw_sort(list, num)
-        gid_t *list;
-        int num;
-{
-	int i, j;
-	gid_t v;
-
-	/* Insertion sort. */
-	for (i = 1; i < num; i++) {
-		v = list[i];
-		/* find correct slot for value v, moving others up */
-		for (j = i; --j >= 0 && v < list[j];)
-			list[j + 1] = list[j];
-		list[j + 1] = v;
-	}
-}
-
-/*
- * copy credentials making sure that the result can be compared with memcmp().
- */
-void
-nfsrv_setcred(incred, outcred)
-	struct ucred *incred, *outcred;
-{
-	int i;
-
-	memset((caddr_t)outcred, 0, sizeof (struct ucred));
-	outcred->cr_ref = 1;
-	outcred->cr_uid = incred->cr_uid;
-	outcred->cr_gid = incred->cr_gid;
-	outcred->cr_ngroups = incred->cr_ngroups;
-	for (i = 0; i < incred->cr_ngroups; i++)
-		outcred->cr_groups[i] = incred->cr_groups[i];
-	nfsrvw_sort(outcred->cr_groups, outcred->cr_ngroups);
 }
 
 u_int32_t

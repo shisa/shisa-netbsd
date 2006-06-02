@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile.GLcore,v 1.7.4.2 2005/05/18 14:33:04 tron Exp $
+#	$NetBSD: Makefile.GLcore,v 1.9 2005/05/14 19:27:56 martin Exp $
 
 LIB=	GLcore
 

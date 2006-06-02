@@ -1,4 +1,4 @@
-/*	$NetBSD: intercept.c,v 1.20.6.2 2005/07/02 18:50:06 tron Exp $	*/
+/*	$NetBSD: intercept.c,v 1.26 2005/12/31 12:33:41 elad Exp $	*/
 /*	$OpenBSD: intercept.c,v 1.29 2002/08/28 03:30:27 itojun Exp $	*/
 /*
  * Copyright 2002 Niels Provos <provos@citi.umich.edu>
@@ -30,7 +30,7 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: intercept.c,v 1.20.6.2 2005/07/02 18:50:06 tron Exp $");
+__RCSID("$NetBSD: intercept.c,v 1.26 2005/12/31 12:33:41 elad Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -142,8 +142,8 @@ intercept_sccb_find(const char *emulation, const char *name)
 }
 
 struct intercept_translate *
-intercept_register_translation(char *emulation, char *name, int offset,
-    struct intercept_translate *tl)
+intercept_register_translation(const char *emulation, const char *name,
+    int offset, struct intercept_translate *tl)
 {
 	struct intercept_syscall *tmp;
 	struct intercept_translate *tlnew;
@@ -182,7 +182,7 @@ intercept_sccb_cbarg(char *emulation, char *name)
 }
 
 int
-intercept_register_sccb(char *emulation, char *name,
+intercept_register_sccb(const char *emulation, const char *name,
     short (*cb)(int, pid_t, int, const char *, int, const char *, void *, int,
 	struct intercept_replace *, struct intercept_tlq *, void *),
     void *cbarg)
@@ -402,6 +402,17 @@ intercept_freepid(pid_t pidnr)
 }
 
 struct intercept_pid *
+intercept_findpid(pid_t pid)
+{
+	struct intercept_pid *tmp, tmp2;
+
+	tmp2.pid = pid;
+	tmp = SPLAY_FIND(pidtree, &pids, &tmp2);
+
+	return (tmp);
+}
+
+struct intercept_pid *
 intercept_getpid(pid_t pid)
 {
 	struct intercept_pid *tmp, tmp2;
@@ -577,12 +588,15 @@ intercept_get_string(int fd, pid_t pid, void *addr)
 }
 
 char *
-intercept_filename(int fd, pid_t pid, void *addr, int userp)
+intercept_filename(int fd, pid_t pid, void *addr, int userp, char *before)
 {
 	char *name;
 
 	if ((name = intercept_get_string(fd, pid, addr)) == NULL)
 		goto abort;
+
+	if (before != NULL)
+		strlcpy(before, name, MAXPATHLEN);
 
 	if ((name = normalize_filename(fd, pid, name, userp)) == NULL)
 		goto abort;
@@ -631,12 +645,12 @@ normalize_filename(int fd, pid_t pid, char *name, int userp)
 	/* Need concatenated path for simplifypath */
 	if (havecwd && name[0] != '/') {
 		if (strlcat(cwd, "/", sizeof(cwd)) >= sizeof(cwd))
-			goto error;
+			return (NULL);
 		if (strlcat(cwd, name, sizeof(cwd)) >= sizeof(cwd))
-			goto error;
+			return (NULL);
 	} else {
 		if (strlcpy(cwd, name, sizeof(cwd)) >= sizeof(cwd))
-			goto error;
+			return (NULL);
 	}
 
 	if (userp != ICLINK_NONE) {
@@ -658,7 +672,7 @@ normalize_filename(int fd, pid_t pid, char *name, int userp)
 
 		/* If realpath fails then the filename does not exist,
 		 * or we are supposed to not resolve the last component */
-		if (realpath(cwd, rcwd) == NULL) {
+		if (intercept_realpath(cwd, rcwd) == NULL) {
 			char *dir, *file;
 			struct stat st;
 
@@ -677,7 +691,7 @@ normalize_filename(int fd, pid_t pid, char *name, int userp)
 				goto error;
 
 			/* So, try again */
-			if (realpath(dir, rcwd) == NULL) {
+			if (intercept_realpath(dir, rcwd) == NULL) {
 				failed = 1;
 				goto out;
 			}
@@ -737,7 +751,7 @@ intercept_syscall(int fd, pid_t pid, u_int16_t seqnr, int policynr,
 	/* Special handling for the exec call */
 	if (!strcmp(name, "execve")) {
 		void *addr;
-		char *argname;
+		char *argname, before[MAXPATHLEN];
 
 		icpid->execve_code = code;
 		icpid->policynr = policynr;
@@ -746,10 +760,15 @@ intercept_syscall(int fd, pid_t pid, u_int16_t seqnr, int policynr,
 			free(icpid->newname);
 
 		intercept.getarg(0, args, argsize, &addr);
-		argname = intercept_filename(fd, pid, addr, ICLINK_ALL);
+
+		argname = intercept_filename(fd, pid, addr, ICLINK_ALL, before);
 		if (argname == NULL)
 			err(1, "%s:%d: intercept_filename",
 			    __func__, __LINE__);
+
+		if (intercept.scriptname(fd, pid, before) != 0)
+			err(1, "%s:%d: ioctl", __func__, __LINE__);
+
 		icpid->newname = strdup(argname);
 		if (icpid->newname == NULL)
 			err(1, "%s:%d: strdup", __func__, __LINE__);
@@ -796,8 +815,13 @@ intercept_syscall(int fd, pid_t pid, u_int16_t seqnr, int policynr,
 	if (action > 0) {
 		error = action;
 		action = ICPOLICY_NEVER;
-	} else
-		elevate = icpid->elevate;
+	} else {
+		icpid = intercept_findpid(pid);
+		if (icpid != NULL)
+			elevate = icpid->elevate;
+		else
+			elevate = NULL;
+	}
 
 
 	/* Resume execution of the process */
@@ -816,22 +840,39 @@ intercept_syscall_result(int fd, pid_t pid, u_int16_t seqnr, int policynr,
 
 	icpid = intercept_getpid(pid);
 	if (!strcmp("execve", name)) {
-
-		/* Commit the name of the new image */
-		if (icpid->name)
-			free(icpid->name);
-		icpid->name = icpid->newname;
-		icpid->newname = NULL;
-
-		if (intercept_newimagecb != NULL)
-			(*intercept_newimagecb)(fd, pid, policynr, emulation,
-			    icpid->name, intercept_newimagecbarg);
-
+		intercept_newimage(fd, pid, policynr, emulation,
+				   icpid->newname, icpid);
+		/* we might have detached by now */
+		if (intercept_findpid(pid) == NULL)
+			return;
 	}
 
  out:
 	/* Resume execution of the process */
 	intercept.answer(fd, pid, seqnr, 0, 0, 0, NULL);
+}
+
+void
+intercept_newimage(int fd, pid_t pid, int policynr, const char *emulation,
+		   char *newname, struct intercept_pid *icpid)
+{
+	if (icpid == NULL)
+		icpid = intercept_getpid(pid);
+
+	if (icpid->name)
+		free(icpid->name);
+	if ((icpid->name = strdup(newname)) == NULL)
+		err(1, "%s:%d: strdup", __func__, __LINE__);
+
+	if (icpid->newname != NULL) {
+		free(icpid->newname);
+		icpid->newname = NULL;
+	}
+
+	if (intercept_newimagecb != NULL)
+		(*intercept_newimagecb)(fd, pid, policynr, emulation,
+		    icpid->name, intercept_newimagecbarg);
+
 }
 
 int
@@ -948,4 +989,144 @@ void
 intercept_policy_free(int policynr)
 {
 	(*intercept_pfreecb)(policynr, intercept_pfreearg);
+}
+
+char *
+intercept_realpath(const char *path, char *resolved)
+{
+	struct stat sb;
+	int idx = 0, n, nlnk = 0, serrno = errno;
+	const char *q;
+	char *p, wbuf[2][MAXPATHLEN];
+	size_t len;
+
+	/*
+	 * Build real path one by one with paying an attention to .,
+	 * .. and symbolic link.
+	 */
+
+	/*
+	 * `p' is where we'll put a new component with prepending
+	 * a delimiter.
+	 */
+	p = resolved;
+
+	if (*path == 0) {
+		*p = 0;
+		errno = ENOENT;
+		return (NULL);
+	}
+
+	/* If relative path, start from current working directory. */
+	if (*path != '/') {
+		if (getcwd(resolved, MAXPATHLEN) == NULL) {
+			p[0] = '.';
+			p[1] = 0;
+			return (NULL);
+		}
+		len = strlen(resolved);
+		if (len > 1)
+			p += len;
+	}
+
+loop:
+	/* Skip any slash. */
+	while (*path == '/')
+		path++;
+
+	if (*path == 0) {
+		if (p == resolved)
+			*p++ = '/';
+		*p = 0;
+		return (resolved);
+	}
+
+	/* Find the end of this component. */
+	q = path;
+	do
+		q++;
+	while (*q != '/' && *q != 0);
+
+	/* Test . or .. */
+	if (path[0] == '.') {
+		if (q - path == 1) {
+			path = q;
+			goto loop;
+		}
+		if (path[1] == '.' && q - path == 2) {
+			/* Trim the last component. */
+			if (p != resolved)
+				while (*--p != '/')
+					;
+			path = q;
+			goto loop;
+		}
+	}
+
+	/* Append this component. */
+	if (p - resolved + 1 + q - path + 1 > MAXPATHLEN) {
+		errno = ENAMETOOLONG;
+		if (p == resolved)
+			*p++ = '/';
+		*p = 0;
+		return (NULL);
+	}
+	p[0] = '/';
+	memcpy(&p[1], path,
+	    /* LINTED We know q > path. */
+	    q - path);
+	p[1 + q - path] = 0;
+
+	/*
+	 * If this component is a symlink, toss it and prepend link
+	 * target to unresolved path.
+	 */
+	if (lstat(resolved, &sb) == -1) {
+		/* Allow nonexistent component if this is the last one. */
+		while (*q == '/')
+			q++;
+
+		if (*q == 0  && errno == ENOENT) {
+			errno = serrno;
+			return (resolved);
+		}
+
+		return (NULL);
+	}
+	if (S_ISLNK(sb.st_mode)) {
+		if (nlnk++ >= MAXSYMLINKS) {
+			errno = ELOOP;
+			return (NULL);
+		}
+		n = readlink(resolved, wbuf[idx], sizeof(wbuf[0]) - 1);
+		if (n < 0)
+			return (NULL);
+		if (n == 0) {
+			errno = ENOENT;
+			return (NULL);
+		}
+
+		/* Append unresolved path to link target and switch to it. */
+		if (n + (len = strlen(q)) + 1 > sizeof(wbuf[0])) {
+			errno = ENAMETOOLONG;
+			return (NULL);
+		}
+		memcpy(&wbuf[idx][n], q, len + 1);
+		path = wbuf[idx];
+		idx ^= 1;
+
+		/* If absolute symlink, start from root. */
+		if (*path == '/')
+			p = resolved;
+		goto loop;
+	}
+	if (*q == '/' && !S_ISDIR(sb.st_mode)) {
+		errno = ENOTDIR;
+		return (NULL);
+	}
+
+	/* Advance both resolved and unresolved path. */
+	p += 1 + q - path;
+	path = q;
+	goto loop;
 }

@@ -1,4 +1,4 @@
-/*	$NetBSD: handler.h,v 1.1.1.2.2.6 2005/11/21 21:12:30 tron Exp $	*/
+/*	$NetBSD: handler.h,v 1.8 2005/11/21 14:20:29 manu Exp $	*/
 
 /* Id: handler.h,v 1.11.4.3 2005/05/07 17:26:05 manubsd Exp */
 

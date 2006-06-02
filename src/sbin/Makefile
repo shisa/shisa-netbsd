@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.91.2.1 2005/05/07 11:21:29 tron Exp $
+#	$NetBSD: Makefile,v 1.99 2006/02/25 01:34:16 christos Exp $
 #	@(#)Makefile	8.5 (Berkeley) 3/31/94
 
 # Not ported: XNSrouted enpload scsiformat startslip
@@ -8,16 +8,17 @@
 
 SUBDIR=	atactl badsect bim brconfig ccdconfig disklabel dkctl dmesg \
 	drvctl edlabel fastboot fdisk fsck fsirand ifconfig init ldconfig \
-	lmcctl mbrlabel mknod modload modunload mount newbtconf nologin \
+	mbrlabel mknod modload modunload mount newbtconf nologin \
 	pdisk ping pppoectl raidctl reboot rcorder rndctl route routed \
-	savecore scsictl shutdown slattach swapctl sysctl ttyflags umount \
-	veriexecctl vinum wdogctl wsconsctl
+	savecore scan_ffs scsictl shutdown slattach swapctl sysctl ttyflags \
+	umount veriexecctl wdogctl wsconsctl
 
 # support for various file systems
 SUBDIR+= fsck_ext2fs
 SUBDIR+= newfs fsck_ffs fsdb dump restore clri tunefs
 SUBDIR+= newfs_lfs fsck_lfs dump_lfs resize_lfs
 SUBDIR+= newfs_msdos fsck_msdos
+SUBDIR+= newfs_sysvbfs
 SUBDIR+= mount_ados
 SUBDIR+= mount_cd9660
 SUBDIR+= mount_ext2fs
@@ -27,6 +28,7 @@ SUBDIR+= mount_ffs
 SUBDIR+= mount_kernfs
 SUBDIR+= mount_lfs
 SUBDIR+= mount_msdos
+SUBDIR+= mount_udf
 SUBDIR+= mount_nfs
 SUBDIR+= mount_ntfs
 SUBDIR+= mount_null
@@ -35,6 +37,8 @@ SUBDIR+= mount_portal
 SUBDIR+= mount_procfs
 SUBDIR+= mount_ptyfs
 SUBDIR+= mount_smbfs
+SUBDIR+= mount_sysvbfs
+SUBDIR+= mount_tmpfs
 SUBDIR+= mount_umap
 SUBDIR+= mount_union
 
@@ -42,7 +46,7 @@ SUBDIR+= mount_union
 SUBDIR+= cgdconfig
 .endif
 
-.if (${MKINET6} != "no")
+.if (${USE_INET6} != "no")
 SUBDIR+= ping6 rtsol
 .endif
 

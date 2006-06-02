@@ -1,4 +1,4 @@
-/*	$NetBSD: du.c,v 1.26 2005/02/17 17:40:59 xtraeme Exp $	*/
+/*	$NetBSD: du.c,v 1.29 2006/05/10 23:35:03 lukem Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993, 1994
@@ -42,7 +42,7 @@ __COPYRIGHT("@(#) Copyright (c) 1989, 1993, 1994\n\
 #if 0
 static char sccsid[] = "@(#)du.c	8.5 (Berkeley) 5/4/95";
 #else
-__RCSID("$NetBSD: du.c,v 1.26 2005/02/17 17:40:59 xtraeme Exp $");
+__RCSID("$NetBSD: du.c,v 1.29 2006/05/10 23:35:03 lukem Exp $");
 #endif
 #endif /* not lint */
 
@@ -74,24 +74,23 @@ main(int argc, char *argv[])
 	FTSENT *p;
 	int64_t totalblocks;
 	int ftsoptions, listdirs, listfiles;
-	int Hflag, Lflag, Pflag, aflag, ch, cflag, gkmflag, nflag, rval, sflag;
+	int Hflag, Lflag, aflag, ch, cflag, gkmflag, nflag, rval, sflag;
 	const char *noargv[2];
 
-	Hflag = Lflag = Pflag = aflag = cflag = gkmflag = nflag = sflag = 0;
+	Hflag = Lflag = aflag = cflag = gkmflag = nflag = sflag = 0;
 	totalblocks = 0;
 	ftsoptions = FTS_PHYSICAL;
 	while ((ch = getopt(argc, argv, "HLPacghkmnrsx")) != -1)
 		switch (ch) {
 		case 'H':
 			Hflag = 1;
-			Lflag = Pflag = 0;
+			Lflag = 0;
 			break;
 		case 'L':
 			Lflag = 1;
-			Hflag = Pflag = 0;
+			Hflag = 0;
 			break;
 		case 'P':
-			Pflag = 1;
 			Hflag = Lflag = 0;
 			break;
 		case 'a':
@@ -166,7 +165,7 @@ main(int argc, char *argv[])
 	if (!*argv) {
 		noargv[0] = ".";
 		noargv[1] = NULL;
-		(const char *)argv = noargv;
+		argv = __UNCONST(noargv);
 	}
 
 	if (!gkmflag)
@@ -333,6 +332,6 @@ usage(void)
 {
 
 	(void)fprintf(stderr,
-		"usage: du [-H | -L | -P] [-a | -s] [-cghkmrx] [file ...]\n");
+		"usage: du [-H | -L | -P] [-a | -s] [-cghkmnrx] [file ...]\n");
 	exit(1);
 }

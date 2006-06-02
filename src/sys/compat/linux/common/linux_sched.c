@@ -1,4 +1,4 @@
-/*	$NetBSD: linux_sched.c,v 1.18 2004/09/10 22:22:20 wiz Exp $	*/
+/*	$NetBSD: linux_sched.c,v 1.30 2006/05/14 21:24:50 elad Exp $	*/
 
 /*-
  * Copyright (c) 1999 The NetBSD Foundation, Inc.
@@ -42,20 +42,25 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: linux_sched.c,v 1.18 2004/09/10 22:22:20 wiz Exp $");
+__KERNEL_RCSID(0, "$NetBSD: linux_sched.c,v 1.30 2006/05/14 21:24:50 elad Exp $");
 
 #include <sys/param.h>
 #include <sys/mount.h>
 #include <sys/proc.h>
 #include <sys/systm.h>
+#include <sys/sysctl.h>
+#include <sys/malloc.h>
 #include <sys/sa.h>
 #include <sys/syscallargs.h>
 #include <sys/wait.h>
+#include <sys/kauth.h>
 
 #include <machine/cpu.h>
 
 #include <compat/linux/common/linux_types.h>
 #include <compat/linux/common/linux_signal.h>
+#include <compat/linux/common/linux_machdep.h> /* For LINUX_NPTL */
+#include <compat/linux/common/linux_emuldata.h>
 
 #include <compat/linux/linux_syscallargs.h>
 
@@ -70,8 +75,16 @@ linux_sys_clone(l, v, retval)
 	struct linux_sys_clone_args /* {
 		syscallarg(int) flags;
 		syscallarg(void *) stack;
+#ifdef LINUX_NPTL
+		syscallarg(void *) parent_tidptr;
+		syscallarg(void *) child_tidptr;
+#endif
 	} */ *uap = v;
 	int flags, sig;
+	int error;
+#ifdef LINUX_NPTL
+	struct linux_emuldata *led;
+#endif
 
 	/*
 	 * We don't support the Linux CLONE_PID or CLONE_PTRACE flags.
@@ -103,19 +116,60 @@ linux_sys_clone(l, v, retval)
 	if (SCARG(uap, flags) & LINUX_CLONE_VFORK)
 		flags |= FORK_PPWAIT;
 
-	sig = SCARG(uap, flags) & LINUX_CLONE_CSIGNAL;
-	if (sig < 0 || sig >= LINUX__NSIG)
-		return (EINVAL);
-	sig = linux_to_native_signo[sig];
+	/* Thread should not issue a SIGCHLD on termination */
+	if (SCARG(uap, flags) & LINUX_CLONE_THREAD) {
+		sig = 0;
+	} else {
+		sig = SCARG(uap, flags) & LINUX_CLONE_CSIGNAL;
+		if (sig < 0 || sig >= LINUX__NSIG)
+			return (EINVAL);
+		sig = linux_to_native_signo[sig];
+	}
 
+#ifdef LINUX_NPTL
+	led = (struct linux_emuldata *)l->l_proc->p_emuldata;
+
+	if (SCARG(uap, flags) & LINUX_CLONE_PARENT_SETTID) {
+		if (SCARG(uap, parent_tidptr) == NULL) {
+			printf("linux_sys_clone: NULL parent_tidptr\n");
+			return EINVAL;
+		}
+
+		if ((error = copyout(&l->l_proc->p_pid,
+		    SCARG(uap, parent_tidptr), 
+		    sizeof(l->l_proc->p_pid))) != 0)
+			return error;
+	}
+
+	/* CLONE_CHILD_CLEARTID: TID clear in the child on exit() */
+	if (SCARG(uap, flags) & LINUX_CLONE_CHILD_CLEARTID)
+		led->child_clear_tid = SCARG(uap, child_tidptr);
+	else	
+		led->child_clear_tid = NULL;
+
+	/* CLONE_CHILD_SETTID: TID set in the child on clone() */
+	if (SCARG(uap, flags) & LINUX_CLONE_CHILD_SETTID)
+		led->child_set_tid = SCARG(uap, child_tidptr);
+	else
+		led->child_set_tid = NULL;
+
+	/* CLONE_SETTLS: new Thread Local Storage in the child */
+	if (SCARG(uap, flags) & LINUX_CLONE_SETTLS)
+		led->set_tls = linux_get_newtls(l);
+	else
+		led->set_tls = 0;
+#endif /* LINUX_NPTL */
 	/*
 	 * Note that Linux does not provide a portable way of specifying
 	 * the stack area; the caller must know if the stack grows up
 	 * or down.  So, we pass a stack size of 0, so that the code
 	 * that makes this adjustment is a noop.
 	 */
-	return (fork1(l, flags, sig, SCARG(uap, stack), 0,
-	    NULL, NULL, retval, NULL));
+	if ((error = fork1(l, flags, sig, SCARG(uap, stack), 0,
+	    NULL, NULL, retval, NULL)) != 0)
+		return error;
+
+	return 0;
 }
 
 int
@@ -145,16 +199,16 @@ linux_sys_sched_setparam(cl, v, retval)
 		return error;
 
 	if (SCARG(uap, pid) != 0) {
-		struct pcred *pc = cp->p_cred;
+		kauth_cred_t pc = cp->p_cred;
 
 		if ((p = pfind(SCARG(uap, pid))) == NULL)
 			return ESRCH;
 		if (!(cp == p ||
-		      pc->pc_ucred->cr_uid == 0 ||
-		      pc->p_ruid == p->p_cred->p_ruid ||
-		      pc->pc_ucred->cr_uid == p->p_cred->p_ruid ||
-		      pc->p_ruid == p->p_ucred->cr_uid ||
-		      pc->pc_ucred->cr_uid == p->p_ucred->cr_uid))
+		      kauth_cred_geteuid(pc) == 0 ||
+		      kauth_cred_getuid(pc) == kauth_cred_getuid(p->p_cred) ||
+		      kauth_cred_geteuid(pc) == kauth_cred_getuid(p->p_cred) ||
+		      kauth_cred_getuid(pc) == kauth_cred_geteuid(p->p_cred) ||
+		      kauth_cred_geteuid(pc) == kauth_cred_geteuid(p->p_cred)))
 			return EPERM;
 	}
 
@@ -182,16 +236,16 @@ linux_sys_sched_getparam(cl, v, retval)
 		return EINVAL;
 
 	if (SCARG(uap, pid) != 0) {
-		struct pcred *pc = cp->p_cred;
+		kauth_cred_t pc = cp->p_cred;
 
 		if ((p = pfind(SCARG(uap, pid))) == NULL)
 			return ESRCH;
 		if (!(cp == p ||
-		      pc->pc_ucred->cr_uid == 0 ||
-		      pc->p_ruid == p->p_cred->p_ruid ||
-		      pc->pc_ucred->cr_uid == p->p_cred->p_ruid ||
-		      pc->p_ruid == p->p_ucred->cr_uid ||
-		      pc->pc_ucred->cr_uid == p->p_ucred->cr_uid))
+		      kauth_cred_geteuid(pc) == 0 ||
+		      kauth_cred_getuid(pc) == kauth_cred_getuid(p->p_cred) ||
+		      kauth_cred_geteuid(pc) == kauth_cred_getuid(p->p_cred) ||
+		      kauth_cred_getuid(pc) == kauth_cred_geteuid(p->p_cred) ||
+		      kauth_cred_geteuid(pc) == kauth_cred_geteuid(p->p_cred)))
 			return EPERM;
 	}
 
@@ -227,16 +281,16 @@ linux_sys_sched_setscheduler(cl, v, retval)
 		return error;
 
 	if (SCARG(uap, pid) != 0) {
-		struct pcred *pc = cp->p_cred;
+		kauth_cred_t pc = cp->p_cred;
 
 		if ((p = pfind(SCARG(uap, pid))) == NULL)
 			return ESRCH;
 		if (!(cp == p ||
-		      pc->pc_ucred->cr_uid == 0 ||
-		      pc->p_ruid == p->p_cred->p_ruid ||
-		      pc->pc_ucred->cr_uid == p->p_cred->p_ruid ||
-		      pc->p_ruid == p->p_ucred->cr_uid ||
-		      pc->pc_ucred->cr_uid == p->p_ucred->cr_uid))
+		      kauth_cred_geteuid(pc) == 0 ||
+		      kauth_cred_getuid(pc) == kauth_cred_getuid(p->p_cred) ||
+		      kauth_cred_geteuid(pc) == kauth_cred_getuid(p->p_cred) ||
+		      kauth_cred_getuid(pc) == kauth_cred_geteuid(p->p_cred) ||
+		      kauth_cred_geteuid(pc) == kauth_cred_geteuid(p->p_cred)))
 			return EPERM;
 	}
 
@@ -267,16 +321,16 @@ linux_sys_sched_getscheduler(cl, v, retval)
  */
 
 	if (SCARG(uap, pid) != 0) {
-		struct pcred *pc = cp->p_cred;
+		kauth_cred_t pc = cp->p_cred;
 
 		if ((p = pfind(SCARG(uap, pid))) == NULL)
 			return ESRCH;
 		if (!(cp == p ||
-		      pc->pc_ucred->cr_uid == 0 ||
-		      pc->p_ruid == p->p_cred->p_ruid ||
-		      pc->pc_ucred->cr_uid == p->p_cred->p_ruid ||
-		      pc->p_ruid == p->p_ucred->cr_uid ||
-		      pc->pc_ucred->cr_uid == p->p_ucred->cr_uid))
+		      kauth_cred_geteuid(pc) == 0 ||
+		      kauth_cred_getuid(pc) == kauth_cred_getuid(p->p_cred) ||
+		      kauth_cred_geteuid(pc) == kauth_cred_getuid(p->p_cred) ||
+		      kauth_cred_getuid(pc) == kauth_cred_geteuid(p->p_cred) ||
+		      kauth_cred_geteuid(pc) == kauth_cred_geteuid(p->p_cred)))
 			return EPERM;
 	}
 
@@ -367,3 +421,112 @@ linux_sys_exit_group(l, v, retval)
 	return 0;
 }
 #endif /* !__m68k__ */
+
+#ifdef LINUX_NPTL
+int
+linux_sys_set_tid_address(l, v, retval)
+	struct lwp *l;
+	void *v;
+	register_t *retval;
+{
+	struct linux_sys_set_tid_address_args /* {
+		syscallarg(int *) tidptr;
+	} */ *uap = v;
+	struct linux_emuldata *led;
+
+	led = (struct linux_emuldata *)l->l_proc->p_emuldata;
+	led->clear_tid = SCARG(uap, tid);
+
+	*retval = l->l_proc->p_pid;
+
+	return 0;
+}
+
+/* ARGUSED1 */
+int
+linux_sys_gettid(l, v, retval)
+	struct lwp *l;
+	void *v;
+	register_t *retval;
+{
+	*retval = l->l_proc->p_pid;
+	return 0;
+}
+
+int
+linux_sys_sched_getaffinity(l, v, retval)
+	struct lwp *l;
+	void *v;
+	register_t *retval;
+{
+	struct linux_sys_sched_getaffinity_args /* {
+		syscallarg(pid_t) pid;
+		syscallarg(unsigned int) len;
+		syscallarg(unsigned long *) mask;
+	} */ *uap = v;
+	int error;
+	int ret;
+	int ncpu;
+	int name[2];
+	size_t sz;
+	char *data;
+	int *retp;
+
+	if (SCARG(uap, mask) == NULL)
+		return EINVAL;
+
+	if (SCARG(uap, len) < sizeof(int))
+		return EINVAL;
+
+	if (pfind(SCARG(uap, pid)) == NULL)
+		return ESRCH;
+
+	/* 
+	 * return the actual number of CPU, tag all of them as available 
+	 * The result is a mask, the first CPU being in the least significant
+	 * bit.
+	 */
+	name[0] = CTL_HW;
+	name[1] = HW_NCPU;
+	sz = sizeof(ncpu);
+
+	if ((error = old_sysctl(&name[0], 2, &ncpu, &sz, NULL, 0, NULL)) != 0)
+		return error;
+
+	ret = (1 << ncpu) - 1;
+
+	data = malloc(SCARG(uap, len), M_TEMP, M_WAITOK|M_ZERO);
+	retp = (int *)&data[SCARG(uap, len) - sizeof(ret)];
+	*retp = ret;
+
+	if ((error = copyout(data, SCARG(uap, mask), SCARG(uap, len))) != 0)
+		return error;
+
+	free(data, M_TEMP);
+
+	return 0;
+
+}
+
+int
+linux_sys_sched_setaffinity(l, v, retval)
+	struct lwp *l;
+	void *v;
+	register_t *retval;
+{
+	struct linux_sys_sched_setaffinity_args /* {
+		syscallarg(pid_t) pid;
+		syscallarg(unsigned int) len;
+		syscallarg(unsigned long *) mask;
+	} */ *uap = v;
+
+	if (pfind(SCARG(uap, pid)) == NULL)
+		return ESRCH;
+
+	/* Let's ignore it */
+#ifdef DEBUG_LINUX
+	printf("linux_sys_sched_setaffinity\n");
+#endif
+	return 0;
+};
+#endif /* LINUX_NPTL */

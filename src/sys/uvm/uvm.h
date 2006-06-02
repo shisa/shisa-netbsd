@@ -1,4 +1,4 @@
-/*	$NetBSD: uvm.h,v 1.39 2005/01/01 21:00:06 yamt Exp $	*/
+/*	$NetBSD: uvm.h,v 1.43 2006/02/11 12:45:07 yamt Exp $	*/
 
 /*
  *
@@ -106,10 +106,6 @@ struct uvm {
 	int page_hashmask;		/* hash mask */
 	struct simplelock hashlock;	/* lock on page_hash array */
 
-	/* anon stuff */
-	struct vm_anon *afree;		/* anon free list */
-	struct simplelock afreelock; 	/* lock on anon free list */
-
 	struct simplelock kentry_lock;
 
 	/* aio_done is locked by uvm.pagedaemon_lock and splbio! */
@@ -156,6 +152,10 @@ UVMHIST_DECL(ubchist);
 UVMHIST_DECL(loanhist);
 #endif
 
+extern struct evcnt uvm_ra_total;
+extern struct evcnt uvm_ra_hit;
+extern struct evcnt uvm_ra_miss;
+
 /*
  * UVM_UNLOCK_AND_WAIT: atomic unlock+wait... wrapper around the
  * interlocked tsleep() function.
@@ -191,21 +191,8 @@ do {									\
 #define UVM_PAGE_OWN(PG, TAG) /* nothing */
 #endif /* UVM_PAGE_TRKOWN */
 
+#include <uvm/uvm_fault_i.h>
+
 #endif /* _KERNEL */
 
 #endif /* _UVM_UVM_H_ */
-
-/*
- * pull in inlines
- */
-
-#ifdef _KERNEL
-
-#include <uvm/uvm_amap_i.h>
-#include <uvm/uvm_fault_i.h>
-#include <uvm/uvm_map_i.h>
-#include <uvm/uvm_page_i.h>
-#include <uvm/uvm_pager_i.h>
-
-#endif /* _KERNEL */
-

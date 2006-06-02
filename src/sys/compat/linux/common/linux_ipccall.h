@@ -1,4 +1,4 @@
-/*	$NetBSD: linux_ipccall.h,v 1.8 2003/01/18 08:02:53 thorpej Exp $	*/
+/*	$NetBSD: linux_ipccall.h,v 1.11 2006/02/16 20:17:15 perry Exp $	*/
 
 /*-
  * Copyright (c) 1995, 1998 The NetBSD Foundation, Inc.
@@ -43,9 +43,9 @@
  * All linux architectures except alpha use the sys_ipc
  * syscall and need the associated defines.
  */
-# if !defined(__alpha__)
+# if !defined(__alpha__) && !defined(__amd64__)
 /* Used on: arm, i386, m68k, mips, ppc, sparc, sparc64 */
-/* Not used on: alpha */
+/* Not used on: alpha, amd64 */
 
 /*
  * Defines for the numbers passes as the first argument to the
@@ -66,27 +66,27 @@
 
 
 #  ifdef SYSVSEM
-inline int linux_semop __P((struct lwp *, struct linux_sys_ipc_args *,
+__inline int linux_semop __P((struct lwp *, struct linux_sys_ipc_args *,
     register_t *));
-inline int linux_semget __P((struct lwp *, struct linux_sys_ipc_args *,
+__inline int linux_semget __P((struct lwp *, struct linux_sys_ipc_args *,
     register_t *));
 #  endif
 
 
 #  ifdef SYSVMSG
-inline int linux_msgsnd __P((struct lwp *, struct linux_sys_ipc_args *,
+__inline int linux_msgsnd __P((struct lwp *, struct linux_sys_ipc_args *,
     register_t *));
-inline int linux_msgrcv __P((struct lwp *, struct linux_sys_ipc_args *,
+__inline int linux_msgrcv __P((struct lwp *, struct linux_sys_ipc_args *,
     register_t *));
-inline int linux_msgget __P((struct lwp *, struct linux_sys_ipc_args *,
+__inline int linux_msgget __P((struct lwp *, struct linux_sys_ipc_args *,
     register_t *));
 #  endif
 
 
 #  ifdef SYSVSHM
-inline int linux_shmdt __P((struct lwp *, struct linux_sys_ipc_args *,
+__inline int linux_shmdt __P((struct lwp *, struct linux_sys_ipc_args *,
     register_t *));
-inline int linux_shmget __P((struct lwp *, struct linux_sys_ipc_args *,
+__inline int linux_shmget __P((struct lwp *, struct linux_sys_ipc_args *,
     register_t *));
 #  endif
 

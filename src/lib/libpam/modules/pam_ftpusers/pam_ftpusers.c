@@ -1,4 +1,4 @@
-/*	$NetBSD: pam_ftpusers.c,v 1.2.2.3 2005/07/11 11:31:18 tron Exp $	*/
+/*	$NetBSD: pam_ftpusers.c,v 1.5 2005/04/19 13:04:38 christos Exp $	*/
 
 /*-
  * Copyright (c) 2001 Networks Associates Technology, Inc.
@@ -38,7 +38,7 @@
 #ifdef __FreeBSD__
 __FBSDID("$FreeBSD: src/lib/libpam/modules/pam_ftpusers/pam_ftpusers.c,v 1.1 2002/05/08 00:30:10 des Exp $");
 #else
-__RCSID("$NetBSD: pam_ftpusers.c,v 1.2.2.3 2005/07/11 11:31:18 tron Exp $");
+__RCSID("$NetBSD: pam_ftpusers.c,v 1.5 2005/04/19 13:04:38 christos Exp $");
 #endif
 
 #include <ctype.h>

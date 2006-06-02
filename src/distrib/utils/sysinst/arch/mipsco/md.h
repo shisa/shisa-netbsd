@@ -1,4 +1,4 @@
-/*	$NetBSD: md.h,v 1.10 2004/06/06 06:07:01 christos Exp $	*/
+/*	$NetBSD: md.h,v 1.12 2006/02/26 10:25:53 dsl Exp $	*/
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.
@@ -64,7 +64,7 @@
  *  or upgrade.
  */
 #define SET_KERNEL_1_NAME	"kern-GENERIC"
-#define MD_SETS_VALID (SET_KERNEL | SET_SYSTEM | (SET_X11 & ~SET_X11_SERVERS))
+#define MD_SETS_VALID SET_KERNEL, SET_SYSTEM, SET_X11_NOSERVERS
 
 /*
  * Machine-specific command to write a new label to a disk.
@@ -72,12 +72,3 @@
  * hand-edited disklabel will NOT be written by MI code.
  */
 #define DISKLABEL_CMD "disklabel -w -r"
-
-
-
-/*
- * Default fileystem type for floppy disks.
- *
- * On NetBSD/mipsco, we don't currently support a dedicated floppy-disk drive
- */
-const char *fdtype;

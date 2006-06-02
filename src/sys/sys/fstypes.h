@@ -1,4 +1,4 @@
-/*	$NetBSD: fstypes.h,v 1.3 2004/08/15 07:19:54 mycroft Exp $	*/
+/*	$NetBSD: fstypes.h,v 1.8 2006/02/12 01:32:07 chs Exp $	*/
 
 /*
  * Copyright (c) 1989, 1991, 1993
@@ -70,10 +70,11 @@ typedef struct fhandle	fhandle_t;
  * one of the __MNT_UNUSED flags.
  */
 
+#define	__MNT_UNUSED1	0x00020000
+#define	__MNT_UNUSED2	0x00200000
 #define	__MNT_UNUSED3	0x00800000
-#define	__MNT_UNUSED4	0x00200000
-#define	__MNT_UNUSED5	0x01000000
-#define	__MNT_UNUSED6	0x02000000
+#define	__MNT_UNUSED4	0x01000000
+#define	__MNT_UNUSED5	0x02000000
 
 #define	MNT_RDONLY	0x00000001	/* read only filesystem */
 #define	MNT_SYNCHRONOUS	0x00000002	/* file system written synchronously */
@@ -139,27 +140,41 @@ typedef struct fhandle	fhandle_t;
 /*
  * Mask of flags that are visible to statvfs()
  */
-#define	MNT_VISFLAGMASK	\
-    (MNT_SOFTDEP | MNT_NODEVMTIME | MNT_SYMPERM | MNT_EXPUBLIC | \
-     MNT_EXNORESPORT | MNT_NOATIME | \
+#define	MNT_VISFLAGMASK	( \
+     MNT_RDONLY | \
+     MNT_SYNCHRONOUS | \
+     MNT_NOEXEC | \
+     MNT_NOSUID | \
+     MNT_NODEV | \
+     MNT_UNION | \
+     MNT_ASYNC | \
+     MNT_NOCOREDUMP | \
      MNT_IGNORE | \
-     MNT_NOCOREDUMP | MNT_ROOTFS | MNT_QUOTA | MNT_LOCAL | \
-     MNT_EXKERB | MNT_EXPORTANON | MNT_DEFEXPORTED | MNT_EXPORTED | \
-     MNT_EXRDONLY | MNT_ASYNC | MNT_UNION | MNT_NODEV | \
-     MNT_NOSUID | MNT_NOEXEC | MNT_SYNCHRONOUS | MNT_RDONLY)
+     MNT_NOATIME | \
+     MNT_SYMPERM | \
+     MNT_NODEVMTIME | \
+     MNT_SOFTDEP | \
+     MNT_EXRDONLY | \
+     MNT_EXPORTED | \
+     MNT_DEFEXPORTED | \
+     MNT_EXPORTANON | \
+     MNT_EXKERB | \
+     MNT_EXNORESPORT | \
+     MNT_EXPUBLIC | \
+     MNT_LOCAL | \
+     MNT_QUOTA | \
+     MNT_ROOTFS)
 
 /*
  * External filesystem control flags.
  */
 #define	MNT_UPDATE	0x00010000	/* not a real mount, just an update */
-#define	MNT_DELEXPORT	0x00020000	/* delete export host lists */
 #define	MNT_RELOAD	0x00040000	/* reload filesystem data */
 #define	MNT_FORCE	0x00080000	/* force unmount or readonly change */
 #define	MNT_GETARGS	0x00400000	/* retrieve file system specific args */
 
 #define __MNT_EXTERNAL_FLAGS \
 	{ MNT_UPDATE,		1,	"being updated" }, \
-	{ MNT_DELEXPORT,	1,	"delete export list" }, \
 	{ MNT_RELOAD,		1,	"reload filesystem data" }, \
 	{ MNT_FORCE,		1,	"force unmount or readonly change" }, \
 	{ MNT_GETARGS,		1,	"retrieve mount arguments" },
@@ -194,15 +209,15 @@ typedef struct fhandle	fhandle_t;
 	"\35MNT_EXPUBLIC" \
 	"\34MNT_EXNORESPORT" \
 	"\33MNT_NOATIME" \
-	"\32MNT_UNUSED6" \
-	"\31MNT_UNUSED5" \
-	"\30MNT_UNUSED3" \
+	"\32MNT_UNUSED" \
+	"\31MNT_UNUSED" \
+	"\30MNT_UNUSED" \
 	"\27MNT_GETARGS" \
-	"\26MNT_UNUSED4" \
+	"\26MNT_UNUSED" \
 	"\25MNT_IGNORE" \
 	"\24MNT_FORCE" \
 	"\23MNT_RELOAD" \
-	"\22MNT_DELEXPORT" \
+	"\22MNT_UNUSED" \
 	"\21MNT_UPDATE" \
 	"\20MNT_NOCOREDUMP" \
 	"\17MNT_ROOTFS" \

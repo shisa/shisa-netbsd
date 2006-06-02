@@ -1,4 +1,4 @@
-/*	$NetBSD: autoconf.c,v 1.12 2004/10/23 17:07:38 thorpej Exp $	*/
+/*	$NetBSD: autoconf.c,v 1.19 2006/04/21 18:17:45 tsutsui Exp $	*/
 
 /*
  * Copyright (c) 2000 Soren S. Jorvang.  All rights reserved.
@@ -26,7 +26,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.12 2004/10/23 17:07:38 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.19 2006/04/21 18:17:45 tsutsui Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -36,32 +36,35 @@ __KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.12 2004/10/23 17:07:38 thorpej Exp $"
 
 #include <machine/cpu.h>
 
+#include <cobalt/cobalt/clockvar.h>
+
 extern char	bootstring[];
 extern int	netboot;
 extern int	bootunit;
 extern int	bootpart;
 
-int		cpuspeed = 100;		/* Until we know more precisely. */
-
 void
-cpu_configure()
+cpu_configure(void)
 {
 
 	softintr_init();
 
 	(void)splhigh();
 
-	if (config_rootfound("mainbus", "mainbus") == NULL)
+	evcnt_attach_static(&hardclock_ev);
+
+	if (config_rootfound("mainbus", NULL) == NULL)
 		panic("no mainbus found");
 
 	_splnone();
 }
 
 void
-cpu_rootconf()
+cpu_rootconf(void)
 {
+
 	printf("boot device: %s\n",
-		booted_device ? booted_device->dv_xname : "<unknown>");
+	    booted_device ? booted_device->dv_xname : "<unknown>");
 
 	setroot(booted_device, booted_partition);
 }
@@ -69,29 +72,27 @@ cpu_rootconf()
 static int hd_iterate = -1;
 
 void
-device_register(dev, aux)
-	struct device *dev;
-	void *aux;
+device_register(struct device *dev, void *aux)
 {
+
 	if (booted_device)
 		return;
 
 	if ((booted_device == NULL) && (netboot == 1))
-		if (dev->dv_class == DV_IFNET)
+		if (device_class(dev) == DV_IFNET)
 			booted_device = dev;
 
 	if ((booted_device == NULL) && (netboot == 0)) {
-		if (dev->dv_class == DV_DISK &&
-		    !strcmp(dev->dv_cfdata->cf_name, "wd")) {
+		if (device_class(dev) == DV_DISK && device_is_a(dev, "wd")) {
 			hd_iterate++;
 			if (hd_iterate == bootunit) {
 				booted_device = dev;
 			}
 		}
 		/*
-		 * XXX Match up MBR boot specification with BSD disklabel for root?
+		 * XXX Match up MBR boot specification with BSD disklabel
+		 *     for root?
 		 */
 		booted_partition = 0;
 	}
 }
-

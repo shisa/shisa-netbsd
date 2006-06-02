@@ -1,4 +1,4 @@
-# $NetBSD: md.amiga,v 1.14.8.1 2005/07/03 17:05:24 snj Exp $
+# $NetBSD: md.amiga,v 1.15 2005/07/03 14:30:52 tron Exp $
 ./usr/X11R6/bin/X
 ./usr/X11R6/bin/Xamiga
 ./usr/X11R6/bin/Xvfb

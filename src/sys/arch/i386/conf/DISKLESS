@@ -1,4 +1,4 @@
-#	$NetBSD: DISKLESS,v 1.102 2005/02/25 13:46:49 simonb Exp $
+#	$NetBSD: DISKLESS,v 1.113 2006/02/05 05:01:55 cube Exp $
 #
 # DISKLESS -- Generic machine setup for diskless boot.
 # This kernel can be loaded from a bootable floppy (i.e. kernel-copy)
@@ -60,6 +60,7 @@ options 	COMPAT_14	# NetBSD 1.4
 options 	COMPAT_15	# NetBSD 1.5
 options 	COMPAT_16	# NetBSD 1.6
 options 	COMPAT_20	# NetBSD 2.0
+options 	COMPAT_30	# NetBSD 3.0 compatibility.
 options 	COMPAT_43	# 4.3BSD, 386BSD, and BSDI
 #options 	TCP_COMPAT_42	# 4.2BSD TCP/IP bug compat. Not recommended.
 
@@ -85,6 +86,8 @@ file-system 	PORTAL		# portal filesystem (still experimental)
 file-system 	PROCFS		# /proc
 file-system 	UMAPFS		# NULLFS + uid and gid remapping
 file-system 	UNION		# union file system
+file-system	PTYFS		# /dev/pts/N support
+#file-system	TMPFS		# experimental - Efficient memory file-system
 
 #options 	QUOTA		# UFS quotas
 #options 	NFSSERVER	# Network File System server
@@ -134,6 +137,7 @@ npx0	at isa? port 0xf0 irq 13	# math coprocessor
 
 pc0	at isa? port 0x60 irq 1		# generic PC console device
 
+#attimer0	at isa?
 #pcppi0	at isa?
 #sysbeep0	at pcppi?
 
@@ -231,9 +235,6 @@ tlp*	at pci? dev ? function ?		# DECchip 21x4x and clones
 
 ukphy*	at mii? phy ?				# generic unknown PHYs
 
-#pss0	at isa? port 0x220 irq 7 drq 6		# Personal Sound System
-#sp0	at pss0 port 0x530 irq 10 drq 0		# 	sound port driver
-
 #sb0	at isa? port 0x220 irq 7 drq 1	# SoundBlaster
 #sb*	at isapnp?
 #wss0	at isa? port 0x530 irq 10 drq 0	# Windows Sound System
@@ -253,15 +254,14 @@ ukphy*	at mii? phy ?				# generic unknown PHYs
 include	"arch/i386/conf/GENERIC.local"
 
 pseudo-device	loop	1		# network loopback
-pseudo-device	bpfilter 4		# packet filter
-pseudo-device	sl	2		# CSLIP
-pseudo-device	ppp	2		# PPP
-pseudo-device	tun	2		# network tunneling over tty
+pseudo-device	bpfilter		# packet filter
+pseudo-device	sl			# CSLIP
+pseudo-device	ppp			# PPP
+pseudo-device	tun			# network tunneling over tty
 #pseudo-device	ipfilter		# IP filter
 
 pseudo-device	pty			# pseudo-terminals
-pseudo-device	tb	1		# tablet line discipline
-#pseudo-device	vnd	4		# paging to files
+#pseudo-device	vnd			# paging to files
 #pseudo-device	ccd	4		# concatenated disk devices
 #pseudo-device	fss	4		# file system snapshot device
 pseudo-device	clockctl		# user control of clock subsystem

@@ -1,4 +1,4 @@
-/*	$NetBSD: ka680.c,v 1.10 2004/10/11 01:00:10 christos Exp $	*/
+/*	$NetBSD: ka680.c,v 1.13 2005/12/24 22:45:40 perry Exp $	*/
 /*
  * Copyright (c) 2002 Hugh Graham.
  * Copyright (c) 2000 Ludd, University of Lule}, Sweden.
@@ -35,7 +35,7 @@
 /* minor modifications for KA690 cache support by isildur@vaxpower.org */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ka680.c,v 1.10 2004/10/11 01:00:10 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ka680.c,v 1.13 2005/12/24 22:45:40 perry Exp $");
 
 #include <sys/param.h>
 #include <sys/types.h>
@@ -108,7 +108,7 @@ struct cpu_dep ka680_calls = {
 void
 ka680_conf()
 {
-	char *cpuname;
+	const char *cpuname;
 
 	/* Don't ask why, but we seem to need this... */
 
@@ -227,7 +227,7 @@ ka680_cache_enable()
 		mtpr(0, start);
 
 	/* Flush the pipes (via REI) */
-	asm("movpsl -(%sp); movab 1f,-(%sp); rei; 1:;");
+	__asm("movpsl -(%sp); movab 1f,-(%sp); rei; 1:;");
 
 	/* Enable primary cache */
 	mtpr(PCCTL_P_EN|PCCTL_I_EN|PCCTL_D_EN, PR_PCCTL);

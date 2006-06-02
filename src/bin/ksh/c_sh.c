@@ -1,4 +1,4 @@
-/*	$NetBSD: c_sh.c,v 1.9 2004/07/07 19:20:09 mycroft Exp $	*/
+/*	$NetBSD: c_sh.c,v 1.12 2006/04/01 23:39:58 christos Exp $	*/
 
 /*
  * built-in Bourne commands
@@ -6,7 +6,7 @@
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: c_sh.c,v 1.9 2004/07/07 19:20:09 mycroft Exp $");
+__RCSID("$NetBSD: c_sh.c,v 1.12 2006/04/01 23:39:58 christos Exp $");
 #endif
 
 
@@ -245,7 +245,7 @@ c_read(wp)
 	char **wp;
 {
 	register int c = 0;
-	int expand = 1, history = 0;
+	int expandv = 1, history = 0;
 	int expanding;
 	int ecode = 0;
 	register char *cp;
@@ -256,6 +256,7 @@ c_read(wp)
 	XString cs, xs;
 	struct tbl *vp;
 	char UNINITIALIZED(*xp);
+	static char REPLY[] = "REPLY";
 
 	while ((optc = ksh_getopt(wp, &builtin_opt, "prsu,")) != EOF)
 		switch (optc) {
@@ -268,7 +269,7 @@ c_read(wp)
 			break;
 #endif /* KSH */
 		  case 'r':
-			expand = 0;
+			expandv = 0;
 			break;
 		  case 's':
 			history = 1;
@@ -287,7 +288,7 @@ c_read(wp)
 	wp += builtin_opt.optind;
 
 	if (*wp == NULL)
-		*--wp = "REPLY";
+		*--wp = REPLY;
 
 	/* Since we can't necessarily seek backwards on non-regular files,
 	 * don't buffer them so we can't read too much.
@@ -372,7 +373,7 @@ c_read(wp)
 					Xput(cs, cp, c);
 				continue;
 			}
-			if (expand && c == '\\') {
+			if (expandv && c == '\\') {
 				expanding = 1;
 				continue;
 			}
@@ -431,6 +432,7 @@ c_eval(wp)
 	char **wp;
 {
 	register struct source *s;
+	int rv;
 
 	if (ksh_getopt(wp, &builtin_opt, null) == '?')
 		return 1;
@@ -464,7 +466,9 @@ c_eval(wp)
 		exstat = subst_exstat;
 	}
 
-	return shell(s, FALSE);
+	rv = shell(s, FALSE);
+	afree(s, ATEMP);
+	return rv;
 }
 
 int
@@ -615,7 +619,8 @@ c_brkcont(wp)
 		 * shall be used.  Doesn't say to print an error but we
 		 * do anyway 'cause the user messed up.
 		 */
-		last_ep->flags &= ~EF_BRKCONT_PASS;
+		if (last_ep)
+			last_ep->flags &= ~EF_BRKCONT_PASS;
 		warningf(TRUE, "%s: can only %s %d level(s)",
 			wp[0], wp[0], n - quit);
 	}
@@ -634,7 +639,7 @@ c_set(wp)
 
 	if (wp[1] == NULL) {
 		static const char *const args [] = { "set", "-", NULL };
-		return c_typeset((char **) args);
+		return c_typeset((char **)__UNCONST(args));
 	}
 
 	argi = parse_args(wp, OF_SET, &setargs);

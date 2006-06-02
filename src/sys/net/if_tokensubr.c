@@ -1,4 +1,4 @@
-/*	$NetBSD: if_tokensubr.c,v 1.30 2005/02/26 22:45:09 perry Exp $	*/
+/*	$NetBSD: if_tokensubr.c,v 1.37 2006/05/18 09:05:51 liamjfoy Exp $	*/
 
 /*
  * Copyright (c) 1982, 1989, 1993
@@ -99,7 +99,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_tokensubr.c,v 1.30 2005/02/26 22:45:09 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_tokensubr.c,v 1.37 2006/05/18 09:05:51 liamjfoy Exp $");
 
 #include "opt_inet.h"
 #include "opt_atalk.h"
@@ -137,6 +137,11 @@ __KERNEL_RCSID(0, "$NetBSD: if_tokensubr.c,v 1.30 2005/02/26 22:45:09 perry Exp 
 
 #include <net/if_ether.h>
 #include <net/if_token.h>
+
+#include "carp.h"
+#if NCARP > 0
+#include <netinet/ip_carp.h>
+#endif
 
 #ifdef INET
 #include <netinet/in.h>
@@ -195,9 +200,9 @@ extern struct ifqueue pkintrq;
 #define RCF_ALLROUTES (2 << 8) | TOKEN_RCF_FRAME2 | TOKEN_RCF_BROADCAST_ALL
 #define RCF_SINGLEROUTE (2 << 8) | TOKEN_RCF_FRAME2 | TOKEN_RCF_BROADCAST_SINGLE
 
-static	int token_output __P((struct ifnet *, struct mbuf *,
-	    struct sockaddr *, struct rtentry *));
-static	void token_input __P((struct ifnet *, struct mbuf *));
+static int	token_output(struct ifnet *, struct mbuf *,
+			     struct sockaddr *, struct rtentry *);
+static void	token_input(struct ifnet *, struct mbuf *);
 
 /*
  * Token Ring output routine.
@@ -206,27 +211,43 @@ static	void token_input __P((struct ifnet *, struct mbuf *));
  * XXX route info has to go into the same mbuf as the header
  */
 static int
-token_output(ifp, m0, dst, rt0)
-	struct ifnet *ifp;
-	struct mbuf *m0;
-	struct sockaddr *dst;
-	struct rtentry *rt0;
+token_output(struct ifnet *ifp0, struct mbuf *m0, struct sockaddr *dst,
+    struct rtentry *rt0)
 {
 	u_int16_t etype;
-	int s, len, error = 0;
+	int error = 0;
 	u_char edst[ISO88025_ADDR_LEN];
 	struct mbuf *m = m0;
 	struct rtentry *rt;
 	struct mbuf *mcopy = (struct mbuf *)0;
 	struct token_header *trh;
 #ifdef INET
-	struct arphdr *ah = (struct arphdr *)ifp;
+	struct arphdr *ah = (struct arphdr *)ifp0;
 #endif /* INET */
 	struct token_rif *rif = (struct  token_rif *)0;
 	struct token_rif bcastrif;
+	struct ifnet *ifp = ifp0;
 	size_t riflen = 0;
 	ALTQ_DECL(struct altq_pktattr pktattr;)
-	short mflags;
+
+#if NCARP > 0
+	if (ifp->if_type == IFT_CARP) {
+		struct ifaddr *ifa;
+
+		/* loop back if this is going to the carp interface */
+		if (dst != NULL && ifp0->if_link_state == LINK_STATE_UP &&
+		    (ifa = ifa_ifwithaddr(dst)) != NULL &&
+		    ifa->ifa_ifp == ifp0)
+			return (looutput(ifp0, m, dst, rt0));
+
+		ifp = ifp->if_carpdev;
+		ah = (struct arphdr *)ifp;
+
+		if ((ifp0->if_flags & (IFF_UP|IFF_RUNNING)) !=
+		    (IFF_UP|IFF_RUNNING))
+			senderr(ENETDOWN);
+	}
+#endif /* NCARP > 0 */
 
 	if ((ifp->if_flags & (IFF_UP|IFF_RUNNING)) != (IFF_UP|IFF_RUNNING))
 		senderr(ENETDOWN);
@@ -272,8 +293,7 @@ token_output(ifp, m0, dst, rt0)
 				rif = &bcastrif;
 				riflen = sizeof(rif->tr_rcf);
 			}
-			bcopy((caddr_t)tokenbroadcastaddr, (caddr_t)edst,
-			    sizeof(edst));
+			memcpy(edst, tokenbroadcastaddr, sizeof(edst));
 		}
 /*
  * XXX m->m_flags & M_MCAST   IEEE802_MAP_IP_MULTICAST ??
@@ -317,11 +337,13 @@ token_output(ifp, m0, dst, rt0)
 				rif = &bcastrif;
 				riflen = sizeof(rif->tr_rcf);
 			}
-			bcopy((caddr_t)tokenbroadcastaddr, (caddr_t)edst,
-			    sizeof(edst));
+			memcpy(edst, tokenbroadcastaddr, sizeof(edst));
 		}
 		else {
-			bcopy((caddr_t)ar_tha(ah), (caddr_t)edst, sizeof(edst));
+			caddr_t tha = (caddr_t)ar_tha(ah);
+			KASSERT(tha);
+			if (tha)
+				bcopy(tha, (caddr_t)edst, sizeof(edst));
 			trh = (struct token_header *)M_TRHSTART(m);
 			trh->token_ac = TOKEN_AC;
 			trh->token_fc = TOKEN_FC;
@@ -408,8 +430,8 @@ token_output(ifp, m0, dst, rt0)
 #ifdef	LLC
 /*	case AF_NSAP: */
 	case AF_CCITT: {
-		struct sockaddr_dl *sdl =
-		    (struct sockaddr_dl *) rt -> rt_gateway;
+		struct sockaddr_dl *sdl = rt ? 
+		    (struct sockaddr_dl *) rt -> rt_gateway : NULL;
 
 		if (sdl && sdl->sdl_family == AF_LINK
 		    && sdl->sdl_alen > 0) {
@@ -519,27 +541,14 @@ token_output(ifp, m0, dst, rt0)
 send:
 #endif
 
-	mflags = m->m_flags;
-	len = m->m_pkthdr.len;
-	s = splnet();
-	/*
-	 * Queue message on interface, and start output if interface
-	 * not yet active.
-	 */
-	IFQ_ENQUEUE(&ifp->if_snd, m, &pktattr, error);
-	if (error) {
-		/* mbuf is already freed */
-		splx(s);
-		return (error);
+#if NCARP > 0
+	if (ifp0 != ifp && ifp0->if_type == IFT_CARP) {
+		bcopy(LLADDR(ifp0->if_sadl), (caddr_t)trh->token_shost,	    
+		    sizeof(trh->token_shost));
 	}
-	ifp->if_obytes += len;
-	if (mflags & M_MCAST)
-		ifp->if_omcasts++;
-	if ((ifp->if_flags & IFF_OACTIVE) == 0)
-		(*ifp->if_start)(ifp);
-	splx(s);
-	return (error);
+#endif /* NCARP > 0 */
 
+	return ifq_enqueue(ifp, m ALTQ_COMMA ALTQ_DECL(&pktattr));
 bad:
 	if (m)
 		m_freem(m);
@@ -552,9 +561,7 @@ bad:
  * the token ring header.
  */
 static void
-token_input(ifp, m)
-	struct ifnet *ifp;
-	struct mbuf *m;
+token_input(struct ifnet *ifp, struct mbuf *m)
 {
 	struct ifqueue *inq;
 	struct llc *l;
@@ -569,7 +576,7 @@ token_input(ifp, m)
 	trh = mtod(m, struct token_header *);
 
 	ifp->if_ibytes += m->m_pkthdr.len;
-	if (bcmp((caddr_t)tokenbroadcastaddr, (caddr_t)trh->token_dhost,
+	if (memcmp(tokenbroadcastaddr, trh->token_dhost,
 	    sizeof(tokenbroadcastaddr)) == 0)
 		m->m_flags |= M_BCAST;
 	else if (trh->token_dhost[0] & 1)
@@ -601,6 +608,13 @@ token_input(ifp, m)
 			goto dropanyway;
 		etype = ntohs(l->llc_snap.ether_type);
 		m_adj(m, LLC_SNAPFRAMELEN);
+#if NCARP > 0
+		if (ifp->if_carp && ifp->if_type != IFT_CARP &&
+		    (carp_input(m, (u_int8_t *)&trh->token_shost,
+		    (u_int8_t *)&trh->token_dhost, l->llc_snap.ether_type) == 0))
+			return;
+#endif /* NCARP > 0 */
+
 		switch (etype) {
 #ifdef INET
 		case ETHERTYPE_IP:
@@ -753,9 +767,7 @@ token_input(ifp, m)
  * Perform common duties while attaching to interface list
  */
 void
-token_ifattach(ifp, lla)
-	struct ifnet *ifp;
-	caddr_t	lla;
+token_ifattach(struct ifnet *ifp, caddr_t lla)
 {
 
 	ifp->if_type = IFT_ISO88025;
@@ -779,8 +791,7 @@ token_ifattach(ifp, lla)
 }
 
 void
-token_ifdetach(ifp)
-        struct ifnet *ifp;
+token_ifdetach(struct ifnet *ifp)
 {
 
 #if NBPFILTER > 0

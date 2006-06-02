@@ -1,4 +1,4 @@
-/*	$NetBSD: hmacmd5.c,v 1.1.1.1 2004/05/17 23:45:02 christos Exp $	*/
+/*	$NetBSD: hmacmd5.c,v 1.1.1.3 2005/12/21 23:17:15 christos Exp $	*/
 
 /*
  * Copyright (C) 2004  Internet Systems Consortium, Inc. ("ISC")

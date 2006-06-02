@@ -1,4 +1,4 @@
-/*	$NetBSD: cftoken.l,v 1.1.1.4.2.3 2005/11/21 21:12:30 tron Exp $	*/
+/*	$NetBSD: cftoken.l,v 1.6 2005/11/21 14:20:28 manu Exp $	*/
 
 /* Id: cftoken.l,v 1.31.2.7 2005/11/06 17:18:26 monas Exp */
 

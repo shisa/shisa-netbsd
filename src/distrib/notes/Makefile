@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.34.2.1 2005/09/02 20:27:41 tron Exp $
+#	$NetBSD: Makefile,v 1.36 2006/04/05 18:37:00 garbled Exp $
 #
 
 .include <bsd.own.mk>
@@ -36,6 +36,7 @@ SUBDIR+= next68k
 SUBDIR+= pc532
 SUBDIR+= pmax
 SUBDIR+= pmppc
+SUBDIR+= prep
 SUBDIR+= sandpoint
 SUBDIR+= sgimips
 SUBDIR+= shark

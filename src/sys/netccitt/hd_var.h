@@ -1,4 +1,4 @@
-/*	$NetBSD: hd_var.h,v 1.11 2003/08/07 16:33:01 agc Exp $	*/
+/*	$NetBSD: hd_var.h,v 1.13 2005/12/10 23:31:41 elad Exp $	*/
 
 /*
  * Copyright (c) 1990, 1993
@@ -72,6 +72,9 @@
  *
  *	@(#)hd_var.h	8.1 (Berkeley) 6/10/93
  */
+
+#ifndef _NETCCITT_HD_VAR_H_
+#define _NETCCITT_HD_VAR_H_
 
 /*
  *
@@ -172,7 +175,7 @@ int hd_decode __P((struct hdcb *, struct Hdlc_frame *));
 void hd_writeinternal __P((struct hdcb *, int, int ));
 void hd_append __P((struct hdtxq *, struct mbuf *));
 void hd_flush __P((struct ifnet *));
-void hd_message __P((struct hdcb *, char *));
+void hd_message __P((struct hdcb *, const char *));
 int hd_status __P((struct hdcb *));
 struct mbuf *hd_remove __P((struct hdtxq *));
 
@@ -180,3 +183,5 @@ struct mbuf *hd_remove __P((struct hdtxq *));
 void hd_timer __P((void));
 
 #endif
+
+#endif /* !_NETCCITT_HD_VAR_H_ */

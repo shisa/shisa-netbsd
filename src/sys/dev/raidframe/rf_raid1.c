@@ -1,4 +1,4 @@
-/*	$NetBSD: rf_raid1.c,v 1.25.2.1 2005/06/17 13:36:25 tron Exp $	*/
+/*	$NetBSD: rf_raid1.c,v 1.27 2005/12/11 12:23:37 christos Exp $	*/
 /*
  * Copyright (c) 1995 Carnegie-Mellon University.
  * All rights reserved.
@@ -33,7 +33,7 @@
  *****************************************************************************/
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: rf_raid1.c,v 1.25.2.1 2005/06/17 13:36:25 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: rf_raid1.c,v 1.27 2005/12/11 12:23:37 christos Exp $");
 
 #include "rf_raid.h"
 #include "rf_raid1.h"

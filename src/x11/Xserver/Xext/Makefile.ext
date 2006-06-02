@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile.ext,v 1.9.4.1 2005/04/06 21:01:39 tron Exp $
+#	$NetBSD: Makefile.ext,v 1.10 2005/03/21 00:49:17 rtr Exp $
 
 .PATH:		${X11SRCDIR.xc}/programs/Xserver/Xext
 

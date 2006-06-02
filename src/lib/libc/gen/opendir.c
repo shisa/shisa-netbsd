@@ -1,4 +1,4 @@
-/*	$NetBSD: opendir.c,v 1.26 2005/01/19 00:53:33 mycroft Exp $	*/
+/*	$NetBSD: opendir.c,v 1.31 2006/05/17 20:36:50 christos Exp $	*/
 
 /*
  * Copyright (c) 1983, 1993
@@ -34,12 +34,13 @@
 #if 0
 static char sccsid[] = "@(#)opendir.c	8.7 (Berkeley) 12/10/94";
 #else
-__RCSID("$NetBSD: opendir.c,v 1.26 2005/01/19 00:53:33 mycroft Exp $");
+__RCSID("$NetBSD: opendir.c,v 1.31 2006/05/17 20:36:50 christos Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
 #include "namespace.h"
 #include "reentrant.h"
+#include "extern.h"
 #include <sys/param.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
@@ -52,16 +53,13 @@ __RCSID("$NetBSD: opendir.c,v 1.26 2005/01/19 00:53:33 mycroft Exp $");
 #include <string.h>
 #include <unistd.h>
 
-#ifdef __weak_alias
-__weak_alias(opendir,_opendir)
-#endif
+#include "dirent_private.h"
 
 /*
  * Open a directory.
  */
 DIR *
-opendir(name)
-	const char *name;
+opendir(const char *name)
 {
 
 	_DIAGASSERT(name != NULL);
@@ -70,9 +68,7 @@ opendir(name)
 }
 
 DIR *
-__opendir2(name, flags)
-	const char *name;
-	int flags;
+__opendir2(const char *name, int flags)
 {
 	DIR *dirp = NULL;
 	int fd;
@@ -224,7 +220,7 @@ retry:
 					struct dirent *dp;
 
 					dp = (struct dirent *)(void *)ddptr;
-					if ((long)dp & 03)
+					if ((long)dp & _DIRENT_ALIGN(dp))
 						break;
 					/*
 					 * d_reclen is unsigned,
@@ -307,7 +303,8 @@ retry:
 		mutex_init((mutex_t *)dirp->dd_lock, NULL);
 	}
 #endif
-	dirp->dd_rewind = telldir(dirp);
+	dirp->dd_internal = NULL;
+	(void)_telldir_unlocked(dirp);
 	return (dirp);
 error:
 	serrno = errno;

@@ -1,4 +1,4 @@
-/*	$NetBSD: zs.c,v 1.20 2004/09/04 13:43:11 tsutsui Exp $	*/
+/*	$NetBSD: zs.c,v 1.23 2006/03/29 04:16:46 thorpej Exp $	*/
 
 /*-
  * Copyright (c) 1996 The NetBSD Foundation, Inc.
@@ -48,7 +48,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: zs.c,v 1.20 2004/09/04 13:43:11 tsutsui Exp $");
+__KERNEL_RCSID(0, "$NetBSD: zs.c,v 1.23 2006/03/29 04:16:46 thorpej Exp $");
 
 #include "opt_ddb.h"
 
@@ -190,7 +190,7 @@ static void
 zs_attach(struct device *parent, struct device *self, void *aux)
 {
 	struct zsc_softc *zsc = (void *) self;
-	struct cfdata *cf = self->dv_cfdata;
+	struct cfdata *cf = device_cfdata(self);
 	struct hb_attach_args *ha = aux;
 	struct zsc_attach_args zsc_args;
 	struct zsdevice *zs;
@@ -582,7 +582,7 @@ zscninit(struct consdev *cn)
 
 	extern const struct cdevsw zstty_cdevsw;
 	extern int tty00_is_console;
-	extern volatile u_char *sccport0a;
+	extern uint32_t sccport0a;
 
 	cn->cn_dev = makedev(cdevsw_lookup_major(&zstty_cdevsw), 0);
 	if (tty00_is_console)

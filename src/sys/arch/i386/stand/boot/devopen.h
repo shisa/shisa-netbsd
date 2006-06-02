@@ -1,3 +1,5 @@
-/* $NetBSD: devopen.h,v 1.1 2003/04/16 22:36:14 dsl Exp $ */
+/*	$NetBSD: devopen.h,v 1.3 2005/12/11 12:17:47 christos Exp $	*/
 
-int bios2dev(int, char **, u_int *, u_int, u_int *);
+extern int boot_biosdev;
+
+void bios2dev(int, u_int, char **, int *, int *);

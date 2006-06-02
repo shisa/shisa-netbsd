@@ -1,4 +1,4 @@
-/*	$NetBSD: i82365var.h,v 1.22 2005/02/04 02:10:36 perry Exp $	*/
+/*	$NetBSD: i82365var.h,v 1.26 2006/02/16 20:17:16 perry Exp $	*/
 
 /*
  * Copyright (c) 1997 Marc Horowitz.  All rights reserved.
@@ -161,7 +161,7 @@ struct pcic_softc {
 
 int	pcic_ident_ok(int);
 int	pcic_vendor(struct pcic_handle *);
-char	*pcic_vendor_to_string(int);
+const char *pcic_vendor_to_string(int);
 
 void	pcic_attach(struct pcic_softc *);
 void	pcic_attach_sockets(struct pcic_softc *);
@@ -169,8 +169,8 @@ void	pcic_attach_sockets_finish(struct pcic_softc *);
 int	pcic_intr(void *arg);
 
 /*
-static inline int pcic_read(struct pcic_handle *, int);
-static inline void pcic_write(struct pcic_handle *, int, u_int8_t);
+static __inline int pcic_read(struct pcic_handle *, int);
+static __inline void pcic_write(struct pcic_handle *, int, u_int8_t);
 */
 
 int	pcic_chip_mem_alloc(pcmcia_chipset_handle_t, bus_size_t,

@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile.sh3,v 1.19 2004/06/04 04:45:51 thorpej Exp $
+#	$NetBSD: Makefile.sh3,v 1.22 2006/03/17 16:06:52 uebayasi Exp $
 
 # Makefile for NetBSD
 #
@@ -26,7 +26,7 @@ NEED_OWN_INSTALL_TARGET?=no
 ##
 THISSH3=	$S/arch/${MACHINE}
 SH3=		$S/arch/sh3
-GENASSYM=	${SH3}/sh3/genassym.cf
+GENASSYM_CONF=	${SH3}/sh3/genassym.cf
 .-include "${THISSH3}/conf/Makefile.${MACHINE}.inc"
 
 ##
@@ -59,9 +59,8 @@ locore.o: ${THISSH3}/${MACHINE}/locore.S assym.h
 ##
 ## (5) link settings
 ##
-# LINKFORMAT possibly set by individual sh3 port
-# LDSCRIPTBASE comes from the kernel's config
-LINKFORMAT?=	-T ${THISSH3}/conf/${LDSCRIPTBASE}
+TEXTADDR?=	${DEFTEXTADDR}
+LINKFLAGS_NORMAL=	-X
 
 ##
 ## (6) port specific target dependencies

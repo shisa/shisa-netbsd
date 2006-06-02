@@ -1,4 +1,4 @@
-/*	$NetBSD: mach_thread.c,v 1.34.2.1 2005/10/04 22:08:11 tron Exp $ */
+/*	$NetBSD: mach_thread.c,v 1.36 2005/12/11 12:20:20 christos Exp $ */
 
 /*-
  * Copyright (c) 2002-2003 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mach_thread.c,v 1.34.2.1 2005/10/04 22:08:11 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: mach_thread.c,v 1.36 2005/12/11 12:20:20 christos Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>

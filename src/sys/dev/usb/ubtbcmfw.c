@@ -1,4 +1,4 @@
-/*	$NetBSD: ubtbcmfw.c,v 1.9 2004/09/17 14:11:24 skrll Exp $	*/
+/*	$NetBSD: ubtbcmfw.c,v 1.12 2006/05/14 21:47:00 elad Exp $	*/
 
 /*
  * Copyright (c) 2002 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ubtbcmfw.c,v 1.9 2004/09/17 14:11:24 skrll Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ubtbcmfw.c,v 1.12 2006/05/14 21:47:00 elad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -107,16 +107,17 @@ USB_ATTACH(ubtbcmfw)
 	usbd_device_handle dev = uaa->device;
 	usbd_interface_handle iface;
 	usbd_status err;
-	char devinfo[1024];
+	char *devinfop;
 	char name[256];
 	char buf[16];
 	usbd_pipe_handle intr_in_pipe;
 	usbd_pipe_handle bulk_out_pipe;
 	uint n;
 
-	usbd_devinfo(dev, 0, devinfo, sizeof(devinfo));
+	devinfop = usbd_devinfo_alloc(dev, 0);
 	USB_ATTACH_SETUP;
-	printf("%s: %s\n", USBDEVNAME(sc->sc_dev), devinfo);
+	printf("%s: %s\n", USBDEVNAME(sc->sc_dev), devinfop);
+	usbd_devinfo_free(devinfop);
 
 	err = usbd_set_config_no(dev, CONFIG_NO, 1);
 	if (err) {
@@ -221,7 +222,7 @@ ubtbcmfw_load_file(usbd_device_handle dev, usbd_pipe_handle out,
 	char buf[1024];
 	struct timeval delta;
 
-	NDINIT(&nd, LOOKUP, FOLLOW, UIO_SYSSPACE, filename, p);
+	NDINIT(&nd, LOOKUP, FOLLOW, UIO_SYSSPACE, filename, curlwp);
 	/* Loop until we are well passed boot */
 	for (;;) {
 		error = vn_open(&nd, FREAD, 0);
@@ -246,7 +247,7 @@ ubtbcmfw_load_file(usbd_device_handle dev, usbd_pipe_handle out,
 	for (offs = 0; ; offs += size) {
 		size = sizeof buf;
 		error = vn_rdwr(UIO_READ, vp, buf, size, offs, UIO_SYSSPACE,
-		    IO_NODELOCKED | IO_SYNC, p->p_ucred, &resid, NULL);
+		    IO_NODELOCKED | IO_SYNC, p->p_cred, &resid, NULL);
 		size -= resid;
 		if (error || size == 0)
 			break;
@@ -257,7 +258,7 @@ ubtbcmfw_load_file(usbd_device_handle dev, usbd_pipe_handle out,
 	}
 
 out:
-	vn_close(vp, FREAD, p->p_ucred, p);
+	vn_close(vp, FREAD, p->p_cred, p);
 	return error;
 }
 

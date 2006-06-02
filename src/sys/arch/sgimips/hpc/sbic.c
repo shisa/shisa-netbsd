@@ -1,4 +1,4 @@
-/*	$NetBSD: sbic.c,v 1.17 2004/01/10 02:55:54 sekiya Exp $	*/
+/*	$NetBSD: sbic.c,v 1.21 2006/03/29 04:16:47 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1990 The Regents of the University of California.
@@ -79,7 +79,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: sbic.c,v 1.17 2004/01/10 02:55:54 sekiya Exp $");
+__KERNEL_RCSID(0, "$NetBSD: sbic.c,v 1.21 2006/03/29 04:16:47 thorpej Exp $");
 
 #include "opt_ddb.h"
 
@@ -128,7 +128,8 @@ int	wd33c93_xfin (struct wd33c93_softc *, int, void *);
 int	wd33c93_poll (struct wd33c93_softc *, struct wd33c93_acb *);
 int	wd33c93_nextstate (struct wd33c93_softc *, struct wd33c93_acb *,
 				u_char, u_char);
-int	wd33c93_abort (struct wd33c93_softc *, struct wd33c93_acb *, char *);
+int	wd33c93_abort (struct wd33c93_softc *, struct wd33c93_acb *,
+     const char *);
 void	wd33c93_xferdone (struct wd33c93_softc *);
 void	wd33c93_error (struct wd33c93_softc *, struct wd33c93_acb *);
 void	wd33c93_scsidone (struct wd33c93_softc *, struct wd33c93_acb *, int);
@@ -220,7 +221,7 @@ wd33c93_attach(struct wd33c93_softc *dev)
 		return;
 	}
 
-	dev->sc_cfflags = dev->sc_dev.dv_cfdata->cf_flags;
+	dev->sc_cfflags = device_cfdata(&dev->sc_dev)->cf_flags;
 	wd33c93_init(dev);
 
 	dev->sc_child = config_found(&dev->sc_dev, &dev->sc_channel,
@@ -825,7 +826,8 @@ wd33c93_wait(struct wd33c93_softc *dev, u_char until, int timeo, int line)
 }
 
 int
-wd33c93_abort(struct wd33c93_softc *dev, struct wd33c93_acb *acb, char *where)
+wd33c93_abort(struct wd33c93_softc *dev, struct wd33c93_acb *acb,
+     const char *where)
 {
 	u_char csr, asr;
 
@@ -2174,7 +2176,7 @@ wd33c93_update_xfer_mode(struct wd33c93_softc *sc, int target)
  *
  * cycle = DIV / (2 * CLK)
  * DIV = FS + 2
- * best we can do is 200ns at 20Mhz, 2 cycles
+ * best we can do is 200ns at 20 MHz, 2 cycles
  */
 int
 wd33c93_div2stp(struct wd33c93_softc *dev, int div)

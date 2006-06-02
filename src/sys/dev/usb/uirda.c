@@ -1,4 +1,4 @@
-/*	$NetBSD: uirda.c,v 1.18 2004/10/23 13:28:26 augustss Exp $	*/
+/*	$NetBSD: uirda.c,v 1.20 2005/12/11 12:24:01 christos Exp $	*/
 
 /*
  * Copyright (c) 2001 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: uirda.c,v 1.18 2004/10/23 13:28:26 augustss Exp $");
+__KERNEL_RCSID(0, "$NetBSD: uirda.c,v 1.20 2005/12/11 12:24:01 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -227,14 +227,14 @@ struct uirda_softc {
 
 #define UIRDA_WR_TIMEOUT 200
 
-int uirda_open(void *h, int flag, int mode, usb_proc_ptr p);
-int uirda_close(void *h, int flag, int mode, usb_proc_ptr p);
+int uirda_open(void *h, int flag, int mode, struct lwp *l);
+int uirda_close(void *h, int flag, int mode, struct lwp *l);
 int uirda_read(void *h, struct uio *uio, int flag);
 int uirda_write(void *h, struct uio *uio, int flag);
 int uirda_set_params(void *h, struct irda_params *params);
 int uirda_get_speeds(void *h, int *speeds);
 int uirda_get_turnarounds(void *h, int *times);
-int uirda_poll(void *h, int events, usb_proc_ptr p);
+int uirda_poll(void *h, int events, struct lwp *l);
 int uirda_kqfilter(void *h, struct knote *kn);
 
 struct irframe_methods uirda_methods = {
@@ -291,7 +291,7 @@ USB_ATTACH(uirda)
 	USB_ATTACH_START(uirda, sc, uaa);
 	usbd_device_handle	dev = uaa->device;
 	usbd_interface_handle	iface = uaa->iface;
-	char			devinfo[1024];
+	char			*devinfop;
 	usb_endpoint_descriptor_t *ed;
 	usbd_status		err;
 	u_int8_t		epcount;
@@ -301,9 +301,10 @@ USB_ATTACH(uirda)
 
 	DPRINTFN(10,("uirda_attach: sc=%p\n", sc));
 
-	usbd_devinfo(dev, 0, devinfo, sizeof(devinfo));
+	devinfop = usbd_devinfo_alloc(dev, 0);
 	USB_ATTACH_SETUP;
-	printf("%s: %s\n", USBDEVNAME(sc->sc_dev), devinfo);
+	printf("%s: %s\n", USBDEVNAME(sc->sc_dev), devinfop);
+	usbd_devinfo_free(devinfop);
 
 	sc->sc_udev = dev;
 	sc->sc_iface = iface;
@@ -440,7 +441,7 @@ uirda_activate(device_ptr_t self, enum devact act)
 }
 
 int
-uirda_open(void *h, int flag, int mode, usb_proc_ptr p)
+uirda_open(void *h, int flag, int mode, struct lwp *l)
 {
 	struct uirda_softc *sc = h;
 	int error;
@@ -509,7 +510,7 @@ bad1:
 }
 
 int
-uirda_close(void *h, int flag, int mode, usb_proc_ptr p)
+uirda_close(void *h, int flag, int mode, struct lwp *l)
 {
 	struct uirda_softc *sc = h;
 
@@ -656,7 +657,7 @@ uirda_write(void *h, struct uio *uio, int flag)
 }
 
 int
-uirda_poll(void *h, int events, usb_proc_ptr p)
+uirda_poll(void *h, int events, struct lwp *l)
 {
 	struct uirda_softc *sc = h;
 	int revents = 0;
@@ -673,7 +674,7 @@ uirda_poll(void *h, int events, usb_proc_ptr p)
 			revents |= events & (POLLIN | POLLRDNORM);
 		} else {
 			DPRINTFN(2,("%s: recording select\n", __func__));
-			selrecord(p, &sc->sc_rd_sel);
+			selrecord(l, &sc->sc_rd_sel);
 		}
 	}
 	splx(s);

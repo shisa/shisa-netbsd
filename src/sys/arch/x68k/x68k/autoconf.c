@@ -1,4 +1,4 @@
-/*	$NetBSD: autoconf.c,v 1.41 2005/01/18 07:12:16 chs Exp $	*/
+/*	$NetBSD: autoconf.c,v 1.47 2006/02/23 05:37:49 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1995 Leo Weppelman
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.41 2005/01/18 07:12:16 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.47 2006/02/23 05:37:49 thorpej Exp $");
 
 #include "opt_compat_netbsd.h"
 #include "scsibus.h"
@@ -73,7 +73,7 @@ cpu_configure(void)
 {
 	x68k_realconfig = 1;
 
-	if (config_rootfound("mainbus", "mainbus") == NULL)
+	if (config_rootfound("mainbus", NULL) == NULL)
 		panic("no mainbus found");
 
 	/* Turn on interrupts */
@@ -92,7 +92,7 @@ cpu_rootconf(void)
 }
 
 /*
- * use config_search to find appropriate device, then call that device
+ * use config_search_ia to find appropriate device, then call that device
  * directly with NULL device variable storage.  A device can then 
  * always tell the difference between the real and console init 
  * by checking for NULL.
@@ -115,7 +115,7 @@ x68k_config_found(struct cfdata *pcfp, struct device *pdp, void *auxp,
 	pdp->dv_cfdata = pcfp;
 	pdp->dv_cfdriver = config_cfdriver_lookup(pcfp->cf_name);
 	pdp->dv_unit = 0;
-	if ((cf = config_search((cfmatch_t)NULL, pdp, auxp)) != NULL) {
+	if ((cf = config_search_ia(NULL, pdp, NULL, auxp)) != NULL) {
 		ca = config_cfattach_lookup(cf->cf_name, cf->cf_atname);
 		if (ca != NULL) {
 			(*ca->ca_attach)(pdp, NULL, auxp);
@@ -142,11 +142,11 @@ config_console(void)
 	/*
 	 * we need mainbus' cfdata.
 	 */
-	cf = config_rootsearch(NULL, "mainbus", "mainbus");
+	cf = config_rootsearch(NULL, "mainbus", NULL);
 	if (cf == NULL)
 		panic("no mainbus");
-	x68k_config_found(cf, NULL, "intio", NULL);
-	x68k_config_found(cf, NULL, "grfbus", NULL);
+	x68k_config_found(cf, NULL, __UNCONST("intio"), NULL);
+	x68k_config_found(cf, NULL, __UNCONST("grfbus"), NULL);
 }
 
 dev_t	bootdev = 0;
@@ -202,7 +202,7 @@ device_register(struct device *dev, void *aux)
 	 * not available driver independantly later.
 	 * For disks, there is nothing useful available at attach time.
 	 */
-	if (dev->dv_class == DV_IFNET) {
+	if (device_class(dev) == DV_IFNET) {
 		majdev = B_TYPE(bootdev);
 		if (X68K_BOOT_DEV_IS_NETIF(majdev)) {
 			sprintf(tname, "%s%d",
@@ -261,8 +261,8 @@ scsi_find(dev_t bdev)
 
 		for (scsibus = TAILQ_FIRST(&alldevs); scsibus;
 					scsibus = TAILQ_NEXT(scsibus, dv_list))
-			if (scsibus->dv_parent
-			    && !strcmp(tname, scsibus->dv_parent->dv_xname))
+			if (device_parent(scsibus)
+			    && !strcmp(tname, device_parent(scsibus)->dv_xname))
 				break;
 	}
 	if (!scsibus)
@@ -322,10 +322,10 @@ mbattach(struct device *pdp, struct device *dp, void *auxp)
 
 	printf("\n");
 
-	config_found(dp, "intio"  , NULL);
-	config_found(dp, "grfbus" , NULL);
-	config_found(dp, "par"    , NULL);
-	config_found(dp, "com"    , NULL);
-	config_found(dp, "com"    , NULL);
-	config_found(dp, "*"      , NULL);
+	config_found(dp, __UNCONST("intio")  , NULL);
+	config_found(dp, __UNCONST("grfbus") , NULL);
+	config_found(dp, __UNCONST("par")    , NULL);
+	config_found(dp, __UNCONST("com")    , NULL);
+	config_found(dp, __UNCONST("com")    , NULL);
+	config_found(dp, __UNCONST("*")      , NULL);
 }

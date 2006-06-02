@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.14.4.1 2005/04/06 20:41:03 tron Exp $
+# $NetBSD: mi,v 1.15 2005/03/18 20:45:42 tron Exp $
 ./etc/X11
 ./etc/fonts
 ./etc/fonts/fonts.conf

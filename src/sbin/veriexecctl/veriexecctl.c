@@ -1,4 +1,4 @@
-/*	$NetBSD: veriexecctl.c,v 1.5.6.11 2005/07/02 15:46:26 tron Exp $	*/
+/*	$NetBSD: veriexecctl.c,v 1.20 2005/12/13 10:56:16 dsl Exp $	*/
 
 /*-
  * Copyright 2005 Elad Efrat <elad@bsd.org.il>
@@ -137,6 +137,11 @@ phase1_preload(void)
 void
 phase2_load(void)
 {
+	/*
+	 * If there's no access type specified, use the default.
+	 */
+	if (!(params.type & (VERIEXEC_DIRECT|VERIEXEC_INDIRECT|VERIEXEC_FILE)))
+		params.type |= VERIEXEC_DIRECT;
 	if (ioctl(gfd, VERIEXEC_LOAD, &params) == -1)
 		warn("Cannot load params from `%s'", params.file);
 	free(params.fingerprint);
@@ -202,6 +207,64 @@ usage(void)
 	exit(1);
 }
 
+static void
+print_flags(unsigned char flags)
+{
+	char buf[64];
+
+	if (!flags) {
+		printf("<none>\n");
+		return;
+	}
+
+	memset(buf, 0, sizeof(buf));
+
+	while (flags) {
+		if (*buf)
+			strlcat(buf, ", ", sizeof(buf));
+
+		if (flags & VERIEXEC_DIRECT) {
+			strlcat(buf, "direct", sizeof(buf));
+			flags &= ~VERIEXEC_DIRECT;
+			continue;
+		}
+		if (flags & VERIEXEC_INDIRECT) {
+			strlcat(buf, "indirect", sizeof(buf));
+			flags &= ~VERIEXEC_INDIRECT;
+			continue;
+		}
+		if (flags & VERIEXEC_FILE) {
+			strlcat(buf, "file", sizeof(buf));
+			flags &= ~VERIEXEC_FILE;
+			continue;
+		}
+		if (flags & VERIEXEC_UNTRUSTED) {
+			strlcat(buf, "untrusted", sizeof(buf));
+			flags &= ~VERIEXEC_UNTRUSTED;
+			continue;
+		}
+	}
+
+	printf("%s\n", buf);
+}
+
+static void
+print_query(struct veriexec_query_params *qp, char *file)
+{
+	int i;
+
+	printf("Filename: %s\n", file);
+	printf("Device: %d, inode: %" PRIu64 "\n", qp->dev, qp->ino);
+	printf("Entry flags: ");
+	print_flags(qp->type);
+	printf("Entry status: %s\n", STATUS_STRING(qp->status));
+	printf("Hashing algorithm: %s\n", qp->fp_type);
+	printf("Fingerprint: ");
+	for (i = 0; i < qp->hash_len; i++)
+		printf("%02x", qp->fp[i]);
+	printf("\n");	
+}
+
 int
 main(int argc, char **argv)
 {
@@ -231,6 +294,53 @@ main(int argc, char **argv)
 	if (argc == 2 && strcasecmp(argv[0], "load") == 0) {
 		filename = argv[1];
 		fingerprint_load(argv[1]);
+	} else if (argc == 2 && strcasecmp(argv[0], "delete") == 0) {
+		struct veriexec_delete_params dp;
+		struct stat sb;
+
+		/* Get device and inode */
+		if (stat(argv[1], &sb) == -1)
+			err(1, "Can't stat `%s'", argv[1]);
+
+		/*
+		 * If it's a regular file, remove it. If it's a directory,
+		 * remove the entire table. If it's neither, abort.
+		 */
+		if (S_ISDIR(sb.st_mode))
+			dp.ino = 0;
+		else if (S_ISREG(sb.st_mode))
+			dp.ino = sb.st_ino;
+		else
+			errx(1, "`%s' is not a regular file or directory.", argv[1]);
+
+		dp.dev = sb.st_dev;
+
+		if (ioctl(gfd, VERIEXEC_DELETE, &dp) == -1)
+			err(1, "Error deleting `%s'", argv[1]);
+	} else if (argc == 2 && strcasecmp(argv[0], "query") == 0) {
+		struct veriexec_query_params qp;
+		struct stat sb;
+		char fp[512]; /* XXX */
+
+		memset(&qp, 0, sizeof(qp));
+		qp.uaddr = &qp;
+
+		/* Get device and inode */
+		if (stat(argv[1], &sb) == -1)
+			err(1, "Can't stat `%s'", argv[1]);
+		if (!S_ISREG(sb.st_mode))
+			errx(1, "`%s' is not a regular file.", argv[1]);
+
+		qp.ino = sb.st_ino;
+		qp.dev = sb.st_dev;
+		memset(fp, 0, sizeof(fp));
+		qp.fp = &fp[0];
+		qp.fp_bufsize = sizeof(fp);
+
+		if (ioctl(gfd, VERIEXEC_QUERY, &qp) == -1)
+			err(1, "Error querying `%s'", argv[1]);
+
+		print_query(&qp, argv[1]);
 	} else
 		usage();
 

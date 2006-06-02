@@ -1,4 +1,4 @@
-/* $NetBSD: sha512.c,v 1.2.2.1 2005/09/12 12:18:33 tron Exp $ */
+/* $NetBSD: sha512.c,v 1.2 2005/08/25 09:51:23 tron Exp $ */
 
 #if HAVE_NBTOOL_CONFIG_H
 #include "nbtool_config.h"

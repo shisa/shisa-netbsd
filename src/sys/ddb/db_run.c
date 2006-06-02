@@ -1,4 +1,4 @@
-/*	$NetBSD: db_run.c,v 1.22 2002/02/15 07:33:52 simonb Exp $	*/
+/*	$NetBSD: db_run.c,v 1.25 2006/04/02 00:57:30 he Exp $	*/
 
 /*
  * Mach Operating System
@@ -34,7 +34,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: db_run.c,v 1.22 2002/02/15 07:33:52 simonb Exp $");
+__KERNEL_RCSID(0, "$NetBSD: db_run.c,v 1.25 2006/04/02 00:57:30 he Exp $");
 
 #include "opt_ddb.h"
 
@@ -252,7 +252,7 @@ db_single_step(db_regs_t *regs)
 /* single-step */
 /*ARGSUSED*/
 void
-db_single_step_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
+db_single_step_cmd(db_expr_t addr, int have_addr, db_expr_t count, const char *modif)
 {
 	boolean_t print = FALSE;
 
@@ -276,7 +276,7 @@ db_single_step_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
 /*ARGSUSED*/
 void
 db_trace_until_call_cmd(db_expr_t addr, int have_addr, db_expr_t count,
-    char *modif)
+    const char *modif)
 {
 	boolean_t print = FALSE;
 
@@ -295,7 +295,7 @@ db_trace_until_call_cmd(db_expr_t addr, int have_addr, db_expr_t count,
 /*ARGSUSED*/
 void
 db_trace_until_matching_cmd(db_expr_t addr, int have_addr, db_expr_t count,
-    char *modif)
+    const char *modif)
 {
 	boolean_t print = FALSE;
 
@@ -315,7 +315,7 @@ db_trace_until_matching_cmd(db_expr_t addr, int have_addr, db_expr_t count,
 /* continue */
 /*ARGSUSED*/
 void
-db_continue_cmd(db_expr_t addr, int have_addr, db_expr_t count, char *modif)
+db_continue_cmd(db_expr_t addr, int have_addr, db_expr_t count, const char *modif)
 {
 
 	if (modif[0] == 'c')
@@ -443,7 +443,8 @@ db_set_temp_breakpoint(db_breakpoint_t bkpt, db_addr_t addr)
 	bkpt->count = 1;
 
 	bkpt->bkpt_inst = db_get_value(bkpt->address, BKPT_SIZE, FALSE);
-	db_put_value(bkpt->address, BKPT_SIZE, BKPT_SET(bkpt->bkpt_inst));
+	db_put_value(bkpt->address, BKPT_SIZE,
+		BKPT_SET(bkpt->bkpt_inst, bkpt->address));
 }
 
 void

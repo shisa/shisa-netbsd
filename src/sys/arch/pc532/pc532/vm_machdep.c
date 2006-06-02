@@ -1,4 +1,4 @@
-/*	$NetBSD: vm_machdep.c,v 1.62 2004/09/17 14:11:21 skrll Exp $	*/
+/*	$NetBSD: vm_machdep.c,v 1.66 2006/05/12 06:05:23 simonb Exp $	*/
 
 /*-
  * Copyright (c) 1982, 1986 The Regents of the University of California.
@@ -78,7 +78,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: vm_machdep.c,v 1.62 2004/09/17 14:11:21 skrll Exp $");
+__KERNEL_RCSID(0, "$NetBSD: vm_machdep.c,v 1.66 2006/05/12 06:05:23 simonb Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -98,7 +98,7 @@ __KERNEL_RCSID(0, "$NetBSD: vm_machdep.c,v 1.62 2004/09/17 14:11:21 skrll Exp $"
 
 extern struct lwp *fpu_lwp;
 
-void	setredzone __P((u_short *, caddr_t));
+void	setredzone(u_short *, caddr_t);
 
 /*
  * Finish a fork operation, with process p2 nearly set up.
@@ -119,12 +119,8 @@ void	setredzone __P((u_short *, caddr_t));
  * accordingly.
  */
 void
-cpu_lwp_fork(l1, l2, stack, stacksize, func, arg)
-	struct lwp *l1, *l2;
-	void *stack;
-	size_t stacksize;
-	void (*func) __P((void *));
-	void *arg;
+cpu_lwp_fork(struct lwp *l1, struct lwp *l2, void *stack, size_t stacksize,
+    void (*func)(void *), void *arg)
 {
 	struct pcb *pcb = &l2->l_addr->u_pcb;
 	struct syscframe *tf;
@@ -171,10 +167,7 @@ cpu_lwp_fork(l1, l2, stack, stacksize, func, arg)
 }
 
 void
-cpu_setfunc(l, func, arg)
-	struct lwp *l;
-	void (*func) __P((void *));
-	void *arg;
+cpu_setfunc(struct lwp *l, void (*func)(void *), void *arg)
 {
 	struct pcb *pcb = &l->l_addr->u_pcb;
 	struct syscframe *tf;
@@ -200,9 +193,9 @@ cpu_setfunc(l, func, arg)
  * saved, so that it goes out with the pcb, which is in the user area.
  */
 void
-cpu_swapout(l)
-	struct lwp *l;
+cpu_swapout(struct lwp *l)
 {
+
 	/*
 	 * Make sure we save the FP state before the user area vanishes.
 	 */
@@ -229,8 +222,7 @@ cpu_lwp_free(struct lwp *l, int proc)
  * jumps into switch() to wait for another process to wake up.
  */
 void
-cpu_exit(arg)
-	struct lwp *arg;
+cpu_exit(struct lwp *arg)
 {
 	extern struct user *proc0paddr;
 	register struct lwp *l __asm("r3");
@@ -261,20 +253,20 @@ struct md_core {
 };
 
 int
-cpu_coredump(l, vp, cred, chdr)
-	struct lwp *l;
-	struct vnode *vp;
-	struct ucred *cred;
-	struct core *chdr;
+cpu_coredump(struct lwp *l, void *iocookie, struct core *chdr)
 {
 	struct md_core md_core;
 	struct coreseg cseg;
 	int error;
 
-	CORE_SETMAGIC(*chdr, COREMAGIC, MID_MACHINE, 0);
-	chdr->c_hdrsize = ALIGN(sizeof(*chdr));
-	chdr->c_seghdrsize = ALIGN(sizeof(cseg));
-	chdr->c_cpusize = sizeof(md_core);
+	if (iocookie == NULL) {
+		CORE_SETMAGIC(*chdr, COREMAGIC, MID_MACHINE, 0);
+		chdr->c_hdrsize = ALIGN(sizeof(*chdr));
+		chdr->c_seghdrsize = ALIGN(sizeof(cseg));
+		chdr->c_cpusize = sizeof(md_core);
+		chdr->c_nseg++;
+		return 0;
+	}
 
 	/* Save integer registers. */
 	error = process_read_regs(l, &md_core.intreg);
@@ -290,38 +282,32 @@ cpu_coredump(l, vp, cred, chdr)
 	cseg.c_addr = 0;
 	cseg.c_size = chdr->c_cpusize;
 
-	error = vn_rdwr(UIO_WRITE, vp, (caddr_t)&cseg, chdr->c_seghdrsize,
-	    (off_t)chdr->c_hdrsize, UIO_SYSSPACE, IO_NODELOCKED|IO_UNIT, cred,
-	    NULL, NULL);
+	error = coredump_write(iocookie, UIO_SYSSPACE, &cseg,
+	    chdr->c_seghdrsize);
 	if (error)
 		return error;
 
-	error = vn_rdwr(UIO_WRITE, vp, (caddr_t)&md_core, sizeof(md_core),
-	    (off_t)(chdr->c_hdrsize + chdr->c_seghdrsize), UIO_SYSSPACE,
-	    IO_NODELOCKED|IO_UNIT, cred, NULL, NULL);
-	if (error)
-		return error;
-
-	chdr->c_nseg++;
-	return 0;
+	return coredump_write(iocookie, UIO_SYSSPACE, &md_core,
+	    sizeof(md_core));
 }
 
 #if 0
 /*
  * Set a red zone in the kernel stack after the u. area.
  */
-setredzone(pte, vaddr)
-	u_short *pte;
-	caddr_t vaddr;
+setredzone(u_short *pte, caddr_t vaddr)
 {
-/* eventually do this by setting up an expand-down stack segment
-   for ss0: selector, allowing stack access down to top of u.
-   this means though that protection violations need to be handled
-   thru a double fault exception that must do an integral task
-   switch to a known good context, within which a dump can be
-   taken. a sensible scheme might be to save the initial context
-   used by sched (that has physical memory mapped 1:1 at bottom)
-   and take the dump while still in mapped mode */
+
+/*
+ * eventually do this by setting up an expand-down stack segment
+ * for ss0: selector, allowing stack access down to top of u.
+ * this means though that protection violations need to be handled
+ * thru a double fault exception that must do an integral task
+ * switch to a known good context, within which a dump can be
+ * taken. a sensible scheme might be to save the initial context
+ * used by sched (that has physical memory mapped 1:1 at bottom)
+ * and take the dump while still in mapped mode.
+ */
 }
 #endif
 
@@ -329,8 +315,7 @@ setredzone(pte, vaddr)
  * Convert kernel VA to physical address
  */
 int
-kvtop(addr)
-	register caddr_t addr;
+kvtop(caddr_t addr)
 {
 	paddr_t pa;
 
@@ -345,9 +330,7 @@ kvtop(addr)
  * do not need to pass an access_type to pmap_enter().
  */
 void
-vmapbuf(bp, len)
-	struct buf *bp;
-	vsize_t len;
+vmapbuf(struct buf *bp, vsize_t len)
 {
 	vaddr_t faddr, taddr, off;
 	paddr_t fpa;
@@ -357,7 +340,7 @@ vmapbuf(bp, len)
 	faddr = trunc_page((vaddr_t)bp->b_saveaddr = bp->b_data);
 	off = (vaddr_t)bp->b_data - faddr;
 	len = round_page(off + len);
-	taddr= uvm_km_valloc_wait(phys_map, len);
+	taddr= uvm_km_alloc(phys_map, len, 0, UVM_KMF_VAONLY | UVM_KMF_WAITVA);
 	bp->b_data = (caddr_t)(taddr + off);
 	/*
 	 * The region is locked, so we expect that pmap_pte() will return
@@ -386,9 +369,7 @@ vmapbuf(bp, len)
  * Unmap a previously-mapped user I/O request.
  */
 void
-vunmapbuf(bp, len)
-	struct buf *bp;
-	vsize_t len;
+vunmapbuf(struct buf *bp, vsize_t len)
 {
 	vaddr_t addr, off;
 
@@ -399,7 +380,7 @@ vunmapbuf(bp, len)
 	len = round_page(off + len);
 	pmap_kremove(addr, len);
 	pmap_update(pmap_kernel());
-	uvm_km_free_wakeup(phys_map, addr, len);
+	uvm_km_free(phys_map, addr, len, UVM_KMF_VAONLY);
 	bp->b_data = bp->b_saveaddr;
 	bp->b_saveaddr = 0;
 }

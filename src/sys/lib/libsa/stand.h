@@ -1,4 +1,4 @@
-/*	$NetBSD: stand.h,v 1.54 2005/02/26 22:58:57 perry Exp $	*/
+/*	$NetBSD: stand.h,v 1.61 2006/01/25 22:44:37 uwe Exp $	*/
 
 /*
  * Copyright (c) 1999 Christopher G. Demetriou.  All rights reserved.
@@ -83,6 +83,7 @@
 #define vprintf		libsa_vprintf
 #define vsprintf	libsa_vsprintf
 #endif
+#define bcmp(s1, s2, l)	memcmp(s1, s2, l)
 #ifdef LIBSA_USE_MEMSET
 #define	bzero(s, l)	memset(s, 0, l)
 #endif
@@ -218,25 +219,31 @@ int	(devopen)(struct open_file *, const char *, char **);
 #ifdef HEAP_VARIABLE
 void	setheap(void *, void *);
 #endif
-void	*alloc(unsigned int);
-void	free(void *, unsigned int);
+void	*alloc(size_t);
+void	dealloc(void *, size_t);
 struct	disklabel;
 char	*getdisklabel(const char *, struct disklabel *);
 int	dkcksum(const struct disklabel *);
 
-void	printf(const char *, ...);
-int	sprintf(char *, const char *, ...);
-int	snprintf(char *, size_t, const char *, ...);
-void	vprintf(const char *, _BSD_VA_LIST_);
-int	vsprintf(char *, const char *, _BSD_VA_LIST_);
-int	vsnprintf(char *, size_t, const char *, _BSD_VA_LIST_);
+void	printf(const char *, ...)
+    __attribute__((__format__(__printf__, 1, 2)));
+int	sprintf(char *, const char *, ...)
+    __attribute__((__format__(__printf__, 2, 3)));
+int	snprintf(char *, size_t, const char *, ...)
+    __attribute__((__format__(__printf__, 3, 4)));
+void	vprintf(const char *, _BSD_VA_LIST_)
+    __attribute__((__format__(__printf__, 1, 0)));
+int	vsprintf(char *, const char *, _BSD_VA_LIST_)
+    __attribute__((__format__(__printf__, 2, 0)));
+int	vsnprintf(char *, size_t, const char *, _BSD_VA_LIST_)
+    __attribute__((__format__(__printf__, 3, 0)));
 void	twiddle(void);
 void	gets(char *);
 int	getfile(char *prompt, int mode);
 char	*strerror(int);
-__dead void	exit(int) __attribute__((noreturn));
-__dead void	panic(const char *, ...) __attribute__((noreturn));
-__dead void	_rtt(void) __attribute__((noreturn));
+__dead void	exit(int) __attribute__((__noreturn__));
+__dead void	panic(const char *, ...) __attribute__((__noreturn__));
+__dead void	_rtt(void) __attribute__((__noreturn__));
 void	(bcopy)(const void *, void *, size_t);
 void	*memcpy(void *, const void *, size_t);
 void	*memmove(void *, const void *, size_t);
@@ -247,7 +254,7 @@ int	open(const char *, int);
 int	close(int);
 void	closeall(void);
 ssize_t	read(int, void *, size_t);
-ssize_t	write(int, void *, size_t);
+ssize_t	write(int, const void *, size_t);
 off_t	lseek(int, off_t, int);
 int	ioctl(int, u_long, char *);
 int	stat(const char *, struct stat *);
@@ -281,5 +288,8 @@ int	oclose(int);
 ssize_t	oread(int, void *, size_t);
 off_t	olseek(int, off_t, int);
 #endif
+
+extern const char HEXDIGITS[];
+extern const char hexdigits[];
 
 #endif /* _LIBSA_STAND_H_ */

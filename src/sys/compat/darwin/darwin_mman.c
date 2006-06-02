@@ -1,6 +1,6 @@
 #undef DEBUG_DARWIN
 #undef DEBUG_MACH
-/*	$NetBSD: darwin_mman.c,v 1.15 2005/02/26 23:10:18 perry Exp $ */
+/*	$NetBSD: darwin_mman.c,v 1.20 2005/12/11 12:19:56 christos Exp $ */
 
 /*-
  * Copyright (c) 2002 The NetBSD Foundation, Inc.
@@ -39,7 +39,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: darwin_mman.c,v 1.15 2005/02/26 23:10:18 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: darwin_mman.c,v 1.20 2005/12/11 12:19:56 christos Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -56,6 +56,8 @@ __KERNEL_RCSID(0, "$NetBSD: darwin_mman.c,v 1.15 2005/02/26 23:10:18 perry Exp $
 #include <sys/sa.h>
 
 #include <sys/syscallargs.h>
+
+#include <compat/sys/signal.h>
 
 #include <compat/common/compat_file.h>
 
@@ -138,15 +140,13 @@ darwin_sys_load_shared_file(l, v, retval)
 	vp = (struct vnode *)fp->f_data;
 	vref(vp);
 
-	/* XXX maximum count ? */
-	if (SCARG(uap, count) < 0)
-		return EINVAL;
-	maplen = sizeof(*mapp) * SCARG(uap, count);
-	if (maplen > PAGE_SIZE) {
-		error = ENOMEM;
+	if (SCARG(uap, count) < 0 ||
+	    SCARG(uap, count) > PAGE_SIZE / sizeof(*mapp)) {
+		error = EINVAL;
 		goto bad3;
 	}
-	mapp = malloc(sizeof(*mapp) * SCARG(uap, count), M_TEMP, M_WAITOK);
+	maplen = SCARG(uap, count) * sizeof(*mapp);
+	mapp = malloc(maplen, M_TEMP, M_WAITOK);
 
 	if ((error = copyin(SCARG(uap, mappings), mapp, maplen)) != 0)
 		goto bad2;
@@ -223,7 +223,7 @@ darwin_sys_load_shared_file(l, v, retval)
 		    i, evc.ev_addr, evc.ev_len));
 
 		vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);
-		if ((error = (*evc.ev_proc)(p, &evc)) != 0) {
+		if ((error = (*evc.ev_proc)(l, &evc)) != 0) {
 			VOP_UNLOCK(vp, 0);
 			DPRINTF(("Failed\n"));
 			goto bad2;
@@ -235,7 +235,7 @@ bad2:
 	free(mapp, M_TEMP);
 bad3:
 	vrele(vp);
-	FILE_UNUSE(fp, p);
+	FILE_UNUSE(fp, l);
 	SCARG(&close_cup, fd) = fd;
 	if ((error = sys_close(l, &close_cup, retval)) != 0)
 		return error;

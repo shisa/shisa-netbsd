@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.532.2.26 2005/11/21 20:29:23 tron Exp $
+# $NetBSD: mi,v 1.624 2006/05/30 00:42:28 christos Exp $
 .						base-sys-root
 ./altroot					base-sys-root
 ./bin						base-sys-root
@@ -70,9 +70,10 @@
 ./etc/defaults					base-sys-root
 ./etc/disklabels				base-obsolete		obsolete
 ./etc/fonts					base-x11-root
-./etc/kerberosIV				base-krb4-root
+./etc/iscsi					base-sysutil-root
+./etc/kerberosIV				base-obsolete		obsolete
 ./etc/kerberosV					base-krb5-root
-./etc/mail					base-sendmail-root
+./etc/mail					base-obsolete		obsolete
 ./etc/mtree					base-sys-root
 ./etc/mtree/set.base				base-sys-root
 ./etc/namedb					base-bind-root
@@ -98,6 +99,8 @@
 ./lib/libdes.so					base-obsolete		obsolete
 ./lib/libdes.so.6				base-obsolete		obsolete
 ./lib/libdes.so.6.0				base-obsolete		obsolete
+./libdata					base-sys-root
+./libdata/firmware				base-sys-root
 ./libexec					base-sys-root
 ./mnt						base-sys-root
 ./rescue					base-sys-root
@@ -121,6 +124,7 @@
 ./sbin/dumplfs					base-obsolete		obsolete
 ./sbin/fastboot					base-sysutil-root
 ./sbin/fasthalt					base-sysutil-root
+./sbin/fdisk					base-sysutil-root
 ./sbin/fsck					base-sysutil-root
 ./sbin/fsck_ext2fs				base-ext2fs-root
 ./sbin/fsck_ffs					base-sysutil-root
@@ -131,10 +135,10 @@
 ./sbin/halt					base-sysutil-root
 ./sbin/ifconfig					base-netutil-root
 ./sbin/init					base-sysutil-root
-./sbin/ipf					base-netutil-root	ipfilter
+./sbin/ipf					base-ipf-root		ipfilter
 ./sbin/ipppctl					base-netutil-root
 ./sbin/ispppcontrol				base-obsolete		obsolete
-./sbin/lmcctl					base-netutil-root
+./sbin/lmcctl					base-obsolete		obsolete
 ./sbin/mbrlabel					base-sysutil-root
 ./sbin/mknod					base-sysutil-root
 ./sbin/modload					base-sysutil-root
@@ -158,6 +162,9 @@
 ./sbin/mount_procfs				base-sysutil-root
 ./sbin/mount_ptyfs				base-miscfs-root
 ./sbin/mount_smbfs				base-smbfs-root
+./sbin/mount_sysvbfs				base-sysutil-root
+./sbin/mount_tmpfs				base-miscfs-root
+./sbin/mount_udf				base-sysutil-root
 ./sbin/mount_ufs				base-sysutil-root
 ./sbin/mount_umap				base-miscfs-root
 ./sbin/mount_union				base-miscfs-root
@@ -166,14 +173,15 @@
 ./sbin/newfs					base-sysutil-root
 ./sbin/newfs_lfs				base-sysutil-root
 ./sbin/newfs_msdos				base-sysutil-root
+./sbin/newfs_sysvbfs				base-sysutil-root
 ./sbin/newlfs					base-obsolete		obsolete
 ./sbin/nfsd					base-obsolete		obsolete
 ./sbin/nfsiod					base-obsolete		obsolete
 ./sbin/nologin					base-sysutil-root
-./sbin/pfctl					base-netutil-root	pf
-./sbin/pflogd					base-netutil-root	pf
+./sbin/pfctl					base-pf-root		pf
+./sbin/pflogd					base-pf-root		pf
 ./sbin/ping					base-netutil-root
-./sbin/ping6					base-netutil-root	inet6
+./sbin/ping6					base-netutil-root	use_inet6
 ./sbin/poweroff					base-sysutil-root
 ./sbin/pppoectl					base-netutil-root
 ./sbin/quotacheck				base-obsolete		obsolete
@@ -188,8 +196,10 @@
 ./sbin/route					base-netutil-root
 ./sbin/routed					base-router-root
 ./sbin/rrestore					base-netutil-root
-./sbin/rtsol					base-netutil-root	inet6
+./sbin/rtsol					base-netutil-root	use_inet6
 ./sbin/savecore					base-sysutil-root
+./sbin/scan_ffs					base-sysutil-root
+./sbin/scan_lfs					base-sysutil-root
 ./sbin/scsictl					base-sysutil-root
 ./sbin/setkey					base-netutil-root
 ./sbin/shutdown					base-sysutil-root
@@ -203,7 +213,7 @@
 ./sbin/umount					base-sysutil-root
 ./sbin/veriexecctl				base-sysutil-root
 ./sbin/verifiedexec_load			base-obsolete		obsolete
-./sbin/vinum					base-sysutil-root
+./sbin/vinum					base-obsolete		obsolete
 ./sbin/wdogctl					base-sysutil-root
 ./sbin/wsconsctl				base-sysutil-root
 ./stand						base-sys-root
@@ -225,7 +235,7 @@
 ./usr/X11R6/include/X11/bitmaps			base-x11-root
 ./usr/X11R6/include/X11/extensions		base-x11-root
 ./usr/X11R6/include/X11/fonts			base-x11-root
-./usr/X11R6/include/X11/fonts/codeconv		base-x11-root
+./usr/X11R6/include/X11/fonts/codeconv		base-obsolete		obsolete
 ./usr/X11R6/include/X11/pixmaps			base-x11-root
 ./usr/X11R6/include/fontconfig			base-x11-root
 ./usr/X11R6/include/freetype2			base-x11-root
@@ -342,7 +352,7 @@
 ./usr/X11R6/lib/X11/xkb/symbols/xfree68		base-x11-root
 ./usr/X11R6/lib/X11/xkb/types			base-x11-root
 ./usr/X11R6/lib/modules				base-x11-root
-./usr/X11R6/lib/modules/codeconv		base-x11-root-obsolete	obsolete
+./usr/X11R6/lib/modules/codeconv		base-obsolete		obsolete
 ./usr/X11R6/lib/modules/drivers			base-x11-root
 ./usr/X11R6/lib/modules/extensions		base-x11-root
 ./usr/X11R6/lib/modules/fonts			base-x11-root
@@ -409,10 +419,11 @@
 ./usr/bin/cpp					base-util-bin		gcccmds
 ./usr/bin/crontab				base-cron-bin
 ./usr/bin/ctags					base-c-bin
-./usr/bin/cu					base-uucp-bin		uucp
+./usr/bin/cu					base-util-bin
 ./usr/bin/cut					base-util-bin
 ./usr/bin/db					base-util-bin
 ./usr/bin/dc					base-util-bin
+./usr/bin/deroff				base-util-bin
 ./usr/bin/diff					base-util-bin
 ./usr/bin/diff3					base-util-bin
 ./usr/bin/dig					base-netutil-bin
@@ -473,7 +484,7 @@
 ./usr/bin/kgetcred				base-krb5-bin		kerberos
 ./usr/bin/kinit					base-krb5-bin		kerberos
 ./usr/bin/klist					base-krb5-bin		kerberos
-./usr/bin/kpasswd				base-krb5-bin		kerberos
+./usr/bin/kpasswd				base-krb5-bin		use_kerberos
 ./usr/bin/ktrace				base-debug-bin
 ./usr/bin/ktruss				base-debug-bin
 ./usr/bin/lam					base-util-bin
@@ -543,6 +554,7 @@
 ./usr/bin/patch					base-util-bin
 ./usr/bin/pathchk				base-util-bin
 ./usr/bin/pawd					base-amd-bin
+./usr/bin/paxctl				base-util-bin
 ./usr/bin/pgrep					base-util-bin
 ./usr/bin/pkill					base-util-bin
 ./usr/bin/pmap					base-util-bin
@@ -552,6 +564,8 @@
 ./usr/bin/progress				base-util-bin
 ./usr/bin/purgestat				base-mailwrapper-bin
 ./usr/bin/pwhash				base-util-bin
+./usr/bin/qsafe					base-util-bin
+./usr/bin/qsieve				base-util-bin
 ./usr/bin/qsubst				base-util-bin
 ./usr/bin/quota					base-util-bin
 ./usr/bin/radioctl				base-audio-bin
@@ -598,6 +612,7 @@
 ./usr/bin/slogin				base-secsh-bin		crypto
 ./usr/bin/sockstat				base-util-bin
 ./usr/bin/sort					base-util-bin
+./usr/bin/spell					base-util-bin
 ./usr/bin/split					base-util-bin
 ./usr/bin/ssh					base-secsh-bin		crypto
 ./usr/bin/ssh-add				base-secsh-bin		crypto
@@ -638,6 +653,7 @@
 ./usr/bin/usbhidaction				base-util-bin
 ./usr/bin/usbhidctl				base-util-bin
 ./usr/bin/users					base-util-bin
+./usr/bin/utoppya				base-util-bin
 ./usr/bin/uucp					base-uucp-bin		uucp
 ./usr/bin/uudecode				base-util-bin
 ./usr/bin/uuencode				base-util-bin
@@ -672,7 +688,7 @@
 ./usr/bin/yes					base-util-bin
 ./usr/bin/ypcat					base-nis-bin		yp
 ./usr/bin/ypmatch				base-nis-bin		yp
-./usr/bin/yppasswd				base-nis-bin		yp
+./usr/bin/yppasswd				base-nis-bin		use_yp
 ./usr/bin/ypwhich				base-nis-bin		yp
 ./usr/bin/zcat					base-util-bin
 ./usr/bin/zcmp					base-util-bin
@@ -689,7 +705,7 @@
 ./usr/include/adosfs				base-c-usr
 ./usr/include/altq				base-c-usr
 ./usr/include/arpa				base-c-usr
-./usr/include/cdk				base-c-usr
+./usr/include/cdk				base-obsolete		obsolete
 ./usr/include/compat				base-obsolete		obsolete
 ./usr/include/crypto				base-c-usr
 ./usr/include/dev				base-c-usr
@@ -722,26 +738,30 @@
 ./usr/include/dev/sun				base-c-usr
 ./usr/include/dev/tc				base-c-usr
 ./usr/include/dev/usb				base-c-usr
-./usr/include/dev/vinum				base-c-usr
+./usr/include/dev/vinum				base-obsolete		obsolete
 ./usr/include/dev/vme				base-c-usr
 ./usr/include/dev/wscons			base-c-usr
 ./usr/include/filecorefs			base-c-usr
 ./usr/include/fs				base-c-usr
 ./usr/include/fs/smbfs				base-c-usr
+./usr/include/fs/sysvbfs			base-c-usr
+./usr/include/fs/udf				base-c-usr
 ./usr/include/g++				base-cxx-usr
 ./usr/include/g++/backward			base-cxx-usr
 ./usr/include/g++/bits				base-cxx-usr
+./usr/include/g++/debug				base-cxx-usr
 ./usr/include/g++/ext				base-cxx-usr
 ./usr/include/g++/gen				base-obsolete		obsolete
 ./usr/include/g++/std				base-cxx-usr
+./usr/include/g++/tr1				base-cxx-usr
 ./usr/include/gssapi				base-c-usr
 ./usr/include/gssapi/rpc			base-obsolete		obsolete
 ./usr/include/isofs				base-c-usr
 ./usr/include/isofs/cd9660			base-c-usr
 ./usr/include/kadm5				base-c-usr
-./usr/include/kerberosIV			base-c-usr
+./usr/include/kerberosIV			base-obsolete		obsolete
 ./usr/include/krb5				base-c-usr
-./usr/include/libmilter				base-sendmail-usr
+./usr/include/libmilter				base-obsolete		obsolete
 ./usr/include/machine				base-c-usr
 ./usr/include/milter				base-obsolete		obsolete
 ./usr/include/miscfs				base-c-usr
@@ -776,6 +796,7 @@
 ./usr/include/ntfs				base-c-usr
 ./usr/include/objc				base-objc-usr
 ./usr/include/openssl				base-c-usr
+./usr/include/prop				base-c-usr
 ./usr/include/protocols				base-c-usr
 ./usr/include/readline				base-c-usr
 ./usr/include/rpc				base-c-usr
@@ -831,14 +852,16 @@
 ./usr/lib/runemodule/libUTF8.so.3		base-obsolete		obsolete
 ./usr/lib/runemodule/libUTF8.so.3.0		base-obsolete		obsolete
 ./usr/libdata					base-sys-usr
+./usr/libdata/firmware				base-sys-usr
 ./usr/libdata/lint				base-c-usr
 ./usr/libexec					base-sys-usr
 ./usr/libexec/atrun				base-cron-bin
+./usr/libexec/ching				base-games-usr
 ./usr/libexec/comsat				base-mail-bin
 ./usr/libexec/cpp				base-obsolete		obsolete
 ./usr/libexec/dnskeygen				base-obsolete		obsolete
 ./usr/libexec/fingerd				base-netutil-bin
-./usr/libexec/ftp-proxy				base-netutil-bin	pf
+./usr/libexec/ftp-proxy				base-pf-bin		pf
 ./usr/libexec/ftpd				base-netutil-bin
 ./usr/libexec/getNAME				base-man-bin
 ./usr/libexec/getty				base-sysutil-bin
@@ -855,14 +878,17 @@
 ./usr/libexec/locate.updatedb			base-sysutil-bin
 ./usr/libexec/lpr				base-lpr-usr
 ./usr/libexec/lpr/lpf				base-lpr-bin
+./usr/libexec/lpr/pjlfilter			base-lpr-bin
 ./usr/libexec/mail.local			base-mail-bin
 ./usr/libexec/makekey				base-crypto-bin
 ./usr/libexec/makewhatis			base-man-bin
 ./usr/libexec/named-xfer			base-obsolete		obsolete
 ./usr/libexec/ntalkd				base-netutil-bin
 ./usr/libexec/postfix				base-postfix-usr
+./usr/libexec/postfix/anvil			base-postfix-bin	postfix
 ./usr/libexec/postfix/bounce			base-postfix-bin	postfix
 ./usr/libexec/postfix/cleanup			base-postfix-bin	postfix
+./usr/libexec/postfix/discard			base-postfix-bin	postfix
 ./usr/libexec/postfix/error			base-postfix-bin	postfix
 ./usr/libexec/postfix/flush			base-postfix-bin	postfix
 ./usr/libexec/postfix/lmtp			base-postfix-bin	postfix
@@ -874,11 +900,14 @@
 ./usr/libexec/postfix/pipe			base-postfix-bin	postfix
 ./usr/libexec/postfix/proxymap			base-postfix-bin	postfix
 ./usr/libexec/postfix/qmgr			base-postfix-bin	postfix
+./usr/libexec/postfix/qmqpd			base-obsolete		obsolete
+./usr/libexec/postfix/scache			base-postfix-bin	postfix
 ./usr/libexec/postfix/sendmail			base-postfix-bin	postfix
 ./usr/libexec/postfix/showq			base-postfix-bin	postfix
 ./usr/libexec/postfix/smtp			base-postfix-bin	postfix
 ./usr/libexec/postfix/smtpd			base-postfix-bin	postfix
 ./usr/libexec/postfix/spawn			base-postfix-bin	postfix
+./usr/libexec/postfix/tlsmgr			base-postfix-bin	postfix
 ./usr/libexec/postfix/trivial-rewrite		base-postfix-bin	postfix
 ./usr/libexec/postfix/verify			base-postfix-bin	postfix
 ./usr/libexec/postfix/virtual			base-postfix-bin	postfix
@@ -891,17 +920,18 @@
 ./usr/libexec/rpc.rwalld			base-rpcserver-bin
 ./usr/libexec/rpc.sprayd			base-rpcserver-bin
 ./usr/libexec/rshd				base-netutil-bin
-./usr/libexec/sendmail				base-sendmail-bin
-./usr/libexec/sendmail/sendmail			base-sendmail-bin	sendmail
+./usr/libexec/sendmail				base-obsolete		obsolete
+./usr/libexec/sendmail/sendmail			base-obsolete		obsolete
 ./usr/libexec/sftp-server			base-secsh-bin		crypto
-./usr/libexec/sm.bin				base-sendmail-usr
-./usr/libexec/smrsh				base-sendmail-bin	sendmail
+./usr/libexec/sm.bin				base-obsolete		obsolete
+./usr/libexec/smrsh				base-obsolete		obsolete
 ./usr/libexec/pfspamd				base-obsolete		obsolete
 ./usr/libexec/spamd				base-obsolete		obsolete
 ./usr/libexec/pfspamd-setup			base-obsolete		obsolete
 ./usr/libexec/spamd-setup			base-obsolete		obsolete
 ./usr/libexec/pfspamlogd			base-obsolete		obsolete
 ./usr/libexec/spamlogd				base-obsolete		obsolete
+./usr/libexec/spellprog				base-util-bin
 ./usr/libexec/ssh-keysign			base-secsh-bin		crypto
 ./usr/libexec/telnetd				base-netutil-bin
 ./usr/libexec/tftpd				base-netutil-bin
@@ -924,7 +954,7 @@
 ./usr/sbin/amd					base-amd-bin
 ./usr/sbin/amq					base-amd-bin
 ./usr/sbin/arp					base-netutil-bin
-./usr/sbin/authpf				base-netutil-bin	pf
+./usr/sbin/authpf				base-pf-bin		pf
 ./usr/sbin/bootpd				base-bootserver-bin
 ./usr/sbin/bootpef				base-bootserver-bin
 ./usr/sbin/bootpgw				base-bootserver-bin
@@ -945,8 +975,8 @@
 ./usr/sbin/diskpart				base-sysutil-bin
 ./usr/sbin/dnsquery				base-obsolete		obsolete
 ./usr/sbin/dnssec-keygen			base-bind-bin
-./usr/sbin/dnssec-makekeyset			base-bind-bin
-./usr/sbin/dnssec-signkey			base-bind-bin
+./usr/sbin/dnssec-makekeyset			base-obsolete		obsolete
+./usr/sbin/dnssec-signkey			base-obsolete		obsolete
 ./usr/sbin/dnssec-signzone			base-bind-bin
 ./usr/sbin/dtmfdecode				base-isdn-bin
 ./usr/sbin/dumpfs				base-sysutil-bin
@@ -957,15 +987,18 @@
 ./usr/sbin/envstat				base-sysutil-bin
 ./usr/sbin/eshconfig				base-sysutil-bin
 ./usr/sbin/etcupdate				base-sysutil-bin
+./usr/sbin/extattrctl				base-sysutil-bin
 ./usr/sbin/faithd				base-router-bin		inet6
 ./usr/sbin/fixmount				base-nfsclient-bin
 ./usr/sbin/flush				base-obsolete		obsolete
 ./usr/sbin/fsinfo				base-sysutil-bin
 ./usr/sbin/fssconfig				base-sysutil-bin
+./usr/sbin/fwctl				base-sysutil-bin
 ./usr/sbin/g711conv				base-obsolete		obsolete
 ./usr/sbin/getencstat				base-sysutil-bin
 ./usr/sbin/gettable				base-obsolete		obsolete
 ./usr/sbin/gifconfig				base-obsolete		obsolete
+./usr/sbin/gpioctl				base-sysutil-bin
 ./usr/sbin/greconfig				base-obsolete		obsolete
 ./usr/sbin/group				base-sysutil-bin
 ./usr/sbin/groupadd				base-sysutil-bin
@@ -974,6 +1007,8 @@
 ./usr/sbin/groupmod				base-sysutil-bin
 ./usr/sbin/hlfsd				base-amd-bin
 ./usr/sbin/host					base-obsolete		obsolete
+./usr/sbin/hostapd				base-sysutil-bin
+./usr/sbin/hostapd_cli				base-sysutil-bin
 ./usr/sbin/hprop				base-krb5-bin		kerberos
 ./usr/sbin/htable				base-obsolete		obsolete
 ./usr/sbin/ifmcstat				base-netutil-bin	inet6
@@ -982,22 +1017,24 @@
 ./usr/sbin/installboot				base-sysutil-bin
 ./usr/sbin/iopctl				base-sysutil-bin
 ./usr/sbin/iostat				base-sysutil-bin
-./usr/sbin/ipfs					base-netutil-bin	ipfilter
-./usr/sbin/ipfstat				base-netutil-bin	ipfilter
-./usr/sbin/ipftest				base-netutil-bin	ipfilter
-./usr/sbin/ipmon				base-netutil-bin	ipfilter
-./usr/sbin/ipnat				base-router-bin		ipfilter
-./usr/sbin/ippool				base-netutil-root	ipfilter
-./usr/sbin/ipresend				base-netutil-bin	ipfilter
-./usr/sbin/ipsend				base-netutil-bin	ipfilter
-./usr/sbin/iptest				base-netutil-bin	ipfilter
+./usr/sbin/ipfs					base-ipf-bin		ipfilter
+./usr/sbin/ipfstat				base-ipf-bin		ipfilter
+./usr/sbin/ipftest				base-ipf-bin		ipfilter
+./usr/sbin/ipmon				base-ipf-bin		ipfilter
+./usr/sbin/ipnat				base-ipf-bin		ipfilter
+./usr/sbin/ippool				base-ipf-root		ipfilter
+./usr/sbin/ipresend				base-ipf-bin		ipfilter
+./usr/sbin/ipsend				base-ipf-bin		ipfilter
+./usr/sbin/iptest				base-ipf-bin		ipfilter
 ./usr/sbin/irdaattach				base-sysutil-bin
+./usr/sbin/iscsi-target				base-iscsi-bin
 ./usr/sbin/isdnd				base-isdn-bin
 ./usr/sbin/isdnmonitor				base-isdn-bin
 ./usr/sbin/isdntel				base-isdn-bin
 ./usr/sbin/isdntelctl				base-isdn-bin
 ./usr/sbin/isdntrace				base-isdn-bin
 ./usr/sbin/ispppcontrol				base-obsolete		obsolete
+./usr/sbin/iwictl				base-sysutil-bin
 ./usr/sbin/kadmin				base-krb5-bin		kerberos
 ./usr/sbin/kdc					base-krb5-bin		kerberos
 ./usr/sbin/kmpstat				base-obsolete		obsolete
@@ -1007,6 +1044,7 @@
 ./usr/sbin/lastlogin				base-sysutil-bin
 ./usr/sbin/link					base-sysutil-bin
 ./usr/sbin/linkfarm				base-pkgutil-bin
+./usr/sbin/lmcconfig				base-netutil-bin
 ./usr/sbin/lmtp					base-obsolete		obsolete
 ./usr/sbin/lpc					base-lpr-bin
 ./usr/sbin/lpd					base-lpr-bin
@@ -1016,7 +1054,7 @@
 ./usr/sbin/mailwrapper				base-mailwrapper-bin
 ./usr/sbin/makedbm				base-nis-bin		yp
 ./usr/sbin/makefs				base-sysutil-bin
-./usr/sbin/makemap				base-sendmail-bin	sendmail
+./usr/sbin/makemap				base-obsolete		obsolete
 ./usr/sbin/map-mbone				base-netutil-bin
 ./usr/sbin/mbrlabel				base-obsolete		obsolete
 ./usr/sbin/mdconfig				base-sysutil-bin
@@ -1024,7 +1062,7 @@
 ./usr/sbin/mk-amd-map				base-amd-bin
 ./usr/sbin/mkalias				base-nis-bin		yp
 ./usr/sbin/mknetid				base-nis-bin		yp
-./usr/sbin/mld6query				base-netutil-bin	inet6
+./usr/sbin/mld6query				base-netutil-bin	use_inet6
 ./usr/sbin/mlxctl				base-sysutil-bin
 ./usr/sbin/mopa.out				base-obsolete		obsolete
 ./usr/sbin/mopchk				base-bootserver-bin
@@ -1094,7 +1132,7 @@
 ./usr/sbin/pppdump				base-ppp-bin
 ./usr/sbin/pppoectl				base-obsolete		obsolete
 ./usr/sbin/pppstats				base-ppp-bin
-./usr/sbin/praliases				base-sendmail-bin	sendmail
+./usr/sbin/praliases				base-obsolete		obsolete
 ./usr/sbin/pstat				base-sysutil-bin
 ./usr/sbin/pvcsif				base-netutil-bin
 ./usr/sbin/pvctxctl				base-netutil-bin
@@ -1115,14 +1153,14 @@
 ./usr/sbin/rndc					base-bind-bin
 ./usr/sbin/rndc-confgen				base-bind-bin
 ./usr/sbin/rmt					base-sysutil-bin
-./usr/sbin/route6d				base-router-bin		inet6
+./usr/sbin/route6d				base-router-bin		use_inet6
 ./usr/sbin/rpc.bootparamd			base-bootserver-bin
 ./usr/sbin/rpc.lockd				base-nfsserver-bin
 ./usr/sbin/rpc.pcnfsd				base-nfsserver-bin
 ./usr/sbin/rpc.statd				base-nfsserver-bin
 ./usr/sbin/rpc.yppasswdd			base-nis-bin		yp
 ./usr/sbin/rpcbind				base-rpcbind-bin
-./usr/sbin/rtadvd				base-router-bin		inet6
+./usr/sbin/rtadvd				base-router-bin		use_inet6
 ./usr/sbin/rtquery				base-netutil-bin
 ./usr/sbin/rtsold				base-netutil-bin	inet6
 ./usr/sbin/rwhod				base-netutil-bin
@@ -1144,13 +1182,14 @@
 ./usr/sbin/spray				base-rpcutil-bin
 ./usr/sbin/sshd					base-secsh-bin		crypto
 ./usr/sbin/statmsg				base-obsolete		obsolete
+./usr/sbin/sti					base-sysutil-bin
 ./usr/sbin/stdethers				base-nis-bin		yp
 ./usr/sbin/stdhosts				base-nis-bin		yp
 ./usr/sbin/sunlabel				base-sysutil-bin
 ./usr/sbin/sup					base-sup-bin
 ./usr/sbin/supfilesrv				base-sup-bin
 ./usr/sbin/supscan				base-sup-bin
-./usr/sbin/sushi				base-sushi-bin
+./usr/sbin/sushi				base-obsolete		obsolete
 ./usr/sbin/sysconfd				base-obsolete		obsolete
 ./usr/sbin/sysctl				base-obsolete		obsolete
 ./usr/sbin/syslogd				base-sysutil-bin
@@ -1161,7 +1200,7 @@
 ./usr/sbin/timed				base-timed-bin
 ./usr/sbin/timedc				base-timed-bin
 ./usr/sbin/traceroute				base-netutil-bin
-./usr/sbin/traceroute6				base-netutil-bin	inet6
+./usr/sbin/traceroute6				base-netutil-bin	use_inet6
 ./usr/sbin/trpt					base-netutil-bin
 ./usr/sbin/trsp					base-netutil-bin
 ./usr/sbin/unlink				base-sysutil-bin
@@ -1178,6 +1217,9 @@
 ./usr/sbin/wiconfig				base-sysutil-bin
 ./usr/sbin/wire-test				base-netutil-bin
 ./usr/sbin/wlanctl				base-sysutil-bin
+./usr/sbin/wpa_cli				base-sysutil-bin
+./usr/sbin/wpa_passphrase			base-sysutil-bin
+./usr/sbin/wpa_supplicant			base-sysutil-bin
 ./usr/sbin/wsconscfg				base-sysutil-bin
 ./usr/sbin/wsfontload				base-sysutil-bin
 ./usr/sbin/wsmoused				base-sysutil-bin
@@ -1251,8 +1293,8 @@
 ./usr/share/doc/smm/05.fastfs			base-smm-share
 ./usr/share/doc/smm/06.nfs			base-smm-share
 ./usr/share/doc/smm/07.lpd			base-smm-share
-./usr/share/doc/smm/08.sendmailop		base-smm-share
-./usr/share/doc/smm/09.sendmail			base-smm-share
+./usr/share/doc/smm/08.sendmailop		base-obsolete		obsolete
+./usr/share/doc/smm/09.sendmail			base-obsolete		obsolete
 ./usr/share/doc/smm/10.named			base-obsolete		obsolete
 ./usr/share/doc/smm/11.timedop			base-smm-share
 ./usr/share/doc/smm/12.timed			base-smm-share
@@ -1311,6 +1353,7 @@
 ./usr/share/examples/emul/ultrix/etc		base-sys-examples
 ./usr/share/examples/fstab			base-fstab-examples
 ./usr/share/examples/ftpd			base-netutil-examples
+./usr/share/examples/hostapd			base-netutil-examples
 ./usr/share/examples/ipf			base-netutil-examples
 ./usr/share/examples/isdn			base-isdn-examples
 ./usr/share/examples/kerberos			base-krb5-examples
@@ -1367,10 +1410,55 @@
 ./usr/share/groff_font/devutf8			base-groff-font
 ./usr/share/i18n				base-sysutil-share
 ./usr/share/i18n/csmapper			base-sysutil-share
+./usr/share/i18n/csmapper/APPLE			base-sysutil-share
+./usr/share/i18n/csmapper/APPLE/CELTIC%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/APPLE/CENTEURO%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/APPLE/CROATIAN%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/APPLE/CYRILLIC%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/APPLE/DINGBATS%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/APPLE/GAELIC%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/APPLE/GREEK%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/APPLE/ICELAND%UCS.mps base-sysutil-share	nls
+./usr/share/i18n/csmapper/APPLE/INUIT%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/APPLE/ROMAN%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/APPLE/ROMANIAN%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/APPLE/THAI%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/APPLE/TURKISH%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/APPLE/UCS%CELTIC.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/APPLE/UCS%CENTEURO.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/APPLE/UCS%CROATIAN.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/APPLE/UCS%CYRILLIC.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/APPLE/UCS%DINGBATS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/APPLE/UCS%GAELIC.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/APPLE/UCS%GREEK.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/APPLE/UCS%ICELAND.mps base-sysutil-share	nls
+./usr/share/i18n/csmapper/APPLE/UCS%INUIT.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/APPLE/UCS%ROMAN.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/APPLE/UCS%ROMANIAN.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/APPLE/UCS%THAI.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/APPLE/UCS%TURKISH.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/AST			base-sysutil-share
+./usr/share/i18n/csmapper/AST/ARMSCII-7%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/AST/ARMSCII-8%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/AST/ARMSCII-8A%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/AST/UCS%ARMSCII-7.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/AST/UCS%ARMSCII-8.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/AST/UCS%ARMSCII-8A.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CNS			base-sysutil-share
+./usr/share/i18n/csmapper/CNS/CNS11643-1%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CNS/CNS11643-2%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CNS/UCS%CNS11643-1.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CNS/UCS%CNS11643-2.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP			base-sysutil-share
 ./usr/share/i18n/csmapper/CP/CP037%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP038%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/CP10000%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/CP10006%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/CP10007%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/CP10029%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP1006%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/CP10079%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/CP10081%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP1026%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP1250%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP1251%UCS.mps	base-sysutil-share	nls
@@ -1430,7 +1518,13 @@
 ./usr/share/i18n/csmapper/CP/CP950%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP037.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP038.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/UCS%CP10000.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/UCS%CP10006.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/UCS%CP10007.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/UCS%CP10029.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP1006.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/UCS%CP10079.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/UCS%CP10081.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP1026.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP1250.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP1251.mps	base-sysutil-share	nls
@@ -1595,25 +1689,70 @@
 ./usr/share/i18n/csmapper/JIS/UCS%JISX0212@MS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/JIS/UCS%JISX0212UDC.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/JIS/UCS%JISX0212VDC@IBM.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/KOI			base-sysutil-share
+./usr/share/i18n/csmapper/KOI/KOI7%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/KOI/KOI8%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/KOI/KOI8-BASE%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/KOI/KOI8-C%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/KOI/KOI8-E%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/KOI/KOI8-R%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/KOI/KOI8-RU%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/KOI/KOI8-T%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/KOI/KOI8-U%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/KOI/UCS%KOI7.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/KOI/UCS%KOI8-BASE.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/KOI/UCS%KOI8-C.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/KOI/UCS%KOI8-E.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/KOI/UCS%KOI8-R.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/KOI/UCS%KOI8-RU.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/KOI/UCS%KOI8-T.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/KOI/UCS%KOI8-U.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/KOI/UCS%KOI8.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/KS			base-sysutil-share
 ./usr/share/i18n/csmapper/KS/KSC5601%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/KS/UCS%KSC5601.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC			base-sysutil-share
 ./usr/share/i18n/csmapper/MISC/Big5%UCS.mps	base-sysutil-share	nls
-./usr/share/i18n/csmapper/MISC/KOI8-R%UCS.mps	base-sysutil-share	nls
-./usr/share/i18n/csmapper/MISC/KOI8-U%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/MISC/KOI8-R%UCS.mps	base-obsolete		obsolete
+./usr/share/i18n/csmapper/MISC/KOI8-U%UCS.mps	base-obsolete		obsolete
+./usr/share/i18n/csmapper/MISC/PTCP154%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/UCS%Big5.mps	base-sysutil-share	nls
-./usr/share/i18n/csmapper/MISC/UCS%KOI8-R.mps	base-sysutil-share	nls
-./usr/share/i18n/csmapper/MISC/UCS%KOI8-U.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/MISC/UCS%KOI8-R.mps	base-obsolete		obsolete
+./usr/share/i18n/csmapper/MISC/UCS%KOI8-U.mps	base-obsolete		obsolete
+./usr/share/i18n/csmapper/MISC/UCS%PTCP154.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/charset.pivot		base-sysutil-share	nls
 ./usr/share/i18n/csmapper/charset.pivot.pvdb	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/mapper.dir		base-sysutil-share	nls
 ./usr/share/i18n/csmapper/mapper.dir.db		base-sysutil-share	nls
 ./usr/share/i18n/esdb				base-sysutil-share
+./usr/share/i18n/esdb/APPLE			base-sysutil-share
+./usr/share/i18n/esdb/APPLE/MACCELTIC.esdb	base-sysutil-share	nls
+./usr/share/i18n/esdb/APPLE/MACCENTEURO.esdb	base-sysutil-share	nls
+./usr/share/i18n/esdb/APPLE/MACCROATIAN.esdb	base-sysutil-share	nls
+./usr/share/i18n/esdb/APPLE/MACCYRILLIC.esdb	base-sysutil-share	nls
+./usr/share/i18n/esdb/APPLE/MACDINGBATS.esdb	base-sysutil-share	nls
+./usr/share/i18n/esdb/APPLE/MACGAELIC.esdb	base-sysutil-share	nls
+./usr/share/i18n/esdb/APPLE/MACGREEK.esdb	base-sysutil-share	nls
+./usr/share/i18n/esdb/APPLE/MACICELAND.esdb	base-sysutil-share	nls
+./usr/share/i18n/esdb/APPLE/MACINUIT.esdb	base-sysutil-share	nls
+./usr/share/i18n/esdb/APPLE/MACROMAN.esdb	base-sysutil-share	nls
+./usr/share/i18n/esdb/APPLE/MACROMANIAN.esdb	base-sysutil-share	nls
+./usr/share/i18n/esdb/APPLE/MACTHAI.esdb	base-sysutil-share	nls
+./usr/share/i18n/esdb/APPLE/MACTURKISH.esdb	base-sysutil-share	nls
+./usr/share/i18n/esdb/AST			base-sysutil-share
+./usr/share/i18n/esdb/AST/ARMSCII-7.esdb	base-sysutil-share	nls
+./usr/share/i18n/esdb/AST/ARMSCII-8.esdb	base-sysutil-share	nls
+./usr/share/i18n/esdb/AST/ARMSCII-8A.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP			base-sysutil-share
 ./usr/share/i18n/esdb/CP/CP037.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP038.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/CP/CP10000.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/CP/CP10006.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/CP/CP10007.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/CP/CP10029.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP1006.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/CP/CP10079.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/CP/CP10081.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP1026.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP1250.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP1251.esdb		base-sysutil-share	nls
@@ -1693,6 +1832,7 @@
 ./usr/share/i18n/esdb/EUC/EUC-KR.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/EUC/EUC-TW.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/ISO-2022			base-sysutil-share
+./usr/share/i18n/esdb/ISO-2022/ISO-2022-CN.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/ISO-2022/ISO-2022-JP-2.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/ISO-2022/ISO-2022-JP.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/ISO-2022/ISO-2022-KR.esdb	base-sysutil-share	nls
@@ -1739,12 +1879,23 @@
 ./usr/share/i18n/esdb/ISO646/ISO646-SE2.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/ISO646/ISO646-US.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/ISO646/ISO646-YU.esdb	base-sysutil-share	nls
+./usr/share/i18n/esdb/KOI			base-sysutil-share
+./usr/share/i18n/esdb/KOI/KOI7-switched.esdb	base-sysutil-share	nls
+./usr/share/i18n/esdb/KOI/KOI7.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/KOI/KOI8-C.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/KOI/KOI8-E.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/KOI/KOI8-R.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/KOI/KOI8-RU.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/KOI/KOI8-T.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/KOI/KOI8-U.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/KOI/KOI8.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC			base-sysutil-share
 ./usr/share/i18n/esdb/MISC/Big5.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/CTEXT.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/GB18030.esdb		base-sysutil-share	nls
-./usr/share/i18n/esdb/MISC/KOI8-R.esdb		base-sysutil-share	nls
-./usr/share/i18n/esdb/MISC/KOI8-U.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/MISC/KOI8-R.esdb		base-obsolete		obsolete
+./usr/share/i18n/esdb/MISC/KOI8-U.esdb		base-obsolete		obsolete
+./usr/share/i18n/esdb/MISC/PTCP154.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/Shift_JIS.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/UTF			base-sysutil-share
 ./usr/share/i18n/esdb/UTF/UTF-16.esdb		base-sysutil-share	nls
@@ -1767,6 +1918,8 @@
 ./usr/share/keymaps/atari			base-sys-share
 ./usr/share/keymaps/x68k			base-sys-share
 ./usr/share/ldscripts				base-util-share
+./usr/share/legal				base-sys-share
+./usr/share/legal/COPYRIGHT			base-sys-share
 ./usr/share/lkm					base-obsolete		obsolete
 ./usr/share/lkm/README				base-obsolete		obsolete
 ./usr/share/lkm/misc				base-obsolete		obsolete
@@ -1796,9 +1949,20 @@
 ./usr/share/lkm/vfs/module/Makefile		base-obsolete		obsolete
 ./usr/share/lkm/vfs/module/kernfsmod.c		base-obsolete		obsolete
 ./usr/share/locale				base-locale-share
+./usr/share/locale/af_ZA.ISO8859-1		base-locale-af
+./usr/share/locale/af_ZA.ISO8859-1/LC_CTYPE	base-locale-af		nls
+./usr/share/locale/af_ZA.ISO8859-15		base-locale-af
+./usr/share/locale/af_ZA.ISO8859-15/LC_CTYPE	base-locale-af		nls
+./usr/share/locale/be				base-locale-be
+./usr/share/locale/be/LC_MESSAGES		base-locale-be
+./usr/share/locale/be_BY.CP1251			base-locale-be
+./usr/share/locale/be_BY.CP1251/LC_CTYPE	base-locale-be		nls
+./usr/share/locale/be_BY.ISO8859-5		base-locale-be
+./usr/share/locale/be_BY.ISO8859-5/LC_CTYPE	base-locale-be		nls
 ./usr/share/locale/bg_BG.CP1251			base-locale-bg
 ./usr/share/locale/bg_BG.CP1251/LC_CTYPE	base-locale-bg		nls
 ./usr/share/locale/ca				base-locale-ca
+./usr/share/locale/ca/LC_MESSAGES		base-locale-ca
 ./usr/share/locale/ca_ES.ISO8859-1		base-locale-ca
 ./usr/share/locale/ca_ES.ISO8859-1/LC_CTYPE	base-locale-ca		nls
 ./usr/share/locale/ca_ES.ISO8859-15		base-locale-ca
@@ -1843,6 +2007,10 @@
 ./usr/share/locale/el/LC_MESSAGES/grep.mo	base-util_locale-el	nls
 ./usr/share/locale/el_GR.ISO8859-7		base-locale-el
 ./usr/share/locale/el_GR.ISO8859-7/LC_CTYPE	base-locale-el		nls
+./usr/share/locale/en@boldquot			base-locale-share
+./usr/share/locale/en@boldquot/LC_MESSAGES	base-locale-share
+./usr/share/locale/en@quot			base-locale-share
+./usr/share/locale/en@quot/LC_MESSAGES		base-locale-share
 ./usr/share/locale/en_AU.ISO8859-1		base-locale-en
 ./usr/share/locale/en_AU.ISO8859-1/LC_CTYPE	base-locale-en		nls
 ./usr/share/locale/en_AU.ISO8859-15		base-locale-en
@@ -1855,6 +2023,10 @@
 ./usr/share/locale/en_GB.ISO8859-1/LC_CTYPE	base-locale-en		nls
 ./usr/share/locale/en_GB.ISO8859-15		base-locale-en
 ./usr/share/locale/en_GB.ISO8859-15/LC_CTYPE	base-locale-en		nls
+./usr/share/locale/en_NZ.ISO8859-1		base-locale-en
+./usr/share/locale/en_NZ.ISO8859-1/LC_CTYPE	base-locale-en		nls
+./usr/share/locale/en_NZ.ISO8859-15		base-locale-en
+./usr/share/locale/en_NZ.ISO8859-15/LC_CTYPE	base-locale-en		nls
 ./usr/share/locale/en_US.ISO8859-1		base-locale-en
 ./usr/share/locale/en_US.ISO8859-1/LC_CTYPE	base-locale-en		nls
 ./usr/share/locale/en_US.ISO8859-15		base-locale-en
@@ -1879,6 +2051,14 @@
 ./usr/share/locale/et/LC_MESSAGES		base-locale-et
 ./usr/share/locale/et/LC_MESSAGES/grep.mo	base-util_locale-et	nls
 ./usr/share/locale/et/LC_MESSAGES/tar.mo	base-obsolete		obsolete
+./usr/share/locale/et_EE.ISO8859-15		base-locale-et
+./usr/share/locale/et_EE.ISO8859-15/LC_CTYPE	base-locale-et		nls
+./usr/share/locale/eu_ES.ISO8859-1		base-locale-eu
+./usr/share/locale/eu_ES.ISO8859-1/LC_CTYPE	base-locale-eu		nls
+./usr/share/locale/eu_ES.ISO8859-15		base-locale-eu
+./usr/share/locale/eu_ES.ISO8859-15/LC_CTYPE	base-locale-eu		nls
+./usr/share/locale/fi				base-locale-share
+./usr/share/locale/fi/LC_MESSAGES		base-locale-share
 ./usr/share/locale/fi_FI.ISO8859-1		base-locale-fi
 ./usr/share/locale/fi_FI.ISO8859-1/LC_CTYPE	base-locale-fi		nls
 ./usr/share/locale/fi_FI.ISO8859-15		base-locale-fi
@@ -1955,6 +2135,8 @@
 ./usr/share/locale/ja_JP.ct/LC_CTYPE		base-locale-ja		nls
 ./usr/share/locale/ja_JP.eucJP			base-locale-ja
 ./usr/share/locale/ja_JP.eucJP/LC_CTYPE		base-locale-ja		nls
+./usr/share/locale/kk_KZ.PT154			base-locale-kk
+./usr/share/locale/kk_KZ.PT154/LC_CTYPE		base-locale-kk		nls
 ./usr/share/locale/ko				base-locale-ko
 ./usr/share/locale/ko/LC_MESSAGES		base-locale-ko
 ./usr/share/locale/ko/LC_MESSAGES/grep.mo	base-locale-ko		nls
@@ -1984,6 +2166,8 @@
 ./usr/share/locale/nl_NL.ISO8859-1/LC_CTYPE	base-locale-nl		nls
 ./usr/share/locale/nl_NL.ISO8859-15		base-locale-nl
 ./usr/share/locale/nl_NL.ISO8859-15/LC_CTYPE	base-locale-nl		nls
+./usr/share/locale/nn				base-locale-share
+./usr/share/locale/nn/LC_MESSAGES		base-locale-share
 ./usr/share/locale/no				base-locale-no
 ./usr/share/locale/no/LC_MESSAGES		base-locale-no
 ./usr/share/locale/no/LC_MESSAGES/grep.mo	base-locale-no		nls
@@ -2009,6 +2193,8 @@
 ./usr/share/locale/pt_BR/LC_MESSAGES		base-locale-pt
 ./usr/share/locale/pt_BR/LC_MESSAGES/grep.mo	base-locale-pt		nls
 ./usr/share/locale/pt_BR/LC_MESSAGES/tar.mo	base-obsolete		obsolete
+./usr/share/locale/pt_BR.ISO8859-1		base-locale-pt
+./usr/share/locale/pt_BR.ISO8859-1/LC_CTYPE	base-locale-pt		nls
 ./usr/share/locale/pt_PT.ISO8859-1		base-locale-pt
 ./usr/share/locale/pt_PT.ISO8859-1/LC_CTYPE	base-locale-pt		nls
 ./usr/share/locale/pt_PT.ISO8859-15		base-locale-pt
@@ -2016,11 +2202,17 @@
 ./usr/share/locale/ro				base-locale-ro
 ./usr/share/locale/ro/LC_MESSAGES		base-locale-ro
 ./usr/share/locale/ro/LC_MESSAGES/texinfo.mo	base-texinfo_locale-ro	nls
+./usr/share/locale/ro_RO.ISO8859-2		base-locale-ro
+./usr/share/locale/ro_RO.ISO8859-2/LC_CTYPE	base-locale-ro		nls
 ./usr/share/locale/ru				base-locale-ru
 ./usr/share/locale/ru/LC_MESSAGES		base-locale-ru
 ./usr/share/locale/ru/LC_MESSAGES/grep.mo	base-locale-ru		nls
 ./usr/share/locale/ru/LC_MESSAGES/tar.mo	base-obsolete		obsolete
 ./usr/share/locale/ru/LC_MESSAGES/texinfo.mo	base-texinfo_locale-ru	nls
+./usr/share/locale/ru_BY.CP1251			base-locale-ru
+./usr/share/locale/ru_BY.CP1251/LC_CTYPE	base-locale-ru		nls
+./usr/share/locale/ru_RU.CP1251			base-locale-ru
+./usr/share/locale/ru_RU.CP1251/LC_CTYPE	base-locale-ru		nls
 ./usr/share/locale/ru_RU.CP866			base-locale-ru
 ./usr/share/locale/ru_RU.CP866/LC_CTYPE		base-locale-ru		nls
 ./usr/share/locale/ru_RU.ISO8859-5		base-locale-ru
@@ -2034,6 +2226,7 @@
 ./usr/share/locale/ru_SU.KOI8-R			base-obsolete		obsolete
 ./usr/share/locale/ru_SU.KOI8-R/LC_CTYPE	base-obsolete		obsolete
 ./usr/share/locale/sk				base-locale-sk
+./usr/share/locale/sk/LC_MESSAGES		base-locale-sk
 ./usr/share/locale/sk_SK.ISO8859-2		base-locale-sk
 ./usr/share/locale/sk_SK.ISO8859-2/LC_CTYPE	base-locale-sk		nls
 ./usr/share/locale/sl				base-locale-sl
@@ -2042,6 +2235,12 @@
 ./usr/share/locale/sl/LC_MESSAGES/tar.mo	base-obsolete		obsolete
 ./usr/share/locale/sl_SI.ISO8859-2		base-locale-sl
 ./usr/share/locale/sl_SI.ISO8859-2/LC_CTYPE	base-locale-sl		nls
+./usr/share/locale/sr				base-locale-share
+./usr/share/locale/sr/LC_MESSAGES		base-locale-share
+./usr/share/locale/sr_YU.ISO8859-2		base-locale-sr
+./usr/share/locale/sr_YU.ISO8859-2/LC_CTYPE	base-locale-sr		nls
+./usr/share/locale/sr_YU.ISO8859-5		base-locale-sr
+./usr/share/locale/sr_YU.ISO8859-5/LC_CTYPE	base-locale-sr		nls
 ./usr/share/locale/sv				base-locale-sv
 ./usr/share/locale/sv/LC_MESSAGES		base-locale-sv
 ./usr/share/locale/sv/LC_MESSAGES/grep.mo	base-util_locale-sv	nls
@@ -2055,6 +2254,12 @@
 ./usr/share/locale/tr/LC_MESSAGES		base-locale-tr
 ./usr/share/locale/tr/LC_MESSAGES/tar.mo	base-obsolete		obsolete
 ./usr/share/locale/tr/LC_MESSAGES/texinfo.mo	base-texinfo_locale-tr	nls
+./usr/share/locale/uk				base-locale-share
+./usr/share/locale/uk/LC_MESSAGES		base-locale-share
+./usr/share/locale/uk_UA.CP1251			base-locale-uk
+./usr/share/locale/uk_UA.CP1251/LC_CTYPE	base-locale-uk		nls
+./usr/share/locale/uk_UA.ISO8859-5		base-locale-uk
+./usr/share/locale/uk_UA.ISO8859-5/LC_CTYPE	base-locale-uk		nls
 ./usr/share/locale/uk_UA.KOI8-U			base-locale-uk
 ./usr/share/locale/uk_UA.KOI8-U/LC_CTYPE	base-locale-uk		nls
 ./usr/share/locale/zh_CN			base-locale-zh
@@ -2074,9 +2279,10 @@
 ./usr/share/locale/zh_TW/LC_MESSAGES		base-locale-zh
 ./usr/share/locale/zh_TW/LC_MESSAGES/texinfo.mo	base-texinfo_locale-zh	nls
 ./usr/share/man					base-man-share
-./usr/share/man/COPYRIGHT			base-man-share		share
+./usr/share/man/COPYRIGHT			base-obsolete		obsolete
 ./usr/share/man/cat1				base-man-share
 ./usr/share/man/cat1/atari			base-man-share
+./usr/share/man/cat1/hp300			base-man-share
 ./usr/share/man/cat1/x68k			base-man-share
 ./usr/share/man/cat2				base-man-share
 ./usr/share/man/cat3				base-man-share
@@ -2094,6 +2300,7 @@
 ./usr/share/man/cat4/cobalt			base-man-share
 ./usr/share/man/cat4/dreamcast			base-man-share
 ./usr/share/man/cat4/evbarm			base-man-share
+./usr/share/man/cat4/evbmips			base-man-share
 ./usr/share/man/cat4/hp300			base-man-share
 ./usr/share/man/cat4/hp700			base-man-share
 ./usr/share/man/cat4/hpcmips			base-man-share
@@ -2192,6 +2399,7 @@
 ./usr/share/man/cat9/x68k			base-man-share
 ./usr/share/man/html1				base-man-share
 ./usr/share/man/html1/atari			base-man-share
+./usr/share/man/html1/hp300			base-man-share
 ./usr/share/man/html1/x68k			base-man-share
 ./usr/share/man/html2				base-man-share
 ./usr/share/man/html3				base-man-share
@@ -2208,6 +2416,7 @@
 ./usr/share/man/html4/cobalt			base-man-share
 ./usr/share/man/html4/dreamcast			base-man-share
 ./usr/share/man/html4/evbarm			base-man-share
+./usr/share/man/html4/evbmips			base-man-share
 ./usr/share/man/html4/hp300			base-man-share
 ./usr/share/man/html4/hp700			base-man-share
 ./usr/share/man/html4/hpcmips			base-man-share
@@ -2306,6 +2515,7 @@
 ./usr/share/man/makewhatis.sed			base-man-share		share
 ./usr/share/man/man1				base-man-share
 ./usr/share/man/man1/atari			base-man-share
+./usr/share/man/man1/hp300			base-man-share
 ./usr/share/man/man1/x68k			base-man-share
 ./usr/share/man/man2				base-man-share
 ./usr/share/man/man3				base-man-share
@@ -2323,6 +2533,7 @@
 ./usr/share/man/man4/cobalt			base-man-share
 ./usr/share/man/man4/dreamcast			base-man-share
 ./usr/share/man/man4/evbarm			base-man-share
+./usr/share/man/man4/evbmips			base-man-share
 ./usr/share/man/man4/hp300			base-man-share
 ./usr/share/man/man4/hp700			base-man-share
 ./usr/share/man/man4/hpcmips			base-man-share
@@ -2448,7 +2659,7 @@
 # C locale is required by POSIX, so is installed if any locales are.
 ./usr/share/nls/C				base-locale-share
 ./usr/share/nls/C/libc.cat			base-locale-share	nls
-./usr/share/nls/C/sushi.cat			base-sushi_locale-share	nls
+./usr/share/nls/C/sushi.cat			base-obsolete		obsolete
 ./usr/share/nls/Pig				base-locale-Pig
 ./usr/share/nls/Pig/libc.cat			base-locale-Pig		nls
 ./usr/share/nls/ca				base-locale-ca
@@ -2474,328 +2685,328 @@
 ./usr/share/nls/sk/libc.cat			base-locale-sk		nls
 ./usr/share/nls/sv				base-locale-sv
 ./usr/share/nls/sv/libc.cat			base-locale-sv		nls
-./usr/share/sendmail				base-sendmail-share
-./usr/share/sendmail/cf				base-sendmail-share
-./usr/share/sendmail/domain			base-sendmail-share
-./usr/share/sendmail/feature			base-sendmail-share
-./usr/share/sendmail/hack			base-sendmail-share
-./usr/share/sendmail/m4				base-sendmail-share
-./usr/share/sendmail/mailer			base-sendmail-share
-./usr/share/sendmail/ostype			base-sendmail-share
-./usr/share/sendmail/sh				base-sendmail-share
-./usr/share/sendmail/siteconfig			base-sendmail-share
-./usr/share/sushi				base-sushi-share
-./usr/share/sushi/help				base-sushi-share	share
-./usr/share/sushi/index				base-sushi-share	share
-./usr/share/sushi/info				base-sushi-share
-./usr/share/sushi/info/index			base-sushi-share	share
-./usr/share/sushi/info/programming		base-sushi-share
-./usr/share/sushi/info/programming/basics	base-sushi-share
-./usr/share/sushi/info/programming/basics/help	base-sushi-share	share
-./usr/share/sushi/info/programming/execapi	base-sushi-share
-./usr/share/sushi/info/programming/execapi/help	base-sushi-share	share
-./usr/share/sushi/info/programming/formapi	base-sushi-share
-./usr/share/sushi/info/programming/formapi/help	base-sushi-share	share
-./usr/share/sushi/info/programming/help		base-sushi-share	share
-./usr/share/sushi/info/programming/helpapi	base-sushi-share
-./usr/share/sushi/info/programming/helpapi/help	base-sushi-share	share
-./usr/share/sushi/info/programming/i18n		base-sushi-share
-./usr/share/sushi/info/programming/i18n/help	base-sushi-share	share
-./usr/share/sushi/info/programming/index	base-sushi-share	share
-./usr/share/sushi/info/programming/indexapi	base-sushi-share
-./usr/share/sushi/info/programming/indexapi/help	base-sushi-share	share
-./usr/share/sushi/info/programming/scriptapi	base-sushi-share
-./usr/share/sushi/info/programming/scriptapi/help	base-sushi-share	share
-./usr/share/sushi/info/programming/searchpaths	base-sushi-share
-./usr/share/sushi/info/programming/searchpaths/help	base-sushi-share	share
-./usr/share/sushi/install			base-sushi-share
-./usr/share/sushi/install/help			base-sushi-share	share
-./usr/share/sushi/install/index			base-sushi-share	share
-./usr/share/sushi/install/install		base-sushi-share
-./usr/share/sushi/install/install/form		base-sushi-share	share
-./usr/share/sushi/install/install/preform	base-sushi-share	share
-./usr/share/sushi/install/install/script	base-sushi-share	share
-./usr/share/sushi/install/install/script1	base-sushi-share	share
-./usr/share/sushi/install/install/script2	base-sushi-share	share
-./usr/share/sushi/install/installb		base-sushi-share
-./usr/share/sushi/install/installb/form		base-sushi-share	share
-./usr/share/sushi/install/installb/preform	base-sushi-share	share
-./usr/share/sushi/install/installb/script	base-sushi-share	share
-./usr/share/sushi/install/list			base-sushi-share
-./usr/share/sushi/install/list/exec		base-sushi-share	share
-./usr/share/sushi/install/remove		base-sushi-share
-./usr/share/sushi/install/remove/form		base-sushi-share	share
-./usr/share/sushi/install/remove/script		base-sushi-share	share
-./usr/share/sushi/install/remove/script1	base-sushi-share	share
-./usr/share/sushi/network			base-sushi-share
-./usr/share/sushi/network/exports		base-sushi-share
-./usr/share/sushi/network/exports/addexport	base-sushi-share
-./usr/share/sushi/network/exports/addexport/form	base-sushi-share	share
-./usr/share/sushi/network/exports/addexport/help	base-sushi-share	share
-./usr/share/sushi/network/exports/addexport/preform	base-sushi-share	share
-./usr/share/sushi/network/exports/addexport/script	base-sushi-share	share
-./usr/share/sushi/network/exports/addexport/script1	base-sushi-share	share
-./usr/share/sushi/network/exports/addexport/script2	base-sushi-share	share
-./usr/share/sushi/network/exports/addexport/script3	base-sushi-share	share
-./usr/share/sushi/network/exports/addexport/script4	base-sushi-share	share
-./usr/share/sushi/network/exports/addexport/script5	base-sushi-share	share
-./usr/share/sushi/network/exports/addexport/script6	base-sushi-share	share
-./usr/share/sushi/network/exports/addexport/script7	base-sushi-share	share
-./usr/share/sushi/network/exports/addexport/script8	base-sushi-share	share
-./usr/share/sushi/network/exports/addexport/script9	base-sushi-share	share
-./usr/share/sushi/network/exports/addexport/scripta	base-sushi-share	share
-./usr/share/sushi/network/exports/addexport/scriptb	base-sushi-share	share
-./usr/share/sushi/network/exports/delexport	base-sushi-share
-./usr/share/sushi/network/exports/delexport/form	base-sushi-share	share
-./usr/share/sushi/network/exports/delexport/help	base-sushi-share	share
-./usr/share/sushi/network/exports/delexport/script	base-sushi-share	share
-./usr/share/sushi/network/exports/delexport/script1	base-sushi-share	share
-./usr/share/sushi/network/exports/help		base-sushi-share	share
-./usr/share/sushi/network/exports/index		base-sushi-share	share
-./usr/share/sushi/network/help			base-sushi-share	share
-./usr/share/sushi/network/hostname		base-sushi-share
-./usr/share/sushi/network/hostname/form		base-sushi-share	share
-./usr/share/sushi/network/hostname/help		base-sushi-share	share
-./usr/share/sushi/network/hostname/script	base-sushi-share	share
-./usr/share/sushi/network/hostname/script1	base-sushi-share	share
-./usr/share/sushi/network/hosts			base-sushi-share
-./usr/share/sushi/network/hosts/addhost		base-sushi-share
-./usr/share/sushi/network/hosts/addhost/form	base-sushi-share	share
-./usr/share/sushi/network/hosts/addhost/help	base-sushi-share	share
-./usr/share/sushi/network/hosts/addhost/script	base-sushi-share	share
-./usr/share/sushi/network/hosts/addv6host	base-sushi-share
-./usr/share/sushi/network/hosts/addv6host/form	base-sushi-share	share
-./usr/share/sushi/network/hosts/addv6host/help	base-sushi-share	share
-./usr/share/sushi/network/hosts/addv6host/script	base-sushi-share	share
-./usr/share/sushi/network/hosts/delhost		base-sushi-share
-./usr/share/sushi/network/hosts/delhost/form	base-sushi-share	share
-./usr/share/sushi/network/hosts/delhost/help	base-sushi-share	share
-./usr/share/sushi/network/hosts/delhost/script	base-sushi-share	share
-./usr/share/sushi/network/hosts/delhost/script1	base-sushi-share	share
-./usr/share/sushi/network/hosts/help		base-sushi-share	share
-./usr/share/sushi/network/hosts/index		base-sushi-share	share
-./usr/share/sushi/network/hosts/modhost		base-sushi-share
-./usr/share/sushi/network/hosts/modhost/form	base-sushi-share	share
-./usr/share/sushi/network/hosts/modhost/help	base-sushi-share	share
-./usr/share/sushi/network/hosts/modhost/preform	base-sushi-share	share
-./usr/share/sushi/network/hosts/modhost/script	base-sushi-share	share
-./usr/share/sushi/network/hosts/modhost/script1	base-sushi-share	share
-./usr/share/sushi/network/hosts/modhost/script2	base-sushi-share	share
-./usr/share/sushi/network/hosts/modv6host	base-sushi-share
-./usr/share/sushi/network/hosts/modv6host/form	base-sushi-share	share
-./usr/share/sushi/network/hosts/modv6host/help	base-sushi-share	share
-./usr/share/sushi/network/hosts/modv6host/preform	base-sushi-share	share
-./usr/share/sushi/network/hosts/modv6host/script	base-sushi-share	share
-./usr/share/sushi/network/hosts/modv6host/script1	base-sushi-share	share
-./usr/share/sushi/network/hosts/modv6host/script2	base-sushi-share	share
-./usr/share/sushi/network/index			base-sushi-share	share
-./usr/share/sushi/network/interfaces		base-sushi-share
-./usr/share/sushi/network/interfaces/help	base-sushi-share	share
-./usr/share/sushi/network/interfaces/index	base-sushi-share	share
-./usr/share/sushi/network/interfaces/interface	base-sushi-share
-./usr/share/sushi/network/interfaces/interface/form	base-sushi-share	share
-./usr/share/sushi/network/interfaces/interface/help	base-sushi-share	share
-./usr/share/sushi/network/interfaces/interface/nwid.sed	base-sushi-share	share
-./usr/share/sushi/network/interfaces/interface/preform	base-sushi-share	share
-./usr/share/sushi/network/interfaces/interface/script	base-sushi-share	share
-./usr/share/sushi/network/interfaces/interface/script1	base-sushi-share	share
-./usr/share/sushi/network/interfaces/interface/script2	base-sushi-share	share
-./usr/share/sushi/network/interfaces/listif	base-sushi-share
-./usr/share/sushi/network/interfaces/listif/script	base-sushi-share	share
-./usr/share/sushi/network/routing		base-sushi-share
-./usr/share/sushi/network/routing/default	base-sushi-share
-./usr/share/sushi/network/routing/default/form	base-sushi-share	share
-./usr/share/sushi/network/routing/default/help	base-sushi-share	share
-./usr/share/sushi/network/routing/default/script	base-sushi-share	share
-./usr/share/sushi/network/routing/default/script1	base-sushi-share	share
-./usr/share/sushi/network/routing/help		base-sushi-share	share
-./usr/share/sushi/network/routing/index		base-sushi-share	share
-./usr/share/sushi/network/routing/ipv4table	base-sushi-share
-./usr/share/sushi/network/routing/ipv4table/exec	base-sushi-share	share
-./usr/share/sushi/network/yp			base-sushi-share
-./usr/share/sushi/network/yp/client		base-sushi-share
-./usr/share/sushi/network/yp/client/form	base-sushi-share	share
-./usr/share/sushi/network/yp/client/help	base-sushi-share	share
-./usr/share/sushi/network/yp/client/script	base-sushi-share	share
-./usr/share/sushi/network/yp/client/script1	base-sushi-share	share
-./usr/share/sushi/network/yp/domainname		base-sushi-share
-./usr/share/sushi/network/yp/domainname/form	base-sushi-share	share
-./usr/share/sushi/network/yp/domainname/help	base-sushi-share	share
-./usr/share/sushi/network/yp/domainname/script	base-sushi-share	share
-./usr/share/sushi/network/yp/domainname/script1	base-sushi-share	share
-./usr/share/sushi/network/yp/help		base-sushi-share	share
-./usr/share/sushi/network/yp/index		base-sushi-share	share
-./usr/share/sushi/network/yp/master		base-sushi-share
-./usr/share/sushi/network/yp/master/form	base-sushi-share	share
-./usr/share/sushi/network/yp/master/help	base-sushi-share	share
-./usr/share/sushi/network/yp/master/script	base-sushi-share	share
-./usr/share/sushi/network/yp/master/script1	base-sushi-share	share
-./usr/share/sushi/network/yp/slave		base-sushi-share
-./usr/share/sushi/network/yp/slave/form		base-sushi-share	share
-./usr/share/sushi/network/yp/slave/help		base-sushi-share	share
-./usr/share/sushi/network/yp/slave/script	base-sushi-share	share
-./usr/share/sushi/network/yp/slave/script1	base-sushi-share	share
-./usr/share/sushi/procs				base-sushi-share
-./usr/share/sushi/procs/help			base-sushi-share	share
-./usr/share/sushi/procs/index			base-sushi-share	share
-./usr/share/sushi/procs/restartallprocs		base-sushi-share
-./usr/share/sushi/procs/restartallprocs/form	base-sushi-share	share
-./usr/share/sushi/procs/restartallprocs/help	base-sushi-share	share
-./usr/share/sushi/procs/restartallprocs/script	base-sushi-share	share
-./usr/share/sushi/procs/restartallprocs/script1	base-sushi-share	share
-./usr/share/sushi/procs/restartprocs		base-sushi-share
-./usr/share/sushi/procs/restartprocs/form	base-sushi-share	share
-./usr/share/sushi/procs/restartprocs/help	base-sushi-share	share
-./usr/share/sushi/procs/restartprocs/script	base-sushi-share	share
-./usr/share/sushi/procs/restartprocs/script1	base-sushi-share	share
-./usr/share/sushi/procs/showallprocs		base-sushi-share
-./usr/share/sushi/procs/showallprocs/script	base-sushi-share	share
-./usr/share/sushi/procs/showprocs		base-sushi-share
-./usr/share/sushi/procs/showprocs/script	base-sushi-share	share
-./usr/share/sushi/procs/startallprocs		base-sushi-share
-./usr/share/sushi/procs/startallprocs/form	base-sushi-share	share
-./usr/share/sushi/procs/startallprocs/help	base-sushi-share	share
-./usr/share/sushi/procs/startallprocs/script	base-sushi-share	share
-./usr/share/sushi/procs/startallprocs/script1	base-sushi-share	share
-./usr/share/sushi/procs/startprocs		base-sushi-share
-./usr/share/sushi/procs/startprocs/form		base-sushi-share	share
-./usr/share/sushi/procs/startprocs/help		base-sushi-share	share
-./usr/share/sushi/procs/startprocs/script	base-sushi-share	share
-./usr/share/sushi/procs/startprocs/script1	base-sushi-share	share
-./usr/share/sushi/procs/stopallprocs		base-sushi-share
-./usr/share/sushi/procs/stopallprocs/form	base-sushi-share	share
-./usr/share/sushi/procs/stopallprocs/help	base-sushi-share	share
-./usr/share/sushi/procs/stopallprocs/script	base-sushi-share	share
-./usr/share/sushi/procs/stopallprocs/script1	base-sushi-share	share
-./usr/share/sushi/procs/stopprocs		base-sushi-share
-./usr/share/sushi/procs/stopprocs/form		base-sushi-share	share
-./usr/share/sushi/procs/stopprocs/help		base-sushi-share	share
-./usr/share/sushi/procs/stopprocs/script	base-sushi-share	share
-./usr/share/sushi/procs/stopprocs/script1	base-sushi-share	share
-./usr/share/sushi/procs/topcpu			base-sushi-share
-./usr/share/sushi/procs/topcpu/script		base-sushi-share	share
-./usr/share/sushi/procs/topmem			base-sushi-share
-./usr/share/sushi/procs/topmem/script		base-sushi-share	share
-./usr/share/sushi/procs/toptime			base-sushi-share
-./usr/share/sushi/procs/toptime/script		base-sushi-share	share
-./usr/share/sushi/scriptoff			base-obsolete		obsolete
-./usr/share/sushi/scriptoff/func		base-obsolete		obsolete
-./usr/share/sushi/scripton			base-obsolete		obsolete
-./usr/share/sushi/scripton/func			base-obsolete		obsolete
-./usr/share/sushi/system			base-sushi-share
-./usr/share/sushi/system/dailyconf		base-sushi-share
-./usr/share/sushi/system/dailyconf/form		base-sushi-share	share
-./usr/share/sushi/system/dailyconf/help		base-sushi-share	share
-./usr/share/sushi/system/dailyconf/script	base-sushi-share	share
-./usr/share/sushi/system/dailyconf/script1	base-sushi-share	share
-./usr/share/sushi/system/dailyconf/script2	base-sushi-share	share
-./usr/share/sushi/system/dailyconf/script3	base-sushi-share	share
-./usr/share/sushi/system/help			base-sushi-share	share
-./usr/share/sushi/system/index			base-sushi-share	share
-./usr/share/sushi/system/inetdconf		base-sushi-share
-./usr/share/sushi/system/inetdconf/form		base-sushi-share	share
-./usr/share/sushi/system/inetdconf/script	base-sushi-share	share
-./usr/share/sushi/system/inetdconf/script1	base-sushi-share	share
-./usr/share/sushi/system/localtime		base-sushi-share
-./usr/share/sushi/system/localtime/form		base-sushi-share	share
-./usr/share/sushi/system/localtime/help		base-sushi-share	share
-./usr/share/sushi/system/localtime/script	base-sushi-share	share
-./usr/share/sushi/system/localtime/script1	base-sushi-share	share
-./usr/share/sushi/system/mailerconf		base-sushi-share
-./usr/share/sushi/system/mailerconf/form	base-sushi-share	share
-./usr/share/sushi/system/mailerconf/script	base-sushi-share	share
-./usr/share/sushi/system/mailerconf/script1	base-sushi-share	share
-./usr/share/sushi/system/rcconf			base-sushi-share
-./usr/share/sushi/system/rcconf/form		base-sushi-share	share
-./usr/share/sushi/system/rcconf/script		base-sushi-share	share
-./usr/share/sushi/system/rcconf/script1		base-sushi-share	share
-./usr/share/sushi/system/rcconf/script2		base-sushi-share	share
-./usr/share/sushi/system/rcconf/script3		base-obsolete		obsolete
-./usr/share/sushi/system/rcconf/script4		base-sushi-share	share
-./usr/share/sushi/system/securityconf		base-sushi-share
-./usr/share/sushi/system/securityconf/form	base-sushi-share	share
-./usr/share/sushi/system/securityconf/help	base-sushi-share	share
-./usr/share/sushi/system/securityconf/script	base-sushi-share	share
-./usr/share/sushi/system/securityconf/script1	base-sushi-share	share
-./usr/share/sushi/system/securityconf/script2	base-sushi-share	share
-./usr/share/sushi/system/securityconf/script3	base-sushi-share	share
-./usr/share/sushi/system/sshdconf		base-sushi-share
-./usr/share/sushi/system/sshdconf/defaults	base-sushi-share	share
-./usr/share/sushi/system/sshdconf/form		base-sushi-share	share
-./usr/share/sushi/system/sshdconf/help		base-sushi-share	share
-./usr/share/sushi/system/sshdconf/script	base-sushi-share	share
-./usr/share/sushi/system/sshdconf/script1	base-sushi-share	share
-./usr/share/sushi/system/sshdconf/script2	base-sushi-share	share
-./usr/share/sushi/system/sshdconf/script3	base-sushi-share	share
-./usr/share/sushi/system/sshdconf/script4	base-sushi-share	share
-./usr/share/sushi/system/sshdconf/script5	base-sushi-share	share
-./usr/share/sushi/system/sshdconf/script6	base-sushi-share	share
-./usr/share/sushi/system/sshdconf/script7	base-sushi-share	share
-./usr/share/sushi/system/sysctl			base-sushi-share
-./usr/share/sushi/system/sysctl/form		base-sushi-share	share
-./usr/share/sushi/system/sysctl/help		base-sushi-share	share
-./usr/share/sushi/system/sysctl/preform		base-sushi-share	share
-./usr/share/sushi/system/sysctl/script		base-sushi-share	share
-./usr/share/sushi/system/sysctl/script1		base-sushi-share	share
-./usr/share/sushi/system/sysctl/script2		base-sushi-share	share
-./usr/share/sushi/system/sysctl/sysctls		base-sushi-share	share
-./usr/share/sushi/system/usermgmtconf		base-sushi-share
-./usr/share/sushi/system/usermgmtconf/form	base-sushi-share	share
-./usr/share/sushi/system/usermgmtconf/help	base-sushi-share	share
-./usr/share/sushi/system/usermgmtconf/script	base-sushi-share	share
-./usr/share/sushi/system/usermgmtconf/script1	base-sushi-share	share
-./usr/share/sushi/system/weeklyconf		base-sushi-share
-./usr/share/sushi/system/weeklyconf/form	base-sushi-share	share
-./usr/share/sushi/system/weeklyconf/help	base-sushi-share	share
-./usr/share/sushi/system/weeklyconf/script	base-sushi-share	share
-./usr/share/sushi/system/weeklyconf/script1	base-sushi-share	share
-./usr/share/sushi/system/weeklyconf/script3	base-sushi-share	share
-./usr/share/sushi/users				base-sushi-share
-./usr/share/sushi/users/addgroup		base-sushi-share
-./usr/share/sushi/users/addgroup/form		base-sushi-share	share
-./usr/share/sushi/users/addgroup/script		base-sushi-share	share
-./usr/share/sushi/users/adduser			base-sushi-share
-./usr/share/sushi/users/adduser/form		base-sushi-share	share
-./usr/share/sushi/users/adduser/script		base-sushi-share	share
-./usr/share/sushi/users/adduser/script1		base-sushi-share	share
-./usr/share/sushi/users/adduser/script2		base-sushi-share	share
-./usr/share/sushi/users/adduser/script3		base-sushi-share	share
-./usr/share/sushi/users/delgroup		base-sushi-share
-./usr/share/sushi/users/delgroup/form		base-sushi-share	share
-./usr/share/sushi/users/delgroup/script		base-sushi-share	share
-./usr/share/sushi/users/delgroup/script1	base-sushi-share	share
-./usr/share/sushi/users/deluser			base-sushi-share
-./usr/share/sushi/users/deluser/form		base-sushi-share	share
-./usr/share/sushi/users/deluser/preform		base-sushi-share	share
-./usr/share/sushi/users/deluser/script		base-sushi-share	share
-./usr/share/sushi/users/deluser/script1		base-sushi-share	share
-./usr/share/sushi/users/deluser/script2		base-sushi-share	share
-./usr/share/sushi/users/disuser			base-sushi-share
-./usr/share/sushi/users/disuser/form		base-sushi-share	share
-./usr/share/sushi/users/disuser/script		base-sushi-share	share
-./usr/share/sushi/users/disuser/script1		base-sushi-share	share
-./usr/share/sushi/users/index			base-sushi-share	share
-./usr/share/sushi/users/listgroup		base-sushi-share
-./usr/share/sushi/users/listgroup/script	base-sushi-share	share
-./usr/share/sushi/users/listuser		base-sushi-share
-./usr/share/sushi/users/listuser/script		base-sushi-share	share
-./usr/share/sushi/users/moduser			base-sushi-share
-./usr/share/sushi/users/moduser/form		base-sushi-share	share
-./usr/share/sushi/users/moduser/preform		base-sushi-share	share
-./usr/share/sushi/users/moduser/script		base-sushi-share	share
-./usr/share/sushi/users/moduser/script1		base-sushi-share	share
-./usr/share/sushi/users/moduser/script2		base-sushi-share	share
-./usr/share/sushi/users/passwd			base-sushi-share
-./usr/share/sushi/users/passwd/form		base-sushi-share	share
-./usr/share/sushi/users/passwd/script		base-sushi-share	share
-./usr/share/sushi/users/passwd/script1		base-sushi-share	share
-./usr/share/sushi/util				base-sushi-share
-./usr/share/sushi/util/help			base-sushi-share	share
-./usr/share/sushi/util/index			base-sushi-share	share
-./usr/share/sushi/util/logging			base-sushi-share
-./usr/share/sushi/util/logging/func		base-sushi-share	share
-./usr/share/sushi/util/scripting		base-sushi-share
-./usr/share/sushi/util/scripting/func		base-sushi-share	share
+./usr/share/sendmail				base-obsolete		obsolete
+./usr/share/sendmail/cf				base-obsolete		obsolete
+./usr/share/sendmail/domain			base-obsolete		obsolete
+./usr/share/sendmail/feature			base-obsolete		obsolete
+./usr/share/sendmail/hack			base-obsolete		obsolete
+./usr/share/sendmail/m4				base-obsolete		obsolete
+./usr/share/sendmail/mailer			base-obsolete		obsolete
+./usr/share/sendmail/ostype			base-obsolete		obsolete
+./usr/share/sendmail/sh				base-obsolete		obsolete
+./usr/share/sendmail/siteconfig			base-obsolete		obsolete
+./usr/share/sushi				base-obsolete	obsolete
+./usr/share/sushi/help				base-obsolete	obsolete
+./usr/share/sushi/index				base-obsolete	obsolete
+./usr/share/sushi/info				base-obsolete	obsolete
+./usr/share/sushi/info/index			base-obsolete	obsolete
+./usr/share/sushi/info/programming		base-obsolete	obsolete
+./usr/share/sushi/info/programming/basics	base-obsolete	obsolete
+./usr/share/sushi/info/programming/basics/help	base-obsolete	obsolete
+./usr/share/sushi/info/programming/execapi	base-obsolete	obsolete
+./usr/share/sushi/info/programming/execapi/help	base-obsolete	obsolete
+./usr/share/sushi/info/programming/formapi	base-obsolete	obsolete
+./usr/share/sushi/info/programming/formapi/help	base-obsolete	obsolete
+./usr/share/sushi/info/programming/help		base-obsolete	obsolete
+./usr/share/sushi/info/programming/helpapi	base-obsolete	obsolete
+./usr/share/sushi/info/programming/helpapi/help	base-obsolete	obsolete
+./usr/share/sushi/info/programming/i18n		base-obsolete	obsolete
+./usr/share/sushi/info/programming/i18n/help	base-obsolete	obsolete
+./usr/share/sushi/info/programming/index	base-obsolete	obsolete
+./usr/share/sushi/info/programming/indexapi	base-obsolete	obsolete
+./usr/share/sushi/info/programming/indexapi/help	base-obsolete	obsolete
+./usr/share/sushi/info/programming/scriptapi	base-obsolete	obsolete
+./usr/share/sushi/info/programming/scriptapi/help	base-obsolete	obsolete
+./usr/share/sushi/info/programming/searchpaths	base-obsolete	obsolete
+./usr/share/sushi/info/programming/searchpaths/help	base-obsolete	obsolete
+./usr/share/sushi/install			base-obsolete	obsolete
+./usr/share/sushi/install/help			base-obsolete	obsolete
+./usr/share/sushi/install/index			base-obsolete	obsolete
+./usr/share/sushi/install/install		base-obsolete	obsolete
+./usr/share/sushi/install/install/form		base-obsolete	obsolete
+./usr/share/sushi/install/install/preform	base-obsolete	obsolete
+./usr/share/sushi/install/install/script	base-obsolete	obsolete
+./usr/share/sushi/install/install/script1	base-obsolete	obsolete
+./usr/share/sushi/install/install/script2	base-obsolete	obsolete
+./usr/share/sushi/install/installb		base-obsolete	obsolete
+./usr/share/sushi/install/installb/form		base-obsolete	obsolete
+./usr/share/sushi/install/installb/preform	base-obsolete	obsolete
+./usr/share/sushi/install/installb/script	base-obsolete	obsolete
+./usr/share/sushi/install/list			base-obsolete	obsolete
+./usr/share/sushi/install/list/exec		base-obsolete	obsolete
+./usr/share/sushi/install/remove		base-obsolete	obsolete
+./usr/share/sushi/install/remove/form		base-obsolete	obsolete
+./usr/share/sushi/install/remove/script		base-obsolete	obsolete
+./usr/share/sushi/install/remove/script1	base-obsolete	obsolete
+./usr/share/sushi/network			base-obsolete	obsolete
+./usr/share/sushi/network/exports		base-obsolete	obsolete
+./usr/share/sushi/network/exports/addexport	base-obsolete	obsolete
+./usr/share/sushi/network/exports/addexport/form	base-obsolete	obsolete
+./usr/share/sushi/network/exports/addexport/help	base-obsolete	obsolete
+./usr/share/sushi/network/exports/addexport/preform	base-obsolete	obsolete
+./usr/share/sushi/network/exports/addexport/script	base-obsolete	obsolete
+./usr/share/sushi/network/exports/addexport/script1	base-obsolete	obsolete
+./usr/share/sushi/network/exports/addexport/script2	base-obsolete	obsolete
+./usr/share/sushi/network/exports/addexport/script3	base-obsolete	obsolete
+./usr/share/sushi/network/exports/addexport/script4	base-obsolete	obsolete
+./usr/share/sushi/network/exports/addexport/script5	base-obsolete	obsolete
+./usr/share/sushi/network/exports/addexport/script6	base-obsolete	obsolete
+./usr/share/sushi/network/exports/addexport/script7	base-obsolete	obsolete
+./usr/share/sushi/network/exports/addexport/script8	base-obsolete	obsolete
+./usr/share/sushi/network/exports/addexport/script9	base-obsolete	obsolete
+./usr/share/sushi/network/exports/addexport/scripta	base-obsolete	obsolete
+./usr/share/sushi/network/exports/addexport/scriptb	base-obsolete	obsolete
+./usr/share/sushi/network/exports/delexport	base-obsolete	obsolete
+./usr/share/sushi/network/exports/delexport/form	base-obsolete	obsolete
+./usr/share/sushi/network/exports/delexport/help	base-obsolete	obsolete
+./usr/share/sushi/network/exports/delexport/script	base-obsolete	obsolete
+./usr/share/sushi/network/exports/delexport/script1	base-obsolete	obsolete
+./usr/share/sushi/network/exports/help		base-obsolete	obsolete
+./usr/share/sushi/network/exports/index		base-obsolete	obsolete
+./usr/share/sushi/network/help			base-obsolete	obsolete
+./usr/share/sushi/network/hostname		base-obsolete	obsolete
+./usr/share/sushi/network/hostname/form		base-obsolete	obsolete
+./usr/share/sushi/network/hostname/help		base-obsolete	obsolete
+./usr/share/sushi/network/hostname/script	base-obsolete	obsolete
+./usr/share/sushi/network/hostname/script1	base-obsolete	obsolete
+./usr/share/sushi/network/hosts			base-obsolete	obsolete
+./usr/share/sushi/network/hosts/addhost		base-obsolete	obsolete
+./usr/share/sushi/network/hosts/addhost/form	base-obsolete	obsolete
+./usr/share/sushi/network/hosts/addhost/help	base-obsolete	obsolete
+./usr/share/sushi/network/hosts/addhost/script	base-obsolete	obsolete
+./usr/share/sushi/network/hosts/addv6host	base-obsolete	obsolete
+./usr/share/sushi/network/hosts/addv6host/form	base-obsolete	obsolete
+./usr/share/sushi/network/hosts/addv6host/help	base-obsolete	obsolete
+./usr/share/sushi/network/hosts/addv6host/script	base-obsolete	obsolete
+./usr/share/sushi/network/hosts/delhost		base-obsolete	obsolete
+./usr/share/sushi/network/hosts/delhost/form	base-obsolete	obsolete
+./usr/share/sushi/network/hosts/delhost/help	base-obsolete	obsolete
+./usr/share/sushi/network/hosts/delhost/script	base-obsolete	obsolete
+./usr/share/sushi/network/hosts/delhost/script1	base-obsolete	obsolete
+./usr/share/sushi/network/hosts/help		base-obsolete	obsolete
+./usr/share/sushi/network/hosts/index		base-obsolete	obsolete
+./usr/share/sushi/network/hosts/modhost		base-obsolete	obsolete
+./usr/share/sushi/network/hosts/modhost/form	base-obsolete	obsolete
+./usr/share/sushi/network/hosts/modhost/help	base-obsolete	obsolete
+./usr/share/sushi/network/hosts/modhost/preform	base-obsolete	obsolete
+./usr/share/sushi/network/hosts/modhost/script	base-obsolete	obsolete
+./usr/share/sushi/network/hosts/modhost/script1	base-obsolete	obsolete
+./usr/share/sushi/network/hosts/modhost/script2	base-obsolete	obsolete
+./usr/share/sushi/network/hosts/modv6host	base-obsolete	obsolete
+./usr/share/sushi/network/hosts/modv6host/form	base-obsolete	obsolete
+./usr/share/sushi/network/hosts/modv6host/help	base-obsolete	obsolete
+./usr/share/sushi/network/hosts/modv6host/preform	base-obsolete	obsolete
+./usr/share/sushi/network/hosts/modv6host/script	base-obsolete	obsolete
+./usr/share/sushi/network/hosts/modv6host/script1	base-obsolete	obsolete
+./usr/share/sushi/network/hosts/modv6host/script2	base-obsolete	obsolete
+./usr/share/sushi/network/index			base-obsolete	obsolete
+./usr/share/sushi/network/interfaces		base-obsolete	obsolete
+./usr/share/sushi/network/interfaces/help	base-obsolete	obsolete
+./usr/share/sushi/network/interfaces/index	base-obsolete	obsolete
+./usr/share/sushi/network/interfaces/interface	base-obsolete	obsolete
+./usr/share/sushi/network/interfaces/interface/form	base-obsolete	obsolete
+./usr/share/sushi/network/interfaces/interface/help	base-obsolete	obsolete
+./usr/share/sushi/network/interfaces/interface/nwid.sed	base-obsolete	obsolete
+./usr/share/sushi/network/interfaces/interface/preform	base-obsolete	obsolete
+./usr/share/sushi/network/interfaces/interface/script	base-obsolete	obsolete
+./usr/share/sushi/network/interfaces/interface/script1	base-obsolete	obsolete
+./usr/share/sushi/network/interfaces/interface/script2	base-obsolete	obsolete
+./usr/share/sushi/network/interfaces/listif	base-obsolete	obsolete
+./usr/share/sushi/network/interfaces/listif/script	base-obsolete	obsolete
+./usr/share/sushi/network/routing		base-obsolete	obsolete
+./usr/share/sushi/network/routing/default	base-obsolete	obsolete
+./usr/share/sushi/network/routing/default/form	base-obsolete	obsolete
+./usr/share/sushi/network/routing/default/help	base-obsolete	obsolete
+./usr/share/sushi/network/routing/default/script	base-obsolete	obsolete
+./usr/share/sushi/network/routing/default/script1	base-obsolete	obsolete
+./usr/share/sushi/network/routing/help		base-obsolete	obsolete
+./usr/share/sushi/network/routing/index		base-obsolete	obsolete
+./usr/share/sushi/network/routing/ipv4table	base-obsolete	obsolete
+./usr/share/sushi/network/routing/ipv4table/exec	base-obsolete	obsolete
+./usr/share/sushi/network/yp			base-obsolete	obsolete
+./usr/share/sushi/network/yp/client		base-obsolete	obsolete
+./usr/share/sushi/network/yp/client/form	base-obsolete	obsolete
+./usr/share/sushi/network/yp/client/help	base-obsolete	obsolete
+./usr/share/sushi/network/yp/client/script	base-obsolete	obsolete
+./usr/share/sushi/network/yp/client/script1	base-obsolete	obsolete
+./usr/share/sushi/network/yp/domainname		base-obsolete	obsolete
+./usr/share/sushi/network/yp/domainname/form	base-obsolete	obsolete
+./usr/share/sushi/network/yp/domainname/help	base-obsolete	obsolete
+./usr/share/sushi/network/yp/domainname/script	base-obsolete	obsolete
+./usr/share/sushi/network/yp/domainname/script1	base-obsolete	obsolete
+./usr/share/sushi/network/yp/help		base-obsolete	obsolete
+./usr/share/sushi/network/yp/index		base-obsolete	obsolete
+./usr/share/sushi/network/yp/master		base-obsolete	obsolete
+./usr/share/sushi/network/yp/master/form	base-obsolete	obsolete
+./usr/share/sushi/network/yp/master/help	base-obsolete	obsolete
+./usr/share/sushi/network/yp/master/script	base-obsolete	obsolete
+./usr/share/sushi/network/yp/master/script1	base-obsolete	obsolete
+./usr/share/sushi/network/yp/slave		base-obsolete	obsolete
+./usr/share/sushi/network/yp/slave/form		base-obsolete	obsolete
+./usr/share/sushi/network/yp/slave/help		base-obsolete	obsolete
+./usr/share/sushi/network/yp/slave/script	base-obsolete	obsolete
+./usr/share/sushi/network/yp/slave/script1	base-obsolete	obsolete
+./usr/share/sushi/procs				base-obsolete	obsolete
+./usr/share/sushi/procs/help			base-obsolete	obsolete
+./usr/share/sushi/procs/index			base-obsolete	obsolete
+./usr/share/sushi/procs/restartallprocs		base-obsolete	obsolete
+./usr/share/sushi/procs/restartallprocs/form	base-obsolete	obsolete
+./usr/share/sushi/procs/restartallprocs/help	base-obsolete	obsolete
+./usr/share/sushi/procs/restartallprocs/script	base-obsolete	obsolete
+./usr/share/sushi/procs/restartallprocs/script1	base-obsolete	obsolete
+./usr/share/sushi/procs/restartprocs		base-obsolete	obsolete
+./usr/share/sushi/procs/restartprocs/form	base-obsolete	obsolete
+./usr/share/sushi/procs/restartprocs/help	base-obsolete	obsolete
+./usr/share/sushi/procs/restartprocs/script	base-obsolete	obsolete
+./usr/share/sushi/procs/restartprocs/script1	base-obsolete	obsolete
+./usr/share/sushi/procs/showallprocs		base-obsolete	obsolete
+./usr/share/sushi/procs/showallprocs/script	base-obsolete	obsolete
+./usr/share/sushi/procs/showprocs		base-obsolete	obsolete
+./usr/share/sushi/procs/showprocs/script	base-obsolete	obsolete
+./usr/share/sushi/procs/startallprocs		base-obsolete	obsolete
+./usr/share/sushi/procs/startallprocs/form	base-obsolete	obsolete
+./usr/share/sushi/procs/startallprocs/help	base-obsolete	obsolete
+./usr/share/sushi/procs/startallprocs/script	base-obsolete	obsolete
+./usr/share/sushi/procs/startallprocs/script1	base-obsolete	obsolete
+./usr/share/sushi/procs/startprocs		base-obsolete	obsolete
+./usr/share/sushi/procs/startprocs/form		base-obsolete	obsolete
+./usr/share/sushi/procs/startprocs/help		base-obsolete	obsolete
+./usr/share/sushi/procs/startprocs/script	base-obsolete	obsolete
+./usr/share/sushi/procs/startprocs/script1	base-obsolete	obsolete
+./usr/share/sushi/procs/stopallprocs		base-obsolete	obsolete
+./usr/share/sushi/procs/stopallprocs/form	base-obsolete	obsolete
+./usr/share/sushi/procs/stopallprocs/help	base-obsolete	obsolete
+./usr/share/sushi/procs/stopallprocs/script	base-obsolete	obsolete
+./usr/share/sushi/procs/stopallprocs/script1	base-obsolete	obsolete
+./usr/share/sushi/procs/stopprocs		base-obsolete	obsolete
+./usr/share/sushi/procs/stopprocs/form		base-obsolete	obsolete
+./usr/share/sushi/procs/stopprocs/help		base-obsolete	obsolete
+./usr/share/sushi/procs/stopprocs/script	base-obsolete	obsolete
+./usr/share/sushi/procs/stopprocs/script1	base-obsolete	obsolete
+./usr/share/sushi/procs/topcpu			base-obsolete	obsolete
+./usr/share/sushi/procs/topcpu/script		base-obsolete	obsolete
+./usr/share/sushi/procs/topmem			base-obsolete	obsolete
+./usr/share/sushi/procs/topmem/script		base-obsolete	obsolete
+./usr/share/sushi/procs/toptime			base-obsolete	obsolete
+./usr/share/sushi/procs/toptime/script		base-obsolete	obsolete
+./usr/share/sushi/scriptoff			base-obsolete	obsolete
+./usr/share/sushi/scriptoff/func		base-obsolete	obsolete
+./usr/share/sushi/scripton			base-obsolete	obsolete
+./usr/share/sushi/scripton/func			base-obsolete	obsolete
+./usr/share/sushi/system			base-obsolete	obsolete
+./usr/share/sushi/system/dailyconf		base-obsolete	obsolete
+./usr/share/sushi/system/dailyconf/form		base-obsolete	obsolete
+./usr/share/sushi/system/dailyconf/help		base-obsolete	obsolete
+./usr/share/sushi/system/dailyconf/script	base-obsolete	obsolete
+./usr/share/sushi/system/dailyconf/script1	base-obsolete	obsolete
+./usr/share/sushi/system/dailyconf/script2	base-obsolete	obsolete
+./usr/share/sushi/system/dailyconf/script3	base-obsolete	obsolete
+./usr/share/sushi/system/help			base-obsolete	obsolete
+./usr/share/sushi/system/index			base-obsolete	obsolete
+./usr/share/sushi/system/inetdconf		base-obsolete	obsolete
+./usr/share/sushi/system/inetdconf/form		base-obsolete	obsolete
+./usr/share/sushi/system/inetdconf/script	base-obsolete	obsolete
+./usr/share/sushi/system/inetdconf/script1	base-obsolete	obsolete
+./usr/share/sushi/system/localtime		base-obsolete	obsolete
+./usr/share/sushi/system/localtime/form		base-obsolete	obsolete
+./usr/share/sushi/system/localtime/help		base-obsolete	obsolete
+./usr/share/sushi/system/localtime/script	base-obsolete	obsolete
+./usr/share/sushi/system/localtime/script1	base-obsolete	obsolete
+./usr/share/sushi/system/mailerconf		base-obsolete	obsolete
+./usr/share/sushi/system/mailerconf/form	base-obsolete	obsolete
+./usr/share/sushi/system/mailerconf/script	base-obsolete	obsolete
+./usr/share/sushi/system/mailerconf/script1	base-obsolete	obsolete
+./usr/share/sushi/system/rcconf			base-obsolete	obsolete
+./usr/share/sushi/system/rcconf/form		base-obsolete	obsolete
+./usr/share/sushi/system/rcconf/script		base-obsolete	obsolete
+./usr/share/sushi/system/rcconf/script1		base-obsolete	obsolete
+./usr/share/sushi/system/rcconf/script2		base-obsolete	obsolete
+./usr/share/sushi/system/rcconf/script3		base-obsolete	obsolete
+./usr/share/sushi/system/rcconf/script4		base-obsolete	obsolete
+./usr/share/sushi/system/securityconf		base-obsolete	obsolete
+./usr/share/sushi/system/securityconf/form	base-obsolete	obsolete
+./usr/share/sushi/system/securityconf/help	base-obsolete	obsolete
+./usr/share/sushi/system/securityconf/script	base-obsolete	obsolete
+./usr/share/sushi/system/securityconf/script1	base-obsolete	obsolete
+./usr/share/sushi/system/securityconf/script2	base-obsolete	obsolete
+./usr/share/sushi/system/securityconf/script3	base-obsolete	obsolete
+./usr/share/sushi/system/sshdconf		base-obsolete	obsolete
+./usr/share/sushi/system/sshdconf/defaults	base-obsolete	obsolete
+./usr/share/sushi/system/sshdconf/form		base-obsolete	obsolete
+./usr/share/sushi/system/sshdconf/help		base-obsolete	obsolete
+./usr/share/sushi/system/sshdconf/script	base-obsolete	obsolete
+./usr/share/sushi/system/sshdconf/script1	base-obsolete	obsolete
+./usr/share/sushi/system/sshdconf/script2	base-obsolete	obsolete
+./usr/share/sushi/system/sshdconf/script3	base-obsolete	obsolete
+./usr/share/sushi/system/sshdconf/script4	base-obsolete	obsolete
+./usr/share/sushi/system/sshdconf/script5	base-obsolete	obsolete
+./usr/share/sushi/system/sshdconf/script6	base-obsolete	obsolete
+./usr/share/sushi/system/sshdconf/script7	base-obsolete	obsolete
+./usr/share/sushi/system/sysctl			base-obsolete	obsolete
+./usr/share/sushi/system/sysctl/form		base-obsolete	obsolete
+./usr/share/sushi/system/sysctl/help		base-obsolete	obsolete
+./usr/share/sushi/system/sysctl/preform		base-obsolete	obsolete
+./usr/share/sushi/system/sysctl/script		base-obsolete	obsolete
+./usr/share/sushi/system/sysctl/script1		base-obsolete	obsolete
+./usr/share/sushi/system/sysctl/script2		base-obsolete	obsolete
+./usr/share/sushi/system/sysctl/sysctls		base-obsolete	obsolete
+./usr/share/sushi/system/usermgmtconf		base-obsolete	obsolete
+./usr/share/sushi/system/usermgmtconf/form	base-obsolete	obsolete
+./usr/share/sushi/system/usermgmtconf/help	base-obsolete	obsolete
+./usr/share/sushi/system/usermgmtconf/script	base-obsolete	obsolete
+./usr/share/sushi/system/usermgmtconf/script1	base-obsolete	obsolete
+./usr/share/sushi/system/weeklyconf		base-obsolete	obsolete
+./usr/share/sushi/system/weeklyconf/form	base-obsolete	obsolete
+./usr/share/sushi/system/weeklyconf/help	base-obsolete	obsolete
+./usr/share/sushi/system/weeklyconf/script	base-obsolete	obsolete
+./usr/share/sushi/system/weeklyconf/script1	base-obsolete	obsolete
+./usr/share/sushi/system/weeklyconf/script3	base-obsolete	obsolete
+./usr/share/sushi/users				base-obsolete	obsolete
+./usr/share/sushi/users/addgroup		base-obsolete	obsolete
+./usr/share/sushi/users/addgroup/form		base-obsolete	obsolete
+./usr/share/sushi/users/addgroup/script		base-obsolete	obsolete
+./usr/share/sushi/users/adduser			base-obsolete	obsolete
+./usr/share/sushi/users/adduser/form		base-obsolete	obsolete
+./usr/share/sushi/users/adduser/script		base-obsolete	obsolete
+./usr/share/sushi/users/adduser/script1		base-obsolete	obsolete
+./usr/share/sushi/users/adduser/script2		base-obsolete	obsolete
+./usr/share/sushi/users/adduser/script3		base-obsolete	obsolete
+./usr/share/sushi/users/delgroup		base-obsolete	obsolete
+./usr/share/sushi/users/delgroup/form		base-obsolete	obsolete
+./usr/share/sushi/users/delgroup/script		base-obsolete	obsolete
+./usr/share/sushi/users/delgroup/script1	base-obsolete	obsolete
+./usr/share/sushi/users/deluser			base-obsolete	obsolete
+./usr/share/sushi/users/deluser/form		base-obsolete	obsolete
+./usr/share/sushi/users/deluser/preform		base-obsolete	obsolete
+./usr/share/sushi/users/deluser/script		base-obsolete	obsolete
+./usr/share/sushi/users/deluser/script1		base-obsolete	obsolete
+./usr/share/sushi/users/deluser/script2		base-obsolete	obsolete
+./usr/share/sushi/users/disuser			base-obsolete	obsolete
+./usr/share/sushi/users/disuser/form		base-obsolete	obsolete
+./usr/share/sushi/users/disuser/script		base-obsolete	obsolete
+./usr/share/sushi/users/disuser/script1		base-obsolete	obsolete
+./usr/share/sushi/users/index			base-obsolete	obsolete
+./usr/share/sushi/users/listgroup		base-obsolete	obsolete
+./usr/share/sushi/users/listgroup/script	base-obsolete	obsolete
+./usr/share/sushi/users/listuser		base-obsolete	obsolete
+./usr/share/sushi/users/listuser/script		base-obsolete	obsolete
+./usr/share/sushi/users/moduser			base-obsolete	obsolete
+./usr/share/sushi/users/moduser/form		base-obsolete	obsolete
+./usr/share/sushi/users/moduser/preform		base-obsolete	obsolete
+./usr/share/sushi/users/moduser/script		base-obsolete	obsolete
+./usr/share/sushi/users/moduser/script1		base-obsolete	obsolete
+./usr/share/sushi/users/moduser/script2		base-obsolete	obsolete
+./usr/share/sushi/users/passwd			base-obsolete	obsolete
+./usr/share/sushi/users/passwd/form		base-obsolete	obsolete
+./usr/share/sushi/users/passwd/script		base-obsolete	obsolete
+./usr/share/sushi/users/passwd/script1		base-obsolete	obsolete
+./usr/share/sushi/util				base-obsolete	obsolete
+./usr/share/sushi/util/help			base-obsolete	obsolete
+./usr/share/sushi/util/index			base-obsolete	obsolete
+./usr/share/sushi/util/logging			base-obsolete	obsolete
+./usr/share/sushi/util/logging/func		base-obsolete	obsolete
+./usr/share/sushi/util/scripting		base-obsolete	obsolete
+./usr/share/sushi/util/scripting/func		base-obsolete	obsolete
 ./usr/share/tabset				base-util-share
 ./usr/share/tabset/3101				base-util-share		share
 ./usr/share/tabset/9837				base-util-share		share
@@ -2844,14 +3055,21 @@
 ./usr/share/wscons/fonts/vt220l.814		base-util-share		share
 ./usr/share/wscons/fonts/vt220l.816		base-util-share		share
 ./usr/share/wscons/keymaps			base-util-share
+./usr/share/wscons/keymaps/pckbd.br.abnt2	base-util-share		share
 ./usr/share/wscons/keymaps/amikbd.pl.qwertz.iso8859-2	base-util-share		share
+./usr/share/wscons/keymaps/mkbd.pt.iso8859-2	base-obsolete		obsolete
+./usr/share/wscons/keymaps/mkbd.pt.iso8859-1	base-util-share		share
 ./usr/share/wscons/keymaps/pckbd.be.azerty	base-util-share		share
 ./usr/share/wscons/keymaps/pckbd.hu.iso8859-2	base-util-share		share
 ./usr/share/wscons/keymaps/pckbd.pl.iso8859-2	base-util-share		share
 ./usr/share/wscons/keymaps/pckbd.ru.koi8-r	base-util-share		share
 ./usr/share/wscons/keymaps/pckbd.sv.svascii	base-util-share		share
+./usr/share/wscons/keymaps/pckbd.de_CH.iso8859-2	base-obsolete	obsolete
+./usr/share/wscons/keymaps/pckbd.fr_CH.iso8859-2	base-obsolete	obsolete
+./usr/share/wscons/keymaps/pckbd.de_CH.iso8859-1	base-util-share		share
+./usr/share/wscons/keymaps/pckbd.fr_CH.iso8859-1	base-util-share		share
 ./usr/share/zoneinfo				base-sys-share
-./usr/share/zoneinfo/Africa			base-sys-share		share
+./usr/share/zoneinfo/Africa			base-sys-share
 ./usr/share/zoneinfo/Africa/Abidjan		base-sys-share		share
 ./usr/share/zoneinfo/Africa/Accra		base-sys-share		share
 ./usr/share/zoneinfo/Africa/Addis_Ababa		base-sys-share		share
@@ -2905,13 +3123,13 @@
 ./usr/share/zoneinfo/Africa/Tripoli		base-sys-share		share
 ./usr/share/zoneinfo/Africa/Tunis		base-sys-share		share
 ./usr/share/zoneinfo/Africa/Windhoek		base-sys-share		share
-./usr/share/zoneinfo/America			base-sys-share		share
+./usr/share/zoneinfo/America			base-sys-share
 ./usr/share/zoneinfo/America/Adak		base-sys-share		share
 ./usr/share/zoneinfo/America/Anchorage		base-sys-share		share
 ./usr/share/zoneinfo/America/Anguilla		base-sys-share		share
 ./usr/share/zoneinfo/America/Antigua		base-sys-share		share
 ./usr/share/zoneinfo/America/Araguaina		base-sys-share		share
-./usr/share/zoneinfo/America/Argentina		base-sys-share		share
+./usr/share/zoneinfo/America/Argentina		base-sys-share
 ./usr/share/zoneinfo/America/Argentina/Buenos_Aires	base-sys-share		share
 ./usr/share/zoneinfo/America/Argentina/Catamarca	base-sys-share		share
 ./usr/share/zoneinfo/America/Argentina/ComodRivadavia	base-sys-share		share
@@ -2972,18 +3190,20 @@
 ./usr/share/zoneinfo/America/Halifax		base-sys-share		share
 ./usr/share/zoneinfo/America/Havana		base-sys-share		share
 ./usr/share/zoneinfo/America/Hermosillo		base-sys-share		share
-./usr/share/zoneinfo/America/Indiana		base-sys-share		share
+./usr/share/zoneinfo/America/Indiana		base-sys-share
 ./usr/share/zoneinfo/America/Indiana/Indianapolis	base-sys-share		share
 ./usr/share/zoneinfo/America/Indiana/Knox	base-sys-share		share
 ./usr/share/zoneinfo/America/Indiana/Marengo	base-sys-share		share
+./usr/share/zoneinfo/America/Indiana/Petersburg	base-sys-share		share
 ./usr/share/zoneinfo/America/Indiana/Vevay	base-sys-share		share
+./usr/share/zoneinfo/America/Indiana/Vincennes	base-sys-share		share
 ./usr/share/zoneinfo/America/Indianapolis	base-sys-share		share
 ./usr/share/zoneinfo/America/Inuvik		base-sys-share		share
 ./usr/share/zoneinfo/America/Iqaluit		base-sys-share		share
 ./usr/share/zoneinfo/America/Jamaica		base-sys-share		share
 ./usr/share/zoneinfo/America/Jujuy		base-sys-share		share
 ./usr/share/zoneinfo/America/Juneau		base-sys-share		share
-./usr/share/zoneinfo/America/Kentucky		base-sys-share		share
+./usr/share/zoneinfo/America/Kentucky		base-sys-share
 ./usr/share/zoneinfo/America/Kentucky/Louisville	base-sys-share		share
 ./usr/share/zoneinfo/America/Kentucky/Monticello	base-sys-share		share
 ./usr/share/zoneinfo/America/Knox_IN		base-sys-share		share
@@ -3001,6 +3221,7 @@
 ./usr/share/zoneinfo/America/Merida		base-sys-share		share
 ./usr/share/zoneinfo/America/Mexico_City	base-sys-share		share
 ./usr/share/zoneinfo/America/Miquelon		base-sys-share		share
+./usr/share/zoneinfo/America/Moncton		base-sys-share		share
 ./usr/share/zoneinfo/America/Monterrey		base-sys-share		share
 ./usr/share/zoneinfo/America/Montevideo		base-sys-share		share
 ./usr/share/zoneinfo/America/Montreal		base-sys-share		share
@@ -3010,7 +3231,7 @@
 ./usr/share/zoneinfo/America/Nipigon		base-sys-share		share
 ./usr/share/zoneinfo/America/Nome		base-sys-share		share
 ./usr/share/zoneinfo/America/Noronha		base-sys-share		share
-./usr/share/zoneinfo/America/North_Dakota	base-sys-share		share
+./usr/share/zoneinfo/America/North_Dakota	base-sys-share
 ./usr/share/zoneinfo/America/North_Dakota/Center	base-sys-share		share
 ./usr/share/zoneinfo/America/Panama		base-sys-share		share
 ./usr/share/zoneinfo/America/Pangnirtung	base-sys-share		share
@@ -3050,7 +3271,7 @@
 ./usr/share/zoneinfo/America/Winnipeg		base-sys-share		share
 ./usr/share/zoneinfo/America/Yakutat		base-sys-share		share
 ./usr/share/zoneinfo/America/Yellowknife	base-sys-share		share
-./usr/share/zoneinfo/Antarctica			base-sys-share		share
+./usr/share/zoneinfo/Antarctica			base-sys-share
 ./usr/share/zoneinfo/Antarctica/Casey		base-sys-share		share
 ./usr/share/zoneinfo/Antarctica/Davis		base-sys-share		share
 ./usr/share/zoneinfo/Antarctica/DumontDUrville	base-sys-share		share
@@ -3061,9 +3282,9 @@
 ./usr/share/zoneinfo/Antarctica/South_Pole	base-sys-share		share
 ./usr/share/zoneinfo/Antarctica/Syowa		base-sys-share		share
 ./usr/share/zoneinfo/Antarctica/Vostok		base-sys-share		share
-./usr/share/zoneinfo/Arctic			base-sys-share		share
+./usr/share/zoneinfo/Arctic			base-sys-share
 ./usr/share/zoneinfo/Arctic/Longyearbyen	base-sys-share		share
-./usr/share/zoneinfo/Asia			base-sys-share		share
+./usr/share/zoneinfo/Asia			base-sys-share
 ./usr/share/zoneinfo/Asia/Aden			base-sys-share		share
 ./usr/share/zoneinfo/Asia/Aktau			base-obsolete		obsolete
 ./usr/share/zoneinfo/Asia/Alma-Ata		base-obsolete		obsolete
@@ -3155,7 +3376,7 @@
 ./usr/share/zoneinfo/Asia/Yakutsk		base-sys-share		share
 ./usr/share/zoneinfo/Asia/Yekaterinburg		base-sys-share		share
 ./usr/share/zoneinfo/Asia/Yerevan		base-sys-share		share
-./usr/share/zoneinfo/Atlantic			base-sys-share		share
+./usr/share/zoneinfo/Atlantic			base-sys-share
 ./usr/share/zoneinfo/Atlantic/Azores		base-sys-share		share
 ./usr/share/zoneinfo/Atlantic/Bermuda		base-sys-share		share
 ./usr/share/zoneinfo/Atlantic/Canary		base-sys-share		share
@@ -3167,7 +3388,7 @@
 ./usr/share/zoneinfo/Atlantic/South_Georgia	base-sys-share		share
 ./usr/share/zoneinfo/Atlantic/St_Helena		base-sys-share		share
 ./usr/share/zoneinfo/Atlantic/Stanley		base-sys-share		share
-./usr/share/zoneinfo/Australia			base-sys-share		share
+./usr/share/zoneinfo/Australia			base-sys-share
 ./usr/share/zoneinfo/Australia/ACT		base-sys-share		share
 ./usr/share/zoneinfo/Australia/Adelaide		base-sys-share		share
 ./usr/share/zoneinfo/Australia/Brisbane		base-sys-share		share
@@ -3190,14 +3411,14 @@
 ./usr/share/zoneinfo/Australia/Victoria		base-sys-share		share
 ./usr/share/zoneinfo/Australia/West		base-sys-share		share
 ./usr/share/zoneinfo/Australia/Yancowinna	base-sys-share		share
-./usr/share/zoneinfo/Brazil			base-sys-share		share
+./usr/share/zoneinfo/Brazil			base-sys-share
 ./usr/share/zoneinfo/Brazil/Acre		base-sys-share		share
 ./usr/share/zoneinfo/Brazil/DeNoronha		base-sys-share		share
 ./usr/share/zoneinfo/Brazil/East		base-sys-share		share
 ./usr/share/zoneinfo/Brazil/West		base-sys-share		share
 ./usr/share/zoneinfo/CET			base-sys-share		share
 ./usr/share/zoneinfo/CST6CDT			base-sys-share		share
-./usr/share/zoneinfo/Canada			base-sys-share		share
+./usr/share/zoneinfo/Canada			base-sys-share
 ./usr/share/zoneinfo/Canada/Atlantic		base-sys-share		share
 ./usr/share/zoneinfo/Canada/Central		base-sys-share		share
 ./usr/share/zoneinfo/Canada/East-Saskatchewan	base-sys-share		share
@@ -3207,7 +3428,7 @@
 ./usr/share/zoneinfo/Canada/Pacific		base-sys-share		share
 ./usr/share/zoneinfo/Canada/Saskatchewan	base-sys-share		share
 ./usr/share/zoneinfo/Canada/Yukon		base-sys-share		share
-./usr/share/zoneinfo/Chile			base-sys-share		share
+./usr/share/zoneinfo/Chile			base-sys-share
 ./usr/share/zoneinfo/Chile/Continental		base-sys-share		share
 ./usr/share/zoneinfo/Chile/EasterIsland		base-sys-share		share
 ./usr/share/zoneinfo/Cuba			base-sys-share		share
@@ -3216,7 +3437,7 @@
 ./usr/share/zoneinfo/EST5EDT			base-sys-share		share
 ./usr/share/zoneinfo/Egypt			base-sys-share		share
 ./usr/share/zoneinfo/Eire			base-sys-share		share
-./usr/share/zoneinfo/Etc			base-sys-share		share
+./usr/share/zoneinfo/Etc			base-sys-share
 ./usr/share/zoneinfo/Etc/GMT			base-sys-share		share
 ./usr/share/zoneinfo/Etc/GMT+0			base-sys-share		share
 ./usr/share/zoneinfo/Etc/GMT+1			base-sys-share		share
@@ -3252,7 +3473,7 @@
 ./usr/share/zoneinfo/Etc/UTC			base-sys-share		share
 ./usr/share/zoneinfo/Etc/Universal		base-sys-share		share
 ./usr/share/zoneinfo/Etc/Zulu			base-sys-share		share
-./usr/share/zoneinfo/Europe			base-sys-share		share
+./usr/share/zoneinfo/Europe			base-sys-share
 ./usr/share/zoneinfo/Europe/Amsterdam		base-sys-share		share
 ./usr/share/zoneinfo/Europe/Andorra		base-sys-share		share
 ./usr/share/zoneinfo/Europe/Athens		base-sys-share		share
@@ -3356,7 +3577,7 @@
 ./usr/share/zoneinfo/HST			base-sys-share		share
 ./usr/share/zoneinfo/Hongkong			base-sys-share		share
 ./usr/share/zoneinfo/Iceland			base-sys-share		share
-./usr/share/zoneinfo/Indian			base-sys-share		share
+./usr/share/zoneinfo/Indian			base-sys-share
 ./usr/share/zoneinfo/Indian/Antananarivo	base-sys-share		share
 ./usr/share/zoneinfo/Indian/Chagos		base-sys-share		share
 ./usr/share/zoneinfo/Indian/Christmas		base-sys-share		share
@@ -3377,11 +3598,11 @@
 ./usr/share/zoneinfo/MET			base-sys-share		share
 ./usr/share/zoneinfo/MST			base-sys-share		share
 ./usr/share/zoneinfo/MST7MDT			base-sys-share		share
-./usr/share/zoneinfo/Mexico			base-sys-share		share
+./usr/share/zoneinfo/Mexico			base-sys-share
 ./usr/share/zoneinfo/Mexico/BajaNorte		base-sys-share		share
 ./usr/share/zoneinfo/Mexico/BajaSur		base-sys-share		share
 ./usr/share/zoneinfo/Mexico/General		base-sys-share		share
-./usr/share/zoneinfo/Mideast			base-sys-share		share
+./usr/share/zoneinfo/Mideast			base-sys-share
 ./usr/share/zoneinfo/Mideast/Riyadh87		base-sys-share		share
 ./usr/share/zoneinfo/Mideast/Riyadh88		base-sys-share		share
 ./usr/share/zoneinfo/Mideast/Riyadh89		base-sys-share		share
@@ -3391,7 +3612,7 @@
 ./usr/share/zoneinfo/Navajo			base-sys-share		share
 ./usr/share/zoneinfo/PRC			base-sys-share		share
 ./usr/share/zoneinfo/PST8PDT			base-sys-share		share
-./usr/share/zoneinfo/Pacific			base-sys-share		share
+./usr/share/zoneinfo/Pacific			base-sys-share
 ./usr/share/zoneinfo/Pacific/Apia		base-sys-share		share
 ./usr/share/zoneinfo/Pacific/Auckland		base-sys-share		share
 ./usr/share/zoneinfo/Pacific/Chatham		base-sys-share		share
@@ -3437,23 +3658,23 @@
 ./usr/share/zoneinfo/ROC			base-sys-share		share
 ./usr/share/zoneinfo/ROK			base-sys-share		share
 ./usr/share/zoneinfo/Singapore			base-sys-share		share
-./usr/share/zoneinfo/SystemV			base-sys-share		share
-./usr/share/zoneinfo/SystemV/AST4		base-sys-share		share
-./usr/share/zoneinfo/SystemV/AST4ADT		base-sys-share		share
-./usr/share/zoneinfo/SystemV/CST6		base-sys-share		share
-./usr/share/zoneinfo/SystemV/CST6CDT		base-sys-share		share
-./usr/share/zoneinfo/SystemV/EST5		base-sys-share		share
-./usr/share/zoneinfo/SystemV/EST5EDT		base-sys-share		share
-./usr/share/zoneinfo/SystemV/HST10		base-sys-share		share
-./usr/share/zoneinfo/SystemV/MST7		base-sys-share		share
-./usr/share/zoneinfo/SystemV/MST7MDT		base-sys-share		share
-./usr/share/zoneinfo/SystemV/PST8		base-sys-share		share
-./usr/share/zoneinfo/SystemV/PST8PDT		base-sys-share		share
-./usr/share/zoneinfo/SystemV/YST9		base-sys-share		share
-./usr/share/zoneinfo/SystemV/YST9YDT		base-sys-share		share
+./usr/share/zoneinfo/SystemV			base-obsolete		obsolete
+./usr/share/zoneinfo/SystemV/AST4		base-obsolete		obsolete
+./usr/share/zoneinfo/SystemV/AST4ADT		base-obsolete		obsolete
+./usr/share/zoneinfo/SystemV/CST6		base-obsolete		obsolete
+./usr/share/zoneinfo/SystemV/CST6CDT		base-obsolete		obsolete
+./usr/share/zoneinfo/SystemV/EST5		base-obsolete		obsolete
+./usr/share/zoneinfo/SystemV/EST5EDT		base-obsolete		obsolete
+./usr/share/zoneinfo/SystemV/HST10		base-obsolete		obsolete
+./usr/share/zoneinfo/SystemV/MST7		base-obsolete		obsolete
+./usr/share/zoneinfo/SystemV/MST7MDT		base-obsolete		obsolete
+./usr/share/zoneinfo/SystemV/PST8		base-obsolete		obsolete
+./usr/share/zoneinfo/SystemV/PST8PDT		base-obsolete		obsolete
+./usr/share/zoneinfo/SystemV/YST9		base-obsolete		obsolete
+./usr/share/zoneinfo/SystemV/YST9YDT		base-obsolete		obsolete
 ./usr/share/zoneinfo/Turkey			base-sys-share		share
 ./usr/share/zoneinfo/UCT			base-sys-share		share
-./usr/share/zoneinfo/US				base-sys-share		share
+./usr/share/zoneinfo/US				base-sys-share
 ./usr/share/zoneinfo/US/Alaska			base-sys-share		share
 ./usr/share/zoneinfo/US/Aleutian		base-sys-share		share
 ./usr/share/zoneinfo/US/Arizona			base-sys-share		share
@@ -3541,13 +3762,13 @@
 ./var/run					base-sys-root
 ./var/rwho					base-netutil-root
 ./var/spool					base-sys-root
-./var/spool/clientmqueue			base-sendmail-root
+./var/spool/clientmqueue			base-obsolete		obsolete
 ./var/spool/ftp					base-netutil-root
 ./var/spool/ftp/bin				base-netutil-root
 ./var/spool/ftp/etc				base-netutil-root
 ./var/spool/ftp/hidden				base-netutil-root
 ./var/spool/lock				base-sys-root
-./var/spool/mqueue				base-sendmail-root
+./var/spool/mqueue				base-obsolete		obsolete
 ./var/spool/output				base-lpr-root
 ./var/spool/output/lpd				base-lpr-root
 ./var/spool/postfix				base-postfix-root

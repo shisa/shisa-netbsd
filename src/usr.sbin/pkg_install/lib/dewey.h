@@ -1,4 +1,4 @@
-/* $NetBSD: dewey.h,v 1.1.2.1 2005/11/06 13:41:32 tron Exp $ */
+/* $NetBSD: dewey.h,v 1.1 2005/11/03 21:59:55 dillo Exp $ */
 
 #ifndef _INST_LIB_DEWEY_H_
 #define _INST_LIB_DEWEY_H_

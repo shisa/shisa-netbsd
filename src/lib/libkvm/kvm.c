@@ -1,4 +1,4 @@
-/*	$NetBSD: kvm.c,v 1.83 2004/02/13 11:36:08 wiz Exp $	*/
+/*	$NetBSD: kvm.c,v 1.87 2006/05/11 12:00:20 yamt Exp $	*/
 
 /*-
  * Copyright (c) 1989, 1992, 1993
@@ -38,7 +38,7 @@
 #if 0
 static char sccsid[] = "@(#)kvm.c	8.2 (Berkeley) 2/13/94";
 #else
-__RCSID("$NetBSD: kvm.c,v 1.83 2004/02/13 11:36:08 wiz Exp $");
+__RCSID("$NetBSD: kvm.c,v 1.87 2006/05/11 12:00:20 yamt Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
@@ -60,6 +60,7 @@ __RCSID("$NetBSD: kvm.c,v 1.83 2004/02/13 11:36:08 wiz Exp $");
 #include <machine/cpu.h>
 
 #include <ctype.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <nlist.h>
@@ -229,20 +230,23 @@ _kvm_open(kd, uf, mf, sf, flag, errout)
 	kd->swfd = -1;
 	kd->nlfd = -1;
 	kd->alive = KVM_ALIVE_DEAD;
-	kd->procbase = 0;
-	kd->procbase2 = 0;
-	kd->lwpbase = 0;
+	kd->procbase = NULL;
+	kd->procbase_len = 0;
+	kd->procbase2 = NULL;
+	kd->procbase2_len = 0;
+	kd->lwpbase = NULL;
+	kd->lwpbase_len = 0;
 	kd->nbpg = getpagesize();
-	kd->swapspc = 0;
-	kd->argspc = 0;
-	kd->arglen = 0;
-	kd->argbuf = 0;
-	kd->argv = 0;
-	kd->vmst = 0;
-	kd->vm_page_buckets = 0;
-	kd->kcore_hdr = 0;
+	kd->swapspc = NULL;
+	kd->argspc = NULL;
+	kd->argspc_len = 0;
+	kd->argbuf = NULL;
+	kd->argv = NULL;
+	kd->vmst = NULL;
+	kd->vm_page_buckets = NULL;
+	kd->kcore_hdr = NULL;
 	kd->cpu_dsize = 0;
-	kd->cpu_data = 0;
+	kd->cpu_data = NULL;
 	kd->dump_off = 0;
 
 	if (flag & KVM_NO_FILES) {
@@ -323,8 +327,11 @@ _kvm_open(kd, uf, mf, sf, flag, errout)
 		}
 		kd->alive = KVM_ALIVE_FILES;
 		if ((kd->swfd = open_cloexec(sf, flag, 0)) < 0) {
-			_kvm_syserr(kd, kd->program, "%s", sf);
-			goto failed;
+			if (errno != ENXIO) {
+				_kvm_syserr(kd, kd->program, "%s", sf);
+				goto failed;
+			}
+			/* swap is not configured?  not fatal */
 		}
 		/*
 		 * Open the kernel namelist.  If /dev/ksyms doesn't 
@@ -690,8 +697,9 @@ kvm_open(uf, mf, sf, flag, program)
 {
 	kvm_t *kd;
 
-	if ((kd = malloc(sizeof(*kd))) == NULL && program != NULL) {
-		(void)fprintf(stderr, "%s: %s\n", program, strerror(errno));
+	if ((kd = malloc(sizeof(*kd))) == NULL) {
+		(void)fprintf(stderr, "%s: %s\n",
+		    program ? program : getprogname(), strerror(errno));
 		return (0);
 	}
 	kd->program = program;

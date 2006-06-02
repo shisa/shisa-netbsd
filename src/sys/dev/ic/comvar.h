@@ -1,4 +1,4 @@
-/*	$NetBSD: comvar.h,v 1.48 2005/02/04 02:10:36 perry Exp $	*/
+/*	$NetBSD: comvar.h,v 1.51 2006/03/05 17:33:33 christos Exp $	*/
 
 /*
  * Copyright (c) 1996 Christopher G. Demetriou.  All rights reserved.
@@ -42,9 +42,7 @@
 
 #include <sys/callout.h>
 #include <sys/timepps.h>
-#if (defined(MULTIPROCESSOR) || defined(LOCKDEBUG)) && defined(COM_MPLOCK)
 #include <sys/lock.h>
-#endif
 
 int comcnattach(bus_space_tag_t, bus_addr_t, int, int, int, tcflag_t);
 
@@ -149,15 +147,8 @@ struct com_softc {
 #if NRND > 0 && defined(RND_COM)
 	rndsource_element_t  rnd_source;
 #endif
-#if (defined(MULTIPROCESSOR) || defined(LOCKDEBUG)) && defined(COM_MPLOCK)
 	struct simplelock	sc_lock;
-#endif
 };
-
-/* Macros to clear/set/test flags. */
-#define SET(t, f)	(t) |= (f)
-#define CLR(t, f)	(t) &= ~(f)
-#define ISSET(t, f)	((t) & (f))
 
 int comprobe1(bus_space_tag_t, bus_space_handle_t);
 int comintr(void *);

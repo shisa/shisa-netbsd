@@ -1,4 +1,4 @@
-/* $NetBSD: drvctl.c,v 1.3.2.1 2005/06/14 20:39:52 tron Exp $ */
+/* $NetBSD: drvctl.c,v 1.4 2005/06/02 00:00:46 lukem Exp $ */
 
 /*
  * Copyright (c) 2004

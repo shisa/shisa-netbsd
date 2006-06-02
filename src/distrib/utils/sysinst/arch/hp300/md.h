@@ -1,4 +1,4 @@
-/*	$NetBSD: md.h,v 1.11 2004/06/06 06:07:00 christos Exp $	*/
+/*	$NetBSD: md.h,v 1.14 2006/03/21 06:18:29 tsutsui Exp $	*/
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.
@@ -55,14 +55,16 @@
 #define PART_ROOT	PART_A
 #define PART_SWAP	PART_B
 #define PART_RAW	PART_C
-#define PART_USR	PART_D	/* Can be after PART_FIRST_FREE */
-#define PART_FIRST_FREE	PART_E
+#define PART_BOOT	PART_D
+#define BOOT_SIZE	hp300_boot_size()
+#define PART_USR	PART_E	/* Can be after PART_FIRST_FREE */
+#define PART_FIRST_FREE	PART_F
 
 #define DEFSWAPRAM	32	/* Assume at least this RAM for swap calc */
 #define DEFROOTSIZE	20	/* Default root size */
 #define DEFVARSIZE	32	/* Default /var size, if created */
-#define DEFUSRSIZE	70	/* Default /usr size, if /home */
-#define XNEEDMB		35	/* Extra megs for full X installation */
+#define DEFUSRSIZE	240	/* Default /usr size, if created */
+#define XNEEDMB		120	/* Extra megs for full X installation */
 
 /*
  *  Default filesets to fetch and install during installation
@@ -71,7 +73,7 @@
  */
 #define SET_KERNEL_1_NAME	"kern-GENERIC"
 
-#define MD_SETS_VALID (SET_KERNEL | SET_SYSTEM | (SET_X11 & ~SET_X11_SERVERS))
+#define MD_SETS_VALID SET_KERNEL, SET_SYSTEM, SET_X11_NOSERVERS
 
 /*
  * Disk names accepted as valid targets for a from-scratch installation.
@@ -94,9 +96,4 @@
  */
 #define DISKLABEL_CMD "disklabel -w -r"
 
-
-/*
- * Default fileystem type for floppy disks.
- * On hp300, if we had floppies, that would be ffs.
- */
-const char *fdtype;
+int hp300_boot_size(void);

@@ -1,4 +1,4 @@
-/*	$NetBSD: installboot.h,v 1.25 2004/08/15 22:00:12 dsl Exp $	*/
+/*	$NetBSD: installboot.h,v 1.30 2006/02/18 11:01:51 dsl Exp $	*/
 
 /*-
  * Copyright (c) 2002 The NetBSD Foundation, Inc.
@@ -55,6 +55,7 @@ typedef enum {
 	IB_VERBOSE =	1<<0,		/* verbose operation */
 	IB_NOWRITE =	1<<1,		/* don't write */
 	IB_CLEAR =	1<<2,		/* clear boot block */
+	IB_EDIT =	1<<3,		/* edit boot parameters */
 
 				/* flags from -o options */
 	IB_ALPHASUM =	1<<8,		/* set Alpha checksum */
@@ -104,6 +105,7 @@ struct ib_mach {
 	const char	*name;
 	int		(*setboot)	(ib_params *);
 	int		(*clearboot)	(ib_params *);
+	int		(*editboot)	(ib_params *);
 	ib_flags	valid_flags;
 };
 
@@ -135,7 +137,7 @@ struct bbinfo_params {
 	bbinfo_endian	endian;
 };
 
-extern struct ib_mach	machines[];
+extern struct ib_mach	*machines[];
 extern struct ib_fs	fstypes[];
 
 	/* installboot.c */
@@ -143,6 +145,7 @@ uint16_t	compute_sunsum(const uint16_t *);
 int		set_sunsum(ib_params *, uint16_t *, uint16_t);
 int		no_setboot(ib_params *);
 int		no_clearboot(ib_params *);
+int		no_editboot(ib_params *);
 
 	/* bbinfo.c */
 int		shared_bbinfo_clearboot(ib_params *, struct bbinfo_params *,
@@ -158,29 +161,23 @@ int		raw_match(ib_params *);
 int		raw_findstage2(ib_params *, uint32_t *, ib_block *);
 
 	/* machines.c */
-int		alpha_setboot(ib_params *);
-int		alpha_clearboot(ib_params *);
-int		amiga_setboot(ib_params *);
-int		hp300_setboot(ib_params *);
-int		i386_setboot(ib_params *);
-int		macppc_setboot(ib_params *);
-int		macppc_clearboot(ib_params *);
-int		news68k_setboot(ib_params *);
-int		news68k_clearboot(ib_params *);
-int		next68k_setboot(ib_params *);
-int		newsmips_setboot(ib_params *);
-int		newsmips_clearboot(ib_params *);
-int		pmax_setboot(ib_params *);
-int		pmax_clearboot(ib_params *);
-int		sparc_setboot(ib_params *);
-int		sparc_clearboot(ib_params *);
-int		sparc64_setboot(ib_params *);
-int		sparc64_clearboot(ib_params *);
-int		sun68k_setboot(ib_params *);
-int		sun68k_clearboot(ib_params *);
-int		vax_setboot(ib_params *);
-int		vax_clearboot(ib_params *);
-int		x68k_setboot(ib_params *);
-int		x68k_clearboot(ib_params *);
+extern struct ib_mach ib_mach_alpha;
+extern struct ib_mach ib_mach_amd64;
+extern struct ib_mach ib_mach_amiga;
+extern struct ib_mach ib_mach_ews4800mips;
+extern struct ib_mach ib_mach_hp300;
+extern struct ib_mach ib_mach_hp700;
+extern struct ib_mach ib_mach_i386;
+extern struct ib_mach ib_mach_macppc;
+extern struct ib_mach ib_mach_news68k;
+extern struct ib_mach ib_mach_newsmips;
+extern struct ib_mach ib_mach_next68k;
+extern struct ib_mach ib_mach_pmax;
+extern struct ib_mach ib_mach_sparc;
+extern struct ib_mach ib_mach_sparc64;
+extern struct ib_mach ib_mach_sun2;
+extern struct ib_mach ib_mach_sun3;
+extern struct ib_mach ib_mach_vax;
+extern struct ib_mach ib_mach_x68k;
 
 #endif	/* _INSTALLBOOT_H */

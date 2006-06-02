@@ -5651,8 +5651,8 @@ Keywords: UUCP, protocol, FAQ
 Approved: news-answers-request@@MIT.Edu
 
 Archive-name: uucp-internals
-Version: $Revision: 1.5.6.1 $
-Last-modified: $Date: 2005/09/08 21:20:38 $
+Version: $Revision: 1.6 $
+Last-modified: $Date: 2005/09/07 12:38:16 $
 @end format
 @end ifset
 

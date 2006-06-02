@@ -1,4 +1,4 @@
-/*	$NetBSD: cbiisc.c,v 1.17 2004/02/13 11:36:09 wiz Exp $ */
+/*	$NetBSD: cbiisc.c,v 1.21 2006/03/29 04:16:45 thorpej Exp $ */
 
 /*
  * Copyright (c) 1997 Michael L. Hitch
@@ -36,7 +36,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: cbiisc.c,v 1.17 2004/02/13 11:36:09 wiz Exp $");
+__KERNEL_RCSID(0, "$NetBSD: cbiisc.c,v 1.21 2006/03/29 04:16:45 thorpej Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -135,7 +135,7 @@ cbiiscmatch(struct device *parent, struct cfdata *cf, void *aux)
 	if (zap->manid != 0x2140 || zap->prodid != 25)
 		return(0);
 	regs = &((volatile u_char *)zap->va)[0x1ff03];
-	if (badaddr((caddr_t)regs))
+	if (badaddr((caddr_t)__UNVOLATILE(regs)))
 		return(0);
 	regs[NCR_CFG1 * 4] = 0;
 	regs[NCR_CFG1 * 4] = NCRCFG1_PARENB | 7;
@@ -170,7 +170,7 @@ cbiiscattach(struct device *parent, struct device *self, void *aux)
 	csc->sc_reg = &((volatile u_char *)zap->va)[0x1ff03];
 	csc->sc_dmabase = &csc->sc_reg[0x80];
 
-	sc->sc_freq = 40;		/* Clocked at 40Mhz */
+	sc->sc_freq = 40;		/* Clocked at 40 MHz */
 
 	printf(": address %p", csc->sc_reg);
 
@@ -202,7 +202,7 @@ cbiiscattach(struct device *parent, struct device *self, void *aux)
 	 * NOTE: low 8 bits are to disable disconnect, and the next
 	 *       8 bits are to disable sync.
 	 */
-	sc->sc_dev.dv_cfdata->cf_flags |= (scsi_nosync >> shift_nosync)
+	device_cfdata(&sc->sc_dev)->cf_flags |= (scsi_nosync >> shift_nosync)
 	    & 0xffff;
 	shift_nosync += 16;
 

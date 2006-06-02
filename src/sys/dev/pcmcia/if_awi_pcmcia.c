@@ -1,4 +1,4 @@
-/* $NetBSD: if_awi_pcmcia.c,v 1.33 2004/08/10 22:49:12 mycroft Exp $ */
+/* $NetBSD: if_awi_pcmcia.c,v 1.35 2005/12/11 12:23:23 christos Exp $ */
 
 /*-
  * Copyright (c) 1999, 2004 The NetBSD Foundation, Inc.
@@ -45,7 +45,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_awi_pcmcia.c,v 1.33 2004/08/10 22:49:12 mycroft Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_awi_pcmcia.c,v 1.35 2005/12/11 12:23:23 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -62,8 +62,8 @@ __KERNEL_RCSID(0, "$NetBSD: if_awi_pcmcia.c,v 1.33 2004/08/10 22:49:12 mycroft E
 #include <net/if_ether.h>
 #include <net/if_media.h>
 
+#include <net80211/ieee80211_netbsd.h>
 #include <net80211/ieee80211_var.h>
-#include <net80211/ieee80211_compat.h>
 
 #include <machine/cpu.h>
 #include <machine/bus.h>

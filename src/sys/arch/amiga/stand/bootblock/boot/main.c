@@ -1,5 +1,5 @@
 /*
- * $NetBSD: main.c,v 1.17 2003/01/20 05:29:59 simonb Exp $
+ * $NetBSD: main.c,v 1.21 2006/01/25 18:28:25 christos Exp $
  *
  *
  * Copyright (c) 1996,1999 Ignatios Souvatzis
@@ -44,7 +44,7 @@
 #include <include/cpu.h>
 
 #include <saerrno.h>
-#include <stand.h>
+#include <lib/libsa/stand.h>
 
 #include "libstubs.h"
 #include "samachdep.h"
@@ -304,7 +304,7 @@ again:
 		/* Insert The Evergrowing Kludge List Here: */
 
 		/* a) dont load kernel over DraCo MMU table */
-			
+
 		if (((cpuid >> 24) == 0x7D) &&
 		    ((from & -DRACOMMUMARGIN) == 0x40000000) &&
 		    (size >= DRACOMMUMARGIN)) {
@@ -368,7 +368,7 @@ again:
 	ksize = ((marks[MARK_END] + 3) & ~3)
 	    + sizeof(*nkcd) + ncd*sizeof(*cd)
 	    + sizeof(*nkcd) + nseg * sizeof(struct boot_memseg);
-		
+
 #ifdef PPCBOOTER
 	kp = alloc(ksize);
 #else
@@ -486,7 +486,7 @@ printf("Supressing %ld kernel symbols\n", marks[MARK_NSYM]);
 	/*NOTREACHED*/
 
 freeall:
-	free(kp, ksize);
+	dealloc(kp, ksize);
 err:
 	printf("\nError %ld\n", (long)errno);
 	goto again;
@@ -537,7 +537,7 @@ long get_number(char **ptr)
 #ifdef TEST
 	fprintf(stderr, "get_number: got %c0x%x",
 	    sign ? '-' : '+', value);
-#endif	
+#endif
 	return (sign ? -value : value);
 }
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: apmvar.h,v 1.19 2003/12/25 21:03:55 jmc Exp $	*/
+/*	$NetBSD: apmvar.h,v 1.23 2005/12/11 12:17:43 christos Exp $	*/
 /*-
  * Copyright (c) 1995 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -63,10 +63,6 @@ struct apm_connect_info {
 	u_int apm_code16_seg_len;
 	u_int apm_data_seg_len;
 	u_int apm_detail;
-};
-
-struct apm_attach_args {
-	char *aaa_busname;
 };
 
 #ifdef _KERNEL

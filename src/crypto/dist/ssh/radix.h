@@ -1,4 +1,4 @@
-/*	$NetBSD: radix.h,v 1.7 2005/02/13 06:01:36 christos Exp $	*/
+/*	$NetBSD: radix.h,v 1.9 2005/04/23 16:55:03 christos Exp $	*/
 /*	$OpenBSD: radix.h,v 1.4 2001/06/26 17:27:24 markus Exp $	*/
 
 /*

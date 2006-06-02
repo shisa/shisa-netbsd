@@ -1,4 +1,4 @@
-/*	$NetBSD: piixide.c,v 1.19.2.4 2005/08/24 21:51:26 tron Exp $	*/
+/*	$NetBSD: piixide.c,v 1.26 2006/05/19 01:27:00 markd Exp $	*/
 
 /*
  * Copyright (c) 1999, 2000, 2001 Manuel Bouyer.
@@ -28,6 +28,9 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+
+#include <sys/cdefs.h>
+__KERNEL_RCSID(0, "$NetBSD: piixide.c,v 1.26 2006/05/19 01:27:00 markd Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -174,6 +177,11 @@ static const struct pciide_product_desc pciide_intel_products[] =  {
 	{ PCI_PRODUCT_INTEL_82801G_SATA,
 	  0,
 	  "Intel 82801GB/GR Serial ATA/Raid Controller (ICH7)",
+	  piixsata_chip_map,
+	},
+	{ PCI_PRODUCT_INTEL_82801GBM_SATA,
+	  0,
+	  "Intel 82801GBM/GHM Serial ATA Controller (ICH7)",
 	  piixsata_chip_map,
 	},
 	{ 0,

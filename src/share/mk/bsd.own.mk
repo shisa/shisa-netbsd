@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.own.mk,v 1.438 2005/02/28 02:28:09 christos Exp $
+#	$NetBSD: bsd.own.mk,v 1.451 2006/05/30 00:52:11 christos Exp $
 
 .if !defined(_BSD_OWN_MK_)
 _BSD_OWN_MK_=1
@@ -38,31 +38,42 @@ NEED_OWN_INSTALL_TARGET?=	yes
 # If some future port is not supported by the in-tree toolchain, this
 # should be set to "yes" for that port only.
 #
-TOOLCHAIN_MISSING=	no
+TOOLCHAIN_MISSING?=	no
 
 #
-# Transitional for toolchain upgrade to GCC3.3
+# Transitional for toolchain upgrade to GCC4.1
 #
 # not working:
+#	all
 #
 .if ${MACHINE_ARCH} == "vax"
-HAVE_GCC3?=	no
-.else
-HAVE_GCC3?=	yes
+HAVE_GCC?=	2
 .endif
 
+.if ${MACHINE_ARCH} == "i386" || \
+    ${MACHINE_ARCH} == "sparc64"
+#HAVE_GCC?=	4
+.endif
+
+# default to GCC3
+HAVE_GCC?=	3
+
 # Do we want to use tools/toolchain or not?
-.if ${HAVE_GCC3} != "no"
+.if ${HAVE_GCC} != "2"
 USE_TOOLS_TOOLCHAIN=no
 .endif
 USE_TOOLS_TOOLCHAIN?=yes
 
 CPPFLAG_ISYSTEM=	-isystem
 # GCC2 did not have -isystem-cxx
-.if ${USE_TOOLS_TOOLCHAIN} != "no"
+.if ${HAVE_GCC} == 2
 CPPFLAG_ISYSTEMXX=	-isystem
 .else
+. if ${HAVE_GCC} == 3
 CPPFLAG_ISYSTEMXX=	-isystem-cxx
+. else	# GCC 4
+CPPFLAG_ISYSTEMXX=	-cxx-isystem
+. endif
 .endif
 
 .if empty(.MAKEFLAGS:M-V*)
@@ -220,7 +231,9 @@ TOOL_CTAGS=		${TOOLDIR}/bin/${_TOOL_PREFIX}ctags
 TOOL_DB=		${TOOLDIR}/bin/${_TOOL_PREFIX}db
 TOOL_EQN=		${TOOLDIR}/bin/${_TOOL_PREFIX}eqn
 TOOL_FGEN=		${TOOLDIR}/bin/${_TOOL_PREFIX}fgen
+TOOL_GENASSYM=		${TOOLDIR}/bin/${_TOOL_PREFIX}genassym
 TOOL_GENCAT=		${TOOLDIR}/bin/${_TOOL_PREFIX}gencat
+TOOL_GMAKE=		${TOOLDIR}/bin/${_TOOL_PREFIX}gmake
 TOOL_GROFF=		PATH=${TOOLDIR}/lib/groff:$${PATH} ${TOOLDIR}/bin/${_TOOL_PREFIX}groff
 TOOL_HEXDUMP=		${TOOLDIR}/bin/${_TOOL_PREFIX}hexdump
 TOOL_HP300MKBOOT=	${TOOLDIR}/bin/${_TOOL_PREFIX}hp300-mkboot
@@ -233,6 +246,8 @@ TOOL_MAKEFS=		${TOOLDIR}/bin/${_TOOL_PREFIX}makefs
 TOOL_MAKEINFO=		${TOOLDIR}/bin/${_TOOL_PREFIX}makeinfo
 TOOL_MAKEWHATIS=	${TOOLDIR}/bin/${_TOOL_PREFIX}makewhatis
 TOOL_MDSETIMAGE=	${TOOLDIR}/bin/${MACHINE_GNU_PLATFORM}-mdsetimage
+TOOL_DISKLABEL=		${TOOLDIR}/bin/${MACHINE_GNU_PLATFORM}-disklabel
+TOOL_FDISK=		${TOOLDIR}/bin/${MACHINE_GNU_PLATFORM}-fdisk
 TOOL_MENUC=		MENUDEF=${TOOLDIR}/share/misc ${TOOLDIR}/bin/${_TOOL_PREFIX}menuc
 TOOL_MIPSELF2ECOFF=	${TOOLDIR}/bin/${_TOOL_PREFIX}mips-elf2ecoff
 TOOL_MKCSMAPPER=	${TOOLDIR}/bin/${_TOOL_PREFIX}mkcsmapper
@@ -397,7 +412,7 @@ MKGCC:= no
 #
 # GCC can produce PIC code for sh3 only starting with gcc3.
 #
-.if ${MACHINE_CPU} == "sh3" && ${HAVE_GCC3} == "no"
+.if ${MACHINE_CPU} == "sh3" && ${HAVE_GCC} == "2"
 NOPIC=		# defined
 .endif
 
@@ -425,6 +440,13 @@ MKGDB=		no
 .endif
 
 #
+# The ia64 port is incomplete.
+#
+.if ${MACHINE_ARCH} == "ia64"
+MKLINT=		no
+.endif
+
+#
 # On the MIPS, all libs are compiled with ABIcalls (and are thus PIC),
 # not just shared libraries, so don't build the _pic version.
 #
@@ -446,7 +468,7 @@ MKGDB=		no
 # so don't build the _pic version.  Unless we are using GCC3 which
 # doesn't support PIC yet.
 #
-.if ${MACHINE_ARCH} == "vax" && ${HAVE_GCC3} != "no"
+.if ${MACHINE_ARCH} == "vax" && ${HAVE_GCC} == "3"
 NOPIC=		# defined
 .endif
 .if ${MACHINE_ARCH} == "vax" && ${OBJECT_FMT} == "ELF"
@@ -556,13 +578,13 @@ MK${var}:=	yes
 	GCC GCCCMDS GDB \
 	HESIOD HTML \
 	IEEEFP INET6 INFO IPFILTER \
-	KERBEROS KERBEROS4 \
+	KERBEROS \
 	LINKLIB LINT \
 	MAN \
 	NLS \
 	OBJ \
 	PAM PF PIC PICINSTALL PICLIB POSTFIX PROFILE \
-	SENDMAIL SHARE SKEY STATICLIB \
+	SHARE SKEY STATICLIB \
 	UUCP \
 	YP
 MK${var}?=	yes
@@ -572,7 +594,7 @@ MK${var}?=	yes
 # MK* options which default to "no".
 #
 .for var in \
-	CRYPTO_IDEA CRYPTO_MDC2 CRYPTO_RC5 \
+	CRYPTO_IDEA CRYPTO_MDC2 CRYPTO_RC5 DEBUG \
 	MANZ OBJDIRS PRIVATELIB SOFTFLOAT UNPRIVED UPDATE X11
 MK${var}?=	no
 .endfor
@@ -581,12 +603,7 @@ MK${var}?=	no
 # Force some options off if their dependencies are off.
 #
 
-.if ${MKKERBEROS} == "no"
-MKKERBEROS4:=   no 
-.endif
-
 .if ${MKCRYPTO} == "no"
-MKKERBEROS4:=	no
 MKKERBEROS:=	no
 .endif
 
@@ -640,8 +657,6 @@ INSTPRIV.unpriv=
 .endif
 INSTPRIV?=	${INSTPRIV.unpriv} -N ${NETBSDSRCDIR}/etc
 .endif
-SYSPKGTAG?=	${SYSPKG:D-T ${SYSPKG}_pkg}
-SYSPKGDOCTAG?=	${SYSPKG:D-T ${SYSPKG}-doc_pkg}
 STRIPFLAG?=	
 
 .if ${NEED_OWN_INSTALL_TARGET} != "no"
@@ -650,6 +665,8 @@ INSTALL_FILE?=		${INSTALL} ${INSTPRIV} ${COPY} ${PRESERVE} ${RENAME}
 INSTALL_LINK?=		${INSTALL} ${INSTPRIV} ${HRDLINK} ${RENAME}
 INSTALL_SYMLINK?=	${INSTALL} ${INSTPRIV} ${SYMLINK} ${RENAME}
 HOST_INSTALL_FILE?=	${INSTALL} ${COPY} ${PRESERVE} ${RENAME}
+HOST_INSTALL_DIR?=	${INSTALL} -d
+HOST_INSTALL_SYMLINK?=	${INSTALL} ${SYMLINK} ${RENAME}
 .endif
 
 #
@@ -666,7 +683,7 @@ HOST_INSTALL_FILE?=	${INSTALL} ${COPY} ${PRESERVE} ${RENAME}
 # USE_* options which default to "yes" unless their corresponding MK*
 # variable is set to "no".
 #
-.for var in HESIOD INET6 KERBEROS KERBEROS4 PAM SKEY YP
+.for var in HESIOD INET6 KERBEROS PAM SKEY YP
 .if (${MK${var}} == "no")
 USE_${var}:= no
 .else
@@ -679,6 +696,13 @@ USE_${var}?= yes
 #
 .for var in LIBSTDCXX
 USE_${var}?= yes
+.endfor
+
+#
+# USE_* options which default to "no".
+#
+.for var in GCC4
+USE_${var}?= no
 .endfor
 
 #

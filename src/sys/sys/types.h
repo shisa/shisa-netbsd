@@ -1,4 +1,4 @@
-/*	$NetBSD: types.h,v 1.66.2.1 2005/05/28 13:36:29 tron Exp $	*/
+/*	$NetBSD: types.h,v 1.71 2006/05/14 21:38:18 elad Exp $	*/
 
 /*-
  * Copyright (c) 1982, 1986, 1991, 1993, 1994
@@ -162,7 +162,7 @@ typedef	__gid_t		gid_t;		/* group id */
 #endif
 
 typedef	uint32_t	id_t;		/* group id, process id or user id */
-typedef	uint32_t	ino_t;		/* inode number */
+typedef	uint64_t	ino_t;		/* inode number */
 typedef	long		key_t;		/* IPC key (for Sys V IPC) */
 
 #ifndef	mode_t
@@ -193,7 +193,7 @@ typedef	__uid_t		uid_t;		/* user id */
 
 typedef	int32_t		dtime_t;	/* on-disk time_t */
 
-#if defined(_KERNEL)
+#if defined(_KERNEL) || defined(_STANDALONE)
 typedef int	boolean_t;
 #ifndef TRUE
 #define	TRUE	1
@@ -289,79 +289,11 @@ typedef	_BSD_USECONDS_T_	useconds_t;
 #undef	_BSD_USECONDS_T_
 #endif
 
-#if (defined(_XOPEN_SOURCE) && defined(_XOPEN_SOURCE_EXTENDED)) || \
-    (_POSIX_C_SOURCE - 0) >= 200112L || \
-    (_XOPEN_SOURCE - 0) >= 500 || defined(_NETBSD_SOURCE)
+#ifdef _NETBSD_SOURCE
+#include <sys/fd_set.h>
+#define	NBBY	__NBBY
 
-/*
- * Implementation dependent defines, hidden from user space. X/Open does not
- * specify them.
- */
-#define	__NBBY	8		/* number of bits in a byte */
-typedef int32_t	__fd_mask;
-
-/* bits per mask */
-#define __NFDBITS	((unsigned int)sizeof(__fd_mask) * __NBBY)
-
-#ifndef howmany
-#define	__howmany(x, y)	(((x) + ((y) - 1)) / (y))
-#else
-#define __howmany(x, y) howmany(x, y)
-#endif
-
-/*
- * Select uses bit masks of file descriptors in longs.  These macros
- * manipulate such bit fields (the filesystem macros use chars).
- * FD_SETSIZE may be defined by the user, but the default here should
- * be enough for most uses.
- */
-#ifndef	FD_SETSIZE
-#define	FD_SETSIZE	256
-#endif
-
-typedef	struct fd_set {
-	__fd_mask	fds_bits[__howmany(FD_SETSIZE, __NFDBITS)];
-} fd_set;
-
-#define	FD_SET(n, p)	\
-    ((p)->fds_bits[(n)/__NFDBITS] |= (1 << ((n) % __NFDBITS)))
-#define	FD_CLR(n, p)	\
-    ((p)->fds_bits[(n)/__NFDBITS] &= ~(1 << ((n) % __NFDBITS)))
-#define	FD_ISSET(n, p)	\
-    ((p)->fds_bits[(n)/__NFDBITS] & (1 << ((n) % __NFDBITS)))
-#if __GNUC_PREREQ__(2, 95)
-#define	FD_ZERO(p)	(void)__builtin_memset((p), 0, sizeof(*(p)))
-#else
-#define	FD_ZERO(p)	do {						\
-	fd_set *__fds = (p);						\
-	unsigned int __i;						\
-	for (__i = 0; __i < __howmany(FD_SETSIZE, __NFDBITS); __i++)	\
-		__fds->fds_bits[__i] = 0;				\
-	} while (/* CONSTCOND */ 0)
-#endif /* GCC 2.95 */
-
-/*
- * Expose our internals if we are not required to hide them.
- */
-#if defined(_NETBSD_SOURCE)
-
-#define NBBY __NBBY
-#define fd_mask __fd_mask
-#define NFDBITS __NFDBITS
-#ifndef howmany
-#define howmany(a, b) __howmany(a, b)
-#endif
-
-#if __GNUC_PREREQ__(2, 95)
-#define	FD_COPY(f, t)	(void)__builtin_memcpy((t), (f), sizeof(*(f)))
-#else
-#define	FD_COPY(f, t)	do {						\
-	fd_set *__f = (f), *__t = (t);					\
-	unsigned int __i;						\
-	for (__i = 0; __i < __howmany(FD_SETSIZE, __NFDBITS); __i++)	\
-		__t->fds_bits[__i] = __f->fds_bits[__i];		\
-	} while (/* CONSTCOND */ 0)
-#endif /* GCC 2.95 */
+typedef struct kauth_cred *kauth_cred_t;
 
 #endif
 
@@ -376,7 +308,6 @@ struct	user;
 struct	__ucontext;
 struct	proc;
 struct	pgrp;
-struct	ucred;
 struct	rusage;
 struct	file;
 struct	buf;
@@ -384,7 +315,11 @@ struct	tty;
 struct	uio;
 #endif
 
-#endif /* _XOPEN_SOURCE_EXTENDED || _XOPEN_SOURCE >= 500 || _NETBSD_SOURCE */
+#ifdef _KERNEL
+#define SET(t, f)	((t) |= (f))
+#define	ISSET(t, f)	((t) & (f))
+#define	CLR(t, f)	((t) &= ~(f))
+#endif
 
 #if !defined(_KERNEL) && !defined(_STANDALONE)
 #if (_POSIX_C_SOURCE - 0L) >= 199506L || (_XOPEN_SOURCE - 0) >= 500 || \

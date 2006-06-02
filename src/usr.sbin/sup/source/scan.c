@@ -1,4 +1,4 @@
-/*	$NetBSD: scan.c,v 1.17 2003/04/03 17:14:24 christos Exp $	*/
+/*	$NetBSD: scan.c,v 1.22 2006/04/02 01:39:48 christos Exp $	*/
 
 /*
  * Copyright (c) 1992 Carnegie Mellon University
@@ -221,7 +221,7 @@ parserelease(TREELIST ** tlp, char *relname, char *args)
 	if ((*tlp = tl) == NULL)
 		goaway("Couldn't allocate TREELIST");
 	tl->TLnext = NULL;
-	tl->TLname = salloc(relname);
+	tl->TLname = estrdup(relname);
 	tl->TLprefix = NULL;
 	tl->TLlist = NULL;
 	tl->TLscan = NULL;
@@ -240,27 +240,29 @@ parserelease(TREELIST ** tlp, char *relname, char *args)
 		case ONEXT:
 			passdelim(&args, '=');
 			arg = nxtarg(&args, " \t");
-			nextrel = salloc(arg);
+			if (nextrel)
+				free(nextrel);
+			nextrel = estrdup(arg);
 			break;
 		case OPREFIX:
 			passdelim(&args, '=');
 			arg = nxtarg(&args, " \t");
-			tl->TLprefix = salloc(arg);
+			tl->TLprefix = estrdup(arg);
 			break;
 		case OLIST:
 			passdelim(&args, '=');
 			arg = nxtarg(&args, " \t");
-			tl->TLlist = salloc(arg);
+			tl->TLlist = estrdup(arg);
 			break;
 		case OSCAN:
 			passdelim(&args, '=');
 			arg = nxtarg(&args, " \t");
-			tl->TLscan = salloc(arg);
+			tl->TLscan = estrdup(arg);
 			break;
 		case OHOST:
 			passdelim(&args, '=');
 			arg = nxtarg(&args, " \t");
-			tl->TLhost = salloc(arg);
+			tl->TLhost = estrdup(arg);
 			break;
 		}
 	}
@@ -274,10 +276,11 @@ getrelease(char *release)
 	char buf[STRINGLENGTH];
 	char *p, *q;
 	int rewound;
+	char *frelease = NULL;
 	FILE *f;
 
 	if (release == NULL)
-		release = salloc(DEFRELEASE);
+		frelease = release = estrdup(DEFRELEASE);
 	listTL = NULL;
 
 	(void) sprintf(buf, FILERELEASES, collname);
@@ -304,9 +307,13 @@ getrelease(char *release)
 			release = parserelease(&tl, release, p);
 			if (tl->TLprefix == NULL)
 				tl->TLprefix = prefix;
-			else if (chdir(tl->TLprefix) < 0)
+			else if (chdir(tl->TLprefix) < 0) {
+				free(tl);
+				fclose(f);
+				if (frelease)
+					free(frelease);
 				return (FALSE);
-			else
+			} else
 				(void) chdir(basedir);
 			tl->TLnext = listTL;
 			listTL = tl;
@@ -316,14 +323,22 @@ getrelease(char *release)
 		}
 		(void) fclose(f);
 	}
-	if (release == NULL)
+	if (release == NULL) {
+		if (frelease)
+			free(frelease);
 		return (TRUE);
-	if (strcmp(release, DEFRELEASE) != 0)
+	}
+	if (strcmp(release, DEFRELEASE) != 0) {
+		if (frelease)
+			free(frelease);
 		return (FALSE);
+	}
 	(void) parserelease(&tl, release, "");
 	tl->TLprefix = prefix;
 	tl->TLnext = listTL;
 	listTL = tl;
+	if (frelease)
+		free(frelease);
 	return (TRUE);
 }
 

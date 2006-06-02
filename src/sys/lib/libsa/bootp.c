@@ -1,4 +1,4 @@
-/*	$NetBSD: bootp.c,v 1.26 2005/02/26 22:58:56 perry Exp $	*/
+/*	$NetBSD: bootp.c,v 1.29 2006/05/20 19:40:46 mrg Exp $	*/
 
 /*
  * Copyright (c) 1992 Regents of the University of California.
@@ -133,7 +133,7 @@ bootp(sock)
 	bp->bp_hlen = 6;
 	bp->bp_xid = htonl(d->xid);
 	MACPY(d->myea, bp->bp_chaddr);
-	strncpy(bp->bp_file, bootfile, sizeof(bp->bp_file));
+	strncpy((char *)bp->bp_file, bootfile, sizeof(bp->bp_file));
 	bcopy(vm_rfc1048, bp->bp_vend, sizeof(vm_rfc1048));
 #ifdef SUPPORT_DHCP
 	bp->bp_vend[4] = TAG_DHCP_MSGTYPE;
@@ -337,12 +337,12 @@ bootprecv(d, pkt, len, tleft)
 #endif
 
 	/* Suck out vendor info */
-	if (bcmp(vm_rfc1048, bp->bp_vend, sizeof(vm_rfc1048)) == 0) {
+	if (memcmp(vm_rfc1048, bp->bp_vend, sizeof(vm_rfc1048)) == 0) {
 		if (vend_rfc1048(bp->bp_vend, sizeof(bp->bp_vend)) != 0)
 			goto bad;
 	}
 #ifdef BOOTP_VEND_CMU
-	else if (bcmp(vm_cmu, bp->bp_vend, sizeof(vm_cmu)) == 0)
+	else if (memcmp(vm_cmu, bp->bp_vend, sizeof(vm_cmu)) == 0)
 		vend_cmu(bp->bp_vend);
 #endif
 	else

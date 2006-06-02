@@ -1,4 +1,4 @@
-/*	$NetBSD: cu.c,v 1.7 2003/08/07 11:16:17 agc Exp $	*/
+/*	$NetBSD: cu.c,v 1.18 2006/04/05 23:30:57 yamt Exp $	*/
 
 /*
  * Copyright (c) 1983, 1993
@@ -30,76 +30,169 @@
  */
 
 #include <sys/cdefs.h>
+#include <getopt.h>
+
 #ifndef lint
 #if 0
 static char sccsid[] = "@(#)cu.c	8.1 (Berkeley) 6/6/93";
 #endif
-__RCSID("$NetBSD: cu.c,v 1.7 2003/08/07 11:16:17 agc Exp $");
+__RCSID("$NetBSD: cu.c,v 1.18 2006/04/05 23:30:57 yamt Exp $");
 #endif /* not lint */
 
 #include "tip.h"
 
+static void cuhelp(void);
+static void cuusage(void);
+
 /*
  * Botch the interface to look like cu's
  */
-int
-cumain(argc, argv)
-	char *argv[];
+void
+cumain(int argc, char *argv[])
 {
-	int i;
-	static char sbuf[12];
+	int c, i, phonearg = 0;
+	int parity = 0;		/* 0 is no parity */
+	int flow = -1;		/* -1 is "tandem" ^S/^Q */
+	static int helpme = 0, nostop = 0;
+	char useresc = '~';
+	static char sbuf[12], brbuf[16];
+	extern char *optarg;
+	extern int optind;
 
-	if (argc < 2) {
-		fprintf(stderr,
-	    "usage: cu telno [-t] [-s speed] [-a acu] [-l line] [-#]\n");
-		exit(8);
-	}
-	CU = DV = NULL;
+	static struct option longopts[] = {
+		{ "help",	no_argument,		&helpme,	1 },
+		{ "escape",	required_argument,	NULL,		'E' },
+		{ "flow",	required_argument,	NULL,		'F' },
+		{ "parity",	required_argument,	NULL,		'P' },
+		{ "phone", 	required_argument,	NULL,		'c' },
+		{ "port",	required_argument,	NULL,		'a' },
+		{ "line",	required_argument,	NULL,		'l' },
+		{ "speed",	required_argument,	NULL,		's' },
+		{ "halfduplex",	no_argument,		NULL,		'h' },
+		{ "nostop",	no_argument,		&nostop,	1  },
+		{ NULL,		0,			NULL,		0 }
+	};
+
+
+	if (argc < 2)
+		cuusage();
+
+	CU = NULL;
+	DV = NULL;
 	BR = DEFBR;
-	for (; argc > 1; argv++, argc--) {
-		if (argv[1][0] != '-')
-			PN = argv[1];
-		else switch (argv[1][1]) {
 
-		case 't':
-			HW = 1, DU = -1;
-			--argc;
-			continue;
+	while((c = getopt_long(argc, argv,
+	    "E:F:P:a:p:c:l:s:heot0123456789", longopts, NULL)) != -1) {
 
+		if (helpme == 1) cuhelp();
+
+		switch(c) {
+
+		case 'E':
+			if(strlen(optarg) > 1)
+				errx(3, "only one escape character allowed");
+			useresc = optarg[0];
+			break;
+		case 'F':
+			if (strncmp(optarg, "hard", sizeof("hard") - 1 ) == 0)
+				flow = 1;
+			else
+				if (strncmp(optarg, "soft",
+				    sizeof("soft") - 1 ) == 0)
+					flow = -1;
+				else
+					if(strcmp(optarg, "none") != 0)
+						errx(3, "bad flow setting");
+					else
+						flow = 0;
+			break;
+		case 'P':
+			if(strcmp(optarg, "even") == 0)
+				parity = -1;
+			else
+				if(strcmp(optarg, "odd") == 0)
+					parity = 1;
+				else
+					if(strcmp(optarg, "none") != 0)
+						errx(3, "bad parity setting");
+					else
+						parity = 0;
+			break;
 		case 'a':
-			CU = argv[2]; ++argv; --argc;
+		case 'p':
+			CU = optarg;
 			break;
-
-		case 's':
-			if (argc < 3 || speed(atoi(argv[2])) == 0) {
-				fprintf(stderr, "cu: unsupported speed %s\n",
-					argv[2]);
-				exit(3);
-			}
-			BR = atoi(argv[2]); ++argv; --argc;
+		case 'c':
+			phonearg = 1;
+			PN = optarg;
 			break;
-
 		case 'l':
-			DV = argv[2]; ++argv; --argc;
+			if (DV != NULL)
+				errx(3,"more than one line specified");
+			if(strchr(optarg, '/'))
+				DV=optarg;
+			else
+				asprintf(&DV, "/dev/%s", optarg);
 			break;
-
+		case 's':
+			BR = atoi(optarg);
+			break;
+		case 'h':
+			HD = TRUE;
+			break;
+		case 'e':
+			if (parity != 0)
+				errx(3, "more than one parity specified");
+			parity = -1; /* even */
+			break;
+		case 'o':
+			if (parity != 0)
+				errx(3, "more than one parity specified");
+			parity = 1; /* odd */
+			break;
+		case 't':
+			HW = 1, DU = -1, DC = 1;
+			break;
 		case '0': case '1': case '2': case '3': case '4':
 		case '5': case '6': case '7': case '8': case '9':
-			if (CU)
-				CU[strlen(CU)-1] = argv[1][1];
-			if (DV)
-				DV[strlen(DV)-1] = argv[1][1];
+			snprintf(brbuf, sizeof(brbuf) -1, "%s%c",
+				 brbuf, c);
+			BR = atoi(brbuf);
 			break;
-
 		default:
-			printf("Bad flag %s", argv[1]);
+			if (nostop == 0)
+				cuusage();
 			break;
 		}
 	}
+
+	argc -= optind;
+	argv += optind;
+
+	switch (argc) {
+	case 1:
+		if (phonearg)
+			errx(3, "more than one phone number specified");
+		else
+			PN = argv[0];
+		break;
+	case 0:
+		/*
+		 * No system or number to call.  We're "direct", so use
+		 * the tty as local.
+		 */
+		HW = 1; DU = -1; DC = 1;
+		break;
+	default:
+		cuusage();
+		break;
+	}
+
 	signal(SIGINT, cleanup);
 	signal(SIGQUIT, cleanup);
 	signal(SIGHUP, cleanup);
 	signal(SIGTERM, cleanup);
+	/* signal(SIGCHLD, SIG_DFL) */	/* XXX seems wrong */
 
 	/*
 	 * The "cu" host name is used to define the
@@ -107,29 +200,93 @@ cumain(argc, argv)
 	 */
 	(void)snprintf(sbuf, sizeof sbuf, "cu%d", (int)BR);
 	if ((i = hunt(sbuf)) == 0) {
-		printf("all ports busy\n");
-		exit(3);
+		errx(3,"all ports busy");
 	}
 	if (i == -1) {
-		printf("link down\n");
-		(void)uu_unlock(uucplock);
-		exit(3);
+		errx(3, "link down");
 	}
 	setbuf(stdout, NULL);
-	loginit();
-	user_uid();
 	vinit();
-	setparity("none");
-	setboolean(value(VERBOSE), 0);
-	if (HW)
-		ttysetup(speed(BR));
-	if (connect()) {
-		printf("Connect failed\n");
-		daemon_uid();
-		(void)uu_unlock(uucplock);
-		exit(1);
+	switch (parity) {
+	case -1:
+		setparity("even");
+		break;
+	case 1:
+		setparity("odd");
+		break;
+	case 0:
+		setparity("none");
+		break;
+	default:
+		setparity("none");
+		break;
 	}
-	if (!HW)
-		ttysetup(speed(BR));
+
+	switch (flow) {
+	case -1:
+		if(nostop) {
+			setboolean(value(TAND), FALSE);
+			setboolean(value(HARDWAREFLOW), FALSE);
+		}
+		else {
+			setboolean(value(TAND), TRUE);
+			setboolean(value(HARDWAREFLOW), FALSE);
+		}
+		break;
+	case 1:
+		setboolean(value(TAND), FALSE);
+		setboolean(value(HARDWAREFLOW), TRUE);
+		break;
+	case 0:
+	default:
+		setboolean(value(TAND), FALSE);
+		setboolean(value(HARDWAREFLOW), FALSE);
+		break;
+	}
+	setcharacter(value(ESCAPE), useresc);
+	setboolean(value(VERBOSE), FALSE);
+	if (HD)
+		setboolean(value(LECHO), TRUE);
+	if (HW) {
+		if (ttysetup((speed_t)BR) != 0) {
+			errx(3, "unsupported speed %ld", BR);
+		}
+	}
+	if (connect()) {
+		errx(1, "Connect failed");
+	}
+	if (!HW) {
+		if (ttysetup((speed_t)BR) != 0) {
+			errx(3, "unsupported speed %ld", BR);
+		}
+	}
+}
+
+static void
+cuusage(void)
+{
+	fprintf(stderr, "Usage: cu [options] [phone-number]\n"
+	    "Use cu --help for help\n");
+	exit(8);
+}
+
+static void
+cuhelp(void)
+{
+	fprintf(stderr,
+	    "BSD tip/cu\n"
+	    "Usage: cu [options] [phone-number]\n"
+	    " -E,--escape char: Use this escape character\n"
+	    " -F,--flow {hard,soft,none}: Use RTS/CTS, ^S/^Q, no flow control\n"
+	    " --nostop: Do not use software flow control\n"
+	    " -a, -p,--port port: Use this port as ACU/Dialer\n"
+	    " -c,--phone number: Call this number\n"
+	    " -h,--halfduplex: Echo characters locally (use \"half duplex\")\n"
+	    " -e: Use even parity\n"
+	    " -o: Use odd parity\n"
+	    " -P,--parity {even,odd,none}: use even, odd, no parity\n"
+	    " -l,--line line: Use this device (ttyXX)\n"
+	    " -s,--speed,--baud speed,-#: Use this speed\n"
+	    " -t: Connect via hard-wired connection\n");
 	exit(0);
 }

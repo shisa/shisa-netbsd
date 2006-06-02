@@ -1,4 +1,4 @@
-/*	$NetBSD: policy.c,v 1.16 2004/10/29 19:55:43 dsl Exp $	*/
+/*	$NetBSD: policy.c,v 1.21 2006/03/18 00:35:02 peter Exp $	*/
 /*	$OpenBSD: policy.c,v 1.15 2002/08/07 00:34:17 vincent Exp $	*/
 /*
  * Copyright 2002 Niels Provos <provos@citi.umich.edu>
@@ -30,7 +30,7 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: policy.c,v 1.16 2004/10/29 19:55:43 dsl Exp $");
+__RCSID("$NetBSD: policy.c,v 1.21 2006/03/18 00:35:02 peter Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -53,7 +53,7 @@ __RCSID("$NetBSD: policy.c,v 1.16 2004/10/29 19:55:43 dsl Exp $");
 static int psccompare(struct policy_syscall *, struct policy_syscall *);
 static int policycompare(struct policy *, struct policy *);
 static int polnrcompare(struct policy *, struct policy *);
-static char *systrace_policyfilename(char *, const char *);
+static char *systrace_policyfilename(const char *, const char *);
 static char *systrace_policyline(char *line);
 static int systrace_policyprocess(struct policy *,
     char *);
@@ -119,12 +119,15 @@ systrace_setupdir(char *path)
 		if (home == NULL)
 			errx(1, "No HOME environment set");
 
-		if (strlcpy(policydir, home, sizeof(policydir)) >= sizeof(policydir))
+		if (strlcpy(policydir, home, sizeof(policydir)) >=
+		    sizeof(policydir))
 			errx(1, "HOME too long");
 
-		if (strlcat(policydir, "/.systrace", sizeof(policydir)) >= sizeof(policydir))
+		if (strlcat(policydir, "/.systrace", sizeof(policydir)) >=
+		    sizeof(policydir))
 			errx(1, "HOME too long");
-	} else if (strlcpy(policydir, path, sizeof(policydir)) >= sizeof(policydir))
+	} else if (strlcpy(policydir, path, sizeof(policydir)) >=
+	    sizeof(policydir))
 		errx(1, "policy directory too long");
 		
 
@@ -252,7 +255,8 @@ systrace_freepolicy(struct policy *policy)
 	if (policy->policynr != -1)
 		SPLAY_REMOVE(polnrtree, &polnrroot, policy);
 
-	free((char *)policy->name);
+	/* XXX: */
+	free((char *)__UNCONST(policy->name));
 	free(policy);
 }
 
@@ -297,7 +301,7 @@ systrace_modifypolicy(int fd, int policynr, const char *name, short action)
 }
 
 char *
-systrace_policyfilename(char *dirname, const char *name)
+systrace_policyfilename(const char *dirname, const char *name)
 {
 	static char file[2*MAXPATHLEN];
 	const char *p;
@@ -326,8 +330,8 @@ systrace_policyfilename(char *dirname, const char *name)
 	return (file);
 }
 
-int
-systrace_addpolicy(const char *name)
+char *
+systrace_getpolicyfilename(const char *name)
 {
 	char *file = NULL;
 
@@ -339,11 +343,19 @@ systrace_addpolicy(const char *name)
 	}
 
 	/* Read global policy */
-	if (file == NULL) {
+	if (file == NULL)
 		file = systrace_policyfilename(POLICY_PATH, name);
-		if (file == NULL)
-			return (-1);
-	}
+
+	return (file);
+}
+
+int
+systrace_addpolicy(const char *name)
+{
+	char *file = NULL;
+
+	if ((file = systrace_getpolicyfilename(name)) == NULL)
+		return (-1);
 
 	return (systrace_readpolicy(file));
 }
@@ -480,7 +492,7 @@ systrace_readtemplate(char *filename, struct policy *policy,
 		}
 
 		if (policy == NULL)
-			return (template);
+			goto out;
 
 		if (systrace_policyprocess(policy, p) == -1)
 			goto error;

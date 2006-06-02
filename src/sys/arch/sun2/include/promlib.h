@@ -1,4 +1,4 @@
-/*	$NetBSD: promlib.h,v 1.6 2005/01/22 15:36:09 chs Exp $ */
+/*	$NetBSD: promlib.h,v 1.8 2005/12/11 12:19:16 christos Exp $ */
 
 /*-
  * Copyright (c) 1999, 2001 The NetBSD Foundation, Inc.
@@ -72,7 +72,7 @@ void	prom_putstr(char *, int);
 void	prom_printf(const char *, ...);
 void	prom_abort(void);
 void	prom_halt(void) __attribute__((__noreturn__));
-void	prom_boot(char *) __attribute__((__noreturn__));
+void	prom_boot(const char *) __attribute__((__noreturn__));
 char	*prom_getbootpath(void);
 char	*prom_getbootfile(void);
 char	*prom_getbootargs(void);

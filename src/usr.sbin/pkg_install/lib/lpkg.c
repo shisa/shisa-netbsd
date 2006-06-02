@@ -1,4 +1,4 @@
-/*	$NetBSD: lpkg.c,v 1.5.6.1 2005/11/06 13:43:17 tron Exp $	*/
+/*	$NetBSD: lpkg.c,v 1.6 2005/11/05 13:11:02 wiz Exp $	*/
 
 /*
  * Copyright (c) 1999 Christian E. Hopps

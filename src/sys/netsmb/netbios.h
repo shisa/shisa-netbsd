@@ -1,4 +1,4 @@
-/*	$NetBSD: netbios.h,v 1.5 2005/02/26 22:39:50 perry Exp $	*/
+/*	$NetBSD: netbios.h,v 1.7 2005/12/11 06:25:32 christos Exp $	*/
 
 /*
  * Copyright (c) 2000-2001 Boris Popov

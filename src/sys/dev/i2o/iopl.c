@@ -1,4 +1,4 @@
-/*	$NetBSD: iopl.c,v 1.17 2005/02/27 00:27:00 perry Exp $	*/
+/*	$NetBSD: iopl.c,v 1.21 2006/03/29 06:45:05 thorpej Exp $	*/
 
 /*-
  * Copyright (c) 2001 The NetBSD Foundation, Inc.
@@ -46,7 +46,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: iopl.c,v 1.17 2005/02/27 00:27:00 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: iopl.c,v 1.21 2006/03/29 06:45:05 thorpej Exp $");
 
 #include "opt_i2o.h"
 #include "opt_inet.h"
@@ -218,7 +218,7 @@ iopl_attach(struct device *parent, struct device *self, void *aux)
 	u_int tmp;
 	u_int32_t tmp1, tmp2, tmp3;
 
-	sc = (struct iopl_softc *)self;
+	sc = device_private(self);
 	iop = (struct iop_softc *)parent;
 	ia = (struct iop_attach_args *)aux;
 	ifp = &sc->sc_if.sci_if;
@@ -356,11 +356,11 @@ iopl_attach(struct device *parent, struct device *self, void *aux)
 	if (((le32toh(iop->sc_status.segnumber) >> 12) & 15) ==
 	    I2O_VERSION_20) {
 		if ((tmp & I2O_LAN_MODES_IPV4_CHECKSUM) != 0)
-			ifcap |= IFCAP_CSUM_IPv4;
+			ifcap |= IFCAP_CSUM_IPv4_Tx|IFCAP_CSUM_IPv4_Rx;
 		if ((tmp & I2O_LAN_MODES_TCP_CHECKSUM) != 0)
-			ifcap |= IFCAP_CSUM_TCPv4;
+			ifcap |= IFCAP_CSUM_TCPv4_Tx|IFCAP_CSUM_TCPv4_Rx;
 		if ((tmp & I2O_LAN_MODES_UDP_CHECKSUM) != 0)
-			ifcap |= IFCAP_CSUM_UDPv4;
+			ifcap |= IFCAP_CSUM_UDPv4_Tx|IFCAP_CSUM_UDPv4_Rx;
 #ifdef notyet
 		if ((tmp & I2O_LAN_MODES_ICMP_CHECKSUM) != 0)
 			ifcap |= IFCAP_CSUM_ICMP;
@@ -724,7 +724,7 @@ iopl_rx_post(struct iopl_softc *sc)
 		/*
 		 * Finally, post the message frame to the device.
 		 */
-		iop_post((struct iop_softc *)sc->sc_dv.dv_parent, mb);
+		iop_post((struct iop_softc *)device_parent(&sc->sc_dv), mb);
 	}
 }
 
@@ -745,7 +745,7 @@ iopl_intr_pg(struct device *dv, struct iop_msg *im, void *reply)
 
 	rb = (struct i2o_reply *)reply;
 	sc = (struct iopl_softc *)dv;
-	iop = (struct iop_softc *)dv->dv_parent;
+	iop = (struct iop_softc *)device_parent(dv);
 	ifp = &sc->sc_if.sci_if;
 
 	if ((rb->msgflags & I2O_MSGFLAGS_FAIL) != 0) {
@@ -1231,8 +1231,8 @@ static void
 iopl_getpg(struct iopl_softc *sc, int pg)
 {
 
-	iop_field_get_all((struct iop_softc *)sc->sc_dv.dv_parent, sc->sc_tid,
-	    pg, &sc->sc_pb, sizeof(sc->sc_pb), &sc->sc_ii_pg);
+	iop_field_get_all((struct iop_softc *)device_parent(&sc->sc_dv),
+	    sc->sc_tid, pg, &sc->sc_pb, sizeof(sc->sc_pb), &sc->sc_ii_pg);
 }
 
 /*
@@ -1292,7 +1292,7 @@ iopl_ifmedia_change(struct ifnet *ifp)
 	u_int8_t fdx;
 
 	sc = ifp->if_softc;
-	iop = (struct iop_softc *)sc->sc_dv.dv_parent;
+	iop = (struct iop_softc *)device_parent(&sc->sc_dv);
 
 	subtype = IFM_SUBTYPE(sc->sc_ifmedia.ifm_cur->ifm_media);
 	if (subtype == IFM_AUTO)
@@ -1360,9 +1360,10 @@ iopl_init(struct ifnet *ifp)
 	int rv, s, flg;
 	u_int8_t hwaddr[8];
 	u_int32_t txmode, rxmode;
+	uint64_t ifcap;
 
 	sc = ifp->if_softc;
-	iop = (struct iop_softc *)sc->sc_dv.dv_parent;
+	iop = (struct iop_softc *)device_parent(&sc->sc_dv);
 
 	s = splbio();
 	flg = sc->sc_flags;
@@ -1413,24 +1414,31 @@ iopl_init(struct ifnet *ifp)
 	rxmode = 0;
 	txmode = 0;
 
-	if ((ifp->if_capenable & IFCAP_CSUM_IPv4) != 0) {
+	ifcap = ifp->if_capenable;
+	if ((ifcap & IFCAP_CSUM_IPv4_Tx) != 0) {
 		sc->sc_tx_tcw |= I2O_LAN_TCW_CKSUM_NETWORK;
-		sc->sc_rx_csumflgs |= M_CSUM_IPv4;
 		txmode |= I2O_LAN_MODES_IPV4_CHECKSUM;
+	}
+	if ((ifcap & IFCAP_CSUM_IPv4_Rx) != 0) {
+		sc->sc_rx_csumflgs |= M_CSUM_IPv4;
 		rxmode |= I2O_LAN_MODES_IPV4_CHECKSUM;
 	}
 
-	if ((ifp->if_capenable & IFCAP_CSUM_TCPv4) != 0) {
+	if ((ifcap & IFCAP_CSUM_TCPv4_Tx) != 0) {
 		sc->sc_tx_tcw |= I2O_LAN_TCW_CKSUM_TRANSPORT;
-		sc->sc_rx_csumflgs |= M_CSUM_TCPv4;
 		txmode |= I2O_LAN_MODES_TCP_CHECKSUM;
+	}
+	if ((ifcap & IFCAP_CSUM_TCPv4_Rx) != 0) {
+		sc->sc_rx_csumflgs |= M_CSUM_TCPv4;
 		rxmode |= I2O_LAN_MODES_TCP_CHECKSUM;
 	}
 
-	if ((ifp->if_capenable & IFCAP_CSUM_UDPv4) != 0) {
+	if ((ifcap & IFCAP_CSUM_UDPv4_Tx) != 0) {
 		sc->sc_tx_tcw |= I2O_LAN_TCW_CKSUM_TRANSPORT;
-		sc->sc_rx_csumflgs |= M_CSUM_UDPv4;
 		txmode |= I2O_LAN_MODES_UDP_CHECKSUM;
+	}
+	if ((ifcap & IFCAP_CSUM_UDPv4_Rx) != 0) {
+		sc->sc_rx_csumflgs |= M_CSUM_UDPv4;
 		rxmode |= I2O_LAN_MODES_TCP_CHECKSUM;
 	}
 
@@ -1556,7 +1564,7 @@ iopl_start(struct ifnet *ifp)
 		return;
 
 	sc = (struct iopl_softc *)ifp->if_softc;
-	iop = (struct iop_softc *)sc->sc_dv.dv_parent;
+	iop = (struct iop_softc *)device_parent(&sc->sc_dv);
 	mf = (struct i2o_lan_packet_send *)mb;
 	frameleft = -1;
 	nxmits = 0;
@@ -1820,7 +1828,7 @@ iopl_filter_generic(struct iopl_softc *sc, u_int64_t *tbl)
 	u_int32_t tmp1;
 
 	ifp = &sc->sc_if.sci_if;
-	iop = (struct iop_softc *)sc->sc_dv.dv_parent;
+	iop = (struct iop_softc *)device_parent(&sc->sc_dv);
 
 	/*
 	 * Clear out the existing multicast table and set in the new one, if

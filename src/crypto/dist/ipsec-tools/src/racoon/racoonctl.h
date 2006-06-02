@@ -1,4 +1,4 @@
-/*	$NetBSD: racoonctl.h,v 1.1.1.2.2.2 2005/11/21 21:12:31 tron Exp $	*/
+/*	$NetBSD: racoonctl.h,v 1.3 2005/11/21 14:20:29 manu Exp $	*/
 
 /* Id: racoonctl.h,v 1.2 2004/12/30 11:08:32 manubsd Exp */
 

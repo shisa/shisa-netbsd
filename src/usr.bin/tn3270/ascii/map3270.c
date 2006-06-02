@@ -1,4 +1,4 @@
-/*	$NetBSD: map3270.c,v 1.12 2003/11/17 11:16:10 wiz Exp $	*/
+/*	$NetBSD: map3270.c,v 1.15 2006/04/30 23:49:34 christos Exp $	*/
 
 /*-
  * Copyright (c) 1988 The Regents of the University of California.
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)map3270.c	4.2 (Berkeley) 4/26/91";
 #else
-__RCSID("$NetBSD: map3270.c,v 1.12 2003/11/17 11:16:10 wiz Exp $");
+__RCSID("$NetBSD: map3270.c,v 1.15 2006/04/30 23:49:34 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -896,7 +896,7 @@ int	(*translator)(char *);	/* Translates ascii string to integer */
         keybdPointer = strsave(keybdPointer);
     }
     environPointer = getenv("MAP3270");
-    if (environPointer
+    if (keybdPointer && environPointer
 	    && (environPointer[0] != '/')
 #if	defined(MSDOS)
 	    && (environPointer[0] != '\\')
@@ -935,7 +935,7 @@ int	(*translator)(char *);	/* Translates ascii string to integer */
 	    if (environPointer) {
 		GotIt = Position(environPointer, "unknown");
 	    }
-	    if (!GotIt) {
+	    if (!GotIt && keybdPointer) {
 		GotIt = Position("/usr/share/misc/map3270", keybdPointer);
 	    }
 	}
@@ -951,5 +951,6 @@ int	(*translator)(char *);	/* Translates ascii string to integer */
 	usePointer = 1;
     }
     (void) GetEntry();
+    free(keybdPointer);
     return(firstentry.address);
 }

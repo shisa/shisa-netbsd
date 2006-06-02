@@ -1,4 +1,4 @@
-/*	$NetBSD: ls.c,v 1.55 2003/12/26 10:51:25 simonb Exp $	*/
+/*	$NetBSD: ls.c,v 1.59 2006/03/22 16:20:34 christos Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993, 1994
@@ -42,7 +42,7 @@ __COPYRIGHT("@(#) Copyright (c) 1989, 1993, 1994\n\
 #if 0
 static char sccsid[] = "@(#)ls.c	8.7 (Berkeley) 8/5/94";
 #else
-__RCSID("$NetBSD: ls.c,v 1.55 2003/12/26 10:51:25 simonb Exp $");
+__RCSID("$NetBSD: ls.c,v 1.59 2006/03/22 16:20:34 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -118,13 +118,12 @@ ls_main(int argc, char *argv[])
 	int kflag = 0;
 	const char *p;
 
+	setprogname(argv[0]);
 	setlocale(LC_ALL, "");
 
 	/* Terminal defaults to -Cq, non-terminal defaults to -1. */
 	if (isatty(STDOUT_FILENO)) {
-		if ((p = getenv("COLUMNS")) != NULL)
-			termwidth = atoi(p);
-		else if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &win) == 0 &&
+		if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &win) == 0 &&
 		    win.ws_col > 0)
 			termwidth = win.ws_col;
 		f_column = f_nonprint = 1;
@@ -197,13 +196,13 @@ ls_main(int argc, char *argv[])
 		case 'A':
 			f_listdot = 1;
 			break;
-		/* the -B option turns off the -b, -q and -w options. */
+		/* The -B option turns off the -b, -q and -w options. */
 		case 'B':
 			f_nonprint = 0;
 			f_octal = 1;
 			f_octal_escape = 0;
 			break;
-		/* the -b option turns off the -B, -q and -w options. */
+		/* The -b option turns off the -B, -q and -w options. */
 		case 'b':
 			f_nonprint = 0;
 			f_octal = 0;
@@ -224,10 +223,7 @@ ls_main(int argc, char *argv[])
 			blocksize = 1024;
 			kflag = 1;
 			break;
-		/*
-		 * The -h option forces all sizes to be measured in bytes.
-		 * It also makes -l suppress -s.
-		 */
+		/* The -h option forces all sizes to be measured in bytes. */
 		case 'h':
 			f_humanize = 1;
 			break;
@@ -240,7 +236,7 @@ ls_main(int argc, char *argv[])
 		case 'p':
 			f_typedir = 1;
 			break;
-		/* the -q option turns off the -B, -b and -w options. */
+		/* The -q option turns off the -B, -b and -w options. */
 		case 'q':
 			f_nonprint = 1;
 			f_octal = 0;
@@ -264,7 +260,7 @@ ls_main(int argc, char *argv[])
 		case 'W':
 			f_whiteout = 1;
 			break;
-		/* the -w option turns off the -B, -b and -q options. */
+		/* The -w option turns off the -B, -b and -q options. */
 		case 'w':
 			f_nonprint = 0;
 			f_octal = 0;
@@ -277,6 +273,11 @@ ls_main(int argc, char *argv[])
 	}
 	argc -= optind;
 	argv += optind;
+
+	if (f_column || f_columnacross || f_stream) {
+		if ((p = getenv("COLUMNS")) != NULL)
+			termwidth = atoi(p);
+	}
 
 	/*
 	 * If both -g and -l options, let -l take precedence.
@@ -384,15 +385,17 @@ traverse(int argc, char *argv[], int options)
 {
 	FTS *ftsp;
 	FTSENT *p, *chp;
-	int ch_options;
+	int ch_options, error;
 
 	if ((ftsp =
 	    fts_open(argv, options, f_nosort ? NULL : mastercmp)) == NULL)
 		err(EXIT_FAILURE, NULL);
 
 	display(NULL, fts_children(ftsp, 0));
-	if (f_listdir)
+	if (f_listdir) {
+		fts_close(ftsp);
 		return;
+	}
 
 	/*
 	 * If not recursing down this tree and don't need stat info, just get
@@ -434,6 +437,9 @@ traverse(int argc, char *argv[], int options)
 				(void)fts_set(ftsp, p, FTS_SKIP);
 			break;
 		}
+	error = errno;
+	fts_close(ftsp);
+	errno = error;
 	if (errno)
 		err(EXIT_FAILURE, "fts_read");
 }

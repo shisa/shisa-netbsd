@@ -1,4 +1,4 @@
-/*	$NetBSD: cpu.c,v 1.18 2004/02/13 11:36:16 wiz Exp $	*/
+/*	$NetBSD: cpu.c,v 1.23 2006/05/05 18:04:42 thorpej Exp $	*/
 
 /*
  * Copyright 2001 Wasabi Systems, Inc.
@@ -36,21 +36,22 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: cpu.c,v 1.18 2004/02/13 11:36:16 wiz Exp $");
+__KERNEL_RCSID(0, "$NetBSD: cpu.c,v 1.23 2006/05/05 18:04:42 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/device.h>
-#include <sys/properties.h>
 
 #include <uvm/uvm_extern.h>
+
+#include <prop/proplib.h>
 
 #include <machine/cpu.h>
 #include <powerpc/ibm4xx/dev/plbvar.h>
 
 struct cputab {
 	int version;
-	char *name;
+	const char *name;
 };
 static struct cputab models[] = {
 	{ PVR_401A1  >> 16,	"401A1" },
@@ -99,15 +100,16 @@ cpuattach(struct device *parent, struct device *self, void *aux)
 	int own, pcf, cas, pcl, aid;
 	struct cputab *cp = models;
 	unsigned int processor_freq;
+	prop_number_t freq;
 
-	if (board_info_get("processor-frequency",
-		&processor_freq, sizeof(processor_freq)) == -1)
-		panic("no processor-frequency");
+	freq = prop_dictionary_get(board_properties, "processor-frequency");
+	KASSERT(freq != NULL);
+	processor_freq = (unsigned int) prop_number_integer_value(freq);
 
 	cpufound++;
 	ncpus++;
 
-	asm ("mfpvr %0" : "=r"(pvr));
+	__asm ("mfpvr %0" : "=r"(pvr));
 	cpu = pvr >> 16;
 
 	/* Break PVR up into separate fields and print them out. */
@@ -156,15 +158,15 @@ cpuattach(struct device *parent, struct device *self, void *aux)
 void
 cpu_probe_cache()
 {
-	int version;
+	int pvr;
 
 	/*
 	 * First we need to identify the CPU and determine the
 	 * cache line size, or things like memset/memcpy may lose
 	 * badly.
 	 */
-	__asm __volatile("mfpvr %0" : "=r" (version));
-	switch (version & 0xffff0000) {
+	__asm volatile("mfpvr %0" : "=r" (pvr));
+	switch (pvr & 0xffff0000) {
 	case PVR_401A1:
 		curcpu()->ci_ci.dcache_size = 1024;
 		curcpu()->ci_ci.dcache_line_size = 16;
@@ -251,8 +253,8 @@ dcache_flush_page(vaddr_t va)
 	if (curcpu()->ci_ci.dcache_line_size)
 		for (i = 0; i < PAGE_SIZE;
 		     i += curcpu()->ci_ci.dcache_line_size)
-			asm volatile("dcbf %0,%1" : : "r" (va), "r" (i));
-	asm volatile("sync;isync" : : );
+			__asm volatile("dcbf %0,%1" : : "r" (va), "r" (i));
+	__asm volatile("sync;isync" : : );
 }
 
 void
@@ -263,8 +265,8 @@ icache_flush_page(vaddr_t va)
 	if (curcpu()->ci_ci.icache_line_size)
 		for (i = 0; i < PAGE_SIZE;
 		     i += curcpu()->ci_ci.icache_line_size)
-			asm volatile("icbi %0,%1" : : "r" (va), "r" (i));
-	asm volatile("sync;isync" : : );
+			__asm volatile("icbi %0,%1" : : "r" (va), "r" (i));
+	__asm volatile("sync;isync" : : );
 }
 
 void
@@ -279,8 +281,8 @@ dcache_flush(vaddr_t va, vsize_t len)
 	len += va & (curcpu()->ci_ci.dcache_line_size-1);
 	if (curcpu()->ci_ci.dcache_line_size)
 		for (i = 0; i < len; i += curcpu()->ci_ci.dcache_line_size)
-			asm volatile("dcbf %0,%1" : : "r" (va), "r" (i));
-	asm volatile("sync;isync" : : );
+			__asm volatile("dcbf %0,%1" : : "r" (va), "r" (i));
+	__asm volatile("sync;isync" : : );
 }
 
 void
@@ -295,6 +297,6 @@ icache_flush(vaddr_t va, vsize_t len)
 	len += va & (curcpu()->ci_ci.icache_line_size-1);
 	if (curcpu()->ci_ci.icache_line_size)
 		for (i = 0; i < len; i += curcpu()->ci_ci.icache_line_size)
-			asm volatile("icbi %0,%1" : : "r" (va), "r" (i));
-	asm volatile("sync;isync" : : );
+			__asm volatile("icbi %0,%1" : : "r" (va), "r" (i));
+	__asm volatile("sync;isync" : : );
 }

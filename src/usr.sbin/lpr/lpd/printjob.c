@@ -1,4 +1,4 @@
-/*	$NetBSD: printjob.c,v 1.41 2004/10/30 08:44:26 dsl Exp $	*/
+/*	$NetBSD: printjob.c,v 1.50 2006/05/11 00:22:53 mrg Exp $	*/
 
 /*
  * Copyright (c) 1983, 1993
@@ -41,7 +41,7 @@ __COPYRIGHT("@(#) Copyright (c) 1983, 1993\n\
 #if 0
 static char sccsid[] = "@(#)printjob.c	8.7 (Berkeley) 5/10/95";
 #else
-__RCSID("$NetBSD: printjob.c,v 1.41 2004/10/30 08:44:26 dsl Exp $");
+__RCSID("$NetBSD: printjob.c,v 1.50 2006/05/11 00:22:53 mrg Exp $");
 #endif
 #endif /* not lint */
 
@@ -125,7 +125,7 @@ static void	init(void);
 static void	setup_ofilter(int);
 static void	close_ofilter(void);
 static void	openpr(void);
-static void	opennet(char *);
+static void	opennet(void);
 static void	opentty(void);
 static void	openrem(void);
 static int	print(int, char *);
@@ -173,8 +173,8 @@ printjob(void)
 	signal(SIGQUIT, abortpr);
 	signal(SIGTERM, abortpr);
 
-	(void)mktemp(tempfile);		/* OK */
-	(void)mktemp(tempremote);	/* OK */
+	(void)mktemp(tempfile);		/* XXX */
+	(void)mktemp(tempremote);	/* XXX */
 
 	/*
 	 * uses short form file names
@@ -284,7 +284,8 @@ again:
 			}
 		}
 	}
-	free((char *) queue);
+	free(queue);
+	queue = NULL;
 	/*
 	 * search the spool directory for more work.
 	 */
@@ -369,6 +370,7 @@ printit(char *file)
 	 *		g -- "file name" plot(1G) file to print
 	 *		v -- "file name" plain raster file to print
 	 *		c -- "file name" cifplot file to print
+	 *		o -- "file name" postscript file to print
 	 *		1 -- "R font file" for troff
 	 *		2 -- "I font file" for troff
 	 *		3 -- "B font file" for troff
@@ -529,8 +531,9 @@ print(int format, char *file)
 	FILE *fp;
 	int status;
 	struct stat stb;
-	char *prog, *av[15], buf[BUFSIZ];
-	int n, fi, fo, pid, p[2], stopped = 0, nofile;
+	const char *prog, *av[15];
+	char buf[BUFSIZ];
+	int n, fi, fo, child_pid, p[2], stopped = 0, nofile;
 
 	if (lstat(file, &stb) < 0 || (fi = open(file, O_RDONLY)) < 0)
 		return(ERROR);
@@ -578,7 +581,7 @@ print(int format, char *file)
 			for (n = 3; n < nofile; n++)
 				(void)close(n);
 			execl(_PATH_PR, "pr", width, length,
-			    "-h", *title ? title : " ", 0);
+			    "-h", *title ? title : " ", NULL);
 			syslog(LOG_ERR, "cannot execl %s", _PATH_PR);
 			exit(2);
 		}
@@ -597,6 +600,23 @@ print(int format, char *file)
 		av[3] = indent;
 		n = 4;
 		break;
+	case 'o':	/* print a postscript file */
+		if (PF == NULL) {
+			/* if PF is not set, handle it like an 'l' */
+			prog = IF;
+			av[1] = "-c";
+			av[2] = width;
+			av[3] = length;
+			av[4] = indent;
+			n = 5;
+			break;
+		} else {
+			prog = PF;
+			av[1] = pxwidth;
+			av[2] = pxlength;
+			n = 3;
+			break;
+		}
 	case 'l':	/* like 'f' but pass control characters */
 		prog = IF;
 		av[1] = "-c";
@@ -677,8 +697,8 @@ print(int format, char *file)
 	fo = pfd;
 	if (ofilter > 0) {		/* stop output filter */
 		write(ofd, "\031\1", 2);
-		while ((pid =
-		    wait3(&status, WUNTRACED, 0)) > 0 && pid != ofilter)
+		while ((child_pid =
+		    wait3(&status, WUNTRACED, 0)) > 0 && child_pid != ofilter)
 			;
 		if (WIFSTOPPED(status) == 0) {
 			(void)close(fi);
@@ -701,7 +721,7 @@ start:
 		nofile = sysconf(_SC_OPEN_MAX);
 		for (n = 3; n < nofile; n++)
 			(void)close(n);
-		execv(prog, av);
+		execv(prog, __UNCONST(av));
 		syslog(LOG_ERR, "cannot execv %s", prog);
 		exit(2);
 	}
@@ -713,7 +733,7 @@ start:
 		return (ERROR);
 	}
 	(void)close(fi);
-	while ((pid = wait(&status)) > 0 && pid != child)
+	while ((child_pid = wait(&status)) > 0 && child_pid != child)
 		;
 	child = 0;
 	prchild = 0;
@@ -735,7 +755,7 @@ start:
 	if (!WIFEXITED(status)) {
 		syslog(LOG_WARNING,
 		    "%s: Daemon filter '%c' terminated (pid=%d) (termsig=%d)",
-			printer, format, (int)pid, WTERMSIG(status));
+			printer, format, (int)child_pid, WTERMSIG(status));
 		return(ERROR);
 	}
 	switch (WEXITSTATUS(status)) {
@@ -851,7 +871,9 @@ sendfile(int type, char *file)
 	char buf[BUFSIZ];
 	int sizerr, resp;
 	extern int rflag;
+	char *save_file;
 
+	save_file = file;
 	if (type == '\3' && rflag && (OF || IF)) {
 		int	save_pfd = pfd;
 
@@ -886,7 +908,7 @@ sendfile(int type, char *file)
 		return(ACCESS);
 
 	amt = snprintf(buf, sizeof(buf), "%c%lld %s\n", type,
-	    (long long)stb.st_size, file);
+	    (long long)stb.st_size, save_file);
 	for (i = 0; ; i++) {
 		if (write(pfd, buf, amt) != amt ||
 		    (resp = response()) < 0 || resp == '\1') {
@@ -1084,7 +1106,7 @@ static void
 sendmail(char *user, int bombed)
 {
 	int i, p[2], s, nofile;
-	char *cp = NULL; /* XXX gcc */
+	const char *cp = NULL; /* XXX gcc */
 	struct stat stb;
 	FILE *fp;
 
@@ -1101,7 +1123,7 @@ sendmail(char *user, int bombed)
 			cp++;
 		else
 			cp = _PATH_SENDMAIL;
-		execl(_PATH_SENDMAIL, cp, "-t", 0);
+		execl(_PATH_SENDMAIL, cp, "-t", NULL);
 		_exit(0);
 	} else if (s > 0) {				/* parent */
 		dup2(p[1], 1);
@@ -1163,18 +1185,18 @@ sendmail(char *user, int bombed)
 static int
 dofork(int action)
 {
-	int i, pid;
+	int i, child_pid;
 	struct passwd *pw;
 
 	for (i = 0; i < 20; i++) {
-		if ((pid = fork()) < 0) {
+		if ((child_pid = fork()) < 0) {
 			sleep((unsigned)(i*i));
 			continue;
 		}
 		/*
 		 * Child should run as daemon instead of root
 		 */
-		if (pid == 0) {
+		if (child_pid == 0) {
 			pw = getpwuid(DU);
 			if (pw == 0) {
 				syslog(LOG_ERR, "uid %ld not in password file",
@@ -1186,7 +1208,7 @@ dofork(int action)
 			setuid(DU);
 			signal(SIGCHLD, SIG_DFL);
 		}
-		return (pid);
+		return (child_pid);
 	}
 	syslog(LOG_ERR, "can't fork");
 
@@ -1221,34 +1243,14 @@ abortpr(int signo)
 static void
 init(void)
 {
-	int status;
 	char *s;
 
-	if ((status = cgetent(&bp, printcapdb, printer)) == -2) {
-		syslog(LOG_ERR, "can't open printer description file");
-		exit(1);
-	} else if (status == -1) {
-		syslog(LOG_ERR, "unknown printer: %s", printer);
-		exit(1);
-	} else if (status == -3)
-		fatal("potential reference loop detected in printcap file");
+	getprintcap(printer);
 
-	if (cgetstr(bp, DEFLP, &LP) == -1)
-		LP = _PATH_DEFDEVLP;
-	if (cgetstr(bp, "rp", &RP) == -1)
-		RP = DEFLP;
-	if (cgetstr(bp, "lo", &LO) == -1)
-		LO = DEFLOCK;
-	if (cgetstr(bp, "st", &ST) == -1)
-		ST = DEFSTAT;
-	if (cgetstr(bp, "lf", &LF) == -1)
-		LF = _PATH_CONSOLE;
-	if (cgetstr(bp, "sd", &SD) == -1)
-		SD = _PATH_DEFSPOOL;
+	FF = cgetstr(bp, "ff", &s) == -1 ? DEFFF : s;
+
 	if (cgetnum(bp, "du", &DU) < 0)
 		DU = DEFUID;
-	if (cgetstr(bp,"ff", &FF) == -1)
-		FF = DEFFF;
 	if (cgetnum(bp, "pw", &PW) < 0)
 		PW = DEFWIDTH;
 	(void)snprintf(&width[2], sizeof(width) - 2, "%ld", PW);
@@ -1261,21 +1263,19 @@ init(void)
 	if (cgetnum(bp, "py", &PY) < 0)
 		PY = 0;
 	(void)snprintf(&pxlength[2], sizeof(pxlength) - 2, "%ld", PY);
-	cgetstr(bp, "rm", &RM);
-	if ((s = checkremote()) != NULL)
-		syslog(LOG_WARNING, "%s", s);
 
-	cgetstr(bp, "af", &AF);
-	cgetstr(bp, "of", &OF);
-	cgetstr(bp, "if", &IF);
-	cgetstr(bp, "rf", &RF);
-	cgetstr(bp, "tf", &TF);
-	cgetstr(bp, "nf", &NF);
-	cgetstr(bp, "df", &DF);
-	cgetstr(bp, "gf", &GF);
-	cgetstr(bp, "vf", &VF);
-	cgetstr(bp, "cf", &CF);
-	cgetstr(bp, "tr", &TR);
+	AF = cgetstr(bp, "af", &s) == -1 ? NULL : s;
+	OF = cgetstr(bp, "of", &s) == -1 ? NULL : s;
+	IF = cgetstr(bp, "if", &s) == -1 ? NULL : s;
+	RF = cgetstr(bp, "rf", &s) == -1 ? NULL : s;
+	TF = cgetstr(bp, "tf", &s) == -1 ? NULL : s;
+	NF = cgetstr(bp, "nf", &s) == -1 ? NULL : s;
+	DF = cgetstr(bp, "df", &s) == -1 ? NULL : s;
+	GF = cgetstr(bp, "gf", &s) == -1 ? NULL : s;
+	VF = cgetstr(bp, "vf", &s) == -1 ? NULL : s;
+	CF = cgetstr(bp, "cf", &s) == -1 ? NULL : s;
+	PF = cgetstr(bp, "pf", &s) == -1 ? NULL : s;
+	TR = cgetstr(bp, "tr", &s) == -1 ? NULL : s;
 
 	RS = (cgetcap(bp, "rs", ':') != NULL);
 	SF = (cgetcap(bp, "sf", ':') != NULL);
@@ -1293,7 +1293,7 @@ init(void)
 		XC = 0;
 	if (cgetnum(bp, "xs", &XS) < 0)
 		XS = 0;
-	cgetstr(bp, "ms", &MS);
+	MS = cgetstr(bp, "ms", &s) == -1 ? NULL : s;
 
 	tof = (cgetcap(bp, "fo", ':') == NULL);
 }
@@ -1310,7 +1310,7 @@ setup_ofilter(int check_rflag)
 	if (OF && (!remote || (check_rflag && rflag))) {
 		int p[2];
 		int i, nofile;
-		char *cp;
+		const char *cp;
 
 		pipe(p);
 		if ((ofilter = dofork(DOABORT)) == 0) {	/* child */
@@ -1324,7 +1324,7 @@ setup_ofilter(int check_rflag)
 				cp = OF;
 			else
 				cp++;
-			execl(OF, cp, width, length, 0);
+			execl(OF, cp, width, length, NULL);
 			syslog(LOG_ERR, "%s: %s: %m", printer, OF);
 			exit(1);
 		}
@@ -1360,11 +1360,9 @@ close_ofilter(void)
 static void
 openpr(void)
 {
-	char *cp;
-
 	if (!remote && *LP) {
-		if ((cp = strchr(LP, '@')))
-			opennet(cp);
+		if (strchr(LP, '@') != NULL)
+			opennet();
 		else
 			opentty();
 	} else if (remote) {
@@ -1386,24 +1384,14 @@ openpr(void)
  * or to a terminal server on the net
  */
 static void
-opennet(char *cp)
+opennet(void)
 {
 	int i;
-	int resp, port;
-	char save_ch;
-
-	save_ch = *cp;
-	*cp = '\0';
-	port = atoi(LP);
-	if (port <= 0) {
-		syslog(LOG_ERR, "%s: bad port number: %s", printer, LP);
-		exit(1);
-	}
-	*cp++ = save_ch;
+	int resp;
 
 	for (i = 1; ; i = i < 256 ? i << 1 : i) {
 		resp = -1;
-		pfd = getport(cp, port);
+		pfd = getport(LP);
 		if (pfd < 0 && errno == ECONNREFUSED)
 			resp = 1;
 		else if (pfd >= 0) {
@@ -1423,7 +1411,7 @@ opennet(char *cp)
 		}
 		sleep(i);
 	}
-	pstatus("sending to %s port %d", cp, port);
+	pstatus("sending to %s", LP);
 }
 
 /*
@@ -1465,7 +1453,7 @@ openrem(void)
 
 	for (i = 1; ; i = i < 256 ? i << 1 : i) {
 		resp = -1;
-		pfd = getport(RM, 0);
+		pfd = getport(RM);
 		if (pfd >= 0) {
 			n = snprintf(line, sizeof(line), "\2%s\n", RP);
 			if (write(pfd, line, n) == n &&
@@ -1633,7 +1621,7 @@ pstatus(const char *msg, ...)
 
 	iov[0].iov_base = buf;
 	iov[0].iov_len = strlen(buf);
-	iov[1].iov_base = "\n";
+	iov[1].iov_base = __UNCONST("\n");
 	iov[1].iov_len = 1;
 	(void)writev(fd, iov, 2);
 	(void)close(fd);

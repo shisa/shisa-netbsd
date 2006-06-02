@@ -1,10 +1,10 @@
-#	$NetBSD: majors.pmax,v 1.11 2003/12/13 23:04:37 ad Exp $
+#	$NetBSD: majors.pmax,v 1.16 2005/12/11 12:18:36 christos Exp $
 #
 # Device majors for pmax
 #
 
 device-major	cons		char 0
-device-major	swap		char 1   block 4
+device-major	swap		char 1   block 4	vmswap
 device-major	ctty		char 2
 device-major	mem		char 3
 device-major	pts		char 4			pty
@@ -58,6 +58,7 @@ device-major	wsfont		char 102		wsfont
 device-major	systrace	char 103		systrace
 device-major	cgd		char 104  block 33	cgd
 device-major	ksyms		char 105		ksyms
+device-major	nsmb		char 106		nsmb
 
 # Majors up to 143 are reserved for machine-dependant drivers.
 # New machine-independant driver majors are assigned in 

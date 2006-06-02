@@ -1,4 +1,4 @@
-/*	$NetBSD: elink3.c,v 1.111 2005/02/27 00:27:01 perry Exp $	*/
+/*	$NetBSD: elink3.c,v 1.115 2006/02/20 16:50:37 thorpej Exp $	*/
 
 /*-
  * Copyright (c) 1998, 2001 The NetBSD Foundation, Inc.
@@ -69,7 +69,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: elink3.c,v 1.111 2005/02/27 00:27:01 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: elink3.c,v 1.115 2006/02/20 16:50:37 thorpej Exp $");
 
 #include "opt_inet.h"
 #include "opt_ns.h"
@@ -225,7 +225,7 @@ u_int16_t ep_read_eeprom(struct ep_softc *, u_int16_t);
 static inline void ep_reset_cmd(struct ep_softc *sc, u_int cmd, u_int arg);
 static inline void ep_finish_reset(bus_space_tag_t, bus_space_handle_t);
 static inline void ep_discard_rxtop(bus_space_tag_t, bus_space_handle_t);
-static __inline int ep_w1_reg(struct ep_softc *, int);
+static inline int ep_w1_reg(struct ep_softc *, int);
 
 /*
  * MII bit-bang glue.
@@ -249,7 +249,7 @@ const struct mii_bitbang_ops ep_mii_bitbang_ops = {
  * Some chips (3c515 [Corkscrew] and 3c574 [RoadRunner]) have
  * Window 1 registers offset!
  */
-static __inline int
+static inline int
 ep_w1_reg(sc, reg)
 	struct ep_softc *sc;
 	int reg;
@@ -731,7 +731,7 @@ ep_tick(arg)
 		panic("ep_tick");
 #endif
 
-	if ((sc->sc_dev.dv_flags & DVF_ACTIVE) == 0)
+	if (!device_is_active(&sc->sc_dev))
 		return;
 
 	s = splnet();
@@ -1410,8 +1410,7 @@ epintr(arg)
 	u_int16_t status;
 	int ret = 0;
 
-	if (sc->enabled == 0 ||
-	    (sc->sc_dev.dv_flags & DVF_ACTIVE) == 0)
+	if (sc->enabled == 0 || !device_is_active(&sc->sc_dev))
 		return (0);
 
 
@@ -1496,7 +1495,7 @@ epread(sc)
 again:
 	if (ifp->if_flags & IFF_DEBUG) {
 		int err = len & ERR_MASK;
-		char *s = NULL;
+		const char *s = NULL;
 
 		if (len & ERR_INCOMPLETE)
 			s = "incomplete packet";

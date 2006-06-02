@@ -1,4 +1,4 @@
-/*	$NetBSD: pk_extern.h,v 1.12 2003/06/29 22:31:55 fvdl Exp $	*/
+/*	$NetBSD: pk_extern.h,v 1.15 2005/12/11 12:24:54 christos Exp $	*/
 
 /*-
  * Copyright (c) 1995 The NetBSD Foundation, Inc.
@@ -36,10 +36,10 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifdef _KERNEL
-
 #ifndef _NETCCITT_PK_EXTERN_H_
 #define _NETCCITT_PK_EXTERN_H_
+
+#ifdef _KERNEL
 
 #include <netccitt/x25isr.h>
 
@@ -57,7 +57,7 @@ int pk_accton __P((char *));
 void pk_acct __P((struct pklcd *));
 
 /* pk_debug.c */
-void pk_trace __P((struct x25config *, struct mbuf *, char *));
+void pk_trace __P((struct x25config *, struct mbuf *, const char *));
 void mbuf_cache __P((struct mbuf_cache *, struct mbuf *));
 
 /* pk_input.c */
@@ -107,14 +107,14 @@ int pk_getlcn __P((struct pkcb *));
 void pk_clear __P((struct pklcd *, int, int));
 void pk_flowcontrol __P((struct pklcd *, int, int));
 void pk_flush __P((struct pklcd *));
-void pk_procerror __P((int, struct pklcd *, char *, int));
+void pk_procerror __P((int, struct pklcd *, const char *, int));
 int pk_ack __P((struct pklcd *, unsigned));
 int pk_decode __P((struct x25_packet *));
 void pk_restartcause __P((struct pkcb *, struct x25_packet *));
 void pk_resetcause __P((struct pkcb *, struct x25_packet *));
 void pk_clearcause __P((struct pkcb *, struct x25_packet *));
 char *format_ntn __P((struct x25config *));
-void pk_message __P((int, struct x25config *, char *, ...))
+void pk_message __P((int, struct x25config *, const char *, ...))
      __attribute__((__format__(__printf__, 3, 4)));
 
 int pk_fragment __P((struct pklcd *, struct mbuf *, int, int, int));
@@ -124,7 +124,7 @@ void pk_timer __P((void));
 
 /* pk_usrreq.c */
 int pk_usrreq __P((struct socket *, int, struct mbuf *, struct mbuf *,
-		   struct mbuf *, struct proc *));
+		   struct mbuf *, struct lwp *));
 int pk_start __P((struct pklcd *));
 int pk_control __P((struct socket *, u_long, caddr_t, struct ifnet *,
 		    struct proc *));
@@ -132,6 +132,6 @@ int pk_ctloutput __P((int, struct socket *, int, int, struct mbuf **));
 int pk_checksockaddr __P((struct mbuf *));
 int pk_send __P((struct mbuf *, void *));
 
-#endif
+#endif /* _KERNEL */
 
-#endif /* _NETCCITT_PK_EXTERN_H_ */
+#endif /* !_NETCCITT_PK_EXTERN_H_ */

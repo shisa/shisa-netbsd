@@ -1,4 +1,4 @@
-/*	$NetBSD: isapnpvar.h,v 1.21 2005/02/04 02:10:43 perry Exp $	*/
+/*	$NetBSD: isapnpvar.h,v 1.24 2006/02/16 20:17:19 perry Exp $	*/
 
 /*-
  * Copyright (c) 1996 The NetBSD Foundation, Inc.

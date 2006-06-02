@@ -1,4 +1,4 @@
-/*	$NetBSD: xinstall.c,v 1.87.2.3 2005/05/11 17:57:49 tron Exp $	*/
+/*	$NetBSD: xinstall.c,v 1.95 2006/05/11 06:09:44 mrg Exp $	*/
 
 /*
  * Copyright (c) 1987, 1993
@@ -46,10 +46,11 @@ __COPYRIGHT("@(#) Copyright (c) 1987, 1993\n\
 #if 0
 static char sccsid[] = "@(#)xinstall.c	8.1 (Berkeley) 7/21/93";
 #else
-__RCSID("$NetBSD: xinstall.c,v 1.87.2.3 2005/05/11 17:57:49 tron Exp $");
+__RCSID("$NetBSD: xinstall.c,v 1.95 2006/05/11 06:09:44 mrg Exp $");
 #endif
 #endif /* not lint */
 
+#define __MKTEMP_OK__	/* All uses of mktemp have been checked */
 #include <sys/param.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -70,7 +71,7 @@ __RCSID("$NetBSD: xinstall.c,v 1.87.2.3 2005/05/11 17:57:49 tron Exp $");
 #include <vis.h>
 
 #include <md5.h>
-#include <rmd160.h>
+#include <crypto/rmd160.h>
 #include <sha1.h>
 
 #include "pathnames.h"
@@ -221,7 +222,7 @@ main(int argc, char *argv[])
 			break;
 		case 'm':
 			if (!(set = setmode(optarg)))
-				errx(1, "%s: invalid file mode", optarg);
+				err(1, "Cannot set file mode `%s'", optarg);
 			mode = getmode(set, 0);
 			free(set);
 			break;
@@ -398,7 +399,7 @@ do_link(char *from_name, char *to_name)
 	if (dorename) {
 		(void)snprintf(tmpl, sizeof(tmpl), "%s/inst.XXXXXX",
 		    xdirname(to_name));
-		/* This usage is safe. The linker will bitch anyway. */
+		/* This usage is safe. */
 		if (mktemp(tmpl) == NULL)
 			err(1, "%s: mktemp", tmpl);
 		ret = link(from_name, tmpl);
@@ -426,7 +427,7 @@ do_symlink(char *from_name, char *to_name)
 	if (dorename) {
 		(void)snprintf(tmpl, sizeof(tmpl), "%s/inst.XXXXXX",
 		    xdirname(to_name));
-		/* This usage is safe. The linker will bitch anyway. */
+		/* This usage is safe. */
 		if (mktemp(tmpl) == NULL)
 			err(1, "%s: mktemp", tmpl);
 
@@ -750,8 +751,8 @@ copy(int from_fd, char *from_name, int to_fd, char *to_name, off_t size)
 {
 	ssize_t	nr, nw;
 	int	serrno;
-	char	*p;
-	char	buf[MAXBSIZE];
+	u_char	*p;
+	u_char	buf[MAXBSIZE];
 	MD5_CTX		ctxMD5;
 	RMD160_CTX	ctxRMD160;
 	SHA1_CTX	ctxSHA1;
@@ -1044,6 +1045,7 @@ metadata_log(const char *path, const char *type, struct timeval *tv,
 	metalog_lock.l_type = F_WRLCK;
 	if (fcntl(fileno(metafp), F_SETLKW, &metalog_lock) == -1) {
 		warn("can't lock %s", metafile);
+		free(buf);
 		return;
 	}
 

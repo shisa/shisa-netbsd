@@ -1,4 +1,4 @@
-/*	$NetBSD: pppoectl.c,v 1.18.2.1 2005/05/11 12:25:49 tron Exp $	*/
+/*	$NetBSD: pppoectl.c,v 1.21 2006/03/17 15:53:46 rumble Exp $	*/
 
 /*
  * Copyright (c) 1997 Joerg Wunsch
@@ -31,7 +31,7 @@
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: pppoectl.c,v 1.18.2.1 2005/05/11 12:25:49 tron Exp $");
+__RCSID("$NetBSD: pppoectl.c,v 1.21 2006/03/17 15:53:46 rumble Exp $");
 #endif
 
 
@@ -160,11 +160,11 @@ main(int argc, char **argv)
 		strncpy(parms.ifname, ifname, sizeof(parms.ifname));
 		strncpy(parms.eth_ifname, eth_if_name, sizeof(parms.eth_ifname));
 		if (access_concentrator) {
-			parms.ac_name = (char*)access_concentrator;
+			parms.ac_name = access_concentrator;
 			parms.ac_name_len = strlen(access_concentrator);
 		}
 		if (service) {
-			parms.service_name = (char*)service;
+			parms.service_name = service;
 			parms.service_name_len = strlen(service);
 		}
 
@@ -265,9 +265,11 @@ main(int argc, char **argv)
 			err(EX_OSERR, "SPPPGETAUTHCFG");
 		/* now allocate buffers for strings */
 		if (spr.myname_length)
-			spr.myname = malloc(spr.myname_length);
+			if ((spr.myname = malloc(spr.myname_length)) == NULL)
+				err(1, NULL);
 		if (spr.hisname_length)
-			spr.hisname = malloc(spr.hisname_length);
+			if ((spr.hisname = malloc(spr.hisname_length)) == NULL)
+				err(1, NULL);
 		/* second pass: get names too */
 		if (ioctl(s, SPPPGETAUTHCFG, &spr) == -1)
 			err(EX_OSERR, "SPPPGETAUTHCFG");

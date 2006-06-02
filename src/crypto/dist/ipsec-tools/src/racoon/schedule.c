@@ -1,4 +1,4 @@
-/*	$NetBSD: schedule.c,v 1.1.1.2.2.2 2005/11/21 21:12:31 tron Exp $	*/
+/*	$NetBSD: schedule.c,v 1.3 2005/11/21 14:20:29 manu Exp $	*/
 
 /*	$KAME: schedule.c,v 1.19 2001/11/05 10:53:19 sakane Exp $	*/
 

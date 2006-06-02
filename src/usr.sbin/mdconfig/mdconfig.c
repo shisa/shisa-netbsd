@@ -1,4 +1,4 @@
-/*	$NetBSD: mdconfig.c,v 1.3.20.1 2005/11/01 22:36:34 tron Exp $	*/
+/*	$NetBSD: mdconfig.c,v 1.4 2005/11/01 01:42:29 chs Exp $	*/
 
 /*
  * Copyright (c) 1995 Gordon W. Ross
@@ -32,7 +32,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: mdconfig.c,v 1.3.20.1 2005/11/01 22:36:34 tron Exp $");
+__RCSID("$NetBSD: mdconfig.c,v 1.4 2005/11/01 01:42:29 chs Exp $");
 #endif
 
 /*

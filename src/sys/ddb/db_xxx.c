@@ -1,4 +1,4 @@
-/*	$NetBSD: db_xxx.c,v 1.30 2005/02/26 23:04:17 perry Exp $	*/
+/*	$NetBSD: db_xxx.c,v 1.38 2006/05/14 21:25:49 elad Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1989, 1991, 1993
@@ -39,7 +39,7 @@
 #include "opt_kgdb.h"
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: db_xxx.c,v 1.30 2005/02/26 23:04:17 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: db_xxx.c,v 1.38 2006/05/14 21:25:49 elad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -50,6 +50,8 @@ __KERNEL_RCSID(0, "$NetBSD: db_xxx.c,v 1.30 2005/02/26 23:04:17 perry Exp $");
 #include <sys/callout.h>
 #include <sys/signalvar.h>
 #include <sys/resourcevar.h>
+#include <sys/pool.h>
+#include <sys/kauth.h>
 
 #include <machine/db_machdep.h>
 
@@ -65,7 +67,7 @@ __KERNEL_RCSID(0, "$NetBSD: db_xxx.c,v 1.30 2005/02/26 23:04:17 perry Exp $");
 #endif
 
 void
-db_kill_proc(db_expr_t addr, int haddr, db_expr_t count, char *modif)
+db_kill_proc(db_expr_t addr, int haddr, db_expr_t count, const char *modif)
 {
 	struct proc *p;
 	db_expr_t pid, sig;
@@ -102,7 +104,7 @@ db_kill_proc(db_expr_t addr, int haddr, db_expr_t count, char *modif)
 
 #ifdef KGDB
 void
-db_kgdb_cmd(db_expr_t addr, int haddr, db_expr_t count, char *modif)
+db_kgdb_cmd(db_expr_t addr, int haddr, db_expr_t count, const char *modif)
 {
 	kgdb_active++;
 	kgdb_trap(db_trap_type, DDB_REGS);
@@ -111,22 +113,23 @@ db_kgdb_cmd(db_expr_t addr, int haddr, db_expr_t count, char *modif)
 #endif
 
 void
-db_show_all_procs(db_expr_t addr, int haddr, db_expr_t count, char *modif)
+db_show_all_procs(db_expr_t addr, int haddr, db_expr_t count, const char *modif)
 {
 	int i;
 
-	char *mode;
+	const char *mode;
 	struct proc *p, *pp, *cp;
 	struct lwp *l, *cl;
 	struct timeval tv[2];
 	const struct proclist_desc *pd;
 
 	if (modif[0] == 0)
-		modif[0] = 'n';			/* default == normal mode */
+		mode = "n";			/* default == normal mode */
+	else
+		mode = strchr("mawln", modif[0]);
 
-	mode = strchr("mawln", modif[0]);
 	if (mode == NULL || *mode == 'm') {
-		db_printf("usage: show all procs [/a] [/n] [/w]\n");
+		db_printf("usage: show all procs [/a] [/l] [/n] [/w]\n");
 		db_printf("\t/a == show process address info\n");
 		db_printf("\t/l == show LWP info\n");
 		db_printf("\t/n == show normal process info [default]\n");
@@ -165,7 +168,7 @@ db_show_all_procs(db_expr_t addr, int haddr, db_expr_t count, char *modif)
 				continue;
 			}
 			l = LIST_FIRST(&p->p_lwps);
-			db_printf("%c%-10d", " >"[cp == p], p->p_pid);
+			db_printf("%c%-10d", (cp == p ? '>' : ' '), p->p_pid);
 
 			switch (*mode) {
 
@@ -178,7 +181,7 @@ db_show_all_procs(db_expr_t addr, int haddr, db_expr_t count, char *modif)
 			case 'l':
 				 while (l != NULL) {
 					db_printf("%c%4d %d %#9x %18p %18p %s\n",
-					    " >"[cl == l], l->l_lid,
+					    (cl == l ? '>' : ' '), l->l_lid,
 					    l->l_stat, l->l_flag, l,
 					    l->l_addr,
 					    (l->l_wchan && l->l_wmesg) ?
@@ -192,7 +195,7 @@ db_show_all_procs(db_expr_t addr, int haddr, db_expr_t count, char *modif)
 			case 'n':
 				db_printf("%8d %8d %10d %d %#7x %4d %16s %7.7s\n",
 				    pp ? pp->p_pid : -1, p->p_pgrp->pg_id,
-				    p->p_cred->p_ruid, p->p_stat, p->p_flag,
+				    kauth_cred_getuid(p->p_cred), p->p_stat, p->p_flag,
 				    p->p_nlwps, p->p_comm,
 				    (p->p_nlwps != 1) ? "*" : (
 				    (l->l_wchan && l->l_wmesg) ?
@@ -227,7 +230,14 @@ db_show_all_procs(db_expr_t addr, int haddr, db_expr_t count, char *modif)
 }
 
 void
-db_dmesg(db_expr_t addr, int haddr, db_expr_t count, char *modif)
+db_show_all_pools(db_expr_t addr, int haddr, db_expr_t count, const char *modif)
+{
+
+	pool_printall(modif, db_printf);
+}
+
+void
+db_dmesg(db_expr_t addr, int haddr, db_expr_t count, const char *modif)
 {
 	struct kern_msgbuf *mbp;
 	db_expr_t print;
@@ -280,7 +290,7 @@ db_dmesg(db_expr_t addr, int haddr, db_expr_t count, char *modif)
 #endif
 
 void
-db_show_sched_qs(db_expr_t addr, int haddr, db_expr_t count, char *modif)
+db_show_sched_qs(db_expr_t addr, int haddr, db_expr_t count, const char *modif)
 {
 	struct prochd *ph;
 	struct lwp *l;
@@ -290,15 +300,17 @@ db_show_sched_qs(db_expr_t addr, int haddr, db_expr_t count, char *modif)
 	{
 		first = 1;
 		ph = &sched_qs[i];
-		for (l = ph->ph_link; l != (struct lwp *)ph; l = l->l_forw) {
+		for (l = ph->ph_link; l != (void *)ph; l = l->l_forw) {
 			if (first) {
 				db_printf("%c%d",
 				    (sched_whichqs & RQMASK(i))
 				    ? ' ' : '!', i);
 				first = 0;
 			}
-			db_printf("\t%d.%d (%s)\n", l->l_proc->p_pid,
-			    l->l_lid, l->l_proc->p_comm);
+			db_printf("\t%d.%d (%s) pri=%d usrpri=%d\n",
+			    l->l_proc->p_pid,
+			    l->l_lid, l->l_proc->p_comm,
+			    (int)l->l_priority, (int)l->l_usrpri);
 		}
 	}
 }

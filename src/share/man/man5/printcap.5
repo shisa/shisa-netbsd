@@ -1,4 +1,4 @@
-.\"	$NetBSD: printcap.5,v 1.17 2003/08/07 10:31:17 agc Exp $
+.\"	$NetBSD: printcap.5,v 1.22 2006/01/21 23:36:31 wiz Exp $
 .\"
 .\" Copyright (c) 1983, 1991, 1993
 .\"	The Regents of the University of California.  All rights reserved.
@@ -29,7 +29,7 @@
 .\"
 .\"     @(#)printcap.5	8.2 (Berkeley) 12/11/93
 .\"
-.Dd March 15, 2003
+.Dd January 20, 2006
 .Dt PRINTCAP 5
 .Os
 .Sh NAME
@@ -91,7 +91,8 @@ format
 .It "if	str" Ta Dv NULL Ta No "name of text filter which does accounting"
 .It "lf	str" Ta Pa /dev/console Ta No "error logging file name"
 .It "lo	str" Ta Pa lock Ta No "name of lock file"
-.It "lp	str" Ta Pa /dev/lp Ta No "device name to open for output to local printer, or port@host for remote printer/printer on print server"
+.It "lp	str" Ta Pa /dev/lp Ta No "device name to open for output to local \
+printer, or port@host for remote printer/printer on print server"
 .It "ms	str" Ta Dv NULL Ta No "list of terminal modes to set or clear"
 .It "mx	num	1000	maximum file size (in"
 .Dv BUFSIZ
@@ -100,6 +101,9 @@ blocks), zero = unlimited
 .It "nf	str" Ta Dv NULL Ta No "ditroff data filter (device independent troff)"
 .It "of	str" Ta Dv NULL Ta No "name of output filtering program"
 .It "pc	num	200	price per foot or page in hundredths of cents"
+.It "pf	str" Ta Dv NULL Ta No "filter for printing"
+.Tn PostScript
+files
 .It "pl	num	66	page length (in lines)"
 .It "pw	num	132	page width (in characters)"
 .It "px	num	0	page width in pixels (horizontal)"
@@ -108,7 +112,8 @@ blocks), zero = unlimited
 .Tn FORTRAN
 style text files
 .It "rg	str" Ta Dv NULL Ta No "restricted group. Only members of group allowed access"
-.It "rm	str" Ta Dv NULL Ta No "machine name for remote printer"
+.It "rm	str" Ta Dv NULL Ta No "machine name for remote printer or port@host \
+for a remote printer on a port other than the standard port."
 .Po
 also suppress the burst page, see
 .Sx NOTES
@@ -159,6 +164,7 @@ c	cf	cifplot
 d	df	DVI (tex)
 g	gf	plot(3)
 n	nf	ditroff
+o	pf	PostScript
 f	rf	Fortran
 t	tf	troff
 v	vf	raster image

@@ -1,4 +1,4 @@
-/*	$NetBSD: kbdsun.c,v 1.6.2.1 2005/06/09 07:02:27 snj Exp $	*/
+/*	$NetBSD: kbdsun.c,v 1.9 2005/12/11 12:23:56 christos Exp $	*/
 /*	NetBSD: kbd.c,v 1.29 2001/11/13 06:54:32 lukem Exp	*/
 
 /*
@@ -47,7 +47,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kbdsun.c,v 1.6.2.1 2005/06/09 07:02:27 snj Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kbdsun.c,v 1.9 2005/12/11 12:23:56 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -351,8 +351,7 @@ kbd_sun_drain_tx(k)
 
 	while ((k->k_txflags & K_TXBUSY) && (!error) && (bail<1000)) {
 		k->k_txflags |= K_TXWANT;
-		error = tsleep((caddr_t)&k->k_txflags,
-			       PZERO | PCATCH, "kbdout", 1);
+		error = tsleep(&k->k_txflags, PZERO | PCATCH, "kbdout", 1);
 		bail++;
 	}
 	if (bail==1000)
@@ -380,7 +379,7 @@ kbd_sun_start_tx(k)
 		/* Nothing to send.  Wake drain waiters. */
 		if (k->k_txflags & K_TXWANT) {
 			k->k_txflags &= ~K_TXWANT;
-			wakeup((caddr_t)&k->k_txflags);
+			wakeup(&k->k_txflags);
 		}
 		return;
 	}

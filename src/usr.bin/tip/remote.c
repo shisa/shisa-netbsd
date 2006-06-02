@@ -1,4 +1,4 @@
-/*	$NetBSD: remote.c,v 1.11 2004/04/23 22:24:34 christos Exp $	*/
+/*	$NetBSD: remote.c,v 1.16 2006/04/03 00:51:13 perry Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -40,7 +40,7 @@ __COPYRIGHT("@(#) Copyright (c) 1992, 1993\n\
 #if 0
 static char sccsid[] = "@(#)remote.c	8.1 (Berkeley) 6/6/93";
 #endif
-__RCSID("$NetBSD: remote.c,v 1.11 2004/04/23 22:24:34 christos Exp $");
+__RCSID("$NetBSD: remote.c,v 1.16 2006/04/03 00:51:13 perry Exp $");
 #endif /* not lint */
 
 #include "pathnames.h"
@@ -64,14 +64,13 @@ static const char	*db_array[3] = { _PATH_REMOTE, 0, 0 };
 
 #define cgetflag(f)	(cgetcap(bp, f, ':') != NULL)
 
-static	void	getremcap __P((char *));
+static	void	getremcap(char *);
 
 static char tiprecord[] = "tip.record";
 static char wspace[] = "\t\n\b\f";
 
 static void
-getremcap(host)
-	char *host;
+getremcap(char *host)
 {
 	const char **p;
 	char ***q;
@@ -103,15 +102,15 @@ getremcap(host)
 		}
 		switch(status) {
 		case -1:
-			fprintf(stderr, "tip: unknown host %s\n", host);
+			warnx("unknown host %s", host);
 			break;
 		case -2:
-			fprintf(stderr, 
-			    "tip: can't open host description file\n");
+			warnx("can't open host description file");
 			break;
 		case -3:
-			fprintf(stderr, 
-			    "tip: possible reference loop in host description file\n");
+			warnx("possible reference loop in host "
+			    "description file");
+
 			break;
 		}
 		exit(3);
@@ -129,14 +128,12 @@ getremcap(host)
 	else
 		DU = cgetflag("du");
 	if (DV == NULL) {
-		fprintf(stderr, "%s: missing device spec\n", host);
-		exit(3);
+		errx(3, "%s: missing device spec\n", host);
 	}
 	if (DU && CU == NULL)
 		CU = DV;
 	if (DU && PN == NULL) {
-		fprintf(stderr, "%s: missing phone number\n", host);
-		exit(3);
+		errx(3, "%s: missing phone number\n", host);
 	}
 
 	HD = cgetflag("hd");
@@ -177,6 +174,8 @@ getremcap(host)
 		setboolean(value(HALFDUPLEX), 1);
 	if (cgetflag("dc"))
 		DC = 1;
+	if (cgetflag("hf"))
+		setboolean(value(HARDWAREFLOW), 1);
 	if (RE == NULL)
 		RE = tiprecord;
 	if (EX == NULL)
@@ -198,8 +197,7 @@ getremcap(host)
 }
 
 char *
-getremote(host)
-	char *host;
+getremote(char *host)
 {
 	char *cp;
 	static char *next;
@@ -207,8 +205,7 @@ getremote(host)
 
 	if (!lookedup) {
 		if (host == NULL && (host = getenv("HOST")) == NULL) {
-			fprintf(stderr, "tip: no host specified\n");
-			exit(3);
+			errx(3, "no host specified");
 		}
 		getremcap(host);
 		next = DV;

@@ -1,4 +1,4 @@
-/*      $NetBSD: sa11x1_pcic.c,v 1.9 2003/08/08 12:29:23 bsh Exp $        */
+/*      $NetBSD: sa11x1_pcic.c,v 1.12 2006/03/04 17:22:06 peter Exp $        */
 
 /*-
  * Copyright (c) 2001 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: sa11x1_pcic.c,v 1.9 2003/08/08 12:29:23 bsh Exp $");
+__KERNEL_RCSID(0, "$NetBSD: sa11x1_pcic.c,v 1.12 2006/03/04 17:22:06 peter Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -64,8 +64,6 @@ __KERNEL_RCSID(0, "$NetBSD: sa11x1_pcic.c,v 1.9 2003/08/08 12:29:23 bsh Exp $");
 #include "sacpcic.h"
 
 static int	sacpcic_print(void *, const char *);
-static int	sacpcic_submatch(struct device *, struct cfdata *, void *);
-
 
 void
 sacpcic_attach_common(struct sacc_softc *psc, struct sacpcic_softc *sc,
@@ -98,8 +96,8 @@ sacpcic_attach_common(struct sacc_softc *psc, struct sacpcic_softc *sc,
 		paa.iosize = 0x4000000;
 
 		sc->sc_socket[i].pcmcia =
-		    (struct device *)config_found_sm(&sc->sc_pc.sc_dev,
-		    &paa, sacpcic_print, sacpcic_submatch);
+		    config_found_ia(&sc->sc_pc.sc_dev, "pcmciabus", &paa,
+				    sacpcic_print);
 
 		sacc_intr_establish((sacc_chipset_tag_t)psc,
 				    i ? IRQ_S1_CDVALID : IRQ_S0_CDVALID,
@@ -117,19 +115,10 @@ sacpcic_attach_common(struct sacc_softc *psc, struct sacpcic_softc *sc,
 }
 
 int
-sacpcic_print(aux, name)
-	void *aux;
-	const char *name;
+sacpcic_print(void *aux, const char *name)
 {
 	return (UNCONF);
 }
-
-int
-sacpcic_submatch(struct device *parent, struct cfdata *cf, void *aux)
-{
-	return config_match(parent, cf, aux);
-}
-
 
 int
 sacpcic_read(struct sapcic_socket *so, int reg)
@@ -217,17 +206,14 @@ sacpcic_write(struct sapcic_socket *so, int reg, int arg)
 }
 		
 void
-sacpcic_clear_intr(arg)
+sacpcic_clear_intr(int arg)
 {
 	/* sacc_intr_dispatch takes care of intr status */
 }
 
 void *
-sacpcic_intr_establish(so, level, ih_fun, ih_arg)
-	struct sapcic_socket *so;
-	int level;
-	int (*ih_fun)(void *);
-	void *ih_arg;
+sacpcic_intr_establish(struct sapcic_socket *so, int level,
+    int (*ih_fun)(void *), void *ih_arg)
 {
 	int irq;
 
@@ -237,9 +223,7 @@ sacpcic_intr_establish(so, level, ih_fun, ih_arg)
 }
 
 void
-sacpcic_intr_disestablish(so, ih)
-	struct sapcic_socket *so;
-	void *ih;
+sacpcic_intr_disestablish(struct sapcic_socket *so, void *ih)
 {
 	sacc_intr_disestablish((sacc_chipset_tag_t)so->pcictag_cookie, ih);
 }

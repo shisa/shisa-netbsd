@@ -1,4 +1,4 @@
-/* $NetBSD: machdep.c,v 1.26 2005/01/21 05:04:23 simonb Exp $ */
+/* $NetBSD: machdep.c,v 1.29 2006/04/09 01:18:14 tsutsui Exp $ */
 
 /*
  * Copyright 2000, 2001
@@ -58,7 +58,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.26 2005/01/21 05:04:23 simonb Exp $");
+__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.29 2006/04/09 01:18:14 tsutsui Exp $");
 
 #include "opt_ddb.h"
 #include "opt_execfmt.h"
@@ -121,9 +121,6 @@ __KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.26 2005/01/21 05:04:23 simonb Exp $");
 /* start and end of kernel symbol table */
 void	*ksym_start, *ksym_end;
 #endif
-
-/* For sysctl_hw. */
-extern char cpu_model[];
 
 /* Our exported CPU info.  Only one for now */
 struct cpu_info cpu_info_store;
@@ -359,7 +356,7 @@ cpu_startup(void)
 	/*
 	 * Good {morning,afternoon,evening,night}.
 	 */
-	printf(version);
+	printf("%s%s", copyright, version);
 	format_bytes(pbuf, sizeof(pbuf), ctob(physmem));
 	printf("total memory = %s\n", pbuf);
 

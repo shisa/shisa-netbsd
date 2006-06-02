@@ -1,4 +1,4 @@
-/*	$NetBSD: mem.c,v 1.8 2003/08/07 16:29:32 agc Exp $	*/
+/*	$NetBSD: mem.c,v 1.11 2006/05/14 21:56:33 elad Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1990, 1993
@@ -74,7 +74,7 @@
 
 #include <sys/cdefs.h>
 
-__KERNEL_RCSID(0, "$NetBSD: mem.c,v 1.8 2003/08/07 16:29:32 agc Exp $");
+__KERNEL_RCSID(0, "$NetBSD: mem.c,v 1.11 2006/05/14 21:56:33 elad Exp $");
 
 #include <sys/param.h>
 #include <sys/conf.h>
@@ -84,6 +84,7 @@ __KERNEL_RCSID(0, "$NetBSD: mem.c,v 1.8 2003/08/07 16:29:32 agc Exp $");
 #include <sys/malloc.h>
 #include <sys/proc.h>
 #include <sys/fcntl.h>
+#include <sys/kauth.h>
 
 #include <machine/cpu.h>
 
@@ -119,7 +120,7 @@ mmrw(dev, uio, flags)
 		/* lock against other uses of shared vmmap */
 		while (physlock > 0) {
 			physlock++;
-			error = tsleep((caddr_t)&physlock, PZERO | PCATCH,
+			error = tsleep(&physlock, PZERO | PCATCH,
 			    "mmrw", 0);
 			if (error)
 				return (error);
@@ -187,7 +188,7 @@ mmrw(dev, uio, flags)
 	}
 	if (minor(dev) == DEV_MEM) {
 		if (physlock > 1)
-			wakeup((caddr_t)&physlock);
+			wakeup(&physlock);
 		physlock = 0;
 	}
 	return (error);
@@ -215,7 +216,7 @@ mmmmap(dev, off, prot)
 	/* minor device 0 is physical memory */
 
 	if (off >= ctob(physmem) &&
-	    suser(p->p_ucred, &p->p_acflag) != 0)
+	    kauth_authorize_generic(p->p_cred, KAUTH_GENERIC_ISSUSER, &p->p_acflag) != 0)
 		return -1;
 	return sh5_btop(off);
 }

@@ -1,4 +1,4 @@
-/*	$NetBSD: compress.c,v 1.21 2004/07/09 12:14:37 wiz Exp $	*/
+/*	$NetBSD: compress.c,v 1.23 2006/04/09 20:01:40 christos Exp $	*/
 
 /*-
  * Copyright (c) 1992, 1993
@@ -39,7 +39,7 @@ __COPYRIGHT("@(#) Copyright (c) 1992, 1993\n\
 #if 0
 static char sccsid[] = "@(#)compress.c	8.2 (Berkeley) 1/7/94";
 #else
-__RCSID("$NetBSD: compress.c,v 1.21 2004/07/09 12:14:37 wiz Exp $");
+__RCSID("$NetBSD: compress.c,v 1.23 2006/04/09 20:01:40 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -203,6 +203,7 @@ compress(char *in, char *out, int bits)
 {
 	int nr;
 	struct stat isb, sb;
+	const char *error = NULL;
 	FILE *ifp, *ofp;
 	int exists, isreg, oreg;
 	u_char buf[BUFSIZ];
@@ -237,23 +238,27 @@ compress(char *in, char *out, int bits)
 		cwarn("%s", out);
 		goto err;
 	}
+	oreg <<= 1;
 	while ((nr = fread(buf, 1, sizeof(buf), ifp)) != 0)
 		if (fwrite(buf, 1, nr, ofp) != nr) {
 			cwarn("%s", out);
 			goto err;
 		}
 
-	if (ferror(ifp) || fclose(ifp)) {
-		cwarn("%s", in);
-		goto err;
-	}
+	if (ferror(ifp))
+		error = in;
+	if (fclose(ifp))
+		if (error == NULL)
+			error = in;
+	if (fclose(ofp))
+		if (error == NULL)
+			error = out;
 	ifp = NULL;
-
-	if (fclose(ofp)) {
-		cwarn("%s", out);
+	ofp = NULL;
+	if (error) {
+		cwarn("%s", error);
 		goto err;
 	}
-	ofp = NULL;
 
 	if (isreg && oreg) {
 		if (stat(out, &sb)) {
@@ -264,8 +269,6 @@ compress(char *in, char *out, int bits)
 		if (!force && sb.st_size >= isb.st_size) {
 			if (verbose)
 		(void)printf("%s: file would grow; left unmodified\n", in);
-			if (unlink(out))
-				cwarn("%s", out);
 			goto err;
 		}
 
@@ -286,11 +289,10 @@ compress(char *in, char *out, int bits)
 	}
 	return;
 
-err:	if (ofp) {
-		if (oreg)
-			(void)unlink(out);
+err:	if (ofp)
 		(void)fclose(ofp);
-	}
+	if (oreg == 2)
+		(void)unlink(out);
 	if (ifp)
 		(void)fclose(ifp);
 }
@@ -334,19 +336,26 @@ decompress(char *in, char *out, int bits)
 	} else
 		isreg = 0;
 
+	oreg <<= 1;
 	while ((nr = fread(buf, 1, sizeof(buf), ifp)) != 0)
 		if (fwrite(buf, 1, nr, ofp) != nr) {
 			cwarn("%s", out);
 			goto err;
 		}
 
-	if (ferror(ifp) || fclose(ifp)) {
+	if (ferror(ifp)) {
+		cwarn("%s", in);
+		goto err;
+	}
+	if (fclose(ifp)) {
+		ifp = NULL;
 		cwarn("%s", in);
 		goto err;
 	}
 	ifp = NULL;
 
 	if (fclose(ofp)) {
+		ofp = NULL;
 		cwarn("%s", out);
 		goto err;
 	}
@@ -359,11 +368,10 @@ decompress(char *in, char *out, int bits)
 	}
 	return;
 
-err:	if (ofp) {
-		if (oreg)
-			(void)unlink(out);
+err:	if (ofp)
 		(void)fclose(ofp);
-	}
+	if (oreg == 2)
+		(void)unlink(out);
 	if (ifp)
 		(void)fclose(ifp);
 }

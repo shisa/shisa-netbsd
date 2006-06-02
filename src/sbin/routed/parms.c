@@ -1,4 +1,4 @@
-/*	$NetBSD: parms.c,v 1.20 2003/07/03 03:04:04 itojun Exp $	*/
+/*	$NetBSD: parms.c,v 1.23 2006/03/18 20:25:28 christos Exp $	*/
 
 /*
  * Copyright (c) 1983, 1993
@@ -38,7 +38,7 @@
 #include <sys/stat.h>
 
 #ifdef __NetBSD__
-__RCSID("$NetBSD: parms.c,v 1.20 2003/07/03 03:04:04 itojun Exp $");
+__RCSID("$NetBSD: parms.c,v 1.23 2006/03/18 20:25:28 christos Exp $");
 #elif defined(__FreeBSD__)
 __RCSID("$FreeBSD$");
 #else
@@ -609,8 +609,10 @@ parse_parms(char *line,
 			intnetp->intnet_metric = (int)strtol(val+1,&p,0);
 			if (*p != '\0'
 			    || intnetp->intnet_metric <= 0
-			    || intnetp->intnet_metric >= HOPCNT_INFINITY)
+			    || intnetp->intnet_metric >= HOPCNT_INFINITY) {
+				free(intnetp);
 				return bad_str(line);
+			}
 		}
 		if (!getnet(buf, &intnetp->intnet_addr, &intnetp->intnet_mask)
 		    || intnetp->intnet_mask == HOST_MASK
@@ -689,7 +691,7 @@ parse_parms(char *line,
 			 * The parm_net stuff is needed to allow several
 			 * -F settings.
 			 */
-			if (!getnet(val0, &addr, &mask)
+			if (val0 == NULL || !getnet(val0, &addr, &mask)
 			    || parm.parm_name[0] != '\0')
 				return bad_str(tgt);
 			parm.parm_net = addr;
@@ -700,6 +702,8 @@ parse_parms(char *line,
 			/* since cleartext passwords are so weak allow
 			 * them anywhere
 			 */
+			if (val0 == NULL)
+				return bad_str("no passwd");
 			msg = get_passwd(tgt,val0,&parm,RIP_AUTH_PW,1);
 			if (msg) {
 				*val0 = '\0';
@@ -707,6 +711,8 @@ parse_parms(char *line,
 			}
 
 		} else if (PARSEQ("md5_passwd")) {
+			if (val0 == NULL)
+				return bad_str("no md5 passwd");
 			msg = get_passwd(tgt,val0,&parm,RIP_AUTH_MD5,safe);
 			if (msg) {
 				*val0 = '\0';
@@ -828,8 +834,10 @@ parse_parms(char *line,
 				    || !getnet(buf2, &tg->tgate_nets[i].net,
 					       &tg->tgate_nets[i].mask)
 				    || tg->tgate_nets[i].net == RIP_DEFAULT
-				    || tg->tgate_nets[i].mask == 0)
+				    || tg->tgate_nets[i].mask == 0) {
+					free(tg);
 					return bad_str(tgt);
+				}
 				i++;
 			}
 			tg->tgate_next = tgates;

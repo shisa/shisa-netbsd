@@ -1,4 +1,4 @@
-/*	$NetBSD: term.c,v 1.40 2004/05/22 23:21:28 christos Exp $	*/
+/*	$NetBSD: term.c,v 1.45 2006/03/18 19:23:14 christos Exp $	*/
 
 /*-
  * Copyright (c) 1992, 1993
@@ -37,7 +37,7 @@
 #if 0
 static char sccsid[] = "@(#)term.c	8.2 (Berkeley) 4/30/95";
 #else
-__RCSID("$NetBSD: term.c,v 1.40 2004/05/22 23:21:28 christos Exp $");
+__RCSID("$NetBSD: term.c,v 1.45 2006/03/18 19:23:14 christos Exp $");
 #endif
 #endif /* not lint && not SCCSID */
 
@@ -398,7 +398,8 @@ term_alloc(EditLine *el, const struct termcapstr *t, const char *cap)
          * New string is shorter; no need to allocate space
          */
 	if (clen <= tlen) {
-		(void) strcpy(*str, cap);	/* XXX strcpy is safe */
+		if (*str)
+			(void) strcpy(*str, cap);	/* XXX strcpy is safe */
 		return;
 	}
 	/*
@@ -472,8 +473,12 @@ term_alloc_display(EditLine *el)
 		return (-1);
 	for (i = 0; i < c->v; i++) {
 		b[i] = (char *) el_malloc((size_t) (sizeof(char) * (c->h + 1)));
-		if (b[i] == NULL)
+		if (b[i] == NULL) {
+			while (--i >= 0)
+				el_free((ptr_t) b[i]);
+			el_free((ptr_t) b);
 			return (-1);
+		}
 	}
 	b[c->v] = NULL;
 	el->el_display = b;
@@ -483,8 +488,12 @@ term_alloc_display(EditLine *el)
 		return (-1);
 	for (i = 0; i < c->v; i++) {
 		b[i] = (char *) el_malloc((size_t) (sizeof(char) * (c->h + 1)));
-		if (b[i] == NULL)
+		if (b[i] == NULL) {
+			while (--i >= 0)
+				el_free((ptr_t) b[i]);
+			el_free((ptr_t) b);
 			return (-1);
+		}
 	}
 	b[c->v] = NULL;
 	el->el_vdisplay = b;
@@ -944,7 +953,7 @@ term_set(EditLine *el, const char *term)
 		Val(T_co) = tgetnum("co");
 		Val(T_li) = tgetnum("li");
 		for (t = tstr; t->name != NULL; t++) {
-			/* XXX: some systems tgetstr needs non const */
+			/* XXX: some systems' tgetstr needs non const */
 			term_alloc(el, t, tgetstr(strchr(t->name, *t->name),
 			    &area));
 		}
@@ -1250,6 +1259,19 @@ term__flush(void)
 	(void) fflush(term_outfile);
 }
 
+/* term_writec():
+ *	Write the given character out, in a human readable form
+ */
+protected void
+term_writec(EditLine *el, int c)
+{
+	char buf[8];
+	int cnt = key__decode_char(buf, sizeof(buf), 0, c);
+	buf[cnt] = '\0';
+	term_overwrite(el, buf, cnt);
+	term__flush();
+}
+
 
 /* term_telltc():
  *	Print the current termcap characteristics
@@ -1277,11 +1299,17 @@ term_telltc(EditLine *el, int argc __attribute__((__unused__)),
 		(void) fprintf(el->el_outfile, "\tIt %s magic margins\n",
 		    EL_HAS_MAGIC_MARGINS ? "has" : "does not have");
 
-	for (t = tstr, ts = el->el_term.t_str; t->name != NULL; t++, ts++)
+	for (t = tstr, ts = el->el_term.t_str; t->name != NULL; t++, ts++) {
+		const char *ub;
+		if (*ts && **ts) {
+		    (void) key__decode_str(*ts, upbuf, sizeof(upbuf), "");
+		    ub = upbuf;
+		} else {
+		    ub = "(empty)";
+		}
 		(void) fprintf(el->el_outfile, "\t%25s (%s) == %s\n",
-		    t->long_name,
-		    t->name, *ts && **ts ?
-		    key__decode_str(*ts, upbuf, "") : "(empty)");
+		    t->long_name, t->name, ub);
+	}
 	(void) fputc('\n', el->el_outfile);
 	return (0);
 }
@@ -1449,7 +1477,7 @@ term_echotc(EditLine *el, int argc __attribute__((__unused__)),
 			break;
 		}
 	if (t->name == NULL) {
-		/* XXX: some systems tgetstr needs non const */
+		/* XXX: some systems' tgetstr needs non const */
 		scap = tgetstr(strchr(*argv, **argv), &area);
 	}
 	if (!scap || scap[0] == '\0') {

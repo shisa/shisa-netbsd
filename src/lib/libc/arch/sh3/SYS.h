@@ -30,7 +30,7 @@
  * SUCH DAMAGE.
  *
  *	from: @(#)SYS.h	5.5 (Berkeley) 5/7/91
- *	$NetBSD: SYS.h,v 1.6 2003/08/07 16:42:18 agc Exp $
+ *	$NetBSD: SYS.h,v 1.9 2006/01/06 06:19:20 uwe Exp $
  */
 
 #include <machine/asm.h>
@@ -40,9 +40,8 @@
 #define SYSTRAP(x)					\
 		mov.l	903f, r0;			\
 		.long	0xc380;	/* trapa #0x80 */	\
-		nop;					\
 		bra	904f;				\
-		nop;					\
+		 nop;					\
 		.align	2;				\
 	903:	.long	(SYS_ ## x);			\
 	904:
@@ -50,9 +49,8 @@
 #define SYSTRAP(x)					\
 		mov.l	903f, r0;			\
 		trapa	#0x80;				\
-		nop;					\
 		bra	904f;				\
-		nop;					\
+		 nop;					\
 		.align	2;				\
 	903:	.long	(SYS_/**/x);			\
 	904:
@@ -63,28 +61,36 @@
 		SYSTRAP(y)
 
 #ifdef PIC
-#define _SYSCALL(x,y)					\
-		.text;					\
-	911:	mov.l	912f, r3;			\
-		braf	r3;				\
-		nop;					\
-		.align	2;				\
-	912:	.long	cerror-(911b+6);		\
-		_SYSCALL_NOERROR(x,y);			\
-		bf	911b;				\
-		nop
-#else
-#define _SYSCALL(x,y)					\
-		.text;					\
-	911:	mov.l	912f, r3;			\
+
+#define JUMP_CERROR					\
+		mov	r0, r4;				\
+		mov.l	912f, r1;			\
+		mova	912f, r0;			\
+		mov.l	913f, r2;			\
+		add	r1, r0;				\
+		mov.l	@(r0, r2), r3;			\
 		jmp	@r3;				\
-		nop;					\
+		 nop;					\
 		.align	2;				\
-	912:	.long	cerror;				\
+	912:	.long	_GLOBAL_OFFSET_TABLE_;		\
+	913:	.long	PIC_GOT(cerror)
+
+#else  /* !PIC */
+
+#define JUMP_CERROR					\
+		mov.l	912f, r3;			\
+		jmp	@r3;				\
+		 mov	r0, r4;				\
+		.align	2;				\
+	912:	.long	cerror
+
+#endif /* !PIC */
+
+#define _SYSCALL(x,y)					\
+		.text;					\
+	911:	JUMP_CERROR;				\
 		_SYSCALL_NOERROR(x,y);			\
-		bf	911b;				\
-		nop
-#endif
+		bf	911b
 
 #define SYSCALL_NOERROR(x)				\
 		_SYSCALL_NOERROR(x,x)
@@ -95,12 +101,12 @@
 #define PSEUDO_NOERROR(x,y)				\
 		_SYSCALL_NOERROR(x,y);			\
 		rts;					\
-		nop
+		 nop
 
 #define PSEUDO(x,y)					\
 		_SYSCALL(x,y);				\
 		rts;					\
-		nop
+		 nop
 
 #define RSYSCALL_NOERROR(x)				\
 		PSEUDO_NOERROR(x,x)
@@ -110,11 +116,11 @@
 
 #ifdef WEAK_ALIAS
 #define	WSYSCALL(weak,strong)				\
-	WEAK_ALIAS(weak,strong);			\
-	PSEUDO(strong,weak)
+		WEAK_ALIAS(weak,strong);		\
+		PSEUDO(strong,weak)
 #else
 #define	WSYSCALL(weak,strong)				\
-	PSEUDO(weak,weak)
+		PSEUDO(weak,weak)
 #endif
 
 	.globl	cerror

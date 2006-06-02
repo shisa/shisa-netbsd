@@ -1,4 +1,4 @@
-.\"     $NetBSD: pcmcia.9,v 1.13 2003/06/30 12:33:41 wiz Exp $
+.\"     $NetBSD: pcmcia.9,v 1.15 2005/12/26 19:48:12 perry Exp $
 .\"
 .\" Copyright (c) 2001 The NetBSD Foundation, Inc.
 .\" All rights reserved.
@@ -34,7 +34,7 @@
 .\" ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 .\" POSSIBILITY OF SUCH DAMAGE.
 .\"
-.Dd June 4, 2001
+.Dd November 2, 2005
 .Dt PCMCIA 9
 .Os
 .Sh NAME
@@ -79,8 +79,7 @@
 "struct pcmcia_io_handle *pcihp"
 .Ft int
 .Fn pcmcia_io_map "struct pcmcia_function *pf" "int width" \
-"bus_size_t offset" "bus_size_t size" "struct pcmcia_io_handle *pcihp" \
-"int *windowp"
+"struct pcmcia_io_handle *pcihp" "int *windowp"
 .Ft void
 .Fn pcmcia_io_unmap "struct pcmcia_function *pf" "int window"
 .Ft int
@@ -100,15 +99,15 @@
 "int (*handler)(void *)" "void *arg"
 .Ft void
 .Fn pcmcia_intr_disestablish "struct pcmcia_function *pf" "void *ih"
-.Ft u_int8_t
+.Ft uint8_t
 .Fn pcmcia_cis_read_1 "struct pcmcia_tuple *tuple" "int index"
-.Ft u_int16_t
+.Ft uint16_t
 .Fn pcmcia_cis_read_2 "struct pcmcia_tuple *tuple" "int index"
-.Ft u_int32_t
+.Ft uint32_t
 .Fn pcmcia_cis_read_3 "struct pcmcia_tuple *tuple" "int index"
-.Ft u_int32_t
+.Ft uint32_t
 .Fn pcmcia_cis_read_4 "struct pcmcia_tuple *tuple" "int index"
-.Ft u_int32_t
+.Ft uint32_t
 .Fn pcmcia_cis_read_n "struct pcmcia_tuple *tuple" "int number" "int index"
 .Ft int
 .Fn pcmcia_scan_cis "struct device *dev" \
@@ -158,7 +157,7 @@ It contains the following members:
 	char		*cis1_info[4];
         int32_t         manufacturer;
         int32_t         product;
-        u_int16_t       error;
+        uint16_t       error;
         SIMPLEQ_HEAD(, pcmcia_function)	pf_head;
 .Ed
 .It Fa struct pcmcia_function
@@ -171,7 +170,7 @@ Contains information about the resources requested by the device.
 It contains the following members:
 .Bd -literal
         int             number;
-        u_int32_t       flags;
+        uint32_t       flags;
         int     	iftype;
         int   		num_iospace;
         u_long 		iomask;
@@ -179,7 +178,7 @@ It contains the following members:
                 u_long  length;
                 u_long  start;
         } iospace[4];
-        u_int16_t       irqmask;
+        uint16_t       irqmask;
         int             num_memspace;
         struct {
                 u_long  length;
@@ -239,16 +238,11 @@ Release I/O space with handle
 .Fa pcihp
 for device function
 .Fa pf .
-.It Fn pcmcia_io_map "pf" "width" "offset" "size" "pcihp" "windowp"
+.It Fn pcmcia_io_map "pf" "width" "pcihp" "windowp"
 Map device I/O for device function
 .Fa pf
 to the I/O space with handle
 .Fa pcihp .
-An I/O window of size
-.Fa size
-is mapped at offset
-.Fa offset
-in the chipset I/O window.
 The width of data access is specified by
 .Fa width .
 Valid values for the width are:

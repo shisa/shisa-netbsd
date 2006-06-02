@@ -1,4 +1,4 @@
-/*	$NetBSD: auth-passwd.c,v 1.12 2005/02/13 18:14:04 christos Exp $	*/
+/*	$NetBSD: auth-passwd.c,v 1.15 2006/02/04 22:32:13 christos Exp $	*/
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -37,20 +37,30 @@
  */
 
 #include "includes.h"
-RCSID("$OpenBSD: auth-passwd.c,v 1.31 2004/01/30 09:48:57 markus Exp $");
-__RCSID("$NetBSD: auth-passwd.c,v 1.12 2005/02/13 18:14:04 christos Exp $");
+RCSID("$OpenBSD: auth-passwd.c,v 1.34 2005/07/19 15:32:26 otto Exp $");
+__RCSID("$NetBSD: auth-passwd.c,v 1.15 2006/02/04 22:32:13 christos Exp $");
 
 #include "packet.h"
+#include "buffer.h"
 #include "log.h"
 #include "servconf.h"
 #include "auth.h"
 #include "auth-options.h"
 
+extern Buffer loginmsg;
 extern ServerOptions options;
 int sys_auth_passwd(Authctxt *, const char *);
 
-#ifdef BSD_AUTH
-static void
+#ifdef HAVE_LOGIN_CAP
+extern login_cap_t *lc;
+#endif
+
+
+#define DAY		(24L * 60 * 60) /* 1 day in seconds */
+#define TWO_WEEKS	(2L * 7 * DAY)	/* 2 weeks in seconds */
+
+#if defined(BSD_AUTH) || defined(USE_PAM)
+void
 disable_forwarding(void)
 {
 	no_port_forwarding_flag = 1;
@@ -75,7 +85,7 @@ auth_password(Authctxt *authctxt, const char *password)
 		return 0;
 #ifdef USE_PAM
 	if (options.use_pam)
-		return (sshpam_auth_passwd(authctxt, password));
+		return (sshpam_auth_passwd(authctxt, password) && ok);
 #endif
 #ifdef KRB5
 	if (options.kerberos_authentication == 1) {
@@ -89,20 +99,61 @@ auth_password(Authctxt *authctxt, const char *password)
 }
 
 #ifdef BSD_AUTH
+static void
+warn_expiry(Authctxt *authctxt, auth_session_t *as)
+{
+	char buf[256];
+	quad_t pwtimeleft, actimeleft, daysleft, pwwarntime, acwarntime;
+
+	pwwarntime = acwarntime = TWO_WEEKS;
+
+	pwtimeleft = auth_check_change(as);
+	actimeleft = auth_check_expire(as);
+#ifdef HAVE_LOGIN_CAP
+	if (authctxt->valid) {
+		pwwarntime = login_getcaptime(lc, "password-warn", TWO_WEEKS,
+		    TWO_WEEKS);
+		acwarntime = login_getcaptime(lc, "expire-warn", TWO_WEEKS,
+		    TWO_WEEKS);
+	}
+#endif
+	if (pwtimeleft != 0 && pwtimeleft < pwwarntime) {
+		daysleft = pwtimeleft / DAY + 1;
+		snprintf(buf, sizeof(buf),
+		    "Your password will expire in %lld day%s.\n",
+		    daysleft, daysleft == 1 ? "" : "s");
+		buffer_append(&loginmsg, buf, strlen(buf));
+	}
+	if (actimeleft != 0 && actimeleft < acwarntime) {
+		daysleft = actimeleft / DAY + 1;
+		snprintf(buf, sizeof(buf),
+		    "Your account will expire in %lld day%s.\n",
+		    daysleft, daysleft == 1 ? "" : "s");
+		buffer_append(&loginmsg, buf, strlen(buf));
+	}
+}
+
 int
 sys_auth_passwd(Authctxt *authctxt, const char *password)
 {
 	struct passwd *pw = authctxt->pw;
 	auth_session_t *as;
+	static int expire_checked = 0;
 
 	as = auth_usercheck(pw->pw_name, authctxt->style, "auth-ssh",
 	    (char *)password);
+	if (as == NULL)
+		return (0);
 	if (auth_getstate(as) & AUTH_PWEXPIRED) {
 		auth_close(as);
 		disable_forwarding();
 		authctxt->force_pwchange = 1;
 		return (1);
 	} else {
+		if (!expire_checked) {
+			expire_checked = 1;
+			warn_expiry(authctxt, as);
+		}
 		return (auth_close(as));
 	}
 }

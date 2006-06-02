@@ -1,4 +1,4 @@
-/* $NetBSD: mkdep.c,v 1.23 2004/07/13 12:00:30 wiz Exp $ */
+/* $NetBSD: mkdep.c,v 1.28 2006/03/20 23:13:51 christos Exp $ */
 
 /*-
  * Copyright (c) 1999 The NetBSD Foundation, Inc.
@@ -44,7 +44,7 @@
 #if !defined(lint)
 __COPYRIGHT("@(#) Copyright (c) 1999 The NetBSD Foundation, Inc.\n\
 	All rights reserved.\n");
-__RCSID("$NetBSD: mkdep.c,v 1.23 2004/07/13 12:00:30 wiz Exp $");
+__RCSID("$NetBSD: mkdep.c,v 1.28 2006/03/20 23:13:51 christos Exp $");
 #endif /* not lint */
 
 #include <sys/mman.h>
@@ -98,7 +98,7 @@ static void
 usage(void)
 {
 	(void)fprintf(stderr,
-	    "usage: %s [-adopq] [-f file] [-s suffixes] [flags] file ...\n",
+	    "usage: %s [-aDdopq] [-f file] [-s suffixes] -- [flags] file ...\n",
 	    getprogname());
 	exit(EXIT_FAILURE);
 }
@@ -106,7 +106,8 @@ usage(void)
 static int
 run_cc(int argc, char **argv, const char **fname)
 {
-	const char *CC, *pathname, *tmpdir;
+	const char *CC, *tmpdir;
+	char *pathname;
 	static char tmpfilename[MAXPATHLEN];
 	char **args;
 	int tmpfd;
@@ -151,6 +152,9 @@ run_cc(int argc, char **argv, const char **fname)
 		err(EXIT_FAILURE, "unable to fork");
 	}
 
+	free(pathname);
+	free(args);
+
 	while (((pid = wait(&status)) != cpid) && (pid >= 0))
 		continue;
 
@@ -158,6 +162,33 @@ run_cc(int argc, char **argv, const char **fname)
 		errx(EXIT_FAILURE, "compile failed.");
 
 	return tmpfd;
+}
+
+static const char *
+read_fname(void)
+{
+	static char *fbuf;
+	static int fbuflen;
+	int len, ch;
+
+	for (len = 0; (ch = getchar()) != EOF; len++) {
+		if (isspace(ch)) {
+			if (len != 0)
+				break;
+			len--;
+			continue;
+		}
+		if (len >= fbuflen - 1) {
+			fbuf = realloc(fbuf, fbuflen += 32);
+			if (fbuf == NULL)
+				err(EXIT_FAILURE, "no memory");
+		}
+		fbuf[len] = ch;
+	}
+	if (len == 0)
+		return NULL;
+	fbuf[len] = 0;
+	return fbuf;
 }
 
 int
@@ -174,6 +205,9 @@ main(int argc, char **argv)
 	const char *suffixes = NULL, *s;
 	suff_list_t *suff_list = NULL, *sl;
 
+	suf = NULL;		/* XXXGCC -Wuninitialized [sun2] */
+	sl = NULL;		/* XXXGCC -Wuninitialized [sun2] */
+
 	setlocale(LC_ALL, "");
 	setprogname(argv[0]);
 
@@ -187,13 +221,17 @@ main(int argc, char **argv)
 	opterr = 0;	/* stop getopt() bleating about errors. */
 	for (;;) {
 		ok_ind = optind;
-		ch = getopt(argc, argv, "adf:opqs:");
+		ch = getopt(argc, argv, "aDdf:opqs:");
 		switch (ch) {
 		case -1:
 			ok_ind = optind;
 			break;
 		case 'a':	/* Append to output file */
 			aflag &= ~O_TRUNC;
+			continue;
+		case 'D':	/* Process *.d files (don't run cc -M) */
+			dflag = 2;	/* Read names from stdin */
+			opterr = 1;
 			continue;
 		case 'd':	/* Process *.d files (don't run cc -M) */
 			dflag = 1;
@@ -225,7 +263,7 @@ main(int argc, char **argv)
 
 	argc -= ok_ind;
 	argv += ok_ind;
-	if (argc == 0 && !dflag)
+	if ((argc == 0 && !dflag) || (argc != 0 && dflag == 2))
 		usage();
 
 	if (suffixes != NULL) {
@@ -252,9 +290,14 @@ main(int argc, char **argv)
 		err(EXIT_FAILURE, "unable to %s to file %s\n",
 		    aflag & O_TRUNC ? "write" : "append", filename);
 
-	for (; *argv != NULL; argv++) {
+	while (dflag == 2 || *argv != NULL) {
 		if (dflag) {
-			fname = *argv;
+			if (dflag == 2) {
+				fname = read_fname();
+				if (fname == NULL)
+					break;
+			} else
+				fname = *argv++;
 			fd = open(fname, O_RDONLY, 0);
 			if (fd == -1) {
 				if (!qflag)
@@ -264,7 +307,7 @@ main(int argc, char **argv)
 		} else {
 			fd = run_cc(argc, argv, &fname);
 			/* consume all args... */
-			argv += argc - 1;
+			argv += argc;
 		}
 
 		sz = lseek(fd, 0, SEEK_END);
@@ -276,7 +319,7 @@ main(int argc, char **argv)
 		close(fd);
 
 		if (buf == MAP_FAILED)
-			err(EXIT_FAILURE, "unable to mmap file %s", *argv);
+			err(EXIT_FAILURE, "unable to mmap file %s", fname);
 		lim = buf + sz - 1;
 
 		/* Remove leading "./" from filenames */

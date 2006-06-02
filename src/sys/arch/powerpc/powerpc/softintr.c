@@ -1,3 +1,5 @@
+/*	$NetBSD: softintr.c,v 1.5 2006/04/12 12:30:50 simonb Exp $	*/
+
 /*-
  * Copyright (c) 2004 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -34,7 +36,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: softintr.c,v 1.2 2004/03/25 18:46:27 matt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: softintr.c,v 1.5 2006/04/12 12:30:50 simonb Exp $");
 
 #include <sys/param.h>
 #include <lib/libkern/libkern.h>
@@ -63,7 +65,7 @@ static struct softintr_qh
 struct pool softintr_pool;
 struct softintr *softnet_handlers[32];
 
-static __inline struct softintr_qh *
+static inline struct softintr_qh *
 softintr_queue(int ipl)
 {
 	switch (ipl) {

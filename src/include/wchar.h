@@ -1,4 +1,4 @@
-/*	$NetBSD: wchar.h,v 1.21.2.1 2005/04/06 13:39:05 tron Exp $	*/
+/*	$NetBSD: wchar.h,v 1.25 2006/04/15 12:17:22 tnozaki Exp $	*/
 
 /*-
  * Copyright (c)1999 Citrus Project,
@@ -146,6 +146,9 @@ double wcstod(const wchar_t * __restrict, wchar_t ** __restrict);
 
 #if defined(_ISOC99_SOURCE) || (__STDC_VERSION__ - 0) > 199901L || \
     defined(_NETBSD_SOURCE)
+float wcstof(const wchar_t * __restrict, wchar_t ** __restrict);
+long double wcstold(const wchar_t * __restrict, wchar_t ** __restrict);
+
 /* LONGLONG */
 long long int wcstoll(const wchar_t * __restrict,
 	wchar_t ** __restrict, int);
@@ -165,6 +168,30 @@ wint_t putwc(wchar_t, FILE *);
 wint_t putwchar(wchar_t);
 
 int fwide(FILE *, int);
+
+wchar_t	*fgetwln(FILE * __restrict, size_t * __restrict);
+int fwprintf(FILE * __restrict, const wchar_t * __restrict, ...);
+int fwscanf(FILE * __restrict, const wchar_t * __restrict, ...);
+int swprintf(wchar_t * __restrict, size_t n, const wchar_t * __restrict, ...);
+int swscanf(const wchar_t * __restrict, const wchar_t * __restrict, ...);
+int vfwprintf(FILE * __restrict, const wchar_t * __restrict, _BSD_VA_LIST_);
+int vswprintf(wchar_t * __restrict, size_t, const wchar_t * __restrict,
+    _BSD_VA_LIST_);
+int vwprintf(const wchar_t * __restrict, _BSD_VA_LIST_);
+int wprintf(const wchar_t * __restrict, ...);
+int wscanf(const wchar_t * __restrict, ...);
+#if defined(_ISOC99_SOURCE) || (__STDC_VERSION__ - 0) > 199901L || \
+    defined(_NETBSD_SOURCE)
+int vfwscanf(FILE * __restrict, const wchar_t * __restrict, _BSD_VA_LIST_);
+int vswscanf(const wchar_t * __restrict, const wchar_t * __restrict,
+    _BSD_VA_LIST_);
+int vwscanf(const wchar_t * __restrict, _BSD_VA_LIST_);
+#endif
+#if defined(_NETBSD_SOURCE)
+struct tinfo;
+int t_putws(struct tinfo *, const wchar_t *, int, void (*)(wchar_t, void *),
+    void *);
+#endif
 __END_DECLS
 
 #ifndef WEOF

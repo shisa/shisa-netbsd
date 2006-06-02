@@ -1,4 +1,4 @@
-/* $NetBSD: cpu.c,v 1.14 2004/08/07 12:07:08 rearnsha Exp $ */
+/* $NetBSD: cpu.c,v 1.20 2006/03/29 04:16:44 thorpej Exp $ */
 
 /*-
  * Copyright (c) 2000, 2001 Ben Harris
@@ -32,7 +32,7 @@
 
 #include <sys/param.h>
 
-__KERNEL_RCSID(0, "$NetBSD: cpu.c,v 1.14 2004/08/07 12:07:08 rearnsha Exp $");
+__KERNEL_RCSID(0, "$NetBSD: cpu.c,v 1.20 2006/03/29 04:16:44 thorpej Exp $");
 
 #include <sys/device.h>
 #include <sys/proc.h>
@@ -50,7 +50,8 @@ __KERNEL_RCSID(0, "$NetBSD: cpu.c,v 1.14 2004/08/07 12:07:08 rearnsha Exp $");
 
 static int cpu_match(struct device *, struct cfdata *, void *);
 static void cpu_attach(struct device *, struct device *, void *);
-static int cpu_search(struct device *, struct cfdata *, void *);
+static int cpu_search(struct device *, struct cfdata *,
+		      const int *, void *);
 static register_t cpu_identify(void);
 #ifdef CPU_ARM2
 static int arm2_undef_handler(u_int, u_int, struct trapframe *, int);
@@ -112,7 +113,7 @@ cpu_attach(struct device *parent, struct device *self, void *aux)
 		printf("ARM3 (rev. %d)", cpu_type & CPU_ID_REVISION_MASK);
 #ifdef CPU_ARM3
 		supported = 1;
-		cpu_arm3_setup(self, self->dv_cfdata->cf_flags);
+		cpu_arm3_setup(self, device_cfdata(self)->cf_flags);
 #endif
 		break;
 	default:
@@ -124,11 +125,12 @@ cpu_attach(struct device *parent, struct device *self, void *aux)
 		printf("%s: WARNING: CPU type not supported by kernel\n",
 		       self->dv_xname);
 	config_interrupts(self, cpu_delay_calibrate);
-	config_search(cpu_search, self, NULL);
+	config_search_ia(cpu_search, self, "cpu", NULL);
 }
 
 static int
-cpu_search(struct device *parent, struct cfdata *cf, void *aux)
+cpu_search(struct device *parent, struct cfdata *cf,
+	   const int *ldesc, void *aux)
 {
 	
 	if (config_match(parent, cf, NULL) > 0)
@@ -159,10 +161,10 @@ cpu_identify()
 	if (setjmp(&undef_jmp) == 0) {
 		id = CPU_ID_ARM2;
 		/* ARM250 and ARM3 support SWP. */
-		__asm __volatile ("swp r0, r0, [%0]" : : "r" (&dummy) : "r0");
+		__asm volatile ("swp r0, r0, [%0]" : : "r" (&dummy) : "r0");
 		id = CPU_ID_ARM250;
 		/* ARM3 has an internal coprocessor 15 with an ID register. */
-		__asm __volatile ("mrc 15, 0, %0, cr0, cr0" : "=r" (id));
+		__asm volatile ("mrc 15, 0, %0, cr0, cr0" : "=r" (id));
 	}
 	remove_coproc_handler(cp_core);
 	remove_coproc_handler(cp15);
@@ -295,12 +297,12 @@ int cpu_delay_factor = 1;
 static void
 cpu_delay_calibrate(struct device *self)
 {
-	struct timeval start, end, diff;
+	struct timeval startt, end, diff;
 
-	microtime(&start);
+	microtime(&startt);
 	cpu_delayloop(10000);
 	microtime(&end);
-	timersub(&end, &start, &diff);
+	timersub(&end, &startt, &diff);
 	cpu_delay_factor = 10000 / diff.tv_usec + 1;
 	printf("%s: 10000 loops in %ld microseconds, delay factor = %d\n",
 	       self->dv_xname, diff.tv_usec, cpu_delay_factor);

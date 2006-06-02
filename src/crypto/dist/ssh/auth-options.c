@@ -1,4 +1,4 @@
-/*	$NetBSD: auth-options.c,v 1.4 2005/02/13 05:57:26 christos Exp $	*/
+/*	$NetBSD: auth-options.c,v 1.6 2006/02/04 22:32:13 christos Exp $	*/
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -11,8 +11,8 @@
  */
 
 #include "includes.h"
-RCSID("$OpenBSD: auth-options.c,v 1.28 2003/06/02 09:17:34 markus Exp $");
-__RCSID("$NetBSD: auth-options.c,v 1.4 2005/02/13 05:57:26 christos Exp $");
+RCSID("$OpenBSD: auth-options.c,v 1.33 2005/12/08 18:34:11 reyk Exp $");
+__RCSID("$NetBSD: auth-options.c,v 1.6 2006/02/04 22:32:13 christos Exp $");
 
 #include "xmalloc.h"
 #include "match.h"
@@ -37,6 +37,9 @@ char *forced_command = NULL;
 /* "environment=" options. */
 struct envstring *custom_environment = NULL;
 
+/* "tunnel=" option. */
+int forced_tun_device = -1;
+
 extern ServerOptions options;
 
 void
@@ -56,6 +59,7 @@ auth_clear_options(void)
 		xfree(forced_command);
 		forced_command = NULL;
 	}
+	forced_tun_device = -1;
 	channel_clear_permitted_opens();
 	auth_debug_reset();
 }
@@ -219,7 +223,7 @@ auth_parse_options(struct passwd *pw, char *opts, char *file, u_long linenum)
 		}
 		cp = "permitopen=\"";
 		if (strncasecmp(opts, cp, strlen(cp)) == 0) {
-			char host[256], sport[6];
+			char *host, *p;
 			u_short port;
 			char *patterns = xmalloc(strlen(opts) + 1);
 
@@ -238,25 +242,29 @@ auth_parse_options(struct passwd *pw, char *opts, char *file, u_long linenum)
 			if (!*opts) {
 				debug("%.100s, line %lu: missing end quote",
 				    file, linenum);
-				auth_debug_add("%.100s, line %lu: missing end quote",
-				    file, linenum);
+				auth_debug_add("%.100s, line %lu: missing "
+				    "end quote", file, linenum);
 				xfree(patterns);
 				goto bad_option;
 			}
 			patterns[i] = 0;
 			opts++;
-			if (sscanf(patterns, "%255[^:]:%5[0-9]", host, sport) != 2 &&
-			    sscanf(patterns, "%255[^/]/%5[0-9]", host, sport) != 2) {
-				debug("%.100s, line %lu: Bad permitopen specification "
-				    "<%.100s>", file, linenum, patterns);
+			p = patterns;
+			host = hpdelim(&p);
+			if (host == NULL || strlen(host) >= NI_MAXHOST) {
+				debug("%.100s, line %lu: Bad permitopen "
+				    "specification <%.100s>", file, linenum,
+				    patterns);
 				auth_debug_add("%.100s, line %lu: "
-				    "Bad permitopen specification", file, linenum);
+				    "Bad permitopen specification", file,
+				    linenum);
 				xfree(patterns);
 				goto bad_option;
 			}
-			if ((port = a2port(sport)) == 0) {
-				debug("%.100s, line %lu: Bad permitopen port <%.100s>",
-				    file, linenum, sport);
+			host = cleanhostname(host);
+			if (p == NULL || (port = a2port(p)) == 0) {
+				debug("%.100s, line %lu: Bad permitopen port "
+				    "<%.100s>", file, linenum, p ? p : "");
 				auth_debug_add("%.100s, line %lu: "
 				    "Bad permitopen port", file, linenum);
 				xfree(patterns);
@@ -265,6 +273,41 @@ auth_parse_options(struct passwd *pw, char *opts, char *file, u_long linenum)
 			if (options.allow_tcp_forwarding)
 				channel_add_permitted_opens(host, port);
 			xfree(patterns);
+			goto next_option;
+		}
+		cp = "tunnel=\"";
+		if (strncasecmp(opts, cp, strlen(cp)) == 0) {
+			char *tun = NULL;
+			opts += strlen(cp);
+			tun = xmalloc(strlen(opts) + 1);
+			i = 0;
+			while (*opts) {
+				if (*opts == '"')
+					break;
+				tun[i++] = *opts++;
+			}
+			if (!*opts) {
+				debug("%.100s, line %lu: missing end quote",
+				    file, linenum);
+				auth_debug_add("%.100s, line %lu: missing end quote",
+				    file, linenum);
+				xfree(tun);
+				forced_tun_device = -1;
+				goto bad_option;
+			}
+			tun[i] = 0;
+			forced_tun_device = a2tun(tun, NULL);
+			xfree(tun);
+			if (forced_tun_device == SSH_TUNID_ERR) {
+				debug("%.100s, line %lu: invalid tun device",
+				    file, linenum);
+				auth_debug_add("%.100s, line %lu: invalid tun device",
+				    file, linenum);
+				forced_tun_device = -1;
+				goto bad_option;
+			}
+			auth_debug_add("Forced tun device: %d", forced_tun_device);
+			opts++;
 			goto next_option;
 		}
 next_option:

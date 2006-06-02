@@ -1,4 +1,4 @@
-/*	$NetBSD: osf1_mount.c,v 1.28 2005/02/26 23:10:21 perry Exp $	*/
+/*	$NetBSD: osf1_mount.c,v 1.30 2005/12/11 12:20:23 christos Exp $	*/
 
 /*
  * Copyright (c) 1999 Christopher G. Demetriou.  All rights reserved.
@@ -58,7 +58,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: osf1_mount.c,v 1.28 2005/02/26 23:10:21 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: osf1_mount.c,v 1.30 2005/12/11 12:20:23 christos Exp $");
 
 #if defined(_KERNEL_OPT)
 #include "fs_nfs.h"
@@ -130,14 +130,14 @@ osf1_sys_fstatfs(l, v, retval)
 		return (error);
 	mp = ((struct vnode *)fp->f_data)->v_mount;
 	sp = &mp->mnt_stat;
-	if ((error = VFS_STATVFS(mp, sp, p)))
+	if ((error = VFS_STATVFS(mp, sp, l)))
 		goto out;
 	sp->f_flag = mp->mnt_flag & MNT_VISFLAGMASK;
 	osf1_cvt_statfs_from_native(sp, &osfs);
 	error = copyout(&osfs, SCARG(uap, buf), min(sizeof osfs,
 	    SCARG(uap, len)));
  out:
-	FILE_UNUSE(fp, p);
+	FILE_UNUSE(fp, l);
 	return (error);
 }
 
@@ -148,7 +148,6 @@ osf1_sys_getfsstat(l, v, retval)
 	register_t *retval;
 {
 	struct osf1_sys_getfsstat_args *uap = v;
-	struct proc *p = l->l_proc;
 	struct mount *mp, *nmp;
 	struct statvfs *sp;
 	struct osf1_statfs osfs;
@@ -172,7 +171,7 @@ osf1_sys_getfsstat(l, v, retval)
 			 */
 			if (((SCARG(uap, flags) & OSF1_MNT_NOWAIT) == 0 ||
 			    (SCARG(uap, flags) & OSF1_MNT_WAIT)) &&
-			    (error = VFS_STATVFS(mp, sp, p)))
+			    (error = VFS_STATVFS(mp, sp, l)))
 				continue;
 			sp->f_flag = mp->mnt_flag & MNT_VISFLAGMASK;
 			osf1_cvt_statfs_from_native(sp, &osfs);
@@ -231,20 +230,19 @@ osf1_sys_statfs(l, v, retval)
 	register_t *retval;
 {
 	struct osf1_sys_statfs_args *uap = v;
-	struct proc *p = l->l_proc;
 	struct mount *mp;
 	struct statvfs *sp;
 	struct osf1_statfs osfs;
 	int error;
 	struct nameidata nd;
 
-	NDINIT(&nd, LOOKUP, FOLLOW, UIO_USERSPACE, SCARG(uap, path), p);
+	NDINIT(&nd, LOOKUP, FOLLOW, UIO_USERSPACE, SCARG(uap, path), l);
 	if ((error = namei(&nd)))
 		return (error);
 	mp = nd.ni_vp->v_mount;
 	sp = &mp->mnt_stat;
 	vrele(nd.ni_vp);
-	if ((error = VFS_STATVFS(mp, sp, p)))
+	if ((error = VFS_STATVFS(mp, sp, l)))
 		return (error);
 	sp->f_flag = mp->mnt_flag & MNT_VISFLAGMASK;
 	osf1_cvt_statfs_from_native(sp, &osfs);
@@ -300,7 +298,7 @@ osf1_mount_mfs(p, osf_argp, bsd_argp)
 
 	len = strlen(mfs_name) + 1;
 	SCARG(bsd_argp, type) = stackgap_alloc(p, &sg, len);
-	if ((error = copyout(mfs_name, (void *)SCARG(bsd_argp, type), len)))
+	if ((error = copyout(mfs_name, __UNCONST(SCARG(bsd_argp, type)), len)))
 		return error;
 
 	return 0;
@@ -363,7 +361,7 @@ osf1_mount_nfs(p, osf_argp, bsd_argp)
 
 	len = strlen(nfs_name) + 1;
 	SCARG(bsd_argp, type) = stackgap_alloc(p, &sg, len);
-	if ((error = copyout(MOUNT_NFS, (void *)SCARG(bsd_argp, type), len)))
+	if ((error = copyout(MOUNT_NFS, __UNCONST(SCARG(bsd_argp, type)), len)))
 		return error;
 
 	return 0;

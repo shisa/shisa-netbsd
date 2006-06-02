@@ -1,4 +1,4 @@
-/* $NetBSD: if_vge.c,v 1.4.2.1 2005/09/11 22:06:32 tron Exp $ */
+/* $NetBSD: if_vge.c,v 1.9 2006/03/08 23:46:27 lukem Exp $ */
 
 /*-
  * Copyright (c) 2004
@@ -35,7 +35,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_vge.c,v 1.4.2.1 2005/09/11 22:06:32 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_vge.c,v 1.9 2006/03/08 23:46:27 lukem Exp $");
 
 /*
  * VIA Networking Technologies VT612x PCI gigabit ethernet NIC driver.
@@ -46,7 +46,7 @@ __KERNEL_RCSID(0, "$NetBSD: if_vge.c,v 1.4.2.1 2005/09/11 22:06:32 tron Exp $");
  */
 
 /*
- * The VIA Networking VT6122 is a 32bit, 33/66Mhz PCI device that
+ * The VIA Networking VT6122 is a 32bit, 33/66 MHz PCI device that
  * combines a tri-speed ethernet MAC and PHY, with the following
  * features:
  *
@@ -127,7 +127,7 @@ static int vge_newbuf		(struct vge_softc *, int, struct mbuf *);
 static int vge_rx_list_init	(struct vge_softc *);
 static int vge_tx_list_init	(struct vge_softc *);
 #ifdef VGE_FIXUP_RX
-static __inline void vge_fixup_rx
+static inline void vge_fixup_rx
 				(struct mbuf *);
 #endif
 static void vge_rxeof		(struct vge_softc *);
@@ -897,7 +897,7 @@ vge_attach(struct device *parent, struct device *self, void *aux)
 	 * Map control/status registers.
 	 */
 	if (0 != pci_mapreg_map(pa, VGE_PCI_LOMEM,
-	    PCI_MAPREG_TYPE_MEM, BUS_SPACE_MAP_LINEAR,
+	    PCI_MAPREG_TYPE_MEM, 0,
 	    &sc->vge_btag, &sc->vge_bhandle, NULL, NULL)) {
 		aprint_error("%s: couldn't map memory\n",
 			sc->sc_dev.dv_xname);
@@ -965,8 +965,10 @@ vge_attach(struct device *parent, struct device *self, void *aux)
 	/*
 	 * We can do IPv4/TCPv4/UDPv4 checksums in hardware.
 	 */
-	ifp->if_capabilities |= IFCAP_CSUM_IPv4 |
-	    IFCAP_CSUM_TCPv4 | IFCAP_CSUM_UDPv4;
+	ifp->if_capabilities |=
+	    IFCAP_CSUM_IPv4_Tx | IFCAP_CSUM_IPv4_Rx |
+	    IFCAP_CSUM_TCPv4_Tx | IFCAP_CSUM_TCPv4_Rx |
+	    IFCAP_CSUM_UDPv4_Tx | IFCAP_CSUM_UDPv4_Rx;
 
 #ifdef DEVICE_POLLING
 #ifdef IFCAP_POLLING
@@ -1142,7 +1144,7 @@ vge_rx_list_init(sc)
 }
 
 #ifdef VGE_FIXUP_RX
-static __inline void
+static inline void
 vge_fixup_rx(m)
 	struct mbuf		*m;
 {

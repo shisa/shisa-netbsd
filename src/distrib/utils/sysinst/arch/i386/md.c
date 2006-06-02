@@ -1,4 +1,4 @@
-/*	$NetBSD: md.c,v 1.106.2.2 2005/09/30 17:45:09 tron Exp $ */
+/*	$NetBSD: md.c,v 1.111 2006/04/05 16:55:05 garbled Exp $ */
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.
@@ -69,8 +69,6 @@ static void md_upgrade_mbrtype(void);
 static int md_read_bootcode(const char *, struct mbr_sector *);
 static unsigned int get_bootmodel(void);
 static char *md_bootxx_name(void);
-
-const char *fdtype = "msdos";
 
 
 int
@@ -320,12 +318,9 @@ md_post_newfs(void)
 	    && (condev & ~3) == 0x800) {
 		/* Motherboard serial port */
 		boottype.bp_consdev = (condev & 3) + 1;
-		td = open("/dev/console", O_RDONLY, 0);
-		if (td != -1) {
-			if (tcgetattr(td, &t) != -1)
-				boottype.bp_conspeed = t.c_ispeed;
-			close(td);
-		}
+		/* Defaulting the baud rate to that of stdin should suffice */
+		if (tcgetattr(0, &t) != -1)
+			boottype.bp_conspeed = t.c_ispeed;
 	}
 
 	process_menu(MENU_getboottype, &boottype);
@@ -476,7 +471,7 @@ md_cleanup_install(void)
 	 * For GENERIC_TINY, do not enable any extra screens or wsmux.
 	 * Otherwise, run getty on 4 VTs.
 	 */
-	if (sets_selected & SET_KERNEL_TINY)
+	if (get_kernel_set() == SET_KERNEL_TINY)
 		run_program(0, "sed -an -e '/^screen/s/^/#/;/^mux/s/^/#/;"
 			    "H;$!d;g;w %s/etc/wscons.conf' %s/etc/wscons.conf",
 			tp, tp);
@@ -607,7 +602,7 @@ md_init(void)
 {
 
 	/* Default to install same type of kernel as we are running */
-	sets_selected = (sets_selected & ~SET_KERNEL) | get_bootmodel();
+	set_kernel_set(get_bootmodel());
 }
 
 static char *
@@ -634,4 +629,22 @@ md_bootxx_name(void)
 
 	asprintf(&bootxx, "/usr/mdec/bootxx_%s", bootfs);
 	return bootxx;
+}
+
+int
+md_post_extract(void)
+{
+	return 0;
+}
+
+int
+md_check_mbr(mbr_info_t *mbri)
+{
+	return 2;
+}
+
+int
+md_mbr_use_wholedisk(mbr_info_t *mbri)
+{
+	return mbr_use_wholedisk(mbri);
 }

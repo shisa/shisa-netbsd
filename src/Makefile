@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.238.2.4 2005/09/02 20:40:23 tron Exp $
+#	$NetBSD: Makefile,v 1.244 2006/04/07 19:38:58 mrg Exp $
 
 #
 # This is the top-level makefile for building NetBSD. For an outline of
@@ -59,6 +59,12 @@
 #	Populate ${RELEASEDIR}/${MACHINE}/binary/sets from ${DESTDIR}
 #   sourcesets:
 #	Populate ${RELEASEDIR}/source/sets from ${NETBSDSRCDIR}
+#   syspkgs:
+#	Populate ${RELEASEDIR}/${MACHINE}/binary/syspkgs from ${DESTDIR}
+#   iso-image:
+#	Create CD-ROM image in RELEASEDIR/MACHINE/installation.
+#	RELEASEDIR must already have been populated by `make release'
+#	or equivalent.
 #
 # Targets invoked by `make build,' in order:
 #   cleandir:        cleans the tree.
@@ -124,7 +130,7 @@ SUBDIR+=	${dir}
 .endfor
 
 .if exists(regress)
-regression-tests: .PHONY
+regression-tests: .PHONY .MAKE
 	@echo Running regression tests...
 	${MAKEDIRTARGET} regress regress
 .endif
@@ -133,7 +139,7 @@ regression-tests: .PHONY
 NOPOSTINSTALL=	# defined
 .endif
 
-afterinstall: .PHONY
+afterinstall: .PHONY .MAKE
 .if ${MKMAN} != "no"
 	${MAKEDIRTARGET} share/man makedb
 .endif
@@ -166,7 +172,11 @@ postinstall-fix-obsolete: .NOTMAIN .PHONY
 # Targets (in order!) called by "make build".
 #
 .if ${USE_TOOLS_TOOLCHAIN} == "no"
+. if ${HAVE_GCC} == "3"
 LIBGCC_EXT=3
+. else
+LIBGCC_EXT=4
+. endif
 .else
 LIBGCC_EXT=
 .endif
@@ -190,7 +200,7 @@ BUILDTARGETS+=	includes
 BUILDTARGETS+=	do-tools-compat
 BUILDTARGETS+=	do-lib-csu
 .if ${MKGCC} != "no"
-.if ${HAVE_GCC3} != "no"
+.if (${HAVE_GCC} == "3" || ${HAVE_GCC} == "4")
 BUILDTARGETS+=	do-gnu-lib-crtstuff${LIBGCC_EXT}
 .endif
 BUILDTARGETS+=	do-gnu-lib-libgcc${LIBGCC_EXT}
@@ -218,7 +228,7 @@ includes-gnu:	.PHONY includes-lib
 
 START_TIME!=	date
 
-build: .PHONY
+build: .PHONY .MAKE
 .if defined(BUILD_DONE)
 	@echo "Build already installed into ${DESTDIR}"
 .else
@@ -236,7 +246,7 @@ build: .PHONY
 # ${RELEASEDIR}).  "buildworld" enforces a build to ${DESTDIR} != /
 #
 
-distribution buildworld: .PHONY
+distribution buildworld: .PHONY .MAKE
 .if make(buildworld) && \
     (!defined(DESTDIR) || ${DESTDIR} == "" || ${DESTDIR} == "/")
 	@echo "Won't make ${.TARGET} with DESTDIR=/"
@@ -260,7 +270,7 @@ distribution buildworld: .PHONY
 HOST_UNAME_S!=	uname -s
 HOST_UNAME_M!=	uname -m
 
-installworld: .PHONY
+installworld: .PHONY .MAKE
 .if (!defined(DESTDIR) || ${DESTDIR} == "" || ${DESTDIR} == "/")
 	@echo "Can't make ${.TARGET} to DESTDIR=/"
 	@false
@@ -286,8 +296,8 @@ installworld: .PHONY
 # Create sets from $DESTDIR or $NETBSDSRCDIR into $RELEASEDIR
 #
 
-.for tgt in sets sourcesets
-${tgt}: .PHONY
+.for tgt in sets sourcesets syspkgs
+${tgt}: .PHONY .MAKE
 	${MAKEDIRTARGET} distrib/sets ${tgt}
 .endfor
 
@@ -297,9 +307,18 @@ ${tgt}: .PHONY
 # are made.
 #
 
-release snapshot: .PHONY
+release snapshot: .PHONY .MAKE
 	${MAKEDIRTARGET} . distribution
 	${MAKEDIRTARGET} etc release DISTRIBUTION_DONE=1
+	@echo   "make ${.TARGET} started at:  ${START_TIME}"
+	@printf "make ${.TARGET} finished at: " && date
+
+#
+# Create a CD-ROM image.
+#
+
+iso-image: .PHONY
+	${MAKEDIRTARGET} etc iso-image
 	@echo   "make ${.TARGET} started at:  ${START_TIME}"
 	@printf "make ${.TARGET} finished at: " && date
 
@@ -318,7 +337,7 @@ check-tools: .PHONY
 	@echo '*** WARNING: NBUILDJOBS is obsolete; use -j directly instead!'
 .endif
 
-do-distrib-dirs: .PHONY
+do-distrib-dirs: .PHONY .MAKE
 .if !defined(DESTDIR) || ${DESTDIR} == ""
 	${MAKEDIRTARGET} etc distrib-dirs DESTDIR=/
 .else
@@ -331,13 +350,13 @@ do-${targ}: .PHONY ${targ}
 .endfor
 
 .for dir in tools tools/compat lib/csu gnu/lib/crtstuff${LIBGCC_EXT} gnu/lib/libgcc${LIBGCC_EXT} lib/libc lib/libdes lib gnu/lib
-do-${dir:S/\//-/g}: .PHONY
+do-${dir:S/\//-/g}: .PHONY .MAKE
 .for targ in dependall install
 	${MAKEDIRTARGET} ${dir} ${targ}
 .endfor
 .endfor
 
-do-ld.so: .PHONY
+do-ld.so: .PHONY .MAKE
 .for targ in dependall install
 .if (${OBJECT_FMT} == "a.out")
 	${MAKEDIRTARGET} libexec/ld.aout_so ${targ}
@@ -347,15 +366,15 @@ do-ld.so: .PHONY
 .endif
 .endfor
 
-do-build: .PHONY
+do-build: .PHONY .MAKE
 .for targ in dependall install
 	${MAKEDIRTARGET} . ${targ} BUILD_tools=no BUILD_lib=no
 .endfor
 
-do-x11: .PHONY
+do-x11: .PHONY .MAKE
 	${MAKEDIRTARGET} x11 build
 
-do-obsolete: .PHONY
+do-obsolete: .PHONY .MAKE
 	${MAKEDIRTARGET} etc install-obsolete-lists
 
 #
@@ -393,5 +412,5 @@ ${.CURDIR}/BUILDING: doc/BUILDING.mdoc
 #
 # Display current make(1) parameters
 #
-params: .PHONY
+params: .PHONY .MAKE
 	${MAKEDIRTARGET} etc params

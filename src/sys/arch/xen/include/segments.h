@@ -1,4 +1,4 @@
-/*	$NetBSD: segments.h,v 1.1 2004/03/11 21:44:08 cl Exp $	*/
+/*	$NetBSD: segments.h,v 1.3 2006/01/15 22:09:51 bouyer Exp $	*/
 /*	NetBSD: segments.h,v 1.41 2004/03/05 11:33:27 junyoung Exp 	*/
 
 /*-
@@ -160,6 +160,7 @@ union descriptor {
 	struct gate_descriptor gd;
 	struct ldt_descriptor ld;
 	uint32_t raw[2];
+	uint64_t raw64;
 } __attribute__((packed));
 
 /*

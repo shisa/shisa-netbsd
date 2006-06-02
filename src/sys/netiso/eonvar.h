@@ -1,4 +1,4 @@
-/*	$NetBSD: eonvar.h,v 1.12 2004/04/20 02:13:26 matt Exp $	*/
+/*	$NetBSD: eonvar.h,v 1.14 2005/12/11 00:01:36 elad Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -57,6 +57,9 @@ SOFTWARE.
 /*
  * ARGO Project, Computer Sciences Dept., University of Wisconsin - Madison
  */
+
+#ifndef _NETISO_EONVAR_H_
+#define _NETISO_EONVAR_H_
 
 #include <sys/ansi.h>
 
@@ -176,10 +179,12 @@ struct eon_llinfo {
 void eonprotoinit (void);
 void eonattach   (void);
 int eonioctl    (struct ifnet *, u_long, caddr_t);
-void eoniphdr    (struct eon_iphdr *, caddr_t, struct route *, int, int);
+void eoniphdr    (struct eon_iphdr *, const void *, struct route *, int, int);
 void eonrtrequest (int, struct rtentry *, struct rt_addrinfo *);
 int eonoutput   (struct ifnet *, struct mbuf *, struct sockaddr *,
 		     struct rtentry *);
 void eoninput    (struct mbuf *, ...);
 void *eonctlinput (int, struct sockaddr *, void *);
 #endif
+
+#endif /* !_NETISO_EONVAR_H_ */

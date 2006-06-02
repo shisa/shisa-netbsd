@@ -1,8 +1,8 @@
-#	$NetBSD: Makefile,v 1.26 2004/04/18 23:42:23 lukem Exp $
+#	$NetBSD: Makefile,v 1.28 2006/03/07 18:13:43 pooka Exp $
 #	@(#)Makefile	8.2 (Berkeley) 12/13/93
 
 MAN=	_DIAGASSERT.3 assert.3 bitstring.3 dlfcn.3 end.3 intro.3 queue.3 \
-	stdarg.3 tree.3 varargs.3
+	stdarg.3 sysexits.3 tree.3 varargs.3
 MLINKS+=end.3 edata.3 end.3 etext.3
 MLINKS+=queue.3 LIST_HEAD.3 \
 	queue.3 LIST_HEAD_INITIALIZER.3 \
@@ -85,7 +85,9 @@ MLINKS+=queue.3 CIRCLEQ_HEAD.3 \
 	queue.3 CIRCLEQ_FIRST.3 \
 	queue.3 CIRCLEQ_LAST.3 \
 	queue.3 CIRCLEQ_NEXT.3 \
-	queue.3 CIRCLEQ_PREV.3
+	queue.3 CIRCLEQ_PREV.3 \
+	queue.3 CIRCLEQ_LOOP_NEXT.3 \
+	queue.3 CIRCLEQ_LOOP_PREV.3
 MLINKS+=stdarg.3 va_arg.3 stdarg.3 va_copy.3 \
 	stdarg.3 va_end.3 stdarg.3 va_start.3
 MLINKS+=dlfcn.3 dlopen.3 dlfcn.3 dlclose.3 dlfcn.3 dlsym.3 dlfcn.3 dlctl.3 \

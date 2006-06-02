@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# $NetBSD: buildfloppies.sh,v 1.9.2.3 2005/11/27 22:45:32 riz Exp $
+# $NetBSD: buildfloppies.sh,v 1.12 2005/09/10 18:05:51 dsl Exp $
 #
 # Copyright (c) 2002-2003 The NetBSD Foundation, Inc.
 # All rights reserved.

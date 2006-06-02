@@ -1,4 +1,4 @@
-/* $NetBSD: sha2.c,v 1.3.2.1 2005/09/08 19:15:44 tron Exp $ */
+/* $NetBSD: sha2.c,v 1.5 2005/09/26 02:59:29 christos Exp $ */
 /*	$KAME: sha2.c,v 1.9 2003/07/20 00:28:38 itojun Exp $	*/
 
 /*
@@ -204,6 +204,7 @@ typedef u_int64_t sha2_word64;	/* Exactly 8 bytes */
  */
 void SHA512_Last(SHA512_CTX*);
 void SHA256_Transform(SHA256_CTX*, const sha2_word32*);
+void SHA384_Transform(SHA384_CTX*, const sha2_word64*);
 void SHA512_Transform(SHA512_CTX*, const sha2_word64*);
 
 
@@ -307,6 +308,23 @@ const static sha2_word64 sha512_initial_hash_value[8] = {
 	0x1f83d9abfb41bd6bULL,
 	0x5be0cd19137e2179ULL
 };
+
+#ifdef __weak_alias
+__weak_alias(SHA256_Init,_SHA256_Init) 
+__weak_alias(SHA256_Update,_SHA256_Update)
+__weak_alias(SHA256_Final,_SHA256_Final)
+__weak_alias(SHA256_Transform,_SHA256_Transform)
+
+__weak_alias(SHA384_Init,_SHA384_Init) 
+__weak_alias(SHA384_Update,_SHA384_Update)
+__weak_alias(SHA384_Final,_SHA384_Final)
+__weak_alias(SHA384_Transform,_SHA384_Transform)
+
+__weak_alias(SHA512_Init,_SHA512_Init) 
+__weak_alias(SHA512_Update,_SHA512_Update)
+__weak_alias(SHA512_Final,_SHA512_Final)
+__weak_alias(SHA512_Transform,_SHA512_Transform)
+#endif
 
 /*** SHA-256: *********************************************************/
 void SHA256_Init(SHA256_CTX* context) {
@@ -914,6 +932,10 @@ void SHA384_Init(SHA384_CTX* context) {
 
 void SHA384_Update(SHA384_CTX* context, const sha2_byte* data, size_t len) {
 	SHA512_Update((SHA512_CTX*)context, data, len);
+}
+
+void SHA384_Transform(SHA512_CTX* context, const sha2_word64* data) {
+	SHA512_Transform((SHA512_CTX*)context, data);
 }
 
 void SHA384_Final(sha2_byte digest[], SHA384_CTX* context) {

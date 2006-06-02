@@ -1,4 +1,4 @@
-/*	$NetBSD: bthci.c,v 1.15 2004/01/04 05:39:35 dsainty Exp $	*/
+/*	$NetBSD: bthci.c,v 1.20 2006/03/28 17:38:29 thorpej Exp $	*/
 
 /*
  * Copyright (c) 2002, 2003 The NetBSD Foundation, Inc.
@@ -38,7 +38,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: bthci.c,v 1.15 2004/01/04 05:39:35 dsainty Exp $");
+__KERNEL_RCSID(0, "$NetBSD: bthci.c,v 1.20 2006/03/28 17:38:29 thorpej Exp $");
 
 #include "bthcidrv.h"
 
@@ -210,7 +210,7 @@ bthci_detach(struct device *self, int flags)
 	maj = cdevsw_lookup_major(&bthci_cdevsw);
 
 	/* Nuke the vnodes for any open instances (calls close). */
-	mn = self->dv_unit;
+	mn = device_unit(self);
 	vdevgone(maj, mn, mn, VCHR);
 
 	DPRINTFN(1, ("%s: driver detached\n", __func__));
@@ -219,15 +219,16 @@ bthci_detach(struct device *self, int flags)
 }
 
 int
-bthciopen(dev_t dev, int flag, int mode, struct proc *p)
+bthciopen(dev_t dev, int flag, int mode, struct lwp *l)
 {
 	struct bthci_softc *sc;
+	struct proc *p = l->l_proc;
 	int error;
 
 	sc = device_lookup(&bthci_cd, BTHCIUNIT(dev));
 	if (sc == NULL)
 		return (ENXIO);
-	if ((sc->sc_dev.dv_flags & DVF_ACTIVE) == 0)
+	if (! device_is_active(&sc->sc_dev))
 		return (EIO);
 	if (sc->sc_open)
 		return (EBUSY);
@@ -258,9 +259,10 @@ bthciopen(dev_t dev, int flag, int mode, struct proc *p)
 }
 
 int
-bthciclose(dev_t dev, int flag, int mode, struct proc *p)
+bthciclose(dev_t dev, int flag, int mode, struct lwp *l)
 {
 	struct bthci_softc *sc;
+	struct proc *p = l->l_proc;
 	int error;
 
 	sc = device_lookup(&bthci_cd, BTHCIUNIT(dev));
@@ -298,7 +300,7 @@ bthciread(dev_t dev, struct uio *uio, int flag)
 	if (sc == NULL)
 		return (ENXIO);
 
-	if ((sc->sc_dev.dv_flags & DVF_ACTIVE) == 0 ||
+	if (! device_is_active(&sc->sc_dev) ||
 	    !sc->sc_open || sc->sc_dying)
 		return (EIO);
 
@@ -391,7 +393,7 @@ bthciwrite(dev_t dev, struct uio *uio, int flag)
 	if (sc == NULL)
 		return (ENXIO);
 
-	if ((sc->sc_dev.dv_flags & DVF_ACTIVE) == 0 || !sc->sc_open)
+	if (! device_is_active(&sc->sc_dev) || !sc->sc_open)
 		return (EIO);
 
 	uiolen = uio->uio_resid;
@@ -444,7 +446,7 @@ bthciioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, struct proc *p)
 	sc = device_lookup(&bthci_cd, BTHCIUNIT(dev));
 	if (sc == NULL)
 		return (ENXIO);
-	if ((sc->sc_dev.dv_flags & DVF_ACTIVE) == 0 || !sc->sc_open)
+	if (! device_is_active(&sc->sc_dev) || !sc->sc_open)
 		return (EIO);
 
 	switch (cmd) {
@@ -462,7 +464,7 @@ bthciioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, struct proc *p)
 #endif
 
 int
-bthcipoll(dev_t dev, int events, struct proc *p)
+bthcipoll(dev_t dev, int events, struct lwp *l)
 {
 	struct bthci_softc *sc;
 	int revents;
@@ -470,9 +472,11 @@ bthcipoll(dev_t dev, int events, struct proc *p)
 
 	sc = device_lookup(&bthci_cd, BTHCIUNIT(dev));
 	if (sc == NULL)
-		return (ENXIO);
-	if ((sc->sc_dev.dv_flags & DVF_ACTIVE) == 0 || !sc->sc_open)
-		return (EIO);
+		return (POLLERR);
+
+	if (! device_is_active(&sc->sc_dev) ||
+	    !sc->sc_open || sc->sc_dying)
+		return (POLLHUP);
 
 	revents = events & (POLLOUT | POLLWRNORM);
 
@@ -484,7 +488,7 @@ bthcipoll(dev_t dev, int events, struct proc *p)
 		} else {
 			DPRINTFN(2,("%s: recording read select\n",
 				    __func__));
-			selrecord(p, &sc->sc_rd_sel);
+			selrecord(l, &sc->sc_rd_sel);
 		}
 		splx(s);
 	}
@@ -526,7 +530,7 @@ bthcikqfilter(dev_t dev, struct knote *kn)
 	sc = device_lookup(&bthci_cd, BTHCIUNIT(dev));
 	if (sc == NULL)
 		return (ENXIO);
-	if ((sc->sc_dev.dv_flags & DVF_ACTIVE) == 0 || !sc->sc_open)
+	if (! device_is_active(&sc->sc_dev) || !sc->sc_open)
 		return (EIO);
 
 	switch (kn->kn_filter) {

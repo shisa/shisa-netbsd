@@ -1,5 +1,5 @@
 #
-#	$NetBSD: GENERIC.in,v 1.47.2.3 2005/11/05 00:39:48 tron Exp $
+#	$NetBSD: GENERIC.in,v 1.61 2006/03/28 20:58:39 pavel Exp $
 #
 # Generic atari
 #
@@ -28,7 +28,8 @@ options 	INSECURE	# disable kernel security levels
 
 # Enable experimental buffer queue strategy for better responsiveness under 
 # high disk I/O load. Use it with caution - it's not proven to be stable yet.
-#options 	NEW_BUFQ_STRATEGY
+#options 	BUFQ_READPRIO
+#options 	BUFQ_PRIOCSCAN
 
 #
 # (Co)processors this kernel should support
@@ -102,6 +103,9 @@ file-system 	MFS		# Memory based filesystem
 file-system 	KERNFS		# Kernel parameter filesystem
 file-system 	MSDOSFS		# MSDOS filesystem
 file-system 	CD9660		# ISO 9660 filesystem with Rock Ridge
+#file-system	PTYFS		# experimental - /dev/ptm support
+#file-system	TMPFS		# experimental - Efficient memory file-system
+#file-system	UDF		# experimental - OSTA UDF CD/DVD file-system
 
 #ifndef INSTALL_KERNEL
 file-system 	NFS		# Network File System client side code
@@ -114,6 +118,7 @@ file-system 	UMAPFS		# null file system (with uid & gid remapping)
 file-system 	PORTAL		# portal file system
 file-system 	EXT2FS		# second extended file system (linux)
 file-system 	LFS		# log-structured file system
+file-system	PTYFS		# /dev/pts/N support
 #endif
 
 #ifndef INSTALL_KERNEL
@@ -149,6 +154,7 @@ options 	COMPAT_14	# Compatibility with NetBSD 1.4
 options 	COMPAT_15	# Compatibility with NetBSD 1.5
 options 	COMPAT_16	# Compatibility with NetBSD 1.6
 options 	COMPAT_20	# Compatibility with NetBSD 2.0
+options 	COMPAT_30	# NetBSD 3.0 compatibility.
 #ifndef INSTALL_KERNEL
 #options 	COMPAT_09	# has no meaning on the atari
 #options 	COMPAT_SUNOS	# Support to run Sun-3 executables
@@ -239,18 +245,18 @@ pseudo-device	pppoe			# PPP over Ethernet (RFC 2516)
 #endif
 pseudo-device	pty			# pseudo-terminals
 pseudo-device	loop			# Loopback network
-pseudo-device	vnd		3	# 3 pseudo disks (see vnconfig)
+pseudo-device	vnd			# 3 pseudo disks (see vnconfig)
 #options 	VND_COMPRESSION		# compressed vnd(4)
 pseudo-device	md		3	# Boot memory disk
 
 #ifndef INSTALL_KERNEL
-pseudo-device	bpfilter	2	# berkeley packet filters
-pseudo-device	tun		2	# network tunnel
+pseudo-device	bpfilter		# berkeley packet filters
+pseudo-device	tun			# network tunnel
 pseudo-device	tap			# virtual Ethernet
-#pseudo-device	gre		2	# generic L3 over IP tunnel
-pseudo-device	gif		4	# IPv[46] over IPv[46] tunnel (RFC1933)
-#pseudo-device	faith		1	# IPv[46] tcp relay translation i/f
-#pseudo-device	stf		1	# 6to4 IPv6 over IPv4 encapsulation
+#pseudo-device	gre			# generic L3 over IP tunnel
+pseudo-device	gif			# IPv[46] over IPv[46] tunnel (RFC1933)
+#pseudo-device	faith			# IPv[46] tcp relay translation i/f
+pseudo-device	stf			# 6to4 IPv6 over IPv4 encapsulation
 #ifndef NO_PHYS_NETWORK
 pseudo-device	vlan			# IEEE 802.1q encapsulation
 pseudo-device	bridge			# simple inter-network bridging

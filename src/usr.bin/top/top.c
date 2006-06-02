@@ -1,4 +1,4 @@
-/*	$NetBSD: top.c,v 1.20 2004/07/23 13:31:50 wiz Exp $	*/
+/*	$NetBSD: top.c,v 1.23 2005/10/03 05:34:51 christos Exp $	*/
 
 const char copyright[] = "Copyright (c) 1984 through 1996, William LeFebvre";
 
@@ -49,7 +49,7 @@ const char copyright[] = "Copyright (c) 1984 through 1996, William LeFebvre";
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: top.c,v 1.20 2004/07/23 13:31:50 wiz Exp $");
+__RCSID("$NetBSD: top.c,v 1.23 2005/10/03 05:34:51 christos Exp $");
 #endif
 
 #include "os.h"
@@ -133,8 +133,8 @@ char *argv[];
     char *env_top;
     char **preset_argv;
     int  preset_argc = 0;
-    char **av;
-    int  ac;
+    char **av = NULL;
+    int  ac = 0;
     char dostates = No;
     char do_unames = Yes;
     char interactive = Maybe;
@@ -520,7 +520,7 @@ Usage: %s [-bIinqSuv] [-d count] [-o field] [-s time] [-U username] [number]\n",
 	/* display the current time */
 	/* this method of getting the time SHOULD be fairly portable */
 	time(&curr_time);
-	i_timeofday(&curr_time);
+	i_timeofday(&curr_time, &system_info.uptime);
 
 	/* display process state breakdown */
 	(*d_procstates)(system_info.p_total,
@@ -534,16 +534,7 @@ Usage: %s [-bIinqSuv] [-d count] [-o field] [-s time] [-U username] [number]\n",
 	else
 	{
 	    /* we'll do it next time */
-	    if (smart_terminal)
-	    {
-		z_cpustates();
-	    }
-	    else
-	    {
-		int i;
-		for (i = 0; i < statics.ncpu; i++)
-		    putchar('\n');
-	    }
+	    z_cpustates();
 	    dostates = Yes;
 	}
 

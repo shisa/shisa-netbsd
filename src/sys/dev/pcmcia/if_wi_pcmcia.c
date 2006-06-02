@@ -1,4 +1,4 @@
-/* $NetBSD: if_wi_pcmcia.c,v 1.61.2.1 2005/05/07 23:08:34 tron Exp $ */
+/* $NetBSD: if_wi_pcmcia.c,v 1.68 2005/12/11 12:23:23 christos Exp $ */
 
 /*-
  * Copyright (c) 2001, 2004 The NetBSD Foundation, Inc.
@@ -41,7 +41,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_wi_pcmcia.c,v 1.61.2.1 2005/05/07 23:08:34 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_wi_pcmcia.c,v 1.68 2005/12/11 12:23:23 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -54,8 +54,8 @@ __KERNEL_RCSID(0, "$NetBSD: if_wi_pcmcia.c,v 1.61.2.1 2005/05/07 23:08:34 tron E
 #include <net/if_ether.h>
 #include <net/if_media.h>
 
+#include <net80211/ieee80211_netbsd.h>
 #include <net80211/ieee80211_var.h>
-#include <net80211/ieee80211_compat.h>
 #include <net80211/ieee80211_radiotap.h>
 #include <net80211/ieee80211_rssadapt.h>
 
@@ -123,6 +123,10 @@ static const struct pcmcia_product wi_pcmcia_products[] = {
 
 	{ PCMCIA_VENDOR_3COM, PCMCIA_PRODUCT_3COM_3CRWE737A,
 	  PCMCIA_CIS_3COM_3CRWE737A },
+
+	{ PCMCIA_VENDOR_ALVARION,
+	  PCMCIA_PRODUCT_ALVARION_BREEZENET,
+	  PCMCIA_CIS_ALVARION_BREEZENET },
 
 	{ PCMCIA_VENDOR_COREGA, PCMCIA_PRODUCT_COREGA_WIRELESS_LAN_PCC_11,
 	  PCMCIA_CIS_COREGA_WIRELESS_LAN_PCC_11 },
@@ -214,6 +218,9 @@ static const struct pcmcia_product wi_pcmcia_products[] = {
 	{ PCMCIA_VENDOR_LINKSYS2, PCMCIA_PRODUCT_LINKSYS2_WCF11,
 	  PCMCIA_CIS_LINKSYS2_WCF11 },
 
+	{ PCMCIA_VENDOR_MICROSOFT, PCMCIA_PRODUCT_MICROSOFT_MN_520,
+	  PCMCIA_CIS_MICROSOFT_MN_520 },
+
 	{ PCMCIA_VENDOR_PLANEX, PCMCIA_PRODUCT_PLANEX_GWNS11H,
 	  PCMCIA_CIS_PLANEX_GWNS11H },
 
@@ -234,6 +241,9 @@ static const struct pcmcia_product wi_pcmcia_products[] = {
 
 	{ PCMCIA_VENDOR_ASUSTEK, PCMCIA_PRODUCT_ASUSTEK_WL_100,
 	  PCMCIA_CIS_ASUSTEK_WL_100 },
+
+	{ PCMCIA_VENDOR_PROXIM, PCMCIA_PRODUCT_PROXIM_RANGELANDS_8430,
+	  PCMCIA_CIS_PROXIM_RANGELANDS_8430 },
 };
 static const size_t wi_pcmcia_nproducts =
     sizeof(wi_pcmcia_products) / sizeof(wi_pcmcia_products[0]);
@@ -491,6 +501,7 @@ wi_pcmcia_write_firm(sc, buf, buflen, ebuf, ebuflen)
 	int buflen, ebuflen;
 {
 	const u_int8_t *p, *ep, *q, *eq;
+	char *endp;
 	u_int32_t addr, id, eid;
 	int i, len, elen, nblk, pdrlen;
 
@@ -502,8 +513,10 @@ wi_pcmcia_write_firm(sc, buf, buflen, ebuf, ebuflen)
 	while (p < ep && *p++ != ' ');	/* FILE: */
 	while (p < ep && *p++ != ' ');	/* filename */
 	while (p < ep && *p++ != ' ');	/* type of the firmware */
-	nblk = strtoul(p, (void *)&p, 10);
-	pdrlen = strtoul(p + 1, (void *)&p, 10);
+	nblk = strtoul(p, &endp, 10);
+	p = (void *)endp;
+	pdrlen = strtoul(p + 1, &endp, 10);
+	p = (void *)endp;
 	while (p < ep && *p++ != 0x1a);	/* skip rest of header */
 
 	/*

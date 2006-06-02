@@ -1,4 +1,4 @@
-/*	$NetBSD: scif.c,v 1.14 2004/12/13 02:34:03 chs Exp $	*/
+/*	$NetBSD: scif.c,v 1.19 2006/05/14 21:56:33 elad Exp $	*/
 
 /*-
  * Copyright (C) 1999 T.Horiuchi and SAITOH Masanobu.  All rights reserved.
@@ -106,7 +106,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: scif.c,v 1.14 2004/12/13 02:34:03 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: scif.c,v 1.19 2006/05/14 21:56:33 elad Exp $");
 
 #include "opt_kgdb.h"
 
@@ -120,6 +120,7 @@ __KERNEL_RCSID(0, "$NetBSD: scif.c,v 1.14 2004/12/13 02:34:03 chs Exp $");
 #include <sys/kernel.h>
 #include <sys/device.h>
 #include <sys/malloc.h>
+#include <sys/kauth.h>
 
 #if 0
 #include <sys/kgdb.h>
@@ -222,11 +223,6 @@ void	scifdiag(void *);
 
 #define	SCIFUNIT(x)	(minor(x) & SCIFUNIT_MASK)
 #define	SCIFDIALOUT(x)	(minor(x) & SCIFDIALOUT_MASK)
-
-/* Macros to clear/set/test flags. */
-#define	SET(t, f)	(t) |= (f)
-#define	CLR(t, f)	(t) &= ~(f)
-#define	ISSET(t, f)	((t) & (f))
 
 /* Hardware flag masks */
 #define	SCIF_HW_NOIEN	0x01
@@ -588,15 +584,15 @@ scifstart(struct tty *tp)
 	/* Output the first chunk of the contiguous buffer. */
 	{
 		int n;
-		int max;
+		int maxb;
 		int i;
 
 		n = sc->sc_tbc;
-		max = sc->sc_fifolen -
+		maxb = sc->sc_fifolen -
 		    ((scif_rd_scfdr2(sc) >> SCIF_SCFDR2_T_SHIFT) &
 		        SCIF_SCFDR2_T_MASK);
-		if (n > max)
-			n = max;
+		if (n > maxb)
+			n = maxb;
 
 		for (i = 0; i < n; i++) {
 			scif_putc(sc->sc_iot, sc->sc_ioh, *(sc->sc_tba));
@@ -621,7 +617,7 @@ scifparam(struct tty *tp, struct termios *t)
 	int ospeed = t->c_ospeed;
 	int s;
 
-	if (ISSET(sc->sc_dev.dv_flags, DVF_ACTIVE) == 0)
+	if (!device_is_active(&sc->sc_dev))
 		return (EIO);
 
 	/* Check requested parameters. */
@@ -755,7 +751,7 @@ scif_iflush(struct scif_softc *sc)
 }
 
 int
-scifopen(dev_t dev, int flag, int mode, struct proc *p)
+scifopen(dev_t dev, int flag, int mode, struct lwp *l)
 {
 	int unit = SCIFUNIT(dev);
 	struct scif_softc *sc;
@@ -770,7 +766,7 @@ scifopen(dev_t dev, int flag, int mode, struct proc *p)
 	    sc->sc_rbuf == NULL)
 		return (ENXIO);
 
-	if (ISSET(sc->sc_dev.dv_flags, DVF_ACTIVE) == 0)
+	if (!device_is_active(&sc->sc_dev))
 		return (ENXIO);
 
 #ifdef KGDB
@@ -785,7 +781,7 @@ scifopen(dev_t dev, int flag, int mode, struct proc *p)
 
 	if (ISSET(tp->t_state, TS_ISOPEN) &&
 	    ISSET(tp->t_state, TS_XCLUDE) &&
-	    p->p_ucred->cr_uid != 0)
+	    kauth_cred_geteuid(l->l_proc->p_cred) != 0)
 		return (EBUSY);
 
 	s = spltty();
@@ -871,7 +867,7 @@ bad:
 }
 
 int
-scifclose(dev_t dev, int flag, int mode, struct proc *p)
+scifclose(dev_t dev, int flag, int mode, struct lwp *l)
 {
 	struct scif_softc *sc = scif_cd.cd_devs[SCIFUNIT(dev)];
 	struct tty *tp = sc->sc_tty;
@@ -883,7 +879,7 @@ scifclose(dev_t dev, int flag, int mode, struct proc *p)
 	(*tp->t_linesw->l_close)(tp, flag);
 	ttyclose(tp);
 
-	if (ISSET(sc->sc_dev.dv_flags, DVF_ACTIVE) == 0)
+	if (!device_is_active(&sc->sc_dev))
 		return (0);
 
 	return (0);
@@ -908,12 +904,12 @@ scifwrite(dev_t dev, struct uio *uio, int flag)
 }
 
 int
-scifpoll(dev_t dev, int events, struct proc *p)
+scifpoll(dev_t dev, int events, struct lwp *l)
 {
 	struct scif_softc *sc = scif_cd.cd_devs[SCIFUNIT(dev)];
 	struct tty *tp = sc->sc_tty;
 
-	return ((*tp->t_linesw->l_poll)(tp, events, p));
+	return ((*tp->t_linesw->l_poll)(tp, events, l));
 }
 
 struct tty *
@@ -926,21 +922,21 @@ sciftty(dev_t dev)
 }
 
 int
-scifioctl(dev_t dev, u_long cmd, caddr_t data, int flag, struct proc *p)
+scifioctl(dev_t dev, u_long cmd, caddr_t data, int flag, struct lwp *l)
 {
 	struct scif_softc *sc = scif_cd.cd_devs[SCIFUNIT(dev)];
 	struct tty *tp = sc->sc_tty;
 	int error;
 	int s;
 
-	if (ISSET(sc->sc_dev.dv_flags, DVF_ACTIVE) == 0)
+	if (!device_is_active(&sc->sc_dev))
 		return (EIO);
 
-	error = (*tp->t_linesw->l_ioctl)(tp, cmd, data, flag, p);
+	error = (*tp->t_linesw->l_ioctl)(tp, cmd, data, flag, l);
 	if (error != EPASSTHROUGH)
 		return (error);
 
-	error = ttioctl(tp, cmd, data, flag, p);
+	error = ttioctl(tp, cmd, data, flag, l);
 	if (error != EPASSTHROUGH)
 		return (error);
 
@@ -962,7 +958,9 @@ scifioctl(dev_t dev, u_long cmd, caddr_t data, int flag, struct proc *p)
 		break;
 
 	case TIOCSFLAGS:
-		error = suser(p->p_ucred, &p->p_acflag);
+		error = kauth_authorize_generic(l->l_proc->p_cred,
+					  KAUTH_GENERIC_ISSUSER,
+					  &l->l_proc->p_acflag);
 		if (error)
 			break;
 		sc->sc_swflags = *(int *)data;
@@ -1059,7 +1057,7 @@ scifdiag(void *arg)
 integrate void
 scif_rxsoft(struct scif_softc *sc, struct tty *tp)
 {
-	int (*rint)(int c, struct tty *tp) = tp->t_linesw->l_rint;
+	int (*rint)(int, struct tty *) = tp->t_linesw->l_rint;
 	u_char *get, *end;
 	u_int cc, scc;
 	u_char ssr2;
@@ -1202,7 +1200,7 @@ scifsoft(void *arg)
 	struct scif_softc *sc = arg;
 	struct tty *tp;
 
-	if (ISSET(sc->sc_dev.dv_flags, DVF_ACTIVE) == 0)
+	if (!device_is_active(&sc->sc_dev))
 		return;
 
 	tp = sc->sc_tty;
@@ -1234,7 +1232,7 @@ scifintr(void *arg)
 	u_short ssr2;
 	int count;
 
-	if (ISSET(sc->sc_dev.dv_flags, DVF_ACTIVE) == 0)
+	if (!device_is_active(&sc->sc_dev))
 		return (0);
 
 	end = sc->sc_ebuf;
@@ -1425,15 +1423,15 @@ scifintr(void *arg)
 		/* Output the next chunk of the contiguous buffer, if any. */
 		if (sc->sc_tbc > 0) {
 			int n;
-			int max;
+			int maxb;
 			int i;
 
 			n = sc->sc_tbc;
-			max = sc->sc_fifolen -
+			maxb = sc->sc_fifolen -
 			    ((scif_rd_scfdr2(sc) >> SCIF_SCFDR2_T_SHIFT) &
 				SCIF_SCFDR2_T_MASK);
-			if (n > max)
-				n = max;
+			if (n > maxb)
+				n = maxb;
 
 			for (i = 0; i < n; i++) {
 				scif_putc(sc->sc_iot, sc->sc_ioh,*(sc->sc_tba));

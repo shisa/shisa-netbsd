@@ -1,4 +1,4 @@
-/*	$NetBSD: stree.c,v 1.7 2004/12/21 16:20:09 christos Exp $	*/
+/*	$NetBSD: stree.c,v 1.10 2006/04/13 21:48:54 christos Exp $	*/
 
 /*
  * Copyright (c) 1992 Carnegie Mellon University
@@ -55,6 +55,7 @@
 #include "libc.h"
 #include "c.h"
 #include <sys/param.h>
+#include <assert.h>
 #include "supcdefs.h"
 #include "supextern.h"
 
@@ -99,7 +100,7 @@ Tmake(char *p)
 	t = (TREE *) malloc(sizeof(TREE));
 	if (t == NULL)
 		goaway("Cannot allocate memory");
-	t->Tname = (p == NULL) ? NULL : salloc(p);
+	t->Tname = (p == NULL) ? NULL : estrdup(p);
 	t->Tflags = 0;
 	t->Tuid = 0;
 	t->Tgid = 0;

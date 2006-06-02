@@ -1,4 +1,4 @@
-/* $NetBSD: dir.c,v 1.14 2005/01/19 19:41:59 xtraeme Exp $	 */
+/* $NetBSD: dir.c,v 1.19 2005/09/13 04:14:17 christos Exp $	 */
 
 /*
  * Copyright (c) 1980, 1986, 1993
@@ -47,13 +47,13 @@
 
 #include "bufcache.h"
 #include "vnode.h"
-#include "lfs.h"
+#include "lfs_user.h"
 
 #include "fsck.h"
 #include "fsutil.h"
 #include "extern.h"
 
-char *lfname = "lost+found";
+const char *lfname = "lost+found";
 int lfmode = 01700;
 struct dirtemplate emptydir = {0, DIRBLKSIZ};
 struct dirtemplate dirhead = {
@@ -244,7 +244,8 @@ dircheck(struct inodesc *idesc, struct direct *dp)
 		pwarn("ino too large, reclen=0, reclen>space, or reclen&3!=0\n");
 		pwarn("dp->d_ino = 0x%x\tdp->d_reclen = 0x%x\n",
 		    dp->d_ino, dp->d_reclen);
-		pwarn("maxino = 0x%x\tspaceleft = 0x%x\n", maxino, spaceleft);
+		pwarn("maxino = %llu\tspaceleft = 0x%x\n",
+		    (unsigned long long)maxino, spaceleft);
 		return (0);
 	}
 	if (dp->d_ino == 0)
@@ -272,14 +273,14 @@ dircheck(struct inodesc *idesc, struct direct *dp)
 }
 
 void
-direrror(ino_t ino, char *errmesg)
+direrror(ino_t ino, const char *errmesg)
 {
 
 	fileerror(ino, ino, errmesg);
 }
 
 void
-fileerror(ino_t cwd, ino_t ino, char *errmesg)
+fileerror(ino_t cwd, ino_t ino, const char *errmesg)
 {
 	char pathbuf[MAXPATHLEN + 1];
 	struct uvnode *vp;
@@ -470,9 +471,10 @@ linkup(ino_t orphan, ino_t parentdir)
 		VTOI(vp)->i_ffs1_nlink++;
 		inodirty(VTOI(vp));
 		lncntp[lfdir]++;
-		pwarn("DIR I=%u CONNECTED. ", orphan);
+		pwarn("DIR I=%llu CONNECTED. ", (unsigned long long)orphan);
 		if (parentdir != (ino_t) - 1)
-			printf("PARENT WAS I=%u\n", parentdir);
+			printf("PARENT WAS I=%llu\n",
+			    (unsigned long long)parentdir);
 		if (preen == 0)
 			printf("\n");
 	}
@@ -483,7 +485,7 @@ linkup(ino_t orphan, ino_t parentdir)
  * fix an entry in a directory.
  */
 int
-changeino(ino_t dir, char *name, ino_t newnum)
+changeino(ino_t dir, const char *name, ino_t newnum)
 {
 	struct inodesc idesc;
 
@@ -502,7 +504,7 @@ changeino(ino_t dir, char *name, ino_t newnum)
  * make an entry in a directory
  */
 int
-makeentry(ino_t parent, ino_t ino, char *name)
+makeentry(ino_t parent, ino_t ino, const char *name)
 {
 	struct ufs1_dinode *dp;
 	struct inodesc idesc;
@@ -541,7 +543,7 @@ makeentry(ino_t parent, ino_t ino, char *name)
 static int
 expanddir(struct uvnode *vp, struct ufs1_dinode *dp, char *name)
 {
-	daddr_t lastbn, newblk;
+	daddr_t lastbn;
 	struct ubuf *bp;
 	char *cp, firstblk[DIRBLKSIZ];
 
@@ -559,7 +561,7 @@ expanddir(struct uvnode *vp, struct ufs1_dinode *dp, char *name)
 	if (bp->b_flags & B_ERROR)
 		goto bad;
 	memcpy(firstblk, bp->b_data, DIRBLKSIZ);
-	bread(vp, newblk, fs->lfs_bsize, NOCRED, &bp);
+	bread(vp, lastbn, fs->lfs_bsize, NOCRED, &bp);
 	if (bp->b_flags & B_ERROR)
 		goto bad;
 	memcpy(bp->b_data, firstblk, DIRBLKSIZ);
@@ -586,7 +588,6 @@ bad:
 	dp->di_db[lastbn + 1] = 0;
 	dp->di_size -= fs->lfs_bsize;
 	dp->di_blocks -= btofsb(fs, fs->lfs_bsize);
-	freeblk(newblk, fs->lfs_frag);
 	return (0);
 }
 

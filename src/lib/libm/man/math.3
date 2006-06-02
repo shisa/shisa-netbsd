@@ -1,4 +1,4 @@
-.\"	$NetBSD: math.3,v 1.18 2003/12/03 23:31:21 jschauma Exp $
+.\"	$NetBSD: math.3,v 1.21 2006/03/26 02:02:38 xtraeme Exp $
 .\"
 .\" Copyright (c) 1985 Regents of the University of California.
 .\" All rights reserved.
@@ -29,7 +29,7 @@
 .\"
 .\"	from: @(#)math.3	6.10 (Berkeley) 5/6/91
 .\"
-.TH MATH 3 "Dec 3, 2003"
+.TH MATH 3 "March 26, 2006"
 .UC 4
 .ds up \fIulp\fR
 .ds nn \fINaN\fR
@@ -87,6 +87,7 @@ lgamma	lgamma.3	log gamma function	???
 log	exp.3	natural logarithm	1
 log10	exp.3	logarithm to base 10	3
 log1p	exp.3	log(1+x)	1
+nan	nan.3	return quiet \*(nn	0
 nextafter	ieee.3	next representable number	0
 pow	exp.3	exponential x**y	60\-500
 remainder	ieee.3	remainder	0
@@ -97,6 +98,7 @@ sinh	sinh.3	hyperbolic function	3
 sqrt	sqrt.3	square root	1
 tan	tan.3	trigonometric function	3
 tanh	tanh.3	hyperbolic function	3
+trunc	trunc.3	nearest integral value	3
 y0	j0.3	Bessel function	???
 y1	j0.3	Bessel function	???
 yn	j0.3	Bessel function	???

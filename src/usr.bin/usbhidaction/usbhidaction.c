@@ -1,4 +1,4 @@
-/*      $NetBSD: usbhidaction.c,v 1.17 2004/11/05 22:43:47 dsl Exp $ */
+/*      $NetBSD: usbhidaction.c,v 1.21 2006/05/19 14:43:58 christos Exp $ */
 
 /*
  * Copyright (c) 2000, 2002 The NetBSD Foundation, Inc.
@@ -38,7 +38,7 @@
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: usbhidaction.c,v 1.17 2004/11/05 22:43:47 dsl Exp $");
+__RCSID("$NetBSD: usbhidaction.c,v 1.21 2006/05/19 14:43:58 christos Exp $");
 #endif
 
 #include <stdio.h>
@@ -58,9 +58,9 @@ __RCSID("$NetBSD: usbhidaction.c,v 1.17 2004/11/05 22:43:47 dsl Exp $");
 #include <syslog.h>
 #include <signal.h>
 
-int verbose = 0;
-int isdemon = 0;
-int reparse = 0;
+static int verbose = 0;
+static int isdemon = 0;
+static int reparse = 0;
 
 struct command {
 	struct command *next;
@@ -72,16 +72,17 @@ struct command {
 	char *name;
 	char *action;
 };
-struct command *commands;
+static struct command *commands;
 
 #define SIZE 4000
 
-void usage(void);
-struct command *parse_conf(const char *, report_desc_t, int, int);
-void docmd(struct command *, int, const char *, int, char **);
-void freecommands(struct command *);
+static void usage(void) __attribute__((__noreturn__));
+static struct command *parse_conf(const char *, report_desc_t, int, int);
+static void docmd(struct command *, int, const char *, int, char **);
+static void freecommands(struct command *);
 
 static void
+/*ARGSUSED*/
 sighup(int sig)
 {
 	reparse = 1;
@@ -101,7 +102,8 @@ main(int argc, char **argv)
 	int reportid;
 	const char *table = NULL;
 
-	setlinebuf(stdout);
+	setprogname(argv[0]);
+	(void)setlinebuf(stdout);
 
 	demon = 1;
 	ignore = 0;
@@ -140,14 +142,22 @@ main(int argc, char **argv)
 	hid_init(table);
 
 	if (dev[0] != '/') {
-		snprintf(devnamebuf, sizeof(devnamebuf), "/dev/%s%s",
+		(void)snprintf(devnamebuf, sizeof(devnamebuf), "/dev/%s%s",
 			 isdigit((unsigned char)dev[0]) ? "uhid" : "", dev);
 		dev = devnamebuf;
 	}
 
+	if (demon && conf[0] != '/')
+		errx(1, "config file must have an absolute path, %s", conf);
+
 	fd = open(dev, O_RDWR);
 	if (fd < 0)
 		err(1, "%s", dev);
+
+	/* Avoid passing the device file descriptor to executed commands */
+	if (fcntl(fd, F_SETFD, FD_CLOEXEC) == -1)
+		err(1, "fcntl(F_SETFD, FD_CLOEXEC)");
+
 	if (ioctl(fd, USB_GET_REPORT_ID, &reportid) < 0)
 		reportid = -1;
 	repd = hid_get_report_desc(fd);
@@ -159,7 +169,7 @@ main(int argc, char **argv)
 	sz = hid_report_size(repd, hid_input, reportid);
 
 	if (verbose)
-		printf("report size %d\n", sz);
+		(void)printf("report size %d\n", sz);
 	if (sz > sizeof buf)
 		errx(1, "report too large");
 
@@ -168,17 +178,17 @@ main(int argc, char **argv)
 	if (demon) {
 		if (daemon(0, 0) < 0)
 			err(1, "daemon()");
-		pidfile(NULL);
+		(void)pidfile(NULL);
 		isdemon = 1;
 	}
 
 	for(;;) {
-		n = read(fd, buf, sz);
+		n = read(fd, buf, (size_t)sz);
 		if (verbose > 2) {
-			printf("read %d bytes:", n);
+			(void)printf("read %d bytes:", n);
 			for (i = 0; i < n; i++)
-				printf(" %02x", buf[i]);
-			printf("\n");
+				(void)printf(" %02x", buf[i]);
+			(void)printf("\n");
 		}
 		if (n < 0) {
 			if (verbose)
@@ -206,15 +216,13 @@ main(int argc, char **argv)
 			reparse = 0;
 		}
 	}
-
-	exit(0);
 }
 
-void
+static void
 usage(void)
 {
 
-	fprintf(stderr, "usage: %s -c config_file [-d] -f hid_dev "
+	(void)fprintf(stderr, "usage: %s -c config_file [-d] -f hid_dev "
 		"[-i] [-t table] [-v]\n", getprogname());
 	exit(1);
 }
@@ -226,24 +234,23 @@ peek(FILE *f)
 
 	c = getc(f);
 	if (c != EOF)
-		ungetc(c, f);
+		(void)ungetc(c, f);
 	return c;
 }
 
-struct command *
+static struct command *
 parse_conf(const char *conf, report_desc_t repd, int reportid, int ignore)
 {
 	FILE *f;
 	char *p;
 	int line;
 	char buf[SIZE], name[SIZE], value[SIZE], action[SIZE];
-	char usage[SIZE], coll[SIZE];
+	char usagestr[SIZE], coll[SIZE];
 	struct command *cmd, *cmds;
 	struct hid_data *d;
 	struct hid_item h;
 	int u, lo, hi, range;
 	
-
 	f = fopen(conf, "r");
 	if (f == NULL)
 		err(1, "%s", conf);
@@ -256,18 +263,20 @@ parse_conf(const char *conf, report_desc_t repd, int reportid, int ignore)
 			continue;
 		p = strchr(buf, '\n');
 		while (p && isspace(peek(f))) {
-			if (fgets(p, sizeof buf - strlen(buf), f) == NULL)
+			if (fgets(p, (int)(sizeof buf - strlen(buf)), f)
+			    == NULL)
 				break;
 			p = strchr(buf, '\n');
 		}
 		if (p)
-			*p = 0;
+			*p = '\0';
 		/* XXX SIZE == 4000 */
 		if (sscanf(buf, "%3999s %3999s %[^\n]", name, value, action) != 3) {
 			if (isdemon) {
 				syslog(LOG_WARNING, "config file `%s', line %d"
 				       ", syntax error: %s", conf, line, buf);
 				freecommands(cmds);
+				(void)fclose(f);
 				return (NULL);
 			} else {
 				errx(1, "config file `%s', line %d,"
@@ -293,6 +302,7 @@ parse_conf(const char *conf, report_desc_t repd, int reportid, int ignore)
 					       "bad value: %s\n",
 					       conf, line, value);
 					freecommands(cmds);
+					(void)fclose(f);
 					return (NULL);
 				} else {
 					errx(1, "config file `%s', line %d, "
@@ -306,7 +316,7 @@ parse_conf(const char *conf, report_desc_t repd, int reportid, int ignore)
 		for (d = hid_start_parse(repd, 1 << hid_input, reportid);
 		     hid_get_item(d, &h); ) {
 			if (verbose > 2)
-				printf("kind=%d usage=%x flags=%x\n",
+				(void)printf("kind=%d usage=%x flags=%x\n",
 				       h.kind, h.usage, h.flags);
 			switch (h.kind) {
 			case hid_input:
@@ -323,33 +333,38 @@ parse_conf(const char *conf, report_desc_t repd, int reportid, int ignore)
 					range = 0;
 				}
 				for (u = lo; u <= hi; u++) {
-					snprintf(usage, sizeof usage,  "%s:%s",
-						 hid_usage_page(HID_PAGE(u)), 
-						 hid_usage_in_page(u));
+					(void)snprintf(usagestr,
+					    sizeof usagestr,
+					    "%s:%s",
+					    hid_usage_page((int)HID_PAGE(u)), 
+					    hid_usage_in_page((u_int)u));
 					if (verbose > 2)
-						printf("usage %s\n", usage);
-					if (!strcasecmp(usage, name))
+						(void)printf("usage %s\n",
+						    usagestr);
+					if (!strcasecmp(usagestr, name))
 						goto foundhid;
 					if (coll[0]) {
-						snprintf(usage, sizeof usage,
-						  "%s.%s:%s", coll+1,
-						  hid_usage_page(HID_PAGE(u)), 
-						  hid_usage_in_page(u));
+						(void)snprintf(usagestr,
+						    sizeof usagestr,
+						    "%s.%s:%s", coll + 1,
+						    hid_usage_page((int)HID_PAGE(u)),
+						    hid_usage_in_page((u_int)u));
 						if (verbose > 2)
-							printf("usage %s\n",
-							       usage);
-						if (!strcasecmp(usage, name))
+							(void)printf(
+							    "usage %s\n",
+							    usagestr);
+						if (!strcasecmp(usagestr, name))
 							goto foundhid;
 					}
 				}
 				break;
 			case hid_collection:
-				snprintf(coll + strlen(coll),
+				(void)snprintf(coll + strlen(coll),
 				    sizeof coll - strlen(coll),  ".%s:%s",
-				    hid_usage_page(HID_PAGE(h.usage)), 
+				    hid_usage_page((int)HID_PAGE(h.usage)), 
 				    hid_usage_in_page(h.usage));
 				if (verbose > 2)
-					printf("coll '%s'\n", coll);
+					(void)printf("coll '%s'\n", coll);
 				break;
 			case hid_endcollection:
 				if (coll[0])
@@ -368,6 +383,7 @@ parse_conf(const char *conf, report_desc_t repd, int reportid, int ignore)
 			syslog(LOG_WARNING, "config file `%s', line %d, HID "
 			       "item not found: `%s'", conf, line, name);
 			freecommands(cmds);
+			(void)fclose(f);
 			return (NULL);
 		} else {
 			errx(1, "config file `%s', line %d, HID item "
@@ -387,14 +403,14 @@ parse_conf(const char *conf, report_desc_t repd, int reportid, int ignore)
 		}
 
 		if (verbose)
-			printf("PARSE:%d %s, %d, '%s'\n", cmd->line, name,
+			(void)printf("PARSE:%d %s, %d, '%s'\n", cmd->line, name,
 			       cmd->value, cmd->action);
 	}
-	fclose(f);
+	(void)fclose(f);
 	return (cmds);
 }
 
-void
+static void
 docmd(struct command *cmd, int value, const char *hid, int argc, char **argv)
 {
 	char cmdbuf[SIZE], *p, *q;
@@ -408,20 +424,20 @@ docmd(struct command *cmd, int value, const char *hid, int argc, char **argv)
 			if (isdigit((unsigned char)*p)) {
 				n = strtol(p, &p, 10) - 1;
 				if (n >= 0 && n < argc) {
-					strncpy(q, argv[n], len);
+					(void)strncpy(q, argv[n], len);
 					q += strlen(q);
 				}
 			} else if (*p == 'V') {
 				p++;
-				snprintf(q, len, "%d", value);
+				(void)snprintf(q, len, "%d", value);
 				q += strlen(q);
 			} else if (*p == 'N') {
 				p++;
-				strncpy(q, cmd->name, len);
+				(void)strncpy(q, cmd->name, len);
 				q += strlen(q);
 			} else if (*p == 'H') {
 				p++;
-				strncpy(q, hid, len);
+				(void)strncpy(q, hid, len);
 				q += strlen(q);
 			} else if (*p) {
 				*q++ = *p++;
@@ -433,13 +449,13 @@ docmd(struct command *cmd, int value, const char *hid, int argc, char **argv)
 	*q = 0;
 
 	if (verbose)
-		printf("system '%s'\n", cmdbuf);
+		(void)printf("system '%s'\n", cmdbuf);
 	r = system(cmdbuf);
 	if (verbose > 1 && r)
-		printf("return code = 0x%x\n", r);
+		(void)printf("return code = 0x%x\n", r);
 }
 
-void
+static void
 freecommands(struct command *cmd)
 {
 	struct command *next;

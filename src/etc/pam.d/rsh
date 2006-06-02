@@ -1,4 +1,4 @@
-# $NetBSD: rsh,v 1.4.2.1 2005/05/18 04:30:34 snj Exp $
+# $NetBSD: rsh,v 1.5 2005/05/14 15:17:47 chs Exp $
 #
 # PAM configuration for the "rsh" service
 #

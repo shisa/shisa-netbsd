@@ -1,4 +1,4 @@
-/*	$NetBSD: exception.h,v 1.5 2004/03/25 01:02:30 uwe Exp $	*/
+/*	$NetBSD: exception.h,v 1.8 2006/03/04 01:55:03 uwe Exp $	*/
 
 /*-
  * Copyright (c) 2002 The NetBSD Foundation, Inc.
@@ -133,11 +133,46 @@
 
 #define	SH7709_INTEVT2_ADC	0x980
 
+/* SH7750R, SH7751, SH7751R */
+#define	SH4_INTEVT_IRL0		0x240
+#define	SH4_INTEVT_IRL1		0x2a0
+#define	SH4_INTEVT_IRL2		0x300
+#define	SH4_INTEVT_IRL3		0x360 
+
+#define	SH4_INTEVT_IRQ0		0x200
+#define	SH4_INTEVT_IRQ1		0x220
+#define	SH4_INTEVT_IRQ2		0x240   
+#define	SH4_INTEVT_IRQ3		0x260
+#define	SH4_INTEVT_IRQ4		0x280
+#define	SH4_INTEVT_IRQ5		0x2a0
+#define	SH4_INTEVT_IRQ6		0x2c0
+#define	SH4_INTEVT_IRQ7		0x2e0
+#define	SH4_INTEVT_IRQ8		0x300
+#define	SH4_INTEVT_IRQ9		0x320
+#define	SH4_INTEVT_IRQ10	0x340
+#define	SH4_INTEVT_IRQ11	0x360
+#define	SH4_INTEVT_IRQ12	0x380
+#define	SH4_INTEVT_IRQ13	0x3a0
+#define	SH4_INTEVT_IRQ14	0x3c0
+#define	SH4_INTEVT_IRQ15	0x3e0
+
+#define	SH4_INTEVT_TMU3		0xb00
+#define	SH4_INTEVT_TMU4		0xb80
+
+#define	SH4_INTEVT_PCISERR	0xa00
+#define	SH4_INTEVT_PCIERR	0xae0
+#define	SH4_INTEVT_PCIPWDWN	0xac0
+#define	SH4_INTEVT_PCIPWON	0xaa0
+#define	SH4_INTEVT_PCIDMA0	0xa80
+#define	SH4_INTEVT_PCIDMA1	0xa60
+#define	SH4_INTEVT_PCIDMA2	0xa40
+#define	SH4_INTEVT_PCIDMA3	0xa20
+
 #ifndef _LOCORE
 #if defined(SH3) && defined(SH4)
-extern u_int32_t __sh_TRA;
-extern u_int32_t __sh_EXPEVT;
-extern u_int32_t __sh_INTEVT;
+extern uint32_t __sh_TRA;
+extern uint32_t __sh_EXPEVT;
+extern uint32_t __sh_INTEVT;
 #endif /* SH3 && SH4 */
 #endif /* !_LOCORE */
 #endif /* _KERNEL */

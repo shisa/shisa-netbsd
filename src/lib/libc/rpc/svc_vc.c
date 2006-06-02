@@ -1,4 +1,4 @@
-/*	$NetBSD: svc_vc.c,v 1.12 2003/01/18 11:29:07 thorpej Exp $	*/
+/*	$NetBSD: svc_vc.c,v 1.18 2006/03/22 12:51:32 drochner Exp $	*/
 
 /*
  * Sun RPC is a product of Sun Microsystems, Inc. and is provided for
@@ -35,7 +35,7 @@
 static char *sccsid = "@(#)svc_tcp.c 1.21 87/08/11 Copyr 1984 Sun Micro";
 static char *sccsid = "@(#)svc_tcp.c	2.2 88/08/01 4.0 RPCSRC";
 #else
-__RCSID("$NetBSD: svc_vc.c,v 1.12 2003/01/18 11:29:07 thorpej Exp $");
+__RCSID("$NetBSD: svc_vc.c,v 1.18 2006/03/22 12:51:32 drochner Exp $");
 #endif
 #endif
 
@@ -94,9 +94,9 @@ static bool_t svc_vc_freeargs __P((SVCXPRT *, xdrproc_t, caddr_t));
 static bool_t svc_vc_reply __P((SVCXPRT *, struct rpc_msg *));
 static void svc_vc_rendezvous_ops __P((SVCXPRT *));
 static void svc_vc_ops __P((SVCXPRT *));
-static bool_t svc_vc_control __P((SVCXPRT *xprt, const u_int rq, void *in));
-static bool_t svc_vc_rendezvous_control __P((SVCXPRT *xprt, const u_int rq,
-					     void *in));
+static bool_t svc_vc_control __P((SVCXPRT *, const u_int, void *));
+static bool_t svc_vc_rendezvous_control __P((SVCXPRT *, const u_int,
+					     void *));
 
 struct cf_rendezvous { /* kept in xprt->xp_p1 for rendezvouser */
 	u_int sendsize;
@@ -145,13 +145,14 @@ svc_vc_create(fd, sendsize, recvsize)
 	socklen_t slen;
 	int one = 1;
 
+	if (!__rpc_fd2sockinfo(fd, &si))
+		return NULL;
+
 	r = mem_alloc(sizeof(*r));
 	if (r == NULL) {
 		warnx("svc_vc_create: out of memory");
-		goto cleanup_svc_vc_create;
-	}
-	if (!__rpc_fd2sockinfo(fd, &si))
 		return NULL;
+	}
 	r->sendsize = __rpc_get_t_size(si.si_af, si.si_proto, (int)sendsize);
 	r->recvsize = __rpc_get_t_size(si.si_af, si.si_proto, (int)recvsize);
 	r->maxrec = __svc_maxrec;
@@ -194,6 +195,8 @@ svc_vc_create(fd, sendsize, recvsize)
 	xprt_register(xprt);
 	return (xprt);
 cleanup_svc_vc_create:
+	if (xprt)
+		mem_free(xprt, sizeof(*xprt));
 	if (r != NULL)
 		mem_free(r, sizeof(*r));
 	return (NULL);
@@ -484,7 +487,6 @@ read_vc(xprtp, buf, len)
 {
 	SVCXPRT *xprt;
 	int sock;
-	int milliseconds = 35 * 1000;
 	struct pollfd pollfd;
 	struct sockaddr *sa;
 	struct msghdr msg;
@@ -493,6 +495,7 @@ read_vc(xprtp, buf, len)
 	struct sockcred *sc;
 	socklen_t crmsgsize;
 	struct cf_conn *cfp;
+	static const struct timespec ts = { 35, 0 };
 
 	xprt = (SVCXPRT *)(void *)xprtp;
 	_DIAGASSERT(xprt != NULL);
@@ -552,7 +555,7 @@ read_vc(xprtp, buf, len)
 	do {
 		pollfd.fd = sock;
 		pollfd.events = POLLIN;
-		switch (poll(&pollfd, 1, milliseconds)) {
+		switch (pollts(&pollfd, 1, &ts, NULL)) {
 		case -1:
 			if (errno == EINTR) {
 				continue;
@@ -762,6 +765,10 @@ svc_vc_rendezvous_ops(xprt)
 #ifdef _REENTRANT
 	extern mutex_t ops_lock;
 #endif
+/* XXXGCC vax compiler unhappy otherwise */
+#ifdef __vax__     
+extern void abort(void);
+#endif
 
 	mutex_lock(&ops_lock);
 	if (ops.xp_recv == NULL) {
@@ -772,7 +779,7 @@ svc_vc_rendezvous_ops(xprt)
 		ops.xp_reply =
 		    (bool_t (*) __P((SVCXPRT *, struct rpc_msg *)))abort;
 		ops.xp_freeargs =
-		    (bool_t (*) __P((SVCXPRT *, xdrproc_t, caddr_t)))abort,
+		    (bool_t (*) __P((SVCXPRT *, xdrproc_t, caddr_t)))abort;
 		ops.xp_destroy = svc_vc_destroy;
 		ops2.xp_control = svc_vc_rendezvous_control;
 	}

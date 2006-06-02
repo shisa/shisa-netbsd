@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_xxx.c,v 1.54 2005/02/26 21:34:55 perry Exp $	*/
+/*	$NetBSD: kern_xxx.c,v 1.58 2006/05/14 21:15:11 elad Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1989, 1993
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_xxx.c,v 1.54 2005/02/26 21:34:55 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_xxx.c,v 1.58 2006/05/14 21:15:11 elad Exp $");
 
 #include "opt_syscall_debug.h"
 
@@ -46,13 +46,11 @@ __KERNEL_RCSID(0, "$NetBSD: kern_xxx.c,v 1.54 2005/02/26 21:34:55 perry Exp $");
 #include <sys/mount.h>
 #include <sys/sa.h>
 #include <sys/syscallargs.h>
+#include <sys/kauth.h>
 
 /* ARGSUSED */
 int
-sys_reboot(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+sys_reboot(struct lwp *l, void *v, register_t *retval)
 {
 	struct sys_reboot_args /* {
 		syscallarg(int) opt;
@@ -62,7 +60,8 @@ sys_reboot(l, v, retval)
 	int error;
 	char *bootstr, bs[128];
 
-	if ((error = suser(p->p_ucred, &p->p_acflag)) != 0)
+	if ((error = kauth_authorize_generic(p->p_cred, KAUTH_GENERIC_ISSUSER,
+				       &p->p_acflag)) != 0)
 		return (error);
 
 	/*
@@ -93,9 +92,7 @@ int	scdebug = SCDEBUG_CALLS|SCDEBUG_RETURNS|SCDEBUG_SHOWARGS|SCDEBUG_ALL;
 #endif
 
 void
-scdebug_call(l, code, args)
-	struct lwp *l;
-	register_t code, args[];
+scdebug_call(struct lwp *l, register_t code, register_t args[])
 {
 	struct proc *p = l->l_proc;
 	const struct sysent *sy;
@@ -114,6 +111,7 @@ scdebug_call(l, code, args)
 	    || sy->sy_call == sys_nosys))
 		return;
 
+	KERNEL_PROC_LOCK(l);
 	printf("proc %d (%s): %s num ", p->p_pid, p->p_comm, em->e_name);
 	if (code < 0
 #ifndef __HAVE_MINIMAL_EMUL
@@ -132,14 +130,11 @@ scdebug_call(l, code, args)
 		}
 	}
 	printf("\n");
+	KERNEL_PROC_UNLOCK(l);
 }
 
 void
-scdebug_ret(l, code, error, retval)
-	struct lwp *l;
-	register_t code;
-	int error;
-	register_t retval[];
+scdebug_ret(struct lwp *l, register_t code, int error, register_t retval[])
 {
 	struct proc *p = l->l_proc;
 	const struct sysent *sy;
@@ -157,6 +152,7 @@ scdebug_ret(l, code, error, retval)
 	    || sy->sy_call == sys_nosys))
 		return;
 
+	KERNEL_PROC_LOCK(l);
 	printf("proc %d (%s): %s num ", p->p_pid, p->p_comm, em->e_name);
 	if (code < 0
 #ifndef __HAVE_MINIMAL_EMUL
@@ -168,5 +164,6 @@ scdebug_ret(l, code, error, retval)
 		printf("%ld ret: err = %d, rv = 0x%lx,0x%lx", (long)code,
 		    error, (long)retval[0], (long)retval[1]);
 	printf("\n");
+	KERNEL_PROC_UNLOCK(l);
 }
 #endif /* SYSCALL_DEBUG */

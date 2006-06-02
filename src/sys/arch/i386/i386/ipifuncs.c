@@ -1,4 +1,4 @@
-/*	$NetBSD: ipifuncs.c,v 1.10 2003/07/14 22:13:10 lukem Exp $ */
+/*	$NetBSD: ipifuncs.c,v 1.12 2005/12/24 20:07:10 perry Exp $ */
 
 /*-
  * Copyright (c) 2000 The NetBSD Foundation, Inc.
@@ -44,7 +44,7 @@
  */
 
 #include <sys/cdefs.h>			/* RCS ID & Copyright macro defns */
-__KERNEL_RCSID(0, "$NetBSD: ipifuncs.c,v 1.10 2003/07/14 22:13:10 lukem Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ipifuncs.c,v 1.12 2005/12/24 20:07:10 perry Exp $");
 
 #include "opt_ddb.h"
 #include "opt_mtrr.h"
@@ -108,7 +108,7 @@ i386_ipi_halt(struct cpu_info *ci)
 
 	printf("%s: shutting down\n", ci->ci_dev->dv_xname);
 	for(;;) {
-		__asm __volatile("hlt");
+		__asm volatile("hlt");
 	}
 }
 

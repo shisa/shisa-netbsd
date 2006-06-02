@@ -1,4 +1,4 @@
-# $NetBSD: Makefile,v 1.10 2005/01/10 03:11:18 lukem Exp $
+# $NetBSD: Makefile,v 1.13 2006/05/11 23:16:30 mrg Exp $
 
 NOLINT= # defined
 
@@ -10,14 +10,6 @@ DIST=		${NETBSDSRCDIR}/crypto/dist
 WARNS?=  1
 
 PROG= hprop
-
-.if ${MKKERBEROS4} != "no"
-CPPFLAGS+= -DKRB4
-CPPFLAGS+= -I${DESTDIR}/usr/include/kerberosIV
-KRB4LDADD= -lkdb -lkrb
-KRB4DPADD= ${LIBKDB} ${LIBKRB}
-.endif
-
 
 SRCS+= 	hprop.c					\
 	v4_dump.c				\
@@ -36,11 +28,15 @@ CPPFLAGS+= -I.					\
 CPPFLAGS+=-DHAVE_IPV6
 .endif
 
+.if ${HAVE_GCC} == 4
+COPTS.mit_dump.c+=	-Wno-pointer-sign
+.endif
+
 VERS!=	cd ${NETBSDSRCDIR}/lib/libvers && ${PRINTOBJDIR}
 
-LDADD+=	-lhdb -lkrb5 ${KRB4LDADD} -lcrypto -lasn1 \
+LDADD+=	-lhdb -lkrb5 -lcrypto -lasn1 \
 	-lcom_err -L${VERS} -lvers -lroken -lcrypt
-DPADD+=	${LIBHDB} ${LIBKRB5} ${KRB4DPADD} ${LIBCRYPTO} ${LIBASN1} \
+DPADD+=	${LIBHDB} ${LIBKRB5} ${LIBCRYPTO} ${LIBASN1} \
 	${LIBCOM_ERR} ${VERS}/libvers.a ${LIBROKEN} ${LIBCRYPT}
 
 MAN=	hprop.8

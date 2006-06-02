@@ -1,4 +1,4 @@
-/*	$NetBSD: ds17485.c,v 1.6 2003/08/07 16:29:16 agc Exp $	*/
+/*	$NetBSD: ds17485.c,v 1.9 2005/12/24 20:07:25 perry Exp $	*/
 
 /*
  * Copyright (c) 2002 The NetBSD Foundation, Inc.
@@ -157,7 +157,7 @@ WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ds17485.c,v 1.6 2003/08/07 16:29:16 agc Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ds17485.c,v 1.9 2005/12/24 20:07:25 perry Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -181,8 +181,8 @@ int 	hexdectodec(int);
 int	dectohexdec(int);
 void	rtc_print(void);
 
-__inline u_int mc146818_read(void *, u_int);
-__inline void mc146818_write(void *, u_int, u_int);
+inline u_int mc146818_read(void *, u_int);
+inline void mc146818_write(void *, u_int, u_int);
 
 #define	SECMIN	((unsigned)60)			/* seconds per minute */
 #define	SECHOUR	((unsigned)(60*SECMIN))		/* seconds per hour */
@@ -247,7 +247,7 @@ rtc_attach(struct device *parent, struct device *self, void *aux)
 #endif
 }
 
-__inline u_int
+inline u_int
 mc146818_read(void *vsc, u_int reg)
 {
 	struct rtc_softc *sc = vsc;
@@ -255,7 +255,7 @@ mc146818_read(void *vsc, u_int reg)
 	return (bus_space_read_1(sc->sc_tag, sc->sc_handle, reg));
 }
 
-__inline void
+inline void
 mc146818_write(void *vsc, u_int reg, u_int datum)
 {
 	struct rtc_softc *sc = vsc;
@@ -336,7 +336,7 @@ inittodr(time_t base)
 {
 	mc_todregs rtclk;
 	time_t n;
-	int sec, min, hr, dom, mon, yr;
+	int sec, mins, hr, dom, mon, yr;
 	int i, days = 0;
 	int s;
 
@@ -363,14 +363,14 @@ inittodr(time_t base)
 	splx(s);
 
 	sec = hexdectodec(rtclk[MC_SEC]);
-	min = hexdectodec(rtclk[MC_MIN]);
+	mins = hexdectodec(rtclk[MC_MIN]);
 	hr = hexdectodec(rtclk[MC_HOUR]);
 	dom = hexdectodec(rtclk[MC_DOM]);
 	mon = hexdectodec(rtclk[MC_MONTH]);
 	yr = hexdectodec(rtclk[MC_YEAR]);
 	yr = (yr < 70) ? yr+100 : yr;
 
-	n = sec + 60 * min + 3600 * hr;
+	n = sec + 60 * mins + 3600 * hr;
 	n += (dom - 1) * 3600 * 24;
 
 	if (yeartoday(yr) == 366)

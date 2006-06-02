@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.4.8.1 2005/04/06 21:05:46 tron Exp $
+#	$NetBSD: Makefile,v 1.6 2005/03/21 01:26:02 rtr Exp $
 
 SUBDIR=bitmap freetype type1 speedo xtt
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: uvm_stat.c,v 1.25 2004/11/23 04:51:56 yamt Exp $	 */
+/*	$NetBSD: uvm_stat.c,v 1.29 2005/11/29 15:45:28 yamt Exp $	 */
 
 /*
  *
@@ -39,9 +39,10 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: uvm_stat.c,v 1.25 2004/11/23 04:51:56 yamt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: uvm_stat.c,v 1.29 2005/11/29 15:45:28 yamt Exp $");
 
 #include "opt_uvmhist.h"
+#include "opt_readahead.h"
 #include "opt_ddb.h"
 
 #include <sys/param.h>
@@ -79,8 +80,7 @@ void uvmcnt_dump(void);
 #ifdef UVMHIST
 /* call this from ddb */
 void
-uvmhist_dump(l)
-	struct uvm_history *l;
+uvmhist_dump(struct uvm_history *l)
 {
 	int lcv, s;
 
@@ -98,8 +98,7 @@ uvmhist_dump(l)
  * print a merged list of uvm_history structures
  */
 static void
-uvmhist_dump_histories(hists)
-	struct uvm_history *hists[];
+uvmhist_dump_histories(struct uvm_history *hists[])
 {
 	struct timeval  tv;
 	int	cur[MAXHISTS];
@@ -169,8 +168,7 @@ restart:
  * merges the named histories.
  */
 void
-uvm_hist(bitmask)
-	u_int32_t	bitmask;	/* XXX only support 32 hists */
+uvm_hist(u_int32_t bitmask)	/* XXX only support 32 hists */
 {
 	struct uvm_history *hists[MAXHISTS + 1];
 	int i = 0;
@@ -244,10 +242,22 @@ uvmexp_print(void (*pr)(const char *, ...))
 	    uvmexp.pdbusy, uvmexp.pdfreed, uvmexp.pdreact, uvmexp.pddeact);
 	(*pr)("    pageouts=%d, pending=%d, nswget=%d\n", uvmexp.pdpageouts,
 	    uvmexp.pdpending, uvmexp.nswget);
-	(*pr)("    nswapdev=%d, nanon=%d, nanonneeded=%d nfreeanon=%d\n",
-	    uvmexp.nswapdev, uvmexp.nanon, uvmexp.nanonneeded,
-	    uvmexp.nfreeanon);
-	(*pr)("    swpages=%d, swpginuse=%d, swpgonly=%d paging=%d\n",
+	(*pr)("    nswapdev=%d, swpgavail=%d\n",
+	    uvmexp.nswapdev, uvmexp.swpgavail);
+	(*pr)("    swpages=%d, swpginuse=%d, swpgonly=%d, paging=%d\n",
 	    uvmexp.swpages, uvmexp.swpginuse, uvmexp.swpgonly, uvmexp.paging);
 }
 #endif
+
+#if defined(READAHEAD_STATS)
+
+#define	UVM_RA_EVCNT_DEFINE(name) \
+struct evcnt uvm_ra_##name = \
+EVCNT_INITIALIZER(EVCNT_TYPE_MISC, NULL, "readahead", #name); \
+EVCNT_ATTACH_STATIC(uvm_ra_##name);
+
+UVM_RA_EVCNT_DEFINE(total);
+UVM_RA_EVCNT_DEFINE(hit);
+UVM_RA_EVCNT_DEFINE(miss);
+
+#endif /* defined(READAHEAD_STATS) */

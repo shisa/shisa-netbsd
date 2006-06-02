@@ -1,4 +1,4 @@
-#	$NetBSD: shl.mi,v 1.2.8.1 2005/04/06 21:27:46 tron Exp $
+#	$NetBSD: shl.mi,v 1.3 2005/03/22 13:45:46 tron Exp $
 ./usr/X11R6/lib/libFS_pic.a
 ./usr/X11R6/lib/libGLU_pic.a
 ./usr/X11R6/lib/libGL_pic.a

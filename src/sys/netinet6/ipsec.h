@@ -1,4 +1,4 @@
-/*	$NetBSD: ipsec.h,v 1.42.14.2 2005/09/03 06:56:04 snj Exp $	*/
+/*	$NetBSD: ipsec.h,v 1.45 2005/12/10 23:39:56 elad Exp $	*/
 /*	$KAME: ipsec.h,v 1.51 2001/08/05 04:52:58 itojun Exp $	*/
 
 /*
@@ -446,4 +446,4 @@ extern char *ipsec_dump_policy __P((ipsec_policy_t, const char *));
 extern const char *ipsec_strerror __P((void));
 #endif /* !_KERNEL */
 
-#endif /* _NETINET6_IPSEC_H_ */
+#endif /* !_NETINET6_IPSEC_H_ */

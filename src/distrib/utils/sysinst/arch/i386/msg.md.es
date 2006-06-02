@@ -1,4 +1,4 @@
-/*	$NetBSD: msg.md.es,v 1.2.2.3 2005/10/07 11:48:56 tron Exp $	*/
+/*	$NetBSD: msg.md.es,v 1.3 2005/10/06 06:46:04 xtraeme Exp $	*/
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.

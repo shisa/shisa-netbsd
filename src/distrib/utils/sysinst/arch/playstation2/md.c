@@ -1,4 +1,4 @@
-/*	$NetBSD: md.c,v 1.18 2004/08/14 16:06:42 dsl Exp $ */
+/*	$NetBSD: md.c,v 1.20 2006/04/05 16:55:06 garbled Exp $ */
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.
@@ -46,8 +46,6 @@
 #include "md.h"
 #include "msg_defs.h"
 #include "menu_defs.h"
-
-const char *fdtype = "msdos";
 
 int
 md_get_info()
@@ -163,4 +161,22 @@ md_check_partitions()
 {
 
 	return (1);
+}
+
+int
+md_post_extract(void)
+{
+	return 0;
+}
+
+int
+md_check_mbr(mbr_info_t *mbri)
+{
+	return 2;
+}
+
+int
+md_mbr_use_wholedisk(mbr_info_t *mbri)
+{
+	return mbr_use_wholedisk(mbri);
 }

@@ -1,4 +1,4 @@
-/*	$NetBSD: clnt_bcast.c,v 1.12 2003/09/09 03:56:39 itojun Exp $	*/
+/*	$NetBSD: clnt_bcast.c,v 1.17 2006/05/18 20:42:52 christos Exp $	*/
 
 /*
  * Sun RPC is a product of Sun Microsystems, Inc. and is provided for
@@ -39,7 +39,7 @@
 #if 0
 static char sccsid[] = "@(#)clnt_bcast.c 1.15 89/04/21 Copyr 1988 Sun Micro";
 #else
-__RCSID("$NetBSD: clnt_bcast.c,v 1.12 2003/09/09 03:56:39 itojun Exp $");
+__RCSID("$NetBSD: clnt_bcast.c,v 1.17 2006/05/18 20:42:52 christos Exp $");
 #endif
 #endif
 
@@ -151,8 +151,10 @@ __rpc_getbroadifs(int af, int proto, int socktype, broadlist_t *list)
 	hints.ai_protocol = proto;
 	hints.ai_socktype = socktype;
 
-	if (getaddrinfo(NULL, "sunrpc", &hints, &res) != 0)
+	if (getaddrinfo(NULL, "sunrpc", &hints, &res) != 0) {
+		freeifaddrs(ifp);
 		return 0;
+	}
 
 	for (ifap = ifp; ifap != NULL; ifap = ifap->ifa_next) {
 		if (ifap->ifa_addr->sa_family != af ||
@@ -246,7 +248,7 @@ rpc_broadcast_exp(prog, vers, proc, xargs, argsp, xresults, resultsp,
 	rpcvers_t	vers;		/* version number */
 	rpcproc_t	proc;		/* procedure number */
 	xdrproc_t	xargs;		/* xdr routine for args */
-	caddr_t		argsp;		/* pointer to args */
+	const char *	argsp;		/* pointer to args */
 	xdrproc_t	xresults;	/* xdr routine for results */
 	caddr_t		resultsp;	/* pointer to results */
 	resultproc_t	eachresult;	/* call with each result obtained */
@@ -288,9 +290,10 @@ rpc_broadcast_exp(prog, vers, proc, xargs, argsp, xresults, resultsp,
 	int msec;
 	int pollretval;
 	int fds_found;
+	struct timespec ts;
 
 #ifdef PORTMAP
-	size_t outlen_pmap;
+	size_t outlen_pmap = 0;
 	u_long port;		/* Remote port number */
 	int pmap_flag = 0;	/* UDP exists ? */
 	char *outbuf_pmap = NULL;
@@ -312,6 +315,7 @@ rpc_broadcast_exp(prog, vers, proc, xargs, argsp, xresults, resultsp,
 	if (nettype == NULL)
 		nettype = "datagram_n";
 	if ((handle = __rpc_setconf(nettype)) == NULL) {
+		AUTH_DESTROY(sys_auth);
 		return (RPC_UNKNOWNPROTO);
 	}
 	while ((nconf = __rpc_getconf(handle)) != NULL) {
@@ -516,8 +520,10 @@ rpc_broadcast_exp(prog, vers, proc, xargs, argsp, xresults, resultsp,
 		 * Get all the replies from these broadcast requests
 		 */
 	recv_again:
+		ts.tv_sec = msec / 1000;
+		ts.tv_nsec = (msec % 1000) * 1000000;
 
-		switch (pollretval = poll(pfd, fdlistno, msec)) {
+		switch (pollretval = pollts(pfd, fdlistno, &ts, NULL)) {
 		case 0:		/* timed out */
 			stat = RPC_TIMEDOUT;
 			continue;
@@ -534,7 +540,7 @@ rpc_broadcast_exp(prog, vers, proc, xargs, argsp, xresults, resultsp,
 			else if (pfd[i].revents & POLLNVAL) {
 				/*
 				 * Something bad has happened to this descri-
-				 * ptor. We can cause poll() to ignore
+				 * ptor. We can cause pollts() to ignore
 				 * it simply by using a negative fd.  We do that
 				 * rather than compacting the pfd[] and fdlist[]
 				 * arrays.
@@ -666,7 +672,7 @@ rpc_broadcast(prog, vers, proc, xargs, argsp, xresults, resultsp,
 	rpcvers_t	vers;		/* version number */
 	rpcproc_t	proc;		/* procedure number */
 	xdrproc_t	xargs;		/* xdr routine for args */
-	caddr_t		argsp;		/* pointer to args */
+	const char *	argsp;		/* pointer to args */
 	xdrproc_t	xresults;	/* xdr routine for results */
 	caddr_t		resultsp;	/* pointer to results */
 	resultproc_t	eachresult;	/* call with each result obtained */

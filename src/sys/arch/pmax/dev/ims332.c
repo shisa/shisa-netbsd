@@ -1,4 +1,4 @@
-/*	$NetBSD: ims332.c,v 1.16 2003/10/31 03:32:19 simonb Exp $	*/
+/*	$NetBSD: ims332.c,v 1.20 2006/03/08 23:46:24 lukem Exp $	*/
 
 /*-
  * Copyright (c) 1992, 1993, 1995
@@ -36,7 +36,7 @@
  */
 
 #include <sys/cdefs.h>			/* RCS ID & Copyright macro defns */
-__KERNEL_RCSID(0, "$NetBSD: ims332.c,v 1.16 2003/10/31 03:32:19 simonb Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ims332.c,v 1.20 2006/03/08 23:46:24 lukem Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -56,8 +56,8 @@ __KERNEL_RCSID(0, "$NetBSD: ims332.c,v 1.16 2003/10/31 03:32:19 simonb Exp $");
  */
 static u_int ims332_read_register (struct fbinfo *, int);
 static void ims332_write_register (struct fbinfo *, int, unsigned int);
-static __inline void ims332_cursor_off(struct fbinfo *fi);
-static __inline void ims332_cursor_on(struct fbinfo *fi);
+static inline void ims332_cursor_off(struct fbinfo *fi);
+static inline void ims332_cursor_on(struct fbinfo *fi);
 
 
 int
@@ -77,8 +77,8 @@ ims332init(fi)
 	DELAY(1);	/* specs sez 50ns.. */
 	deassert_ims332_reset_bit(reset);
 
-	/* CLOCKIN appears to receive a 6.25 Mhz clock --> PLL 12 for
-           75Mhz monitor */
+	/* CLOCKIN appears to receive a 6.25 MHz clock --> PLL 12 for
+           75 MHz monitor */
 	ims332_write_register (fi, IMS332_REG_BOOT,
 			       12 | IMS332_BOOT_CLOCK_PLL);
 
@@ -162,7 +162,7 @@ ims332_write_register(fi, regno, val)
 /*
  * Turn off hardware cursor sprite.
  */
-static __inline void
+static inline void
 ims332_cursor_off(fi)
 	struct fbinfo *fi;
 {
@@ -177,7 +177,7 @@ ims332_cursor_off(fi)
 /*
  * Turn on hardware cursor.
  */
-static __inline void
+static inline void
 ims332_cursor_on(fi)
 	struct fbinfo *fi;
 {
@@ -227,14 +227,14 @@ ims332LoadColorMap(fi, bits, index, count)
 	const u_char *bits;
 	int index, count;
 {
-	u_char *cmap_bits;
+	const u_char *cmap_bits;
 	u_char *cmap;
 	int i;
 
 	if (index > 256 || index < 0 || index + count > 256)
 		return EINVAL;
 
-	cmap_bits = (u_char *)bits;
+	cmap_bits = bits;
 	cmap = (u_char *)(fi -> fi_cmap_bits) + index * 3;
 
 	for (i = 0; i < count; i++) {

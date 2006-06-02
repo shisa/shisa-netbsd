@@ -1,4 +1,4 @@
-/*	$NetBSD: supfilesrv.c,v 1.30 2004/12/21 16:20:09 christos Exp $	*/
+/*	$NetBSD: supfilesrv.c,v 1.36 2006/05/10 21:45:40 mrg Exp $	*/
 
 /*
  * Copyright (c) 1992 Carnegie Mellon University
@@ -260,6 +260,8 @@
 #define MSGFILE
 #include "supmsg.h"
 
+extern char *crypt(const char *, const char *);
+
 int maxchildren;
 
 /*
@@ -306,7 +308,7 @@ TREELIST *listTL;		/* list of trees to upgrade */
 
 int silent;			/* -S flag */
 #ifdef LIBWRAP
-int clog;			/* -l flag */
+int sup_clog;			/* -l flag */
 #endif
 int live;			/* -d flag */
 int dbgportsq;			/* -P flag */
@@ -415,7 +417,7 @@ main(int argc, char **argv)
 			servicekill();
 			exit(1);
 		}
-		if (clog) {
+		if (sup_clog) {
 			logallow("connection from %.500s", eval_client(&req));
 		}
 #endif
@@ -455,7 +457,7 @@ main(int argc, char **argv)
 				servicekill();
 				exit(1);
 			}
-			if (clog) {
+			if (sup_clog) {
 				logallow("connection from %.500s",
 				    eval_client(&req));
 			}
@@ -516,7 +518,7 @@ init(int argc, char **argv)
 #endif
 	live = FALSE;
 #ifdef LIBWRAP
-	clog = FALSE;
+	sup_clog = FALSE;
 #endif
 	dbgportsq = FALSE;
 	scmdebug = 0;
@@ -533,7 +535,7 @@ init(int argc, char **argv)
 			break;
 #ifdef LIBWRAP
 		case 'l':
-			clog = TRUE;
+			sup_clog = TRUE;
 			break;
 #endif
 		case 'd':
@@ -600,7 +602,7 @@ init(int argc, char **argv)
 			*q = '\0';
 		if (*p == '\0')
 			quit(1, "No cryptkey found in %s\n", cryptkey);
-		cryptkey = salloc(buf);
+		cryptkey = estrdup(buf);
 	}
 	(void) fclose(f);
 	x = request(dbgportsq ? DEBUGFPORT : FILEPORT, clienthost, &maxsleep);
@@ -808,7 +810,7 @@ srvsetup(void)
 			goaway("User `%s' not found", xuser);
 		}
 		(void) free(xuser);
-		xuser = salloc(pw->pw_dir);
+		xuser = estrdup(pw->pw_dir);
 
 		/* check crosspatch host access file */
 		cryptkey = NULL;
@@ -836,7 +838,7 @@ srvsetup(void)
 					if (!matchhost(q))
 						continue;
 
-					cryptkey = salloc(p);
+					cryptkey = estrdup(p);
 					hostok = TRUE;
 					if (local_file(fileno(f), &fsbuf) > 0
 					    && stat_info_ok(&sbuf, &fsbuf)) {
@@ -868,14 +870,14 @@ srvsetup(void)
 #ifdef RCS
 	if (candorcs && release != NULL &&
 	    (strncmp(release, "RCS.", 4) == 0)) {
-		rcs_branch = salloc(&release[4]);
+		rcs_branch = estrdup(&release[4]);
 		free(release);
-		release = salloc("RCS");
+		release = estrdup("RCS");
 		dorcs = TRUE;
 	}
 #endif
 	if (release == NULL)
-		release = salloc(DEFRELEASE);
+		release = estrdup(DEFRELEASE);
 	if (basedir == NULL || *basedir == '\0') {
 		basedir = NULL;
 		(void) sprintf(buf, FILEDIRS, DEFDIR);
@@ -890,7 +892,7 @@ srvsetup(void)
 				q = nxtarg(&p, " \t=");
 				if (strcmp(q, collname) == 0) {
 					basedir = skipover(p, " \t=");
-					basedir = salloc(basedir);
+					basedir = estrdup(basedir);
 					break;
 				}
 			}
@@ -898,7 +900,7 @@ srvsetup(void)
 		}
 		if (basedir == NULL) {
 			(void) sprintf(buf, FILEBASEDEFAULT, collname);
-			basedir = salloc(buf);
+			basedir = estrdup(buf);
 		}
 	}
 	if (chdir(basedir) < 0)
@@ -912,7 +914,7 @@ srvsetup(void)
 				*q = 0;
 			if (index("#;:", *p))
 				continue;
-			prefix = salloc(p);
+			prefix = estrdup(p);
 			if (chdir(prefix) < 0)
 				goaway("Can't chdir to %s from base directory %s",
 				    prefix, basedir);
@@ -972,7 +974,7 @@ srvsetup(void)
 					while ((*p == ' ') || (*p == '\t'))
 						p++;
 					if (*p)
-						cryptkey = salloc(p);
+						cryptkey = estrdup(p);
 					break;
 				}
 			}
@@ -1038,7 +1040,7 @@ docrypt(void)
 					if ((q = index(p, '\n')) != NULL)
 						*q = '\0';
 					if (*p)
-						cryptkey = salloc(buf);
+						cryptkey = estrdup(buf);
 				}
 				if (local_file(fileno(f), &fsbuf) > 0
 				    && stat_info_ok(&sbuf, &fsbuf)) {
@@ -1097,9 +1099,9 @@ srvlogin(void)
 				filegid = runas_gid;
 				loguser = NULL;
 			} else
-				loguser = salloc(DEFUSER);
+				loguser = estrdup(DEFUSER);
 		} else
-			loguser = salloc(DEFUSER);
+			loguser = estrdup(DEFUSER);
 	}
 	if ((logerror = changeuid(loguser, logpswd, fileuid, filegid)) != NULL) {
 		logack = FLOGNG;
@@ -1350,9 +1352,9 @@ sendone(TREE * t, void *v)
 #endif
 			if (fd == -1) {
 				if (docompress) {
-					tmpnam(temp_file);
-					fd = open(temp_file,
-					    (O_WRONLY | O_CREAT | O_TRUNC | O_EXCL), 0600);
+					snprintf(temp_file, sizeof(temp_file),
+					     "%s/supfilesrv.XXXXXX", P_tmpdir);
+					fd = mkstemp(temp_file);
 					if (fd < 0)
 						goaway("We died trying to create temp file");
 					close(fd);
@@ -1374,8 +1376,8 @@ sendone(TREE * t, void *v)
 				t->Tmode = 0;
 		}
 		if (t->Tmode) {
-			t->Tuser = salloc(uconvert(t->Tuid));
-			t->Tgroup = salloc(gconvert(t->Tgid));
+			t->Tuser = estrdup(uconvert(t->Tuid));
+			t->Tgroup = estrdup(gconvert(t->Tgid));
 		}
 	}
 	x = msgrecv(sendfile, fd);
@@ -1403,8 +1405,8 @@ senddir(TREE * t, void *v)
 	if (x != SCMOK)
 		goaway("Error reading receive file request from client");
 	upgradeT = t;		/* upgrade file pointer */
-	t->Tuser = salloc(uconvert(t->Tuid));
-	t->Tgroup = salloc(gconvert(t->Tgid));
+	t->Tuser = estrdup(uconvert(t->Tuid));
+	t->Tgroup = estrdup(gconvert(t->Tgid));
 	x = msgrecv(sendfile, 0);
 	if (x != SCMOK)
 		goaway("Error sending file %s to client", t->Tname);
@@ -1445,7 +1447,7 @@ srvfinishup(time_t starttime)
 		goawayreason = (char *) NULL;
 		x = msggoaway();
 		doneack = FDONESUCCESS;
-		donereason = salloc("Unknown");
+		donereason = estrdup("Unknown");
 	} else if (goawayreason == (char *) NULL)
 		x = msgdone();
 	else {
@@ -1454,15 +1456,15 @@ srvfinishup(time_t starttime)
 	}
 	if (x == SCMEOF || x == SCMERR) {
 		doneack = FDONEUSRERROR;
-		donereason = salloc("Premature EOF on network");
+		donereason = estrdup("Premature EOF on network");
 	} else if (x != SCMOK) {
 		doneack = FDONESRVERROR;
-		donereason = salloc("Unknown SCM code");
+		donereason = estrdup("Unknown SCM code");
 	}
 	if (doneack == FDONEDONTLOG)
 		return;
 	if (donereason == NULL)
-		donereason = salloc("No reason");
+		donereason = estrdup("No reason");
 	if (doneack == FDONESRVERROR || doneack == FDONEUSRERROR)
 		logerr("%s", donereason);
 	else if (doneack == FDONEGOAWAY)
@@ -1573,7 +1575,7 @@ uconvert(int uid)
 	pw = getpwuid(uid);
 	if (pw == NULL)
 		return ("");
-	p = salloc(pw->pw_name);
+	p = estrdup(pw->pw_name);
 	Hinsert(uidH, uid, 0, p, (TREE *) NULL);
 	return (p);
 }
@@ -1590,7 +1592,7 @@ gconvert(int gid)
 	gr = getgrgid(gid);
 	if (gr == NULL)
 		return ("");
-	p = salloc(gr->gr_name);
+	p = estrdup(gr->gr_name);
 	Hinsert(gidH, gid, 0, p, (TREE *) NULL);
 	return (p);
 }
@@ -1691,7 +1693,7 @@ changeuid(char *namep, char *passwordp, int fileuid, int filegid)
 #else				/* CMUCS */
 	status = ACCESS_CODE_OK;
 	if (namep && strcmp(pwd->pw_name, DEFUSER) != 0)
-		if (strcmp(pwd->pw_passwd, (char *) crypt(pswdp, pwd->pw_passwd)))
+		if (pswdp == NULL || strcmp(pwd->pw_passwd, crypt(pswdp, pwd->pw_passwd)))
 			status = ACCESS_CODE_BADPASSWORD;
 #endif				/* CMUCS */
 	switch (status) {
@@ -1746,8 +1748,6 @@ changeuid(char *namep, char *passwordp, int fileuid, int filegid)
 		(void) sprintf(p = errbuf, "Reason:  Status %d", status);
 		break;
 	}
-	if (pwd == NULL)
-		return (p);
 	if (status != ACCESS_CODE_OK) {
 		logerr("Login failure for %s", pwd->pw_name);
 		logerr("%s", p);
@@ -1785,7 +1785,7 @@ goaway(char *fmt, ...)
 
 	vsnprintf(buf, sizeof(buf), fmt, ap);
 	va_end(ap);
-	goawayreason = salloc(buf);
+	goawayreason = estrdup(buf);
 	(void) msggoaway();
 	logerr("%s", buf);
 	longjmp(sjbuf, TRUE);

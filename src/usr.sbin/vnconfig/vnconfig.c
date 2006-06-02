@@ -1,4 +1,4 @@
-/*	$NetBSD: vnconfig.c,v 1.31.2.1 2005/08/14 21:14:03 riz Exp $	*/
+/*	$NetBSD: vnconfig.c,v 1.34 2005/08/19 02:09:50 christos Exp $	*/
 
 /*-
  * Copyright (c) 1997 The NetBSD Foundation, Inc.
@@ -236,6 +236,8 @@ main(argc, argv)
 				struct statvfs *mnt = NULL;
 				int i, n;
 
+				n = 0;	/* XXXGCC -Wuninitialized */
+
 				printf("vnd%d: ", vnu.vnu_unit);
 
 				dev = devname(vnu.vnu_dev, S_IFBLK);
@@ -267,7 +269,8 @@ main(argc, argv)
 					    major(vnu.vnu_dev),
 					    minor(vnu.vnu_dev));
 
-				printf("inode %d\n", vnu.vnu_ino);
+				printf("inode %llu\n",
+				    (unsigned long long)vnu.vnu_ino);
 			}
 
 			if (argc)

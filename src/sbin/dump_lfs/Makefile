@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.5.6.1 2005/04/21 19:04:14 tron Exp $
+#	$NetBSD: Makefile,v 1.6 2005/04/19 07:26:38 hannken Exp $
 #	@(#)Makefile	8.1 (Berkeley) 6/5/93
 
 #	lfs_inode.c		LFS filestore-specific routines

@@ -29,3 +29,6 @@
 #if !defined(NO_SOLIB)
 #include "solib.h"             /* Support for shared libraries. */
 #endif
+
+/* Override child_pid_to_exec_file in 'inftarg.c'.  */
+#define CHILD_PID_TO_EXEC_FILE

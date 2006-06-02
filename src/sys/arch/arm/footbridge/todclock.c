@@ -1,4 +1,4 @@
-/*	$NetBSD: todclock.c,v 1.6 2004/07/05 07:28:45 pk Exp $	*/
+/*	$NetBSD: todclock.c,v 1.9 2005/12/24 20:06:52 perry Exp $	*/
 
 /*
  * Copyright (c) 1994-1997 Mark Brinicombe.
@@ -44,7 +44,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: todclock.c,v 1.6 2004/07/05 07:28:45 pk Exp $");
+__KERNEL_RCSID(0, "$NetBSD: todclock.c,v 1.9 2005/12/24 20:06:52 perry Exp $");
 
 /* Include header files */
 
@@ -148,7 +148,7 @@ todclockattach(parent, self, aux)
 	printf("\n");
 }
 
-static __inline int
+static inline int
 yeartoday(year)
 	int year;
 {
@@ -183,7 +183,7 @@ void
 resettodr()
 {
 	int s;
-	time_t year, mon, day, hour, min, sec;
+	time_t year, mon, day, hour, mins, sec;
 	rtc_t rtc;
 
 	/* Have we set the system time in inittodr() */
@@ -227,14 +227,14 @@ resettodr()
 	sec %= SECPERDAY;
 	hour = sec / 3600;
 	sec %= 3600;
-	min = sec / 60;
+	mins = sec / 60;
 	sec %= 60;
 	rtc.rtc_cen = year / 100;
 	rtc.rtc_year = year % 100;
 	rtc.rtc_mon = mon+1;
 	rtc.rtc_day = day+1;
 	rtc.rtc_hour = hour;
-	rtc.rtc_min = min;
+	rtc.rtc_min = mins;
 	rtc.rtc_sec = sec;
 	rtc.rtc_centi =
 	rtc.rtc_micro = 0;

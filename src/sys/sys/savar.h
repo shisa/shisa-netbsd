@@ -1,4 +1,4 @@
-/*	$NetBSD: savar.h,v 1.15.14.1 2005/10/21 17:39:40 riz Exp $	*/
+/*	$NetBSD: savar.h,v 1.18 2006/03/29 23:02:31 cube Exp $	*/
 
 /*-
  * Copyright (c) 2001 The NetBSD Foundation, Inc.
@@ -40,8 +40,8 @@
  * Internal data usd by the scheduler activation implementation
  */
 
-#ifndef _SYS_SAVAR_H
-#define _SYS_SAVAR_H
+#ifndef _SYS_SAVAR_H_
+#define _SYS_SAVAR_H_
 
 #include <sys/lock.h>
 #include <sys/tree.h>
@@ -55,6 +55,19 @@ union sau_state {
 	struct {
 		struct lwp	*ss_lwp;
 	} ss_deferred;
+};
+
+struct sa_emul {
+	size_t		sae_ucsize;	/* Size of ucontext_t */
+	size_t		sae_sasize;	/* Size of sa_t */
+	size_t		sae_sapsize;	/* Size of (sa_t *) */
+	int		(*sae_sacopyout)(int, const void *, void *);
+	int		(*sae_upcallconv)(struct lwp *, int, size_t *, void **,
+			    void (**)(void *));
+	void		(*sae_upcall)(struct lwp *, int, int, int, void *,
+			    void *, void *, sa_upcall_t);
+	void		(*sae_getucontext)(struct lwp *, void *);
+	void		*(*sae_ucsp)(void *); /* Stack ptr from an ucontext_t */
 };
 
 struct sadata_upcall {
@@ -146,4 +159,15 @@ void	sa_unblock_userret(struct lwp *);
 void	sa_upcall_userret(struct lwp *);
 void	cpu_upcall(struct lwp *, int, int, int, void *, void *, void *, sa_upcall_t);
 
-#endif /* !_SYS_SAVAR_H */
+typedef int (*sa_copyin_stack_t)(stack_t *, int, stack_t *);
+int	sa_stacks1(struct lwp *, register_t *, int, stack_t *,
+    sa_copyin_stack_t);
+int	dosa_register(struct lwp *, sa_upcall_t, sa_upcall_t *, int, ssize_t);
+
+void	*sa_ucsp(void *);
+
+#define SAOUT_UCONTEXT	0
+#define SAOUT_SA_T	1
+#define SAOUT_SAP_T	2
+
+#endif /* !_SYS_SAVAR_H_ */

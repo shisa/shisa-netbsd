@@ -1,4 +1,4 @@
-/* 	$NetBSD: gallant12x22.h,v 1.7.2.1 2005/09/26 20:35:26 tron Exp $ */
+/* 	$NetBSD: gallant12x22.h,v 1.11 2005/12/11 12:24:12 christos Exp $ */
 
 /*
  * Copyright (c) 1992, 1993
@@ -35,9 +35,9 @@
  * Derived from: @(#)gallant19.h	8.1 (Berkeley) 6/11/93
  */
 
-extern u_char gallant12x22_data[];
+static u_char gallant12x22_data[];
 
-struct wsdisplay_font gallant12x22 = {
+static struct wsdisplay_font gallant12x22 = {
 	"Gallant",			/* typeface name */
 	0,				/* firstchar */
 	255 - 0 + 1,			/* numchar */

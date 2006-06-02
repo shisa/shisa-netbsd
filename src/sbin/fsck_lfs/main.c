@@ -1,4 +1,4 @@
-/* $NetBSD: main.c,v 1.20.2.1 2005/05/07 11:21:29 tron Exp $	 */
+/* $NetBSD: main.c,v 1.28 2006/04/17 19:05:16 perseant Exp $	 */
 
 /*
  * Copyright (c) 1980, 1986, 1993
@@ -52,7 +52,7 @@
 
 int returntosingle;
 
-static int argtoi(int, char *, char *, int);
+static int argtoi(int, const char *, const char *, int);
 static int checkfilesys(const char *, char *, long, int);
 static void usage(void);
 extern void (*panic_func)(int, const char *, va_list);
@@ -62,9 +62,8 @@ main(int argc, char **argv)
 {
 	int ch;
 	int ret = 0;
-	char *optstring = "b:dfi:m:npPqy";
+	const char *optstring = "b:dfi:m:npPqy";
 
-	sync();
 	skipclean = 1;
 	exitonfail = 0;
 	idaddr = 0x0;
@@ -142,7 +141,7 @@ main(int argc, char **argv)
 }
 
 static int
-argtoi(int flag, char *req, char *str, int base)
+argtoi(int flag, const char *req, const char *str, int base)
 {
 	char *cp;
 	int ret;
@@ -238,7 +237,8 @@ checkfilesys(const char *filesys, char *mntpt, long auxdata, int child)
 		if (zlnhead != NULL) {
 			printf("The following zero link count inodes remain:");
 			for (zlnp = zlnhead; zlnp; zlnp = zlnp->next)
-				printf(" %u,", zlnp->zlncnt);
+				printf(" %llu,",
+				    (unsigned long long)zlnp->zlncnt);
 			printf("\n");
 		}
 	}
@@ -256,8 +256,8 @@ checkfilesys(const char *filesys, char *mntpt, long auxdata, int child)
 	/*
 	 * print out summary statistics
 	 */
-	pwarn("%d files, %lld used, %lld free\n",
-	    n_files, (long long) n_blks,
+	pwarn("%llu files, %lld used, %lld free\n",
+	    (unsigned long long)n_files, (long long) n_blks,
 	    (long long) fs->lfs_bfree);
 
 	ckfini(1);
@@ -285,8 +285,6 @@ checkfilesys(const char *filesys, char *mntpt, long auxdata, int child)
 
 			if (flags & MNT_RDONLY) {
 				args.fspec = 0;
-				args.export.ex_flags = 0;
-				args.export.ex_root = 0;
 				flags |= MNT_UPDATE | MNT_RELOAD;
 				ret = mount(MOUNT_LFS, "/", flags, &args);
 				if (ret == 0)

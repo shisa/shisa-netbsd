@@ -1,4 +1,4 @@
-/*	$NetBSD: timer_jazziovar.h,v 1.3 2005/01/22 08:43:02 tsutsui Exp $	*/
+/*	$NetBSD: timer_jazziovar.h,v 1.5 2005/12/11 12:16:39 christos Exp $	*/
 
 /*-
  * Copyright (c) 2001 The NetBSD Foundation, Inc.
@@ -43,3 +43,4 @@ struct timer_jazzio_config {
 };
 
 extern struct timer_jazzio_config *timer_jazzio_conf;
+extern struct evcnt timer_jazzio_ev;

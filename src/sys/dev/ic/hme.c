@@ -1,4 +1,4 @@
-/*	$NetBSD: hme.c,v 1.49 2005/03/05 18:36:23 heas Exp $	*/
+/*	$NetBSD: hme.c,v 1.53 2005/12/24 23:41:33 perry Exp $	*/
 
 /*-
  * Copyright (c) 1999 The NetBSD Foundation, Inc.
@@ -41,7 +41,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: hme.c,v 1.49 2005/03/05 18:36:23 heas Exp $");
+__KERNEL_RCSID(0, "$NetBSD: hme.c,v 1.53 2005/12/24 23:41:33 perry Exp $");
 
 /* #define HMEDEBUG */
 
@@ -257,8 +257,9 @@ hme_config(sc)
 	ifp->if_flags =
 	    IFF_BROADCAST | IFF_SIMPLEX | IFF_NOTRAILERS | IFF_MULTICAST;
 	sc->sc_if_flags = ifp->if_flags;
-	ifp->if_capabilities |= IFCAP_CSUM_TCPv4_Rx | IFCAP_CSUM_UDPv4_Rx |
-				IFCAP_CSUM_TCPv4 | IFCAP_CSUM_UDPv4;
+	ifp->if_capabilities |=
+	    IFCAP_CSUM_TCPv4_Tx | IFCAP_CSUM_TCPv4_Rx |
+	    IFCAP_CSUM_UDPv4_Tx | IFCAP_CSUM_UDPv4_Rx;
 	IFQ_SET_READY(&ifp->if_snd);
 
 	/* Initialize ifmedia structures and MII info */
@@ -653,7 +654,7 @@ hme_init(sc)
  * Compare two Ether/802 addresses for equality, inlined and unrolled for
  * speed.
  */
-static __inline__ int
+static inline int
 ether_cmp(a, b)
 	u_char *a, *b;
 {
@@ -755,7 +756,7 @@ hme_get(sc, ri, flags)
 
 #ifdef INET
 	/* hardware checksum */
-	if (ifp->if_csum_flags_rx & (M_CSUM_TCPv4 | M_CSUM_TCPv4)) {
+	if (ifp->if_csum_flags_rx & (M_CSUM_TCPv4 | M_CSUM_UDPv4)) {
 		struct ether_header *eh;
 		struct ip *ip;
 		struct udphdr *uh;

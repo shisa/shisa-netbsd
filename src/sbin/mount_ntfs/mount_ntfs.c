@@ -1,4 +1,4 @@
-/* $NetBSD: mount_ntfs.c,v 1.12 2005/02/05 15:06:15 xtraeme Exp $ */
+/* $NetBSD: mount_ntfs.c,v 1.14 2006/03/21 21:11:41 christos Exp $ */
 
 /*
  * Copyright (c) 1994 Christopher G. Demetriou
@@ -35,7 +35,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: mount_ntfs.c,v 1.12 2005/02/05 15:06:15 xtraeme Exp $");
+__RCSID("$NetBSD: mount_ntfs.c,v 1.14 2006/03/21 21:11:41 christos Exp $");
 #endif
 
 #include <sys/cdefs.h>
@@ -81,6 +81,7 @@ mount_ntfs(int argc, char **argv)
 	struct stat sb;
 	int c, mntflags, set_gid, set_uid, set_mask;
 	char *dev, *dir, canon_dev[MAXPATHLEN], canon_dir[MAXPATHLEN];
+	mntoptparse_t mp;
 
 	mntflags = set_gid = set_uid = set_mask = 0;
 	(void)memset(&args, '\0', sizeof(args));
@@ -106,7 +107,10 @@ mount_ntfs(int argc, char **argv)
 			args.flag |= NTFS_MFLAG_ALLNAMES;
 			break;
 		case 'o':
-			getmntopts(optarg, mopts, &mntflags, 0);
+			mp = getmntopts(optarg, mopts, &mntflags, 0);
+			if (mp == NULL)
+				err(1, "getmntopts");
+			freemntopts(mp);
 			break;
 		case '?':
 		default:
@@ -138,11 +142,6 @@ mount_ntfs(int argc, char **argv)
 	}
 
 	args.fspec = dev;
-	args.export.ex_root = 65534;	/* unchecked anyway on DOS fs */
-	if (mntflags & MNT_RDONLY)
-		args.export.ex_flags = MNT_EXRDONLY;
-	else
-		args.export.ex_flags = 0;
 	if (!set_gid || !set_uid || !set_mask) {
 		if (stat(dir, &sb) == -1)
 			err(EX_OSERR, "stat %s", dir);

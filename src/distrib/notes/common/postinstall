@@ -1,4 +1,4 @@
-.\"	$NetBSD: postinstall,v 1.58.2.2 2005/12/06 23:35:51 tron Exp $
+.\"	$NetBSD: postinstall,v 1.60 2006/03/09 18:07:31 wiz Exp $
 .\"
 .\" Copyright (c) 1999-2004 The NetBSD Foundation, Inc.
 .\" All rights reserved.
@@ -326,7 +326,7 @@ Also, you may want to read through the
 .Nx*M
 FAQ entry on X11.
 .br
-.Lk http://www.NetBSD.org/Ports/faq.html#x11
+.Lk http://www.NetBSD.org/Ports/hp300/faq.html#x11
 .\}
 .if \n[macppc] \{\
 Also, you may want to read through the
@@ -391,13 +391,13 @@ A list of available packages suitable for browsing is at
 Precompiled binaries can be found at
 .Lk ftp://ftp.NetBSD.org/pub/NetBSD/packages/ ,
 usually in the
-.Pa \*V/\*M/All
+.Pa \*V/\*P/All
 subdir.
 You can install them with the following commands under
 .Xr sh 1 :
 .Pp
 .Bd -unfilled
-.Ic # PKG_PATH=ftp://ftp.NetBSD.org/pub/NetBSD/packages/\*V/\*M/All
+.Ic # PKG_PATH=ftp://ftp.NetBSD.org/pub/NetBSD/packages/\*V/\*P/All
 .Ic # export PKG_PATH
 .Ic # pkg_add -v tcsh
 .Ic # pkg_add -v bash
@@ -413,7 +413,7 @@ If you are using
 then replace the first two lines with the following:
 .Pp
 .Bd -unfilled
-.Ic # setenv PKG_PATH ftp://ftp.NetBSD.org/pub/NetBSD/packages/\*V/\*M/All
+.Ic # setenv PKG_PATH ftp://ftp.NetBSD.org/pub/NetBSD/packages/\*V/\*P/All
 \&...
 .Ed
 .Pp

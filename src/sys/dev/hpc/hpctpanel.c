@@ -1,4 +1,4 @@
-/*	$NetBSD: hpctpanel.c,v 1.2 2005/02/27 00:26:59 perry Exp $	*/
+/*	$NetBSD: hpctpanel.c,v 1.4 2005/12/11 12:21:22 christos Exp $	*/
 
 /*
  * Copyright (c) 1999-2003 TAKEMURA Shin All rights reserved.
@@ -28,7 +28,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: hpctpanel.c,v 1.2 2005/02/27 00:26:59 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: hpctpanel.c,v 1.4 2005/12/11 12:21:22 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -42,10 +42,10 @@ __KERNEL_RCSID(0, "$NetBSD: hpctpanel.c,v 1.2 2005/02/27 00:26:59 perry Exp $");
 
 int
 hpc_tpanel_ioctl(struct tpcalib_softc *sc, u_long cmd, caddr_t data, int flag,
-    struct proc *p)
+    struct lwp *l)
 {
 	struct wsmouse_id *id;
-	char *idstr;
+	const char *idstr;
 	int s;
 
 	switch (cmd) {
@@ -72,7 +72,7 @@ hpc_tpanel_ioctl(struct tpcalib_softc *sc, u_long cmd, caddr_t data, int flag,
 
         case WSMOUSEIO_SCALIBCOORDS:
         case WSMOUSEIO_GCALIBCOORDS:
-                return tpcalib_ioctl(sc, cmd, data, flag, p);
+                return tpcalib_ioctl(sc, cmd, data, flag, l);
 
 	default:
 		return EPASSTHROUGH;

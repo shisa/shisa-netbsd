@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.4.8.3 2005/07/02 16:12:13 tron Exp $
+#	$NetBSD: Makefile,v 1.7 2005/07/02 08:28:58 rtr Exp $
 
 XMODULEDIR=	${X11USRLIBDIR}/modules/fonts
 
