@@ -9,7 +9,7 @@ INCS=	bpf.h bpfdesc.h dlt.h ethertypes.h if.h if_arc.h if_arp.h \
 	if_stripvar.h if_tap.h if_token.h if_tun.h if_types.h if_vlanvar.h \
 	netisr.h pfil.h pfkeyv2.h pfvar.h ppp-comp.h ppp_defs.h radix.h \
 	raw_cb.h route.h slcompress.h slip.h zlib.h \
-	if_mip.h
+	if_mip.h if_nemo.h mipsock.h
 
 .include <bsd.kinc.mk>
 

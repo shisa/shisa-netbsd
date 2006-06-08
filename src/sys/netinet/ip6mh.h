@@ -286,6 +286,7 @@ struct ip6_mh_opt {
 #define IP6_MHOPT_REPLAY_PROTECTION	10
 #define IP6_MHOPT_IPV4_PREFIX   11       /* IPv4 Mobile Network Prefix */
 #define IP6_MHOPT_IPV4_HOA      12       /* IPv4 Home Address */
+#define IP6_MHOPT_MAX		12
 
 /* Binding Refresh Advice */
 struct ip6_mh_opt_refresh_advice {

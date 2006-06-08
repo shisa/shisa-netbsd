@@ -366,6 +366,9 @@ struct nd_opt_hdr {		/* Neighbor discovery option header */
 #define ND_OPT_REDIRECTED_HEADER	4
 #define ND_OPT_MTU			5
 
+#define	ND_OPT_ADV_INTERVAL		6	/* RFC3775 */
+#define	ND_OPT_HA_INFORMATION		7	/* RFC3775 */
+
 struct nd_opt_prefix_info {	/* prefix information */
 	u_int8_t	nd_opt_pi_type;
 	u_int8_t	nd_opt_pi_len;
@@ -379,6 +382,7 @@ struct nd_opt_prefix_info {	/* prefix information */
 
 #define ND_OPT_PI_FLAG_ONLINK		0x80
 #define ND_OPT_PI_FLAG_AUTO		0x40
+#define ND_OPT_PI_FLAG_ROUTER		0x20	/* RFC3775 */
 
 struct nd_opt_rd_hdr {		/* redirected header */
 	u_int8_t	nd_opt_rh_type;
@@ -394,6 +398,28 @@ struct nd_opt_mtu {		/* MTU option */
 	u_int16_t	nd_opt_mtu_reserved;
 	u_int32_t	nd_opt_mtu_mtu;
 } __attribute__((__packed__));
+
+struct nd_opt_adv_interval {	/* Advertisement interval option */
+	u_int8_t	nd_opt_ai_type;
+	u_int8_t	nd_opt_ai_len;
+	u_int16_t	nd_opt_ai_reserved;
+	u_int32_t	nd_opt_ai_interval;
+} __attribute__((__packed__));
+
+struct nd_opt_homeagent_info {	/* Home Agent info */
+	u_int8_t	nd_opt_hai_type;
+	u_int8_t	nd_opt_hai_len;
+	u_int16_t	nd_opt_hai_reserved;
+	u_int16_t	nd_opt_hai_preference;
+	u_int16_t	nd_opt_hai_lifetime;
+} __attribute__((__packed__));
+
+#if BYTE_ORDER == BIG_ENDIAN
+#define MIP6_HAINFO_FLAG_MR     0x8000
+#endif /* BIG_ENDIAN */
+#if BYTE_ORDER == LITTLE_ENDIAN
+#define MIP6_HAINFO_FLAG_MR     0x0080
+#endif /* LITTLE_ENDIAN */
 
 /*
  * icmp6 namelookup

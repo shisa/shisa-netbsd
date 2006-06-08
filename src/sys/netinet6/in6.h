@@ -287,6 +287,7 @@ extern const struct in6_addr in6addr_linklocal_allrouters;
 #define IPV6_ADDR_SCOPE_GLOBAL		0x0e
 #else
 #define __IPV6_ADDR_SCOPE_NODELOCAL	0x01
+#define __IPV6_ADDR_SCOPE_INTFACELOCAL	0x01
 #define __IPV6_ADDR_SCOPE_LINKLOCAL	0x02
 #define __IPV6_ADDR_SCOPE_SITELOCAL	0x05
 #define __IPV6_ADDR_SCOPE_ORGLOCAL	0x08	/* just used in this file */
