@@ -293,6 +293,12 @@ inet6_rth_space(int type, int segments)
 	switch (type) {
 	case IPV6_RTHDR_TYPE_0:
 		return (((segments * 2) + 1) << 3);
+#ifdef MIP6
+	case IPV6_RTHDR_TYPE_2:
+		if (segments != 1)
+			return (0); /* XXX is 0 OK? */
+		return (((segments * 2) + 1) << 3);
+#endif /* MIP6 */
 	default:
 		return (0);	/* type not suppported */
 	}
@@ -303,6 +309,9 @@ inet6_rth_init(void *bp, socklen_t bp_len, int type, int segments)
 {
 	struct ip6_rthdr *rth;
 	struct ip6_rthdr0 *rth0;
+#ifdef MIP6
+	struct ip6_rthdr2 *rth2;
+#endif /* MIP6 */
 
 	_DIAGASSERT(bp != NULL);
 
@@ -321,6 +330,23 @@ inet6_rth_init(void *bp, socklen_t bp_len, int type, int segments)
 		rth0->ip6r0_segleft = 0;
 		rth0->ip6r0_reserved = 0;
 		break;
+#ifdef MIP6
+	case IPV6_RTHDR_TYPE_2:
+		if (segments != 1)
+			return (NULL); /* segments must be 1. */
+
+		/* length validation */
+		if (bp_len < inet6_rth_space(IPV6_RTHDR_TYPE_2, segments))
+			return (NULL);
+
+		memset(bp, 0, bp_len);
+		rth2 = (struct ip6_rthdr2 *)(void *)rth;
+		rth2->ip6r2_len = segments * 2;
+		rth2->ip6r2_type = IPV6_RTHDR_TYPE_2;
+		rth2->ip6r2_segleft = 0;
+		rth2->ip6r2_reserved = 0;
+		break;
+#endif /* MIP6 */
 	default:
 		return (NULL);	/* type not supported */
 	}
@@ -333,6 +359,9 @@ inet6_rth_add(void *bp, const struct in6_addr *addr)
 {
 	struct ip6_rthdr *rth;
 	struct ip6_rthdr0 *rth0;
+#ifdef MIP6
+	struct ip6_rthdr2 *rth2;
+#endif /* MIP6 */
 	struct in6_addr *nextaddr;
 
 	_DIAGASSERT(bp != NULL);
@@ -347,6 +376,16 @@ inet6_rth_add(void *bp, const struct in6_addr *addr)
 		*nextaddr = *addr;
 		rth0->ip6r0_segleft++;
 		break;
+#ifdef MIP6
+	case IPV6_RTHDR_TYPE_2:
+		rth2 = (struct ip6_rthdr2 *)(void *)rth;
+		if (rth2->ip6r2_segleft != 0)
+			return (-1); /* rthdr2 can contain just one address. */
+		nextaddr = (struct in6_addr *)(void *)(rth2 + 1) + rth2->ip6r2_segleft;
+		*nextaddr = *addr;
+		rth2->ip6r2_segleft++;
+		break;
+#endif /* MIP6 */
 	default:
 		return (-1);	/* type not supported */
 	}
@@ -395,6 +434,11 @@ inet6_rth_reverse(const void *in, void *out)
 		}
 		
 		break;
+#ifdef MIP6
+	case IPV6_RTHDR_TYPE_2:
+		/* reversing operation is not supported for type 2. */
+		return (-1);
+#endif /* MIP6 */
 	default:
 		return (-1);	/* type not supported */
 	}
@@ -407,6 +451,9 @@ inet6_rth_segments(const void *bp)
 {
 	const struct ip6_rthdr *rh;
 	const struct ip6_rthdr0 *rh0;
+#ifdef MIP6
+	const struct ip6_rthdr2 *rh2;
+#endif /* MIP6 */
 	unsigned int addrs;
 
 	_DIAGASSERT(bp != NULL);
@@ -426,6 +473,19 @@ inet6_rth_segments(const void *bp)
 			return (-1);
 
 		return (addrs);
+#ifdef MIP6
+	case IPV6_RTHDR_TYPE_2:
+		rh2 = (const struct ip6_rthdr2 *)bp;
+
+		/*
+		 * Validation for a type-2 routing header.
+		 */
+		if ((rh2->ip6r2_len % 2) != 0 ||
+		    (addrs = (rh2->ip6r2_len / 2)) < rh2->ip6r2_segleft)
+			return (-1);
+
+		return (addrs);
+#endif /* MIP6 */
 	default:
 		return (-1);	/* unknown type */
 	}
@@ -436,6 +496,9 @@ inet6_rth_getaddr(const void *bp, int idx)
 {
 	const struct ip6_rthdr *rh;
 	const struct ip6_rthdr0 *rh0;
+#ifdef MIP6
+	const struct ip6_rthdr2 *rh2;
+#endif /* MIP6 */
 	unsigned int addrs;
 
 	_DIAGASSERT(bp != NULL);
@@ -458,6 +521,26 @@ inet6_rth_getaddr(const void *bp, int idx)
 			return (NULL);
 
 		return (((struct in6_addr *)(void *)__UNCONST(rh0 + 1)) + idx);
+#ifdef MIP6
+	case IPV6_RTHDR_TYPE_2:
+		rh2 = (const struct ip6_rthdr2 *)bp;
+
+		/* rthdr2 contains just one address. */
+		if (idx != 1)
+			return (NULL); /* rthdr2 contains just one address. */
+
+		/*
+		 * Validation for a type-2 routing header.
+		 */
+		if ((rh2->ip6r2_len % 2) != 0 ||
+		    (addrs = (rh2->ip6r2_len / 2)) < rh2->ip6r2_segleft)
+			return (NULL);
+
+		if (idx < 0 || addrs <= idx)
+			return (NULL);
+
+		return (((struct in6_addr *)(void *)__UNCONST(rh2 + 1)) + idx);
+#endif /* MIP6 */
 	default:
 		return (NULL);	/* unknown type */
 	}

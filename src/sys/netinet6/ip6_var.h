@@ -124,6 +124,7 @@ struct	ip6po_rhinfo {
 #define ip6po_rthdr	ip6po_rhinfo.ip6po_rhi_rthdr
 #define ip6po_route	ip6po_rhinfo.ip6po_rhi_route
 #define ip6po_rthdr2	ip6po_rhinfo2.ip6po_rhi_rthdr
+#define ip6po_route2	ip6po_rhinfo2.ip6po_rhi_route
 
 /* Nexthop related info */
 struct	ip6po_nhinfo {
@@ -230,8 +231,7 @@ struct ip6aux {
 	u_int32_t ip6a_flags;
 #define IP6A_SWAP	0x01		/* swapped home/care-of on packet */
 #define IP6A_HASEEN	0x02		/* HA was present */
-#define IP6A_BRUID	0x04		/* BR Unique Identifier was present */
-#define IP6A_RTALERTSEEN 0x08		/* rtalert present */
+
 #define IP6A_ROUTEOPTIMIZED 0x10	/* route optimized packet */
 #define IP6A_NOTUSEBC	0x20		/* do not requrie to lookup BC */
 #define IP6A_TEMP_PROXYND_DEL	0x40	/* Marking for resuming proxy nd entry after sending sepcial BA */

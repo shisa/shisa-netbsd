@@ -67,8 +67,9 @@ struct gif_softc {
 	void	*gif_si;		/* softintr handle */
 #endif
 #ifdef MIP6
-	struct sockaddr *gif_nexthop;	/* nexthop address */
-#endif /* MIP6 */
+	/* XXX: must be located as nemo_nexthop of the nemo_softc{} */
+	struct sockaddr	*gif_nexthop; /* nexthop address */
+#endif
 };
 
 #define gif_ro gifsc_gifscr.gifscr_ro

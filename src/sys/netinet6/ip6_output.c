@@ -212,7 +212,23 @@ ip6_output(m0, opt, ro, flags, im6o, so, ifpp)
 		/* Hop-by-Hop options header */
 		MAKE_EXTHDR(opt->ip6po_hbh, &exthdrs.ip6e_hbh);
 		/* Destination options header(1st part) */
-		MAKE_EXTHDR(opt->ip6po_dest1, &exthdrs.ip6e_dest1);
+		if (opt->ip6po_rthdr
+#ifdef MIP6
+		    || opt->ip6po_rthdr2
+#endif /* MIP6 */
+			) {
+			/*
+			 * Destination options header(1st part)
+			 * This only makes sence with a routing header.
+			 * See Section 9.2 of RFC 3542.
+			 * Disabling this part just for MIP6 convenience is
+			 * a bad idea.  We need to think carefully about a
+			 * way to make the advanced API coexist with MIP6
+			 * options, which might automatically be inserted in
+			 * the kernel.
+			 */
+			MAKE_EXTHDR(opt->ip6po_dest1, &exthdrs.ip6e_dest1);
+		}
 		/* Routing header */
 		MAKE_EXTHDR(opt->ip6po_rthdr, &exthdrs.ip6e_rthdr);
 #ifdef MIP6
@@ -483,7 +499,7 @@ ip6_output(m0, opt, ro, flags, im6o, so, ifpp)
 		struct ip6_rthdr *rh = NULL;
 		int segleft_org = 0;
 #ifdef MIP6
-			int segleft2_org = 0;
+		int segleft2_org = 0;
 #endif /* MIP6 */
 		struct ipsec_output_state state;
 
@@ -532,10 +548,10 @@ ip6_output(m0, opt, ro, flags, im6o, so, ifpp)
 			rh->ip6r_segleft = segleft_org;
 		}
 #ifdef MIP6
-			if (exthdrs.ip6e_rthdr2) {
-				/* ah6_output doesn't modify mbuf chain */
-				rh->ip6r_segleft = segleft2_org;
-			}
+		if (exthdrs.ip6e_rthdr2) {
+			/* ah6_output doesn't modify mbuf chain */
+			rh->ip6r_segleft = segleft2_org;
+		}
 #endif /* MIP6 */
 	    }
 skip_ipsec2:;
@@ -570,39 +586,39 @@ skip_ipsec2:;
 	 * with the first hop of the routing header.
 	 */
 	{
-	      struct ip6_rthdr *rh = NULL;
+		struct ip6_rthdr *rh = NULL;
 
-	      if (exthdrs.ip6e_rthdr)
-		    rh = (struct ip6_rthdr *)(mtod(exthdrs.ip6e_rthdr,
-						   struct ip6_rthdr *));
+		if (exthdrs.ip6e_rthdr)
+			rh = (struct ip6_rthdr *)(mtod(exthdrs.ip6e_rthdr,
+			    struct ip6_rthdr *));
 #ifdef MIP6
-	      else if (exthdrs.ip6e_rthdr2)
-		    rh = (struct ip6_rthdr *)(mtod(exthdrs.ip6e_rthdr2,
-						   struct ip6_rthdr *));
+		else if (exthdrs.ip6e_rthdr2)
+			rh = (struct ip6_rthdr *)(mtod(exthdrs.ip6e_rthdr2,
+			    struct ip6_rthdr *));
 #endif /* MIP6 */
-	      if (rh) {
-		    struct ip6_rthdr0 *rh0;
-		    struct in6_addr *addr;
+		if (rh) {
+			struct ip6_rthdr0 *rh0;
+			struct in6_addr *addr;
 
-		    finaldst = ip6->ip6_dst;
-		    switch (rh->ip6r_type) {
-		    case IPV6_RTHDR_TYPE_0:
+			finaldst = ip6->ip6_dst;
+			switch (rh->ip6r_type) {
+			case IPV6_RTHDR_TYPE_0:
 #ifdef MIP6
-		    case IPV6_RTHDR_TYPE_2:
+			case IPV6_RTHDR_TYPE_2:
 #endif /* MIP6 */
-		          rh0 = (struct ip6_rthdr0 *)rh;
-			  addr = (struct in6_addr *)(rh0 + 1);
-			  ip6->ip6_dst = addr[0];
-			  bcopy(&addr[1], &addr[0],
-				sizeof(struct in6_addr) *
-				(rh0->ip6r0_segleft - 1));
-			  addr[rh0->ip6r0_segleft - 1] = finaldst;
-			  break;
-		    default:	/* is it possible? */
-		          error = EINVAL;
-			  goto bad;
-		    }
-	      }
+				rh0 = (struct ip6_rthdr0 *)rh;
+				addr = (struct in6_addr *)(rh0 + 1);
+				ip6->ip6_dst = addr[0];
+				bcopy(&addr[1], &addr[0],
+				    sizeof(struct in6_addr) *
+				    (rh0->ip6r0_segleft - 1));
+				addr[rh0->ip6r0_segleft - 1] = finaldst;
+				break;
+			default:	/* is it possible? */
+				error = EINVAL;
+				goto bad;
+			}
+		}
 	}
 
 	/* Source address validation */
@@ -2216,6 +2232,7 @@ ip6_pcbopts(pktopt, m, so)
 		opt->ip6po_hbh || opt->ip6po_dest1 || opt->ip6po_dest2 ||
 #if defined(MIP6) && NMIP > 0
 		opt->ip6po_hoa ||
+		opt->ip6po_rhinfo2.ip6po_rhi_rthdr ||
 #endif /* MIP6 && NMIP > 0 */
 		opt->ip6po_rhinfo.ip6po_rhi_rthdr)
 		    printf("ip6_pcbopts: all specified options are cleared.\n");
@@ -2423,15 +2440,19 @@ ip6_clearpktopts(pktopt, optname)
 		if (pktopt->ip6po_rhinfo.ip6po_rhi_rthdr)
 			free(pktopt->ip6po_rhinfo.ip6po_rhi_rthdr, M_IP6OPT);
 		pktopt->ip6po_rhinfo.ip6po_rhi_rthdr = NULL;
-#ifdef MIP6
-		if (pktopt->ip6po_rhinfo2.ip6po_rhi_rthdr)
-			free(pktopt->ip6po_rhinfo2.ip6po_rhi_rthdr, M_IP6OPT);
-		pktopt->ip6po_rhinfo2.ip6po_rhi_rthdr = NULL;
-#endif /* MIP6 */
 		if (pktopt->ip6po_route.ro_rt) {
 			RTFREE(pktopt->ip6po_route.ro_rt);
 			pktopt->ip6po_route.ro_rt = NULL;
 		}
+#ifdef MIP6
+		if (pktopt->ip6po_rhinfo2.ip6po_rhi_rthdr)
+			free(pktopt->ip6po_rhinfo2.ip6po_rhi_rthdr, M_IP6OPT);
+		pktopt->ip6po_rhinfo2.ip6po_rhi_rthdr = NULL;
+		if (pktopt->ip6po_route2.ro_rt) {
+			RTFREE(pktopt->ip6po_route2.ro_rt);
+			pktopt->ip6po_route2.ro_rt = NULL;
+		}
+#endif /* MIP6 */
 	}
 	if (optname == -1 || optname == IPV6_DSTOPTS) {
 		if (pktopt->ip6po_dest2)
@@ -3242,7 +3263,19 @@ ip6_setpktopt(optname, buf, len, opt, priv, sticky, cmsg, uproto)
 			newdest = &opt->ip6po_dest1;
 			break;
 		case IPV6_DSTOPTS:
+#if defined(MIP6) && NMIP > 0
+			/*
+			 * Check whether this destination option is
+			 * home address option.
+			 * If so, the option must be stored in ip6po_hoa
+			 */
+			if (mip6_search_hoa_in_destopt((u_int8_t *)dest) != NULL)
+				newdest = &opt->ip6po_hoa;
+			else
+				newdest = &opt->ip6po_dest2;
+#else
 			newdest = &opt->ip6po_dest2;
+#endif /* MIP6 && NMIP > 0 */
 			break;
 		}
 
@@ -3283,15 +3316,36 @@ ip6_setpktopt(optname, buf, len, opt, priv, sticky, cmsg, uproto)
 			if (rth->ip6r_len / 2 != rth->ip6r_segleft)
 				return (EINVAL);
 			break;
+#ifdef MIP6
+		case IPV6_RTHDR_TYPE_2:
+			if (rth->ip6r_len == 0) /* must contain one addr */
+				return (EINVAL);
+			if (rth->ip6r_len != 2) /* length must be 2 */
+				return (EINVAL);
+			if (rth->ip6r_segleft != 1)
+				return (EINVAL);
+			break;
+#endif /* MIP6 */
 		default:
 			return (EINVAL);        /* not supported */
 		}
 		/* turn off the previous option */
 		ip6_clearpktopts(opt, IPV6_RTHDR);
-		opt->ip6po_rthdr = malloc(rthlen, M_IP6OPT, M_NOWAIT);
-		if (opt->ip6po_rthdr == NULL)
-			return (ENOBUFS);
-		bcopy(rth, opt->ip6po_rthdr, rthlen);
+#ifdef MIP6
+		if (rth->ip6r_type == IPV6_RTHDR_TYPE_0) {
+#endif /* MIP6 */
+			opt->ip6po_rthdr = malloc(rthlen, M_IP6OPT, M_NOWAIT);
+			if (opt->ip6po_rthdr == NULL)
+				return (ENOBUFS);
+			bcopy(rth, opt->ip6po_rthdr, rthlen);
+#ifdef MIP6
+		} else if (rth->ip6r_type == IPV6_RTHDR_TYPE_2) {
+			opt->ip6po_rthdr2 = malloc(rthlen, M_IP6OPT, M_NOWAIT);
+			if (opt->ip6po_rthdr2 == NULL)
+				return (ENOBUFS);
+			bcopy(rth, opt->ip6po_rthdr2, rthlen);
+		}
+#endif /* MIP6 */
 		break;
 	}
 

@@ -102,7 +102,7 @@ typedef __sa_family_t	sa_family_t;
 #define	IPPROTO_PIM		103		/* Protocol indep. multicast */
 #define	IPPROTO_IPCOMP		108		/* IP Payload Comp. Protocol */
 #define	IPPROTO_VRRP		112		/* VRRP RFC 2338 */
-#define	IPPROTO_MH		135		/* IPv6 Mobility Header */
+#define	IPPROTO_MH		135		/* Mobility Header RFC3775 */
 
 #define	IPPROTO_RAW		255		/* raw IP packet */
 #define	IPPROTO_MAX		256

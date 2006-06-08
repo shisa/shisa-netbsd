@@ -126,12 +126,10 @@ struct icmp6_hdr {
 #define ICMP6_NI_QUERY			139	/* node information request */
 #define ICMP6_NI_REPLY			140	/* node information reply */
 
-/* Folloing numbers are defined in the mobile-ip draft. */
 #define MIP6_HA_DISCOVERY_REQUEST	144	/* home agent addr disc req */
 #define MIP6_HA_DISCOVERY_REPLY		145	/* home agent addr dis reply */
 #define MIP6_PREFIX_SOLICIT		146	/* mobile prefix sol */
 #define MIP6_PREFIX_ADVERT		147	/* mobile prefix adv */
-
 
 /* The definitions below are experimental. TBA */
 #define MLD_MTRACE_RESP			200	/* mtrace response(to sender) */

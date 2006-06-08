@@ -29,10 +29,11 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#include "opt_mip6.h"
 
 #include <sys/cdefs.h>
 __KERNEL_RCSID(0, "$NetBSD: dest6.c,v 1.12 2003/05/14 06:47:39 itojun Exp $");
+
+#include "opt_mip6.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>

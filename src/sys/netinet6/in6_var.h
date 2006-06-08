@@ -463,6 +463,16 @@ struct	in6_rrenumreq {
 /* do not input/output */
 #define IN6_IFF_NOTREADY (IN6_IFF_TENTATIVE|IN6_IFF_DUPLICATED)
 
++/* flags which cannot be changed by hand */
+#ifndef MIP6
+#define IN6_IFF_READONLY (IN6_IFF_DUPLICATED|IN6_IFF_DETACHED|\
+    IN6_IFF_NODAD|IN6_IFF_AUTOCONF)
+#else
+/* Mobile IPv6 userland program requires to assign an address with NODAD. */
+#define IN6_IFF_READONLY (IN6_IFF_DUPLICATED|IN6_IFF_DETACHED|\
+    IN6_IFF_AUTOCONF)
+#endif /* !MIP6 */
+
 #ifdef _KERNEL
 #define IN6_ARE_SCOPE_CMP(a,b) ((a)-(b))
 #define IN6_ARE_SCOPE_EQUAL(a,b) ((a)==(b))

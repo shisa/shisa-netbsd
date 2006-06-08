@@ -186,17 +186,8 @@ const struct ip6protosw inet6sw[] = {
 #ifdef MIP6
 { SOCK_RAW,	&inet6domain,	IPPROTO_MH,PR_ATOMIC|PR_ADDR|PR_LASTHDR,
   mip6_input,	0,	 	0,		rip6_ctloutput,
-#if defined(__FreeBSD__) && __FreeBSD__ >= 3
-  0,
-#else
   rip6_usrreq,
-#endif
   0,		0,		0,		0,
-#ifdef __OpenBSD__
-  mip6_sysctl,
-#elif defined(__FreeBSD__)
-  &rip6_usrreqs,
-#endif
 },
 #endif /* MIP6 */
 #ifdef IPSEC
@@ -258,15 +249,8 @@ const struct ip6protosw inet6sw[] = {
 struct ip6protosw mip6_tunnel_protosw =
 { SOCK_RAW,	&inet6domain,	IPPROTO_IPV6,	PR_ATOMIC|PR_ADDR,
   mip6_tunnel_input, rip6_output,	0,	rip6_ctloutput,
-#ifdef __FreeBSD__
-  0,
-#else
   rip6_usrreq,
-#endif
   0,            0,              0,              0,
-#ifdef __FreeBSD__
-  &rip6_usrreqs
-#endif
 };
 #endif /* MIP6 */
 

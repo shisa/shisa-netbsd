@@ -186,7 +186,10 @@ struct rt_msghdr {
 #define RTM_OIFINFO	0xe	/* Old (pre-1.5) RTM_IFINFO message */
 #define RTM_IFINFO	0xf	/* iface/link going up/down etc. */
 #define	RTM_IFANNOUNCE	0x10	/* iface arrival/departure */
-#define	RTM_ADDRINFO	0x11	/* change address flags */
+#if 0
+#define	RTM_IEEE80211	0x11	/* IEEE80211 wireless event */
+#endif
+#define	RTM_ADDRINFO	0x12	/* address status change notification */
 
 #define RTV_MTU		0x1	/* init or lock _mtu */
 #define RTV_HOPCOUNT	0x2	/* init or lock _hopcount */

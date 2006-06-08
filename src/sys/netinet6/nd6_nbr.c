@@ -83,7 +83,6 @@ __KERNEL_RCSID(0, "$NetBSD: nd6_nbr.c,v 1.56 2005/02/26 22:45:13 perry Exp $");
 #define SDL(s) ((struct sockaddr_dl *)s)
 
 struct dadq;
-struct dadq *nd6_dad_find __P((struct ifaddr *));
 static void nd6_dad_starttimer __P((struct dadq *, int));
 static void nd6_dad_stoptimer __P((struct dadq *));
 static void nd6_dad_timer __P((struct ifaddr *));
@@ -972,7 +971,6 @@ nd6_na_output(ifp, daddr6, taddr6, flags, tlladdr, sdl0)
 #if defined(MIP6) && NMIP > 0
 	bzero(&opts, sizeof(opts));
 	opts.ip6po_hlim = -1;
-
 	opts.ip6po_flags |= IP6PO_USECOA;
 	popts = &opts;
 #endif /* MIP6 && NMIP > 0 */

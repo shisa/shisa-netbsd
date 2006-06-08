@@ -1465,14 +1465,24 @@ pfxlist_onlink_check()
 			if (ifa->ia6_ndpr == NULL) /* XXX: see above. */
 				continue;
 
-			if (find_pfxlist_reachable_router(ifa->ia6_ndpr))
-				ifa->ia6_flags &= ~IN6_IFF_DETACHED;
-			else
-				ifa->ia6_flags |= IN6_IFF_DETACHED;
-
+			if (find_pfxlist_reachable_router(ifa->ia6_ndpr)) {
+				if (ifa->ia6_flags & IN6_IFF_DETACHED) {
+					ifa->ia6_flags &= ~IN6_IFF_DETACHED;
+					ifa->ia6_flags |= IN6_IFF_TENTATIVE;
 #if defined(MIP6) && NMIP > 0
-			rt_addrinfomsg((struct ifaddr *)ifa);
+					rt_addrinfomsg((struct ifaddr *)ifa);
 #endif /* MIP6 && NMIP > 0 */
+					nd6_dad_start((struct ifaddr *)ifa,
+					    0);
+				}
+			} else {
+				if ((ifa->ia6_flags & IN6_IFF_DETACHED) == 0) {
+					ifa->ia6_flags |= IN6_IFF_DETACHED;
+#if defined(MIP6) && NMIP > 0
+					rt_addrinfomsg((struct ifaddr *)ifa);
+#endif /* MIP6 && NMIP > 0 */
+				}
+			}
 		}
 	}
 	else {
@@ -1480,10 +1490,15 @@ pfxlist_onlink_check()
 			if ((ifa->ia6_flags & IN6_IFF_AUTOCONF) == 0)
 				continue;
 
-			ifa->ia6_flags &= ~IN6_IFF_DETACHED;
+			if (ifa->ia6_flags & IN6_IFF_DETACHED) {
+				ifa->ia6_flags &= ~IN6_IFF_DETACHED;
+				ifa->ia6_flags |= IN6_IFF_TENTATIVE;
 #if defined(MIP6) && NMIP > 0
-			rt_addrinfomsg((struct ifaddr *)ifa);
+                                rt_addrinfomsg((struct ifaddr *)ifa);
 #endif /* MIP6 && NMIP > 0 */
+				/* Do we need a delay in this case? */
+				nd6_dad_start((struct ifaddr *)ifa, 0);
+			}
 		}
 	}
 }

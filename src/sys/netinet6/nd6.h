@@ -393,6 +393,7 @@ caddr_t nd6_ifptomac __P((struct ifnet *));
 void nd6_dad_start __P((struct ifaddr *, int *));
 void nd6_dad_stop __P((struct ifaddr *));
 void nd6_dad_duplicated __P((struct ifaddr *));
+struct dadq *nd6_dad_find __P((struct ifaddr *));
 
 /* nd6_rtr.c */
 void nd6_rs_input __P((struct mbuf *, int, int));

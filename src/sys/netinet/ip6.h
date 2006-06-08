@@ -162,7 +162,7 @@ struct ip6_dest {
 #define IP6OPT_RTALERT_ACTNET	2 	/* contains an Active Networks msg */
 #define IP6OPT_MINLEN		2
 
-#define	IP6OPT_HOME_ADDRESS	0xc9	/* 11 0 01001 */
+#define	IP6OPT_HOME_ADDRESS	0xc9	/* 11 0 01001 Mobile IPv6 RFC3775 */
 
 #define IP6OPT_TYPE(o)		((o) & 0xC0)
 #define IP6OPT_TYPE_SKIP	0x00

@@ -640,12 +640,16 @@ in6_control(so, cmd, data, ifp, p)
 		struct nd_prefix pr0, *pr;
 
 		/* reject read-only flags */
-		if ((ifra->ifra_flags & IN6_IFF_DUPLICATED) != 0 ||
-		    (ifra->ifra_flags & IN6_IFF_DETACHED) != 0 ||
-		    (ifra->ifra_flags & IN6_IFF_NODAD) != 0 ||
-		    (ifra->ifra_flags & IN6_IFF_AUTOCONF) != 0) {
+		if ((ifra->ifra_flags & IN6_IFF_READONLY))
 			return (EINVAL);
-		}
+
+		/*
+		 * when trying to change flags on an existing interface
+		 * address, make sure to preserve old read-only ones.
+		 */
+		if (ia)
+			ifra->ifra_flags |= (ia->ia6_flags & IN6_IFF_READONLY);
+
 		/*
 		 * first, make or update the interface address structure,
 		 * and link it to the list.
