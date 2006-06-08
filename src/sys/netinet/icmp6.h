@@ -1,4 +1,4 @@
-/*	$NetBSD: icmp6.h,v 1.30 2004/04/21 17:49:46 itojun Exp $	*/
+/*	$NetBSD: icmp6.h,v 1.35 2006/03/07 18:15:28 wiz Exp $	*/
 /*	$KAME: icmp6.h,v 1.84 2003/04/23 10:26:51 itojun Exp $	*/
 
 
@@ -112,9 +112,9 @@ struct icmp6_hdr {
 #endif
 
 #define ND_ROUTER_SOLICIT		133	/* router solicitation */
-#define ND_ROUTER_ADVERT		134	/* router advertisment */
+#define ND_ROUTER_ADVERT		134	/* router advertisement */
 #define ND_NEIGHBOR_SOLICIT		135	/* neighbor solicitation */
-#define ND_NEIGHBOR_ADVERT		136	/* neighbor advertisment */
+#define ND_NEIGHBOR_ADVERT		136	/* neighbor advertisement */
 #define ND_REDIRECT			137	/* redirect */
 
 #define ICMP6_ROUTER_RENUMBERING	138	/* router renumbering */
@@ -125,6 +125,11 @@ struct icmp6_hdr {
 #define ICMP6_FQDN_REPLY		140	/* FQDN reply */
 #define ICMP6_NI_QUERY			139	/* node information request */
 #define ICMP6_NI_REPLY			140	/* node information reply */
+
+#define MIP6_HA_DISCOVERY_REQUEST	144	/* home agent addr disc req */
+#define MIP6_HA_DISCOVERY_REPLY		145	/* home agent addr dis reply */
+#define MIP6_PREFIX_SOLICIT		146	/* mobile prefix sol */
+#define MIP6_PREFIX_ADVERT		147	/* mobile prefix adv */
 
 /* The definitions below are experimental. TBA */
 #define MLD_MTRACE_RESP			200	/* mtrace response(to sender) */
@@ -196,6 +201,8 @@ struct mld_hdr {
 #define mld_maxdelay	mld_icmp6_hdr.icmp6_data16[0]
 #define mld_reserved	mld_icmp6_hdr.icmp6_data16[1]
 
+#define MLD_MINLEN			24
+
 /*
  * Neighbor Discovery
  */
@@ -224,6 +231,18 @@ struct nd_router_advert {	/* router advertisement */
 #define nd_ra_flags_reserved	nd_ra_hdr.icmp6_data8[1]
 #define ND_RA_FLAG_MANAGED	0x80
 #define ND_RA_FLAG_OTHER	0x40
+#define ND_RA_FLAG_HOME_AGENT	0x20
+
+/*
+ * Router preference values based on RFC4199.
+ */
+#define ND_RA_FLAG_RTPREF_MASK	0x18 /* 00011000 */
+
+#define ND_RA_FLAG_RTPREF_HIGH	0x08 /* 00001000 */
+#define ND_RA_FLAG_RTPREF_MEDIUM	0x00 /* 00000000 */
+#define ND_RA_FLAG_RTPREF_LOW	0x18 /* 00011000 */
+#define ND_RA_FLAG_RTPREF_RSV	0x10 /* 00010000 */
+
 #define nd_ra_router_lifetime	nd_ra_hdr.icmp6_data16[1]
 
 struct nd_neighbor_solicit {	/* neighbor solicitation */
@@ -270,6 +289,70 @@ struct nd_redirect {		/* redirect */
 #define nd_rd_code		nd_rd_hdr.icmp6_code
 #define nd_rd_cksum		nd_rd_hdr.icmp6_cksum
 #define nd_rd_reserved		nd_rd_hdr.icmp6_data32[0]
+
+struct mip6_dhaad_req {		/* HA Address Discovery Request */
+	struct icmp6_hdr	mip6_dhreq_hdr;
+} __attribute__((__packed__));
+
+#define mip6_dhreq_type		mip6_dhreq_hdr.icmp6_type
+#define mip6_dhreq_code		mip6_dhreq_hdr.icmp6_code
+#define mip6_dhreq_cksum	mip6_dhreq_hdr.icmp6_cksum
+#define mip6_dhreq_id		mip6_dhreq_hdr.icmp6_data16[0]
+#define mip6_dhreq_reserved	mip6_dhreq_hdr.icmp6_data16[1]
+
+#if BYTE_ORDER == BIG_ENDIAN
+#define MIP6_DHREQ_FLAG_MR	0x8000
+#endif /* BIG_ENDIAN */
+#if BYTE_ORDER == LITTLE_ENDIAN
+#define MIP6_DHREQ_FLAG_MR	0x0080
+#endif /* LITTLE_ENDIAN */
+
+struct mip6_dhaad_rep {		/* HA Address Discovery Reply */
+	struct icmp6_hdr	mip6_dhrep_hdr;
+	/* could be followed by home agent addresses */
+} __attribute__((__packed__));
+
+#define mip6_dhrep_type		mip6_dhrep_hdr.icmp6_type
+#define mip6_dhrep_code		mip6_dhrep_hdr.icmp6_code
+#define mip6_dhrep_cksum	mip6_dhrep_hdr.icmp6_cksum
+#define mip6_dhrep_id		mip6_dhrep_hdr.icmp6_data16[0]
+#define mip6_dhrep_reserved	mip6_dhrep_hdr.icmp6_data16[1]
+
+#if BYTE_ORDER == BIG_ENDIAN
+#define MIP6_DHREP_FLAG_MR	0x8000
+#endif /* BIG_ENDIAN */
+#if BYTE_ORDER == LITTLE_ENDIAN
+#define MIP6_DHREP_FLAG_MR	0x0080
+#endif /* LITTLE_ENDIAN */
+
+struct mip6_prefix_solicit {	/* Mobile Prefix Solicitation */
+	struct icmp6_hdr	mip6_ps_hdr;
+} __attribute__((__packed__));
+
+#define mip6_ps_type		mip6_ps_hdr.icmp6_type
+#define mip6_ps_code		mip6_ps_hdr.icmp6_code
+#define mip6_ps_cksum		mip6_ps_hdr.icmp6_cksum
+#define mip6_ps_id		mip6_ps_hdr.icmp6_data16[0]
+#define mip6_ps_reserved	mip6_ps_hdr.icmp6_data16[1]
+
+struct mip6_prefix_advert {	/* Mobile Prefix Advertisement */
+	struct icmp6_hdr	mip6_pa_hdr;
+	/* followed by options */
+} __attribute__((__packed__));
+
+#define mip6_pa_type		mip6_pa_hdr.icmp6_type
+#define mip6_pa_code		mip6_pa_hdr.icmp6_code
+#define mip6_pa_cksum		mip6_pa_hdr.icmp6_cksum
+#define mip6_pa_id		mip6_pa_hdr.icmp6_data16[0]
+#define mip6_pa_flags_reserved	mip6_pa_hdr.icmp6_data16[1]
+#if BYTE_ORDER == BIG_ENDIAN
+#define MIP6_PA_FLAG_MANAGED	0x8000
+#define MIP6_PA_FLAG_OTHER	0x4000
+#endif /* BIG_ENDIAN */
+#if BYTE_ORDER == LITTLE_ENDIAN
+#define MIP6_PA_FLAG_MANAGED	0x0080
+#define MIP6_PA_FLAG_OTHER	0x0040
+#endif /* LITTLE_ENDIAN */
 
 struct nd_opt_hdr {		/* Neighbor discovery option header */
 	u_int8_t	nd_opt_type;
@@ -481,23 +564,10 @@ struct icmp6_filter {
 	u_int32_t icmp6_filt[8];
 };
 
-#ifdef _KERNEL
 #define	ICMP6_FILTER_SETPASSALL(filterp) \
-do {								\
-	int i; u_char *p;					\
-	p = (u_char *)filterp;					\
-	for (i = 0; i < sizeof(struct icmp6_filter); i++)	\
-		p[i] = 0xff;					\
-} while (/*CONSTCOND*/ 0)
+	(void)memset(filterp, 0xff, sizeof(struct icmp6_filter))
 #define	ICMP6_FILTER_SETBLOCKALL(filterp) \
-	bzero(filterp, sizeof(struct icmp6_filter))
-#else /* _KERNEL */
-#define	ICMP6_FILTER_SETPASSALL(filterp) \
-	memset(filterp, 0xff, sizeof(struct icmp6_filter))
-#define	ICMP6_FILTER_SETBLOCKALL(filterp) \
-	memset(filterp, 0x00, sizeof(struct icmp6_filter))
-#endif /* _KERNEL */
-
+	(void)memset(filterp, 0x00, sizeof(struct icmp6_filter))
 #define	ICMP6_FILTER_SETPASS(type, filterp) \
 	(((filterp)->icmp6_filt[(type) >> 5]) |= (1 << ((type) & 31)))
 #define	ICMP6_FILTER_SETBLOCK(type, filterp) \
@@ -596,7 +666,8 @@ struct icmp6stat {
 #define ICMPV6CTL_ND6_DEBUG	18
 #define ICMPV6CTL_ND6_DRLIST	19
 #define ICMPV6CTL_ND6_PRLIST	20
-#define ICMPV6CTL_MAXID		21
+#define	ICMPV6CTL_ND6_MAXQLEN	24
+#define ICMPV6CTL_MAXID		25
 
 #define ICMPV6CTL_NAMES { \
 	{ 0, 0 }, \
@@ -620,6 +691,10 @@ struct icmp6stat {
 	{ "nd6_debug", CTLTYPE_INT }, \
 	{ 0, 0 }, \
 	{ 0, 0 }, \
+	{ 0, 0 }, \
+	{ 0, 0 }, \
+	{ 0, 0 }, \
+	{ "nd6_maxqueuelen", CTLTYPE_INT }, \
 }
 
 #define RTF_PROBEMTU	RTF_PROTO1
@@ -632,6 +707,7 @@ struct	in6_multi;
 void	icmp6_init(void);
 void	icmp6_paramerror(struct mbuf *, int);
 void	icmp6_error(struct mbuf *, int, int, int);
+void	icmp6_error2(struct mbuf *, int, int, int, struct ifnet *);
 int	icmp6_input(struct mbuf **, int *, int);
 void	icmp6_fasttimo(void);
 void	icmp6_reflect(struct mbuf *, size_t);
@@ -706,4 +782,4 @@ extern int	icmp6_rediraccept;	/* accept/process redirects */
 extern int	icmp6_redirtimeout;	/* cache time for redirect routes */
 #endif /* _KERNEL */
 
-#endif /* not _NETINET_ICMP6_H_ */
+#endif /* !_NETINET_ICMP6_H_ */

@@ -1,4 +1,4 @@
-/*	$NetBSD: ip6_forward.c,v 1.44 2005/02/26 22:45:12 perry Exp $	*/
+/*	$NetBSD: ip6_forward.c,v 1.47 2006/01/21 00:15:36 rpaulo Exp $	*/
 /*	$KAME: ip6_forward.c,v 1.109 2002/09/11 08:10:17 sakane Exp $	*/
 
 /*
@@ -31,10 +31,11 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ip6_forward.c,v 1.44 2005/02/26 22:45:12 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ip6_forward.c,v 1.47 2006/01/21 00:15:36 rpaulo Exp $");
 
 #include "opt_ipsec.h"
 #include "opt_pfil_hooks.h"
+#include "opt_mip6.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -56,8 +57,15 @@ __KERNEL_RCSID(0, "$NetBSD: ip6_forward.c,v 1.44 2005/02/26 22:45:12 perry Exp $
 #include <netinet/ip_var.h>
 #include <netinet/ip6.h>
 #include <netinet6/ip6_var.h>
+#include <netinet6/scope6_var.h>
 #include <netinet/icmp6.h>
 #include <netinet6/nd6.h>
+
+#ifdef MIP6
+#include <netinet/ip6mh.h>
+#include <netinet6/mip6.h>
+#include <netinet6/mip6_var.h>
+#endif /* MIP6 */
 
 #ifdef IPSEC
 #include <netinet6/ipsec.h>
@@ -100,12 +108,36 @@ ip6_forward(m, srcrt)
 	int error = 0, type = 0, code = 0;
 	struct mbuf *mcopy = NULL;
 	struct ifnet *origifp;	/* maybe unnecessary */
+	u_int32_t inzone, outzone;
+	struct in6_addr src_in6, dst_in6;
 #ifdef IPSEC
 	struct secpolicy *sp = NULL;
 	int ipsecrt = 0;
 #endif
+#ifdef MIP6
+	struct mip6_bc_internal *bce;
+#endif /* MIP6 */
 
 #ifdef IPSEC
+#if defined(MIP6) && NMIP > 0
+	{
+		/*
+		 * XXX skip IPsec policy integrity check if the next
+		 * hop is me.  This is dirty but we need this trick
+		 * when we use an IPsec tunnel mode policy for
+		 * protocol 'any' between a home agent and a mobile
+		 * node.
+		 */
+		struct in6_ifaddr *ia;
+
+		for (ia = in6_ifaddr; ia; ia = ia->ia_next) {
+			if ((ia->ia6_flags & IN6_IFF_NOTREADY) == 0 &&
+			    IN6_ARE_ADDR_EQUAL(&ia->ia_addr.sin6_addr,
+			    &ip6->ip6_dst))
+				goto skip_ipsec6_in_reject;
+		}
+	}
+#endif /* MIP6 && NMIP > 0 */
 	/*
 	 * Check AH/ESP integrity.
 	 */
@@ -118,6 +150,9 @@ ip6_forward(m, srcrt)
 		m_freem(m);
 		return;
 	}
+#if defined(MIP6) && NMIP > 0
+ skip_ipsec6_in_reject:
+#endif /* MIP6 && NMIP > 0 */
 #endif /* IPSEC */
 
 	/*
@@ -330,6 +365,61 @@ ip6_forward(m, srcrt)
     skip_ipsec:
 #endif /* IPSEC */
 
+#ifdef MIP6
+	/* This codes are only for Home Agent */
+	if (!MIP6_IS_HA) 
+		goto bc_check_done;
+	/*
+	 * intercept and tunnel packets for home addresses
+	 * which we are acting as a home agent for.
+	 */
+
+	/* XXX need some policy to determine bid for MCOA */
+	if ((bce = mip6_bce_get(&ip6->ip6_dst, NULL, NULL, 0)) &&
+	    (bce->mbc_flags & IP6_MH_BU_HOME) &&
+	    (bce->mbc_encap != NULL)) {
+		if (IN6_IS_ADDR_LINKLOCAL(&bce->mbc_hoa)
+		    || IN6_IS_ADDR_SITELOCAL(&bce->mbc_hoa)) {
+			ip6stat.ip6s_cantforward++;
+			if (mcopy) {
+				icmp6_error(mcopy, ICMP6_DST_UNREACH,
+				    ICMP6_DST_UNREACH_ADDR, 0);
+			}
+			m_freem(m);
+			return;
+		}
+       
+		if (m->m_pkthdr.len > IPV6_MMTU) {
+			u_long mtu = IPV6_MMTU;
+			/* XXX in6_ifstat_inc(rt->rt_ifp, ifs6_in_toobig); */
+			if (mcopy) {
+				icmp6_error(mcopy,
+				    ICMP6_PACKET_TOO_BIG, 0, mtu);
+			}
+			m_freem(m);
+			return;
+		}
+
+		/*
+		 * if we have a binding cache entry for the
+		 * ip6_dst, we are acting as a home agent for
+		 * that node.  before sending a packet as a
+		 * tunneled packet, we must make sure that
+		 * encaptab is ready.  if dad is enabled and
+		 * not completed yet, encaptab will be NULL.
+		 */
+		if (mip6_encapsulate(&m, IFA_IN6(bce->mbc_ifaddr), 
+		    &bce->mbc_coa) != 0) {
+			ip6stat.ip6s_cantforward++;
+		}
+		if (mcopy)
+			m_freem(mcopy);
+		return;
+	bc_check_done:
+		;
+	}
+#endif /* MIP6 */
+
 	dst = &ip6_forward_rt.ro_dst;
 	if (!srcrt) {
 		/*
@@ -384,14 +474,29 @@ ip6_forward(m, srcrt)
 #endif /* IPSEC */
 
 	/*
-	 * Scope check: if a packet can't be delivered to its destination
-	 * for the reason that the destination is beyond the scope of the
-	 * source address, discard the packet and return an icmp6 destination
-	 * unreachable error with Code 2 (beyond scope of source address).
-	 * [draft-ietf-ipngwg-icmp-v3-00.txt, Section 3.1]
+	 * Source scope check: if a packet can't be delivered to its
+	 * destination for the reason that the destination is beyond the scope
+	 * of the source address, discard the packet and return an icmp6
+	 * destination unreachable error with Code 2 (beyond scope of source
+	 * address).  We use a local copy of ip6_src, since in6_setscope()
+	 * will possibly modify its first argument.
+	 * [draft-ietf-ipngwg-icmp-v3-07, Section 3.1]
 	 */
-	if (in6_addr2scopeid(m->m_pkthdr.rcvif, &ip6->ip6_src) !=
-	    in6_addr2scopeid(rt->rt_ifp, &ip6->ip6_src)
+	src_in6 = ip6->ip6_src;
+	if (in6_setscope(&src_in6, rt->rt_ifp, &outzone)) {
+		/* XXX: this should not happen */
+		ip6stat.ip6s_cantforward++;
+		ip6stat.ip6s_badscope++;
+		m_freem(m);
+		return;
+	}
+	if (in6_setscope(&src_in6, m->m_pkthdr.rcvif, &inzone)) {
+		ip6stat.ip6s_cantforward++;
+		ip6stat.ip6s_badscope++;
+		m_freem(m);
+		return;
+	}
+	if (inzone != outzone
 #ifdef IPSEC
 	    && !ipsecrt
 #endif
@@ -417,12 +522,29 @@ ip6_forward(m, srcrt)
 		return;
 	}
 
+	/*
+	 * Destination scope check: if a packet is going to break the scope
+	 * zone of packet's destination address, discard it.  This case should
+	 * usually be prevented by appropriately-configured routing table, but
+	 * we need an explicit check because we may mistakenly forward the
+	 * packet to a different zone by (e.g.) a default route.
+	 */
+	dst_in6 = ip6->ip6_dst;
+	if (in6_setscope(&dst_in6, m->m_pkthdr.rcvif, &inzone) != 0 ||
+	    in6_setscope(&dst_in6, rt->rt_ifp, &outzone) != 0 ||
+	    inzone != outzone) {
+		ip6stat.ip6s_cantforward++;
+		ip6stat.ip6s_badscope++;
+		m_freem(m);
+		return;
+	}
+
 	if (m->m_pkthdr.len > IN6_LINKMTU(rt->rt_ifp)) {
 		in6_ifstat_inc(rt->rt_ifp, ifs6_in_toobig);
 		if (mcopy) {
 			u_long mtu;
 #ifdef IPSEC
-			struct secpolicy *sp;
+			struct secpolicy *xsp;
 			int ipsecerror;
 			size_t ipsechdrsiz;
 #endif
@@ -436,9 +558,9 @@ ip6_forward(m, srcrt)
 			 * case, as we have the outgoing interface for
 			 * encapsulated packet as "rt->rt_ifp".
 			 */
-			sp = ipsec6_getpolicybyaddr(mcopy, IPSEC_DIR_OUTBOUND,
+			xsp = ipsec6_getpolicybyaddr(mcopy, IPSEC_DIR_OUTBOUND,
 				IP_FORWARDING, &ipsecerror);
-			if (sp) {
+			if (xsp) {
 				ipsechdrsiz = ipsec6_hdrsiz(mcopy,
 					IPSEC_DIR_OUTBOUND, NULL);
 				if (ipsechdrsiz < mtu)
@@ -497,6 +619,12 @@ ip6_forward(m, srcrt)
 			m_freem(m);
 			return;
 		}
+#ifdef MIP6
+		/* if the node is HA, redirect must not be sent.
+		   XXX this logic must be re-considerred.
+		   (e.g. lookup BCE or check state or something...) */
+		if (!MIP6_IS_HA) 
+#endif /* defined(MIP6) */
 		type = ND_REDIRECT;
 	}
 
@@ -537,10 +665,12 @@ ip6_forward(m, srcrt)
 	}
 	else
 		origifp = rt->rt_ifp;
-	if (IN6_IS_SCOPE_LINKLOCAL(&ip6->ip6_src))
-		ip6->ip6_src.s6_addr16[1] = 0;
-	if (IN6_IS_SCOPE_LINKLOCAL(&ip6->ip6_dst))
-		ip6->ip6_dst.s6_addr16[1] = 0;
+	/*
+	 * clear embedded scope identifiers if necessary.
+	 * in6_clearscope will touch the addresses only when necessary.
+	 */
+	in6_clearscope(&ip6->ip6_src);
+	in6_clearscope(&ip6->ip6_dst);
 
 #ifdef PFIL_HOOKS
 	/*

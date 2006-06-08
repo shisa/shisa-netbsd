@@ -1,4 +1,4 @@
-/*	$NetBSD: ipsec.c,v 1.101 2005/03/09 14:17:13 itojun Exp $	*/
+/*	$NetBSD: ipsec.c,v 1.107 2006/02/25 02:28:58 wiz Exp $	*/
 /*	$KAME: ipsec.c,v 1.136 2002/05/19 00:36:39 itojun Exp $	*/
 
 /*
@@ -35,10 +35,11 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ipsec.c,v 1.101 2005/03/09 14:17:13 itojun Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ipsec.c,v 1.107 2006/02/25 02:28:58 wiz Exp $");
 
 #include "opt_inet.h"
 #include "opt_ipsec.h"
+#include "opt_mip6.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -75,6 +76,7 @@ __KERNEL_RCSID(0, "$NetBSD: ipsec.c,v 1.101 2005/03/09 14:17:13 itojun Exp $");
 #ifdef INET6
 #include <netinet6/in6_pcb.h>
 #include <netinet/icmp6.h>
+#include <netinet6/scope6_var.h>
 #endif
 
 #include <netinet6/ipsec.h>
@@ -87,6 +89,13 @@ __KERNEL_RCSID(0, "$NetBSD: ipsec.c,v 1.101 2005/03/09 14:17:13 itojun Exp $");
 #include <netkey/keydb.h>
 #include <netkey/key_debug.h>
 
+#ifdef MIP6
+#include "mip.h"
+#include <netinet/ip6mh.h>
+#include <netinet6/mip6.h>
+#include <netinet6/mip6_var.h>
+#endif /* MIP6 */
+
 #include <net/net_osdep.h>
 
 #ifdef IPSEC_DEBUG
@@ -98,7 +107,7 @@ int ipsec_debug = 0;
 struct ipsecstat ipsecstat;
 int ip4_ah_cleartos = 1;
 int ip4_ah_offsetmask = 0;	/* maybe IP_DF? */
-int ip4_ipsec_dfbit = 0;	/* DF bit on encap. 0: clear 1: set 2: copy */
+int ip4_ipsec_dfbit = 2;	/* DF bit on encap. 0: clear 1: set 2: copy */
 int ip4_esp_trans_deflev = IPSEC_LEVEL_USE;
 int ip4_esp_net_deflev = IPSEC_LEVEL_USE;
 int ip4_ah_trans_deflev = IPSEC_LEVEL_USE;
@@ -373,7 +382,7 @@ ipsec_get_tag(m)
  *		others	: error occurred.
  *	others:	a pointer to SP
  *
- * NOTE: IPv6 mapped adddress concern is implemented here.
+ * NOTE: IPv6 mapped address concern is implemented here.
  */
 struct secpolicy *
 ipsec4_getpolicybysock(m, dir, so, error)
@@ -1065,6 +1074,9 @@ ipsec6_get_ulp(m, spidx, needport)
 	int off, nxt;
 	struct tcphdr th;
 	struct udphdr uh;
+#ifdef MIP6
+	struct ip6_mh mh;
+#endif /* MIP6 */
 
 	/* sanity check */
 	if (m == NULL)
@@ -1104,6 +1116,16 @@ ipsec6_get_ulp(m, spidx, needport)
 		((struct sockaddr_in6 *)&spidx->src)->sin6_port = uh.uh_sport;
 		((struct sockaddr_in6 *)&spidx->dst)->sin6_port = uh.uh_dport;
 		break;
+#ifdef MIP6
+	case IPPROTO_MH:
+		spidx->ul_proto = nxt;
+		if (off + sizeof(struct ip6_mh) > m->m_pkthdr.len)
+			break;
+		m_copydata(m, off, sizeof(mh), (caddr_t)&mh);
+		((struct sockaddr_in6 *)&spidx->src)->sin6_port =
+		    htons((u_int16_t)mh.ip6mh_type);
+		break;
+#endif /* MIP6 */
 	case IPPROTO_ICMPV6:
 	default:
 		/* XXX intermediate headers??? */
@@ -1133,14 +1155,14 @@ ipsec6_setspidx_ipaddr(m, spidx)
 	bzero(sin6, sizeof(*sin6));
 	sin6->sin6_family = AF_INET6;
 	sin6->sin6_len = sizeof(struct sockaddr_in6);
-	in6_recoverscope(sin6, &ip6->ip6_src, NULL);
+	sin6->sin6_addr = ip6->ip6_src;
 	spidx->prefs = sizeof(struct in6_addr) << 3;
 
 	sin6 = (struct sockaddr_in6 *)&spidx->dst;
 	bzero(sin6, sizeof(*sin6));
 	sin6->sin6_family = AF_INET6;
 	sin6->sin6_len = sizeof(struct sockaddr_in6);
-	in6_recoverscope(sin6, &ip6->ip6_dst, NULL);
+	sin6->sin6_addr = ip6->ip6_dst;
 	spidx->prefd = sizeof(struct in6_addr) << 3;
 
 	return 0;
@@ -1211,7 +1233,7 @@ ipsec_init_pcbpolicy(so, pcb_sp)
 	}
 	bzero(new, sizeof(*new));
 
-	if (so->so_uid == 0)	/* XXX */
+	if (so->so_uidinfo->ui_uid == 0)	/* XXX */
 		new->priv = 1;
 	else
 		new->priv = 0;
@@ -2190,6 +2212,8 @@ ipsec6_encapsulate(m, sav)
 	struct ip6_hdr *oip6;
 	struct ip6_hdr *ip6;
 	size_t plen;
+	int error;
+	struct sockaddr_in6 sa6;
 
 	/* can't tunnel between different AFs */
 	if (((struct sockaddr *)&sav->sah->saidx.src)->sa_family
@@ -2247,10 +2271,17 @@ ipsec6_encapsulate(m, sav)
 		/* ip6->ip6_plen will be updated in ip6_output() */
 	}
 	ip6->ip6_nxt = IPPROTO_IPV6;
-	in6_embedscope(&ip6->ip6_src,
-	    (struct sockaddr_in6 *)&sav->sah->saidx.src, NULL, NULL);
-	in6_embedscope(&ip6->ip6_dst,
-	    (struct sockaddr_in6 *)&sav->sah->saidx.dst, NULL, NULL);
+
+	sa6 = *(struct sockaddr_in6 *)&sav->sah->saidx.src;
+	if ((error = sa6_embedscope(&sa6, 0)) != 0)
+		return (error);
+	ip6->ip6_src = sa6.sin6_addr;
+
+	sa6 = *(struct sockaddr_in6 *)&sav->sah->saidx.dst;
+	if ((error = sa6_embedscope(&sa6, 0)) != 0)
+		return (error);
+	ip6->ip6_dst = sa6.sin6_addr;
+
 	ip6->ip6_hlim = IPV6_DEFHLIM;
 
 	/* XXX Should ip6_src be updated later ? */
@@ -2857,7 +2888,7 @@ ipsec6_checksa(isr, state, tunnel)
 		sin6->sin6_len = sizeof(*sin6);
 		sin6->sin6_family = AF_INET6;
 		sin6->sin6_port = IPSEC_PORT_ANY;
-		in6_recoverscope(sin6, &ip6->ip6_src, NULL);
+		sin6->sin6_addr = ip6->ip6_src;
 	}
 	sin6 = (struct sockaddr_in6 *)&saidx.dst;
 	if (sin6->sin6_len == 0 || tunnel) {
@@ -2865,7 +2896,7 @@ ipsec6_checksa(isr, state, tunnel)
 		sin6->sin6_len = sizeof(*sin6);
 		sin6->sin6_family = AF_INET6;
 		sin6->sin6_port = IPSEC_PORT_ANY;
-		in6_recoverscope(sin6, &ip6->ip6_dst, NULL);
+		sin6->sin6_addr = ip6->ip6_dst;
 	}
 
 	return key_checkrequest(isr, &saidx);
@@ -3233,10 +3264,8 @@ ipsec4_splithdr(m)
 			m_freem(m);
 			return NULL;
 		}
-		M_COPY_PKTHDR(mh, m);
+		M_MOVE_PKTHDR(mh, m);
 		MH_ALIGN(mh, hlen);
-		m_tag_delete_chain(m, NULL);
-		m->m_flags &= ~M_PKTHDR;
 		m->m_len -= hlen;
 		m->m_data += hlen;
 		mh->m_next = m;
@@ -3271,10 +3300,8 @@ ipsec6_splithdr(m)
 			m_freem(m);
 			return NULL;
 		}
-		M_COPY_PKTHDR(mh, m);
+		M_MOVE_PKTHDR(mh, m);
 		MH_ALIGN(mh, hlen);
-		m_tag_delete_chain(m, NULL);
-		m->m_flags &= ~M_PKTHDR;
 		m->m_len -= hlen;
 		m->m_data += hlen;
 		mh->m_next = m;
@@ -3347,7 +3374,6 @@ ipsec6_tunnel_validate(ip6, nxt0, sav)
 	switch (((struct sockaddr *)&sav->sah->saidx.dst)->sa_family) {
 	case AF_INET6:
 		sin6 = ((struct sockaddr_in6 *)&sav->sah->saidx.dst);
-		in6_embedscope(&in6, sin6, NULL, NULL);
 		if (!IN6_ARE_ADDR_EQUAL(&ip6->ip6_dst, &in6))
 			return 0;
 		break;
@@ -3400,7 +3426,7 @@ ipsec_copypkt(m)
 						    0, M_COPYALL, M_DONTWAIT);
 					}
 #endif
-					M_COPY_PKTHDR(mnew, n);
+					M_MOVE_PKTHDR(mnew, n);
 				}
 				else {
 					MGET(mnew, M_DONTWAIT, MT_DATA);

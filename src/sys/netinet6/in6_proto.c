@@ -1,4 +1,4 @@
-/*	$NetBSD: in6_proto.c,v 1.58.6.1 2005/08/15 19:04:43 tron Exp $	*/
+/*	$NetBSD: in6_proto.c,v 1.63 2006/05/18 09:05:51 liamjfoy Exp $	*/
 /*	$KAME: in6_proto.c,v 1.66 2000/10/10 15:35:47 itojun Exp $	*/
 
 /*
@@ -62,11 +62,12 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: in6_proto.c,v 1.58.6.1 2005/08/15 19:04:43 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: in6_proto.c,v 1.63 2006/05/18 09:05:51 liamjfoy Exp $");
 
 #include "opt_inet.h"
 #include "opt_ipsec.h"
 #include "opt_iso.h"
+#include "opt_mip6.h"
 
 #include <sys/param.h>
 #include <sys/socket.h>
@@ -115,6 +116,15 @@ __KERNEL_RCSID(0, "$NetBSD: in6_proto.c,v 1.58.6.1 2005/08/15 19:04:43 tron Exp 
 #include <netinet6/ipcomp.h>
 #endif /* IPSEC */
 
+#include "carp.h"
+#if NCARP > 0
+#include <netinet/ip_carp.h>
+#endif
+
+#ifdef MIP6
+#include <netinet6/mip6_var.h>
+#endif /* MIP6 */
+
 #include <netinet6/ip6protosw.h>
 
 #include <net/net_osdep.h>
@@ -160,8 +170,7 @@ const struct ip6protosw inet6sw[] = {
 { SOCK_RAW,	&inet6domain,	IPPROTO_ICMPV6,	PR_ATOMIC|PR_ADDR|PR_LASTHDR,
   icmp6_input,	rip6_output,	rip6_ctlinput,	rip6_ctloutput,
   rip6_usrreq,
-  icmp6_init,	icmp6_fasttimo,	0,		0,
-  NULL,
+  icmp6_init,	0,		0,		0,
 },
 { SOCK_RAW,	&inet6domain,	IPPROTO_DSTOPTS,PR_ATOMIC|PR_ADDR,
   dest6_input,	0,	 	0,		0,
@@ -178,6 +187,13 @@ const struct ip6protosw inet6sw[] = {
   0,
   0,		0,		0,		0,
 },
+#ifdef MIP6
+{ SOCK_RAW,	&inet6domain,	IPPROTO_MH,	PR_ATOMIC|PR_ADDR|PR_LASTHDR,
+  mip6_input,	0,		0,		rip6_ctloutput,
+  rip6_usrreq,
+  0,		0,		0,		0,
+},
+#endif /* MIP6 */
 #ifdef IPSEC
 { SOCK_RAW,	&inet6domain,	IPPROTO_AH,	PR_ATOMIC|PR_ADDR,
   ah6_input,	0,	 	ah6_ctlinput,	0,
@@ -212,6 +228,13 @@ const struct ip6protosw inet6sw[] = {
   rip6_usrreq,
   encap_init,	0,		0,		0,
 },
+#if NCARP > 0
+{ SOCK_RAW,	&inet6domain,	IPPROTO_CARP,	PR_ATOMIC|PR_ADDR,
+  carp6_proto_input,	rip6_output,	0,		rip6_ctloutput,
+  rip6_usrreq,
+  0,		0,		0,		0,		NULL /* carp_sysctl */
+},
+#endif /* NCARP */
 #ifdef ISO
 { SOCK_RAW,	&inet6domain,	IPPROTO_EON,	PR_ATOMIC|PR_ADDR|PR_LASTHDR,
   encap6_input,	rip6_output,	encap6_ctlinput, rip6_ctloutput,
@@ -232,10 +255,20 @@ const struct ip6protosw inet6sw[] = {
 },
 };
 
+#ifdef MIP6
+/* To receive tunneled packet on mobile node or home agent */
+struct ip6protosw mip6_tunnel_protosw =
+{ SOCK_RAW,	&inet6domain,	IPPROTO_IPV6,	PR_ATOMIC|PR_ADDR,
+  mip6_tunnel_input, rip6_output, 0,		rip6_ctloutput,
+  rip6_usrreq,
+  0,		0,		0,		0,
+};
+#endif /* MIP6 */
+
 struct domain inet6domain =
     { AF_INET6, "internet6", 0, 0, 0,
-      (struct protosw *)inet6sw,
-      (struct protosw *)&inet6sw[sizeof(inet6sw)/sizeof(inet6sw[0])],
+      (const struct protosw *)inet6sw,
+      (const struct protosw *)&inet6sw[sizeof(inet6sw)/sizeof(inet6sw[0])],
       rn_inithead,
       offsetof(struct sockaddr_in6, sin6_addr) << 3,
       sizeof(struct sockaddr_in6),
@@ -266,6 +299,7 @@ int	ip6_auto_flowlabel = 1;
 int	ip6_use_deprecated = 1;	/* allow deprecated addr (RFC2462 5.5.4) */
 int	ip6_rr_prune = 5;	/* router renumbering prefix
 				 * walk list every 5 sec. */
+int	ip6_mcast_pmtu = 0;	/* enable pMTU discovery for multicast? */
 int	ip6_v6only = 1;
 
 int	ip6_keepfaith = 0;
