@@ -1,4 +1,4 @@
-/* $Id: mipsock.c,v 1.1 2006/06/08 04:35:47 keiichi Exp $ */
+/* $Id: mipsock.c,v 1.2 2006/06/13 06:12:05 keiichi Exp $ */
 
 /*
  * Copyright (C) 2004 WIDE Project.
@@ -71,7 +71,7 @@
 #define thread proc
 #endif /* __APPLE__ */
 
-/*MALLOC_DEFINE(M_RTABLE, "routetbl", "routing tables");*/
+DOMAIN_DEFINE(mipdomain);	/* foward declare and add to link set */
 
 static struct	sockaddr mips_dst = { 2, PF_MOBILITY, };
 static struct	sockaddr mips_src = { 2, PF_MOBILITY, };
