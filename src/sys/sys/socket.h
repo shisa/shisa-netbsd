@@ -197,7 +197,7 @@ struct	linger {
 #define	pseudo_AF_MOBILITY 31		/* IP mobility */
 #endif
 
-#define	AF_MAX		31
+#define	AF_MAX		32
 
 /*
  * Structure used by kernel to store most
