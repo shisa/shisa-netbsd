@@ -429,7 +429,6 @@ mip_ioctl(ifp, cmd, data)
 				
 				bcopy(&mbul->mbul_peeraddr, &bul6->bul_peeraddr, 
 				      sizeof(mbul->mbul_peeraddr));
-				printf("adding entry %s\n", ip6_sprintf(&mbul->mbul_peeraddr));
 				bcopy(&mbul->mbul_hoa, &bul6->bul_hoa, 
 				      sizeof(mbul->mbul_hoa));
 				bcopy(&mbul->mbul_coa, &bul6->bul_coa, 
