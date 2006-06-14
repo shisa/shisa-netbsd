@@ -293,6 +293,12 @@ in6_alias(struct in6_ifreq *creq)
 			printf(" detached");
 		if (ifr6.ifr_ifru.ifru_flags6 & IN6_IFF_DEPRECATED)
 			printf(" deprecated");
+#ifdef MIP6
+		if (ifr6.ifr_ifru.ifru_flags6 & IN6_IFF_HOME)
+			printf(" home");
+		if (ifr6.ifr_ifru.ifru_flags6 & IN6_IFF_DEREGISTERING)
+			printf(" deregistering");
+#endif /* MIP6 */
 	}
 
 	if (scopeid)
