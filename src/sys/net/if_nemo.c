@@ -29,16 +29,9 @@
  * SUCH DAMAGE.
  */
 
-#ifdef __FreeBSD__
-#include "opt_inet.h"
-#include "opt_inet6.h"
-#include "opt_mip6.h"
-#endif
-#ifdef __NetBSD__
 #include "opt_inet.h"
 #include "opt_iso.h"
 #include "opt_mip6.h"
-#endif
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -87,7 +80,7 @@
 #include <netinet6/scope6_var.h>
 #endif /* INET6 */
 
-#if defined(__NetBSD__) && defined(ISO)
+#ifdef ISO
 #include <netiso/iso.h>
 #include <netiso/iso_var.h>
 #endif
@@ -96,15 +89,8 @@
 #include <net/if_nemo.h>
 
 #include "nemo.h"
-#ifdef __FreeBSD__
-#include "bpf.h"
-#define NBPFILTER	NBPF
-#else
 #include "bpfilter.h"
-#endif
-#ifdef __OpenBSD__
 #include "bridge.h"
-#endif
 
 #include <net/net_osdep.h>
 
@@ -112,16 +98,13 @@
 
 LIST_HEAD(, nemo_softc) nemo_softc_list;
 
-#ifdef __FreeBSD__
-void nemoattach __P((void *));
-#else
 void nemoattach __P((int));
-#endif
 #ifndef __HAVE_GENERIC_SOFT_INTERRUPTS
 void nemonetisr __P((void));
 #endif
-void nemointr __P((void *));
-#if defined(__NetBSD__) && defined(ISO)
+static void	nemointr(void *);
+static void	nemo_start(struct ifnet *);
+#ifdef ISO
 static struct mbuf *nemo_eon_encap(struct mbuf *);
 static struct mbuf *nemo_eon_decap(struct ifnet *, struct mbuf *);
 #endif
@@ -158,21 +141,13 @@ nemoattach(dummy)
 
 	LIST_INIT(&nemo_softc_list);
 
-#if defined(__NetBSD__) || defined(__OpenBSD__)
 	nnemo = dummy;
-#else
-	nnemo = NNEMO;
-#endif
 	nemo_softc = sc = malloc(nnemo * sizeof(struct nemo_softc),
 	    M_DEVBUF, M_WAIT);
 	bzero(sc, nnemo * sizeof(struct nemo_softc));
 	for (i = 0; i < nnemo; sc++, i++) {
-#ifdef __FreeBSD__
-		if_initname(&sc->nemo_if, "nemo", i);
-#else
 		snprintf(sc->nemo_if.if_xname, sizeof(sc->nemo_if.if_xname),
 		    "nemo%d", i);
-#endif
 		nemoattach0(sc);
 		LIST_INSERT_HEAD(&nemo_softc_list, sc, nemo_list);
 	}
@@ -191,22 +166,13 @@ nemoattach0(sc)
 	/* turn off ingress filter */
 	sc->nemo_if.if_flags  |= IFF_LINK2;
 	sc->nemo_if.if_ioctl  = nemo_ioctl;
-#ifdef __OpenBSD__
-	sc->nemo_if.if_start  = nemo_start;
-#endif
 	sc->nemo_if.if_output = nemo_output;
+	sc->nemo_if.if_start  = nemo_start;
 	sc->nemo_if.if_type   = IFT_GIF;
-#ifdef __NetBSD__
 	sc->nemo_if.if_dlt = DLT_NULL;
-#endif
-#ifdef __FreeBSD__
-	IFQ_SET_MAXLEN(&sc->nemo_if.if_snd, IFQ_MAXLEN);
-#endif
 	IFQ_SET_READY(&sc->nemo_if.if_snd);
 	if_attach(&sc->nemo_if);
-#if defined(__NetBSD__) || defined(__OpenBSD__)
 	if_alloc_sadl(&sc->nemo_if);
-#endif
 #if NBPFILTER > 0
 	bpfattach(&sc->nemo_if, DLT_NULL, sizeof(u_int));
 #endif
@@ -215,54 +181,17 @@ nemoattach0(sc)
 #endif
 }
 
-#ifdef __FreeBSD__
-PSEUDO_SET(nemoattach, if_nemo);
-#endif
-
-#ifdef __OpenBSD__
 void
 nemo_start(ifp)
 	struct ifnet *ifp;
 {
-#if NBRIDGE > 0
-	struct sockaddr dst;
-#endif /* NBRIDGE */
-
-	struct mbuf *m;
-	int s;
-
-#if NBRIDGE > 0
-	bzero(&dst, sizeof(dst));
-
-	/*
-	 * XXX The assumption here is that only the ethernet bridge
-	 * uses the start routine of this interface, and it's thus
-	 * safe to do this.
-	 */
-	dst.sa_family = AF_LINK;
-#endif /* NBRIDGE */
-
-	for (;;) {
-#ifdef __NetBSD__
-		s = splnet();
+#ifdef __HAVE_GENERIC_SOFT_INTERRUPTS
+	softintr_schedule(((struct nemo_softc*)ifp)->nemo_si);
 #else
-		s = splimp();
+	/* XXX bad spl level? */
+	nemonetisr();
 #endif
-		IFQ_DEQUEUE(&ifp->if_snd, m);
-		splx(s);
-
-		if (m == NULL) return;
-
-#if NBRIDGE > 0
-		/* Sanity check -- interface should be member of a bridge */
-		if (ifp->if_bridge == NULL) m_freem(m);
-		else nemo_output(ifp, m, &dst, NULL);
-#else
-		m_freem(m);
-#endif /* NBRIDGE */
-	}
 }
-#endif
 
 #ifdef GIF_ENCAPCHECK
 int
@@ -1001,6 +930,13 @@ nemo_set_tunnel(ifp, src, dst)
 
 		/* XXX both end must be valid? (I mean, not 0.0.0.0) */
 	}
+
+#ifdef __HAVE_GENERIC_SOFT_INTERRUPTS
+	if (sc->nemo_si) {
+		softintr_disestablish(sc->nemo_si);
+		sc->nemo_si = NULL;
+	}
+#endif
 
 	/* XXX we can detach from both, but be polite just in case */
 	if (sc->nemo_psrc)

@@ -37,27 +37,15 @@
 #define _NET_IF_GIF_H_
 
 
-#if defined(__FreeBSD__) || defined(__NetBSD__)
 #if defined(_KERNEL) && !defined(_LKM)
 #include "opt_inet.h"
 #include "opt_mip6.h"
-#endif
 #endif
 
 #include <netinet/in.h>
 /* xxx sigh, why route have struct route instead of pointer? */
 
 struct encaptab;
-
-#ifdef __FreeBSD__
-extern	void (*ng_nemo_input_p)(struct ifnet *ifp, struct mbuf **mp,
-		int af);
-extern	void (*ng_nemo_input_orphan_p)(struct ifnet *ifp, struct mbuf *m,
-		int af);
-extern	int  (*ng_nemo_output_p)(struct ifnet *ifp, struct mbuf **mp);
-extern	void (*ng_nemo_attach_p)(struct ifnet *ifp);
-extern	void (*ng_nemo_detach_p)(struct ifnet *ifp);
-#endif
 
 struct nemo_softc {
 	struct ifnet	nemo_if;	   /* common area - must be at the top */
@@ -69,17 +57,15 @@ struct nemo_softc {
 		struct route_in6 nemoscr_ro6; /* xxx */
 #endif
 	} nemosc_nemoscr;
+	int	nemo_flags; /* dummy */
 	const struct encaptab *encap_cookie4;
 	const struct encaptab *encap_cookie6;
 	LIST_ENTRY(nemo_softc) nemo_list; /* all nemo's are linked */
 #ifdef __HAVE_GENERIC_SOFT_INTERRUPTS
 	void	*nemo_si;	/* softintr handle */
 #endif
-#ifdef __FreeBSD__
-	void		*nemo_netgraph;	/* ng_nemo(4) netgraph node info */
-#endif
-#ifdef MIP6
 	long	nemo_route_expire; /* XXX: dummy */
+#ifdef MIP6
 	/* XXX: must be located as gif_nexthop of gif_softc{} */
 	struct sockaddr	*nemo_nexthop; /* nexthop address */
 #endif
