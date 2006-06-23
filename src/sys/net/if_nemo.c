@@ -50,9 +50,7 @@
 #include <sys/syslog.h>
 #include <sys/protosw.h>
 #include <machine/cpu.h>
-#ifdef __HAVE_GENERIC_SOFT_INTERRUPTS
 #include <machine/intr.h>
-#endif
 
 #include <net/if.h>
 #include <net/if_types.h>
