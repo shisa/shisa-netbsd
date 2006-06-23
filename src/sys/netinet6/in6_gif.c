@@ -113,7 +113,6 @@ in6_gif_output(ifp, family, m)
 	pktopt.ip6po_hlim = -1;   /* -1 means default hop limit */
 #endif /* MIP6 */
 
-
 	if (sin6_src == NULL || sin6_dst == NULL ||
 	    sin6_src->sin6_family != AF_INET6 ||
 	    sin6_dst->sin6_family != AF_INET6) {
@@ -198,34 +197,19 @@ in6_gif_output(ifp, family, m)
 	ip6->ip6_flow &= ~ntohl(0xff00000);
 	ip6->ip6_flow |= htonl((u_int32_t)otos << 20);
 
-	if (sc->gif_route_expire - time.tv_sec <= 0 ||
-	     dst->sin6_family != sin6_dst->sin6_family ||
-	     !IN6_ARE_ADDR_EQUAL(&dst->sin6_addr, &sin6_dst->sin6_addr)) {
-		/* cache route doesn't match */
-		bzero(dst, sizeof(*dst));
-		dst->sin6_family = sin6_dst->sin6_family;
-		dst->sin6_len = sizeof(struct sockaddr_in6);
-		dst->sin6_addr = sin6_dst->sin6_addr;
-		if (sc->gif_ro6.ro_rt) {
-			RTFREE(sc->gif_ro6.ro_rt);
-			sc->gif_ro6.ro_rt = NULL;
-		}
-	}
-
-	if (sc->gif_ro6.ro_rt == NULL) {
-		rtalloc((struct route *)&sc->gif_ro6);
-		if (sc->gif_ro6.ro_rt == NULL) {
-			m_freem(m);
-			return ENETUNREACH;
-		}
-
-		/* if it constitutes infinite encapsulation, punt. */
-		if (sc->gif_ro.ro_rt->rt_ifp == ifp) {
-			m_freem(m);
-			return ENETUNREACH;	/* XXX */
-		}
-
-		sc->gif_route_expire = time.tv_sec + GIF_ROUTE_TTL;
+	/*
+	 * compare address family just for safety.  other validity checks
+	 * are made in in6_selectsrc() called from ip6_output().
+	 */
+	if (sc->gif_ro6.ro_rt && (dst->sin6_family != sin6_dst->sin6_family ||
+	    sc->gif_route_expire - time.tv_sec <= 0)) {
+		/*
+		 * If the cached route is not valid or has expired,
+		 * clear the stale cache and let ip6_output make a new cached
+		 * route.
+		 */
+		RTFREE(sc->gif_ro6.ro_rt);
+		sc->gif_ro6.ro_rt = NULL;
 	}
 
 #ifdef MIP6
@@ -269,6 +253,14 @@ in6_gif_output(ifp, family, m)
 	error = ip6_output(m, p, &sc->gif_ro6, 0,
 		    (struct ip6_moptions *)NULL, (struct socket *)NULL, NULL);
 #endif
+
+
+	/*
+	 * if a (new) cached route has been created in ip6_output(), extend
+	 * the expiration time.
+	 */
+	if (sc->gif_ro6.ro_rt && mono_time.tv_sec >= sc->gif_route_expire)
+		sc->gif_route_expire = mono_time.tv_sec + GIF_ROUTE_TTL;
 
 	return (error);
 }
