@@ -64,7 +64,7 @@ struct nemo_softc {
 #ifdef __HAVE_GENERIC_SOFT_INTERRUPTS
 	void	*nemo_si;	/* softintr handle */
 #endif
-	long	nemo_route_expire; /* XXX: dummy */
+	long	nemo_route_expire; /* XXX gif_route_expire */
 #ifdef MIP6
 	/* XXX: must be located as gif_nexthop of gif_softc{} */
 	struct sockaddr	*nemo_nexthop; /* nexthop address */
