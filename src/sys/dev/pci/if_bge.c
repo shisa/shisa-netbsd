@@ -1,4 +1,4 @@
-/*	$NetBSD: if_bge.c,v 1.107 2006/05/28 13:07:21 blymn Exp $	*/
+/*	$NetBSD: if_bge.c,v 1.109 2006/06/01 02:20:54 jonathan Exp $	*/
 
 /*
  * Copyright (c) 2001 Wind River Systems
@@ -79,7 +79,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_bge.c,v 1.107 2006/05/28 13:07:21 blymn Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_bge.c,v 1.109 2006/06/01 02:20:54 jonathan Exp $");
 
 #include "bpfilter.h"
 #include "vlan.h"
@@ -1484,22 +1484,20 @@ bge_blockinit(struct bge_softc *sc)
 	CSR_WRITE_4(sc, BGE_BMAN_DMA_DESCPOOL_HIWAT, 10);
 
 	/* Enable buffer manager */
-	if ((sc->bge_quirks & BGE_QUIRK_5705_CORE) == 0) {
-		CSR_WRITE_4(sc, BGE_BMAN_MODE,
-		    BGE_BMANMODE_ENABLE|BGE_BMANMODE_LOMBUF_ATTN);
+	CSR_WRITE_4(sc, BGE_BMAN_MODE,
+	    BGE_BMANMODE_ENABLE|BGE_BMANMODE_LOMBUF_ATTN);
 
-		/* Poll for buffer manager start indication */
-		for (i = 0; i < BGE_TIMEOUT; i++) {
-			if (CSR_READ_4(sc, BGE_BMAN_MODE) & BGE_BMANMODE_ENABLE)
-				break;
-			DELAY(10);
-		}
+	/* Poll for buffer manager start indication */
+	for (i = 0; i < BGE_TIMEOUT; i++) {
+		if (CSR_READ_4(sc, BGE_BMAN_MODE) & BGE_BMANMODE_ENABLE)
+			break;
+		DELAY(10);
+	}
 
-		if (i == BGE_TIMEOUT) {
-			printf("%s: buffer manager failed to start\n",
-			    sc->bge_dev.dv_xname);
-			return(ENXIO);
-		}
+	if (i == BGE_TIMEOUT) {
+		printf("%s: buffer manager failed to start\n",
+		    sc->bge_dev.dv_xname);
+		return(ENXIO);
 	}
 
 	/* Enable flow-through queues */
@@ -2406,9 +2404,8 @@ bge_attach(device_t parent, device_t self, void *aux)
 	 * Detect PCI-Express devices
 	 * XXX: guessed from Linux/FreeBSD; no documentation
 	 */
-	if (BGE_ASICREV(sc->bge_chipid) == BGE_ASICREV_BCM5750 &&
-	    pci_get_capability(pa->pa_pc, pa->pa_tag, PCI_CAP_PCIEXPRESS,
-	    NULL, NULL) != 0)
+	if (pci_get_capability(pa->pa_pc, pa->pa_tag, PCI_CAP_PCIEXPRESS,
+	        NULL, NULL) != 0)
 		sc->bge_pcie = 1;
 	else
 		sc->bge_pcie = 0;
@@ -2746,7 +2743,7 @@ bge_reset(struct bge_softc *sc)
 	bge_writereg_ind(sc, BGE_MISC_CFG, (65 << 1));
 
 	/* Enable memory arbiter. */
-	if ((sc->bge_quirks & BGE_QUIRK_5705_CORE) == 0) {
+	{
 		uint32_t marbmode = 0;
 		if (BGE_IS_5714_FAMILY(sc)) {
 			marbmode = CSR_READ_4(sc, BGE_MARB_MODE);
@@ -2812,7 +2809,8 @@ bge_reset(struct bge_softc *sc)
 		CSR_WRITE_4(sc, BGE_PCIE_CTL0, CSR_READ_4(sc, BGE_PCIE_CTL0) | (1<<25));
 
 	/* Enable memory arbiter. */
-	if ((sc->bge_quirks & BGE_QUIRK_5705_CORE) == 0) {
+	/* XXX why do this twice? */
+	{
 		uint32_t marbmode = 0;
 		if (BGE_IS_5714_FAMILY(sc)) {
 			marbmode = CSR_READ_4(sc, BGE_MARB_MODE);

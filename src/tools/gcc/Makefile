@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.18 2006/05/17 03:26:37 mrg Exp $
+#	$NetBSD: Makefile,v 1.20 2006/06/24 05:29:03 mrg Exp $
 
 .include <bsd.own.mk>
 
@@ -31,7 +31,7 @@ MAKE_ARGS=	MACHINE= MAKEINFO=${TOOL_MAKEINFO:Q} \
 MKNATIVE_ENV=	${BINENV} ${CONFIGURE_ENV:NC*:NLD*} \
 			CC_FOR_BUILD=${HOST_CC:Q} \
 			CC=${CC:Q}' '${CCADDFLAGS:Q} \
-			CXX=${CXX:Q}' '${CCADDFLAGS:Q} \
+			CXX=${CXX:Q}' '${CCADDFLAGS:Q}' '${CXXADDFLAGS:Q} \
 			CPP=${CPP:Q}' '-I${DESTDIR}/usr/include \
 			CFLAGS= CPPFLAGS= CXXFLAGS= LDFLAGS= \
 			AS=${AS:Q} LD=${LD:Q} NM=${NM:Q} OBJDUMP=${OBJDUMP:Q} \
@@ -56,7 +56,7 @@ BUILD_MAKE=${MAKE}
 BUILD_MAKE=${TOOL_GMAKE}
 .endif
 
-#CCADDFLAGS=	${CPPFLAG_ISYSTEM} ${DESTDIR}/usr/include ${CPPFLAG_ISYSTEMXX} ${DESTDIR}/usr/include/g++ -L${DESTDIR}/lib -L${DESTDIR}/usr/lib -B${DESTDIR}/usr/lib/
+CXXADDFLAGS=	${CPPFLAG_ISYSTEMXX} ${DESTDIR}/usr/include/g++
 CCADDFLAGS=	${CPPFLAG_ISYSTEM} ${DESTDIR}/usr/include -L${DESTDIR}/lib -L${DESTDIR}/usr/lib -B${DESTDIR}/usr/lib/
 
 NEWCONFIGDIR?=	${.CURDIR}/../..
@@ -81,22 +81,23 @@ native-gcc: .native/.configure_done
 			--disable-multilib \
 			--enable-threads \
 			--disable-symvers \
-			--enable-newlib \
 			--build=`${.CURDIR}/../../gnu/dist/${MODULE}/config.guess` \
 			--host=${MACHINE_GNU_PLATFORM} \
 			--target=${MACHINE_GNU_PLATFORM}) && \
-		(cd .native && ${MKNATIVE_ENV} ${BUILD_MAKE} all-build-libiberty) && \
-		(cd .native && ${MKNATIVE_ENV} ${BUILD_MAKE} configure-gcc configure-libcpp)
+		(cd .native && ${MKNATIVE_ENV} ${BUILD_MAKE} all-build-libiberty)
 .if ${HAVE_GCC} == 4
 	PATH=${TOOLDIR}/bin:$$PATH; export PATH; \
+		(cd .native && ${MKNATIVE_ENV} ${BUILD_MAKE} configure-gcc configure-libcpp) && \
 		(cd .native && ${MKNATIVE_ENV} ${BUILD_MAKE} configure-libiberty)
 	# edit Makefile so that maybe-all-gcc does not depend on all-gcc any more.
 		(cd .native && mv Makefile Makefile.config && \
-			sed -e 's/\(maybe-all-gcc:\) all-gcc/\1/' < Makefile.config > Makefile)
-.endif
+			sed -e 's/\(maybe-all-gcc:\) all-gcc/\1/' < Makefile.config > Makefile) && \
+		(cd .native/gcc && ${MKNATIVE_ENV} ${BUILD_MAKE} -e tree-check.h config.h)
+.else
 	PATH=${TOOLDIR}/bin:$$PATH; export PATH; \
-		(cd .native/gcc && ${MKNATIVE_ENV} ${BUILD_MAKE} -e tree-check.h config.h) && \
-	true
+		(cd .native && ${MKNATIVE_ENV} ${BUILD_MAKE} all-libiberty) && \
+		(cd .native/gcc && ${MKNATIVE_ENV} ${BUILD_MAKE} tree-check.h config.h)
+.endif
 	PATH=${TOOLDIR}/bin:$$PATH; export PATH; \
 		(cd .native && touch gcc/cc1obj gcc/cc1plus gcc/f771 gcc/libgcc.a gcc/libgcc_s.so && \
 			${MKNATIVE_ENV} ${BUILD_MAKE} configure-target-libiberty \
@@ -104,13 +105,17 @@ native-gcc: .native/.configure_done
 			configure-target-libstdc++-v3 \
 			ALL_GCC_C= ALL_GCC_CXX= \
 			CC_FOR_TARGET=${CC:Q}' '${CCADDFLAGS:Q} \
-			CXX_FOR_TARGET=${CXX:Q}' '${CCADDFLAGS:Q} \
-			ac_cv_prog_cc_cross=yes \
-			CPP=${CPP:Q}' '-I${DESTDIR}/usr/include) && \
+			CXX_FOR_TARGET=${CXX:Q}' '${CCADDFLAGS:Q}' '${CXXADDFLAGS:Q} \
+			CPP=${CPP:Q}' '-I${DESTDIR}/usr/include \
+			ac_cv_prog_cc_cross=yes) && \
 	true
 	PATH=${TOOLDIR}/bin:$$PATH; export PATH; \
 		(cd .native/${MACHINE_GNU_PLATFORM}/libstdc++-v3/include && \
-			${MKNATIVE_ENV} ${BUILD_MAKE} all-local) && \
+			${MKNATIVE_ENV} ${BUILD_MAKE} \
+			CC_FOR_TARGET=${CC:Q}' '${CCADDFLAGS:Q} \
+			CXX_FOR_TARGET=${CXX:Q}' '${CCADDFLAGS:Q}' '${CXXADDFLAGS:Q} \
+			CPP=${CPP:Q}' '-I${DESTDIR}/usr/include \
+			all-local) && \
 	true
 	PATH=${TOOLDIR}/bin:$$PATH; export PATH; \
 		(cd .native/${MACHINE_GNU_PLATFORM}/libiberty && \

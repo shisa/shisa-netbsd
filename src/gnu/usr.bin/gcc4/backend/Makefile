@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.1 2006/05/10 22:48:12 mrg Exp $
+#	$NetBSD: Makefile,v 1.5 2006/06/25 03:08:54 mrg Exp $
 
 MKPRIVATELIB=	yes
 
@@ -30,13 +30,14 @@ CLEANFILES+=	gengenrtl genrtl.c genrtl.h \
 		gtype-c.h gtype-cp.h gtype-f.h gtype-objc.h \
 		genflags genflags.h \
 		gencheck tree-check.h \
-		genpreds tm-preds.h tm_p.h cs-tm_p.h \
+		insn-preds.c genpreds tm-preds.h tm_p.h cs-tm_p.h \
 		genmodes insn-modes.c insn-modes.h min-insn-modes.c \
 		auto-host.h build-print-rtl.c \
 		build-rtl.c build-errors.c build-varray.c \
 		build-bitmap.c build-ggc-none.c \
 		gt-*.h *.o *.lo \
 		cs-config.h \
+		gcov-iov gcov-iov.h \
 
 #
 # These files have special needs
@@ -58,7 +59,7 @@ COPTS.reload1.c=		-O1
 
 # Headers that host objects depend on (except gen*rtl*)
 HH_NORTL=	${G_tm_file_list} ${G_build_xm_include_list}
-HH=		${HH_NORTL} genrtl.h
+HH=		${HH_NORTL} genrtl.h insn-modes.h
 
 #
 # Generate the various header files we need.
@@ -74,10 +75,10 @@ gengenrtl: gengenrtl.lo build-errors.lo
 	${_MKTARGET_LINK}
 	${HOST_LINK.c} -o ${.TARGET} ${.ALLSRC} ${NBCOMPATLIB} ${HOSTLIBIBERTY}
 
-tm-preds.h: genpreds
+tm-preds.h: genpreds ${G_md_file}
 	${_MKTARGET_CREATE}
 	./genpreds -h ${G_md_file} >${.TARGET}
-insn-preds.c: genpreds
+insn-preds.c: genpreds ${G_md_file}
 	${_MKTARGET_CREATE}
 	./genpreds ${G_md_file} >${.TARGET}
 genpreds.lo: ${HH}
@@ -160,7 +161,7 @@ tm_p.h: Makefile
 	${HOST_SH} ${GNUHOSTDIST}/gcc/mkconfig.sh ${.TARGET}
 
 CLEANFILES+=	options.h options.c optionlist
-optionlist: ${G_ALL_OPT_FILES) Makefile ${DIST}/gcc/opt-gather.awk
+optionlist: ${G_ALL_OPT_FILES} ${GCCARCH}/defs.mk Makefile ${DIST}/gcc/opt-gather.awk
 	${AWK} -f ${DIST}/gcc/opt-gather.awk ${G_ALL_OPT_FILES} > ${.TARGET}
 
 options.c: optionlist ${DIST}/gcc/opt-functions.awk ${DIST}/gcc/optc-gen.awk
@@ -275,7 +276,7 @@ insn-${f}: gen${f:R} ${G_md_file}
 # "One of these things is not like the other"
 #
 CLEANFILES+=		genattrtab insn-attrtab.c
-genattrtab.lo: ${HH} gtype-desc.h insn-modes.h
+genattrtab.lo: ${HH} gtype-desc.h
 genautomata.lo: ${HH}
 genattrtab: genattrtab.lo genautomata.lo ${EXTRADEPENDS} ${G_BUILD_VARRAY:.o=.lo}
 	${_MKTARGET_LINK}
@@ -289,7 +290,8 @@ insn-attrtab.c: genattrtab ${G_md_file}
 #
 genextract.lo: insn-config.h
 insn-conditions.lo: insn-constants.h tm_p.h tm-preds.h
-genattr.c: insn-modes.h
+build-ggc-none.lo: gtype-desc.h
+ggc-none.o: gtype-desc.h
 
 insn-attrtab.o: insn-config.h
 insn-extract.o: insn-config.h

@@ -2076,6 +2076,22 @@ num_insns_constant (rtx op, enum machine_mode mode)
 }
 
 
+/* Interpret element ELT of the CONST_VECTOR OP as an integer value.
+   If the mode of OP is MODE_VECTOR_INT, this simply returns the
+   corresponding element of the vector, but for V4SFmode and V2SFmode,
+   the corresponding "float" is interpreted as an SImode integer.  */
+
+static HOST_WIDE_INT
+const_vector_elt_as_int (rtx op, unsigned int elt)
+{
+  rtx tmp = CONST_VECTOR_ELT (op, elt);
+  if (GET_MODE (op) == V4SFmode
+      || GET_MODE (op) == V2SFmode)
+    tmp = gen_lowpart (SImode, tmp);
+  return INTVAL (tmp);
+}
+
+
 /* Return true if OP can be synthesized with a particular vspltisb, vspltish 
    or vspltisw instruction.  OP is a CONST_VECTOR.  Which instruction is used
    depends on STEP and COPIES, one of which will be 1.  If COPIES > 1,
@@ -2094,8 +2110,7 @@ vspltis_constant (rtx op, unsigned step, unsigned copies)
   unsigned bitsize = GET_MODE_BITSIZE (inner);
   unsigned mask = GET_MODE_MASK (inner);
 
-  rtx last = CONST_VECTOR_ELT (op, nunits - 1);
-  HOST_WIDE_INT val = INTVAL (last);
+  HOST_WIDE_INT val = const_vector_elt_as_int (op, nunits - 1);
   HOST_WIDE_INT splat_val = val;
   HOST_WIDE_INT msb_val = val > 0 ? 0 : -1;
 
@@ -2135,7 +2150,7 @@ vspltis_constant (rtx op, unsigned step, unsigned copies)
       else
 	desired_val = msb_val;
 
-      if (desired_val != INTVAL (CONST_VECTOR_ELT (op, i)))
+      if (desired_val != const_vector_elt_as_int (op, i))
 	return false;
     }
 
@@ -5892,10 +5907,10 @@ rs6000_gimplify_va_arg (tree valist, tree type, tree *pre_p, tree *post_p)
       t = build1 (LABEL_EXPR, void_type_node, lab_false);
       append_to_statement_list (t, pre_p);
 
-      if (n_reg > 2)
+      if ((n_reg == 2 && reg != gpr) || n_reg > 2)
 	{
 	  /* Ensure that we don't find any more args in regs.
-	     Alignment has taken care of the n_reg == 2 case.  */
+	     Alignment has taken care of the n_reg == 2 gpr case.  */
 	  t = build (MODIFY_EXPR, TREE_TYPE (reg), reg, size_int (8));
 	  gimplify_and_add (t, pre_p);
 	}

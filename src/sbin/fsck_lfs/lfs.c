@@ -1,4 +1,4 @@
-/* $NetBSD: lfs.c,v 1.21 2006/04/17 19:05:16 perseant Exp $ */
+/* $NetBSD: lfs.c,v 1.23 2006/06/05 23:27:36 christos Exp $ */
 /*-
  * Copyright (c) 2003 The NetBSD Foundation, Inc.
  * All rights reserved.

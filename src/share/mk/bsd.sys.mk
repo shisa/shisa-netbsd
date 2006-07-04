@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.sys.mk,v 1.131 2006/05/22 00:43:04 uwe Exp $
+#	$NetBSD: bsd.sys.mk,v 1.133 2006/06/18 14:38:48 gdamore Exp $
 #
 # Build definitions used for NetBSD source tree builds.
 
@@ -16,19 +16,14 @@ CFLAGS+=	-Wall -Wstrict-prototypes -Wmissing-prototypes -Wpointer-arith
 # differently in traditional and ansi environments' which is the warning
 # we wanted, and now we don't get anymore.
 CFLAGS+=	-Wno-sign-compare -Wno-traditional
-.if !defined(HAVE_GCC) || (${HAVE_GCC} == 2)
-CFLAGS+=	-Wno-uninitialized
-.endif
 .endif
 .if ${WARNS} > 1
 CFLAGS+=	-Wreturn-type -Wswitch -Wshadow
 .endif
 .if ${WARNS} > 2
 CFLAGS+=	-Wcast-qual -Wwrite-strings
-.if defined(HAVE_GCC) && (${HAVE_GCC} > 2)
 CXXFLAGS+=	-Wabi
 CXXFLAGS+=	-Wold-style-cast
-.endif
 CXXFLAGS+=	-Wctor-dtor-privacy -Wnon-virtual-dtor -Wreorder \
 		-Wno-deprecated -Wno-non-template-friend \
 		-Woverloaded-virtual -Wno-pmf-conversions -Wsign-promo -Wsynth
@@ -148,6 +143,7 @@ TOOL_ROFF_HTML?=	${TOOL_GROFF} -Tlatin1 -mdoc2html
 TOOL_ROFF_PS?=		${TOOL_GROFF} -Tps
 TOOL_ROFF_RAW?=		${TOOL_GROFF} -Z
 TOOL_RPCGEN?=		rpcgen
+TOOL_SED?=		sed
 TOOL_SOELIM?=		soelim
 TOOL_STAT?=		stat
 TOOL_SPARKCRC?=		sparkcrc

@@ -1,4 +1,4 @@
-#	$NetBSD: BRANCHES,v 1.81 2006/05/24 11:03:28 yamt Exp $
+#	$NetBSD: BRANCHES,v 1.86 2006/06/21 15:20:39 yamt Exp $
 #
 # This file contains a list of branches that exist in the NetBSD CVS
 # tree and their current state.
@@ -222,6 +222,17 @@ Notes:		Compiles and works on i386 (tested with a MidiSport 2x4 and
                 pcppi/midisyn). Ready for testing. Please coordinate commits
 		with maintainer.
 
+Branch:		gdamore-uart
+Description:	Add register table support to com driver.
+Status:		Active
+Start Date:	14 June 2006
+End Date:
+Base Tag:	gdamore-uart-base
+Maintainer:	Garrett D'Amore <gdamore@NetBSD.org>
+Scope:		kernel
+Notes:		Results in consolidation of Alchemy (mips/dev/alchemy/aucom.c)
+		com support, and also removes a nasty hack from Atheros com.
+
 Branch:		gmcgarry_ctxsw
 Description:	Separate scheduler from context-switch code
 Status:		Dormant
@@ -349,17 +360,6 @@ Notes:		Requires parts of xsrc/xfree (HEAD)
 		xsrc/local, xsrc/xfree/xc/programs/Xserver/hw/netbsd
 		Requires xorg (XORG-6_8_1)
 
-Branch:		simonb-timecounters
-Description:	Port FreeBSD timecounters to NetBSD
-Status:		Active
-Start Date:	Sat Feb 04 2006
-End Date:
-Base Tag:	simonb-timecounters-base
-Maintainer:	Simon Burge <simonb@NetBSD.org>,
-		Frank Kardel <kardel@NetBSD.org>
-Scope:		sys, sbin/savecore, usr.bin/vmstat, usr.sbin/ntp
-Notes:
-
 Branch:		thorpej-devvp
 Description:	replace dev_t with struct vnode * in devsw entry points
 Status:		Active
@@ -380,7 +380,7 @@ Description:	implement and evaluate lazy mapping of mbuf external data pages
 Status:		Active
 Start Date:	Wed Jul  6 2005
 End Date:	
-Base Tag:	yamt-lazymbuf-base
+Base Tag:	yamt-lazymbuf-base2
 Maintainer:	YAMAMOTO Takashi <yamt@NetBSD.org>
 Scope:		src/sys
 Notes:		
@@ -786,6 +786,19 @@ Base Tag:
 Maintainer:	Jason Thorpe <thorpej@NetBSD.org>
 Scope:		kernel
 Notes:
+
+Branch:		simonb-timecounters
+Description:	Port FreeBSD timecounters to NetBSD
+Status:		Terminated
+Start Date:	Sat Feb 04 2006
+End Date:	Wed Jun 07 2006
+Base Tag:	simonb-timecounters-base
+Maintainer:	Simon Burge <simonb@NetBSD.org>,
+		Frank Kardel <kardel@NetBSD.org>
+Scope:		sys, sbin/savecore, usr.bin/vmstat, usr.sbin/ntp
+Notes:		early (partial conversion) commit to -current
+		ok'ed by core@ on 20060605 for testing and further
+		simplified conversion
 
 Branch:		wrstuden-devbsize
 Description:	Modify buffer cache to deal with different devices having

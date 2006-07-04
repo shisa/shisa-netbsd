@@ -1,4 +1,4 @@
-/*	$NetBSD: af_ns.c,v 1.2 2005/03/20 01:10:51 thorpej Exp $	*/
+/*	$NetBSD: af_ns.c,v 1.4 2006/06/16 23:48:35 elad Exp $	*/
 
 /*
  * Copyright (c) 1983, 1993
@@ -33,7 +33,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: af_ns.c,v 1.2 2005/03/20 01:10:51 thorpej Exp $");
+__RCSID("$NetBSD: af_ns.c,v 1.4 2006/06/16 23:48:35 elad Exp $");
 #endif /* not lint */
 
 /*
@@ -99,12 +99,12 @@ xns_status(int force)
 
 	getsock(AF_NS);
 	if (s < 0) {
-		if (errno == EPROTONOSUPPORT)
+		if (errno == EAFNOSUPPORT)
 			return;
 		err(EXIT_FAILURE, "socket");
 	}
 	(void) memset(&ifr, 0, sizeof(ifr));
-	(void) strncpy(ifr.ifr_name, name, sizeof(ifr.ifr_name));
+	estrlcpy(ifr.ifr_name, name, sizeof(ifr.ifr_name));
 	if (ioctl(s, SIOCGIFADDR, &ifr) == -1) {
 		if (errno == EADDRNOTAVAIL || errno == EAFNOSUPPORT) {
 			if (!force)
@@ -113,7 +113,7 @@ xns_status(int force)
 		} else
 			warn("SIOCGIFADDR");
 	}
-	(void) strncpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
+	estrlcpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
 	sns = (struct sockaddr_ns *)&ifr.ifr_addr;
 	printf("\tns %s ", ns_ntoa(sns->sns_addr));
 	if (flags & IFF_POINTOPOINT) { /* by W. Nesheim@Cornell */
@@ -123,7 +123,7 @@ xns_status(int force)
 			else
 			    warn("SIOCGIFDSTADDR");
 		}
-		(void) strncpy(ifr.ifr_name, name, sizeof (ifr.ifr_name));
+		estrlcpy(ifr.ifr_name, name, sizeof (ifr.ifr_name));
 		sns = (struct sockaddr_ns *)&ifr.ifr_dstaddr;
 		printf("--> %s ", ns_ntoa(sns->sns_addr));
 	}

@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.18 2003/07/16 11:11:49 dsl Exp $
+#	$NetBSD: Makefile,v 1.20 2006/06/28 15:03:00 lukem Exp $
 
 NOMAN=
 BINDIR=	/usr/mdec
@@ -8,21 +8,26 @@ STRIPFLAG=
 
 .include <bsd.own.mk>
 
+LDFLAGS+= -nostdlib
 .if ${OBJECT_FMT} == "ELF"
-LDFLAGS+= -e start
+LDFLAGS+= -Wl,-e,start
 .else
-LDFLAGS+= -e _start -N
+LDFLAGS+= -Wl,-e,_start -Wl,-N
 .endif
 
 .if ${MACHINE} == "macppc"
+
 PROG=	mbr
 SRCS=	mbr_macppc.S
 
+CLEANFILES+=	${PROG}.tmp
+
 ${PROG}: ${OBJS}
-	${LD} -o ${PROG}.tmp ${LDFLAGS} -Ttext 0x600 ${OBJS}
+	${_MKTARGET_LINK}
+	${CC} -o ${PROG}.tmp ${LDFLAGS} -Wl,-Ttext,0x600 ${OBJS}
 	${STRIP} ${PROG}.tmp
 	${OBJCOPY} -O binary ${PROG}.tmp ${PROG}
-	rm -f ${PROG}.tmp
-.endif
+
+.endif	# macppc
 
 .include <bsd.prog.mk>

@@ -1,23 +1,25 @@
-#	$NetBSD: Makefile.inc,v 1.42 2006/03/20 22:36:37 bouyer Exp $
+#	$NetBSD: Makefile.inc,v 1.44 2006/06/08 22:17:07 hubertf Exp $
 #
 #	etc.i386/Makefile.inc -- i386-specific etc Makefile targets
 #
 
 KERNEL_SETS=		GENERIC GENERIC_TINY GENERIC_LAPTOP \
 			GENERIC_DIAGNOSTIC GENERIC_PS2TINY GENERIC.MP \
-			GENERIC.MPACPI XEN0 XENU XEN3_U
+			GENERIC.MPACPI XEN2_DOM0 XEN2_DOMU XEN3_DOMU
 
 BUILD_KERNELS=		INSTALL INSTALL_SMALL INSTALL_TINY \
-			INSTALL_LAPTOP INSTALL_PS2 INSTALL_XENU \
-			INSTALL_XEN3_U
+			INSTALL_LAPTOP INSTALL_PS2 INSTALL_XEN2_DOMU \
+			INSTALL_XEN3_DOMU
 
 INSTALLATION_DIRS+=	installation/misc	\
+			installation/cdrom	\
 			installation/floppy
 
 # i386 specific distrib stuff
 snap_md_post:
 	cd ${KERNSRCDIR}/arch/i386/stand/dosboot && ${MAKE} release
 	cd ${KERNSRCDIR}/arch/i386/stand/misc && ${MAKE} release
+	${MAKESUMS} -t ${RELEASEDIR}/${MACHINE}/installation/cdrom '*.iso'
 	${MAKESUMS} -t ${RELEASEDIR}/${MACHINE}/installation/floppy '*.fs'
 	${MAKESUMS} -t ${RELEASEDIR}/${MACHINE}/installation/misc '*.*'
 

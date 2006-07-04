@@ -1,4 +1,4 @@
-/* $NetBSD: kern_auth.c,v 1.6 2006/05/28 06:52:17 yamt Exp $ */
+/* $NetBSD: kern_auth.c,v 1.8 2006/06/13 22:56:46 dyoung Exp $ */
 
 /*-
  * Copyright (c) 2005, 2006 Elad Efrat <elad@NetBSD.org>
@@ -247,7 +247,6 @@ void
 kauth_cred_setuid(kauth_cred_t cred, uid_t uid)
 {
 	KASSERT(cred != NULL);
-	KASSERT(uid >= 0 && uid <= UID_MAX);
 
 	cred->cr_uid = uid;
 }
@@ -256,7 +255,6 @@ void
 kauth_cred_seteuid(kauth_cred_t cred, uid_t uid)
 {
 	KASSERT(cred != NULL);
-	KASSERT(uid >= 0 && uid <= UID_MAX);
 
 	cred->cr_euid = uid;
 }
@@ -265,7 +263,6 @@ void
 kauth_cred_setsvuid(kauth_cred_t cred, uid_t uid)
 {
 	KASSERT(cred != NULL);
-	KASSERT(uid >= 0 && uid <= UID_MAX);
 
 	cred->cr_svuid = uid;
 }
@@ -274,7 +271,6 @@ void
 kauth_cred_setgid(kauth_cred_t cred, gid_t gid)
 {
 	KASSERT(cred != NULL);
-	KASSERT(gid >= 0 && gid <= GID_MAX);
 
 	cred->cr_gid = gid;
 }
@@ -283,7 +279,6 @@ void
 kauth_cred_setegid(kauth_cred_t cred, gid_t gid)
 {
 	KASSERT(cred != NULL);
-	KASSERT(gid >= 0 && gid <= GID_MAX);
 
 	cred->cr_egid = gid;
 }
@@ -292,7 +287,6 @@ void
 kauth_cred_setsvgid(kauth_cred_t cred, gid_t gid)
 {
 	KASSERT(cred != NULL);
-	KASSERT(gid >= 0 && gid <= GID_MAX);
 
 	cred->cr_svgid = gid;
 }
@@ -304,7 +298,6 @@ kauth_cred_ismember_gid(kauth_cred_t cred, gid_t gid, int *resultp)
 	int i;
 
 	KASSERT(cred != NULL);
-	KASSERT(gid >= 0 && gid <= GID_MAX);
 	KASSERT(resultp != NULL);
 
 	*resultp = 0;
@@ -761,24 +754,20 @@ kauth_authorize_cb_process(kauth_cred_t cred, kauth_action_t action,
 			   void *arg3)
 {
 	struct proc *p;
-	kauth_cred_t cred2;
 	int error;
 
 	error = KAUTH_RESULT_DEFER;
 
 	p = arg0;
-	cred2 = arg1;
 
 	switch (action) {
 	case KAUTH_PROCESS_CANSIGNAL: {
-		struct proc *to;
 		int signum;
 
-		to = arg2;
-		signum = (int)(unsigned long)arg3;
+		signum = (int)(unsigned long)arg1;
 
-		if (kauth_cred_uidmatch(cred, cred2)  ||
-		    (signum == SIGCONT && (p->p_session == to->p_session)))
+		if (kauth_cred_uidmatch(cred, p->p_cred) ||
+		    (signum == SIGCONT && (curproc->p_session == p->p_session)))
 			error = KAUTH_RESULT_ALLOW;
 		else
 			error = KAUTH_RESULT_DEFER;
@@ -787,7 +776,7 @@ kauth_authorize_cb_process(kauth_cred_t cred, kauth_action_t action,
 		}
 
 	case KAUTH_PROCESS_CANPTRACE:
-		if (kauth_cred_uidmatch(cred, cred2))
+		if (kauth_cred_uidmatch(cred, p->p_cred))
 			error = KAUTH_RESULT_ALLOW;
 		else
 			error = KAUTH_RESULT_DENY;
@@ -797,7 +786,7 @@ kauth_authorize_cb_process(kauth_cred_t cred, kauth_action_t action,
 		if (!security_curtain) {
 			error = KAUTH_RESULT_ALLOW;
 		} else {
-			if (kauth_cred_uidmatch(cred, cred2))
+			if (kauth_cred_uidmatch(cred, p->p_cred))
 				error = KAUTH_RESULT_ALLOW;
 			else
 				error = KAUTH_RESULT_DENY;

@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.own.mk,v 1.451 2006/05/30 00:52:11 christos Exp $
+#	$NetBSD: bsd.own.mk,v 1.461 2006/06/26 15:30:05 drochner Exp $
 
 .if !defined(_BSD_OWN_MK_)
 _BSD_OWN_MK_=1
@@ -44,36 +44,48 @@ TOOLCHAIN_MISSING?=	no
 # Transitional for toolchain upgrade to GCC4.1
 #
 # not working:
-#	all
+#	sh5, vax
 #
-.if ${MACHINE_ARCH} == "vax"
-HAVE_GCC?=	2
+.if \
+    ${MACHINE_ARCH} == "alpha" || \
+    ${MACHINE_ARCH} == "arm" || \
+    ${MACHINE_ARCH} == "armeb" || \
+    ${MACHINE_ARCH} == "i386" || \
+    ${MACHINE_ARCH} == "m68000" || \
+    ${MACHINE_ARCH} == "powerpc" || \
+    ${MACHINE_ARCH} == "powerpc64" || \
+    ${MACHINE_ARCH} == "sparc" || \
+    ${MACHINE_ARCH} == "sparc64" || \
+    ${MACHINE_ARCH} == "x86_64"
+HAVE_GCC?=	4
 .endif
 
-.if ${MACHINE_ARCH} == "i386" || \
-    ${MACHINE_ARCH} == "sparc64"
+# These ones work (or mostly work), but aren't switched yet
+.if \
+    ${MACHINE_ARCH} == "hppa" || \
+    ${MACHINE_ARCH} == "m68k" || \
+    ${MACHINE_ARCH} == "mipsel" || \
+    ${MACHINE_ARCH} == "mipseb" || \
+    ${MACHINE_ARCH} == "sh3eb" || \
+    ${MACHINE_ARCH} == "sh3el"
 #HAVE_GCC?=	4
 .endif
 
 # default to GCC3
 HAVE_GCC?=	3
 
-# Do we want to use tools/toolchain or not?
-.if ${HAVE_GCC} != "2"
-USE_TOOLS_TOOLCHAIN=no
-.endif
-USE_TOOLS_TOOLCHAIN?=yes
+#
+# Transitional for toolchain upgrade to GDB6
+#
+#HAVE_GDB?=	6
+
+HAVE_GDB?=	5
 
 CPPFLAG_ISYSTEM=	-isystem
-# GCC2 did not have -isystem-cxx
-.if ${HAVE_GCC} == 2
-CPPFLAG_ISYSTEMXX=	-isystem
-.else
-. if ${HAVE_GCC} == 3
+.if ${HAVE_GCC} == 3
 CPPFLAG_ISYSTEMXX=	-isystem-cxx
-. else	# GCC 4
+.else	# GCC 4
 CPPFLAG_ISYSTEMXX=	-cxx-isystem
-. endif
 .endif
 
 .if empty(.MAKEFLAGS:M-V*)
@@ -268,6 +280,7 @@ TOOL_ROFF_HTML=		${TOOL_GROFF} -Tlatin1 -mdoc2html
 TOOL_ROFF_PS=		${TOOL_GROFF} -Tps
 TOOL_ROFF_RAW=		${TOOL_GROFF} -Z
 TOOL_RPCGEN=		CPP=${CPP:Q} ${TOOLDIR}/bin/${_TOOL_PREFIX}rpcgen
+TOOL_SED=		${TOOLDIR}/bin/${_TOOL_PREFIX}sed
 TOOL_SOELIM=		${TOOLDIR}/bin/${_TOOL_PREFIX}soelim
 TOOL_STAT=		${TOOLDIR}/bin/${_TOOL_PREFIX}stat
 TOOL_SPARKCRC=		${TOOLDIR}/bin/${_TOOL_PREFIX}sparkcrc
@@ -375,6 +388,11 @@ LOCALEGRP?=	wheel
 LOCALEOWN?=	root
 LOCALEMODE?=	${NONBINMODE}
 
+FIRMWAREDIR?=	/libdata/firmware
+FIRMWAREGRP?=	wheel
+FIRMWAREOWN?=	root
+FIRMWAREMODE?=	${NONBINMODE}
+
 #
 # Data-driven table using make variables to control how
 # toolchain-dependent targets and shared libraries are built
@@ -410,13 +428,6 @@ MKGCC:= no
 .endif
 
 #
-# GCC can produce PIC code for sh3 only starting with gcc3.
-#
-.if ${MACHINE_CPU} == "sh3" && ${HAVE_GCC} == "2"
-NOPIC=		# defined
-.endif
-
-#
 # gcc3 and gdb on sh5 are not ready for prime-time.
 #
 .if ${MACHINE_CPU} == "sh5"
@@ -430,6 +441,12 @@ MKGDB=no
 #
 .if ${MACHINE_ARCH} == "m68000"
 NOPIC=		# defined
+MKISCSI=	no
+# XXX GCC 4 outputs mcount() calling sequences that try to load values
+# from over 64KB away and this fails to assemble.
+.if ${HAVE_GCC} == 4
+NOPROFILE=	# defined
+.endif
 .endif
 
 #
@@ -577,7 +594,7 @@ MK${var}:=	yes
 	DOC \
 	GCC GCCCMDS GDB \
 	HESIOD HTML \
-	IEEEFP INET6 INFO IPFILTER \
+	IEEEFP INET6 INFO IPFILTER ISCSI \
 	KERBEROS \
 	LINKLIB LINT \
 	MAN \

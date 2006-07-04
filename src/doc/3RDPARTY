@@ -1,4 +1,4 @@
-#	$NetBSD: 3RDPARTY,v 1.436 2006/05/25 04:10:09 rpaulo Exp $
+#	$NetBSD: 3RDPARTY,v 1.446 2006/06/29 03:46:02 dan Exp $
 #
 # This file contains a list of the software that has been integrated into
 # NetBSD where we are not the primary maintainer.
@@ -26,7 +26,7 @@
 
 Package:	acpica
 Version:	20060217
-Current Vers:	20060310
+Current Vers:	20060608
 Maintainer:	INTEL
 Archive Site:	http://developer.intel.com/technology/IAPC/acpi/downloads.htm
 Home Page:	http://developer.intel.com/technology/IAPC/acpi/
@@ -52,8 +52,8 @@ Fix symbolic links before import.
 Check src/usr.sbin/amd/include/config.h is correct after import.
 
 Package:	ath-hal
-Version:	0.9.16.16
-Current Vers:	0.9.16.16
+Version:	0.9.17.2
+Current Vers:	0.9.17.2
 Maintainer:	Sam Leffler <sam@errno.com>
 Archive Site:	none
 Home Page:	none
@@ -61,9 +61,7 @@ Mailing List:	none
 Responsible:	sam, dyoung, gdamore
 License:	Redistribution without changes (binary only)
 Notes:
-The current version was imported from FreeBSD.  New versions should come from
-Sam Leffler directly.  The HAL is binary only, and located in
-src/sys/contrib/dev/ath
+The HAL is binary only, and located in src/sys/contrib/dev/ath
 
 Package:	bc
 Version:	1.06
@@ -114,8 +112,8 @@ License:	GPLv2, LGPLv2, BSD
 Notes:
 
 Package:	bsd-family-tree
-Version:	1.101
-Current Vers:	1.101
+Version:	1.105
+Current Vers:	1.105
 Maintainer:	n/a
 Archive Site:	http://cvsweb.freebsd.org/src/share/misc/bsd-family-tree
 Home Page:	http://cvsweb.freebsd.org/src/share/misc/bsd-family-tree
@@ -168,8 +166,8 @@ License:	BSD-like
 Notes:
 
 Package:	cvs
-Version:	1.11.21
-Current Vers:	1.11.21/1.12.12
+Version:	1.11.22
+Current Vers:	1.11.22/1.12.13
 Maintainer:	cvshome
 Archive Site:	http://ftp.gnu.org/non-gnu/cvs/
 Home Page:	http://cvs.nongnu.org/
@@ -271,8 +269,8 @@ Newer flex will be found in:
 	http://sourceforge.net/projects/lex/
 
 Package:	gcc
-Version:	2.95.3/3.3.3
-Current Vers:	3.3.6/3.4.4/4.0.3/4.1.0
+Version:	3.3.6/4.1.2-20060602
+Current Vers:	3.3.6/4.1.1
 Maintainer:	cygnus
 Archive Site:	ftp://ftp.gnu.org/gnu/gcc/
 Home Page:	http://www.gnu.org/software/gcc/
@@ -283,10 +281,13 @@ Notes:
 before importing:
 	- delete all .cvsignore and .brik files
 	- delete gcc/java gcc/ada libffi zlib boehm-gc libjava fastjar
+	- delete all related testsuites
+for GCC4:
+	- delete all fortran and testsuites
 
 Package:	gdb
-Version:	5.3
-Current Vers:	6.3
+Version:	5.3/6.4
+Current Vers:	6.4
 Maintainer:	FSF
 Archive Site:	ftp://ftp.gnu.org/gnu/gdb/
 Home Page:	http://www.gnu.org/software/gdb/
@@ -523,18 +524,16 @@ and ndbootd-raw.c.  Restore saved config.h, and force it to define
 HAVE_STRICT_ALIGNMENT.  Fix RCS IDs, import.
 
 Package:	ntp
-Version:	4.2.0
-Current Vers:	4.2.0
+Version:	4.2.2
+Current Vers:	4.2.2
 Maintainer:	David L. Mills <mills@udel.edu>
 Archive Site:	ftp://ftp.udel.edu/pub/ntp/ntp4/
-Home Page:	http://www.ntp.org/
+Home Page:	http://www.ntp.org/, http://ntp.isc.org/
 Mailing List:
 Responsible:	simonb, jonathan
 License:	BSD-like
 Notes:
 See /usr/src/dist/ntp/ntp2netbsd for update instructions.
-NOTE: As of 20010405 -current includes a fix for the "ntpdx" root
-exploit/DoS attack which has been pulled up to the 1.4 and 1.5 branches.
 
 Package:	nvi
 Version:	1.79
@@ -669,7 +668,7 @@ set-permissions'').
 
 Package:	ppp
 Version:	2.4.3 [with 2.4.4b1 changes]
-Current Vers:	2.4.4b1
+Current Vers:	2.4.4
 Maintainer:	Paul Mackerras <paulus@samba.org>
 Archive Site:	ftp://ftp.samba.org/pub/ppp/
 Home Page:
@@ -738,21 +737,6 @@ Mailing List:	bug-gnats@gnu.org
 License:	GPLv2
 Responsible:
 Notes:
-
-Package:	sendmail
-Version:	8.13.3
-Current Vers:	8.13.6
-Maintainer:	Eric P. Allman
-Archive Site:	ftp://ftp.sendmail.org/pub/sendmail/
-Home Page:	http://www.sendmail.org/
-Mailing List:
-Responsible:	atatat
-License:	Specific. See src/gnu/dist/sendmail/LICENSE
-Notes:
-use gnu/dist/sendmail/sendmail2netbsd to strip off RCS tags.
-local changes:
-- do not reverse-resolve link-local addresses
-- syslog args change
 
 Package:	SoftFloat
 Version:	2a

@@ -1,4 +1,4 @@
-#	$NetBSD: special,v 1.94 2006/05/30 00:40:22 christos Exp $
+#	$NetBSD: special,v 1.97 2006/06/19 15:44:36 gdamore Exp $
 #	@(#)special	8.2 (Berkeley) 1/23/94
 #
 # Hand-crafted mtree specification for the dangerous files.
@@ -24,6 +24,10 @@
 ./etc/Distfile			type=file mode=0644 optional
 ./etc/amd			type=dir  mode=0755 optional
 ./etc/apm			type=dir  mode=0755 optional
+./etc/bluetooth			type=dir  mode=0755
+./etc/bluetooth/bluetooth.conf	type=file mode=0640
+./etc/bluetooth/hosts		type=file mode=0644
+./etc/bluetooth/protocols	type=file mode=0644
 ./etc/bootparams		type=file mode=0644 optional
 ./etc/bootptab			type=file mode=0644 optional
 ./etc/ccd.conf			type=file mode=0644 optional
@@ -85,8 +89,6 @@
 ./etc/mail			type=dir  mode=0755
 ./etc/mail/aliases		type=file mode=0644
 ./etc/mail/aliases.db		type=file mode=0644 optional tags=exclude
-./etc/mail/helpfile		type=file mode=0444
-./etc/mail/local-host-names	type=file mode=0644 optional
 ./etc/mail.rc			type=file mode=0644
 ./etc/mailer.conf		type=file mode=0644
 ./etc/man.conf			type=file mode=0644
@@ -163,6 +165,8 @@
 ./etc/rc.d/apmd			type=file mode=0555
 ./etc/rc.d/bootconf.sh		type=file mode=0555
 ./etc/rc.d/bootparams		type=file mode=0555
+./etc/rc.d/btconfig		type=file mode=0555
+./etc/rc.d/bthcid		type=file mode=0555
 ./etc/rc.d/ccd			type=file mode=0555
 ./etc/rc.d/cleartmp		type=file mode=0555
 ./etc/rc.d/cron			type=file mode=0555
@@ -227,6 +231,7 @@
 ./etc/rc.d/rwho			type=file mode=0555
 ./etc/rc.d/savecore		type=file mode=0555
 ./etc/rc.d/screenblank		type=file mode=0555
+./etc/rc.d/sdpd			type=file mode=0555
 ./etc/rc.d/securelevel		type=file mode=0555
 ./etc/rc.d/sshd			type=file mode=0555
 ./etc/rc.d/swap1		type=file mode=0555
@@ -370,7 +375,6 @@
 ./var/spool/ftp/etc/passwd		type=file mode=0644 optional
 ./var/spool/ftp/hidden		type=dir  mode=0111 ignore optional
 ./var/spool/ftp/pub		type=dir  mode=0775 ignore optional
-./var/spool/mqueue		type=dir  mode=0755 ignore
 ./var/spool/output		type=dir  mode=0755 ignore
 ./var/spool/uucp		type=dir  mode=0755 uname=uucp gname=daemon ignore optional
 ./var/spool/uucppublic		type=dir  mode=1777 uname=uucp gname=daemon ignore optional

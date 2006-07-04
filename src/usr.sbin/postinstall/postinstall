@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# $NetBSD: postinstall,v 1.14 2006/05/30 05:53:24 tron Exp $
+# $NetBSD: postinstall,v 1.19 2006/06/19 15:44:56 gdamore Exp $
 #
 # Copyright (c) 2002-2005 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -569,7 +569,7 @@ do_gid()
 	[ -n "$1" ] || err 2 "USAGE: do_gid  fix|check"
 
 	check_ids $1 groups "${DEST_DIR}/etc/group" \
-	    named ntpd sshd authpf _pflogd _rwhod
+	    named ntpd postfix sshd authpf _pflogd _rwhod
 }
 
 #
@@ -725,7 +725,7 @@ do_rc()
 	compare_dir ${op} ${SRC_DIR}/etc/rc.d ${DEST_DIR}/etc/rc.d 555 \
 		DAEMON LOGIN NETWORKING SERVERS \
 		accounting altqd amd apmd \
-		bootconf.sh bootparams \
+		bootconf.sh bootparams btconfig bthcid \
 		ccd cgd cleartmp cron \
 		dhclient dhcpd dhcrelay dmesg downinterfaces \
 		fixsb fsck ftpd \
@@ -741,7 +741,7 @@ do_rc()
 		quota \
 		racoon rpcbind raidframe raidframeparity rarpd rbootd root \
 		route6d routed rtadvd rtclocaltime rtsold rwho \
-		savecore screenblank securelevel sshd \
+		savecore screenblank sdpd securelevel sshd \
 		staticroute swap1 swap2 sysctl sysdb syslogd \
 		timed tpctl ttys \
 		veriexec virecover wdogctl wscons wsmoused \
@@ -751,7 +751,7 @@ do_rc()
 
 		# check for obsolete rc.d files
 	for f in NETWORK fsck.sh kerberos nfsiod servers systemfs \
-	    daemon gated login portmap sendmail smmsp sunndd xntpd; do
+	    daemon gated login portmap sunndd xntpd; do
 		fd=/etc/rc.d/${f}
 		[ -e "${DEST_DIR}${fd}" ] && echo "${fd}"
 	done | obsolete_paths ${op}
@@ -759,17 +759,45 @@ do_rc()
 
 		# check for obsolete rc.conf(5) variables
 	set --	amd amd_master \
-		mountcritlocal critical_filesystems_beforenet \
-		mountcritremote critical_filesystems \
-		network ip6forwarding \
-		sysctl defcorename \
-		sysctl nfsiod_flags
+		critical_filesystems critical_filesystems_beforenet \
+		defcorename \
+		ip6forwarding \
+		mountcritlocal mountcritremote \
+		network nfsiod_flags \
+		sysctl
 	while [ $# -gt 1 ]; do
 		if rcconf_is_set ${op} $1 $2 1; then
 			failed=1
 		fi
 		shift 2
 	done
+
+	return ${failed}
+}
+
+#
+#	sendmail
+#
+additem sendmail "remove obsolete sendmail configuration files and scripts"
+do_sendmail()
+{
+	[ -n "$1" ] || err 2 "USAGE: do_sendmail  fix|check"
+	op=$1
+	failed=0
+
+	# Don't complain if the "sendmail" package is installed because the
+	# files might still be in use.
+	if /usr/sbin/pkg_info -qe sendmail >/dev/null 2>&1
+	then
+		return 0
+	fi
+
+	for f in /etc/mail/helpfile /etc/mail/local-host-names \
+	    /etc/mail/sendmail.cf /etc/mail/submit.cf /etc/rc.d/sendmail \
+	    /etc/rc.d/smmsp /var/spool/clientmqueue /var/spool/mqueue; do
+		[ -e "${DEST_DIR}${f}" ] && echo "${f}"
+	done | obsolete_paths ${op}
+	failed=$(( ${failed} + $? ))
 
 	return ${failed}
 }
@@ -957,7 +985,7 @@ do_uid()
 	[ -n "$1" ] || err 2 "USAGE: do_uid  fix|check"
 
 	check_ids $1 users "${DEST_DIR}/etc/master.passwd" \
-	    named ntpd sshd _pflogd _rwhod
+	    named ntpd postfix sshd _pflogd _rwhod
 }
 
 

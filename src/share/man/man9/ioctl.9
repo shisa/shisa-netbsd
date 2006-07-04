@@ -1,4 +1,4 @@
-.\" $NetBSD: ioctl.9,v 1.20 2003/05/01 08:42:08 uebayasi Exp $
+.\" $NetBSD: ioctl.9,v 1.22 2006/06/19 15:44:44 gdamore Exp $
 .\"
 .\" Copyright (c) 1999  The NetBSD Foundation, Inc.
 .\" All rights reserved.
@@ -98,6 +98,15 @@ ADB devices (mac68k, macppc)
 .Xr isdntel 4
 .It 'b'
 .Xr \&tb 4
+.It 'b'
+Bluetooth HCI sockets, see
+.Xr bluetooth 4
+.It 'b'
+Bluetooth Hub Control, see
+.Xr bthub 4
+.It 'b'
+Bluetooth Headset audio driver, see
+.Xr bthset 4
 .It 'B'
 bell device (x68k)
 .It 'B'
@@ -289,7 +298,7 @@ is provided.
 .Cm EPASSTHROUGH
 indicates that no error occurred during processing (it did not fail),
 but neither was anything processed (it did not succeed).
-This supercedes the use of either
+This supersedes the use of either
 .Cm ENOTTY
 (which is an explicit failure) or -1 (which has no contextual meaning)
 as a return value.

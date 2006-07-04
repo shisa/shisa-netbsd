@@ -412,6 +412,7 @@ commit (argc, argv)
 		/* Silently ignore -n for compatibility with old
 		 * clients.
 		 */
+		if (!server_active) error(0, 0, "the `-n' option is obsolete");
 		break;
 #endif /* SERVER_SUPPORT */
 	    case 'm':
@@ -1746,11 +1747,15 @@ remove_file (finfo, tag, message)
 	if (!quiet)
 	    error (0, retcode == -1 ? errno : 0,
 		   "failed to commit dead revision for `%s'", finfo->fullname);
+	if (prev_rev != NULL)
+	    free (prev_rev);
 	return 1;
     }
     /* At this point, the file has been committed as removed.  We should
        probably tell the history file about it  */
-    history_write ('R', NULL, finfo->rcs->head, finfo->file, finfo->repository);
+    corev = rev ? RCS_getbranch (finfo->rcs, rev, 1) : RCS_head (finfo->rcs);
+    history_write ('R', NULL, corev, finfo->file, finfo->repository);
+    free (corev);
 
     if (rev != NULL)
 	free (rev);

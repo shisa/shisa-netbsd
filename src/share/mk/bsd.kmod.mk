@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.kmod.mk,v 1.81 2006/05/11 22:24:48 mrg Exp $
+#	$NetBSD: bsd.kmod.mk,v 1.83 2006/06/26 04:07:34 lukem Exp $
 
 .include <bsd.init.mk>
 
@@ -67,16 +67,19 @@ ${OBJS} ${LOBJS}: ${DPSRCS}
 .if ${MACHINE_CPU} == "powerpc" || \
     ${MACHINE_CPU} == "arm"
 ${KMOD}_tmp.o: ${OBJS} ${DPADD}
-	${LD} -r ${LDFLAGS} -o tmp.o ${OBJS}
+	${_MKTARGET_COMPILE}
+	${LD} -r -o tmp.o ${OBJS}
 	mv tmp.o ${.TARGET}
 
 ${KMOD}_tramp.S: ${KMOD}_tmp.o $S/lkm/arch/${MACHINE_CPU}/lkmtramp.awk
+	${_MKTARGET_CREATE}
 	${OBJDUMP} --syms --reloc ${KMOD}_tmp.o | \
 		 awk -f $S/lkm/arch/${MACHINE_CPU}/lkmtramp.awk > tmp.S
 	mv tmp.S ${.TARGET}
 
 ${PROG}: ${KMOD}_tmp.o ${KMOD}_tramp.o
-	${LD} -r ${LDFLAGS} \
+	${_MKTARGET_LINK}
+	${LD} -r \
 		`${OBJDUMP} --syms --reloc ${KMOD}_tmp.o | \
 			 awk -f $S/lkm/arch/${MACHINE_CPU}/lkmwrap.awk` \
 		 -o tmp.o ${KMOD}_tmp.o ${KMOD}_tramp.o
@@ -89,7 +92,8 @@ ${PROG}: ${KMOD}_tmp.o ${KMOD}_tramp.o
 	mv tmp.o ${.TARGET}
 .else
 ${PROG}: ${OBJS} ${DPADD}
-	${LD} -r ${LDFLAGS} -o tmp.o ${OBJS}
+	${_MKTARGET_LINK}
+	${LD} -r -o tmp.o ${OBJS}
 	mv tmp.o ${.TARGET}
 .endif
 
@@ -141,6 +145,7 @@ ${_PROG}: ${PROG}					# install rule
 ${_PROG}:	.MADE					# no build at install
 .endif
 .endif
+	${_MKTARGET_INSTALL}
 	${INSTALL_FILE} -o ${KMODOWN} -g ${KMODGRP} -m ${KMODMODE} \
 		${.ALLSRC} ${.TARGET}
 

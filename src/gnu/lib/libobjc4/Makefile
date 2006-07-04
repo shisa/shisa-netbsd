@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.4 2006/05/23 10:59:03 mrg Exp $
+#	$NetBSD: Makefile,v 1.7 2006/06/23 17:27:08 mrg Exp $
 
 REQUIRETOOLS=	yes
 NOLINT=		# defined
@@ -28,12 +28,13 @@ LIBGCCOBJ!=    cd ${.CURDIR}/../libgcc4/libgcc && ${PRINTOBJDIR}
 DIST=		${NETBSDSRCDIR}/gnu/dist/gcc4
 GNUHOSTDIST=	${NETBSDSRCDIR}/gnu/dist/gcc4
 GCCARCH=	${NETBSDSRCDIR}/gnu/usr.bin/gcc4/arch/${MACHINE_ARCH}
+LIBOBJCARCH=	${NETBSDSRCDIR}/gnu/lib/libobjc4/arch/${MACHINE_ARCH}
 GCCLIBXX=	${NETBSDSRCDIR}/gnu/lib/libstdc++-v3_4/arch/${MACHINE_ARCH}
 
 SRCS=		${G_OBJS:N[A-Z]*:Nlinking.lo:.lo=.c} ${G_OBJS:M[A-Z]*:.lo=.m} linking.m
 
 GCPPFLAGS=	${G_ALL_CFLAGS} ${G_INCLUDES}
-CPPFLAGS+=	-I. -I${GCCARCH} -I${LIBGCCOBJ} ${GCPPFLAGS:M-D*} ${GCPPFLAGS:M-I*:N-I.*}
+CPPFLAGS+=	-I. -I${GCCARCH} ${GCPPFLAGS:M-D*} ${GCPPFLAGS:M-I*:N-I.*}
 CPPFLAGS+=	-I${GCCLIBXX}
 
 BUILDSYMLINKS=	${.CURDIR}/../libstdc++-v3_4/arch/${MACHINE_ARCH} bits
@@ -74,22 +75,31 @@ ${FAKEHEADERS}:
 tm.h ${SRCS}: ${FAKEHEADERS}
 CLEANFILES+=	${FAKEHEADERS}
 
-${SRCS}: unwind.h
+${SRCS}: tconfig.h unwind.h options.h
+
+tconfig.h:
+	${_MKTARGET_CREATE}
+	TARGET_CPU_DEFAULT="" \
+	HEADERS="$(G_xm_include_list)" DEFINES="USED_FOR_TARGET $(G_xm_defines)" \
+	${HOST_SH} $(GNUHOSTDIST)/gcc/mkconfig.sh tconfig.h
+
 unwind.h: ${G_UNWIND_H}
 	${_MKTARGET_CREATE}
 	rm -f ${.TARGET}
 	ln -s ${G_UNWIND_H} ${.TARGET}
-CLEANFILES+= unwind.h
+
+CLEANFILES+= tconfig.h unwind.h
 
 # XXX just while all platforms defs.mk are updated..
 .if exists(${.CURDIR}/arch/${MACHINE_ARCH}/defs.mk)
-CLEANFILES+=	options.h optionlist
-optionlist: ${G_ALL_OPT_FILES) Makefile ${DIST}/gcc/opt-gather.awk
+optionlist: ${G_ALL_OPT_FILES} ${LIBOBJCARCH}/defs.mk Makefile ${DIST}/gcc/opt-gather.awk
 	${AWK} -f ${DIST}/gcc/opt-gather.awk ${G_ALL_OPT_FILES} > ${.TARGET}
 
 options.h: optionlist ${DIST}/gcc/opt-functions.awk ${DIST}/gcc/opth-gen.awk
 	${AWK} -f ${DIST}/gcc/opt-functions.awk -f ${DIST}/gcc/opth-gen.awk \
 		< optionlist > ${.TARGET}
+
+CLEANFILES+=	options.h optionlist
 .endif
 
 .else

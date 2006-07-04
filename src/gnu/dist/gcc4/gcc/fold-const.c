@@ -1485,13 +1485,18 @@ int_const_binop (enum tree_code code, tree arg1, tree arg2, int notrunc)
 
 /* Combine two constants ARG1 and ARG2 under operation CODE to produce a new
    constant.  We assume ARG1 and ARG2 have the same data type, or at least
-   are the same kind of constant and the same machine mode.
+   are the same kind of constant and the same machine mode.  Return zero if
+   combining the constants is not allowed in the current operating mode.
 
    If NOTRUNC is nonzero, do not truncate the result to fit the data type.  */
 
 static tree
 const_binop (enum tree_code code, tree arg1, tree arg2, int notrunc)
 {
+  /* Sanity check for the recursive cases.  */
+  if (!arg1 || !arg2)
+    return NULL_TREE;
+
   STRIP_NOPS (arg1);
   STRIP_NOPS (arg2);
 
@@ -1539,7 +1544,6 @@ const_binop (enum tree_code code, tree arg1, tree arg2, int notrunc)
 
       /* Don't constant fold this floating point operation if
 	 the result has overflowed and flag_trapping_math.  */
-
       if (flag_trapping_math
 	  && MODE_HAS_INFINITIES (mode)
 	  && REAL_VALUE_ISINF (result)
@@ -1551,7 +1555,6 @@ const_binop (enum tree_code code, tree arg1, tree arg2, int notrunc)
 	 result may dependent upon the run-time rounding mode and
 	 flag_rounding_math is set, or if GCC's software emulation
 	 is unable to accurately represent the result.  */
-      
       if ((flag_rounding_math
 	   || (REAL_MODE_FORMAT_COMPOSITE_P (mode)
 	       && !flag_unsafe_math_optimizations))
@@ -1567,6 +1570,7 @@ const_binop (enum tree_code code, tree arg1, tree arg2, int notrunc)
 	  | TREE_CONSTANT_OVERFLOW (arg2);
       return t;
     }
+
   if (TREE_CODE (arg1) == COMPLEX_CST)
     {
       tree type = TREE_TYPE (arg1);
@@ -1574,79 +1578,62 @@ const_binop (enum tree_code code, tree arg1, tree arg2, int notrunc)
       tree i1 = TREE_IMAGPART (arg1);
       tree r2 = TREE_REALPART (arg2);
       tree i2 = TREE_IMAGPART (arg2);
-      tree t;
+      tree real, imag;
 
       switch (code)
 	{
 	case PLUS_EXPR:
-	  t = build_complex (type,
-			     const_binop (PLUS_EXPR, r1, r2, notrunc),
-			     const_binop (PLUS_EXPR, i1, i2, notrunc));
-	  break;
-
 	case MINUS_EXPR:
-	  t = build_complex (type,
-			     const_binop (MINUS_EXPR, r1, r2, notrunc),
-			     const_binop (MINUS_EXPR, i1, i2, notrunc));
+	  real = const_binop (code, r1, r2, notrunc);
+	  imag = const_binop (code, i1, i2, notrunc);
 	  break;
 
 	case MULT_EXPR:
-	  t = build_complex (type,
-			     const_binop (MINUS_EXPR,
-					  const_binop (MULT_EXPR,
-						       r1, r2, notrunc),
-					  const_binop (MULT_EXPR,
-						       i1, i2, notrunc),
-					  notrunc),
-			     const_binop (PLUS_EXPR,
-					  const_binop (MULT_EXPR,
-						       r1, i2, notrunc),
-					  const_binop (MULT_EXPR,
-						       i1, r2, notrunc),
-					  notrunc));
+	  real = const_binop (MINUS_EXPR,
+			      const_binop (MULT_EXPR, r1, r2, notrunc),
+			      const_binop (MULT_EXPR, i1, i2, notrunc),
+			      notrunc);
+	  imag = const_binop (PLUS_EXPR,
+			      const_binop (MULT_EXPR, r1, i2, notrunc),
+			      const_binop (MULT_EXPR, i1, r2, notrunc),
+			      notrunc);
 	  break;
 
 	case RDIV_EXPR:
 	  {
-	    tree t1, t2, real, imag;
 	    tree magsquared
 	      = const_binop (PLUS_EXPR,
 			     const_binop (MULT_EXPR, r2, r2, notrunc),
 			     const_binop (MULT_EXPR, i2, i2, notrunc),
 			     notrunc);
-
-	    t1 = const_binop (PLUS_EXPR,
-			      const_binop (MULT_EXPR, r1, r2, notrunc),
-			      const_binop (MULT_EXPR, i1, i2, notrunc),
-			      notrunc);
-	    t2 = const_binop (MINUS_EXPR,
-			      const_binop (MULT_EXPR, i1, r2, notrunc),
-			      const_binop (MULT_EXPR, r1, i2, notrunc),
-			      notrunc);
+	    tree t1
+	      = const_binop (PLUS_EXPR,
+			     const_binop (MULT_EXPR, r1, r2, notrunc),
+			     const_binop (MULT_EXPR, i1, i2, notrunc),
+			     notrunc);
+	    tree t2
+	      = const_binop (MINUS_EXPR,
+			     const_binop (MULT_EXPR, i1, r2, notrunc),
+			     const_binop (MULT_EXPR, r1, i2, notrunc),
+			     notrunc);
 
 	    if (INTEGRAL_TYPE_P (TREE_TYPE (r1)))
-	      {
-		real = const_binop (TRUNC_DIV_EXPR, t1, magsquared, notrunc);
-		imag = const_binop (TRUNC_DIV_EXPR, t2, magsquared, notrunc);
-	      }
-	    else
-	      {
-		real = const_binop (RDIV_EXPR, t1, magsquared, notrunc);
-		imag = const_binop (RDIV_EXPR, t2, magsquared, notrunc);
-		if (!real || !imag)
-		  return NULL_TREE;
-	      }
+	      code = TRUNC_DIV_EXPR;
 
-	    t = build_complex (type, real, imag);
+	    real = const_binop (code, t1, magsquared, notrunc);
+	    imag = const_binop (code, t2, magsquared, notrunc);
 	  }
 	  break;
 
 	default:
 	  gcc_unreachable ();
 	}
-      return t;
+
+      if (real && imag)
+	return build_complex (type, real, imag);
     }
-  return 0;
+
+  return NULL_TREE;
 }
 
 /* Create a size type INT_CST node with NUMBER sign extended.  KIND
@@ -1668,6 +1655,9 @@ size_binop (enum tree_code code, tree arg0, tree arg1)
 {
   tree type = TREE_TYPE (arg0);
 
+  if (arg0 == error_mark_node || arg1 == error_mark_node)
+    return error_mark_node;
+
   gcc_assert (TREE_CODE (type) == INTEGER_TYPE && TYPE_IS_SIZETYPE (type)
 	      && type == TREE_TYPE (arg1));
 
@@ -1686,9 +1676,6 @@ size_binop (enum tree_code code, tree arg0, tree arg1)
       /* Handle general case of two integer constants.  */
       return int_const_binop (code, arg0, arg1, 0);
     }
-
-  if (arg0 == error_mark_node || arg1 == error_mark_node)
-    return error_mark_node;
 
   return fold_build2 (code, type, arg0, arg1);
 }
@@ -2421,6 +2408,11 @@ operand_equal_p (tree arg0, tree arg1, unsigned int flags)
      them equal.  We must check this before the STRIP_NOPS calls
      because they may change the signedness of the arguments.  */
   if (TYPE_UNSIGNED (TREE_TYPE (arg0)) != TYPE_UNSIGNED (TREE_TYPE (arg1)))
+    return 0;
+
+  /* If both types don't have the same precision, then it is not safe
+     to strip NOPs.  */
+  if (TYPE_PRECISION (TREE_TYPE (arg0)) != TYPE_PRECISION (TREE_TYPE (arg1)))
     return 0;
 
   STRIP_NOPS (arg0);
@@ -4935,10 +4927,10 @@ fold_truthop (enum tree_code code, tree truth_type, tree lhs, tree rhs)
       l_const = fold_convert (lntype, l_const);
       l_const = unextend (l_const, ll_bitsize, ll_unsignedp, ll_and_mask);
       l_const = const_binop (LSHIFT_EXPR, l_const, size_int (xll_bitpos), 0);
-      if (! integer_zerop (const_binop (BIT_AND_EXPR, l_const,
-					fold_build1 (BIT_NOT_EXPR,
-						     lntype, ll_mask),
-					0)))
+      if (integer_nonzerop (const_binop (BIT_AND_EXPR, l_const,
+					 fold_build1 (BIT_NOT_EXPR,
+						      lntype, ll_mask),
+					 0)))
 	{
 	  warning (0, "comparison is always %d", wanted_code == NE_EXPR);
 
@@ -4950,10 +4942,10 @@ fold_truthop (enum tree_code code, tree truth_type, tree lhs, tree rhs)
       r_const = fold_convert (lntype, r_const);
       r_const = unextend (r_const, rl_bitsize, rl_unsignedp, rl_and_mask);
       r_const = const_binop (LSHIFT_EXPR, r_const, size_int (xrl_bitpos), 0);
-      if (! integer_zerop (const_binop (BIT_AND_EXPR, r_const,
-					fold_build1 (BIT_NOT_EXPR,
-						     lntype, rl_mask),
-					0)))
+      if (integer_nonzerop (const_binop (BIT_AND_EXPR, r_const,
+					 fold_build1 (BIT_NOT_EXPR,
+						      lntype, rl_mask),
+					 0)))
 	{
 	  warning (0, "comparison is always %d", wanted_code == NE_EXPR);
 
@@ -8548,7 +8540,7 @@ fold_binary (enum tree_code code, tree type, tree op0, tree op1)
 	return NULL_TREE;
 
       /* Turn (a OP c1) OP c2 into a OP (c1+c2).  */
-      if (TREE_CODE (arg0) == code && host_integerp (arg1, false)
+      if (TREE_CODE (op0) == code && host_integerp (arg1, false)
 	  && TREE_INT_CST_LOW (arg1) < TYPE_PRECISION (type)
 	  && host_integerp (TREE_OPERAND (arg0, 1), false)
 	  && TREE_INT_CST_LOW (TREE_OPERAND (arg0, 1)) < TYPE_PRECISION (type))
@@ -10073,8 +10065,10 @@ fold_ternary (enum tree_code code, tree type, tree op0, tree op1, tree op2)
           && integer_zerop (TREE_OPERAND (arg0, 1))
           && integer_zerop (op2)
           && (tem = sign_bit_p (TREE_OPERAND (arg0, 0), arg1)))
-        return fold_convert (type, fold_build2 (BIT_AND_EXPR,
-						TREE_TYPE (tem), tem, arg1));
+        return fold_convert (type,
+			     fold_build2 (BIT_AND_EXPR,
+					  TREE_TYPE (tem), tem,
+					  fold_convert (TREE_TYPE (tem), arg1)));
 
       /* (A >> N) & 1 ? (1 << N) : 0 is simply A & (1 << N).  A & 1 was
 	 already handled above.  */
@@ -10111,7 +10105,9 @@ fold_ternary (enum tree_code code, tree type, tree op0, tree op1, tree op2)
       if (integer_zerop (op2)
 	  && truth_value_p (TREE_CODE (arg0))
 	  && truth_value_p (TREE_CODE (arg1)))
-	return fold_build2 (TRUTH_ANDIF_EXPR, type, arg0, arg1);
+	return fold_build2 (TRUTH_ANDIF_EXPR, type,
+			    fold_convert (type, arg0),
+			    arg1);
 
       /* Convert A ? B : 1 into !A || B if A and B are truth values.  */
       if (integer_onep (op2)
@@ -10121,7 +10117,9 @@ fold_ternary (enum tree_code code, tree type, tree op0, tree op1, tree op2)
 	  /* Only perform transformation if ARG0 is easily inverted.  */
 	  tem = invert_truthvalue (arg0);
 	  if (TREE_CODE (tem) != TRUTH_NOT_EXPR)
-	    return fold_build2 (TRUTH_ORIF_EXPR, type, tem, arg1);
+	    return fold_build2 (TRUTH_ORIF_EXPR, type,
+				fold_convert (type, tem),
+				arg1);
 	}
 
       /* Convert A ? 0 : B into !A && B if A and B are truth values.  */
@@ -10132,14 +10130,18 @@ fold_ternary (enum tree_code code, tree type, tree op0, tree op1, tree op2)
 	  /* Only perform transformation if ARG0 is easily inverted.  */
 	  tem = invert_truthvalue (arg0);
 	  if (TREE_CODE (tem) != TRUTH_NOT_EXPR)
-	    return fold_build2 (TRUTH_ANDIF_EXPR, type, tem, op2);
+	    return fold_build2 (TRUTH_ANDIF_EXPR, type,
+				fold_convert (type, tem),
+				op2);
 	}
 
       /* Convert A ? 1 : B into A || B if A and B are truth values.  */
       if (integer_onep (arg1)
 	  && truth_value_p (TREE_CODE (arg0))
 	  && truth_value_p (TREE_CODE (op2)))
-	return fold_build2 (TRUTH_ORIF_EXPR, type, arg0, op2);
+	return fold_build2 (TRUTH_ORIF_EXPR, type,
+			    fold_convert (type, arg0),
+			    op2);
 
       return NULL_TREE;
 
@@ -10786,6 +10788,9 @@ multiple_of_p (tree type, tree top, tree bottom)
 int
 tree_expr_nonnegative_p (tree t)
 {
+  if (t == error_mark_node)
+    return 0;
+
   if (TYPE_UNSIGNED (TREE_TYPE (t)))
     return 1;
 

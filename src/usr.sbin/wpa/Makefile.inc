@@ -1,4 +1,4 @@
-# $NetBSD: Makefile.inc,v 1.4 2006/04/12 15:31:51 rpaulo Exp $
+# $NetBSD: Makefile.inc,v 1.6 2006/06/25 03:03:41 mrg Exp $
 
 BINDIR?=	/usr/sbin
 
@@ -6,3 +6,9 @@ BINDIR?=	/usr/sbin
 
 WPA_SUPPLICANT_DISTDIR?=	${.CURDIR}/../../../dist/wpa_supplicant
 HOSTAPD_DISTDIR?=		${.CURDIR}/../../../dist/hostapd
+
+.include <bsd.own.mk>
+
+.if ${MKCRYPTO} == "no"
+NO_OPENSSL=	# defined
+.endif

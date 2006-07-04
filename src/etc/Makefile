@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.326 2006/05/30 00:40:22 christos Exp $
+#	$NetBSD: Makefile,v 1.330 2006/06/27 12:34:54 christos Exp $
 #	from: @(#)Makefile	8.7 (Berkeley) 5/25/95
 
 # Environment variables without default values:
@@ -45,7 +45,7 @@
 TZDIR=		/usr/share/zoneinfo
 LOCALTIME?=	UTC
 CKSUM?=		${TOOL_CKSUM}
-MAKESUMS=	CKSUM=${CKSUM:Q} ${HOST_SH} ${NETBSDSRCDIR}/distrib/sets/makesums
+MAKESUMS=	MAKE=${MAKE:Q} CKSUM=${CKSUM:Q} ${HOST_SH} ${NETBSDSRCDIR}/distrib/sets/makesums
 DISTRIBVER!=	${HOST_SH} ${NETBSDSRCDIR}/sys/conf/osrelease.sh
 
 # Flags for creating ISO CDROM image
@@ -226,9 +226,11 @@ CONFIGFILES+=		${file}
 FILESMODE_${file:T}=	600
 .endfor
 
+.if (${MKPOSTFIX} != "no")
 CONFIGFILES+=		aliases
 FILESDIR_aliases=	/etc/mail
 FILESMODE_aliases=	644
+.endif
 
 CONFIGFILES+=		MAKEDEV.local
 FILESDIR_MAKEDEV.local=	/dev
@@ -271,7 +273,6 @@ install-etc-files: .PHONY .MAKE check_DESTDIR MAKEDEV
 	    MAKEDEV ${DESTDIR}/dev
 .for owner group mode file in \
 		${BINOWN} operator	664	/etc/dumpdates  \
-		${BINOWN} ${BINGRP}	644	/etc/mail/local-host-names \
 		${BINOWN} operator	600	/etc/skeykeys \
 		root wheel		600	/var/at/at.deny \
 		nobody ${BINGRP}	664	/var/db/locate.database \
@@ -309,7 +310,7 @@ install-etc-files: .PHONY .MAKE check_DESTDIR MAKEDEV
 	${ETC_INSTALL_FILE} -o ${owner} -g ${group} -m ${mode} \
 	    	/dev/null ${DESTDIR}${file}
 .endfor
-.for subdir in . defaults iscsi mtree namedb pam.d powerd rc.d root skel ssh
+.for subdir in . defaults bluetooth iscsi mtree namedb pam.d powerd rc.d root skel ssh
 	${MAKEDIRTARGET} ${subdir} configinstall
 .endfor
 	${MAKEDIRTARGET} ${NETBSDSRCDIR}/usr.bin/mail configinstall

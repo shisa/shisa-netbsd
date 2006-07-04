@@ -1,4 +1,4 @@
-/* $NetBSD: wlanctl.c,v 1.5 2006/05/25 02:48:09 christos Exp $ */
+/* $NetBSD: wlanctl.c,v 1.7 2006/06/03 21:55:28 christos Exp $ */
 /*-
  * Copyright (c) 2005 David Young.  All rights reserved.
  *
@@ -195,7 +195,7 @@ dump_nodes(const char *ifname_arg, int hdr_type, struct cmdflags *cf)
 #endif
 	u_int i, ifindex;
 	size_t namelen, nodes_len, totallen;
-	int name[10];
+	int name[12];
 	int *vname;
 	char ifname[IFNAMSIZ];
 	struct ieee80211_node_sysctl *pns, *ns;

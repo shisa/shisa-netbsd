@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.96 2006/05/11 01:15:32 mrg Exp $
+#	$NetBSD: Makefile,v 1.99 2006/06/22 20:03:41 mrg Exp $
 
 .include <bsd.own.mk>
 
@@ -7,17 +7,18 @@ TOOLCHAIN_BITS= gmake .WAIT
 .endif
 .if ${TOOLCHAIN_MISSING} == "no"
 TOOLCHAIN_BITS+= binutils .WAIT
-.  if ${USE_TOOLS_TOOLCHAIN} != "yes"
 TOOLCHAIN_BITS+= gcc
-.    if ${MKCROSSGDB:Uno} != "no"
+.  if ${MKCROSSGDB:Uno} != "no"
 TOOLCHAIN_BITS+= gdb
-.    endif
-.  else
-TOOLCHAIN_BITS+= toolchain
 .  endif
 TOOLCHAIN_BITS+= .WAIT dbsym mdsetimage
 # XXX Eventually, we want to be able to build dbsym and mdsetimage
 # XXX if EXTERNAL_TOOLCHAIN is set.
+.endif
+
+LINT_BITS=
+.if ${MKLINT} != "no"
+LINT_BITS= lint lint2
 .endif
 
 # Dependencies in SUBDIR below ordered to maximize parallel ability.
@@ -25,8 +26,9 @@ TOOLCHAIN_BITS+= .WAIT dbsym mdsetimage
 
 SUBDIR=	host-mkdep .WAIT compat .WAIT \
 	binstall .WAIT mktemp .WAIT \
-		cap_mkdb crunchgen ctags genassym gencat hexdump lint lint2 \
-		lorder m4 makewhatis mkdep mtree rpcgen tsort uudecode \
+		cap_mkdb crunchgen ctags genassym gencat hexdump \
+		${LINT_BITS} \
+		lorder m4 makewhatis mkdep mtree rpcgen sed tsort uudecode \
 	texinfo .WAIT \
 	yacc .WAIT \
 	lex .WAIT \

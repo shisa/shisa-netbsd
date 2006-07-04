@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-#	$NetBSD: install.md,v 1.8 2003/02/23 22:29:38 he Exp $
+#	$NetBSD: install.md,v 1.10 2006/06/04 17:00:13 tsutsui Exp $
 #
 # Copyright (c) 1996 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -77,12 +77,12 @@ __mfs_failed_1
 md_get_diskdevs() {
 	# return available disk devices
 	dmesg | awk -F : '/^rd[0-9]*:./ { print $1; }' | sort -u
-	dmesg | awk -F : '/^sd[0-9]*:.*cylinders/ { print $1; }' | sort -u
+	dmesg | awk -F : '/^sd[0-9]*:.*sectors/ { print $1; }' | sort -u
 }
 
 md_get_cddevs() {
 	# return available CD-ROM devices
-	dmesg | awk -F : '/^sd[0-9]*:.*CD-ROM/ { print $1; }' | sort -u
+	dmesg | awk -F : '/^cd[0-9]*:.*cdrom/ { print $1; }' | sort -u
 }
 
 md_get_ifdevs() {

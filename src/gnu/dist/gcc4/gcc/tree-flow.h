@@ -420,6 +420,8 @@ typedef struct
 
 /* Array of all variables referenced in the function.  */
 extern GTY((param_is (struct int_tree_map))) htab_t referenced_vars;
+/* List of referenced variables in the function with duplicate UID's.  */
+extern VEC(tree,gc) *referenced_vars_dup_list;
 
 extern tree referenced_var_lookup (unsigned int);
 extern tree referenced_var_lookup_if_exists (unsigned int);
@@ -761,6 +763,7 @@ struct loop *tree_ssa_loop_version (struct loops *, struct loop *, tree,
 tree expand_simple_operations (tree);
 void substitute_in_loop_info (struct loop *, tree, tree);
 edge single_dom_exit (struct loop *);
+bool contains_abnormal_ssa_name_p (tree);
 
 /* In tree-ssa-loop-im.c  */
 /* The possibilities of statement movement.  */

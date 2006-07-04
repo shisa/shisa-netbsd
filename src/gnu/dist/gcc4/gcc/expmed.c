@@ -1,7 +1,8 @@
 /* Medium-level subroutines: convert bit-field store and extract
    and shifts, multiplies and divides to rtl instructions.
    Copyright (C) 1987, 1988, 1989, 1992, 1993, 1994, 1995, 1996, 1997, 1998,
-   1999, 2000, 2001, 2002, 2003, 2004, 2005 Free Software Foundation, Inc.
+   1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -352,7 +353,25 @@ store_bit_field (rtx str_rtx, unsigned HOST_WIDE_INT bitsize,
 	 meaningful at a much higher level; when structures are copied
 	 between memory and regs, the higher-numbered regs
 	 always get higher addresses.  */
-      bitnum += SUBREG_BYTE (op0) * BITS_PER_UNIT;
+      int inner_mode_size = GET_MODE_SIZE (GET_MODE (SUBREG_REG (op0)));
+      int outer_mode_size = GET_MODE_SIZE (GET_MODE (op0));
+      
+      byte_offset = 0;
+
+      /* Paradoxical subregs need special handling on big endian machines.  */
+      if (SUBREG_BYTE (op0) == 0 && inner_mode_size < outer_mode_size)
+	{
+	  int difference = inner_mode_size - outer_mode_size;
+
+	  if (WORDS_BIG_ENDIAN)
+	    byte_offset += (difference / UNITS_PER_WORD) * UNITS_PER_WORD;
+	  if (BYTES_BIG_ENDIAN)
+	    byte_offset += difference % UNITS_PER_WORD;
+	}
+      else
+	byte_offset = SUBREG_BYTE (op0);
+
+      bitnum += byte_offset * BITS_PER_UNIT;
       op0 = SUBREG_REG (op0);
     }
 
@@ -608,7 +627,9 @@ store_bit_field (rtx str_rtx, unsigned HOST_WIDE_INT bitsize,
       && bitsize > 0
       && GET_MODE_BITSIZE (op_mode) >= bitsize
       && ! ((REG_P (op0) || GET_CODE (op0) == SUBREG)
-	    && (bitsize + bitpos > GET_MODE_BITSIZE (op_mode))))
+	    && (bitsize + bitpos > GET_MODE_BITSIZE (op_mode)))
+      && insn_data[CODE_FOR_insv].operand[1].predicate (GEN_INT (bitsize),
+							VOIDmode))
     {
       int xbitpos = bitpos;
       rtx value1;
@@ -763,7 +784,7 @@ store_fixed_bit_field (rtx op0, unsigned HOST_WIDE_INT offset,
 {
   enum machine_mode mode;
   unsigned int total_bits = BITS_PER_WORD;
-  rtx subtarget, temp;
+  rtx temp;
   int all_zero = 0;
   int all_one = 0;
 
@@ -889,24 +910,28 @@ store_fixed_bit_field (rtx op0, unsigned HOST_WIDE_INT offset,
 
   /* Now clear the chosen bits in OP0,
      except that if VALUE is -1 we need not bother.  */
+  /* We keep the intermediates in registers to allow CSE to combine
+     consecutive bitfield assignments.  */
 
-  subtarget = op0;
+  temp = force_reg (mode, op0);
 
   if (! all_one)
     {
-      temp = expand_binop (mode, and_optab, op0,
+      temp = expand_binop (mode, and_optab, temp,
 			   mask_rtx (mode, bitpos, bitsize, 1),
-			   subtarget, 1, OPTAB_LIB_WIDEN);
-      subtarget = temp;
+			   NULL_RTX, 1, OPTAB_LIB_WIDEN);
+      temp = force_reg (mode, temp);
     }
-  else
-    temp = op0;
 
   /* Now logical-or VALUE into OP0, unless it is zero.  */
 
   if (! all_zero)
-    temp = expand_binop (mode, ior_optab, temp, value,
-			 subtarget, 1, OPTAB_LIB_WIDEN);
+    {
+      temp = expand_binop (mode, ior_optab, temp, value,
+			   NULL_RTX, 1, OPTAB_LIB_WIDEN);
+      temp = force_reg (mode, temp);
+    }
+
   if (op0 != temp)
     emit_move_insn (op0, temp);
 }
@@ -2226,13 +2251,17 @@ expand_shift (enum tree_code code, enum machine_mode mode, rtx shifted,
 		 code below.  */
 
 	      rtx subtarget = target == shifted ? 0 : target;
+	      tree new_amount, other_amount;
 	      rtx temp1;
 	      tree type = TREE_TYPE (amount);
-	      tree new_amount = make_tree (type, op1);
-	      tree other_amount
+	      if (GET_MODE (op1) != TYPE_MODE (type)
+		  && GET_MODE (op1) != VOIDmode)
+		op1 = convert_to_mode (TYPE_MODE (type), op1, 1);
+	      new_amount = make_tree (type, op1);
+	      other_amount
 		= fold_build2 (MINUS_EXPR, type,
 			       build_int_cst (type, GET_MODE_BITSIZE (mode)),
-			       amount);
+			       new_amount);
 
 	      shifted = force_reg (mode, shifted);
 
@@ -2361,7 +2390,7 @@ struct algorithm
 /* The entry for our multiplication cache/hash table.  */
 struct alg_hash_entry {
   /* The number we are multiplying by.  */
-  unsigned int t;
+  unsigned HOST_WIDE_INT t;
 
   /* The mode in which we are multiplying something by T.  */
   enum machine_mode mode;
@@ -2376,7 +2405,11 @@ struct alg_hash_entry {
 };
 
 /* The number of cache/hash entries.  */
+#if HOST_BITS_PER_WIDE_INT == 64
+#define NUM_ALG_HASH_ENTRIES 1031
+#else
 #define NUM_ALG_HASH_ENTRIES 307
+#endif
 
 /* Each entry of ALG_HASH caches alg_code for some integer.  This is
    actually a hash table.  If we have a collision, that the older

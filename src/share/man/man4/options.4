@@ -1,4 +1,4 @@
-.\"	$NetBSD: options.4,v 1.320 2006/05/19 17:53:18 tsutsui Exp $
+.\"	$NetBSD: options.4,v 1.322 2006/06/19 15:44:36 gdamore Exp $
 .\"
 .\" Copyright (c) 1996
 .\" 	Perry E. Metzger.  All rights reserved.
@@ -52,6 +52,8 @@ configuration options that may be specified in a kernel config
 file.
 See
 .Xr config 1
+and
+.Xr config 5
 for information on how to configure and build kernels.
 .Pp
 The
@@ -1829,6 +1831,12 @@ This stack is used by the
 package, which adds support for
 .Tn AppleTalk
 server services via user libraries and applications.
+.It Cd options BLUETOOTH
+Include support for the
+.Tn Bluetooth
+protocol stack. See
+.Xr bluetooth 4
+for details.
 .It Cd options IPNOPRIVPORTS
 Normally, only root can bind a socket descriptor to a so-called
 .Dq privileged
@@ -2679,6 +2687,7 @@ bolded
 .Xr userconf 4 ,
 .Xr vnd 4 ,
 .Xr wscons 4 ,
+.Xr config 5 ,
 .Xr edquota 8 ,
 .Xr init 8 ,
 .Xr mdsetimage 8 ,

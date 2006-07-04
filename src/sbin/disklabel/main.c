@@ -1,4 +1,4 @@
-/*	$NetBSD: main.c,v 1.9 2006/03/18 11:38:59 dsl Exp $	*/
+/*	$NetBSD: main.c,v 1.12 2006/06/25 21:32:39 christos Exp $	*/
 
 /*
  * Copyright (c) 1987, 1993
@@ -47,7 +47,7 @@ __COPYRIGHT("@(#) Copyright (c) 1987, 1993\n\
 static char sccsid[] = "@(#)disklabel.c	8.4 (Berkeley) 5/4/95";
 /* from static char sccsid[] = "@(#)disklabel.c	1.2 (Symmetric) 11/28/85"; */
 #else
-__RCSID("$NetBSD: main.c,v 1.9 2006/03/18 11:38:59 dsl Exp $");
+__RCSID("$NetBSD: main.c,v 1.12 2006/06/25 21:32:39 christos Exp $");
 #endif
 #endif	/* not lint */
 
@@ -723,7 +723,7 @@ static u_int
 get_filecore_partition(int f)
 {
 	struct filecore_bootblock	*fcbb;
-	static char	bb[DEV_BSIZE];
+	static u_char	bb[DEV_BSIZE];
 	u_int		offset;
 	struct riscix_partition_table	*riscix_part;
 	int		loop;
@@ -761,11 +761,11 @@ get_filecore_partition(int f)
 		riscix_part = (struct riscix_partition_table *)bb;
 
 		for (loop = 0; loop < NRISCIX_PARTITIONS; ++loop) {
-			if (strcmp(riscix_part->partitions[loop].rp_name,
+			if (strcmp((char *)riscix_part->partitions[loop].rp_name,
 				    "RiscBSD") == 0 ||
-			    strcmp(riscix_part->partitions[loop].rp_name,
+			    strcmp((char *)riscix_part->partitions[loop].rp_name,
 				    "NetBSD") == 0 ||
-			    strcmp(riscix_part->partitions[loop].rp_name,
+			    strcmp((char *)riscix_part->partitions[loop].rp_name,
 				    "Empty:") == 0) {
 				return riscix_part->partitions[loop].rp_start;
 				break;
@@ -921,7 +921,7 @@ write_bootarea(int f, u_int sector)
 	if (sector == 0) {
 		struct alpha_boot_block *bb;
 
-		bb = (struct alpha_boot_block *)bootarea;
+		bb = (struct alpha_boot_block *)(void *)bootarea;
 		bb->bb_cksum = 0;
 		ALPHA_BOOT_BLOCK_CKSUM(bb, &bb->bb_cksum);
 	}
@@ -1459,7 +1459,8 @@ getasciilabel(FILE *f, struct disklabel *lp)
 				lp->d_ncylinders = v;
 			continue;
 		}
-		if (!strcmp(cp, "total sectors")) {
+		if (!strcmp(cp, "total sectors") ||
+		    !strcmp(cp, "sectors/unit")) {
 			if (GETNUM32(tp, &v) != 0) {
 				warnx("line %d: bad %s: %s", lineno, cp, tp);
 				errors++;

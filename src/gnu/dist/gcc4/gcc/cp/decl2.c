@@ -119,6 +119,12 @@ grok_method_quals (tree ctype, tree function, cp_cv_quals quals)
   type_quals = quals & ~TYPE_QUAL_RESTRICT;
   this_quals = quals & TYPE_QUAL_RESTRICT;
 
+  if (fntype == error_mark_node || ctype == error_mark_node)
+    {
+      TREE_TYPE (function) = error_mark_node;
+      return this_quals;
+    }
+
   ctype = cp_build_qualified_type (ctype, type_quals);
   fntype = build_method_type_directly (ctype, TREE_TYPE (fntype),
 				       (TREE_CODE (fntype) == METHOD_TYPE
@@ -1144,6 +1150,8 @@ finish_anon_union (tree anon_union_decl)
     }
 
   main_decl = build_anon_union_vars (type, anon_union_decl);
+  if (main_decl == error_mark_node)
+    return;
   if (main_decl == NULL_TREE)
     {
       warning (0, "anonymous union with no members");

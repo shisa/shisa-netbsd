@@ -1,5 +1,5 @@
 #! /usr/bin/env sh
-#	$NetBSD: build.sh,v 1.146 2006/02/03 12:29:41 apb Exp $
+#	$NetBSD: build.sh,v 1.148 2006/06/22 20:00:18 mrg Exp $
 #
 # Copyright (c) 2001-2005 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -84,10 +84,10 @@ initdefaults()
 	# presence of symlinks.  Unsetting PWD is simpler than changing
 	# every occurrence of pwd to use -P.
 	#
-	# XXX Except that doesn't work on Solaris.
+	# XXX Except that doesn't work on Solaris. Or many Linuces.
 	#
 	unset PWD
-	TOP=$(/bin/pwd -P 2>/dev/null)
+	TOP=$(/bin/pwd -P 2>/dev/null || /bin/pwd 2>/dev/null)
 
 	# Set defaults.
 	#
@@ -238,7 +238,7 @@ validatearch()
 	#
 	case "${MACHINE_ARCH}" in
 
-	alpha|arm|armeb|hppa|i386|m68000|m68k|mipse[bl]|ns32k|powerpc|sh[35]e[bl]|sparc|sparc64|vax|x86_64|ia64)
+	alpha|arm|armeb|hppa|i386|m68000|m68k|mipse[bl]|ns32k|powerpc|powerpc64|sh[35]e[bl]|sparc|sparc64|vax|x86_64|ia64)
 		;;
 
 	"")
@@ -271,6 +271,9 @@ validatearch()
 		arches="sh5eb sh5el"
 		;;
 
+	macppc|evbppc)
+		arches="powerpc powerpc64"
+		;;
 	*)
 		oma="${MACHINE_ARCH}"
 		getarch
@@ -868,7 +871,7 @@ createmakewrapper()
 	eval cat <<EOF ${makewrapout}
 #! /bin/sh
 # Set proper variables to allow easy "make" building of a NetBSD subtree.
-# Generated from:  \$NetBSD: build.sh,v 1.146 2006/02/03 12:29:41 apb Exp $
+# Generated from:  \$NetBSD: build.sh,v 1.148 2006/06/22 20:00:18 mrg Exp $
 # with these arguments: ${_args}
 #
 EOF

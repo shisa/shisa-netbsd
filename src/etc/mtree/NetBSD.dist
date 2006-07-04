@@ -1,4 +1,4 @@
-#	$NetBSD: NetBSD.dist,v 1.313 2006/05/30 02:10:01 christos Exp $
+#	$NetBSD: NetBSD.dist,v 1.321 2006/06/27 14:59:38 peter Exp $
 #	@(#)4.4BSD.dist	8.1 (Berkeley) 6/13/93
 
 /set type=dir uname=root gname=wheel mode=0755
@@ -24,6 +24,7 @@
 ./etc/X11/xserver
 ./etc/X11/xsm
 ./etc/cgd			mode=0700
+./etc/bluetooth
 ./etc/defaults
 ./etc/fonts
 ./etc/iscsi
@@ -50,6 +51,7 @@
 ./lib
 ./libdata
 ./libdata/firmware
+./libdata/firmware/ral
 ./libexec
 ./mnt
 ./rescue
@@ -257,7 +259,6 @@
 ./usr/include/isofs/cd9660
 ./usr/include/kadm5
 ./usr/include/krb5
-./usr/include/libmilter
 ./usr/include/miscfs
 ./usr/include/miscfs/fdesc
 ./usr/include/miscfs/fifofs
@@ -312,7 +313,6 @@
 ./usr/libexec/ching
 ./usr/libexec/lpr
 ./usr/libexec/postfix
-./usr/libexec/sm.bin
 ./usr/libexec/uucp
 ./usr/lkm
 ./usr/mdec
@@ -465,10 +465,12 @@
 ./usr/share/i18n/csmapper
 ./usr/share/i18n/csmapper/APPLE
 ./usr/share/i18n/csmapper/AST
+./usr/share/i18n/csmapper/BIG5
 ./usr/share/i18n/csmapper/CNS
 ./usr/share/i18n/csmapper/CP
 ./usr/share/i18n/csmapper/EBCDIC
 ./usr/share/i18n/csmapper/GB
+./usr/share/i18n/csmapper/GEORGIAN
 ./usr/share/i18n/csmapper/ISO-8859
 ./usr/share/i18n/csmapper/ISO646
 ./usr/share/i18n/csmapper/JIS
@@ -478,9 +480,11 @@
 ./usr/share/i18n/esdb
 ./usr/share/i18n/esdb/APPLE
 ./usr/share/i18n/esdb/AST
+./usr/share/i18n/esdb/BIG5
 ./usr/share/i18n/esdb/CP
 ./usr/share/i18n/esdb/EBCDIC
 ./usr/share/i18n/esdb/EUC
+./usr/share/i18n/esdb/GEORGIAN
 ./usr/share/i18n/esdb/ISO-2022
 ./usr/share/i18n/esdb/ISO-8859
 ./usr/share/i18n/esdb/ISO646
@@ -685,6 +689,7 @@
 ./usr/share/man/cat4/evbmips
 ./usr/share/man/cat4/hp300
 ./usr/share/man/cat4/hp700
+./usr/share/man/cat4/hpcarm
 ./usr/share/man/cat4/hpcmips
 ./usr/share/man/cat4/hpcsh
 ./usr/share/man/cat4/i386
@@ -791,6 +796,7 @@
 ./usr/share/man/man4/evbmips
 ./usr/share/man/man4/hp300
 ./usr/share/man/man4/hp700
+./usr/share/man/man4/hpcarm
 ./usr/share/man/man4/hpcmips
 ./usr/share/man/man4/hpcsh
 ./usr/share/man/man4/i386
@@ -897,6 +903,7 @@
 ./usr/share/man/html4/evbmips
 ./usr/share/man/html4/hp300
 ./usr/share/man/html4/hp700
+./usr/share/man/html4/hpcarm
 ./usr/share/man/html4/hpcmips
 ./usr/share/man/html4/hpcsh
 ./usr/share/man/html4/i386
@@ -1084,7 +1091,6 @@
 ./var/spool/ftp/etc
 ./var/spool/ftp/hidden		mode=0111
 ./var/spool/lock		uname=uucp gname=daemon
-./var/spool/mqueue
 ./var/spool/output
 ./var/spool/output/lpd
 ./var/spool/postfix

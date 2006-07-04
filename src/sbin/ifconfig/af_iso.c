@@ -1,4 +1,4 @@
-/*	$NetBSD: af_iso.c,v 1.1 2005/03/20 00:02:58 thorpej Exp $	*/
+/*	$NetBSD: af_iso.c,v 1.3 2006/06/16 23:48:35 elad Exp $	*/
 
 /*
  * Copyright (c) 1983, 1993
@@ -33,7 +33,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: af_iso.c,v 1.1 2005/03/20 00:02:58 thorpej Exp $");
+__RCSID("$NetBSD: af_iso.c,v 1.3 2006/06/16 23:48:35 elad Exp $");
 #endif /* not lint */
 
 #include <sys/param.h> 
@@ -123,12 +123,12 @@ iso_status(int force)
 
 	getsock(AF_ISO);
 	if (s < 0) {
-		if (errno == EPROTONOSUPPORT)
+		if (errno == EAFNOSUPPORT)
 			return;
 		err(EXIT_FAILURE, "socket");
 	}
 	(void) memset(&isoifr, 0, sizeof(isoifr));
-	(void) strncpy(isoifr.ifr_name, name, sizeof(isoifr.ifr_name));
+	estrlcpy(isoifr.ifr_name, name, sizeof(isoifr.ifr_name));
 	if (ioctl(s, SIOCGIFADDR_ISO, &isoifr) == -1) {
 		if (errno == EADDRNOTAVAIL || errno == EAFNOSUPPORT) {
 			if (!force)
@@ -138,7 +138,7 @@ iso_status(int force)
 		} else
 			warn("SIOCGIFADDR_ISO");
 	}
-	(void) strncpy(isoifr.ifr_name, name, sizeof isoifr.ifr_name);
+	strlcpy(isoifr.ifr_name, name, sizeof isoifr.ifr_name);
 	siso = &isoifr.ifr_Addr;
 	printf("\tiso %s ", iso_ntoa(&siso->siso_addr));
 	if (ioctl(s, SIOCGIFNETMASK_ISO, &isoifr) == -1) {
@@ -160,7 +160,7 @@ iso_status(int force)
 			else
 			    warn("SIOCGIFDSTADDR_ISO");
 		}
-		(void) strncpy(isoifr.ifr_name, name, sizeof (isoifr.ifr_name));
+		strlcpy(isoifr.ifr_name, name, sizeof (isoifr.ifr_name));
 		siso = &isoifr.ifr_Addr;
 		printf("--> %s ", iso_ntoa(&siso->siso_addr));
 	}

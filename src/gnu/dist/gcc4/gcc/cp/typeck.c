@@ -227,7 +227,8 @@ commonparms (tree p1, tree p2)
 tree
 original_type (tree t)
 {
-  while (TYPE_NAME (t) != NULL_TREE)
+  while (t != error_mark_node
+	 && TYPE_NAME (t) != NULL_TREE)
     {
       tree x = TYPE_NAME (t);
       if (TREE_CODE (x) != TYPE_DECL)
@@ -2621,7 +2622,7 @@ convert_arguments (tree typelist, tree values, tree fndecl, int flags)
       tree type = typetail ? TREE_VALUE (typetail) : 0;
       tree val = TREE_VALUE (valtail);
 
-      if (val == error_mark_node)
+      if (val == error_mark_node || type == error_mark_node)
 	return error_mark_node;
 
       if (type == void_type_node)
@@ -5363,7 +5364,7 @@ build_modify_expr (tree lhs, enum tree_code modifycode, tree rhs)
   bool plain_assign = (modifycode == NOP_EXPR);
 
   /* Avoid duplicate error messages from operands that had errors.  */
-  if (lhs == error_mark_node || rhs == error_mark_node)
+  if (error_operand_p (lhs) || error_operand_p (rhs))
     return error_mark_node;
 
   /* Handle control structure constructs used as "lvalues".  */
@@ -5629,6 +5630,10 @@ build_modify_expr (tree lhs, enum tree_code modifycode, tree rhs)
 
   if (newrhs == error_mark_node)
     return error_mark_node;
+
+  if (TREE_CODE (lhs) == COMPONENT_REF)
+    newrhs = adjust_bitfield_initializer (TREE_OPERAND (lhs, 1),
+					  newrhs);
 
   if (c_dialect_objc () && flag_objc_gc)
     {
