@@ -1,4 +1,4 @@
-/*	$NetBSD: in6.c,v 1.103 2006/05/18 09:05:51 liamjfoy Exp $	*/
+/*	$NetBSD: in6.c,v 1.108 2006/06/07 22:34:03 kardel Exp $	*/
 /*	$KAME: in6.c,v 1.198 2001/07/18 09:12:38 itojun Exp $	*/
 
 /*
@@ -62,7 +62,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: in6.c,v 1.103 2006/05/18 09:05:51 liamjfoy Exp $");
+__KERNEL_RCSID(0, "$NetBSD: in6.c,v 1.108 2006/06/07 22:34:03 kardel Exp $");
 
 #include "opt_inet.h"
 #include "opt_pfil_hooks.h"
@@ -109,6 +109,8 @@ __KERNEL_RCSID(0, "$NetBSD: in6.c,v 1.103 2006/05/18 09:05:51 liamjfoy Exp $");
 #endif /* MIP6 */
 
 #include <net/net_osdep.h>
+
+#include <netccitt/x25.h>
 
 #ifdef PFIL_HOOKS
 #include <net/pfil.h>
@@ -350,6 +352,13 @@ in6_control(so, cmd, data, ifp, p)
 		privileged++;
 
 	switch (cmd) {
+	/*
+	 * XXX: Fix me, once we fix SIOCSIFADDR, SIOCIFDSTADDR, etc.
+	 */
+	case SIOCSIFADDR:
+	case SIOCSIFDSTADDR:
+	case SIOCSIFCONF_X25:
+		return EOPNOTSUPP;
 	case SIOCGETSGCNT_IN6:
 	case SIOCGETMIFCNT_IN6:
 		return (mrt6_ioctl(cmd, data));
@@ -507,11 +516,11 @@ in6_control(so, cmd, data, ifp, p)
 		/* sanity for overflow - beware unsigned */
 		lt = &ifr->ifr_ifru.ifru_lifetime;
 		if (lt->ia6t_vltime != ND6_INFINITE_LIFETIME
-		 && lt->ia6t_vltime + time.tv_sec < time.tv_sec) {
+		 && lt->ia6t_vltime + time_second < time_second) {
 			return EINVAL;
 		}
 		if (lt->ia6t_pltime != ND6_INFINITE_LIFETIME
-		 && lt->ia6t_pltime + time.tv_sec < time.tv_sec) {
+		 && lt->ia6t_pltime + time_second < time_second) {
 			return EINVAL;
 		}
 		break;
@@ -575,8 +584,8 @@ in6_control(so, cmd, data, ifp, p)
 			 * XXX: adjust expiration time assuming time_t is
 			 * signed.
 			 */
-			maxexpire = (-1) &
-			    ~(1 << ((sizeof(maxexpire) * 8) - 1));
+			maxexpire = ((time_t)~0) &
+			    ~((time_t)1 << ((sizeof(maxexpire) * 8) - 1));
 			if (ia->ia6_lifetime.ia6t_vltime <
 			    maxexpire - ia->ia6_updatetime) {
 				retlt->ia6t_expire = ia->ia6_updatetime +
@@ -593,8 +602,8 @@ in6_control(so, cmd, data, ifp, p)
 			 * XXX: adjust expiration time assuming time_t is
 			 * signed.
 			 */
-			maxexpire = (-1) &
-			    ~(1 << ((sizeof(maxexpire) * 8) - 1));
+			maxexpire = ((time_t)~0) &
+			    ~((time_t)1 << ((sizeof(maxexpire) * 8) - 1));
 			if (ia->ia6_lifetime.ia6t_pltime <
 			    maxexpire - ia->ia6_updatetime) {
 				retlt->ia6t_preferred = ia->ia6_updatetime +
@@ -609,12 +618,12 @@ in6_control(so, cmd, data, ifp, p)
 		/* for sanity */
 		if (ia->ia6_lifetime.ia6t_vltime != ND6_INFINITE_LIFETIME) {
 			ia->ia6_lifetime.ia6t_expire =
-				time.tv_sec + ia->ia6_lifetime.ia6t_vltime;
+				time_second + ia->ia6_lifetime.ia6t_vltime;
 		} else
 			ia->ia6_lifetime.ia6t_expire = 0;
 		if (ia->ia6_lifetime.ia6t_pltime != ND6_INFINITE_LIFETIME) {
 			ia->ia6_lifetime.ia6t_preferred =
-				time.tv_sec + ia->ia6_lifetime.ia6t_pltime;
+				time_second + ia->ia6_lifetime.ia6t_pltime;
 		} else
 			ia->ia6_lifetime.ia6t_preferred = 0;
 		break;
@@ -770,7 +779,8 @@ in6_control(so, cmd, data, ifp, p)
 	default:
 		if (ifp == NULL || ifp->if_ioctl == 0)
 			return (EOPNOTSUPP);
-		return ((*ifp->if_ioctl)(ifp, cmd, data));
+		error = ((*ifp->if_ioctl)(ifp, cmd, data));
+		return error;
 	}
 
 	return (0);
@@ -942,7 +952,7 @@ in6_update_ifa(ifp, ifra, ia, flags)
 		ia->ia_ifa.ifa_addr = (struct sockaddr *)&ia->ia_addr;
 		ia->ia_addr.sin6_family = AF_INET6;
 		ia->ia_addr.sin6_len = sizeof(ia->ia_addr);
-		ia->ia6_createtime = time.tv_sec;
+		ia->ia6_createtime = time_second;
 		if ((ifp->if_flags & (IFF_POINTOPOINT | IFF_LOOPBACK)) != 0) {
 			/*
 			 * XXX: some functions expect that ifa_dstaddr is not
@@ -973,7 +983,7 @@ in6_update_ifa(ifp, ifra, ia, flags)
 	}
 
 	/* update timestamp */
-	ia->ia6_updatetime = time.tv_sec;
+	ia->ia6_updatetime = time_second;
 
 	/* set prefix mask */
 	if (ifra->ifra_prefixmask.sin6_len) {
@@ -1020,12 +1030,12 @@ in6_update_ifa(ifp, ifra, ia, flags)
 	ia->ia6_lifetime = ifra->ifra_lifetime;
 	if (ia->ia6_lifetime.ia6t_vltime != ND6_INFINITE_LIFETIME) {
 		ia->ia6_lifetime.ia6t_expire =
-		    time.tv_sec + ia->ia6_lifetime.ia6t_vltime;
+		    time_second + ia->ia6_lifetime.ia6t_vltime;
 	} else
 		ia->ia6_lifetime.ia6t_expire = 0;
 	if (ia->ia6_lifetime.ia6t_pltime != ND6_INFINITE_LIFETIME) {
 		ia->ia6_lifetime.ia6t_preferred =
-		    time.tv_sec + ia->ia6_lifetime.ia6t_pltime;
+		    time_second + ia->ia6_lifetime.ia6t_pltime;
 	} else
 		ia->ia6_lifetime.ia6t_preferred = 0;
 
@@ -1043,7 +1053,7 @@ in6_update_ifa(ifp, ifra, ia, flags)
 	 */
 	if ((ifra->ifra_flags & IN6_IFF_DEPRECATED) != 0) {
 		ia->ia6_lifetime.ia6t_pltime = 0;
-		ia->ia6_lifetime.ia6t_preferred = time.tv_sec;
+		ia->ia6_lifetime.ia6t_preferred = time_second;
 	}
 
 	/*

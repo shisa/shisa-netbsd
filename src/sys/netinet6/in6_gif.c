@@ -1,4 +1,4 @@
-/*	$NetBSD: in6_gif.c,v 1.44 2005/12/11 12:25:02 christos Exp $	*/
+/*	$NetBSD: in6_gif.c,v 1.45 2006/06/07 22:34:03 kardel Exp $	*/
 /*	$KAME: in6_gif.c,v 1.62 2001/07/29 04:27:25 itojun Exp $	*/
 
 /*
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: in6_gif.c,v 1.44 2005/12/11 12:25:02 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: in6_gif.c,v 1.45 2006/06/07 22:34:03 kardel Exp $");
 
 #include "opt_inet.h"
 #include "opt_iso.h"
@@ -202,7 +202,7 @@ in6_gif_output(ifp, family, m)
 	 * are made in in6_selectsrc() called from ip6_output().
 	 */
 	if (sc->gif_ro6.ro_rt && (dst->sin6_family != sin6_dst->sin6_family ||
-	    sc->gif_route_expire - time.tv_sec <= 0)) {
+	    sc->gif_route_expire - time_second <= 0)) {
 		/*
 		 * If the cached route is not valid or has expired,
 		 * clear the stale cache and let ip6_output make a new cached
@@ -259,8 +259,8 @@ in6_gif_output(ifp, family, m)
 	 * if a (new) cached route has been created in ip6_output(), extend
 	 * the expiration time.
 	 */
-	if (sc->gif_ro6.ro_rt && mono_time.tv_sec >= sc->gif_route_expire)
-		sc->gif_route_expire = mono_time.tv_sec + GIF_ROUTE_TTL;
+	if (sc->gif_ro6.ro_rt && time_second >= sc->gif_route_expire)
+		sc->gif_route_expire = time_second + GIF_ROUTE_TTL;
 
 	return (error);
 }

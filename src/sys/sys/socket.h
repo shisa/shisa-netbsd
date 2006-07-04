@@ -1,4 +1,4 @@
-/*	$NetBSD: socket.h,v 1.79 2006/05/11 15:49:44 christos Exp $	*/
+/*	$NetBSD: socket.h,v 1.82 2006/06/27 03:49:08 mrg Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -194,10 +194,13 @@ struct	linger {
 #define pseudo_AF_KEY	29		/* Internal key management protocol  */
 #define	pseudo_AF_HDRCMPLT 30		/* Used by BPF to not rewrite hdrs
 					   in interface output routine */
-#define	pseudo_AF_MOBILITY 31		/* IP mobility */
+#endif
+#define AF_BLUETOOTH	31
+#if defined(_NETBSD_SOURCE)
+#define	pseudo_AF_MOBILITY 32		/* IP mobility */
 #endif
 
-#define	AF_MAX		32
+#define	AF_MAX		33
 
 /*
  * Structure used by kernel to store most
@@ -283,6 +286,7 @@ struct sockaddr_storage {
 #if defined(_NETBSD_SOURCE)
 #define PF_KEY 		pseudo_AF_KEY	/* like PF_ROUTE, only for key mgmt */
 #endif
+#define PF_BLUETOOTH	AF_BLUETOOTH
 #define PF_MOBILITY	pseudo_AF_MOBILITY
 
 #define	PF_MAX		AF_MAX
@@ -558,7 +562,11 @@ ssize_t	sendmsg(int, const struct msghdr *, int);
 int	setsockopt(int, int, int, const void *, socklen_t);
 int	shutdown(int, int);
 int	sockatmark(int);
-int	socket(int, int, int);
+int	socket(int, int, int)
+#if !defined(__LIBC12_SOURCE__) && !defined(_STANDALONE)
+__RENAME(__socket30)
+#endif
+			     ;
 int	socketpair(int, int, int, int *);
 __END_DECLS
 #endif /* !_KERNEL */

@@ -1,4 +1,4 @@
-#	$NetBSD: files,v 1.777 2006/05/28 08:57:53 martin Exp $
+#	$NetBSD: files,v 1.784 2006/06/26 16:13:21 drochner Exp $
 
 #	@(#)files.newconf	7.5 (Berkeley) 5/10/93
 
@@ -14,15 +14,15 @@ devclass tty
 # (note, these are case-sensitive)
 #
 defflag				INSECURE
-defflag				MBUFTRACE
-defflag				KMEMSTATS
 defflag				KCONT
+defflag				KMEMSTATS
 defflag				KTRACE
+defflag				MBUFTRACE
 defflag				SYSTRACE
+defparam			DEFCORENAME
+defparam			HZ
 defparam			MAXUPRC
 defparam			RTC_OFFSET
-defparam			HZ
-defparam			DEFCORENAME
 defflag	opt_pipe.h		PIPE_SOCKETPAIR PIPE_NODIRECT
 
 defflag				BUFQ_DISKSORT
@@ -139,6 +139,7 @@ include "dev/sysmon/files.sysmon"
 #
 include "net80211/files.net80211"
 include "netatalk/files.netatalk"
+include "netbt/files.netbt"
 include "netccitt/files.netccitt"
 include "netinet/files.netinet"
 include "netinet/files.ipfilter"
@@ -262,9 +263,6 @@ include "dev/i2c/files.i2c"
 
 # IR device support
 include	"dev/ir/files.ir"
-
-# Bluetooth device support
-include "dev/bluetooth/files.bluetooth"
 
 # Parallel Port Bus support
 include "dev/ppbus/files.ppbus"
@@ -537,10 +535,10 @@ file	dev/ic/rtw.c			rtw
 file	dev/ic/rtwphy.c			rtw
 file	dev/ic/rtwphyio.c		rtw
 
-# Ralink RT2500 802.11
-device	ral: arp, ether, ifnet, wlan
-define	ralcommon
-file	dev/ic/ral.c			ralcommon
+# Ralink RT2500/RT2600 802.11
+device	ral: arp, ether, ifnet, wlan, firmload
+file	dev/ic/rt2560.c			ral
+file	dev/ic/rt2661.c			ral
 
 # 3Com Etherlink-III Ethernet controller
 #
@@ -916,6 +914,11 @@ file	dev/ic/tea5757.c		tea5757
 define	lm700x
 file	dev/ic/lm700x.c			lm700x
 
+# ACPI power management timer (hardware access, independent of ACPI)
+#
+define acpipmtimer
+file	dev/ic/acpipmtimer.c	acpipmtimer
+
 # Definitions for wscons
 # device attributes: display, display with emulator, keyboard, and mouse
 #
@@ -1253,6 +1256,7 @@ file	kern/kern_systrace.c		systrace
 file	kern/kern_subr.c
 file	kern/kern_synch.c
 file	kern/kern_sysctl.c
+file	kern/kern_tc.c
 file	kern/kern_time.c
 file	kern/kern_timeout.c
 file	kern/kern_uuid.c
@@ -1267,6 +1271,7 @@ file	kern/subr_disk.c
 file	kern/subr_iostat.c
 file	kern/subr_evcnt.c
 file	kern/subr_extent.c
+file	kern/subr_kmem.c
 file	kern/subr_log.c
 file	kern/subr_pool.c
 file	kern/subr_prf.c
@@ -1274,6 +1279,7 @@ file	kern/subr_prof.c
 file	kern/subr_once.c
 file	kern/subr_optstr.c
 file	kern/subr_userconf.c		userconf
+file	kern/subr_vmem.c
 file	kern/subr_workqueue.c
 file	kern/subr_xxx.c
 file	kern/sys_generic.c

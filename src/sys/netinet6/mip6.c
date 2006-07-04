@@ -1,4 +1,4 @@
-/*	$Id: mip6.c,v 1.1 2006/06/08 04:35:48 keiichi Exp $	*/
+/*	$Id: mip6.c,v 1.2 2006/07/04 08:14:46 keiichi Exp $	*/
 
 /*
  * Copyright (C) 2004 WIDE Project.  All rights reserved.
@@ -1708,8 +1708,6 @@ mip6_md_scan(u_int16_t ifindex)
 
 	getmicrotime(&timenow);
 	time_second = (time_t)timenow.tv_sec;
-#else
-        long time_second = time.tv_sec;
 #endif
 #endif
 
