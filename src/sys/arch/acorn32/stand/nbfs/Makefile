@@ -1,11 +1,11 @@
-#	$NetBSD: Makefile,v 1.1 2006/04/05 21:33:26 bjh21 Exp $
+#	$NetBSD: Makefile,v 1.3 2006/07/04 23:08:10 bjh21 Exp $
 
 PROG=		nbfs
 PROGSOURCE=	rmheader.S rmvers.c nbfs.c rmalloc.c
-NEWVERSWHAT=	"RISC OS Boot"
+NEWVERSWHAT=	"Boot Filing System"
 MKMODULE=	yes
 
-CPPFLAGS+=	-DLIBSA_SINGLE_DEVICE=rodisk_
+CPPFLAGS+=	-DLIBSA_SINGLE_DEVICE=rodisk_ -DLIBSA_NO_TWIDDLE
 
 rmvers.c: ${.CURDIR}/version
 	${HOST_SH} ${.CURDIR}/../lib/newvers_rm.sh ${.CURDIR}/version "NetBSD Boot FS"

@@ -1,4 +1,4 @@
-.\"	$NetBSD: sl.4,v 1.11 2006/06/17 04:58:14 reed Exp $
+.\"	$NetBSD: sl.4,v 1.16 2006/07/09 09:21:35 wiz Exp $
 .\"
 .\" Copyright (c) 1983, 1991, 1993
 .\"	The Regents of the University of California.  All rights reserved.
@@ -29,7 +29,7 @@
 .\"
 .\"     From:	@(#)lo.4	8.1 (Berkeley) 6/5/93
 .\"
-.Dd December 5, 2004
+.Dd July 9, 2006
 .Dt SL 4
 .Os
 .Sh NAME
@@ -45,6 +45,23 @@ interface allows asynchronous serial lines to be used as
 network interfaces using the
 .Tn SLIP
 protocol.
+.Pp
+To use the
+.Nm
+interface, the administrator must first create the interface and assign
+a tty line to it.
+The
+.Nm
+interface is created using the
+.Xr ifconfig 8
+.Cm create
+subcommand, and
+.Xr slattach 8
+is used to assign a tty line to the interface.
+Once the interface is attached, network source and destination addresses and
+other parameters are configured via
+.Xr ifconfig 8 .
+.Pp
 The
 .Nm
 interface can use Van Jacobson
@@ -52,8 +69,60 @@ interface can use Van Jacobson
 header compression and
 .Tn ICMP
 filtering.
-.Pp
-However,
+The following flags to
+.Xr ifconfig 8
+control these properties of a SLIP link:
+.Bl -tag -width Ar
+.It Ar link0
+Turn on Van Jacobson header compression.
+.It Ar -link0
+Turn off header compression. (default)
+.It Ar link1
+Don't pass through ICMP packets.
+.It Ar -link1
+Do pass through ICMP packets. (default)
+.It Ar link2
+If a packet with a compressed header is received, automatically enable
+compression of outgoing packets. (default)
+.It Ar -link2
+Don't auto-enable compression.
+.El
+.Sh DIAGNOSTICS
+.Bl -diag
+.It sl%d: af%d not supported .
+The interface was handed
+a message with addresses formatted in an unsuitable address
+family; the packet was dropped.
+.El
+.Sh SEE ALSO
+.Xr inet 4 ,
+.Xr intro 4 ,
+.Xr ppp 4 ,
+.Xr strip 4 ,
+.Xr ifconfig 8 ,
+.Xr slattach 8 ,
+.Xr sliplogin 8 ,
+.Xr slstats 8
+.Rs
+.%A J. Romkey
+.%R RFC
+.%N 1055
+.%D June 1988
+.%T "A Nonstandard for Transmission of IP Datagrams over Serial Lines: SLIP"
+.Re
+.Rs
+.%A Van Jacobson
+.%R RFC
+.%N 1144
+.%D February 1990
+.%T "Compressing TCP/IP Headers for Low-Speed Serial Links"
+.Re
+.Sh HISTORY
+The
+.Nm
+device appeared in
+.Nx 1.0 .
+.Sh BUGS
 .Tn SLIP
 can only transmit
 .Tn IPv4
@@ -69,28 +138,3 @@ This is why
 has been superseded by the Point-to-Point Protocol
 .Pq Tn PPP ,
 which does all of those things, and much more.
-.Sh DIAGNOSTICS
-.Bl -diag
-.It sl%d: af%d not supported .
-The interface was handed
-a message with addresses formatted in an unsuitable address
-family; the packet was dropped.
-.El
-.Sh SEE ALSO
-.Xr inet 4 ,
-.Xr intro 4 ,
-.Xr ppp 4 ,
-.Xr slattach 8 ,
-.Xr sliplogin 8 ,
-.Xr slstats 8
-.Rs
-.%R RFC
-.%N 1055
-.%D June 1988
-.%T "A Nonstandard for Transmission of IP Datagrams over Serial Lines: SLIP"
-.Re
-.Sh HISTORY
-The
-.Nm
-device appeared in
-.Nx 1.0 .

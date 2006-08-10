@@ -1,4 +1,4 @@
-# $NetBSD: md.i386,v 1.92 2006/05/17 15:07:05 tron Exp $
+# $NetBSD: md.i386,v 1.95 2006/07/26 20:09:17 drochner Exp $
 ./usr/include/emmintrin.h			comp-c-include		gcccmds
 ./usr/include/i386				comp-c-include
 ./usr/include/i386/_G_config.h			comp-obsolete		obsolete
@@ -18,7 +18,7 @@
 ./usr/include/i386/cpu.h			comp-c-include
 ./usr/include/i386/cpufunc.h			comp-c-include
 ./usr/include/i386/cputypes.h			comp-c-include
-./usr/include/i386/db_machdep.h			comp-c-include
+./usr/include/i386/db_machdep.h			comp-obsolete		obsolete
 ./usr/include/i386/disklabel.h			comp-c-include
 ./usr/include/i386/elf_machdep.h		comp-c-include
 ./usr/include/i386/endian.h			comp-c-include
@@ -77,6 +77,7 @@
 ./usr/include/i386/wchar_limits.h		comp-c-include
 ./usr/include/ieeefp.h				comp-c-include
 ./usr/include/mmintrin.h			comp-c-include		gcccmds
+./usr/include/mm_malloc.h			comp-c-include		gcccmds,gcc=4
 ./usr/include/pmc.h				comp-c-include
 ./usr/include/x86				comp-c-include
 ./usr/include/x86/aout_machdep.h		comp-c-include
@@ -107,5 +108,13 @@
 ./usr/lib/libpmc.a				comp-c-lib
 ./usr/lib/libpmc_p.a				comp-c-proflib		profile
 ./usr/lib/libpmc_pic.a				comp-c-piclib
+./usr/libdata/debug/sbin/ldconfig.debug		comp-sysutil-debug	debug
+./usr/libdata/debug/usr/bin/fdformat.debug	comp-util-debug		debug
+./usr/libdata/debug/usr/bin/pmc.debug		comp-util-debug		debug
+./usr/libdata/debug/usr/sbin/apm.debug		comp-sysutil-debug	debug
+./usr/libdata/debug/usr/sbin/apmd.debug		comp-sysutil-debug	debug
+./usr/libdata/debug/usr/sbin/bad144.debug	comp-sysutil-debug	debug
+./usr/libdata/debug/usr/sbin/ipwctl.debug	comp-sysutil-debug	debug
+./usr/libdata/debug/usr/sbin/ndiscvt.debug	comp-sysutil-debug	debug
 ./usr/libdata/lint/llib-li386.ln		comp-c-lintlib		lint
 ./usr/libdata/lint/llib-lpmc.ln			comp-c-lintlib		lint

@@ -1,4 +1,4 @@
-/*	$NetBSD: socket.c,v 1.5 2006/06/11 19:34:21 kardel Exp $	*/
+/*	$NetBSD: socket.c,v 1.7 2006/07/29 10:21:37 kardel Exp $	*/
 
 /*  Copyright (C) 1996, 2000 N.M. Maclaren
     Copyright (C) 1996, 2000 The University of Cambridge

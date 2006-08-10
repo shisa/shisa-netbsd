@@ -1,4 +1,4 @@
-/*	$NetBSD: proc.h,v 1.222 2006/05/16 00:08:25 elad Exp $	*/
+/*	$NetBSD: proc.h,v 1.224 2006/07/21 10:07:29 yamt Exp $	*/
 
 /*-
  * Copyright (c) 1986, 1989, 1991, 1993
@@ -42,6 +42,7 @@
 #if defined(_KERNEL_OPT)
 #include "opt_multiprocessor.h"
 #include "opt_kstack.h"
+#include "opt_lockdebug.h"
 #endif
 
 #include <machine/proc.h>		/* Machine-dependent proc substruct */
@@ -159,15 +160,18 @@ struct emul {
  * which might be addressible only on a processor on which the process
  * is running.
  *
- * Fields marked 'p:' are protected by the process's own p_lock.
- * Fields marked 'l:' are protected by the proclist_lock
- * Fields marked 's:' are protected by the SCHED_LOCK.
+ * Field markings and the corresponding locks (not yet fully implemented,
+ * more a statement of intent):
+ *
+ * l:	proclist_lock
+ * p:	p->p_lock
+ * s:	sched_lock
  */
 struct proc {
-	LIST_ENTRY(proc) p_list;	/* List of all processes */
+	LIST_ENTRY(proc) p_list;	/* l: List of all processes */
 
 	/* Substructures: */
-	struct kauth_cred *p_cred;	/* Credentials */
+	struct kauth_cred *p_cred;	/* p: Master copy of credentials */
 	struct filedesc	*p_fd;		/* Ptr to open files structure */
 	struct cwdinfo	*p_cwdi;	/* cdir/rdir/cmask info */
 	struct pstats	*p_stats;	/* Accounting/statistics (PROC ONLY) */
@@ -269,7 +273,7 @@ struct proc {
 #define	p_endcopy	p_xstat
 
 	u_short		p_xstat;	/* Exit status for wait; also stop signal */
-	u_short		p_acflag;	/* Accounting flags */
+	u_short		p_acflag;	/* p: Acc. flags; see struct lwp also */
 	struct rusage 	*p_ru;		/* Exit information. XXX */
 
 	struct mdproc	p_md;		/* Any machine-dependent fields */
@@ -525,6 +529,13 @@ _proclist_skipmarker(struct proc *p0)
 	for ((var) = LIST_FIRST(head);					\
 		((var) = _proclist_skipmarker(var)) != NULL;		\
 		(var) = LIST_NEXT(var, p_list))
+
+#if defined(LOCKDEBUG)
+void assert_sleepable(struct simplelock *, const char *);
+#define	ASSERT_SLEEPABLE(lk, msg)	assert_sleepable((lk), (msg))
+#else /* defined(LOCKDEBUG) */
+#define	ASSERT_SLEEPABLE(lk, msg)	/* nothing */
+#endif /* defined(LOCKDEBUG) */
 
 /* Compatibility with old, non-interlocked tsleep call */
 #define	tsleep(chan, pri, wmesg, timo)					\

@@ -1,4 +1,4 @@
-/*	$NetBSD: var.c,v 1.110 2006/05/19 17:29:01 christos Exp $	*/
+/*	$NetBSD: var.c,v 1.112 2006/07/28 17:08:55 sjg Exp $	*/
 
 /*
  * Copyright (c) 1988, 1989, 1990, 1993
@@ -69,14 +69,14 @@
  */
 
 #ifndef MAKE_NATIVE
-static char rcsid[] = "$NetBSD: var.c,v 1.110 2006/05/19 17:29:01 christos Exp $";
+static char rcsid[] = "$NetBSD: var.c,v 1.112 2006/07/28 17:08:55 sjg Exp $";
 #else
 #include <sys/cdefs.h>
 #ifndef lint
 #if 0
 static char sccsid[] = "@(#)var.c	8.3 (Berkeley) 3/19/94";
 #else
-__RCSID("$NetBSD: var.c,v 1.110 2006/05/19 17:29:01 christos Exp $");
+__RCSID("$NetBSD: var.c,v 1.112 2006/07/28 17:08:55 sjg Exp $");
 #endif
 #endif /* not lint */
 #endif
@@ -134,6 +134,7 @@ __RCSID("$NetBSD: var.c,v 1.110 2006/05/19 17:29:01 christos Exp $");
 #include    "make.h"
 #include    "buf.h"
 #include    "dir.h"
+#include    "job.h"
 
 /*
  * This is a harmless return value for Var_Parse that can be used by Var_Subst
@@ -1835,12 +1836,19 @@ VarQuote(char *str)
     Buffer  	  buf;
     /* This should cover most shells :-( */
     static char meta[] = "\n \t'`\";&<>()|*?{}[]\\$!#^~";
+    const char	*newline;
+
+    newline = Shell_GetNewline();
 
     buf = Buf_Init(MAKE_BSIZE);
     for (; *str; str++) {
-	if (strchr(meta, *str) != NULL)
-	    Buf_AddByte(buf, (Byte)'\\');
-	Buf_AddByte(buf, (Byte)*str);
+	if (*str == '\n' && newline != NULL) {
+	    Buf_AddBytes(buf, strlen(newline), newline);
+	} else {
+	    if (strchr(meta, *str) != NULL)
+		Buf_AddByte(buf, (Byte)'\\');
+	    Buf_AddByte(buf, (Byte)*str);
+	}
     }
     Buf_AddByte(buf, (Byte)'\0');
     str = (char *)Buf_GetAll(buf, NULL);
@@ -1981,6 +1989,7 @@ ApplyModifiers(char *nstr, const char *tstr,
     int             cnt;	/* Used to count brace pairs when variable in
 				 * in parens or braces */
     char	delim;
+    int		modifier;	/* that we are processing */
     Var_Parse_State parsestate; /* Flags passed to helper functions */
 
     delim = '\0';
@@ -2016,7 +2025,7 @@ ApplyModifiers(char *nstr, const char *tstr,
 				      v, ctxt, err, &used, freePtr);
 		if (nstr == var_Error
 		    || (nstr == varNoError && err == 0)
-		    || strlen(rval) != used) {
+		    || strlen(rval) != (size_t) used) {
 		    if (freeIt)
 			free(freeIt);
 		    goto out;		/* error already reported */
@@ -2032,7 +2041,7 @@ ApplyModifiers(char *nstr, const char *tstr,
 	    printf("Applying :%c to \"%s\"\n", *tstr, nstr);
 	}
 	newStr = var_Error;
-	switch (*tstr) {
+	switch ((modifier = *tstr)) {
 	case ':':
 	    {
 		if (tstr[1] == '=' ||
@@ -2929,7 +2938,7 @@ ApplyModifiers(char *nstr, const char *tstr,
 	    }
 	}
 	if (DEBUG(VAR)) {
-	    printf("Result is \"%s\"\n", newStr);
+	    printf("Result of :%c is \"%s\"\n", modifier, newStr);
 	}
 
 	if (newStr != nstr) {

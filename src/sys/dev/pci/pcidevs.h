@@ -1,10 +1,10 @@
-/*	$NetBSD: pcidevs.h,v 1.800 2006/06/27 21:39:28 kent Exp $	*/
+/*	$NetBSD: pcidevs.h,v 1.809 2006/07/30 04:18:25 simonb Exp $	*/
 
 /*
  * THIS FILE AUTOMATICALLY GENERATED.  DO NOT EDIT.
  *
  * generated from:
- *	NetBSD: pcidevs,v 1.801 2006/06/27 21:38:40 kent Exp
+ *	NetBSD: pcidevs,v 1.809 2006/07/30 04:17:42 simonb Exp
  */
 
 /*
@@ -593,6 +593,7 @@
 #define	PCI_VENDOR_ATHEROS	0x168c		/* Atheros Communications */
 #define	PCI_VENDOR_GLOBALSUN	0x16ab		/* Global Sun Tech */
 #define	PCI_VENDOR_SAFENET	0x16ae		/* SafeNet */
+#define	PCI_VENDOR_MICREL	0x16c6		/* Micrel */
 #define	PCI_VENDOR_LINKSYS	0x1737		/* Linksys */
 #define	PCI_VENDOR_ALTIMA	0x173b		/* Altima */
 #define	PCI_VENDOR_ANTARES	0x1754		/* Antares Microsystems */
@@ -828,10 +829,12 @@
 #define	PCI_PRODUCT_ADDTRON_RHINEII	0x1320		/* Rhine II 10/100 Ethernet */
 
 /* ADMtek products */
-#define	PCI_PRODUCT_ADMTEK_AL981	0x0981		/* AL981 10/100 Ethernet */
-#define	PCI_PRODUCT_ADMTEK_AN985	0x0985		/* AN985 10/100 Ethernet */
-#define	PCI_PRODUCT_ADMTEK_AN985_2	0x1985		/* AN985 10/100 Ethernet (OEM) */
+#define	PCI_PRODUCT_ADMTEK_AL981	0x0981		/* AL981 (Comet) 10/100 Ethernet */
+#define	PCI_PRODUCT_ADMTEK_AN983	0x0985		/* AN983 (Centaur-P) 10/100 Ethernet */
+#define	PCI_PRODUCT_ADMTEK_AN985	0x1985		/* AN985 (Centaur-C) 10/100 Ethernet */
 #define	PCI_PRODUCT_ADMTEK_ADM8211	0x8201		/* ADM8211 11Mbps 802.11b WLAN */
+#define	PCI_PRODUCT_ADMTEK_ADM9511	0x9511		/* ADM9511 (Centaur-II) 10/100 Ethernet */
+#define	PCI_PRODUCT_ADMTEK_ADM9513	0x9513		/* ADM9513 (Centaur-II) 10/100 Ethernet */
 
 /* Advanced System Products */
 #define	PCI_PRODUCT_ADVSYS_1200A	0x1100
@@ -1010,21 +1013,27 @@
 #define	PCI_PRODUCT_ATI_SB200_EHCI	0x4345		/* SB200 USB2 Host Controller */
 #define	PCI_PRODUCT_ATI_SB200_OHCI_1	0x4347		/* SB200 USB Host Controller */
 #define	PCI_PRODUCT_ATI_SB200_OHCI_2	0x4348		/* SB200 USB Host Controller */
+#define	PCI_PRODUCT_ATI_IXP_IDE_200	0x4349		/* SB200 IXP IDE Controller */
 #define	PCI_PRODUCT_ATI_SB200_ISA	0x434c		/* SB200 PCI-ISA Bridge */
+#define	PCI_PRODUCT_ATI_SB200_MODEM	0x434d		/* SB200 Modem */
 #define	PCI_PRODUCT_ATI_SB200_SMB	0x4353		/* SB200 SMBus Controller */
 #define	PCI_PRODUCT_ATI_IXP_AUDIO_300	0x4361		/* IXP AC'97 Audio Controller */
+#define	PCI_PRODUCT_ATI_SB300_SMB	0x4363		/* SB300 SMBus Controller */
+#define	PCI_PRODUCT_ATI_IXP_IDE_300	0x4369		/* SB300 IXP IDE Controller */
 #define	PCI_PRODUCT_ATI_IXP_AUDIO_400	0x4370		/* IXP AC'97 Audio Controller */
-#define	PCI_PRODUCT_ATI_IXP_IDE_200	0x4349		/* IXP IDE Controller */
-#define	PCI_PRODUCT_ATI_IXP_IDE_300	0x4369		/* IXP IDE Controller */
 #define	PCI_PRODUCT_ATI_SB400_PPB	0x4371		/* SB400 PCI-PCI Bridge */
-#define	PCI_PRODUCT_ATI_SB400_SMB	0x4372		/* SB400 SMB Controller */
+#define	PCI_PRODUCT_ATI_SB400_SMB	0x4372		/* SB400 SMBus Controller */
 #define	PCI_PRODUCT_ATI_SB400_EHCI	0x4373		/* SB400 USB2 Host Controller */
 #define	PCI_PRODUCT_ATI_SB400_OHCI_1	0x4374		/* SB400 USB Host Controller */
 #define	PCI_PRODUCT_ATI_SB400_OHCI_2	0x4375		/* SB400 USB Host Controller */
 #define	PCI_PRODUCT_ATI_IXP_IDE_400	0x4376		/* SB400 IXP IDE Controller */
 #define	PCI_PRODUCT_ATI_SB400_ISA	0x4377		/* SB400 PCI-ISA Bridge */
+#define	PCI_PRODUCT_ATI_SB400_MODEM	0x4378		/* SB400 Modem */
 #define	PCI_PRODUCT_ATI_SB400_SATA_1	0x4379		/* SB400 SATA Controller */
 #define	PCI_PRODUCT_ATI_SB400_SATA_2	0x437a		/* SB400 SATA Controller */
+#define	PCI_PRODUCT_ATI_SB600_SATA_1	0x4380		/* SB600 SATA Controller */
+#define	PCI_PRODUCT_ATI_SB600_SATA_2	0x4381		/* SB600 SATA Controller */
+#define	PCI_PRODUCT_ATI_IXP_IDE_600	0x438c		/* SB600 IXP IDE Controller */
 #define	PCI_PRODUCT_ATI_MACH64_CT	0x4354		/* Mach64 CT */
 #define	PCI_PRODUCT_ATI_MACH64_CX	0x4358		/* Mach64 CX */
 #define	PCI_PRODUCT_ATI_RADEON_RS250_D7	0x4437		/* Radeon Mobility 7000 IGP */
@@ -2074,6 +2083,7 @@
 #define	PCI_PRODUCT_INTEL_82801FB_IDE	0x266f		/* 82801FB/FR IDE Controller */
 #define	PCI_PRODUCT_INTEL_82945P_MCH	0x2770		/* 82945G/P Memory Controller Hub */
 #define	PCI_PRODUCT_INTEL_82945P_EXP	0x2771		/* 82945G/P PCI Express Bridge */
+#define	PCI_PRODUCT_INTEL_82945P_IGD	0x2772		/* 82945G/P Integrated Graphics Device */
 #define	PCI_PRODUCT_INTEL_82955X_HB	0x2774		/* 82955X Host */
 #define	PCI_PRODUCT_INTEL_82955X_EXP	0x2775		/* 82955X PCI Express Bridge */
 #define	PCI_PRODUCT_INTEL_82915G_IGDC	0x2782		/* 82915G/GL IGD Companion */
@@ -2149,6 +2159,7 @@
 #define	PCI_PRODUCT_INTEL_PRO_WL_3945ABG_1	0x4222		/* PRO/Wireless LAN 3945ABG Mini-PCI Adapter */
 #define	PCI_PRODUCT_INTEL_PRO_WL_2915ABG_1	0x4223		/* PRO/Wireless LAN 2915ABG Mini-PCI Adapter */
 #define	PCI_PRODUCT_INTEL_PRO_WL_2915ABG_2	0x4224		/* PRO/Wireless LAN 2915ABG Mini-PCI Adapter */
+#define	PCI_PRODUCT_INTEL_PRO_WL_3945ABG_2	0x4227		/* PRO/Wireless LAN 2915ABG Mini-PCI Adapter */
 #define	PCI_PRODUCT_INTEL_80312_ATU	0x530d		/* 80310 ATU */
 #define	PCI_PRODUCT_INTEL_82371SB_ISA	0x7000		/* 82371SB (PIIX3) PCI-ISA Bridge */
 #define	PCI_PRODUCT_INTEL_82371SB_IDE	0x7010		/* 82371SB (PIIX3) IDE Interface */
@@ -2206,7 +2217,8 @@
 
 /* ITE products */
 #define	PCI_PRODUCT_ITE_IT8152	0x8152		/* IT8152 Host Bridge */
-#define	PCI_PRODUCT_ITE_IT8212	0x8212		/* IT8212 IDE controller */
+#define	PCI_PRODUCT_ITE_IT8211	0x8211		/* IT8211 IDE Controller */
+#define	PCI_PRODUCT_ITE_IT8212	0x8212		/* IT8212 IDE Controller */
 
 /* I. T. T. products */
 #define	PCI_PRODUCT_ITT_AGX016	0x0001		/* AGX016 */
@@ -2314,6 +2326,10 @@
 
 /* Microsoft products */
 #define	PCI_PRODUCT_MICROSOFT_MN120	0x0001		/* MN-120 10/100 Ethernet Notebook Adapter */
+
+/* Micrel products */
+#define	PCI_PRODUCT_MICREL_KSZ8841	0x8841		/* 10/100 Ethernet */
+#define	PCI_PRODUCT_MICREL_KSZ8842	0x8842		/* Switched 2-port 10/100 Ethernet */
 
 /* Middle Digital products */
 #define	PCI_PRODUCT_MIDDLE_DIGITAL_WEASEL_VGA	0x9050		/* Weasel Virtual VGA */
@@ -3309,6 +3325,7 @@
 #define	PCI_PRODUCT_VIATECH_VT8377	0x3189		/* VT8377 Apollo KT400 CPU to PCI Bridge */
 #define	PCI_PRODUCT_VIATECH_VT8378	0x3205		/* VT8378 Apollo KM400 CPU to PCI Bridge */
 #define	PCI_PRODUCT_VIATECH_VT8237	0x3227		/* VT8237 (Apollo KT600) PCI-ISA Bridge */
+#define	PCI_PRODUCT_VIATECH_VT8237A_HDA	0x3288		/* VT8237A/VT8251 High Definition Audio Controller */
 #define	PCI_PRODUCT_VIATECH_KT880_4	0x4269		/* KT880 CPU to PCI Bridge */
 #define	PCI_PRODUCT_VIATECH_VT86C100A	0x6100		/* VT86C100A (Rhine-II) 10/100 Ethernet */
 #define	PCI_PRODUCT_VIATECH_VT8378_IG	0x7205		/* VT8378 KM400 UniChrome Integrated Graphics */

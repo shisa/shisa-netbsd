@@ -1,4 +1,4 @@
-/* $NetBSD: udf_vfsops.c,v 1.6 2006/06/12 00:20:21 christos Exp $ */
+/* $NetBSD: udf_vfsops.c,v 1.8 2006/07/23 22:06:10 ad Exp $ */
 
 /*
  * Copyright (c) 2006 Reinoud Zandijk
@@ -36,7 +36,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: udf_vfsops.c,v 1.6 2006/06/12 00:20:21 christos Exp $");
+__RCSID("$NetBSD: udf_vfsops.c,v 1.8 2006/07/23 22:06:10 ad Exp $");
 #endif /* not lint */
 
 
@@ -94,7 +94,7 @@ int udf_sync(struct mount *, int, kauth_cred_t, struct lwp *);
 int udf_vget(struct mount *, ino_t, struct vnode **);
 int udf_fhtovp(struct mount *, struct fid *, struct vnode **);
 int udf_checkexp(struct mount *, struct mbuf *, int *, kauth_cred_t *);
-int udf_vptofh(struct vnode *, struct fid *);
+int udf_vptofh(struct vnode *, struct fid *, size_t *);
 int udf_snapshot(struct mount *, struct vnode *, struct timespec *);
 
 void udf_init(void);
@@ -246,12 +246,10 @@ udf_mount(struct mount *mp, const char *path,
 	struct udf_args args;
 	struct udf_mount *ump;
 	struct vnode *devvp;
-	struct proc *p;
 	int openflags, accessmode, error;
 
 	DPRINTF(CALL, ("udf_mount called\n"));
 
-	p = l->l_proc;
 	if (mp->mnt_flag & MNT_GETARGS) {
 		/* request for the mount arguments */
 		ump = VFSTOUDF(mp);
@@ -308,11 +306,11 @@ udf_mount(struct mount *mp, const char *path,
 	 * If mount by non-root, then verify that user has necessary
 	 * permissions on the device.
 	 */
-	if (kauth_cred_geteuid(p->p_cred) != 0) {
+	if (kauth_cred_geteuid(l->l_cred) != 0) {
 		accessmode = VREAD;
 		if ((mp->mnt_flag & MNT_RDONLY) == 0)
 			accessmode |= VWRITE;
-		error = VOP_ACCESS(devvp, accessmode, p->p_cred, l);
+		error = VOP_ACCESS(devvp, accessmode, l->l_cred, l);
 		if (error) {
 			vput(devvp);
 			return (error);
@@ -484,7 +482,7 @@ udf_mountfs(struct vnode *devvp, struct mount *mp,
 	int    num_anchors, error, lst;
 
 	/* flush out any old buffers remaining from a previous use. */
-	error = vinvalbuf(devvp, V_SAVE, l->l_proc->p_cred, l, 0, 0);
+	error = vinvalbuf(devvp, V_SAVE, l->l_cred, l, 0, 0);
 	if (error)
 		return error;
 
@@ -734,7 +732,7 @@ udf_fhtovp(struct mount *mp, struct fid *fhp, struct vnode **vpp)
  * have been recycled.
  */
 int
-udf_vptofh(struct vnode *vp, struct fid *fid)
+udf_vptofh(struct vnode *vp, struct fid *fid, size_t *fh_size)
 {
 	DPRINTF(NOTIMPL, ("udf_vptofh called\n"));
 	return EOPNOTSUPP;
@@ -753,5 +751,3 @@ udf_snapshot(struct mount *mp, struct vnode *vp, struct timespec *tm)
 	DPRINTF(NOTIMPL, ("udf_snapshot called\n"));
 	return EOPNOTSUPP;
 }
-
-

@@ -1,4 +1,4 @@
-/*	$NetBSD: kd.c,v 1.38 2006/05/14 21:56:33 elad Exp $	*/
+/*	$NetBSD: kd.c,v 1.40 2006/07/26 08:09:21 martin Exp $	*/
 
 /*-
  * Copyright (c) 1996 The NetBSD Foundation, Inc.
@@ -46,7 +46,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kd.c,v 1.38 2006/05/14 21:56:33 elad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kd.c,v 1.40 2006/07/26 08:09:21 martin Exp $");
 
 #include <sys/param.h>
 #include <sys/proc.h>
@@ -163,7 +163,6 @@ kdopen(dev_t dev, int flag, int mode, struct lwp *l)
 	struct kd_softc *kd;
 	int error, s, unit;
 	struct tty *tp;
-	struct proc *p = l->l_proc;
 static	int firstopen = 1;
 	
 	unit = minor(dev);
@@ -180,7 +179,8 @@ static	int firstopen = 1;
 	/* It's simpler to do this up here. */
 	if (((tp->t_state & (TS_ISOPEN | TS_XCLUDE))
 	     ==             (TS_ISOPEN | TS_XCLUDE))
-	    && (kauth_authorize_generic(p->p_cred, KAUTH_GENERIC_ISSUSER, &p->p_acflag) != 0) )
+	    && (kauth_authorize_generic(l->l_cred, KAUTH_GENERIC_ISSUSER,
+	    &l->l_acflag) != 0) )
 	{
 		return (EBUSY);
 	}

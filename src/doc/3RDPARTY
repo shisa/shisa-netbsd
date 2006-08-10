@@ -1,4 +1,4 @@
-#	$NetBSD: 3RDPARTY,v 1.446 2006/06/29 03:46:02 dan Exp $
+#	$NetBSD: 3RDPARTY,v 1.457 2006/07/30 10:08:52 jdolecek Exp $
 #
 # This file contains a list of the software that has been integrated into
 # NetBSD where we are not the primary maintainer.
@@ -102,7 +102,7 @@ Todo[4]: Re-entrant functions of net/*
 
 Package:	binutils
 Version:	2.16.1
-Current Vers:	2.16.1
+Current Vers:	2.17
 Maintainer:	FSF
 Archive Site:	ftp://ftp.gnu.org/gnu/binutils/
 Home Page:	http://www.gnu.org/software/binutils/
@@ -184,7 +184,7 @@ I have merged all the changes already.
 
 Package:	db
 Version:	1.85
-Current Vers:	1.86/4.3.28
+Current Vers:	1.86/4.4.20
 Maintainer:	Keith Bostic <bostic@vangogh.cs.berkeley.edu>
 Archive Site:	http://www.sleepycat.com/download/index.shtml
 Home Page:	http://www.sleepycat.com/products/db.shtml
@@ -201,7 +201,7 @@ src/lib/libc/db/db2netbsd.
 
 Package:	dhcp
 Version:	3.0.3
-Current Vers:	3.0.3
+Current Vers:	3.0.4
 Maintainer:	mellon
 Archive Site:	ftp://ftp.isc.org/isc/dhcp/
 Home Page:	http://www.isc.org/sw/dhcp/
@@ -284,6 +284,7 @@ before importing:
 	- delete all related testsuites
 for GCC4:
 	- delete all fortran and testsuites
+	- update gcc/version.c for the NetBSD GCC date
 
 Package:	gdb
 Version:	5.3/6.4
@@ -341,7 +342,7 @@ for import.
 
 Package:	heimdal
 Version:	0.6.2
-Current Vers:	0.7.1
+Current Vers:	0.7.2
 Maintainer:	Heimdal <heimdal@pdc.kth.se>
 Archive Site:	ftp://ftp.pdc.kth.se/pub/heimdal/src/
 Home Page:	http://www.pdc.kth.se/heimdal/
@@ -524,13 +525,13 @@ and ndbootd-raw.c.  Restore saved config.h, and force it to define
 HAVE_STRICT_ALIGNMENT.  Fix RCS IDs, import.
 
 Package:	ntp
-Version:	4.2.2
-Current Vers:	4.2.2
+Version:	4.2.2p2
+Current Vers:	4.2.2p2
 Maintainer:	David L. Mills <mills@udel.edu>
 Archive Site:	ftp://ftp.udel.edu/pub/ntp/ntp4/
 Home Page:	http://www.ntp.org/, http://ntp.isc.org/
 Mailing List:
-Responsible:	simonb, jonathan
+Responsible:	simonb, jonathan, kardel
 License:	BSD-like
 Notes:
 See /usr/src/dist/ntp/ntp2netbsd for update instructions.
@@ -619,7 +620,7 @@ Maintainer:	Michael Rendell <michael@cs.mun.ca>
 Archive Site:	ftp://ftp.cs.mun.ca/pub/pdksh/
 Home Page:	http://www.cs.mun.ca/~michael/pdksh/
 Mailing List:
-Responsible:
+Responsible:	jdolecek
 License:	Public domain
 pdksh-5.2.14-patches.1 and pdksh-5.2.14-patches.2 have been applied.
 
@@ -652,14 +653,14 @@ formating in man pages, disallowing flood pinging, alignment fixes,
 and more.
 
 Package:	postfix
-Version:	2.2.10
-Current Vers:	2.2.10/2.3-20060207
+Version:	2.3.0
+Current Vers:	2.3.1/2.4-20060711
 Maintainer:	Wietse Venema <wietse@porcupine.org>
 Archive Site:	ftp://postfix.cloud9.net/official/
 Home Page:	http://www.postfix.org/
 Mailing List:	postfix-users@postfix.org
 Responsible:	perry, rpaulo
-License:	Several. See src/gnu/dist/postfix
+License:	IBM Public License. See also src/gnu/dist/postfix.
 Notes:
 HTML documentation should be kept in sync with the README_FILES.
 src/gnu/dist/postfix/conf/postfix-files must be kept in sync with our
@@ -667,14 +668,14 @@ directory layout (the easiest way to check is by running ``postfix
 set-permissions'').
 
 Package:	ppp
-Version:	2.4.3 [with 2.4.4b1 changes]
+Version:	2.4.4
 Current Vers:	2.4.4
 Maintainer:	Paul Mackerras <paulus@samba.org>
 Archive Site:	ftp://ftp.samba.org/pub/ppp/
 Home Page:
 CVS root:	:pserver:cvs@pserver.samba.org:/cvsroot (password: cvs)
 Mailing List:
-Responsible:	christos
+Responsible:	christos, cube
 License:	BSD (3-clause)
 Notes:
 BSD support was removed from 2.4.0; I added it back and removed
@@ -684,8 +685,8 @@ net/zlib, and <net/ppp-comp.h> and I now maintain sys-bsd.c. This
 is clearly a pain. I have not tested the modules code, neither our
 makefiles make it easy to construct a module, but I left one there
 as an example.
-TDB code as found in 2.4.3 is under GPL.  Therefore, we're using
-the version found in 2.4.1.
+TDB code as found in 2.4.x, x>1 is under the GPL.  Therefore, we're
+using the version found in 2.4.1.
 
 Package:	rcs
 Version:	5.7

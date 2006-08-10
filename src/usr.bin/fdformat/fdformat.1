@@ -1,4 +1,4 @@
-.\"	$NetBSD: fdformat.1,v 1.14 2002/09/30 11:08:59 grant Exp $
+.\"	$NetBSD: fdformat.1,v 1.16 2006/07/22 08:36:14 wiz Exp $
 .\"
 .\" Copyright (c) 1996, 1997 The NetBSD Foundation, Inc.
 .\" All rights reserved.
@@ -34,7 +34,7 @@
 .\" ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 .\" POSSIBILITY OF SUCH DAMAGE.
 .\"
-.Dd November 28, 1996
+.Dd July 22, 2006
 .Dt FDFORMAT 1
 .Os
 .Sh NAME
@@ -85,13 +85,6 @@ density parameters (as provided by the floppy diskette device driver).
 .Pp
 As the each track of the floppy diskette is formatted, it is read to
 verify the format was successful.
-A status is printed for each track.
-.Em F
-indicates a track was formatted.
-.Em V
-indicates the track was successfully verified.
-.Em E
-indicates an error in formatting or verifying a track.
 .Pp
 The
 .Nm

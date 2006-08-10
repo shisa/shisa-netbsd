@@ -1,4 +1,4 @@
-/* $NetBSD: inode.c,v 1.31 2005/09/13 04:14:17 christos Exp $	 */
+/* $NetBSD: inode.c,v 1.34 2006/07/19 22:48:11 perseant Exp $	 */
 
 /*-
  * Copyright (c) 1997, 1998 The NetBSD Foundation, Inc.
@@ -169,8 +169,8 @@ ckinode(struct ufs1_dinode *dp, struct inodesc *idesc)
 				/* An empty block in a directory XXX */
 				getpathname(pathbuf, sizeof(pathbuf),
 				    idesc->id_number, idesc->id_number);
-				pfatal("DIRECTORY %s: CONTAINS EMPTY BLOCKS",
-				    pathbuf);
+				pfatal("DIRECTORY %s INO %lld: CONTAINS EMPTY BLOCKS [1]",
+				    pathbuf, (long long)idesc->id_number);
 				if (reply("ADJUST LENGTH") == 1) {
 					vp = vget(fs, idesc->id_number);
 					dp = VTOD(vp);
@@ -180,7 +180,8 @@ ckinode(struct ufs1_dinode *dp, struct inodesc *idesc)
 					    "YOU MUST RERUN FSCK AFTERWARDS\n");
 					rerun = 1;
 					inodirty(VTOI(vp));
-				}
+				} else
+					break;
 			}
 			continue;
 		}
@@ -207,8 +208,8 @@ ckinode(struct ufs1_dinode *dp, struct inodesc *idesc)
 				/* An empty block in a directory XXX */
 				getpathname(pathbuf, sizeof(pathbuf),
 				    idesc->id_number, idesc->id_number);
-				pfatal("DIRECTORY %s: CONTAINS EMPTY BLOCKS",
-				    pathbuf);
+				pfatal("DIRECTORY %s INO %lld: CONTAINS EMPTY BLOCKS [2]",
+				    pathbuf, (long long)idesc->id_number);
 				if (reply("ADJUST LENGTH") == 1) {
 					vp = vget(fs, idesc->id_number);
 					dp = VTOD(vp);
@@ -219,7 +220,8 @@ ckinode(struct ufs1_dinode *dp, struct inodesc *idesc)
 					rerun = 1;
 					inodirty(VTOI(vp));
 					break;
-				}
+				} else
+					break;
 			}
 		}
 		sizepb *= NINDIR(fs);
@@ -296,8 +298,8 @@ iblock(struct inodesc *idesc, long ilevel, u_int64_t isize)
 				/* An empty block in a directory XXX */
 				getpathname(pathbuf, sizeof(pathbuf),
 				    idesc->id_number, idesc->id_number);
-				pfatal("DIRECTORY %s: CONTAINS EMPTY BLOCKS",
-				    pathbuf);
+				pfatal("DIRECTORY %s INO %lld: CONTAINS EMPTY BLOCKS [3]",
+				    pathbuf, (long long)idesc->id_number);
 				if (reply("ADJUST LENGTH") == 1) {
 					vp = vget(fs, idesc->id_number);
 					VTOI(vp)->i_ffs1_size -= isize;
@@ -464,6 +466,10 @@ clearinode(ino_t inumber)
 
 	LFS_IENTRY(ifp, fs, inumber, bp);
 	daddr = ifp->if_daddr;
+	if (daddr == LFS_UNUSED_DADDR) {
+		brelse(bp);
+		return;
+	}
 	ifp->if_daddr = LFS_UNUSED_DADDR;
 	ifp->if_nextfree = fs->lfs_freehd;
 	fs->lfs_freehd = inumber;
@@ -477,6 +483,7 @@ clearinode(ino_t inumber)
 		SEGUSE *sup;
 		u_int32_t oldsn = dtosn(fs, daddr);
 
+		seg_table[oldsn].su_nbytes -= DINODE1_SIZE;
 		LFS_SEGENTRY(sup, fs, oldsn, bp);
 		sup->su_nbytes -= DINODE1_SIZE;
 		LFS_WRITESEGENTRY(sup, fs, oldsn, bp);	/* Ifile */
@@ -596,7 +603,8 @@ allocino(ino_t request, int type)
 		if (statemap[ino] == USTATE)
 			break;
 	if (ino == maxino)
-		return (0);
+		extend_ifile(fs);
+
 	switch (type & IFMT) {
 	case IFDIR:
 		statemap[ino] = DSTATE;

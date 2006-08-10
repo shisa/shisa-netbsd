@@ -1,4 +1,4 @@
-.\" $NetBSD: bluetooth.3,v 1.1 2006/06/19 15:44:36 gdamore Exp $
+.\" $NetBSD: bluetooth.3,v 1.3 2006/07/30 00:15:54 wiz Exp $
 .\"
 .\" Copyright (c) 2003 Maksim Yevmenkin <m_evmenkin@yahoo.com>
 .\" All rights reserved.
@@ -24,10 +24,10 @@
 .\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 .\" SUCH DAMAGE.
 .\"
-.\" $Id: bluetooth.3,v 1.1 2006/06/19 15:44:36 gdamore Exp $
+.\" $Id: bluetooth.3,v 1.3 2006/07/30 00:15:54 wiz Exp $
 .\" $FreeBSD: src/lib/libbluetooth/bluetooth.3,v 1.7 2005/01/21 10:26:11 ru Exp $
 .\"
-.Dd May 7, 2003
+.Dd July 26, 2006
 .Dt BLUETOOTH 3
 .Os
 .Sh NAME
@@ -45,12 +45,6 @@
 .Nm bt_ntoa ,
 .Nm bt_devaddr ,
 .Nm bt_devname ,
-.Nm bt_openconfig ,
-.Nm bt_getconfig ,
-.Nm bt_freeconfig ,
-.Nm bt_eachconfig ,
-.Nm bt_closeconfig ,
-.Nm bt_printconfig
 .Nd Bluetooth routines
 .Sh LIBRARY
 .Lb libbluetooth
@@ -84,26 +78,13 @@
 .Fn bt_devaddr "const char *name" "bdaddr_t *addr"
 .Ft int
 .Fn bt_devname "char *name" "const bdaddr_t *addr"
-.Ft bt_handle_t
-.Fn bt_openconfig "const char *name"
-.Ft bt_cfgentry_t
-.Fn bt_getconfig "bt_handle_t handle" "const bdaddr_t *ba"
-.Ft int
-.Fn bt_eachconfig "bt_handle_t handle" "void (*func)(bt_cfgentry_t *, void *)" "void *arg"
-.Ft void
-.Fn bt_freeconfig "bt_cfgentry_t *cfg"
-.Ft int
-.Fn bt_closeconfig "bt_handle_t handle"
-.Ft int
-.Fn bt_printconfig "FILE *fp" "bt_cfgentry_t *cfg"
 .Sh DESCRIPTION
 The
 .Fn bt_gethostent ,
-.Fn bt_gethostbyname
+.Fn bt_gethostbyname ,
 and
 .Fn bt_gethostbyaddr
-functions
-each return a pointer to an object with the
+functions each return a pointer to an object with the
 .Vt hostent
 structure describing a Bluetooth host
 referenced by name or by address, respectively.
@@ -155,7 +136,7 @@ file.
 .Pp
 The
 .Fn bt_getprotoent ,
-.Fn bt_getprotobyname
+.Fn bt_getprotobyname ,
 and
 .Fn bt_getprotobynumber
 functions each return a pointer to an object with the
@@ -174,7 +155,8 @@ The
 .Fa proto
 argument passed to
 .Fn bt_getprotobynumber
-should have numeric value of the desired Bluetooth Protocol Service Multiplexor.
+should have numeric value of the desired Bluetooth Protocol Service
+Multiplexor.
 .Pp
 The structure returned contains the information obtained from a line in
 .Pa /etc/bluetooth/protocols
@@ -224,41 +206,8 @@ or 0 if the string did not match any local device. The
 function takes a Bluetooth device address and copies the local device
 name associated with that address into the buffer provided, if any.
 It returns 1 when the device was found, otherwise 0.
-.Pp
-The
-.Fn bt_openconfig ,
-.Fn bt_getconfig ,
-.Fn bt_eachconfig ,
-and
-.Fn bt_closeconfig
-functions can be used to extract configuration entries from files in the
-.Xr bluetooth.conf 5
-file format. If
-.Dv NULL
-is specified as the file name to
-.Fn bt_openconfig ,
-the default file name of
-.Pa /etc/bluetooth/bluetooth.conf
-will be used.
-.Fn bt_getconfig
-will scan the config file for a matching BD_ADDR and return a
-pointer to a dynamically allocated
-.Ar bt_cfgentry_t
-structure which must be freed with
-.Fn bt_freeconfig .
-The
-.Fn bt_eachconfig
-function can be used to iterate through all entries in the config file,
-with each config entry being passed to the given function in turn, then
-freed automatically.
-.Pp
-The
-.Fn bt_printconfig
-function will print a config entry to the file pointer
-in a format compatible with reading it later.
 .Sh FILES
 .Bl -tag -width ".Pa /etc/bluetooth/hosts" -compact
-.It Pa /etc/bluetooth/bluetooth.conf
 .It Pa /etc/bluetooth/hosts
 .It Pa /etc/bluetooth/protocols
 .El
@@ -269,19 +218,19 @@ const char *bdstr = "00:01:02:03:04:05";
 bdaddr_t bd;
 struct hostent *hp;
 
-if (!bt_aton(bdstr, &bd))
+if (!bt_aton(bdstr, \*[Am]bd))
 	errx(1, "can't parse BD_ADDR %s", bdstr);
 
-if ((hp = bt_gethostbyaddr((const char *)&bd,
+if ((hp = bt_gethostbyaddr((const char *)\*[Am]bd,
     sizeof(bd), AF_BLUETOOTH)) == NULL)
 	errx(1, "no name associated with %s", bdstr);
 
-printf("name associated with %s is %s\en", bdstr, hp->h_name);
+printf("name associated with %s is %s\en", bdstr, hp-\*[Gt]h_name);
 .Ed
 .Sh DIAGNOSTICS
 Error return status from
 .Fn bt_gethostent ,
-.Fn bt_gethostbyname
+.Fn bt_gethostbyname ,
 and
 .Fn bt_gethostbyaddr
 is indicated by return of a
@@ -314,14 +263,13 @@ This is a non-recoverable error.
 .Pp
 The
 .Fn bt_getprotoent ,
-.Fn bt_getprotobyname
+.Fn bt_getprotobyname ,
 and
 .Fn bt_getprotobynumber
 return
 .Dv NULL
 on EOF or error.
 .Sh SEE ALSO
-.Xr bluetooth.conf 5 ,
 .Xr gethostbyaddr 3 ,
 .Xr gethostbyname 3 ,
 .Xr getprotobyname 3 ,
@@ -329,7 +277,19 @@ on EOF or error.
 .Xr herror 3 ,
 .Xr inet_aton 3 ,
 .Xr inet_ntoa 3
-.Sh CAVEAT
+.Sh HISTORY
+.Nm libbluetooth
+first appeared in
+.Fx
+was ported to
+.Nx 4.0
+and extended by
+.An Iain Hibbert
+for Itronix, Inc.
+.Sh AUTHORS
+.An Maksim Yevmenkin Aq m_evmenkin@yahoo.com
+.An Iain Hibbert
+.Sh CAVEATS
 The
 .Fn bt_gethostent
 function reads the next line of
@@ -353,19 +313,7 @@ The
 function opens and/or rewinds the
 .Pa /etc/bluetooth/protocols
 file.
-.Sh AUTHORS
-.An Maksim Yevmenkin Aq m_evmenkin@yahoo.com
-.An Iain Hibbert
 .Sh BUGS
 These functions use static data storage;
 if the data is needed for future use, it should be
 copied before any subsequent calls overwrite it.
-.Sh HISTORY
-.Nm libbluetooth
-first appeard in
-.Fx
-was ported to
-.Nx 4.0
-and extended by
-.An Iain Hibbert
-for Itronix, Inc.

@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.391 2006/06/27 21:43:26 peter Exp $
+#	$NetBSD: Makefile,v 1.397 2006/07/29 08:54:52 wiz Exp $
 #	@(#)Makefile	8.1 (Berkeley) 6/18/93
 
 MAN=	aac.4 ac97.4 acardide.4 aceride.4 acphy.4 adc.4 adt7467c.4 adv.4 \
@@ -8,7 +8,7 @@ MAN=	aac.4 ac97.4 acardide.4 aceride.4 acphy.4 adc.4 adt7467c.4 adv.4 \
 	auacer.4 audio.4 audiocs.4 auich.4 \
 	auixp.4 autri.4 auvia.4 awi.4 azalia.4 \
 	bba.4 bce.4 be.4 bge.4 bha.4 bktr.4 bluetooth.4 bmtphy.4 \
-	bpf.4 brgphy.4 bridge.4 bthidev.4 bthub.4 bthset.4 btkbd.4 btms.4 \
+	bpf.4 brgphy.4 bridge.4 btdev.4 bthidev.4 btkbd.4 btms.4 btsco.4 \
 	cac.4 cardbus.4 carp.4 ccd.4 cd.4 \
 	cec.4 cgd.4 cfb.4 ch.4 ciphy.4 ciss.4 clcs.4 clct.4 clnp.4 \
 	clockctl.4 cltp.4 cmdide.4 cmpci.4 cms.4 cnw.4 \
@@ -22,8 +22,8 @@ MAN=	aac.4 ac97.4 acardide.4 aceride.4 acphy.4 adc.4 adt7467c.4 adv.4 \
 	hptide.4 icmp.4 icp.4 icsphy.4 idp.4 ieee80211.4 ifmedia.4 \
 	igsfb.4 iha.4 inet.4 inphy.4 intersil7170.4 \
 	ioasic.4 ioat.4 iop.4 iophy.4 iopsp.4 ip.4 ipkdb.4 ipw.4 \
-	iso.4 isp.4 it.4 iteide.4 iwi.4 ixpide.4 joy.4 kloader.4 ksyms.4 \
-	kttcp.4 lc.4 ld.4 lkm.4 lo.4 lxtphy.4 mainbus.4 makphy.4 \
+	iso.4 isp.4 it.4 iteide.4 iwi.4 ixpide.4 joy.4 kloader.4 kse.4 \
+	ksyms.4 kttcp.4 lc.4 ld.4 lkm.4 lo.4 lxtphy.4 mainbus.4 makphy.4 \
 	mbe.4 mca.4 mcclock.4 md.4 mfb.4 mhzc.4 midi.4 \
 	mii.4 mk48txx.4 mlx.4 mly.4 mpt.4 mpu.4 mtd.4 \
 	mtio.4 multicast.4 ne.4 neo.4 netintro.4 nfe.4 njs.4 ns.4 \
@@ -42,7 +42,7 @@ MAN=	aac.4 ac97.4 acardide.4 aceride.4 acphy.4 adc.4 adt7467c.4 adv.4 \
 	svwsata.4 swwdog.4 systrace.4 \
 	tap.4 tc.4 tcds.4 tcp.4 termios.4 tfb.4 ti.4 \
 	tl.4 tlp.4 tlphy.4 tp.4 tr.4 tra.4 trm.4 tty.4 tun.4 \
-	tqphy.4 twe.4 txp.4 ubsec.4 udp.4 uep.4 uha.4 uk.4 ukphy.4 \
+	tqphy.4 twa.4 twe.4 txp.4 ubsec.4 udp.4 uep.4 uha.4 uk.4 ukphy.4 \
 	unix.4 userconf.4 veriexec.4 vga.4 vge.4 viaide.4 \
 	vlan.4 vmmon.4 vmnet.4 vnd.4 vr.4 wd.4 wdc.4 \
 	wi.4 wm.4 wscons.4 wsdisplay.4 wsfont.4 wskbd.4 \
@@ -50,7 +50,7 @@ MAN=	aac.4 ac97.4 acardide.4 aceride.4 acphy.4 adc.4 adt7467c.4 adv.4 \
 
 # USB devices
 MAN+=	uaudio.4 ubsa.4 ubt.4 ubtbcmfw.4 ucom.4 ucycom.4 \
-	udsbr.4 uftdi.4 ugen.4 uhid.4 \
+	udsbr.4 uftdi.4 ugen.4 ugensa.4 uhid.4 \
 	uhidev.4 uipaq.4 uirda.4 ukbd.4 ukyopon.4 ulpt.4 \
 	umass.4 umct.4 umidi.4 umodem.4 ums.4 uplcom.4 urio.4 usb.4 \
 	uscanner.4 usscanner.4 ustir.4 uvisor.4 uvscom.4 uyap.4 \
@@ -139,6 +139,7 @@ MLINKS+=scsi.4 atapibus.4
 MLINKS+=scsi.4 scsibus.4
 MLINKS+=si.4 sw.4
 MLINKS+=sk.4 skc.4
+MLINKS+=sl.4 slip.4
 MLINKS+=speaker.4 spkr.4
 MLINKS+=tty.4 dty.4
 MLINKS+=url.4 urlphy.4

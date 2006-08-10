@@ -1,21 +1,21 @@
-/*	$NetBSD: getopt.c,v 1.6 2000/07/03 02:51:18 matt Exp $	*/
+/*	$NetBSD: getopt.c,v 1.8 2006/07/09 21:39:48 wiz Exp $	*/
+
+/*
+ * This material, written by Henry Spencer, was released by him
+ * into the public domain and is thus not subject to any copyright.
+ */
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: getopt.c,v 1.6 2000/07/03 02:51:18 matt Exp $");
+__RCSID("$NetBSD: getopt.c,v 1.8 2006/07/09 21:39:48 wiz Exp $");
 #endif /* not lint */
 
-#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 
-int	main __P((int, char **));
-
 int
-main(argc, argv)
-	int argc;
-	char *argv[];
+main(int argc, char *argv[])
 {
 	int c;
 	int status = 0;

@@ -1,4 +1,4 @@
-/*	$NetBSD: veriexecctl.c,v 1.20 2005/12/13 10:56:16 dsl Exp $	*/
+/*	$NetBSD: veriexecctl.c,v 1.23 2006/07/14 23:00:09 elad Exp $	*/
 
 /*-
  * Copyright 2005 Elad Efrat <elad@bsd.org.il>
@@ -34,6 +34,7 @@
 #include <sys/param.h>
 #include <sys/queue.h>
 #include <sys/verified_exec.h>
+#include <sys/statvfs.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -73,27 +74,27 @@ openlock(const char *path)
 }
 
 struct veriexec_up *
-dev_lookup(dev_t d)
+dev_lookup(char *vfs)
 {
 	struct veriexec_up *p;
 
 	CIRCLEQ_FOREACH(p, &params_list, vu_list)
-		if (p->vu_param.dev == d)
+		if (strcmp(p->vu_param.file, vfs) == 0)
 			return (p);
 
 	return NULL;
 }
 
 struct veriexec_up *
-dev_add(dev_t d)
+dev_add(char *vfs)
 {
 	struct veriexec_up *up;
 
 	if ((up = calloc((size_t)1, sizeof(*up))) == NULL)
 		err(1, "No memory");
 
-	up->vu_param.dev = d;
 	up->vu_param.hash_size = 1;
+	strlcpy(up->vu_param.file, vfs, sizeof(up->vu_param.file));
 
 	CIRCLEQ_INSERT_TAIL(&params_list, up, vu_list);
 
@@ -109,19 +110,23 @@ phase1_preload(void)
 
 	while (!CIRCLEQ_EMPTY(&params_list)) {
 		struct veriexec_up *vup;
+		struct statvfs sv;
 
 		vup = CIRCLEQ_FIRST(&params_list);
+
+		if (statvfs(vup->vu_param.file, &sv) != 0)
+			err(1, "Can't statvfs() `%s'", vup->vu_param.file);
 
 		if (ioctl(gfd, VERIEXEC_TABLESIZE, &(vup->vu_param)) == -1) {
 			if (errno != EEXIST)
 				err(1, "Error in phase 1: Can't "
-				    "set hash table size for device %d",
-				    vup->vu_param.dev);
+				    "set hash table size for mount `%s'",
+				    sv.f_mntonname);
 		}
 
 		if (verbose) {
-			printf(" => Hash table sizing successful for device "
-			    "%d. (%zu entries)\n", vup->vu_param.dev,
+			printf(" => Hash table sizing successful for mount "
+			    "`%s'. (%zu entries)\n", sv.f_mntonname,
 			    vup->vu_param.hash_size);
 		}
 
@@ -251,10 +256,14 @@ print_flags(unsigned char flags)
 static void
 print_query(struct veriexec_query_params *qp, char *file)
 {
+	struct statvfs sv;
 	int i;
 
+	if (statvfs(file, &sv) != 0)
+		err(1, "Can't statvfs() `%s'\n", file);
+
 	printf("Filename: %s\n", file);
-	printf("Device: %d, inode: %" PRIu64 "\n", qp->dev, qp->ino);
+	printf("Mount: %s\n", sv.f_mntonname);
 	printf("Entry flags: ");
 	print_flags(qp->type);
 	printf("Entry status: %s\n", STATUS_STRING(qp->status));
@@ -298,22 +307,17 @@ main(int argc, char **argv)
 		struct veriexec_delete_params dp;
 		struct stat sb;
 
-		/* Get device and inode */
 		if (stat(argv[1], &sb) == -1)
 			err(1, "Can't stat `%s'", argv[1]);
+
+		strlcpy(dp.file, argv[1], sizeof(dp.file));
 
 		/*
 		 * If it's a regular file, remove it. If it's a directory,
 		 * remove the entire table. If it's neither, abort.
 		 */
-		if (S_ISDIR(sb.st_mode))
-			dp.ino = 0;
-		else if (S_ISREG(sb.st_mode))
-			dp.ino = sb.st_ino;
-		else
+		if (!S_ISDIR(sb.st_mode) && !S_ISREG(sb.st_mode))
 			errx(1, "`%s' is not a regular file or directory.", argv[1]);
-
-		dp.dev = sb.st_dev;
 
 		if (ioctl(gfd, VERIEXEC_DELETE, &dp) == -1)
 			err(1, "Error deleting `%s'", argv[1]);
@@ -325,14 +329,13 @@ main(int argc, char **argv)
 		memset(&qp, 0, sizeof(qp));
 		qp.uaddr = &qp;
 
-		/* Get device and inode */
 		if (stat(argv[1], &sb) == -1)
 			err(1, "Can't stat `%s'", argv[1]);
 		if (!S_ISREG(sb.st_mode))
 			errx(1, "`%s' is not a regular file.", argv[1]);
 
-		qp.ino = sb.st_ino;
-		qp.dev = sb.st_dev;
+		strlcpy(qp.file, argv[1], sizeof(qp.file));
+
 		memset(fp, 0, sizeof(fp));
 		qp.fp = &fp[0];
 		qp.fp_bufsize = sizeof(fp);

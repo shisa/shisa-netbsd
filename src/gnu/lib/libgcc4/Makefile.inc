@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile.inc,v 1.2 2006/05/20 09:56:29 mrg Exp $
+#	$NetBSD: Makefile.inc,v 1.4 2006/07/06 21:39:44 mrg Exp $
 
 .if exists(${.CURDIR}/arch/${MACHINE_ARCH}.mk) && ${MKGCC} != "no"
 .include "${.CURDIR}/arch/${MACHINE_ARCH}.mk"
@@ -25,8 +25,12 @@ LIB2FUNCS_ALL=	_muldi3 _negdi2 _lshrdi3 _ashldi3 _ashrdi3 \
         _addvdi3 _subvsi3 _subvdi3 _mulvsi3 _mulvdi3 _negvsi2 _negvdi2 _ctors \
         _ffssi2 _ffsdi2 _clz _clzsi2 _clzdi2 _ctzsi2 _ctzdi2 _popcount_tab \
         _popcountsi2 _popcountdi2 _paritysi2 _paritydi2 _powisf2 _powidf2 \
-        _powixf2 _powitf2 _mulsc3 _muldc3 _mulxc3 _multc3 _divsc3 _divdc3 \
-        _divxc3 _divtc3
+        _powixf2 _powitf2 \
+
+.if ${MACHINE_ARCH} != "vax"
+LIB2FUNCS_ALL+=	\
+	_mulsc3 _muldc3 _mulxc3 _multc3 _divsc3 _divdc3 _divxc3 _divtc3
+.endif
 
 LIB2FUNCS_SHORT:=${LIB2FUNCS_ALL}
 LIB2_DIVMOD_FUNCS:=${G_LIB2_DIVMOD_FUNCS}
@@ -62,6 +66,7 @@ xfgnulib.c:	${DIST}/gcc/config/m68k/fpgnulib.c
 	cat ${DIST}/gcc/config/m68k/fpgnulib.c >> xfgnulib.c
 CLEANFILES+=	fpgnulib.c xfgnulib.c
 .endif
+
 .if ${MACHINE_ARCH} == "powerpc" || \
     ${MACHINE_ARCH} == "sh3el" || \
     ${MACHINE_ARCH} == "sh3eb" || \
@@ -69,6 +74,10 @@ CLEANFILES+=	fpgnulib.c xfgnulib.c
     ${MACHINE_ARCH} == "sh5eb"
 _TRADITIONAL_CPP=
 COMPILE.S=	${CC} ${AFLAGS} ${CPPFLAGS} -c
+.endif
+
+.if ${MACHINE_ARCH} == "powerpc64"
+COPTS+=	-mlong-double-128
 .endif
 
 ${LIB2FUNCS} ${LIB2FUNCS_ST}: ${.CURDIR}/Makefile

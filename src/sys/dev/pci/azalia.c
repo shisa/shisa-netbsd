@@ -1,4 +1,4 @@
-/*	$NetBSD: azalia.c,v 1.36 2006/06/27 22:02:14 kent Exp $	*/
+/*	$NetBSD: azalia.c,v 1.38 2006/07/21 17:30:26 kent Exp $	*/
 
 /*-
  * Copyright (c) 2005 The NetBSD Foundation, Inc.
@@ -48,7 +48,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: azalia.c,v 1.36 2006/06/27 22:02:14 kent Exp $");
+__KERNEL_RCSID(0, "$NetBSD: azalia.c,v 1.38 2006/07/21 17:30:26 kent Exp $");
 
 #include <sys/param.h>
 #include <sys/device.h>
@@ -119,6 +119,7 @@ typedef struct azalia_t {
 	bus_space_handle_t ioh;
 	bus_size_t map_size;
 	bus_dma_tag_t dmat;
+	pcireg_t pciid;
 	uint32_t subid;
 
 	codec_t codecs[15];
@@ -269,6 +270,10 @@ static const char *pin_devices[16] = {
  * PCI functions
  * ================================================================ */
 
+#define PCI_ID_CODE0(v, p)	PCI_ID_CODE(PCI_VENDOR_##v, PCI_PRODUCT_##v##_##p)
+#define PCIID_MCP55		PCI_ID_CODE0(NVIDIA, MCP55_HDA)
+#define PCIID_VT8237A		PCI_ID_CODE0(VIATECH, VT8237A_HDA)
+
 static int
 azalia_pci_match(struct device *parent, struct cfdata *match, void *aux)
 {
@@ -328,6 +333,7 @@ azalia_pci_attach(struct device *parent, struct device *self, void *aux)
 	}
 	aprint_normal("%s: interrupting at %s\n", XNAME(sc), intrrupt_str);
 
+	sc->pciid = pa->pa_id;
 	vendor = pci_findvendor(pa->pa_id);
 	name = pci_findproduct(pa->pa_id);
 	if (vendor != NULL && name != NULL) {
@@ -619,16 +625,6 @@ azalia_init_corb(azalia_t *az)
 	/* reset CORBRP */
 	corbrp = AZ_READ_2(az, CORBRP);
 	AZ_WRITE_2(az, CORBRP, corbrp | HDA_CORBRP_CORBRPRST);
-	for (i = 5000; i >= 0; i--) {
-		DELAY(10);
-		corbrp = AZ_READ_2(az, CORBRP);
-		if (corbrp & HDA_CORBRP_CORBRPRST)
-			break;
-	}
-	if (i <= 0) {
-		aprint_error("%s: CORBRP reset failure\n", XNAME(az));
-		return -1;
-	}
 	AZ_WRITE_2(az, CORBRP, corbrp & ~HDA_CORBRP_CORBRPRST);
 	for (i = 5000; i >= 0; i--) {
 		DELAY(10);
@@ -637,7 +633,7 @@ azalia_init_corb(azalia_t *az)
 			break;
 	}
 	if (i <= 0) {
-		aprint_error("%s: CORBRP reset failure 2\n", XNAME(az));
+		aprint_error("%s: CORBRP reset failure\n", XNAME(az));
 		return -1;
 	}
 	DPRINTF(("%s: CORBWP=%d; size=%d\n", __func__,

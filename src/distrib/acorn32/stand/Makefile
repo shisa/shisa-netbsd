@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.20 2004/11/10 03:55:28 jmc Exp $
+#	$NetBSD: Makefile,v 1.24 2006/07/23 13:33:53 bjh21 Exp $
 #
 
 .include <bsd.own.mk>
@@ -13,6 +13,7 @@ ARCHIVE=BtNetBSD.spk
 RAMDISKDIR!=	cd ${.CURDIR}/../ramdisk && ${PRINTOBJDIR}
 
 BOOTLOADER=	${DESTDIR}/usr/mdec/boot32,ffa
+NBFS=		${DESTDIR}/usr/mdec/nbfs,ffa
 
 all: ${ARCHIVE}
 
@@ -40,11 +41,13 @@ UUDECODE_FILES_RENAME_pling.Sprites=tmp/BtNetBSD/!BtNetBSD/!Sprites,ff9
 UUDECODE_FILES_RENAME_pling.Sprites22=tmp/BtNetBSD/!BtNetBSD/!Sprites22,ff9
 UUDECODE_FILES_RENAME_MemFix=tmp/BtNetBSD/!BtNetBSD/MemFix,ffa
 
-SETTYPE_FILES=!BtNetBSD/!Boot !BtNetBSD/!Edit !BtNetBSD/!Run !BtNetBSD/BtNetBSD
-SETTYPE_FILES+=!BtNetBSD/PreBoot !BtNetBSD/TestBoot !BtNetBSD/checkro403
+SETTYPE_FILES=!BtNetBSD/!Boot !BtNetBSD/!Edit !BtNetBSD/!Help !BtNetBSD/!Run
+SETTYPE_FILES+=!BtNetBSD/BtNetBSD !BtNetBSD/PreBoot !BtNetBSD/TestBoot
+SETTYPE_FILES+=!BtNetBSD/checkro403
 
 SETTYPE_FILE_!BtNetBSD/!Boot=feb
 SETTYPE_FILE_!BtNetBSD/!Edit=feb
+SETTYPE_FILE_!BtNetBSD/!Help=feb
 SETTYPE_FILE_!BtNetBSD/!Run=feb
 SETTYPE_FILE_!BtNetBSD/BtNetBSD=ffb
 SETTYPE_FILE_!BtNetBSD/PreBoot=feb
@@ -78,11 +81,6 @@ SETTYPE_FILES+=misc/bb_netbsd
 
 SETTYPE_FILE_misc/bb_netbsd=ffb
 
-SETTYPE_FILES+=misc/Mkrel/MkRelease misc/Mkrel/MkRelScr
-
-SETTYPE_FILE_misc/Mkrel/MkRelease=feb
-SETTYPE_FILE_misc/Mkrel/MkRelScr=feb
-
 .PATH: ${.CURDIR}/BtNetBSD/!BtNetBSD
 .PATH: ${.CURDIR}/BtNetBSD/!BtNetBSD/native 
 .PATH: ${.CURDIR}/BtNetBSD/!BtNetBSD/src/Banner
@@ -101,6 +99,11 @@ setup_tmp:
 .PHONY: settypes
 settypes: setup_tmp
 .for file in ${SETTYPE_FILES}
+. if ${SETTYPE_FILE_${file}} == ffb
+	${AWK} '{ printf "%5d %s\n", FNR * 10, $$0 }' \
+	    < tmp/BtNetBSD/${file} > tmp/BtNetBSD/${file}.tmp
+	mv tmp/BtNetBSD/${file}.tmp tmp/BtNetBSD/${file}
+. endif
 	mv tmp/BtNetBSD/${file} tmp/BtNetBSD/${file},${SETTYPE_FILE_${file}}
 .endfor
 
@@ -108,6 +111,7 @@ settypes: setup_tmp
 tmp/BtNetBSD: setup_tmp ${UUDECODE_FILES} settypes
 	cp ${KERNOBJDIR}/INSTALL/netbsd tmp/BtNetBSD/InstKern,1a9
 	cp ${BOOTLOADER} 'tmp/BtNetBSD/!BtNetBSD/boot32,ffa'
+	cp ${NBFS} 'tmp/BtNetBSD/!BtNetBSD/nbfs,ffa'
 	${TOOL_MDSETIMAGE} tmp/BtNetBSD/InstKern,1a9 ${RAMDISKDIR}/ramdisk.fs
 	# unixfs is copied into the !BtNetBSD dir at install time
 	cd tmp/BtNetBSD && cp -R '!BtNetBSD/native' unixfs

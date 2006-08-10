@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.636 2006/06/27 20:39:01 peter Exp $
+# $NetBSD: mi,v 1.643 2006/07/27 22:18:46 christos Exp $
 .						base-sys-root
 ./altroot					base-sys-root
 ./bin						base-sys-root
@@ -42,6 +42,7 @@
 ./bin/test					base-util-root
 ./dev						base-sys-root
 ./dev/altq					base-sys-root
+./dev/bthubctl					base-obsolete		obsolete
 ./dev/fd					base-sys-root
 ./dev/i4b					base-obsolete		obsolete
 ./dev/i4bctl					base-obsolete		obsolete
@@ -111,6 +112,7 @@
 ./rescue					base-sys-root
 ./root						base-sys-root
 ./sbin						base-sys-root
+./sbin/amrctl					base-sysutil-root
 ./sbin/atactl					base-sysutil-root
 ./sbin/badsect					base-sysutil-root
 ./sbin/brconfig					base-netutil-root
@@ -861,6 +863,22 @@
 ./usr/lib/runemodule/libUTF8.so.3		base-obsolete		obsolete
 ./usr/lib/runemodule/libUTF8.so.3.0		base-obsolete		obsolete
 ./usr/libdata					base-sys-usr
+./usr/libdata/debug				base-sys-usr
+./usr/libdata/debug/bin				base-sys-usr
+./usr/libdata/debug/libexec			base-sys-usr
+./usr/libdata/debug/sbin			base-sys-usr
+./usr/libdata/debug/usr				base-sys-usr
+./usr/libdata/debug/usr/X11R6			base-sys-usr
+./usr/libdata/debug/usr/X11R6/bin		base-sys-usr
+./usr/libdata/debug/usr/X11R6/libexec		base-sys-usr
+./usr/libdata/debug/usr/bin			base-sys-usr
+./usr/libdata/debug/usr/games			base-sys-usr
+./usr/libdata/debug/usr/libexec			base-sys-usr
+./usr/libdata/debug/usr/libexec/ching		base-sys-usr
+./usr/libdata/debug/usr/libexec/lpr		base-sys-usr
+./usr/libdata/debug/usr/libexec/postfix		base-sys-usr
+./usr/libdata/debug/usr/libexec/uucp		base-sys-usr
+./usr/libdata/debug/usr/sbin			base-sys-usr
 ./usr/libdata/firmware				base-sys-usr
 ./usr/libdata/lint				base-c-usr
 ./usr/libexec					base-sys-usr
@@ -868,6 +886,7 @@
 ./usr/libexec/ching				base-games-usr
 ./usr/libexec/comsat				base-mail-bin
 ./usr/libexec/cpp				base-obsolete		obsolete
+./usr/libexec/cpp0				base-obsolete		obsolete
 ./usr/libexec/dnskeygen				base-obsolete		obsolete
 ./usr/libexec/fingerd				base-netutil-bin
 ./usr/libexec/ftp-proxy				base-pf-bin		pf
@@ -980,6 +999,7 @@
 ./usr/sbin/cnwctl				base-netutil-bin
 ./usr/sbin/cron					base-cron-bin
 ./usr/sbin/daicctl				base-isdn-bin
+./usr/sbin/dbsym				base-sysutil-bin	bfd
 ./usr/sbin/dev_mkdb				base-sysutil-bin
 ./usr/sbin/dhcpd				base-dhcpd-bin
 ./usr/sbin/dhcrelay				base-dhcpd-bin
@@ -1181,6 +1201,7 @@
 ./usr/sbin/scriptdump				base-obsolete		obsolete
 ./usr/sbin/sdpd					base-sysutil-bin
 ./usr/sbin/sendmail				base-mailwrapper-bin
+./usr/sbin/services_mkdb			base-sysutil-bin
 ./usr/sbin/sesd					base-sysutil-bin
 ./usr/sbin/setencstat				base-sysutil-bin
 ./usr/sbin/setkey				base-obsolete		obsolete
@@ -1475,8 +1496,10 @@
 ./usr/share/i18n/csmapper/CNS			base-sysutil-share
 ./usr/share/i18n/csmapper/CNS/CNS11643-1%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CNS/CNS11643-2%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CNS/CNS11643-3%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CNS/UCS%CNS11643-1.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CNS/UCS%CNS11643-2.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CNS/UCS%CNS11643-3.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP			base-sysutil-share
 ./usr/share/i18n/csmapper/CP/CP037%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP038%UCS.mps	base-sysutil-share	nls
@@ -1783,11 +1806,11 @@
 ./usr/share/i18n/esdb/AST/ARMSCII-8.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/AST/ARMSCII-8A.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/BIG5			base-sysutil-share
-./usr/share/i18n/esdb/BIG5/Big5-2003.esdb	base-sysutil-share
-./usr/share/i18n/esdb/BIG5/Big5-E.esdb		base-sysutil-share
-./usr/share/i18n/esdb/BIG5/Big5-ETen.esdb	base-sysutil-share
-./usr/share/i18n/esdb/BIG5/Big5-IBM.esdb	base-sysutil-share
-./usr/share/i18n/esdb/BIG5/Big5-Plus.esdb	base-sysutil-share
+./usr/share/i18n/esdb/BIG5/Big5-2003.esdb	base-sysutil-share	nls
+./usr/share/i18n/esdb/BIG5/Big5-E.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/BIG5/Big5-ETen.esdb	base-sysutil-share	nls
+./usr/share/i18n/esdb/BIG5/Big5-IBM.esdb	base-sysutil-share	nls
+./usr/share/i18n/esdb/BIG5/Big5-Plus.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP			base-sysutil-share
 ./usr/share/i18n/esdb/CP/CP037.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP038.esdb		base-sysutil-share	nls

@@ -1,4 +1,4 @@
-/*	$NetBSD: prop_number.h,v 1.1 2006/04/27 20:11:27 thorpej Exp $	*/
+/*	$NetBSD: prop_number.h,v 1.3 2006/07/12 13:54:55 yamt Exp $	*/
 
 /*-
  * Copyright (c) 2006 The NetBSD Foundation, Inc.
@@ -39,7 +39,7 @@
 #ifndef _PROPLIB_PROP_NUMBER_H_
 #define	_PROPLIB_PROP_NUMBER_H_
 
-#ifndef _KERNEL
+#if !defined(_KERNEL) && !defined(_STANDALONE)
 #include <stdint.h>
 #endif
 #include <prop/prop_object.h>
@@ -47,16 +47,16 @@
 typedef struct _prop_number *prop_number_t;
 
 __BEGIN_DECLS
-prop_number_t	prop_number_create_integer(uintmax_t);
+prop_number_t	prop_number_create_integer(uint64_t);
 
 prop_number_t	prop_number_copy(prop_number_t);
 
 int		prop_number_size(prop_number_t);
 
-uintmax_t	prop_number_integer_value(prop_number_t);
+uint64_t	prop_number_integer_value(prop_number_t);
 
 boolean_t	prop_number_equals(prop_number_t, prop_number_t);
-boolean_t	prop_number_equals_integer(prop_number_t, uintmax_t);
+boolean_t	prop_number_equals_integer(prop_number_t, uint64_t);
 __END_DECLS
 
 #endif /* _PROPLIB_PROP_NUMBER_H_ */

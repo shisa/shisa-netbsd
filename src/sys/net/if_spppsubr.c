@@ -1,4 +1,4 @@
-/*	$NetBSD: if_spppsubr.c,v 1.92 2006/06/07 22:33:43 kardel Exp $	 */
+/*	$NetBSD: if_spppsubr.c,v 1.95 2006/07/23 22:06:12 ad Exp $	 */
 
 /*
  * Synchronous PPP/Cisco link level subroutines.
@@ -41,7 +41,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_spppsubr.c,v 1.92 2006/06/07 22:33:43 kardel Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_spppsubr.c,v 1.95 2006/07/23 22:06:12 ad Exp $");
 
 #include "opt_inet.h"
 #include "opt_ipx.h"
@@ -1066,11 +1066,8 @@ sppp_ioctl(struct ifnet *ifp, u_long cmd, void *data)
 	switch (cmd) {
 	case SIOCAIFADDR:
 	case SIOCSIFDSTADDR:
-		break;
-
 	case SIOCSIFADDR:
-		if_up(ifp);
-		/* fall through... */
+		break;
 
 	case SIOCSIFFLAGS:
 		going_up = ifp->if_flags & IFF_UP &&
@@ -1146,9 +1143,10 @@ sppp_ioctl(struct ifnet *ifp, u_long cmd, void *data)
 	case SPPPSETDNSOPTS:
 	case SPPPSETKEEPALIVE:
 	{
-		struct proc *p = curproc;		/* XXX */
+		struct lwp *l = curlwp;		/* XXX */
 
-		if ((error = kauth_authorize_generic(p->p_cred, KAUTH_GENERIC_ISSUSER, &p->p_acflag)) != 0)
+		if ((error = kauth_authorize_generic(l->l_cred,
+		    KAUTH_GENERIC_ISSUSER, &l->l_acflag)) != 0)
 			break;
 	}
 	/* FALLTHROUGH */

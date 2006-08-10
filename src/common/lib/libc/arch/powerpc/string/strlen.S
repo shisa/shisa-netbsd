@@ -1,4 +1,4 @@
-/*	$NetBSD: strlen.S,v 1.2 2005/12/23 10:04:51 skrll Exp $ */
+/*	$NetBSD: strlen.S,v 1.4 2006/07/07 07:31:03 ross Exp $ */
 
 /*-
  * Copyright (C) 2001	Martin J. Laubach <mjl@NetBSD.org>

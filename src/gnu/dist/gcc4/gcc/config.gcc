@@ -663,8 +663,8 @@ arm*-*-freebsd*|strongarm*-*-freebsd*)
 arm*-*-netbsdelf*)
 	tm_file="dbxelf.h elfos.h netbsd.h netbsd-elf.h arm/elf.h arm/aout.h arm/arm.h arm/netbsd-elf.h"
 	tmake_file="${tmake_file} arm/t-arm arm/t-netbsd"
-	case $machine in
-	armeb*) tm_defines="${tm_defines} TARGET_ENDIAN_DEFAULT=ARM_FLAG_BIG_END"
+	case ${target} in
+	armeb*) tm_defines="${tm_defines} TARGET_ENDIAN_DEFAULT=MASK_BIG_END" ;;
 	esac
 	;;
 arm*-*-netbsd*)
@@ -1678,10 +1678,10 @@ powerpc*-*-freebsd*)
 	extra_options="${extra_options} rs6000/sysv4.opt"
 	;;
 powerpc*-*-netbsd*)
-	tm_file="${tm_file} dbxelf.h elfos.h netbsd.h netbsd-elf.h freebsd-spec.h rs6000/sysv4.h rs6000/netbsd.h"
+	tm_file="${tm_file} dbxelf.h elfos.h netbsd.h netbsd-elf.h freebsd-spec.h rs6000/sysv4.h"
 	case ${target} in
 	  powerpc64*)
-	    tm_file="${tm_file} rs6000/biarch64.h rs6000/default64.h rs6000/netbsd64.h"
+	    tm_file="rs6000/biarch64.h ${tm_file} rs6000/default64.h rs6000/netbsd64.h"
 	    tmake_file="${tmake_file} rs6000/t-netbsd64"
 	    ;;
 	  *)
@@ -1689,7 +1689,7 @@ powerpc*-*-netbsd*)
 	    tmake_file="${tmake_file} rs6000/t-netbsd"
 	    ;;
 	esac
-	extra_options="${extra_options} rs6000/sysv4.opt"
+	extra_options="${extra_options} rs6000/sysv4.opt rs6000/linux64.opt"
 	;;
 powerpc-*-chorusos*)
 	tm_file="${tm_file} dbxelf.h elfos.h svr4.h freebsd-spec.h rs6000/sysv4.h chorus.h"

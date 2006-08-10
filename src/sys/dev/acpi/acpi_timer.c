@@ -1,6 +1,10 @@
-/* $NetBSD: acpi_timer.c,v 1.2 2006/06/26 12:29:36 drochner Exp $ */
+/* $NetBSD: acpi_timer.c,v 1.5 2006/07/02 18:53:33 bouyer Exp $ */
+
+#include <sys/cdefs.h>
+__KERNEL_RCSID(0, "$NetBSD: acpi_timer.c,v 1.5 2006/07/02 18:53:33 bouyer Exp $");
 
 #include <sys/types.h>
+#include <dev/acpi/acpi_timer.h>
 
 #ifdef __HAVE_TIMECOUNTER
 
@@ -8,7 +12,6 @@
 #include <sys/time.h>
 #include <sys/timetc.h>
 #include <dev/acpi/acpica.h>
-#include <dev/acpi/acpi_timer.h>
 
 static int acpitimer_test(void);
 static uint32_t acpitimer_delta(uint32_t, uint32_t);
@@ -41,7 +44,7 @@ acpitimer_init()
 	j = 0;
 	for (i = 0; i < 10; i++)
 		j += acpitimer_test();
-	aprint_verbose("acpitimer_test(): %d\n", j);
+
 	if (j >= 10) {
 		acpi_timecounter.tc_name = "ACPI-Fast";
 		acpi_timecounter.tc_get_timecount = acpitimer_read_fast;

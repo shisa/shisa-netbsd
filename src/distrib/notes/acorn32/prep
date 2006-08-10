@@ -1,4 +1,4 @@
-.\"	$NetBSD: prep,v 1.4 2002/06/29 08:57:21 lukem Exp $
+.\"	$NetBSD: prep,v 1.11 2006/07/13 15:19:58 bjh21 Exp $
 .
 First and foremost, before beginning the installation process,
 .Em make sure you have a reliable backup
@@ -6,33 +6,16 @@ of any data on your hard disk that you
 wish to keep.
 Repartitioning your hard disk is an excellent way to destroy important data.
 .Ss2 Software requirements
-You will need the following RiscOS software:
+You will need the following RISC OS software:
 .Bl -bullet
 .It
 A program that will unpack sparchives.
 We recommend that you get David Pilling's !SparkPlug.
 A self-extracting version of this
-can be found at David Pilling's W3 site
-.Pq Lk http://pilling.users.netlink.co.uk/free.html .
-.It
-A program that can uncompress gzip files, because the current bootloader
-can't read gzip'ed kernels (yet!).
-.Bl -bullet
-.It
-The included command line gzip program
-.Pa installation/misc/gzip_ff8
-(!) which is a mirror a version
-that Laurent Domisse has patched to work on SA.
-This is also available from:
-.Lk http://www.users.dircon.co.uk/~arcangel/files/index.html .
-Just set the type of the file to
-.Ql ff8 .
-.It
-SparkFS from David Pilling (commercial) (v1.28 for SA-110).
-.It
-!Gzip from HENSA (micros.hensa.ac.uk); is it still alive
-though?
-.El
+can be found in the distribution directory at
+.Pa installation/misc/splug.bas
+or at David Pilling's W3 site:
+.Lk http://pilling.users.netlink.co.uk/free.html
 .It
 A program to report your disk's geometry:
 .Bl -bullet
@@ -43,10 +26,11 @@ kernel and look for the geometry in the boot messages.
 Sergio Monesi's fsck suite (a good thing to have around
 anyway).
 Available from:
-.Lk http://cdc8g5.cdc.polimi.it/~pel0015/fsck.html
+.Lk http://www.monesi.com/sergio/fsck.html
 .It
 !Zap (The read disk facility).
-Available from HENSA.
+Available from:
+.Lk http://zap.tartarus.org/
 .It
 The partition software/formatter for your desired installation
 target:
@@ -78,10 +62,8 @@ An installation kernel for your platform:
 .Pp
 RiscPC/A7000(+)/NC's  : INSTALL kernel
 .It
-The Bootloader and RiscOS tools:
-.Pa BtNetBSD.tar.gz
-or
-.Pa BtNetBSD.zip
+The Bootloader and RISC OS tools:
+.Pa BtNetBSD.spk
 as found in the
 .Pa installation/misc
 directory.
@@ -97,17 +79,7 @@ ftp site).
 A hardcopy of this document
 .El
 .Ss2 Preliminary steps
-Unpack your BtNetBSD archive in whatever way, set the type of the
-.Pa Settype
-file in the
-.Pa BtNetBSD
-directory to
-.Ql Obey
-and run it.
-This will make the files RISC OS typed correctly.
-This is also explained in a bit more detail in the enclosed
-.Pa README
-file.
+Unpack your BtNetBSD archive in whatever way.
 .Ss2 Preparing your hard disk
 Terms:
 .Bl -tag -width "File system"
@@ -118,7 +90,7 @@ A section of a device.
 .It File system
 A structured partition that is able to hold files.
 .It Disc
-A RiscOS file system in a partition.
+A RISC OS file system in a partition.
 There can be more than one Disc per Device.
 .El
 .Pp
@@ -141,10 +113,10 @@ It is still recommended that if you decide to dedicate a device to
 .Nx
 that you set aside a small RISC OS partition at the beginning
 of the device.
-This is a useful place to store the RiscOS side of
+This is a useful place to store the RISC OS side of
 .Nx ,
 and will make the use of UnixFS easier to configure.
-If you do decide to create a minimal RiscOS partition at the beginning of
+If you do decide to create a minimal RISC OS partition at the beginning of
 the device, a size of 10-20 MB is recommended (some partitioning
 software has problems with partitions smaller than this).
 .Pp
@@ -311,7 +283,6 @@ run
 You can only have one RISC OS partition with this card.
 The rest has to be set aside for
 .Nx .
-
 This card does not have a friendly WIMP-based interface on the SCSI
 management program, but the command line version is very good.
 You should run this in a task window (press
@@ -450,13 +421,9 @@ can be non-trivial to put it back.
 .Ss2 Booting
 .Pp
 Now that your device is ready for the installation you need to
-unpack the bootloader archive.
-Pick either
-.Pa BtNetBSD.tgz
-or
-.Pa BtNetBSD.zip
-depending on which type of archive you can extract easiest.
-(If you're installing from CD-ROM then this should be unpacked already),
+unpack the bootloader archive,
+.Pa BtNetBSD.spk ,
+(If you're installing from CD-ROM then this should be unpacked already) and
 copy the directory to your hard disk.
 In the archive you'll find the tools
 mentioned in this document as well as the bootloader
@@ -467,19 +434,18 @@ Open the
 .Pa !BtNetBSD
 application and edit the
 .Pa fastboot
-file to specify
-the installation kernel location; an example is already given.
-.Pa
-You can also set other details like tweaking with the amount of memory in
+file.
+.Pp
+You can set details like tweaking with the amount of memory in
 the WimpSlot of the bootloader when this is too much.
 Remember however that this shouldn't be set too low for it can crash
 the bootloader.
-.Pa
+.Pp
 When you think you've filled in the proper details save the file again
 and proceed.
-.Ss2 Running !BtNetBSD
+.Ss2 Booting the installation kernel
 .Pp
-Double click on the !BtNetBSD icon (or the !Run file in it) to start it
+Double click on the InstKern icon to start it
 up.
 .Pp
 .Nx
@@ -497,10 +463,10 @@ Open the
 .Pa !BtNetBSD
 application again and edit the
 .Pa fastboot
-file again to fill in the normal kernel name.
+file to fill in the normal kernel name.
 .Pp
 Specify the device
-.Nx NetBSD
+.Nx
 should be looking for its kernel in.
 This is the
 .Ql "Run <BtNetBSD$Dir>.native.mountufs ADFS 4"

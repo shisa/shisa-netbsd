@@ -1,4 +1,4 @@
-.\"	$NetBSD: options.4,v 1.322 2006/06/19 15:44:36 gdamore Exp $
+.\"	$NetBSD: options.4,v 1.326 2006/07/14 22:05:57 wiz Exp $
 .\"
 .\" Copyright (c) 1996
 .\" 	Perry E. Metzger.  All rights reserved.
@@ -30,7 +30,7 @@
 .\" THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 .\"
 .\"
-.Dd May 19, 2006
+.Dd July 14, 2006
 .Os
 .Dt OPTIONS 4
 .Sh NAME
@@ -330,7 +330,7 @@ which have been deprecated with the addition of the
 .Xr fstatvfs 2 ,
 .Xr getvfsstat 2
 and
-.Xr fhstatvfs 2 
+.Xr fhstatvfs 2
 system calls.
 .It Cd options COMPAT_30
 Enable binary compatibility with
@@ -395,7 +395,7 @@ On those architectures that support it, this enables binary
 compatibility with Linux ELF and
 .Xr a.out 5
 applications built for the same architecture.
-This currently includes the alpha, arm, i386, m68k, mips, powerpc, and
+This currently includes the alpha, arm, i386, m68k, mips, powerpc and
 x86_64 ports.
 .It Cd options COMPAT_LINUX32
 On those 64 bit architectures that support it, this enables binary
@@ -1460,6 +1460,13 @@ A supplement to XSERVER that adds support for entering
 .Xr ddb 4
 while in
 .Tn X11 .
+.It Cd options FILEASSOC
+Support for
+.Xr fileassoc 9 .
+.It Cd options FILEASSOC_NHOOKS=integer
+Number of storage slots per file for
+.Xr fileassoc 9 .
+Default is 4.
 .El
 .Ss Networking Options
 .Bl -ohang

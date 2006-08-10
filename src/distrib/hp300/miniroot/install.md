@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-#	$NetBSD: install.md,v 1.10 2006/06/04 17:00:13 tsutsui Exp $
+#	$NetBSD: install.md,v 1.12 2006/07/29 10:40:51 tsutsui Exp $
 #
 # Copyright (c) 1996 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -94,8 +94,7 @@ md_installboot() {
 	# $1 is the root disk
 
 	echo -n "Installing boot block..."
-	disklabel -W ${1}
-	disklabel -B ${1}
+	/usr/sbin/installboot -v /dev/r${1}c  /usr/mdec/uboot.lif
 	echo "done."
 }
 
@@ -453,11 +452,12 @@ __md_prep_disklabel_4
 }
 
 md_copy_kernel() {
-	echo -n "Copying kernel..."
-	cp -p /netbsd /mnt/netbsd
-	echo "done."
+	if [ ! -f /mnt/netbsd ]; then
+		echo -n "No kernel set extracted. Copying miniroot kernel..."
+		cp -p /netbsd /mnt/netbsd
+		echo "done."
 
-	cat << __md_copy_kernel_1
+		cat << __md_copy_kernel_1
 
 The INSTALL kernel from the miniroot has been copied to your root disk.
 It has minimal facilities enabled.  The first thing you should do after
@@ -465,8 +465,9 @@ installation is install an appropriate kernel for your machine (such as
 the GENERIC kernel).
 
 __md_copy_kernel_1
-	echo -n	"Press <return> to continue. "
-	getresp ""
+		echo -n	"Press <return> to continue. "
+		getresp ""
+	fi
 }
 
 	# Note, while they might not seem machine-dependent, the

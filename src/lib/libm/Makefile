@@ -1,4 +1,4 @@
-#  $NetBSD: Makefile,v 1.75 2006/05/11 00:37:53 mrg Exp $
+#  $NetBSD: Makefile,v 1.77 2006/07/03 16:03:56 drochner Exp $
 #
 #  @(#)Makefile 5.1beta 93/09/24
 #
@@ -111,6 +111,8 @@ WARNS?=		1
 
 .if (${MACHINE_ARCH} != "vax")
 CPPFLAGS+= -D_MULTI_LIBM -D_POSIX_MODE
+# XXX noieee libm is gross
+COPTS+=	-fno-strict-aliasing
 .endif
 CPPFLAGS+=-DLIBM_SCCS
 
@@ -180,9 +182,9 @@ SRCS:=${SRCS} n_sqrt.S n_argred.S n_infnan.S n_atan2.S n_cabs.S n_cbrt.S \
 .endif
 
 MAN+=	acos.3 acosh.3 asin.3 asinh.3 atan.3 atan2.3 atanh.3 ceil.3 \
-	cos.3 cosh.3 erf.3 exp.3 fabs.3 floor.3 fmod.3 hypot.3 ieee.3 \
-	ieee_test.3 isinff.3 j0.3 lgamma.3 lrint.3 \
-	math.3 rint.3 round.3 sin.3 sinh.3 \
+	cos.3 cosh.3 erf.3 exp.3 fabs.3 floor.3 fmod.3 frexp.3 hypot.3 ieee.3 \
+	ieee_test.3 isinff.3 j0.3 ldexp.3 lgamma.3 lrint.3 \
+	math.3 modf.3 rint.3 round.3 sin.3 sinh.3 \
 	sqrt.3 tan.3 tanh.3 trunc.3
 
 MLINKS+=acos.3 acosf.3

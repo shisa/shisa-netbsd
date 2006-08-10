@@ -1,4 +1,4 @@
-$NetBSD: pcidevs,v 1.801 2006/06/27 21:38:40 kent Exp $
+$NetBSD: pcidevs,v 1.809 2006/07/30 04:17:42 simonb Exp $
 
 /*
  * Copyright (c) 1995, 1996 Christopher G. Demetriou
@@ -586,6 +586,7 @@ vendor ACTIONTEC	0x1668	Action Tec Electronics
 vendor ATHEROS		0x168c	Atheros Communications
 vendor GLOBALSUN	0x16ab	Global Sun Tech
 vendor SAFENET		0x16ae	SafeNet
+vendor MICREL		0x16c6	Micrel
 vendor LINKSYS		0x1737	Linksys
 vendor ALTIMA		0x173b	Altima
 vendor ANTARES		0x1754	Antares Microsystems
@@ -821,10 +822,12 @@ product ADDTRON 8139	0x1360	8139 Ethernet
 product ADDTRON RHINEII	0x1320	Rhine II 10/100 Ethernet
 
 /* ADMtek products */
-product ADMTEK AL981	0x0981	AL981 10/100 Ethernet
-product ADMTEK AN985	0x0985	AN985 10/100 Ethernet
-product ADMTEK AN985_2	0x1985	AN985 10/100 Ethernet (OEM)
+product ADMTEK AL981	0x0981	AL981 (Comet) 10/100 Ethernet
+product ADMTEK AN983	0x0985	AN983 (Centaur-P) 10/100 Ethernet
+product ADMTEK AN985	0x1985	AN985 (Centaur-C) 10/100 Ethernet
 product ADMTEK ADM8211	0x8201	ADM8211 11Mbps 802.11b WLAN
+product ADMTEK ADM9511	0x9511	ADM9511 (Centaur-II) 10/100 Ethernet
+product ADMTEK ADM9513	0x9513	ADM9513 (Centaur-II) 10/100 Ethernet
 
 /* Advanced System Products */
 product ADVSYS 1200A	0x1100
@@ -1003,21 +1006,27 @@ product ATI SB200_PPB		0x4342	SB200 PCI-PCI Bridge
 product ATI SB200_EHCI		0x4345	SB200 USB2 Host Controller
 product ATI SB200_OHCI_1	0x4347	SB200 USB Host Controller
 product ATI SB200_OHCI_2	0x4348	SB200 USB Host Controller
+product ATI IXP_IDE_200 	0x4349	SB200 IXP IDE Controller
 product ATI SB200_ISA		0x434c	SB200 PCI-ISA Bridge
+product ATI SB200_MODEM 	0x434d	SB200 Modem
 product ATI SB200_SMB		0x4353	SB200 SMBus Controller
 product ATI IXP_AUDIO_300	0x4361	IXP AC'97 Audio Controller
+product ATI SB300_SMB 		0x4363	SB300 SMBus Controller
+product ATI IXP_IDE_300 	0x4369	SB300 IXP IDE Controller
 product ATI IXP_AUDIO_400	0x4370	IXP AC'97 Audio Controller
-product ATI IXP_IDE_200		0x4349	IXP IDE Controller
-product ATI IXP_IDE_300		0x4369	IXP IDE Controller
 product ATI SB400_PPB		0x4371	SB400 PCI-PCI Bridge
-product ATI SB400_SMB		0x4372	SB400 SMB Controller
+product ATI SB400_SMB		0x4372	SB400 SMBus Controller
 product ATI SB400_EHCI		0x4373	SB400 USB2 Host Controller
 product ATI SB400_OHCI_1	0x4374	SB400 USB Host Controller
 product ATI SB400_OHCI_2	0x4375	SB400 USB Host Controller
 product ATI IXP_IDE_400		0x4376	SB400 IXP IDE Controller
 product ATI SB400_ISA		0x4377	SB400 PCI-ISA Bridge
+product ATI SB400_MODEM 	0x4378	SB400 Modem
 product ATI SB400_SATA_1	0x4379	SB400 SATA Controller
 product ATI SB400_SATA_2	0x437a	SB400 SATA Controller
+product ATI SB600_SATA_1 	0x4380	SB600 SATA Controller
+product ATI SB600_SATA_2 	0x4381	SB600 SATA Controller
+product ATI IXP_IDE_600 	0x438c	SB600 IXP IDE Controller
 product ATI MACH64_CT		0x4354	Mach64 CT
 product ATI MACH64_CX		0x4358	Mach64 CX
 product ATI RADEON_RS250_D7	0x4437	Radeon Mobility 7000 IGP
@@ -2067,6 +2076,7 @@ product INTEL 82801FB_AC	0x266e	82801FB/FR AC'97 Audio Controller
 product INTEL 82801FB_IDE	0x266f	82801FB/FR IDE Controller
 product INTEL 82945P_MCH	0x2770	82945G/P Memory Controller Hub
 product INTEL 82945P_EXP	0x2771	82945G/P PCI Express Bridge
+product INTEL 82945P_IGD	0x2772	82945G/P Integrated Graphics Device
 product INTEL 82955X_HB		0x2774	82955X Host
 product INTEL 82955X_EXP	0x2775	82955X PCI Express Bridge
 product INTEL 82915G_IGDC	0x2782	82915G/GL IGD Companion
@@ -2142,6 +2152,7 @@ product INTEL PRO_WL_2225BG	0x4221	PRO/Wireless LAN 2225BG Mini-PCI Adapter
 product INTEL PRO_WL_3945ABG_1	0x4222	PRO/Wireless LAN 3945ABG Mini-PCI Adapter
 product INTEL PRO_WL_2915ABG_1	0x4223	PRO/Wireless LAN 2915ABG Mini-PCI Adapter
 product INTEL PRO_WL_2915ABG_2	0x4224	PRO/Wireless LAN 2915ABG Mini-PCI Adapter
+product INTEL PRO_WL_3945ABG_2	0x4227	PRO/Wireless LAN 2915ABG Mini-PCI Adapter
 product INTEL 80312_ATU		0x530d	80310 ATU
 product INTEL 82371SB_ISA	0x7000	82371SB (PIIX3) PCI-ISA Bridge
 product INTEL 82371SB_IDE	0x7010	82371SB (PIIX3) IDE Interface
@@ -2199,7 +2210,8 @@ product IODATA CBSCII		0x0005	CBSCII NinjaSCSI-32Bi SCSI
 
 /* ITE products */
 product ITE IT8152		0x8152	IT8152 Host Bridge
-product ITE IT8212		0x8212	IT8212 IDE controller
+product ITE IT8211		0x8211	IT8211 IDE Controller
+product ITE IT8212		0x8212	IT8212 IDE Controller
 
 /* I. T. T. products */
 product ITT AGX016	0x0001	AGX016
@@ -2307,6 +2319,10 @@ product MEDIAQ MQ200		0x0200	MQ200
 
 /* Microsoft products */
 product MICROSOFT MN120		0x0001	MN-120 10/100 Ethernet Notebook Adapter
+
+/* Micrel products */
+product MICREL KSZ8841		0x8841	10/100 Ethernet
+product MICREL KSZ8842		0x8842	Switched 2-port 10/100 Ethernet
 
 /* Middle Digital products */
 product MIDDLE_DIGITAL WEASEL_VGA	0x9050	Weasel Virtual VGA
@@ -3250,7 +3266,7 @@ product V3 V96DPC	0xc960	V96DPC	i960 (Dual) Host-PCI Bridge
 
 /* VIA Technologies products, from http://www.via.com.tw/ */
 product VIATECH VT6305		0x0130	VT6305 IEEE 1394 Host Controller
-product VIATECH KT880	0x0269	KT880 CPU to PCI Bridge
+product VIATECH KT880		0x0269	KT880 CPU to PCI Bridge
 product VIATECH VT8363_HB	0x0305	VT8363 (Apollo KT133) Host Bridge
 product VIATECH	VT8371_HB	0x0391	VT8371 (Apollo KX133) Host Bridge
 product VIATECH VT8501_MVP4	0x0501	VT8501 (Apollo MVP4) Host Bridge
@@ -3271,10 +3287,10 @@ product VIATECH VT82C693	0x0693	VT82C693 (Apollo Pro Plus) Host-PCI
 product VIATECH VT86C926	0x0926	VT86C926 Amazon PCI-Ethernet Controller
 product VIATECH	VT82C570M	0x1000	VT82C570M (Apollo) Host-PCI Bridge
 product VIATECH VT82C570MV	0x1006	VT82C570M (Apollo) PCI-ISA Bridge
-product VIATECH KT880_1	0x1269	KT880 CPU to PCI Bridge
+product VIATECH KT880_1		0x1269	KT880 CPU to PCI Bridge
 product VIATECH VT82C586_IDE	0x1571	VT82C586 IDE Controller
 product VIATECH VT82C595_2	0x1595	VT82C595 (Apollo VP2) Host-PCI Bridge
-product VIATECH KT880_2	0x2269	KT880 CPU to PCI Bridge
+product VIATECH KT880_2		0x2269	KT880 CPU to PCI Bridge
 product VIATECH VT83C572	0x3038	VT83C572 USB Controller
 product VIATECH VT82C586_PWR	0x3040	VT82C586 Power Management Controller
 product VIATECH VT3043		0x3043	VT3043 (Rhine) 10/100 Ethernet
@@ -3297,15 +3313,16 @@ product VIATECH VT8233A		0x3147	VT8233A PCI-ISA Bridge
 product VIATECH VT8237_SATA	0x3149	VT8237 Integrated SATA Controller
 product VIATECH VT8237R_SATA	0x3349	VT8237R Integrated SATA Controller
 product VIATECH VT6421_RAID	0x3249	VT6421 Serial RAID Controller
-product VIATECH KT880_3	0x3269	KT880 CPU to PCI bridge
+product VIATECH KT880_3		0x3269	KT880 CPU to PCI bridge
 product VIATECH VT8235		0x3177	VT8235 (Apollo KT400) PCI-ISA Bridge
 product VIATECH VT8377		0x3189	VT8377 Apollo KT400 CPU to PCI Bridge
-product VIATECH VT8378	0x3205	VT8378 Apollo KM400 CPU to PCI Bridge
+product VIATECH VT8378		0x3205	VT8378 Apollo KM400 CPU to PCI Bridge
 product VIATECH VT8237		0x3227	VT8237 (Apollo KT600) PCI-ISA Bridge
-product VIATECH KT880_4	0x4269	KT880 CPU to PCI Bridge
+product	VIATECH	VT8237A_HDA	0x3288	VT8237A/VT8251 High Definition Audio Controller
+product VIATECH KT880_4		0x4269	KT880 CPU to PCI Bridge
 product VIATECH VT86C100A	0x6100	VT86C100A (Rhine-II) 10/100 Ethernet
 product VIATECH VT8378_IG	0x7205	VT8378 KM400 UniChrome Integrated Graphics
-product VIATECH KT880_5	0x7269	KT880 CPU to PCI Bridge
+product VIATECH KT880_5		0x7269	KT880 CPU to PCI Bridge
 product VIATECH VT8231		0x8231	VT8231 PCI-ISA Bridge
 product VIATECH VT8231_PWR	0x8235	VT8231 Power Management Controller
 product VIATECH VT8363_PPB	0x8305	VT8363 (Apollo KT133) PCI to AGP Bridge

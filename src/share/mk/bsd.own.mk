@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.own.mk,v 1.461 2006/06/26 15:30:05 drochner Exp $
+#	$NetBSD: bsd.own.mk,v 1.467 2006/07/24 23:54:15 uwe Exp $
 
 .if !defined(_BSD_OWN_MK_)
 _BSD_OWN_MK_=1
@@ -44,7 +44,7 @@ TOOLCHAIN_MISSING?=	no
 # Transitional for toolchain upgrade to GCC4.1
 #
 # not working:
-#	sh5, vax
+#	sh5
 #
 .if \
     ${MACHINE_ARCH} == "alpha" || \
@@ -54,8 +54,11 @@ TOOLCHAIN_MISSING?=	no
     ${MACHINE_ARCH} == "m68000" || \
     ${MACHINE_ARCH} == "powerpc" || \
     ${MACHINE_ARCH} == "powerpc64" || \
+    ${MACHINE_ARCH} == "sh3eb" || \
+    ${MACHINE_ARCH} == "sh3el" || \
     ${MACHINE_ARCH} == "sparc" || \
     ${MACHINE_ARCH} == "sparc64" || \
+    ${MACHINE_ARCH} == "vax" || \
     ${MACHINE_ARCH} == "x86_64"
 HAVE_GCC?=	4
 .endif
@@ -65,9 +68,7 @@ HAVE_GCC?=	4
     ${MACHINE_ARCH} == "hppa" || \
     ${MACHINE_ARCH} == "m68k" || \
     ${MACHINE_ARCH} == "mipsel" || \
-    ${MACHINE_ARCH} == "mipseb" || \
-    ${MACHINE_ARCH} == "sh3eb" || \
-    ${MACHINE_ARCH} == "sh3el"
+    ${MACHINE_ARCH} == "mipseb"
 #HAVE_GCC?=	4
 .endif
 
@@ -393,6 +394,11 @@ FIRMWAREGRP?=	wheel
 FIRMWAREOWN?=	root
 FIRMWAREMODE?=	${NONBINMODE}
 
+DEBUGDIR?=	/usr/libdata/debug
+DEBUGGRP?=	wheel
+DEBUGOWN?=	root
+DEBUGMODE?=	${NONBINMODE}
+
 #
 # Data-driven table using make variables to control how
 # toolchain-dependent targets and shared libraries are built
@@ -485,7 +491,7 @@ MKGDB=		no
 # so don't build the _pic version.  Unless we are using GCC3 which
 # doesn't support PIC yet.
 #
-.if ${MACHINE_ARCH} == "vax" && ${HAVE_GCC} == "3"
+.if ${MACHINE_ARCH} == "vax" && ${HAVE_GCC} >= 3
 NOPIC=		# defined
 .endif
 .if ${MACHINE_ARCH} == "vax" && ${OBJECT_FMT} == "ELF"
@@ -563,6 +569,9 @@ dependall:	.NOTMAIN realdepend .MAKE
 # These should be tested with `== "no"' or `!= "no"'.
 # The NOxxx variables should only be set by Makefiles.
 #
+# Please keep etc/Makefile and share/man/man5/mk.conf.5 in sync
+# with changes to the MK* variables here.
+#
 
 #
 # Supported NO* options (if defined, MK* will be forced to "no",
@@ -611,7 +620,7 @@ MK${var}?=	yes
 # MK* options which default to "no".
 #
 .for var in \
-	CRYPTO_IDEA CRYPTO_MDC2 CRYPTO_RC5 DEBUG \
+	CRYPTO_IDEA CRYPTO_MDC2 CRYPTO_RC5 DEBUG DEBUGLIB \
 	MANZ OBJDIRS PRIVATELIB SOFTFLOAT UNPRIVED UPDATE X11
 MK${var}?=	no
 .endfor

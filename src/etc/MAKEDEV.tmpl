@@ -1,5 +1,5 @@
 #!/bin/sh -
-#	$NetBSD: MAKEDEV.tmpl,v 1.53 2006/06/19 15:44:35 gdamore Exp $
+#	$NetBSD: MAKEDEV.tmpl,v 1.58 2006/07/27 06:49:06 martti Exp $
 #
 # Copyright (c) 2003 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -223,12 +223,13 @@
 #	ad*	UNIBUS interface to Data Translation A/D converter
 #	agp*	AGP GART devices
 #	altq	ALTQ control interface
+#	amr*	AMI MegaRaid control device
 #	apm	power management device
 #	audio*	audio devices
 #	bell*	OPM bell device (x68k)
 #	bktr	Brooktree 848/849/878/879 based TV cards
 #	bpf	packet filter
-#	bthubctl Bluetooth HUB control
+#	btdev*	Bluetooth Device control interface
 #	cfs*	Coda file system device
 #	ch*	SCSI media changer
 #	cir*	Consumer IR
@@ -468,6 +469,7 @@ all)
 	makedev atabus0 atabus1 atabus2 atabus3
 	makedev tap tap0 tap1 tap2 tap3
 	makedev gpio gpio0 gpio1 gpio2 gpio3 gpio4 gpio5 gpio6 gpio7
+	makedev btdev0 btdev1 btdev2 btdev3
 	;;
 
 init)
@@ -616,6 +618,10 @@ wsmux*)
 
 xenevt)
 	mkdev xenevt c %xenevt_chr% 0
+	;;
+
+xsd_kva)
+	mkdev xsd_kva c %xenevt_chr% 1
 	;;
 
 xencons)
@@ -934,8 +940,9 @@ bpf)
 	lndev bpf bpf0
 	;;
 
-bthubctl)
-	mkdev bthubctl c %bthub_chr% 0
+btdev*)
+	unit=${i#btdev}
+	mkdev btdev$unit c %btdev_chr% $unit
 	;;
 
 tun*)
@@ -953,6 +960,9 @@ ipl)
 	mkdev ipnat	c %ipl_chr% 1
 	mkdev ipstate	c %ipl_chr% 2
 	mkdev ipauth	c %ipl_chr% 3
+	mkdev ipsync	c %ipl_chr% 4
+	mkdev ipscan	c %ipl_chr% 5
+	mkdev iplookup	c %ipl_chr% 6
 	;;
 
 pf)
@@ -1005,6 +1015,11 @@ radio*)
 	unit=${i#radio}
 	: ${unit:-0}
 	mkdev radio$unit c %radio_chr% $unit 666
+	;;
+
+amr*)
+	unit=${i#amr}
+	mkdev amr$unit c %amr_chr% $unit
 	;;
 
 apm)

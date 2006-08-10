@@ -1,4 +1,4 @@
-.\"	$NetBSD: sysctl.3,v 1.170 2006/05/16 00:08:24 elad Exp $
+.\"	$NetBSD: sysctl.3,v 1.177 2006/07/24 21:48:13 wiz Exp $
 .\"
 .\" Copyright (c) 1993
 .\"	The Regents of the University of California.  All rights reserved.
@@ -29,7 +29,7 @@
 .\"
 .\"	@(#)sysctl.3	8.4 (Berkeley) 5/9/95
 .\"
-.Dd April 26, 2006
+.Dd July 24, 2006
 .Dt SYSCTL 3
 .Os
 .Sh NAME
@@ -934,10 +934,10 @@ The number of raw input characters.
 .It Li KERN_URND
 Random integer value.
 .It Li KERN_VERIEXEC
-Tunings for Verified Exec.
-Third level names for the veriexec variables are detailed below.
-The changeable column shows whether a process with appropriate
-privilege may change the value or only raise it.
+Tunings for Verixec.
+Third level names for the Veriexec variables are detailed below.
+The changeable column shows whether a process with appropriate privilege may
+change the value or only raise it.
 Only the superuser can modify these variables.
 .Bl -column "VERIEXECXALGORITHMSXXX" "struct integerXXX" -offset indent
 .It Sy Third level name	Type	Changeable
@@ -950,39 +950,38 @@ Only the superuser can modify these variables.
 The variables are as follows:
 .Bl -tag -width "123456"
 .It Li VERIEXEC_ALGORITHMS
-Returns a string with the supported algorithms in Verified Exec.
+Returns a string with the supported algorithms in Veriexec.
 .It Li VERIEXEC_COUNT
-Variables are added to this node as new hash tables are created to
-contain Verified Exec data for a new device.
-Each variable in the node
-will have a name in the form of
-.No dev_ Ns Aq id
-where
-.Aq id
-is the device id.
-For example, the variable for the root device may be dev_0.
-The value of this
-variable will be the amount of fingerprinted files on the device.
+Sub-nodes are added to this node as new mounts are monitored by Veriexec.
+Each mount will be under its own
+.No tableN
+node.
+Under each node there will be three variables, indicating the mount
+point, the file-system type, and the number of entries.
 .It Li VERIEXEC_STRICT
-Controls the strict level of Verified Exec.
+Controls the strict level of Veriexec.
 The strict level defines how
-Verified Exec will treat various situations.
+Veriexec will treat various situations.
 In strict level 0, the system is in learning mode and will only warn about
 fingerprint mismatches, aswell as allow removal of fingerprinted files.
 It is the only level where fingerprints can be loaded.
 In strict level 1, the system is in IDS mode.
 It will deny access to files with mismatched fingerprints.
+Write access to monitored files will be permitted, but once modified, further
+access to them will be denied.
+Monitored files cannot be removed.
 In strict level 2, the system is in IPS mode.
 It has all effects of
-strict level 1, plus it will deny write access to monitored files,
-prevent their removal, and enforce access type (direct, indirect, file).
+strict level 1, plus it will deny write access to monitored files and enforce
+access type (direct, indirect, file).
+Execution of non-monitored files is denied.
 Strict level 3 operates as lockdown mode.
 It will have all effects of
 strict level 2, but it will also prevent access to non-monitored files.
 Furthermore, it will prevent addition of new files to the system, and
 allow writing only to files opened before the strict level was raised.
 .It Li VERIEXEC_VERBOSE
-Controls the verbosity level of Verified Exec.
+Controls the verbosity level of Veriexec.
 If 0, only the minimal
 indication required will be given about what's happening - fingerprint
 mismatches, removal of entries from the tables, modification of a
@@ -1003,6 +1002,29 @@ Each element of the array contains the kernel address of a vnode
 .Va struct vnode *
 followed by the vnode itself
 .Va struct vnode .
+.It Li kern.coredump.setid
+Settings related to set-id processes coredumps.
+By default, set-id processes do not dump core in situations where
+other processes would.
+The settings in this node allows an administrator to change this
+behavior.
+.Pp
+.Bl -tag -width "123456"
+.It Li kern.coredump.setid.dump
+If non-zero, set-id processes will dump core.
+.It Li kern.coredump.setid.group
+The group-id for the set-id processes' coredump.
+.It Li kern.coredump.setid.mode
+The mode for the set-id processes' coredump.
+See
+.Xr chmod 1 .
+.It Li kern.coredump.setid.owner
+The user-id that will be used as the owner of the set-id processes'
+coredump.
+.It Li kern.coredump.setid.path
+The path to which set-id processes' coredumps will be saved to.
+Same syntax as kern.defcorename.
+.El
 .El
 .Sh CTL_MACHDEP
 The set of variables defined is architecture dependent.
@@ -2012,33 +2034,10 @@ explicit enable/disable flag.
 .Pp
 When non-zero, all programs will get the PaX MPROTECT restrictions,
 except those exempted with
-.Xr paxctl 1 .
+.Xr paxctl 1  .
 Otherwise, all programs will not get the PaX MPROTECT restrictions,
 except those specifically marked as such with
-.Xr paxctl 1.
-.El
-.It Li security.setid_core
-Settings related to set-id processes coredumps.
-By default, set-id processes do not dump core in situations where
-other processes would.
-The settings in this node allows an administrator to change this
-behavior.
-.Pp
-.Bl -tag -width "123456"
-.It Li security.setid_core.dump
-If non-zero, set-id processes will dump core.
-.It Li security.setid_core.group
-The group-id for the set-id processes' coredump.
-.It Li security.setid_core.mode
-The mode for the set-id processes' coredump.
-See
-.Xr chmod 1 .
-.It Li security.setid_core.owner
-The user-id that will be used as the owner of the set-id processes'
-coredump.
-.It Li security.setid_core.path
-The path to which set-id processes' coredumps will be saved to.
-Same syntax as kern.defcorename.
+.Xr paxctl 1 .
 .El
 .El
 .Sh CTL_VENDOR

@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.99 2006/06/22 20:03:41 mrg Exp $
+#	$NetBSD: Makefile,v 1.104 2006/07/19 09:54:47 tron Exp $
 
 .include <bsd.own.mk>
 
@@ -47,7 +47,7 @@ SUBDIR+=	groff
 .endif
 
 .if ${MKMAINTAINERTOOLS:Uno} != "no"
-SUBDIR+=	autoconf gettext
+SUBDIR+=	autoconf .WAIT gettext
 .endif
 
 .if ${MACHINE} == "hp700"
@@ -118,10 +118,12 @@ all-${dir} depend-${dir} dependall-${dir} install-${dir}:
 .include <bsd.subdir.mk>
 .include <bsd.obj.mk>
 
-.if exists(PREVIOUSTOOLDIR)
+.if !defined(PREVIOUSTOOLDIR)
+.  if exists(PREVIOUSTOOLDIR)
 PREVIOUSTOOLDIR!=	cat PREVIOUSTOOLDIR
-.else
+.  else
 PREVIOUSTOOLDIR=	
+.  endif
 .endif
 
 CLEANFILES+=	PREVIOUSTOOLDIR
@@ -133,9 +135,9 @@ realall realdepend: .MAKE
 	@echo "***     !=  TOOLDIR '${TOOLDIR}'"
 	@echo "*** Cleaning mis-matched tools"
 	rm -f PREVIOUSTOOLDIR
-	(cd ${.CURDIR} && ${MAKE} cleandir)
+	(cd ${.CURDIR} && ${MAKE} PREVIOUSTOOLDIR=${TOOLDIR} cleandir)
 .endif
-	echo ${TOOLDIR} > PREVIOUSTOOLDIR
+	echo ${TOOLDIR} >PREVIOUSTOOLDIR
 
 # For each .WAIT point, make sure the immediately preceding target is
 # installed before building anything after that point.

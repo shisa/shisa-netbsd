@@ -1,4 +1,4 @@
-/*	$NetBSD: netbsd32_compat_30.c,v 1.8 2006/05/27 23:46:49 simonb Exp $	*/
+/*	$NetBSD: netbsd32_compat_30.c,v 1.11 2006/07/23 22:06:09 ad Exp $	*/
 
 /*
  * Copyright (c) 1998, 2001 Matthew R. Green
@@ -29,7 +29,9 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: netbsd32_compat_30.c,v 1.8 2006/05/27 23:46:49 simonb Exp $");
+__KERNEL_RCSID(0, "$NetBSD: netbsd32_compat_30.c,v 1.11 2006/07/23 22:06:09 ad Exp $");
+
+#include "opt_nfsserver.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -55,6 +57,7 @@ __KERNEL_RCSID(0, "$NetBSD: netbsd32_compat_30.c,v 1.8 2006/05/27 23:46:49 simon
 #include <compat/netbsd32/netbsd32.h>
 #include <compat/netbsd32/netbsd32_syscallargs.h>
 #include <compat/netbsd32/netbsd32_conv.h>
+#include <compat/sys/mount.h>
 
 
 int
@@ -209,30 +212,29 @@ compat_30_netbsd32_fhstat(l, v, retval)
 		syscallarg(const netbsd32_fhandlep_t) fhp;
 		syscallarg(netbsd32_stat13p_t) sb);
 	} */ *uap = v;
-	struct proc *p = l->l_proc;
 	struct stat sb;
 	struct netbsd32_stat13 sb32;
 	int error;
-	fhandle_t fh;
+	struct compat_30_fhandle fh;
 	struct mount *mp;
 	struct vnode *vp;
 
 	/*
 	 * Must be super user
 	 */
-	if ((error = kauth_authorize_generic(p->p_cred, KAUTH_GENERIC_ISSUSER,
-	    &p->p_acflag)))
+	if ((error = kauth_authorize_generic(l->l_cred,
+	    KAUTH_GENERIC_ISSUSER, &l->l_acflag)))
 		return (error);
 
 	if ((error = copyin(NETBSD32PTR64(SCARG(uap, fhp)), &fh,
-	    sizeof(fhandle_t))) != 0)
+	    sizeof(fh))) != 0)
 		return (error);
 
 	if ((mp = vfs_getvfs(&fh.fh_fsid)) == NULL)
 		return (ESTALE);
 	if (mp->mnt_op->vfs_fhtovp == NULL)
 		return EOPNOTSUPP;
-	if ((error = VFS_FHTOVP(mp, &fh.fh_fid, &vp)))
+	if ((error = VFS_FHTOVP(mp, (struct fid*)&fh.fh_fid, &vp)))
 		return (error);
 	error = vn_stat(vp, &sb, l);
 	vput(vp);
@@ -241,4 +243,41 @@ compat_30_netbsd32_fhstat(l, v, retval)
 	netbsd32_from___stat13(&sb, &sb32);
 	error = copyout(&sb32, NETBSD32PTR64(SCARG(uap, sb)), sizeof(sb));
 	return (error);
+}
+
+int
+compat_30_netbsd32_socket(l, v, retval)
+	struct lwp *l;
+	void *v;
+	register_t *retval;
+{
+	struct compat_30_netbsd32_socket_args /* {
+		syscallarg(int) domain;
+		syscallarg(int) type;
+		syscallarg(int) protocol;
+	} */ *uap = v;
+	struct compat_30_sys_socket_args ua;
+
+	NETBSD32TO64_UAP(domain);
+	NETBSD32TO64_UAP(type);
+	NETBSD32TO64_UAP(protocol);
+	return (compat_30_sys_socket(l, &ua, retval));
+}
+
+int
+compat_30_netbsd32_getfh(l, v, retval)
+	struct lwp *l;
+	void *v;
+	register_t *retval;
+{
+	struct compat_30_netbsd32_getfh_args /* {
+		syscallarg(const netbsd32_charp) fname;
+		syscallarg(netbsd32_compat_30_fhandlep_t) fhp;
+	} */ *uap = v;
+	struct compat_30_sys_getfh_args ua;
+
+	NETBSD32TOP_UAP(fname, const char);
+	NETBSD32TOP_UAP(fhp, struct compat_30_fhandle);
+	/* Lucky for us a fhandle_t doesn't change sizes */
+	return (compat_30_sys_getfh(l, &ua, retval));
 }

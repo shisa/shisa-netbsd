@@ -1,10 +1,10 @@
-/*	$NetBSD: pcidevs_data.h,v 1.799 2006/06/27 21:39:28 kent Exp $	*/
+/*	$NetBSD: pcidevs_data.h,v 1.808 2006/07/30 04:18:25 simonb Exp $	*/
 
 /*
  * THIS FILE AUTOMATICALLY GENERATED.  DO NOT EDIT.
  *
  * generated from:
- *	NetBSD: pcidevs,v 1.801 2006/06/27 21:38:40 kent Exp
+ *	NetBSD: pcidevs,v 1.809 2006/07/30 04:17:42 simonb Exp
  */
 
 /*
@@ -2184,6 +2184,10 @@ static const struct pci_vendor pci_vendors[] = {
 	    "SafeNet",
 	},
 	{
+	    PCI_VENDOR_MICREL,
+	    "Micrel",
+	},
+	{
 	    PCI_VENDOR_LINKSYS,
 	    "Linksys",
 	},
@@ -2364,7 +2368,7 @@ static const struct pci_vendor pci_vendors[] = {
 	    "INVALID VENDOR ID",
 	},
 };
-const int pci_nvendors = 581;
+const int pci_nvendors = 582;
 
 static const struct pci_product pci_products[] = {
 	{
@@ -3001,19 +3005,27 @@ static const struct pci_product pci_products[] = {
 	},
 	{
 	    PCI_VENDOR_ADMTEK, PCI_PRODUCT_ADMTEK_AL981,
-	    "AL981 10/100 Ethernet",
+	    "AL981 (Comet) 10/100 Ethernet",
+	},
+	{
+	    PCI_VENDOR_ADMTEK, PCI_PRODUCT_ADMTEK_AN983,
+	    "AN983 (Centaur-P) 10/100 Ethernet",
 	},
 	{
 	    PCI_VENDOR_ADMTEK, PCI_PRODUCT_ADMTEK_AN985,
-	    "AN985 10/100 Ethernet",
-	},
-	{
-	    PCI_VENDOR_ADMTEK, PCI_PRODUCT_ADMTEK_AN985_2,
-	    "AN985 10/100 Ethernet (OEM)",
+	    "AN985 (Centaur-C) 10/100 Ethernet",
 	},
 	{
 	    PCI_VENDOR_ADMTEK, PCI_PRODUCT_ADMTEK_ADM8211,
 	    "ADM8211 11Mbps 802.11b WLAN",
+	},
+	{
+	    PCI_VENDOR_ADMTEK, PCI_PRODUCT_ADMTEK_ADM9511,
+	    "ADM9511 (Centaur-II) 10/100 Ethernet",
+	},
+	{
+	    PCI_VENDOR_ADMTEK, PCI_PRODUCT_ADMTEK_ADM9513,
+	    "ADM9513 (Centaur-II) 10/100 Ethernet",
 	},
 	{
 	    PCI_VENDOR_ADVSYS, PCI_PRODUCT_ADVSYS_1200A,
@@ -3608,8 +3620,16 @@ static const struct pci_product pci_products[] = {
 	    "SB200 USB Host Controller",
 	},
 	{
+	    PCI_VENDOR_ATI, PCI_PRODUCT_ATI_IXP_IDE_200,
+	    "SB200 IXP IDE Controller",
+	},
+	{
 	    PCI_VENDOR_ATI, PCI_PRODUCT_ATI_SB200_ISA,
 	    "SB200 PCI-ISA Bridge",
+	},
+	{
+	    PCI_VENDOR_ATI, PCI_PRODUCT_ATI_SB200_MODEM,
+	    "SB200 Modem",
 	},
 	{
 	    PCI_VENDOR_ATI, PCI_PRODUCT_ATI_SB200_SMB,
@@ -3620,16 +3640,16 @@ static const struct pci_product pci_products[] = {
 	    "IXP AC'97 Audio Controller",
 	},
 	{
-	    PCI_VENDOR_ATI, PCI_PRODUCT_ATI_IXP_AUDIO_400,
-	    "IXP AC'97 Audio Controller",
-	},
-	{
-	    PCI_VENDOR_ATI, PCI_PRODUCT_ATI_IXP_IDE_200,
-	    "IXP IDE Controller",
+	    PCI_VENDOR_ATI, PCI_PRODUCT_ATI_SB300_SMB,
+	    "SB300 SMBus Controller",
 	},
 	{
 	    PCI_VENDOR_ATI, PCI_PRODUCT_ATI_IXP_IDE_300,
-	    "IXP IDE Controller",
+	    "SB300 IXP IDE Controller",
+	},
+	{
+	    PCI_VENDOR_ATI, PCI_PRODUCT_ATI_IXP_AUDIO_400,
+	    "IXP AC'97 Audio Controller",
 	},
 	{
 	    PCI_VENDOR_ATI, PCI_PRODUCT_ATI_SB400_PPB,
@@ -3637,7 +3657,7 @@ static const struct pci_product pci_products[] = {
 	},
 	{
 	    PCI_VENDOR_ATI, PCI_PRODUCT_ATI_SB400_SMB,
-	    "SB400 SMB Controller",
+	    "SB400 SMBus Controller",
 	},
 	{
 	    PCI_VENDOR_ATI, PCI_PRODUCT_ATI_SB400_EHCI,
@@ -3660,12 +3680,28 @@ static const struct pci_product pci_products[] = {
 	    "SB400 PCI-ISA Bridge",
 	},
 	{
+	    PCI_VENDOR_ATI, PCI_PRODUCT_ATI_SB400_MODEM,
+	    "SB400 Modem",
+	},
+	{
 	    PCI_VENDOR_ATI, PCI_PRODUCT_ATI_SB400_SATA_1,
 	    "SB400 SATA Controller",
 	},
 	{
 	    PCI_VENDOR_ATI, PCI_PRODUCT_ATI_SB400_SATA_2,
 	    "SB400 SATA Controller",
+	},
+	{
+	    PCI_VENDOR_ATI, PCI_PRODUCT_ATI_SB600_SATA_1,
+	    "SB600 SATA Controller",
+	},
+	{
+	    PCI_VENDOR_ATI, PCI_PRODUCT_ATI_SB600_SATA_2,
+	    "SB600 SATA Controller",
+	},
+	{
+	    PCI_VENDOR_ATI, PCI_PRODUCT_ATI_IXP_IDE_600,
+	    "SB600 IXP IDE Controller",
 	},
 	{
 	    PCI_VENDOR_ATI, PCI_PRODUCT_ATI_MACH64_CT,
@@ -7172,6 +7208,10 @@ static const struct pci_product pci_products[] = {
 	    "82945G/P PCI Express Bridge",
 	},
 	{
+	    PCI_VENDOR_INTEL, PCI_PRODUCT_INTEL_82945P_IGD,
+	    "82945G/P Integrated Graphics Device",
+	},
+	{
 	    PCI_VENDOR_INTEL, PCI_PRODUCT_INTEL_82955X_HB,
 	    "82955X Host",
 	},
@@ -7472,6 +7512,10 @@ static const struct pci_product pci_products[] = {
 	    "PRO/Wireless LAN 2915ABG Mini-PCI Adapter",
 	},
 	{
+	    PCI_VENDOR_INTEL, PCI_PRODUCT_INTEL_PRO_WL_3945ABG_2,
+	    "PRO/Wireless LAN 2915ABG Mini-PCI Adapter",
+	},
+	{
 	    PCI_VENDOR_INTEL, PCI_PRODUCT_INTEL_80312_ATU,
 	    "80310 ATU",
 	},
@@ -7660,8 +7704,12 @@ static const struct pci_product pci_products[] = {
 	    "IT8152 Host Bridge",
 	},
 	{
+	    PCI_VENDOR_ITE, PCI_PRODUCT_ITE_IT8211,
+	    "IT8211 IDE Controller",
+	},
+	{
 	    PCI_VENDOR_ITE, PCI_PRODUCT_ITE_IT8212,
-	    "IT8212 IDE controller",
+	    "IT8212 IDE Controller",
 	},
 	{
 	    PCI_VENDOR_ITT, PCI_PRODUCT_ITT_AGX016,
@@ -7962,6 +8010,14 @@ static const struct pci_product pci_products[] = {
 	{
 	    PCI_VENDOR_MICROSOFT, PCI_PRODUCT_MICROSOFT_MN120,
 	    "MN-120 10/100 Ethernet Notebook Adapter",
+	},
+	{
+	    PCI_VENDOR_MICREL, PCI_PRODUCT_MICREL_KSZ8841,
+	    "10/100 Ethernet",
+	},
+	{
+	    PCI_VENDOR_MICREL, PCI_PRODUCT_MICREL_KSZ8842,
+	    "Switched 2-port 10/100 Ethernet",
 	},
 	{
 	    PCI_VENDOR_MIDDLE_DIGITAL, PCI_PRODUCT_MIDDLE_DIGITAL_WEASEL_VGA,
@@ -11180,6 +11236,10 @@ static const struct pci_product pci_products[] = {
 	    "VT8237 (Apollo KT600) PCI-ISA Bridge",
 	},
 	{
+	    PCI_VENDOR_VIATECH, PCI_PRODUCT_VIATECH_VT8237A_HDA,
+	    "VT8237A/VT8251 High Definition Audio Controller",
+	},
+	{
 	    PCI_VENDOR_VIATECH, PCI_PRODUCT_VIATECH_KT880_4,
 	    "KT880 CPU to PCI Bridge",
 	},
@@ -11716,4 +11776,4 @@ static const struct pci_product pci_products[] = {
 	    "Video Controller",
 	},
 };
-const int pci_nproducts = 2337;
+const int pci_nproducts = 2351;
