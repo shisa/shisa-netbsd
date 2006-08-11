@@ -3,16 +3,31 @@ How to export the NetBSD current srouce
  and import it to the SHISA repository.
 
 1) Export NetBSD current
-
-	CURDIR= the directory the 'src' directory resides
+	CURDIR= the directory the 'src' directory of the original
+                NetBSD resides
 
 	cd ${CURDIR}
 	cvs -d:pserver:anoncvs@anoncvs.netbsd.org:/cvsroot
 		export -D20060630 src
+                         ~~~~~~~~ (date of the target NetBSD)
 
 2) Import
-	CURDIR= the directory the 'src' directory resides
+	CURDIR= the directory the 'src' directory of the original
+                NetBSD resides
 
 	cd ${CURDIR}
 	cvs -dmobilegravity.sfc.wide.ad.jp:/cvsroot
 		import -I! -ko shisa-netbsd NETBSD netbsd-current-20060630
+                                                                  ~~~~~~~~
+                                                (date of the target NetBSD)
+
+3) Update
+	CURDIR= the directory the 'src' directory of the SHISA version
+                of NetBSD resides
+
+	cd ${CURDIR}/src
+	cvs update -jnetbsd-current-20060531 -jnetbsd-current-20060630 -dP
+                     ~~~~~~~~~~~~~~~~~~~~~~~   ~~~~~~~~~~~~~~~~~~~~~~~
+                  (the tag of the previously   (the tag just imported
+                   imported NetBSD)             NetBSD)
+                                    
