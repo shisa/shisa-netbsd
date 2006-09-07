@@ -1,4 +1,4 @@
-/*	$NetBSD: prop_bool.c,v 1.3 2006/07/05 20:29:28 thorpej Exp $	*/
+/*	$NetBSD: prop_bool.c,v 1.5 2006/08/22 21:21:23 thorpej Exp $	*/
 
 /*-
  * Copyright (c) 2006 The NetBSD Foundation, Inc.
@@ -64,7 +64,7 @@ static const struct _prop_object_type _prop_object_type_bool = {
 };
 
 #define	prop_object_is_bool(x)		\
-	((x)->pb_obj.po_type == &_prop_object_type_bool)
+	((x) != NULL && (x)->pb_obj.po_type == &_prop_object_type_bool)
 
 static void
 _prop_bool_free(void *v)
@@ -93,8 +93,9 @@ _prop_bool_equals(void *v1, void *v2)
 	prop_bool_t b1 = v1;
 	prop_bool_t b2 = v2;
 
-	_PROP_ASSERT(prop_object_is_bool(b1));
-	_PROP_ASSERT(prop_object_is_bool(b2));
+	if (! (prop_object_is_bool(b1) &&
+	       prop_object_is_bool(b2)))
+		return (FALSE);
 
 	/*
 	 * Since we only ever allocate one true and one false,
@@ -150,7 +151,8 @@ prop_bool_t
 prop_bool_copy(prop_bool_t opb)
 {
 
-	_PROP_ASSERT(prop_object_is_bool(opb));
+	if (! prop_object_is_bool(opb))
+		return (NULL);
 
 	/*
 	 * Because we only ever allocate one true and one false, this
@@ -168,7 +170,9 @@ boolean_t
 prop_bool_true(prop_bool_t pb)
 {
 
-	_PROP_ASSERT(prop_object_is_bool(pb));
+	if (! prop_object_is_bool(pb))
+		return (FALSE);
+
 	return (pb->pb_value);
 }
 

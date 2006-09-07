@@ -1,5 +1,5 @@
 #! /usr/bin/env sh
-#	$NetBSD: build.sh,v 1.148 2006/06/22 20:00:18 mrg Exp $
+#	$NetBSD: build.sh,v 1.151 2006/08/27 05:05:05 matt Exp $
 #
 # Copyright (c) 2001-2005 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -178,6 +178,12 @@ getarch()
 		MACHINE=${MACHINE%-e[bl]}
 		;;
 
+	evbmips64-e[bl]|sbmips64-e[bl])
+		MACHINE_ARCH=mips64${MACHINE##*-}
+		makewrappermachine=${MACHINE}
+		MACHINE=${MACHINE%64-e[bl]}
+		;;
+
 	evbmips|sbmips)		# no default MACHINE_ARCH
 		;;
 
@@ -238,7 +244,7 @@ validatearch()
 	#
 	case "${MACHINE_ARCH}" in
 
-	alpha|arm|armeb|hppa|i386|m68000|m68k|mipse[bl]|ns32k|powerpc|powerpc64|sh[35]e[bl]|sparc|sparc64|vax|x86_64|ia64)
+	alpha|arm|armeb|hppa|i386|m68000|m68k|mipse[bl]|mips64e[bl]|ns32k|powerpc|powerpc64|sh[35]e[bl]|sparc|sparc64|vax|x86_64|ia64)
 		;;
 
 	"")
@@ -260,7 +266,11 @@ validatearch()
 		;;
 
 	evbmips|sbmips)
-		arches="mipseb mipsel"
+		arches="mipseb mipsel mips64eb mips64el"
+		;;
+
+	sgimips)
+		arches="mipseb mips64eb"
 		;;
 
 	evbsh3)
@@ -863,7 +873,7 @@ createmakewrapper()
 	fi
 
 	case "${KSH_VERSION:-${SH_VERSION}}" in
-	*PD\ KSH*)
+	*PD\ KSH*|*MIRBSD\ KSH*)
 		set +o braceexpand
 		;;
 	esac
@@ -871,7 +881,7 @@ createmakewrapper()
 	eval cat <<EOF ${makewrapout}
 #! /bin/sh
 # Set proper variables to allow easy "make" building of a NetBSD subtree.
-# Generated from:  \$NetBSD: build.sh,v 1.148 2006/06/22 20:00:18 mrg Exp $
+# Generated from:  \$NetBSD: build.sh,v 1.151 2006/08/27 05:05:05 matt Exp $
 # with these arguments: ${_args}
 #
 EOF

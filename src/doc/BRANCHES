@@ -1,4 +1,4 @@
-#	$NetBSD: BRANCHES,v 1.87 2006/06/30 23:05:28 chap Exp $
+#	$NetBSD: BRANCHES,v 1.91 2006/08/30 20:40:36 wiz Exp $
 #
 # This file contains a list of branches that exist in the NetBSD CVS
 # tree and their current state.
@@ -135,12 +135,23 @@ Notes:
 
 Branch:		netbsd-1-6
 Description:	The NetBSD 1.6 release branch
-Status:		Active
+Status:		Terminated
 Start Date:	22 May 2002
 End Date:
 Base Tag:	netbsd-1-6-base
 Maintainer:	1.6 Release Engineering <releng-1-6@NetBSD.org>
 Scope:		Entire tree.
+Notes:
+		Commits restricted to Release Engineering.
+
+Branch:		netbsd-2
+Description:    The NetBSD 2 release branch
+Status:		Active
+Start Date:	23 Dec 2004
+End Date:
+Base Tag:	netbsd-2-base
+Maintainer:	2 Release Engineering <releng-2@NetBSD.org>
+Scope:		Entire tree. (src + xsrc)
 Notes:
 		Commits restricted to Release Engineering.
 
@@ -159,15 +170,16 @@ Notes:		Branch was re-purposed to security/critical change function
 		NetBSD 2 tree.
 		Commits restricted to Release Engineering.
 
-Branch:		netbsd-2
-Description:    The NetBSD 2 release branch
+Branch:		netbsd-2-1
+Description:	Tracking security/critical fixes for NetBSD 2.1
 Status:		Active
-Start Date:	23 Dec 2004
+Start Date:     26 Oct 2005 
 End Date:
-Base Tag:	netbsd-2-base
+Base Tag:	netbsd-2-1-RELEASE
 Maintainer:	2 Release Engineering <releng-2@NetBSD.org>
 Scope:		Entire tree. (src + xsrc)
-Notes:
+Notes:		Branch contains only security/critical fixes to
+		NetBSD 2.1.  For new features, use netbsd-2 branch.
 		Commits restricted to Release Engineering.
 
 Branch:		netbsd-3
@@ -181,16 +193,15 @@ Scope:		Entire tree. (src + xsrc)
 Notes:
 		Commits restricted to Release Engineering.
 
-Branch:		netbsd-2-1
-Description:	Tracking security/critical fixes for NetBSD 2.1
+Branch:		netbsd-4
+Description:	The NetBSD 4 release branch
 Status:		Active
-Start Date:     26 Oct 2005 
+Start Date:	8 Aug 2006
 End Date:
-Base Tag:	netbsd-2-1-RELEASE
-Maintainer:	2 Release Engineering <releng-2@NetBSD.org>
+Base Tag:	netbsd-4-base
+Maintainer:	4 Release Engineering <releng-4@NetBSD.org>
 Scope:		Entire tree. (src + xsrc)
-Notes:		Branch contains only security/critical fixes to
-		NetBSD 2.1.  For new features, use netbsd-2 branch.
+Notes:
 		Commits restricted to Release Engineering.
 
 ########################################################################
@@ -199,16 +210,15 @@ Notes:		Branch contains only security/critical fixes to
 
 Branch:		bjh21-hydra
 Description:	Simtec Hydra support and ARM SMP in general
-Status:		Active
+Status:		Dormant
 Start Date:	18 Oct 2002
 End Date:
 Base Tag:	bjh21-hydra-base
 Maintainer:	Ben Harris <bjh21@NetBSD.org>
 Scope:		sys/arch/arm sys/arch/acorn32
-Notes:		This code is on a branch because it involves changes to
+Notes:		This code was on a branch because it involves changes to
 		cpuswitch.S which would otherwise make merging the
-		nathanw_sa branch difficult.  This branch is expected
-		to be merged to the trunk shortly after nathanw_sa.
+		nathanw_sa branch difficult.
 
 Branch:		gdamore-uart
 Description:	Add register table support to com driver.
@@ -381,9 +391,9 @@ Description:	play with page replacement policy
 Status:		Active
 Start Date:	Sun Mar  5 2006
 End Date:	
-Base Tag:	yamt-pdpolicy-base5
+Base Tag:	yamt-pdpolicy-base7
 Maintainer:	YAMAMOTO Takashi <yamt@NetBSD.org>
-Scope:		src/sys
+Scope:		src/sys  (src/common is tagged but not branched)
 Notes:		
 
 

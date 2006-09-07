@@ -1,4 +1,4 @@
-.\"	$NetBSD: main,v 1.311 2006/05/25 15:07:08 freza Exp $
+.\"	$NetBSD: main,v 1.313 2006/08/30 14:19:24 obache Exp $
 .\"
 .\" Copyright (c) 1999-2005 The NetBSD Foundation, Inc.
 .\" All rights reserved.
@@ -1265,6 +1265,7 @@ If you're one of them, and would like to mentioned, tell us!)
 .It Ta John Heasley Ta Mt heas@NetBSD.org
 .It Ta Geert Hendrickx Ta Mt ghen@NetBSD.org
 .It Ta Ren\('e Hexel Ta Mt rh@NetBSD.org
+.It Ta Iain Hibbert Ta Mt plunky@NetBSD.org
 .It Ta Kouichirou Hiratsuka Ta Mt hira@NetBSD.org
 .It Ta Michael L. Hitch Ta Mt mhitch@NetBSD.org
 .It Ta Jachym Holecek Ta Mt freza@NetBSD.org
@@ -1344,6 +1345,7 @@ If you're one of them, and would like to mentioned, tell us!)
 .It Ta Tohru Nishimura Ta Mt nisimura@NetBSD.org
 .It Ta NONAKA Kimihiro Ta Mt nonaka@NetBSD.org
 .It Ta Takehiko NOZAKI Ta Mt tnozaki@NetBSD.org
+.It Ta OBATA Akio Ta Mt obache@NetBSD.org
 .It Ta Jesse Off Ta Mt joff@NetBSD.org
 .It Ta Tatoku Ogaito Ta Mt tacha@NetBSD.org
 .It Ta OKANO Takayoshi Ta Mt kano@NetBSD.org

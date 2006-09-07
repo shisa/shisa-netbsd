@@ -1,4 +1,4 @@
-#	$NetBSD: 3RDPARTY,v 1.457 2006/07/30 10:08:52 jdolecek Exp $
+#	$NetBSD: 3RDPARTY,v 1.462 2006/08/30 23:31:53 rpaulo Exp $
 #
 # This file contains a list of the software that has been integrated into
 # NetBSD where we are not the primary maintainer.
@@ -112,8 +112,8 @@ License:	GPLv2, LGPLv2, BSD
 Notes:
 
 Package:	bsd-family-tree
-Version:	1.105
-Current Vers:	1.105
+Version:	1.107
+Current Vers:	1.107
 Maintainer:	n/a
 Archive Site:	http://cvsweb.freebsd.org/src/share/misc/bsd-family-tree
 Home Page:	http://cvsweb.freebsd.org/src/share/misc/bsd-family-tree
@@ -653,8 +653,8 @@ formating in man pages, disallowing flood pinging, alignment fixes,
 and more.
 
 Package:	postfix
-Version:	2.3.0
-Current Vers:	2.3.1/2.4-20060711
+Version:	2.3.3
+Current Vers:	2.3.3/2.4-20060711
 Maintainer:	Wietse Venema <wietse@porcupine.org>
 Archive Site:	ftp://postfix.cloud9.net/official/
 Home Page:	http://www.postfix.org/
