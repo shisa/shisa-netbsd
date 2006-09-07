@@ -1,4 +1,4 @@
-#	$NetBSD: std.macppc,v 1.20 2006/04/05 06:54:26 gdamore Exp $
+#	$NetBSD: std.macppc,v 1.21 2006/08/05 21:26:48 sanjayl Exp $
 #
 # Standard/required options for NetBSD/macppc.
 
@@ -8,6 +8,7 @@ include		"conf/std"	# MI standard options
 # standard ("mandatory") kernel options.
 options 	PPC_OEA		# OEA class PowerPC chips
 makeoptions	PPCDIR="oea"	# Tell Makefile.powerpc what dir to use
+makeoptions     PPC_ARCH_MODE="ppc32"
 
 # Executable support:
 options 	EXEC_ELF32	# (native) ELF32 binary support

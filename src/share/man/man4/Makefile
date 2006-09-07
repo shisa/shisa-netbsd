@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.397 2006/07/29 08:54:52 wiz Exp $
+#	$NetBSD: Makefile,v 1.401 2006/08/26 16:14:29 matt Exp $
 #	@(#)Makefile	8.1 (Berkeley) 6/18/93
 
 MAN=	aac.4 ac97.4 acardide.4 aceride.4 acphy.4 adc.4 adt7467c.4 adv.4 \
@@ -13,7 +13,7 @@ MAN=	aac.4 ac97.4 acardide.4 aceride.4 acphy.4 adc.4 adt7467c.4 adv.4 \
 	cec.4 cgd.4 cfb.4 ch.4 ciphy.4 ciss.4 clcs.4 clct.4 clnp.4 \
 	clockctl.4 cltp.4 cmdide.4 cmpci.4 cms.4 cnw.4 \
 	com.4 crypto.4 cs80bus.4 cypide.4  geodeide.4 \
-	ddb.4 ddc.4 dge.4 de.4 dmoverio.4 \
+	ddb.4 ddc.4 de.4 dge.4 dk.4 dmoverio.4 \
 	dmphy.4 dpt.4 dpti.4 drum.4 eap.4 ebus.4 edc.4 \
 	elmc.4 emuxki.4 en.4 envsys.4 ep.4 esh.4 esis.4 \
 	esa.4 esiop.4 esl.4 esm.4 eso.4 exphy.4 fast_ipsec.4 fd.4 \
@@ -26,7 +26,7 @@ MAN=	aac.4 ac97.4 acardide.4 aceride.4 acphy.4 adc.4 adt7467c.4 adv.4 \
 	ksyms.4 kttcp.4 lc.4 ld.4 lkm.4 lo.4 lxtphy.4 mainbus.4 makphy.4 \
 	mbe.4 mca.4 mcclock.4 md.4 mfb.4 mhzc.4 midi.4 \
 	mii.4 mk48txx.4 mlx.4 mly.4 mpt.4 mpu.4 mtd.4 \
-	mtio.4 multicast.4 ne.4 neo.4 netintro.4 nfe.4 njs.4 ns.4 \
+	mtio.4 multicast.4 ne.4 neo.4 netintro.4 nfe.4 njs.4 \
 	nsclpcsio.4 nsip.4 nsphy.4 nsphyter.4 ntwoc.4 \
 	null.4 nsmb.4 oak.4 oosiop.4 opl.4 options.4 \
 	optiide.4 osiop.4 pas.4 pcdisplay.4 pciide.4 \
@@ -45,11 +45,11 @@ MAN=	aac.4 ac97.4 acardide.4 aceride.4 acphy.4 adc.4 adt7467c.4 adv.4 \
 	tqphy.4 twa.4 twe.4 txp.4 ubsec.4 udp.4 uep.4 uha.4 uk.4 ukphy.4 \
 	unix.4 userconf.4 veriexec.4 vga.4 vge.4 viaide.4 \
 	vlan.4 vmmon.4 vmnet.4 vnd.4 vr.4 wd.4 wdc.4 \
-	wi.4 wm.4 wscons.4 wsdisplay.4 wsfont.4 wskbd.4 \
+	wi.4 wm.4 wpi.4 wscons.4 wsdisplay.4 wsfont.4 wskbd.4 \
 	wsmouse.4 wsmux.4 xbox.4 xge.4 yds.4 ym.4 zero.4 zstty.4 
 
 # USB devices
-MAN+=	uaudio.4 ubsa.4 ubt.4 ubtbcmfw.4 ucom.4 ucycom.4 \
+MAN+=	uaudio.4 ubsa.4 ubt.4 ucom.4 ucycom.4 \
 	udsbr.4 uftdi.4 ugen.4 ugensa.4 uhid.4 \
 	uhidev.4 uipaq.4 uirda.4 ukbd.4 ukyopon.4 ulpt.4 \
 	umass.4 umct.4 umidi.4 umodem.4 ums.4 uplcom.4 urio.4 usb.4 \

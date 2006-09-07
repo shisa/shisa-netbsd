@@ -1,4 +1,4 @@
-/*	$NetBSD: init.c,v 1.73 2006/04/18 11:40:26 salo Exp $	*/
+/*	$NetBSD: init.c,v 1.76 2006/07/30 20:01:26 elad Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -42,7 +42,7 @@ __COPYRIGHT("@(#) Copyright (c) 1991, 1993\n"
 #if 0
 static char sccsid[] = "@(#)init.c	8.2 (Berkeley) 4/28/95";
 #else
-__RCSID("$NetBSD: init.c,v 1.73 2006/04/18 11:40:26 salo Exp $");
+__RCSID("$NetBSD: init.c,v 1.76 2006/07/30 20:01:26 elad Exp $");
 #endif
 #endif /* not lint */
 
@@ -1657,15 +1657,14 @@ createsysctlnode()
 	/*
 	 * Create top-level dynamic sysctl node.  Its child nodes will only
 	 * be readable by the superuser, since regular mortals should not
-	 * care ("Sssh, it's a secret!").  Additionally, both nodes become
-	 * read-only at securelevel 1.
+	 * care ("Sssh, it's a secret!").
 	 */
 	len = sizeof(struct sysctlnode);
 	mib[0] = CTL_CREATE;
 
 	memset(&node, 0, len);
 	node.sysctl_flags = SYSCTL_VERSION | CTLFLAG_READWRITE |
-	    CTLFLAG_PRIVATE | CTLFLAG_READONLY1 | CTLTYPE_NODE;
+	    CTLFLAG_PRIVATE | CTLTYPE_NODE;
 	node.sysctl_num = CTL_CREATE;
 	snprintf(node.sysctl_name, SYSCTL_NAMELEN, "init");
 	if (sysctl(&mib[0], 1, &node, &len, &node, len) == -1) {
@@ -1683,7 +1682,7 @@ createsysctlnode()
 
 	memset(&node, 0, len);
 	node.sysctl_flags = SYSCTL_VERSION | CTLFLAG_READWRITE |
-	    CTLFLAG_READONLY1 | CTLTYPE_STRING | CTLFLAG_OWNDATA;
+	    CTLTYPE_STRING | CTLFLAG_OWNDATA;
 	node.sysctl_size = _POSIX_PATH_MAX;
 	node.sysctl_data = __UNCONST("/");
 	node.sysctl_num = CTL_CREATE;

@@ -1,4 +1,4 @@
-/*	$NetBSD: dkwedge_bsdlabel.c,v 1.5 2006/02/25 01:27:20 christos Exp $	*/
+/*	$NetBSD: dkwedge_bsdlabel.c,v 1.7 2006/08/13 19:17:11 martin Exp $	*/
 
 /*-
  * Copyright (c) 2004 The NetBSD Foundation, Inc.
@@ -86,7 +86,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: dkwedge_bsdlabel.c,v 1.5 2006/02/25 01:27:20 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: dkwedge_bsdlabel.c,v 1.7 2006/08/13 19:17:11 martin Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>

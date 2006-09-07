@@ -1,4 +1,4 @@
-/*	$NetBSD: statvfs.c,v 1.3 2005/06/12 05:21:28 lukem Exp $	*/
+/*	$NetBSD: statvfs.c,v 1.4 2006/07/31 16:34:42 martin Exp $	*/
 
 /*-
  * Copyright (c) 2004 The NetBSD Foundation, Inc.
@@ -38,7 +38,7 @@
 
 #include <sys/cdefs.h>
 #if defined(LIBC_SCCS) && !defined(lint)
-__RCSID("$NetBSD: statvfs.c,v 1.3 2005/06/12 05:21:28 lukem Exp $");
+__RCSID("$NetBSD: statvfs.c,v 1.4 2006/07/31 16:34:42 martin Exp $");
 #endif /* LIBC_SCCS and not lint */
 
 #include "namespace.h"
@@ -62,8 +62,12 @@ fstatvfs(int f, struct statvfs *st)
 	return fstatvfs1(f, st, ST_WAIT);
 }
 
+int	__fhstatvfs140(const void *fhp, size_t fh_size, struct statvfs *buf,
+	int flags);
+int	__fhstatvfs40(const void *fh, size_t fh_size, struct statvfs *st);
+
 int
-fhstatvfs(const fhandle_t *fh, struct statvfs *st)
+__fhstatvfs40(const void *fh, size_t fh_size, struct statvfs *st)
 {
-	return fhstatvfs1(fh, st, ST_WAIT);
+	return __fhstatvfs140(fh, fh_size, st, ST_WAIT);
 }

@@ -1,4 +1,4 @@
-/*	$NetBSD: route.c,v 1.97 2006/01/29 22:11:10 wiz Exp $	*/
+/*	$NetBSD: route.c,v 1.100 2006/08/26 15:26:02 matt Exp $	*/
 
 /*
  * Copyright (c) 1983, 1989, 1991, 1993
@@ -39,7 +39,7 @@ __COPYRIGHT("@(#) Copyright (c) 1983, 1989, 1991, 1993\n\
 #if 0
 static char sccsid[] = "@(#)route.c	8.6 (Berkeley) 4/28/95";
 #else
-__RCSID("$NetBSD: route.c,v 1.97 2006/01/29 22:11:10 wiz Exp $");
+__RCSID("$NetBSD: route.c,v 1.100 2006/08/26 15:26:02 matt Exp $");
 #endif
 #endif /* not lint */
 
@@ -56,9 +56,7 @@ __RCSID("$NetBSD: route.c,v 1.97 2006/01/29 22:11:10 wiz Exp $");
 #include <net80211/ieee80211_netbsd.h>
 #include <netinet/in.h>
 #include <netatalk/at.h>
-#include <netns/ns.h>
 #include <netiso/iso.h>
-#include <netccitt/x25.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 
@@ -89,7 +87,6 @@ static int getaddr(int, char *, struct hostent **);
 static int flushroutes(int, char *[], int);
 static int prefixlen(const char *);
 #ifndef SMALL
-static int x25_makemask(void);
 static void interfaces(void);
 static void monitor(void);
 static int print_getmsg(struct rt_msghdr *, int);
@@ -113,9 +110,7 @@ union	sockunion {
 	struct	sockaddr_at sat;
 	struct	sockaddr_dl sdl;
 #ifndef SMALL
-	struct	sockaddr_ns sns;
 	struct	sockaddr_iso siso;
-	struct	sockaddr_x25 sx25;
 #endif /* SMALL */
 } so_dst, so_gate, so_mask, so_genmask, so_ifa, so_ifp;
 
@@ -198,7 +193,7 @@ main(int argc, char **argv)
 	else
 		sock = socket(PF_ROUTE, SOCK_RAW, 0);
 	if (sock < 0)
-		err(1, "socket");
+		err(EXIT_FAILURE, "socket");
 
 	if (*argv == NULL) {
 		if (doflush)
@@ -257,8 +252,8 @@ flushroutes(int argc, char *argv[], int doall)
 	shutdown(sock, SHUT_RD); /* Don't want to read back our messages */
 	if (argc > 1) {
 		argv++;
-		if (argc == 2 && **argv == '-')
-		    switch (keyword(*argv + 1)) {
+		if (argc == 2 && **argv == '-') {
+			switch (keyword(*argv + 1)) {
 			case K_INET:
 				af = AF_INET;
 				break;
@@ -271,9 +266,6 @@ flushroutes(int argc, char *argv[], int doall)
 			case K_ATALK:
 				af = AF_APPLETALK;
 				break;
-			case K_XNS:
-				af = AF_NS;
-				break;
 #endif /* SMALL */
 			case K_LINK:
 				af = AF_LINK;
@@ -283,11 +275,10 @@ flushroutes(int argc, char *argv[], int doall)
 			case K_OSI:
 				af = AF_ISO;
 				break;
-			case K_X25:
-				af = AF_CCITT;
 #endif /* SMALL */
 			default:
 				goto bad;
+			}
 		} else
 bad:			usage(*argv);
 	}
@@ -298,13 +289,13 @@ bad:			usage(*argv);
 	mib[4] = NET_RT_DUMP;
 	mib[5] = 0;		/* no flags */
 	if (sysctl(mib, 6, NULL, &needed, NULL, 0) < 0)
-		err(1, "route-sysctl-estimate");
+		err(EXIT_FAILURE, "route-sysctl-estimate");
 	buf = lim = NULL;
 	if (needed) {
 		if ((buf = malloc(needed)) == NULL)
-			err(1, "malloc");
+			err(EXIT_FAILURE, "malloc");
 		if (sysctl(mib, 6, buf, &needed, NULL, 0) < 0)
-			err(1, "actual retrieval of routing table");
+			err(EXIT_FAILURE, "actual retrieval of routing table");
 		lim = buf + needed;
 	}
 	if (verbose) {
@@ -599,9 +590,6 @@ routename(struct sockaddr *sa, struct sockaddr *nm, int flags)
 #endif
 
 #ifndef SMALL
-	case AF_NS:
-		return (ns_print((struct sockaddr_ns *)sa));
-
 	case AF_ISO:
 		(void)snprintf(line, sizeof line, "iso %s",
 		    iso_ntoa(&((struct sockaddr_iso *)sa)->siso_addr));
@@ -758,9 +746,6 @@ netname(struct sockaddr *sa, struct sockaddr *nm)
 #endif
 
 #ifndef SMALL
-	case AF_NS:
-		return (ns_print((struct sockaddr_ns *)sa));
-
 	case AF_ISO:
 		(void)snprintf(line, sizeof line, "iso %s",
 		    iso_ntoa(&((struct sockaddr_iso *)sa)->siso_addr));
@@ -873,16 +858,6 @@ newroute(int argc, char **argv)
 				af = AF_ISO;
 				aflen = sizeof(struct sockaddr_iso);
 				break;
-
-			case K_X25:
-				af = AF_CCITT;
-				aflen = sizeof(struct sockaddr_x25);
-				break;
-
-			case K_XNS:
-				af = AF_NS;
-				aflen = sizeof(struct sockaddr_ns);
-				break;
 #endif /* SMALL */
 
 			case K_IFACE:
@@ -913,6 +888,9 @@ newroute(int argc, char **argv)
 			case K_CLONED:
 				flags |= RTF_CLONED;
 				break;
+			case K_NOCLONED:
+				flags &= ~RTF_CLONED;
+				break;
 			case K_PROTO1:
 				flags |= RTF_PROTO1;
 				break;
@@ -921,6 +899,9 @@ newroute(int argc, char **argv)
 				break;
 			case K_CLONING:
 				flags |= RTF_CLONING;
+				break;
+			case K_NOCLONING:
+				flags &= ~RTF_CLONING;
 				break;
 			case K_XRESOLVE:
 				flags |= RTF_XRESOLVE;
@@ -1017,7 +998,7 @@ newroute(int argc, char **argv)
 		}
 	}
 	if (forcehost && forcenet)
-		errx(1, "-host and -net conflict");
+		errx(EXIT_FAILURE, "-host and -net conflict");
 	else if (forcehost)
 		ishost = 1;
 	else if (forcenet)
@@ -1229,14 +1210,16 @@ getaddr(int which, char *s, struct hostent **hpp)
 				slash = 0;
 			}
 			if (getaddrinfo(s, "0", &hints, &res) != 0)
-				errx(1, "%s: bad value", s);
+				errx(EXIT_FAILURE, "%s: bad value", s);
 		}
 		if (slash)
 			*slash = '/';
 		if (sizeof(su->sin6) != res->ai_addrlen)
-			errx(1, "%s: bad value", s);
-		if (res->ai_next)
-			errx(1, "%s: address resolved to multiple values", s);
+			errx(EXIT_FAILURE, "%s: bad value", s);
+		if (res->ai_next) {
+			errx(EXIT_FAILURE,
+			    "%s: address resolved to multiple values", s);
+		}
 		memcpy(&su->sin6, res->ai_addr, sizeof(su->sin6));
 		freeaddrinfo(res);
 #ifdef __KAME__
@@ -1260,18 +1243,6 @@ getaddr(int which, char *s, struct hostent **hpp)
 #endif
 
 #ifndef SMALL
-	case AF_NS:
-		if (which == RTA_DST) {
-			struct sockaddr_ns *sms = &(so_mask.sns);
-			memset(sms, 0, sizeof(*sms));
-			sms->sns_family = 0;
-			sms->sns_len = 6;
-			sms->sns_addr.x_net = *(union ns_net *)ns_bh;
-			rtm_addrs |= RTA_NETMASK;
-		}
-		su->sns.sns_addr = ns_addr(s);
-		return (!ns_nullhost(su->sns.sns_addr));
-
 	case AF_OSI:
 		su->siso.siso_addr = *iso_addr(s);
 		if (which == RTA_NETMASK || which == RTA_GENMASK) {
@@ -1281,10 +1252,6 @@ getaddr(int which, char *s, struct hostent **hpp)
 			su->siso.siso_len = 1 + cp - (char *)su;
 		}
 		return (1);
-
-	case AF_CCITT:
-		ccitt_addr(s, &su->sx25);
-		return (which == RTA_DST ? x25_makemask() : 1);
 #endif /* SMALL */
 
 	case PF_ROUTE:
@@ -1297,7 +1264,7 @@ getaddr(int which, char *s, struct hostent **hpp)
 		t = strchr (s, '.');
 		if (!t) {
 badataddr:
-			errx(1, "bad address: %s", s);
+			errx(EXIT_FAILURE, "bad address: %s", s);
 		}
 		val = atoi (s);
 		if (val > 65535)
@@ -1363,7 +1330,7 @@ netdone:
 		memmove(&su->sin.sin_addr, hp->h_addr, hp->h_length);
 		return (1);
 	}
-	errx(1, "%s: bad value", s);
+	errx(EXIT_FAILURE, "%s: bad value", s);
 	/*NOTREACHED*/
 }
 
@@ -1383,13 +1350,13 @@ prefixlen(const char *s)
 		break;
 #endif
 	default:
-		errx(1, "prefixlen is not supported with af %d", af);
+		errx(EXIT_FAILURE, "prefixlen is not supported with af %d", af);
 		/*NOTREACHED*/
 	}
 
 	rtm_addrs |= RTA_NETMASK;	
 	if (len < -1 || len > max)
-		errx(1, "%s: bad value", s);
+		errx(EXIT_FAILURE, "%s: bad value", s);
 	
 	q = len >> 3;
 	r = len & 7;
@@ -1418,66 +1385,6 @@ prefixlen(const char *s)
 }
 
 #ifndef SMALL
-int
-x25_makemask(void)
-{
-	char *cp;
-
-	if ((rtm_addrs & RTA_NETMASK) == 0) {
-		rtm_addrs |= RTA_NETMASK;
-		for (cp = (char *)&so_mask.sx25.x25_net;
-		     cp < &so_mask.sx25.x25_opts.op_flags; cp++)
-			*cp = -1;
-		so_mask.sx25.x25_len = (u_char)&(((sup)0)->sx25.x25_opts);
-	}
-	return 0;
-}
-
-
-const char *
-ns_print(struct sockaddr_ns *sns)
-{
-	struct ns_addr work;
-	union { union ns_net net_e; u_int32_t int32_t_e; } net;
-	u_short port;
-	static char mybuf[50], cport[10], chost[25];
-	const char *host = "";
-	char *p;
-	u_char *q;
-
-	work = sns->sns_addr;
-	port = ntohs(work.x_port);
-	work.x_port = 0;
-	net.net_e  = work.x_net;
-	if (ns_nullhost(work) && net.int32_t_e == 0) {
-		if (!port)
-			return ("*.*");
-		(void)snprintf(mybuf, sizeof mybuf, "*.%XH", port);
-		return (mybuf);
-	}
-
-	if (memcmp(ns_bh, work.x_host.c_host, 6) == 0)
-		host = "any";
-	else if (memcmp(ns_nullh, work.x_host.c_host, 6) == 0)
-		host = "*";
-	else {
-		q = work.x_host.c_host;
-		(void)snprintf(chost, sizeof chost, "%02X%02X%02X%02X%02X%02XH",
-			q[0], q[1], q[2], q[3], q[4], q[5]);
-		for (p = chost; *p == '0' && p < chost + 12; p++)
-			/* void */;
-		host = p;
-	}
-	if (port)
-		(void)snprintf(cport, sizeof cport, ".%XH", htons(port));
-	else
-		*cport = 0;
-
-	(void)snprintf(mybuf, sizeof mybuf, "%XH.%s%s",
-	    (u_int32_t)ntohl(net.int32_t_e), host, cport);
-	return (mybuf);
-}
-
 static void
 interfaces(void)
 {
@@ -1493,12 +1400,14 @@ interfaces(void)
 	mib[4] = NET_RT_IFLIST;
 	mib[5] = 0;		/* no flags */
 	if (sysctl(mib, 6, NULL, &needed, NULL, 0) < 0)
-		err(1, "route-sysctl-estimate");
+		err(EXIT_FAILURE, "route-sysctl-estimate");
 	if (needed) {
 		if ((buf = malloc(needed)) == NULL)
-			err(1, "malloc");
-		if (sysctl(mib, 6, buf, &needed, NULL, 0) < 0)
-			err(1, "actual retrieval of interface table");
+			err(EXIT_FAILURE, "malloc");
+		if (sysctl(mib, 6, buf, &needed, NULL, 0) < 0) {
+			err(EXIT_FAILURE,
+			    "actual retrieval of interface table");
+		}
 		lim = buf + needed;
 		for (next = buf; next < lim; next += rtm->rtm_msglen) {
 			rtm = (struct rt_msghdr *)next;
@@ -1608,7 +1517,7 @@ rtmsg(int cmd, int flags)
 			l = read(sock, (char *)&m_rtmsg, sizeof(m_rtmsg));
 		} while (l > 0 && (rtm.rtm_seq != seq || rtm.rtm_pid != pid));
 		if (l < 0)
-			err(1, "read from routing socket");
+			err(EXIT_FAILURE, "read from routing socket");
 		else
 			return print_getmsg(&rtm, l);
 	}
@@ -1637,8 +1546,6 @@ mask_addr(void)
 #endif
 #ifndef SMALL
 	case AF_APPLETALK:
-	case AF_NS:
-	case AF_CCITT:
 #endif /* SMALL */
 	case 0:
 		return;
@@ -2094,10 +2001,6 @@ sodump(sup su, const char *which)
 	case AF_ISO:
 		(void)printf("%s: iso %s; ",
 		    which, iso_ntoa(&su->siso.siso_addr));
-		break;
-	case AF_NS:
-		(void)printf("%s: xns %s; ",
-		    which, ns_ntoa(su->sns.sns_addr));
 		break;
 #endif /* SMALL */
 	default:

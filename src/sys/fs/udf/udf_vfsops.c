@@ -1,4 +1,4 @@
-/* $NetBSD: udf_vfsops.c,v 1.8 2006/07/23 22:06:10 ad Exp $ */
+/* $NetBSD: udf_vfsops.c,v 1.11 2006/08/22 16:52:41 reinoud Exp $ */
 
 /*
  * Copyright (c) 2006 Reinoud Zandijk
@@ -36,7 +36,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: udf_vfsops.c,v 1.8 2006/07/23 22:06:10 ad Exp $");
+__RCSID("$NetBSD: udf_vfsops.c,v 1.11 2006/08/22 16:52:41 reinoud Exp $");
 #endif /* not lint */
 
 
@@ -213,6 +213,11 @@ free_udf_mountinfo(struct mount *mp)
 
 	ump = VFSTOUDF(mp);
 	if (ump) {
+		/* dispose of our descriptor pool */
+		if (ump->desc_pool)
+			pool_destroy(ump->desc_pool);
+
+		/* clear our data */
 		mp->mnt_data = NULL;
 		for (i = 0; i < UDF_ANCHORS; i++)
 			MPFREE(ump->anchors[i], M_UDFVOLD);
@@ -226,11 +231,6 @@ free_udf_mountinfo(struct mount *mp)
 		MPFREE(ump->fileset_desc,     M_UDFVOLD);
 		MPFREE(ump->vat_table,        M_UDFVOLD);
 		MPFREE(ump->sparing_table,    M_UDFVOLD);
-
-		/*
-		 * Note that the node related (e)fe descriptors pool is
-		 * destroyed already if it was used.
-		 */
 
 		free(ump, M_UDFMNT);
 	}
@@ -433,9 +433,6 @@ udf_unmount(struct mount *mp, int mntflags, struct lwp *l)
 	 * VOP_RECLAIM on the nodes themselves.
 	 */
 
-	/* dispose of our descriptor pool */
-	pool_destroy(&ump->desc_pool);
-
 	/* close device */
 	DPRINTF(VOLUMES, ("closing device\n"));
 	if (mp->mnt_flag & MNT_RDONLY) {
@@ -482,8 +479,7 @@ udf_mountfs(struct vnode *devvp, struct mount *mp,
 	int    num_anchors, error, lst;
 
 	/* flush out any old buffers remaining from a previous use. */
-	error = vinvalbuf(devvp, V_SAVE, l->l_cred, l, 0, 0);
-	if (error)
+	if ((error = vinvalbuf(devvp, V_SAVE, l->l_cred, l, 0, 0)))
 		return error;
 
 	/* allocate udf part of mount structure; malloc allways succeeds */
@@ -506,9 +502,7 @@ udf_mountfs(struct vnode *devvp, struct mount *mp,
 	/* set up arguments and device */
 	ump->mount_args = *args;
 	ump->devvp      = devvp;
-	error = udf_update_discinfo(ump);
-
-	if (error) { 
+	if ((error = udf_update_discinfo(ump))) {
 		printf("UDF mount: error inspecting fs node\n");
 		return error;
 	}
@@ -533,15 +527,15 @@ udf_mountfs(struct vnode *devvp, struct mount *mp,
 	    num_anchors, args->sessionnr));
 
 	/* read in volume descriptor sequence */
-	error = udf_read_vds_space(ump);
-	if (error)
+	if ((error = udf_read_vds_space(ump))) {
 		printf("UDF mount: error reading volume space\n");
+		return error;
+	}
 
 	/* check consistency and completeness */
-	if (!error) {
-		error = udf_process_vds(ump, args);
-		if (error)
-			printf("UDF mount: disc not properly formatted\n");
+	if ((error = udf_process_vds(ump, args))) {
+		printf("UDF mount: disc not properly formatted\n");
+		return error;
 	}
 
 	/*
@@ -550,22 +544,21 @@ udf_mountfs(struct vnode *devvp, struct mount *mp,
 	 * sector_size.
 	 */
 	lb_size = udf_rw32(ump->logical_vol->lb_size);
-	pool_init(&ump->desc_pool, lb_size, 0, 0, 0, "udf_desc_pool", NULL);
+	ump->desc_pool = malloc(sizeof(struct pool), M_UDFMNT, M_WAITOK);
+	memset(ump->desc_pool, 0, sizeof(struct pool));
+	pool_init(ump->desc_pool, lb_size, 0, 0, 0, "udf_desc_pool", NULL);
 
 	/* read vds support tables like VAT, sparable etc. */
-	if (!error) {
-		error = udf_read_vds_tables(ump, args);
-		if (error)
-			printf("UDF mount: error in format or damaged disc\n");
-	}
-	if (!error) {
-		error = udf_read_rootdirs(ump, args);
-		if (error)
-			printf("UDF mount: "
-			       "disc not properly formatted or damaged disc\n");
-	}
-	if (error)
+	if ((error = udf_read_vds_tables(ump, args))) {
+		printf("UDF mount: error in format or damaged disc\n");
 		return error;
+	}
+
+	if ((error = udf_read_rootdirs(ump, args))) {
+		printf("UDF mount: "
+		       "disc not properly formatted or damaged disc\n");
+		return error;
+	}
 
 	/* setup rest of mount information */
 	mp->mnt_data = ump;

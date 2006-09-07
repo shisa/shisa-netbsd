@@ -1,4 +1,4 @@
-/*	$NetBSD: defs.h,v 1.6 2000/11/28 22:31:37 mrg Exp $	*/
+/*	$NetBSD: defs.h,v 1.8 2006/08/17 03:50:21 macallan Exp $	*/
 
 /*-
  * Copyright (c) 1996 The NetBSD Foundation, Inc.
@@ -35,6 +35,10 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+
+#ifdef USE_OPENFIRM
+#include <dev/ofw/openfirmio.h>
+#endif
 
 #undef BUFSIZE
 #define BUFSIZE		1024
@@ -89,6 +93,15 @@ struct	extabent {
 };
 #endif /* __sparc__ */
 
+#ifdef USE_OPENFIRM
+struct	extabent {
+	char	*ex_keyword;		/* keyword for this entry */
+	void	(*ex_handler) (struct extabent *,
+		    struct ofiocdesc *, char *);
+					/* handler function for this entry */
+};
+#endif
+
 /* date parser */
 struct	timeb;
 time_t	get_date (char *, struct timeb *);
@@ -120,3 +133,8 @@ void	op_action (char *, char *);
 void	op_dump (void);
 int	check_for_openprom (void);
 #endif /* __sparc__ */
+
+/* OpenFirmware handlers. */
+char	*of_handler (char *, char *);
+void	of_action (char *, char *);
+void	of_dump (void);

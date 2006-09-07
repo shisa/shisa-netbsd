@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_synch.c,v 1.163 2006/07/08 00:23:29 matt Exp $	*/
+/*	$NetBSD: kern_synch.c,v 1.165 2006/08/30 17:28:32 tsutsui Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2000, 2004 The NetBSD Foundation, Inc.
@@ -76,7 +76,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_synch.c,v 1.163 2006/07/08 00:23:29 matt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_synch.c,v 1.165 2006/08/30 17:28:32 tsutsui Exp $");
 
 #include "opt_ddb.h"
 #include "opt_ktrace.h"
@@ -560,7 +560,13 @@ ltsleep(volatile const void *ident, int priority, const char *wmesg, int timo,
 	else
 		mi_switch(l, NULL);
 
-#if	defined(DDB) && !defined(GPROF) && !defined(sun2) && !defined(__vax__)
+#if	defined(DDB) && !defined(GPROF) && \
+	!defined(__m68k__) && !defined(__vax__)
+	/*
+	 * XXX
+	 * gcc4 optimizer will duplicate this asm statement on some arch
+	 * and it will cause a multiple symbol definition error in gas.
+	 */
 	/* handy breakpoint location after process "wakes" */
 	__asm(".globl bpendtsleep\nbpendtsleep:");
 #endif
@@ -1313,7 +1319,7 @@ checkrunqueue(int whichq, struct lwp *l)
 	int found = 0;
 	int die = 0;
 	int empty = 1;
-	for (l2 = rq->ph_link; l2 != (void*) rq; l2 = l2->l_forw) {
+	for (l2 = rq->ph_link; l2 != (const void*) rq; l2 = l2->l_forw) {
 		if (l2->l_stat != LSRUN) {
 			printf("checkrunqueue[%d]: lwp %p state (%d) "
 			    " != LSRUN\n", whichq, l2, l2->l_stat);

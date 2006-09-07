@@ -1,4 +1,4 @@
-.\"	$NetBSD: options.4,v 1.326 2006/07/14 22:05:57 wiz Exp $
+.\"	$NetBSD: options.4,v 1.329 2006/08/26 18:34:28 pavel Exp $
 .\"
 .\" Copyright (c) 1996
 .\" 	Perry E. Metzger.  All rights reserved.
@@ -30,7 +30,7 @@
 .\" THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 .\"
 .\"
-.Dd July 14, 2006
+.Dd August 26, 2006
 .Os
 .Dt OPTIONS 4
 .Sh NAME
@@ -335,14 +335,11 @@ system calls.
 .It Cd options COMPAT_30
 Enable binary compatibility with
 .Nx 3.0 .
-This allows the use of old syscalls for
-.Fn getdents ,
-.Fn stat ,
-.Fn fstat ,
-.Fn lstat
-and
-.Fn fhstat .
-The syscall numbers were changed post 3.0 to introduce 64 bit inode.
+See
+.Xr compat_30 8
+for details about the changes made after the
+.Nx 3.0
+release.
 .It Cd options COMPAT_43
 Enables compatibility with
 .Bx 4.3 .
@@ -2196,8 +2193,6 @@ See also
 .Xr sysctl 8
 and
 .Xr sysctl 3 .
-.It Cd options VERIFIED_EXEC
-Enables Veriexec, the in-kernel file integrity subsystem.
 .It Cd options VERIFIED_EXEC_FP_MD5
 Enables support for MD5 hashes in Veriexec.
 .It Cd options VERIFIED_EXEC_FP_SHA1
@@ -2316,6 +2311,13 @@ on a Shark.
 Include translation for French keyboards when using
 .Em pccons
 on a Shark.
+.El
+.Ss amd64-specific Options
+.Bl -ohang
+.It Cd options POWERNOW_K8
+Include support for AMD Athlon 64 PowerNow! and Cool`n'Quiet
+Technology, used to change the cpu and voltage frequency
+on the fly.
 .El
 .Ss atari-specific Options
 .Bl -ohang

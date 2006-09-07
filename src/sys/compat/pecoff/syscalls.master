@@ -1,4 +1,4 @@
-	$NetBSD: syscalls.master,v 1.22 2006/07/13 21:31:31 martin Exp $
+	$NetBSD: syscalls.master,v 1.24 2006/08/31 00:21:09 oki Exp $
 ; based on NetBSD: syscalls.master,v 1.150 2005/11/29 22:52:02 yamt Exp
 
 ;	@(#)syscalls.master	8.2 (Berkeley) 1/13/94
@@ -46,6 +46,7 @@
 #include "opt_sysv.h"
 #include "opt_compat_43.h"
 #include "opt_posix.h"
+#include "opt_ptrace.h"
 
 #include "fs_lfs.h"
 #include "fs_nfs.h"
@@ -116,8 +117,12 @@
 24	NOARGS		{ uid_t sys_getuid(void); }
 #endif
 25	NOARGS		{ uid_t sys_geteuid(void); }
+#if defined(PTRACE) || !defined(_KERNEL)
 26	NOARGS		{ int sys_ptrace(int req, pid_t pid, caddr_t addr, \
 			    int data); }
+#else
+26	EXCL		sys_ptrace
+#endif
 27	NOARGS		{ ssize_t sys_recvmsg(int s, struct msghdr *msg, \
 			    int flags); }
 28	NOARGS		{ ssize_t sys_sendmsg(int s, \
@@ -645,15 +650,17 @@
 #endif
 296	NOARGS		{ int sys___getcwd(char *bufp, size_t length); }
 297	NOARGS		{ int sys_fchroot(int fd); }
-298	NOARGS		{ int sys_fhopen(const fhandle_t *fhp, int flags); }
 #ifdef COMPAT_30
+298	NOARGS		{ int compat_30_sys_fhopen(const fhandle_t *fhp, \
+			    int flags); }
 299	NOARGS		{ int compat_30_sys_fhstat(const fhandle_t *fhp, \
 			    struct stat13 *sb); }
 #else
+298	EXCL		compat_30_sys_fhopen
 299	EXCL		compat_30_sys_fhstat
 #endif
 #ifdef COMPAT_20
-300	NOARGS		{ int compat_20_sys_fhstatfs(const fhandle_t *fhp, \
+300	NOARGS		{ int compat_20_sys_fhstatfs(const struct compat_30_fhandle *fhp, \
 			    struct statfs12 *buf); }
 #else
 300	EXCL		compat_20_sys_fhstatfs
@@ -755,8 +762,12 @@
 			    struct statvfs *buf, int flags); }
 358	NOARGS		{ int sys_fstatvfs1(int fd, struct statvfs *buf, \
 			    int flags); }
-359	NOARGS		{ int sys_fhstatvfs1(const fhandle_t *fhp, \
+#ifdef COMPAT_30
+359	NOARGS		{ int compat_30_sys_fhstatvfs1(const fhandle_t *fhp, \
 			    struct statvfs *buf, int flags); }
+#else
+359	EXCL		compat_30_sys_fhstatvfs1
+#endif
 360	NOARGS		{ int sys_extattrctl(const char *path, int cmd, \
 			    const char *filename, int attrnamespace, \
 			    const char *attrname); }
@@ -828,9 +839,18 @@
 390	NOARGS		{ int sys___getdents30(int fd, char *buf, size_t count); }
 391	NOARGS		{ int sys_posix_fadvise(int fd, off_t offset, \
 			    off_t len, int advice); }
-392	NOARGS		{ int sys___fhstat30(const fhandle_t *fhp, \
+#ifdef COMPAT_30
+392	NOARGS		{ int compat_30_sys___fhstat30(const fhandle_t *fhp, \
 			    struct stat *sb); }
+#else
+392	EXCL		compat_30_sys___fhstat30
+#endif
 393	NOARGS		{ int sys___ntp_gettime30(struct ntptimeval *ntvp); }
 394	NOARGS		{ int sys___socket30(int domain, int type, int protocol); }
 395	STD		{ int pecoff_sys___getfh30(const char *fname, \
-			    fhandle_t *fhp, size_t *fh_size); }
+			    void *fhp, size_t *fh_size); }
+396	NOARGS		{ int sys___fhopen40(const void *fhp, size_t fh_size,\
+			    int flags); }
+397	NOARGS		{ int sys___fhstatvfs140(const void *fhp, \
+			    size_t fh_size, struct statvfs *buf, int flags); }
+398	NOARGS		{ int sys___fhstat40(const void *fhp, \

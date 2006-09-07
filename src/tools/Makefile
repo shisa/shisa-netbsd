@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.104 2006/07/19 09:54:47 tron Exp $
+#	$NetBSD: Makefile,v 1.106 2006/08/03 17:11:05 freza Exp $
 
 .include <bsd.own.mk>
 
@@ -175,6 +175,11 @@ install-${_prev}: dependall-${_prev}
 # order depend/all/install targets for ${d} subdir.  Note the additional
 # .WAIT to achieve "closure" of the predecessor/successor relationships.
 .ORDER: depend-${d} all-${d} dependall-${d} .WAIT install-${d}
+
+# prevent cleandir in real{all,depend} from interfering with subdir makes
+.ORDER: realdepend dependall-${d}
+.ORDER: realdepend depend-${d}
+.ORDER: realall all-${d}
 
 # make all/depend-${d} dependent on list of install targets
 depend-${d} all-${d} dependall-${d}: ${_deps}

@@ -1,4 +1,4 @@
-#	$NetBSD: INSTALL,v 1.285 2006/04/19 10:31:44 drochner Exp $
+#	$NetBSD: INSTALL,v 1.288 2006/08/26 20:26:45 christos Exp $
 #
 #	INSTALL - Installation kernel.
 #
@@ -137,11 +137,8 @@ options 	INET		# IP + ICMP + TCP + UDP
 options 	INET6		# IPv6
 #options 	MROUTING	# IP multicast routing
 #options 	PIM		# Protocol Independent Multicast
-#options 	NS		# XNS
-#options 	NSIP		# XNS tunneling over IP
 #options 	ISO,TPIP	# OSI
 #options 	EON		# OSI tunneling over IP
-#options 	CCITT,LLC,HDLC	# X.25
 #options 	NETATALK	# AppleTalk networking protocols
 #options 	PPP_BSDCOMP	# BSD-Compress compression support for PPP
 #options 	PPP_DEFLATE	# Deflate compression support for PPP
@@ -403,12 +400,14 @@ icp*	at pci? dev ? function ?	# ICP-Vortex GDT & Intel RAID
 mlx*	at pci? dev ? function ?	# Mylex DAC960 & DEC SWXCR family
 mlx*	at eisa? slot ?			# Mylex DAC960 & DEC SWXCR family
 twe*	at pci? dev ? function ?	# 3ware Escalade RAID controllers
+twa*	at pci? dev ? function ?	# 3ware Escalade 95xx RAID controllers
 
 ld*	at aac? unit ?			# logical disk devices
 ld*	at amr? unit ?
 ld*	at cac? unit ?
 ld*	at icp? unit ?
 ld*	at twe? unit ?
+ld*	at twa? unit ?
 ld*	at mlx? unit ?
 
 icpsp*	at icp? unit ?			# SCSI pass-through
@@ -659,7 +658,7 @@ uhidev*	at uhub? port ? configuration ? interface ?
 ukbd*	at uhidev? reportid ?
 wskbd*	at ukbd? console ?
 
-# USB serial adpater
+# USB serial adapter
 #ucycom*	at uhidev? reportid ?
 
 # USB Generic HID devices

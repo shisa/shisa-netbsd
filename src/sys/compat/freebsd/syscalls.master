@@ -1,4 +1,4 @@
-	$NetBSD: syscalls.master,v 1.52 2006/06/26 21:23:57 mrg Exp $
+	$NetBSD: syscalls.master,v 1.54 2006/08/30 11:04:37 matt Exp $
 
 ;	from: @(#)syscalls.master	8.2 (Berkeley) 1/13/94
 
@@ -38,6 +38,7 @@
 #include "opt_sysv.h"
 #include "opt_compat_43.h"
 #include "opt_posix.h"
+#include "opt_ptrace.h"
 
 #include "fs_lfs.h"
 #include "fs_nfs.h"
@@ -100,8 +101,12 @@
 23	NOARGS		{ int sys_setuid(uid_t uid); }
 24	NOARGS		{ uid_t sys_getuid_with_euid(void); }
 25	NOARGS		{ uid_t sys_geteuid(void); }
+#ifdef PTRACE
 26	STD		{ int freebsd_sys_ptrace(int req, pid_t pid, \
 			    caddr_t addr, int data); }
+#else
+26	EXCL		ptrace
+#endif
 27	NOARGS		{ int sys_recvmsg(int s, struct msghdr *msg, \
 			    int flags); }
 28	NOARGS		{ int sys_sendmsg(int s, caddr_t msg, int flags); }
@@ -317,7 +322,7 @@
 160	UNIMPL
 #ifdef NFS
 161	STD		{ int freebsd_sys_getfh(const char *fname, \
-			    fhandle_t *fhp); }
+			    struct compat_30_fhandle *fhp); }
 #else
 161	UNIMPL		getfh
 #endif
@@ -557,10 +562,13 @@
 294	UNIMPL
 295	UNIMPL
 296	UNIMPL
-297	NOARGS		{ int compat_20_sys_fhstatfs(const fhandle_t *fhp, \
+297	NOARGS		{ int compat_20_sys_fhstatfs(const struct	\
+			    compat_30_fhandle *fhp, \
 			    struct statfs12 *buf); }
-298	NOARGS		{ int sys_fhopen(const fhandle_t *fhp, int flags); }
-299	NOARGS		{ int compat_30_sys_fhstat(const fhandle_t *fhp, \
+298	NOARGS		{ int compat_30_sys_fhopen(const	\
+			    struct compat_30_fhandle *fhp, int flags); }
+299	NOARGS		{ int compat_30_sys_fhstat(const 	\
+			    struct cocmpat_30_fhandlez *fhp, 	\
 			    struct stat13 *sb); }
 ; syscall numbers for FreeBSD
 300	UNIMPL		modnext

@@ -1,4 +1,4 @@
-/*	$NetBSD: sysctl.h,v 1.154 2006/04/14 13:09:07 blymn Exp $	*/
+/*	$NetBSD: sysctl.h,v 1.156 2006/08/17 17:11:29 christos Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993
@@ -89,8 +89,8 @@ struct ctlname {
  * Flags that apply to each node, governing access and other features
  */
 #define CTLFLAG_READONLY	0x00000000
-#define CTLFLAG_READONLY1	0x00000010
-#define CTLFLAG_READONLY2	0x00000020
+/* #define CTLFLAG_UNUSED1		0x00000010 */
+/* #define CTLFLAG_UNUSED2		0x00000020 */
 /* #define CTLFLAG_READ*	0x00000040 */
 #define CTLFLAG_READWRITE	0x00000070
 #define CTLFLAG_ANYWRITE	0x00000080
@@ -1045,9 +1045,6 @@ void	sysctl_unlock(struct lwp *);
 int	sysctl_locate(struct lwp *, const int *, u_int,
 		      const struct sysctlnode **, int *);
 int	sysctl_query(SYSCTLFN_PROTO);
-#ifdef SYSCTL_DEBUG_CREATE
-#define sysctl_create _sysctl_create
-#endif /* SYSCTL_DEBUG_CREATE */
 int	sysctl_create(SYSCTLFN_PROTO);
 int	sysctl_destroy(SYSCTLFN_PROTO);
 int	sysctl_lookup(SYSCTLFN_PROTO);

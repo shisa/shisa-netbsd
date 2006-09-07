@@ -1,4 +1,4 @@
-/*	$NetBSD: vfs_syscalls_30.c,v 1.12 2006/07/23 22:06:08 ad Exp $	*/
+/*	$NetBSD: vfs_syscalls_30.c,v 1.15 2006/08/04 16:58:27 yamt Exp $	*/
 
 /*-
  * Copyright (c) 2005 The NetBSD Foundation, Inc.
@@ -36,7 +36,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: vfs_syscalls_30.c,v 1.12 2006/07/23 22:06:08 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: vfs_syscalls_30.c,v 1.15 2006/08/04 16:58:27 yamt Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -383,9 +383,56 @@ compat_30_sys_getfh(struct lwp *l, void *v, register_t *retval)
 	sz = sizeof(struct compat_30_fhandle);
 	error = vfs_composefh(vp, (void *)&fh, &sz);
 	vput(vp);
+	if (sz != FHANDLE_SIZE_COMPAT) {
+		error = EINVAL;
+	}
 	if (error)
 		return (error);
-	error = copyout(&fh, (caddr_t)SCARG(uap, fhp),
-	    sizeof(struct compat_30_fhandle));
+	error = copyout(&fh, SCARG(uap, fhp), sizeof(struct compat_30_fhandle));
 	return (error);
+}
+
+/*
+ * Open a file given a file handle.
+ *
+ * Check permissions, allocate an open file structure,
+ * and call the device open routine if any.
+ */
+int
+compat_30_sys_fhopen(struct lwp *l, void *v, register_t *retval)
+{
+	struct compat_30_sys_fhopen_args /* {
+		syscallarg(const fhandle_t *) fhp;
+		syscallarg(int) flags;
+	} */ *uap = v;
+
+	return dofhopen(l, SCARG(uap, fhp), FHANDLE_SIZE_COMPAT,
+	    SCARG(uap, flags), retval);
+}
+
+/* ARGSUSED */
+int
+compat_30_sys___fhstat30(struct lwp *l, void *v, register_t *retval)
+{
+	struct compat_30_sys___fhstat30_args /* {
+		syscallarg(const fhandle_t *) fhp;
+		syscallarg(struct stat *) sb;
+	} */ *uap = v;
+
+	return dofhstat(l, SCARG(uap, fhp), FHANDLE_SIZE_COMPAT,
+	    SCARG(uap, sb), retval);
+}
+
+/* ARGSUSED */
+int
+compat_30_sys_fhstatvfs1(struct lwp *l, void *v, register_t *retval)
+{
+	struct compat_30_sys_fhstatvfs1_args /* {
+		syscallarg(const fhandle_t *) fhp;
+		syscallarg(struct statvfs *) buf;
+		syscallarg(int)	flags;
+	} */ *uap = v;
+
+	return dofhstatvfs(l, SCARG(uap, fhp), FHANDLE_SIZE_COMPAT,
+	    SCARG(uap, buf), SCARG(uap, flags), retval);
 }

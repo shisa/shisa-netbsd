@@ -1,4 +1,4 @@
-# $NetBSD: GENERIC,v 1.63 2006/06/28 15:19:28 liamjfoy Exp $
+# $NetBSD: GENERIC,v 1.65 2006/08/26 07:59:22 tsutsui Exp $
 #
 # GENERIC machine description file
 #
@@ -22,7 +22,7 @@ include		"arch/pc532/conf/std.pc532"
 
 options 	INCLUDE_CONFIG_FILE	# embed config file in kernel binary
 
-#ident 		"GENERIC-$Revision: 1.63 $"
+#ident 		"GENERIC-$Revision: 1.65 $"
 
 maxusers	8			# estimated number of users
 
@@ -30,7 +30,7 @@ maxusers	8			# estimated number of users
 #options 	DDB_HISTORY_SIZE=100	# enable history editing in DDB
 #options 	DIAGNOSTIC		# internal consistency checking
 options 	KTRACE			# system call tracing, a la ktrace(1)
-options 	SYSTRACE		# system call vetting via systrace(1)
+#options 	SYSTRACE		# system call vetting via systrace(1)
 
 #options 	ACCOUNTING		# process accounting
 #options 	SYSVMSG			# System V message queues
@@ -141,7 +141,6 @@ pseudo-device	ksyms			# /dev/ksyms
 #pseudo-device	pflog			# PF log if
 
 # Veriexec
-#options VERIFIED_EXEC
 #
 # a pseudo device needed for veriexec
 #pseudo-device	veriexec		1
@@ -156,4 +155,3 @@ pseudo-device	ksyms			# /dev/ksyms
 #options VERIFIED_EXEC_FP_SHA512
 #options VERIFIED_EXEC_FP_SHA1
 #options VERIFIED_EXEC_FP_MD5
-

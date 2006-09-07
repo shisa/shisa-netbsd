@@ -1,4 +1,4 @@
-# $NetBSD: GENERIC,v 1.44 2006/06/28 15:19:27 liamjfoy Exp $
+# $NetBSD: GENERIC,v 1.47 2006/08/26 20:26:43 christos Exp $
 #
 # GENERIC machine description file
 # 
@@ -86,11 +86,8 @@ options 	INET6		# IPV6
 #options 	IPSEC_DEBUG	# debug for IP security
 #options 	MROUTING	# IP multicast routing
 #options 	PIM		# Protocol Independent Multicast
-#options 	NS		# XNS
-#options 	NSIP		# XNS tunneling over IP
 #options 	ISO,TPIP	# OSI
 #options 	EON		# OSI tunneling over IP
-#options 	CCITT,LLC,HDLC	# X.25
 #options 	NETATALK	# AppleTalk networking
 #options 	PFIL_HOOKS	# pfil(9) packet filter hooks
 #options 	PPP_BSDCOMP	# BSD-Compress compression support for PPP
@@ -132,7 +129,7 @@ options 	P1003_1B_SEMAPHORE # p1003.1b semaphore support
 
 # Miscellaneous kernel options
 options 	KTRACE		# system call tracing, a la ktrace(1)
-options 	SYSTRACE	# system call vetting via systrace(1)
+#options 	SYSTRACE	# system call vetting via systrace(1)
 #options 	IRQSTATS	# manage IRQ statistics
 #options 	LKM		# loadable kernel modules
 #options 	KMEMSTATS	# kernel memory statistics
@@ -269,7 +266,6 @@ pseudo-device	ksyms			# /dev/ksyms
 #pseudo-device	pflog			# PF log if
 
 # Veriexec
-#options VERIFIED_EXEC
 #
 # a pseudo device needed for veriexec
 #pseudo-device	veriexec		1

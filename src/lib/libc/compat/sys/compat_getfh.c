@@ -1,7 +1,7 @@
-/*	$NetBSD: compat_getfh.c,v 1.3 2006/07/27 18:11:19 christos Exp $	*/
+/*	$NetBSD: compat_getfh.c,v 1.5 2006/08/04 16:30:22 yamt Exp $	*/
 
 /*-
- * Copyright (c) 2002 The NetBSD Foundation, Inc.
+ * Copyright (c) 2006 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
  * This code is derived from software contributed to The NetBSD Foundation
@@ -39,33 +39,22 @@
 
 #include <sys/cdefs.h>
 #if defined(LIBC_SCCS) && !defined(lint)
-__RCSID("$NetBSD: compat_getfh.c,v 1.3 2006/07/27 18:11:19 christos Exp $");
+__RCSID("$NetBSD: compat_getfh.c,v 1.5 2006/08/04 16:30:22 yamt Exp $");
 #endif /* LIBC_SCCS and not lint */
 
 #define __LIBC12_SOURCE__
 
 #include <sys/types.h>
 #include <sys/mount.h>
+#include <compat/include/fstypes.h>
+
+#include <errno.h>
 
 __warn_references(getfh,
     "warning: reference to compatibility getfh(); include <sys/mount.h> to generate correct reference")
 
-/*
- * Old fhandle_t
- */
 
-/* Old, fixed size filehandle structures (used upto (including) 3.x) */
-struct compat_30_fid{
-	unsigned short	fid30_len;
-	unsigned short	fid30_reserved;
-	char		fid30_data[16];
-};
-struct compat_30_fhandle {
-	fsid_t	fh_fsid;
-	struct compat_30_fid fh_fid;
-};
-
-int     __getfh30(const char *, fhandle_t*, size_t *);
+int     __getfh30(const char *, void*, size_t *);
 int	getfh(const char *path, struct compat_30_fhandle *fhp);
 
 /*
@@ -75,6 +64,15 @@ int
 getfh(const char *path, struct compat_30_fhandle *fhp)
 {
 	size_t fh_size = sizeof(*fhp);
+	int ret;
 
-	return __getfh30(path, (void*)fhp, &fh_size);
+	ret = __getfh30(path, (void*)fhp, &fh_size);
+	if (ret != 0) {
+		return ret;
+	}
+	if (fh_size != FHANDLE30_SIZE) {
+		errno = EINVAL;
+		return -1;
+	}
+	return 0;
 }

@@ -1,4 +1,4 @@
-/*	$NetBSD: cd.c,v 1.242 2006/03/30 16:09:28 thorpej Exp $	*/
+/*	$NetBSD: cd.c,v 1.248 2006/09/01 03:29:32 matt Exp $	*/
 
 /*-
  * Copyright (c) 1998, 2001, 2003, 2004, 2005 The NetBSD Foundation, Inc.
@@ -57,7 +57,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: cd.c,v 1.242 2006/03/30 16:09:28 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: cd.c,v 1.248 2006/09/01 03:29:32 matt Exp $");
 
 #include "rnd.h"
 
@@ -203,7 +203,7 @@ const struct cdevsw cd_cdevsw = {
 	nostop, notty, nopoll, nommap, nokqfilter, D_DISK
 };
 
-static struct dkdriver cddkdriver = { cdstrategy };
+static struct dkdriver cddkdriver = { cdstrategy, NULL };
 
 static const struct scsipi_periphsw cd_switch = {
 	cd_interpret_sense,	/* use our error handler first */
@@ -889,10 +889,14 @@ cddone(struct scsipi_xfer *xs, int error)
 	struct buf *bp = xs->bp;
 
 	if (bp) {
+		/* note, bp->b_resid is NOT initialised */
 		bp->b_error = error;
 		bp->b_resid = xs->resid;
-		if (error)
+		if (error) {
+			/* on a read/write error bp->b_resid is zero, so fix */
+			bp->b_resid = bp->b_bcount;
 			bp->b_flags |= B_ERROR;
+		}
 
 		disk_unbusy(&cd->sc_dk, bp->b_bcount - bp->b_resid,
 		    (bp->b_flags & B_READ));
@@ -1058,14 +1062,12 @@ cdminphys(struct buf *bp)
 static int
 cdread(dev_t dev, struct uio *uio, int ioflag)
 {
-
 	return (physio(cdstrategy, NULL, dev, B_READ, cdminphys, uio));
 }
 
 static int
 cdwrite(dev_t dev, struct uio *uio, int ioflag)
 {
-
 	return (physio(cdstrategy, NULL, dev, B_WRITE, cdminphys, uio));
 }
 
@@ -1523,11 +1525,9 @@ bad:
 		 * GET_CONFIGURATION, READ_DISCINFO, READ_TRACKINFO,
 		 * (READ_TOCf2, READ_CD_CAPACITY and GET_CONFIGURATION) commands
 		 */
-
 		return mmc_getdiscinfo(periph, (struct mmc_discinfo *) addr);
 	case MMCGETTRACKINFO:
 		/* READ TOCf2, READ_CD_CAPACITY and READ_TRACKINFO commands */
-
 		return mmc_gettrackinfo(periph, (struct mmc_trackinfo *) addr);
 	default:
 		if (part != RAW_PART)
@@ -1645,7 +1645,7 @@ cdgetdisklabel(struct cd_softc *cd)
  * we count.
  */
 static int
-read_cd_capacity(struct scsipi_periph *periph, int *blksize, u_long *size)
+read_cd_capacity(struct scsipi_periph *periph, u_int *blksize, u_long *size)
 {
 	struct scsipi_read_cd_capacity    cap_cmd;
 	struct scsipi_read_cd_cap_data    cap;
@@ -1728,7 +1728,7 @@ read_cd_capacity(struct scsipi_periph *periph, int *blksize, u_long *size)
 static u_long
 cd_size(struct cd_softc *cd, int flags)
 {
-	int blksize;
+	u_int blksize;
 	u_long size;
 	int error;
 
@@ -1746,7 +1746,7 @@ cd_size(struct cd_softc *cd, int flags)
 			blksize = 2048;
 	}
 	cd->params.blksize     = blksize;
-	cd->params.disksize    = size-1;   /* disklabel is exclusive */
+	cd->params.disksize    = size;
 	cd->params.disksize512 = ((u_int64_t)cd->params.disksize * blksize) / DEV_BSIZE;
 
 	SC_DEBUG(cd->sc_periph, SCSIPI_DB2,
@@ -2585,7 +2585,11 @@ mmc_profile2class(uint16_t mmc_profile)
 	case 0x14 : /* DVD-RW sequential */
 	case 0x1a : /* DVD+RW  */
 	case 0x1b : /* DVD+R   */
+	case 0x2a : /* DVD+RW Dual layer */
 	case 0x2b : /* DVD+R Dual layer */
+	case 0x50 : /* HD DVD-ROM */
+	case 0x51 : /* HD DVD-R   */
+	case 0x52 : /* HD DVD-RW; DVD-RAM like */
 		return MMC_CLASS_DVD;
 	case 0x40 : /* BD-ROM  */
 	case 0x41 : /* BD-R Sequential recording (SRM) */
@@ -2854,7 +2858,7 @@ mmc_getdiscinfo(struct scsipi_periph *periph,
 	if (error)
 		return error;
 
-	mmc_discinfo->last_possible_lba = (uint32_t) last_lba;
+	mmc_discinfo->last_possible_lba = (uint32_t) last_lba - 1;
 
 	/* Read in all features to determine device capabilities */
 	last_feature = feature = 0;

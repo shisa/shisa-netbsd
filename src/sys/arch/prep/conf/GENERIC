@@ -1,4 +1,4 @@
-# $NetBSD: GENERIC,v 1.122 2006/06/28 15:19:29 liamjfoy Exp $
+# $NetBSD: GENERIC,v 1.129 2006/09/01 07:41:57 garbled Exp $
 #
 # GENERIC machine description file
 # 
@@ -22,9 +22,7 @@ include 	"arch/prep/conf/std.prep"
 
 options 	INCLUDE_CONFIG_FILE	# embed config file in kernel binary
 
-makeoptions	COPTS="-Os -mmultiple"	# -Os -mmultiple to reduce size.
-
-#ident		"GENERIC-$Revision: 1.122 $"
+#ident		"GENERIC-$Revision: 1.129 $"
 
 maxusers	32
 
@@ -38,7 +36,7 @@ options 	RTC_OFFSET=0	# hardware clock is this many mins. west of GMT
 options 	NTP		# NTP phase/frequency locked loop
 
 options 	KTRACE		# system call tracing via ktrace(1)
-options 	SYSTRACE	# system call vetting via systrace(1)
+#options 	SYSTRACE	# system call vetting via systrace(1)
 
 options 	SYSVMSG		# System V-like message queues
 options 	SYSVSEM		# System V-like semaphores
@@ -129,6 +127,7 @@ options 	PPP_DEFLATE	# Deflate compression support for PPP
 options 	PPP_FILTER	# Active filter support for PPP (requires bpf)
 options 	PFIL_HOOKS	# pfil(9) packet filter hooks
 options 	IPFILTER_LOG	# ipmon(8) log support
+options 	IPFILTER_LOOKUP	# ippool(8) support
 #options 	IPFILTER_DEFAULT_BLOCK	# block all packets by default
 #options 	TCP_DEBUG	# Record last TCP_NDEBUG packets with SO_DEBUG
 
@@ -285,6 +284,7 @@ esiop*	at pci? dev ? function ?	# Symbios 53c875 SCSI and newer
 
 # PCMCIA SCSI controllers
 aic*	at pcmcia? function ?		# Adaptec APA-1460 SCSI
+spc* 	at pcmcia? function ?		# Fujitsu MB87030/MB89352 SCSI
 
 # SCSI bus support
 #scsibus* at adw?
@@ -293,6 +293,7 @@ scsibus* at aic?
 #scsibus* at iha?
 #scsibus* at pcscp?
 scsibus* at siop?
+scsibus* at spc?
 scsibus* at esiop?
 
 # SCSI devices
@@ -307,6 +308,10 @@ uk*	at scsibus? target ? lun ?	# SCSI unknown
 
 # IDE controller found on most Power Personal machines
 wdc*	at pnpbus?
+
+# PCI IDE controllers
+pciide*		at pci? dev ? function ? flags 0x0000
+hptide*		at pci? dev ? function ?
 
 #fdc0 at pnpbus?	# standard ISA floppy controller
 #fd0 at fdc0 drive ?
@@ -420,7 +425,7 @@ ukphy*	at mii? phy ?			# generic unknown PHYs
 #ukbd*	at uhidev? reportid ?
 #wskbd*	at ukbd? console ? mux 1
 
-# USB serial adpater
+# USB serial adapter
 #ucycom*	at uhidev? reportid ?
 
 # USB Generic HID devices
@@ -574,7 +579,6 @@ pseudo-device	wsmux			# mouse & keyboard multiplexor
 pseudo-device	wsfont
 
 # Veriexec
-#options VERIFIED_EXEC
 #
 # a pseudo device needed for veriexec
 #pseudo-device	veriexec		1

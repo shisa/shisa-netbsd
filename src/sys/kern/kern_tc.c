@@ -1,4 +1,4 @@
-/* $NetBSD: kern_tc.c,v 1.5 2006/07/23 22:06:11 ad Exp $ */
+/* $NetBSD: kern_tc.c,v 1.7 2006/08/06 13:29:42 bjh21 Exp $ */
 
 /*-
  * ----------------------------------------------------------------------------
@@ -11,7 +11,7 @@
 
 #include <sys/cdefs.h>
 /* __FBSDID("$FreeBSD: src/sys/kern/kern_tc.c,v 1.166 2005/09/19 22:16:31 andre Exp $"); */
-__KERNEL_RCSID(0, "$NetBSD: kern_tc.c,v 1.5 2006/07/23 22:06:11 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_tc.c,v 1.7 2006/08/06 13:29:42 bjh21 Exp $");
 
 #include "opt_ntp.h"
 

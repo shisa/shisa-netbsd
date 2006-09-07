@@ -1,4 +1,4 @@
-/*	$NetBSD: vfs_syscalls.c,v 1.262 2006/07/26 16:34:07 elad Exp $	*/
+/*	$NetBSD: vfs_syscalls.c,v 1.267 2006/08/08 13:08:08 yamt Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: vfs_syscalls.c,v 1.262 2006/07/26 16:34:07 elad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: vfs_syscalls.c,v 1.267 2006/08/08 13:08:08 yamt Exp $");
 
 #include "opt_compat_netbsd.h"
 #include "opt_compat_43.h"
@@ -80,7 +80,9 @@ __KERNEL_RCSID(0, "$NetBSD: vfs_syscalls.c,v 1.262 2006/07/26 16:34:07 elad Exp 
 #ifdef COMPAT_30
 #include "opt_nfsserver.h"
 #include <nfs/rpcv2.h>
+#endif
 #include <nfs/nfsproto.h>
+#ifdef COMPAT_30
 #include <nfs/nfs.h>
 #include <nfs/nfs_var.h>
 #endif
@@ -1356,36 +1358,52 @@ out:
 }
 
 /*
- * vfs_copyinfh: copyin a filehandle.
+ * vfs_copyinfh_alloc: allocate and copyin a filehandle, given
+ * the needed size.
  */
 
 int
-vfs_copyinfh_alloc(const void *ufhp, fhandle_t **fhpp)
+vfs_copyinfh_alloc(const void *ufhp, size_t fhsize, fhandle_t **fhpp)
 {
 	fhandle_t *fhp;
-	fhandle_t tempfh;
-	size_t fhsize;
 	int error;
 
 	*fhpp = NULL;
-	error = copyin(ufhp, &tempfh, sizeof(tempfh));
-	if (error) {
-		return error;
-	}
-	fhsize = FHANDLE_SIZE(&tempfh);
 	if (fhsize > FHANDLE_SIZE_MAX) {
 		return EINVAL;
 	}
+	if (fhsize < FHANDLE_SIZE_MIN) {
+		return EINVAL;
+	}
+again:
 	fhp = kmem_alloc(fhsize, KM_SLEEP);
 	if (fhp == NULL) {
 		return ENOMEM;
 	}
 	error = copyin(ufhp, fhp, fhsize);
 	if (error == 0) {
-		*fhpp = fhp;
-	} else {
-		kmem_free(fhp, fhsize);
+		/* XXX this check shouldn't be here */
+		if (FHANDLE_SIZE(fhp) == fhsize) {
+			*fhpp = fhp;
+			return 0;
+		} else if (fhsize == NFSX_V2FH && FHANDLE_SIZE(fhp) < fhsize) {
+			/*
+			 * a kludge for nfsv2 padded handles.
+			 */
+			size_t sz;
+
+			sz = FHANDLE_SIZE(fhp);
+			kmem_free(fhp, fhsize);
+			fhsize = sz;
+			goto again;
+		} else {
+			/*
+			 * userland told us wrong size.
+			 */
+		    	error = EINVAL;
+		}
 	}
+	kmem_free(fhp, fhsize);
 	return error;
 }
 
@@ -1457,24 +1475,22 @@ out:
  * Check permissions, allocate an open file structure,
  * and call the device open routine if any.
  */
+
 int
-sys_fhopen(struct lwp *l, void *v, register_t *retval)
+dofhopen(struct lwp *l, const void *ufhp, size_t fhsize, int oflags,
+    register_t *retval)
 {
-	struct sys_fhopen_args /* {
-		syscallarg(const fhandle_t *) fhp;
-		syscallarg(int) flags;
-	} */ *uap = v;
 	struct filedesc *fdp = l->l_proc->p_fd;
 	struct file *fp;
 	struct vnode *vp = NULL;
 	struct mount *mp;
 	kauth_cred_t cred = l->l_cred;
-	int flags;
 	struct file *nfp;
 	int type, indx, error=0;
 	struct flock lf;
 	struct vattr va;
 	fhandle_t *fh;
+	int flags;
 
 	/*
 	 * Must be super user
@@ -1483,7 +1499,7 @@ sys_fhopen(struct lwp *l, void *v, register_t *retval)
 	    &l->l_acflag)))
 		return (error);
 
-	flags = FFLAGS(SCARG(uap, flags));
+	flags = FFLAGS(oflags);
 	if ((flags & (FREAD | FWRITE)) == 0)
 		return (EINVAL);
 	if ((flags & O_CREAT))
@@ -1492,7 +1508,7 @@ sys_fhopen(struct lwp *l, void *v, register_t *retval)
 	if ((error = falloc(l, &nfp, &indx)) != 0)
 		return (error);
 	fp = nfp;
-	error = vfs_copyinfh_alloc(SCARG(uap, fhp), &fh);
+	error = vfs_copyinfh_alloc(ufhp, fhsize, &fh);
 	if (error != 0) {
 		goto bad;
 	}
@@ -1589,14 +1605,23 @@ bad:
 	return (error);
 }
 
-/* ARGSUSED */
 int
-sys___fhstat30(struct lwp *l, void *v, register_t *retval)
+sys___fhopen40(struct lwp *l, void *v, register_t *retval)
 {
-	struct sys___fhstat30_args /* {
-		syscallarg(const fhandle_t *) fhp;
-		syscallarg(struct stat *) sb;
+	struct sys___fhopen40_args /* {
+		syscallarg(const void *) fhp;
+		syscallarg(size_t) fh_size;
+		syscallarg(int) flags;
 	} */ *uap = v;
+
+	return dofhopen(l, SCARG(uap, fhp), SCARG(uap, fh_size),
+	    SCARG(uap, flags), retval);
+}
+
+int
+dofhstat(struct lwp *l, const void *ufhp, size_t fhsize, struct stat *sbp,
+    register_t *retval)
+{
 	struct stat sb;
 	int error;
 	fhandle_t *fh;
@@ -1609,7 +1634,7 @@ sys___fhstat30(struct lwp *l, void *v, register_t *retval)
 	    KAUTH_GENERIC_ISSUSER, &l->l_acflag)) != 0)
 		return (error);
 
-	error = vfs_copyinfh_alloc(SCARG(uap, fhp), &fh);
+	error = vfs_copyinfh_alloc(ufhp, fhsize, &fh);
 	if (error != 0) {
 		goto bad;
 	}
@@ -1622,21 +1647,31 @@ sys___fhstat30(struct lwp *l, void *v, register_t *retval)
 	if (error) {
 		goto bad;
 	}
-	error = copyout(&sb, SCARG(uap, sb), sizeof(sb));
+	error = copyout(&sb, sbp, sizeof(sb));
 bad:
 	vfs_copyinfh_free(fh);
 	return error;
 }
 
+
 /* ARGSUSED */
 int
-sys_fhstatvfs1(struct lwp *l, void *v, register_t *retval)
+sys___fhstat40(struct lwp *l, void *v, register_t *retval)
 {
-	struct sys_fhstatvfs1_args /* {
-		syscallarg(const fhandle_t *) fhp;
-		syscallarg(struct statvfs *) buf;
-		syscallarg(int)	flags;
+	struct sys___fhstat40_args /* {
+		syscallarg(const void *) fhp;
+		syscallarg(size_t) fh_size;
+		syscallarg(struct stat *) sb;
 	} */ *uap = v;
+
+	return dofhstat(l, SCARG(uap, fhp), SCARG(uap, fh_size), SCARG(uap, sb),
+	    retval);
+}
+
+int
+dofhstatvfs(struct lwp *l, const void *ufhp, size_t fhsize, struct statvfs *buf,
+    int flags, register_t *retval)
+{
 	struct statvfs *sb = NULL;
 	fhandle_t *fh;
 	struct mount *mp;
@@ -1650,7 +1685,7 @@ sys_fhstatvfs1(struct lwp *l, void *v, register_t *retval)
 	    KAUTH_GENERIC_ISSUSER, &l->l_acflag)) != 0)
 		return error;
 
-	error = vfs_copyinfh_alloc(SCARG(uap, fhp), &fh);
+	error = vfs_copyinfh_alloc(ufhp, fhsize, &fh);
 	if (error != 0) {
 		goto out;
 	}
@@ -1660,18 +1695,33 @@ sys_fhstatvfs1(struct lwp *l, void *v, register_t *retval)
 	}
 	mp = vp->v_mount;
 	sb = STATVFSBUF_GET();
-	if ((error = dostatvfs(mp, sb, l, SCARG(uap, flags), 1)) != 0) {
+	if ((error = dostatvfs(mp, sb, l, flags, 1)) != 0) {
 		vput(vp);
 		goto out;
 	}
 	vput(vp);
-	error = copyout(sb, SCARG(uap, buf), sizeof(*sb));
+	error = copyout(sb, buf, sizeof(*sb));
 out:
 	if (sb != NULL) {
 		STATVFSBUF_PUT(sb);
 	}
 	vfs_copyinfh_free(fh);
 	return error;
+}
+
+/* ARGSUSED */
+int
+sys___fhstatvfs140(struct lwp *l, void *v, register_t *retval)
+{
+	struct sys___fhstatvfs140_args /* {
+		syscallarg(const void *) fhp;
+		syscallarg(size_t) fh_size;
+		syscallarg(struct statvfs *) buf;
+		syscallarg(int)	flags;
+	} */ *uap = v;
+
+	return dofhstatvfs(l, SCARG(uap, fhp), SCARG(uap, fh_size),
+	    SCARG(uap, buf), SCARG(uap, flags), retval);
 }
 
 /*

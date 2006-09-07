@@ -1,4 +1,4 @@
-/* $NetBSD: if_pppoe.c,v 1.70 2006/07/23 22:06:12 ad Exp $ */
+/* $NetBSD: if_pppoe.c,v 1.72 2006/08/30 16:57:59 christos Exp $ */
 
 /*-
  * Copyright (c) 2002 The NetBSD Foundation, Inc.
@@ -37,11 +37,12 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_pppoe.c,v 1.70 2006/07/23 22:06:12 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_pppoe.c,v 1.72 2006/08/30 16:57:59 christos Exp $");
 
 #include "pppoe.h"
 #include "bpfilter.h"
 #include "opt_pfil_hooks.h"
+#include "opt_pppoe.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -150,8 +151,8 @@ struct pppoe_softc {
 };
 
 /* incoming traffic will be queued here */
-struct ifqueue ppoediscinq = { NULL };
-struct ifqueue ppoeinq = { NULL };
+struct ifqueue ppoediscinq = { .ifq_maxlen = IFQ_MAXLEN };
+struct ifqueue ppoeinq = { .ifq_maxlen = IFQ_MAXLEN };
 
 #ifdef __HAVE_GENERIC_SOFT_INTERRUPTS
 void * pppoe_softintr = NULL;
@@ -218,9 +219,6 @@ pppoeattach(int count)
 {
 	LIST_INIT(&pppoe_softc_list);
 	if_clone_attach(&pppoe_cloner);
-
-	ppoediscinq.ifq_maxlen = IFQ_MAXLEN;
-	ppoeinq.ifq_maxlen = IFQ_MAXLEN;
 
 #ifdef __HAVE_GENERIC_SOFT_INTERRUPTS
 	pppoe_softintr = softintr_establish(IPL_SOFTNET, pppoe_softintr_handler, NULL);

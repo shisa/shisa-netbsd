@@ -1,4 +1,4 @@
-/*	$NetBSD: tunnel.c,v 1.6 2006/06/16 23:48:35 elad Exp $	*/
+/*	$NetBSD: tunnel.c,v 1.8 2006/08/31 17:46:16 dyoung Exp $	*/
 
 /*
  * Copyright (c) 1983, 1993
@@ -31,7 +31,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: tunnel.c,v 1.6 2006/06/16 23:48:35 elad Exp $");
+__RCSID("$NetBSD: tunnel.c,v 1.8 2006/08/31 17:46:16 dyoung Exp $");
 #endif /* not lint */
 
 #include <sys/param.h> 
@@ -50,6 +50,7 @@ __RCSID("$NetBSD: tunnel.c,v 1.6 2006/06/16 23:48:35 elad Exp $");
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <util.h>
 
 #include "extern.h"
 #include "tunnel.h"
@@ -59,9 +60,10 @@ __RCSID("$NetBSD: tunnel.c,v 1.6 2006/06/16 23:48:35 elad Exp $");
 #endif
 
 void
-settunnel(const char *src, const char *dst)
+settunnel(const char *src0, const char *dst0)
 {
 	struct addrinfo hints, *srcres, *dstres;
+	char *dst, *dstport, *src, *srcport;
 	int ecode;
 	struct if_laddrreq req;
 
@@ -69,11 +71,21 @@ settunnel(const char *src, const char *dst)
 	hints.ai_family = afp->af_af;
 	hints.ai_socktype = SOCK_DGRAM; /*dummy*/
 
-	if ((ecode = getaddrinfo(src, NULL, &hints, &srcres)) != 0)
+	if ((src = strdup(src0)) == NULL)
+		err(EXIT_FAILURE, "%s: strdup", __func__);
+	if ((dst = strdup(dst0)) == NULL)
+		err(EXIT_FAILURE, "%s: strdup", __func__);
+
+	srcport = src;
+	(void)strsep(&srcport, ",");
+	dstport = dst;
+	(void)strsep(&dstport, ",");
+
+	if ((ecode = getaddrinfo(src, srcport, &hints, &srcres)) != 0)
 		errx(EXIT_FAILURE, "error in parsing address string: %s",
 		    gai_strerror(ecode));
 
-	if ((ecode = getaddrinfo(dst, NULL, &hints, &dstres)) != 0)
+	if ((ecode = getaddrinfo(dst, dstport, &hints, &dstres)) != 0)
 		errx(EXIT_FAILURE, "error in parsing address string: %s",
 		    gai_strerror(ecode));
 
@@ -123,6 +135,8 @@ settunnel(const char *src, const char *dst)
 
 	freeaddrinfo(srcres);
 	freeaddrinfo(dstres);
+	free(src);
+	free(dst);
 }
 
 /*ARGSUSED*/
@@ -137,6 +151,8 @@ deletetunnel(const char *ifname, int param)
 void
 tunnel_status(void)
 {
+	char dstserv[sizeof(",65535")];
+	char srcserv[sizeof(",65535")];
 	char psrcaddr[NI_MAXHOST];
 	char pdstaddr[NI_MAXHOST];
 	const int niflag = NI_NUMERICHOST;
@@ -155,15 +171,20 @@ tunnel_status(void)
 		in6_fillscopeid((struct sockaddr_in6 *)&req.addr);
 #endif /* INET6 */
 	getnameinfo((struct sockaddr *)&req.addr, req.addr.ss_len,
-	    psrcaddr, sizeof(psrcaddr), 0, 0, niflag);
+	    psrcaddr, sizeof(psrcaddr), &srcserv[1], sizeof(srcserv) - 1,
+	    niflag);
 
 #ifdef INET6
 	if (req.dstaddr.ss_family == AF_INET6)
 		in6_fillscopeid((struct sockaddr_in6 *)&req.dstaddr);
 #endif
 	getnameinfo((struct sockaddr *)&req.dstaddr, req.dstaddr.ss_len,
-	    pdstaddr, sizeof(pdstaddr), 0, 0, niflag);
+	    pdstaddr, sizeof(pdstaddr), &dstserv[1], sizeof(dstserv) - 1,
+	    niflag);
 
-	printf("\ttunnel %s %s --> %s\n", lafp ? lafp->af_name : "???",
-	    psrcaddr, pdstaddr);
+	srcserv[0] = (strcmp(&srcserv[1], "0") == 0) ? '\0' : ',';
+	dstserv[0] = (strcmp(&dstserv[1], "0") == 0) ? '\0' : ',';
+
+	printf("\ttunnel %s %s%s --> %s%s\n", lafp ? lafp->af_name : "???",
+	    psrcaddr, srcserv, pdstaddr, dstserv);
 }

@@ -1,4 +1,4 @@
-/*	$NetBSD: newfs.c,v 1.20 2006/05/04 04:39:15 perseant Exp $	*/
+/*	$NetBSD: newfs.c,v 1.22 2006/08/06 00:21:14 perseant Exp $	*/
 
 /*-
  * Copyright (c) 1989, 1992, 1993
@@ -39,7 +39,7 @@ __COPYRIGHT("@(#) Copyright (c) 1989, 1992, 1993\n\
 #if 0
 static char sccsid[] = "@(#)newfs.c	8.5 (Berkeley) 5/24/95";
 #else
-__RCSID("$NetBSD: newfs.c,v 1.20 2006/05/04 04:39:15 perseant Exp $");
+__RCSID("$NetBSD: newfs.c,v 1.22 2006/08/06 00:21:14 perseant Exp $");
 #endif
 #endif /* not lint */
 
@@ -290,9 +290,16 @@ main(int argc, char **argv)
 
 
 	if (!S_ISCHR(st.st_mode)) {
+		if (!S_ISREG(st.st_mode)) {
+			fatal("%s: neither a character special device "
+			      "nor a regular file", special);
+		}
 		if (debug) {
 			lp = debug_readlabel(fsi);
 			pp = &lp->d_partitions[0];
+			if (secsize == 0)
+				secsize = 512;
+			pp->p_size = st.st_size / secsize;
 		} else {
 			static struct partition dummy_pp;
 			lp = NULL;

@@ -1,4 +1,4 @@
-	$NetBSD: syscalls.master,v 1.18 2006/07/13 23:44:34 pavel Exp $
+	$NetBSD: syscalls.master,v 1.20 2006/08/30 14:01:25 he Exp $
 
 ;	@(#)syscalls.master	8.2 (Berkeley) 1/13/94
 
@@ -109,8 +109,12 @@
 23	NOARGS		{ int sys_setuid(uid_t uid); }
 24	NOARGS		{ uid_t sys_getuid(void); }
 25	NOARGS		{ uid_t sys_geteuid(void); }
+#if defined(PTRACE) || !defined(_KERNEL)
 26	NOARGS		{ int sys_ptrace(int req, pid_t pid, caddr_t addr, \
 			    int data); }
+#else
+26	EXCL		ptrace
+#endif
 27	NOARGS		{ ssize_t sys_recvmsg(int s, struct msghdr *msg, \
 			    int flags); }
 28	NOARGS		{ ssize_t sys_sendmsg(int s, \
@@ -445,7 +449,8 @@
 #endif
 159	UNIMPL
 160	UNIMPL
-161	NOARGS		{ int compat_30_sys_getfh(const char *fname, fhandle_t *fhp); }
+161	NOARGS		{ int compat_30_sys_getfh(const char *fname, \
+			    struct compat_30_fhandle *fhp); }
 #if defined(COMPAT_09) || !defined(_KERNEL)
 162	NOARGS		{ int compat_09_sys_getdomainname(char *domainname, \
 			    int len); } ogetdomainname
@@ -752,11 +757,14 @@
 #endif
 296	NOARGS		{ int sys___getcwd(char *bufp, size_t length); }
 297	NOARGS		{ int sys_fchroot(int fd); }
-298	NOARGS		{ int sys_fhopen(const fhandle_t *fhp, int flags); }
-299	STD		{ int aoutm68k_sys_fhstat(const fhandle_t *fhp, \
+298	NOARGS		{ int compat_30_sys_fhopen(const \
+			    struct compat_30_fhandle *fhp, int flags); }
+299	STD		{ int aoutm68k_sys_fhstat(const struct \
+			    compat_30_fhandle *fhp, \
 			    struct aoutm68k_stat *sb); }
 #if defined(COMPAT_20) || !defined(_KERNEL)
-300	NOARGS		{ int compat_20_sys_fhstatfs(const fhandle_t *fhp, \
+300	NOARGS		{ int compat_20_sys_fhstatfs(const struct \
+			    compat_30-fhandle *fhp, \
 			    struct statfs12 *buf); }
 #else
 300	EXCL		compat_20_sys_fhstatfs

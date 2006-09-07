@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_sig.c,v 1.224 2006/07/23 22:06:11 ad Exp $	*/
+/*	$NetBSD: kern_sig.c,v 1.226 2006/08/30 13:55:03 cube Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1989, 1991, 1993
@@ -37,8 +37,9 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_sig.c,v 1.224 2006/07/23 22:06:11 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_sig.c,v 1.226 2006/08/30 13:55:03 cube Exp $");
 
+#include "opt_coredump.h"
 #include "opt_ktrace.h"
 #include "opt_multiprocessor.h"
 #include "opt_compat_sunos.h"
@@ -84,7 +85,9 @@ __KERNEL_RCSID(0, "$NetBSD: kern_sig.c,v 1.224 2006/07/23 22:06:11 ad Exp $");
 #include <uvm/uvm.h>
 #include <uvm/uvm_extern.h>
 
+#ifdef COREDUMP
 static int	build_corename(struct proc *, char *, const char *, size_t);
+#endif
 static void	ksiginfo_exithook(struct proc *, void *);
 static void	ksiginfo_put(struct proc *, const ksiginfo_t *);
 static ksiginfo_t *ksiginfo_get(struct proc *, int);
@@ -1997,7 +2000,10 @@ sigexit(struct lwp *l, int signum)
 #if 0
 	struct lwp	*l2;
 #endif
-	int		error, exitsig;
+	int		exitsig;
+#ifdef COREDUMP
+	int		error;
+#endif
 
 	p = l->l_proc;
 
@@ -2028,18 +2034,22 @@ sigexit(struct lwp *l, int signum)
 	p->p_acflag |= AXSIG;
 	if (sigprop[signum] & SA_CORE) {
 		p->p_sigctx.ps_signo = signum;
+#ifdef COREDUMP
 		if ((error = coredump(l, NULL)) == 0)
 			exitsig |= WCOREFLAG;
+#endif
 
 		if (kern_logsigexit) {
 			/* XXX What if we ever have really large UIDs? */
 			int uid = l->l_cred ?
 			    (int)kauth_cred_geteuid(l->l_cred) : -1;
 
+#ifdef COREDUMP
 			if (error)
 				log(LOG_INFO, lognocoredump, p->p_pid,
 				    p->p_comm, uid, signum, error);
 			else
+#endif
 				log(LOG_INFO, logcoredump, p->p_pid,
 				    p->p_comm, uid, signum);
 		}
@@ -2050,6 +2060,7 @@ sigexit(struct lwp *l, int signum)
 	/* NOTREACHED */
 }
 
+#ifdef COREDUMP
 struct coredump_iostate {
 	struct lwp *io_lwp;
 	struct vnode *io_vp;
@@ -2193,6 +2204,7 @@ done:
 		PNBUF_PUT(name);
 	return error;
 }
+#endif /* COREDUMP */
 
 /*
  * Nonexistent system call-- signal process (may want to handle it).
@@ -2209,6 +2221,7 @@ sys_nosys(struct lwp *l, void *v, register_t *retval)
 	return (ENOSYS);
 }
 
+#ifdef COREDUMP
 static int
 build_corename(struct proc *p, char *dst, const char *src, size_t len)
 {
@@ -2249,6 +2262,7 @@ build_corename(struct proc *p, char *dst, const char *src, size_t len)
 	*d = '\0';
 	return 0;
 }
+#endif /* COREDUMP */
 
 void
 getucontext(struct lwp *l, ucontext_t *ucp)

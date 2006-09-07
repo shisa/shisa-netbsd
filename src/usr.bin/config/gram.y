@@ -1,5 +1,5 @@
 %{
-/*	$NetBSD: gram.y,v 1.7 2006/06/04 13:07:24 cube Exp $	*/
+/*	$NetBSD: gram.y,v 1.9 2006/08/30 10:12:25 matt Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -117,7 +117,7 @@ static	struct nvlist *mk_ns(const char *, struct nvlist *);
 %token	VERSION
 %token	WITH
 %token	<num> NUMBER
-%token	<str> PATHNAME QSTRING WORD EMPTY
+%token	<str> PATHNAME QSTRING WORD EMPTYSTRING
 %token	ENDDEFS
 
 %left '|'
@@ -275,7 +275,8 @@ one_def:
 	device_major			{ do_devsw = 1; } |
 	prefix |
 	DEVCLASS WORD			{ (void)defattr($2, NULL, NULL, 1); } |
-	DEFFS fsoptfile_opt deffses	{ deffilesystem($2, $3); } |
+	DEFFS fsoptfile_opt deffses defoptdeps
+					{ deffilesystem($2, $3, $4); } |
 	DEFINE WORD interface_opt attrs_opt
 					{ (void)defattr($2, $3, $4, 0); } |
 	DEFOPT optfile_opt defopts defoptdeps
@@ -389,7 +390,7 @@ filename:
 value:
 	QSTRING				{ $$ = $1; } |
 	WORD				{ $$ = $1; } |
-	EMPTY				{ $$ = $1; } |
+	EMPTYSTRING			{ $$ = $1; } |
 	signed_number			{ char bf[40];
 					  (void)snprintf(bf, sizeof(bf),
 					      FORMAT($1), (long long)$1.val);

@@ -1,4 +1,4 @@
-/*	$NetBSD: bpf.c,v 1.120 2006/07/26 13:54:13 christos Exp $	*/
+/*	$NetBSD: bpf.c,v 1.122 2006/08/28 00:09:28 christos Exp $	*/
 
 /*
  * Copyright (c) 1990, 1991, 1993
@@ -39,7 +39,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: bpf.c,v 1.120 2006/07/26 13:54:13 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: bpf.c,v 1.122 2006/08/28 00:09:28 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -167,7 +167,7 @@ dev_type_open(bpfopen);
 
 const struct cdevsw bpf_cdevsw = {
 	bpfopen, noclose, noread, nowrite, noioctl,
-	nostop, notty, nopoll, nommap, nokqfilter,
+	nostop, notty, nopoll, nommap, nokqfilter, D_OTHER
 };
 
 static int
@@ -466,7 +466,7 @@ bpf_read(struct file *fp, off_t *offp, struct uio *uio,
 
 	/*
 	 * Restrict application to use a buffer the same size as
-	 * as kernel buffers.
+	 * the kernel buffers.
 	 */
 	if (uio->uio_resid != d->bd_bufsize)
 		return (EINVAL);

@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile.inc,v 1.69 2006/05/05 00:03:21 rpaulo Exp $
+#	$NetBSD: Makefile.inc,v 1.71 2006/08/26 16:11:05 matt Exp $
 #	@(#)Makefile.inc	8.2 (Berkeley) 9/5/93
 
 # net sources
@@ -11,7 +11,7 @@ SRCS+=	__cmsg_alignbytes.c base64.c ethers.c gethnamaddr.c getifaddrs.c \
 	getservbyname.c getservbyport.c getservent.c \
 	getservbyname_r.c getservbyport_r.c getservent_r.c \
 	iso_addr.c linkaddr.c \
-	nsdispatch.c nslexer.l nsparser.y ns_addr.c ns_ntoa.c nsap_addr.c \
+	nsdispatch.c nslexer.l nsparser.y nsap_addr.c \
 	rcmd.c recv.c send.c sethostent.c \
 	sockatmark.c
 
@@ -43,7 +43,7 @@ nslexer.c: nslexer.l nsparser.h
 
 MAN+=	byteorder.3 ethers.3 gethostbyname.3 getifaddrs.3 \
 	getnetent.3 getprotoent.3 \
-	getservent.3 inet.3 inet_net.3 iso_addr.3 linkaddr.3 ns.3 \
+	getservent.3 inet.3 inet_net.3 iso_addr.3 linkaddr.3 \
 	nsdispatch.3 rcmd.3 resolver.3 sockatmark.3
 
 .if (${MKHESIOD} != "no")
@@ -75,7 +75,6 @@ MLINKS+=inet.3 addr.3 inet.3 inet_addr.3 inet.3 inet_aton.3 \
 	inet.3 ntoa.3 inet.3 inet_ntop.3 inet.3 inet_pton.3
 MLINKS+=inet_net.3 inet_net_ntop.3 inet_net.3 inet_net_pton.3
 MLINKS+=linkaddr.3 link_addr.3 linkaddr.3 link_ntoa.3 linkaddr.3 linkntoa.3
-MLINKS+=ns.3 ns_addr.3 ns.3 ns_ntoa.3
 MLINKS+=rcmd.3 iruserok.3 rcmd.3 rresvport.3 rcmd.3 ruserok.3 rcmd.3 orcmd.3
 MLINKS+=resolver.3 dn_comp.3 resolver.3 dn_expand.3 resolver.3 res_init.3 \
 	resolver.3 res_mkquery.3 resolver.3 res_send.3 resolver.3 res_query.3 \

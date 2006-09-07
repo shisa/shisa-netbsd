@@ -1,4 +1,4 @@
-/*	$NetBSD: consinit.c,v 1.10 2006/04/24 14:15:47 jmcneill Exp $	*/
+/*	$NetBSD: consinit.c,v 1.12 2006/08/13 20:22:27 jmcneill Exp $	*/
 
 /*
  * Copyright (c) 1998
@@ -27,7 +27,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: consinit.c,v 1.10 2006/04/24 14:15:47 jmcneill Exp $");
+__KERNEL_RCSID(0, "$NetBSD: consinit.c,v 1.12 2006/08/13 20:22:27 jmcneill Exp $");
 
 #include "opt_kgdb.h"
 
@@ -165,7 +165,6 @@ consinit()
 #if (NPC > 0) || (NVGA > 0) || (NEGA > 0) || (NPCDISPLAY > 0) || (NVESAFB > 0)
 	if (!strcmp(consinfo->devname, "pc")) {
 		int error;
-
 #if (NVESAFB > 0)
 		if (!vesafb_cnattach())
 			goto dokbd;
