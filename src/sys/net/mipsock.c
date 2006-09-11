@@ -1,4 +1,4 @@
-/* $Id: mipsock.c,v 1.2 2006/06/13 06:12:05 keiichi Exp $ */
+/* $Id: mipsock.c,v 1.3 2006/09/11 06:23:30 keiichi Exp $ */
 
 /*
  * Copyright (C) 2004 WIDE Project.
@@ -757,7 +757,8 @@ static struct protosw mipsw[] = {
 #ifdef __APPLE__
   0,
 #endif
-#if !defined(__FreeBSD__) && !defined(__APPLE__)
+#if defined(__NetBSD__)
+#elif !defined(__FreeBSD__) && !defined(__APPLE__)
   0/*sysctl_rtable*/
 #else
   &mip_usrreqs

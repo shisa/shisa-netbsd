@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.643 2006/07/27 22:18:46 christos Exp $
+# $NetBSD: mi,v 1.647 2006/08/26 19:31:53 matt Exp $
 .						base-sys-root
 ./altroot					base-sys-root
 ./bin						base-sys-root
@@ -793,7 +793,8 @@
 ./usr/include/net				base-c-usr
 ./usr/include/net80211				base-c-usr
 ./usr/include/netatalk				base-c-usr
-./usr/include/netccitt				base-c-usr
+./usr/include/netbt				base-c-usr
+./usr/include/netccitt				base-obsolete		obsolete
 ./usr/include/netinet				base-c-usr
 ./usr/include/netinet6				base-c-usr
 ./usr/include/netipsec				base-c-usr
@@ -801,7 +802,7 @@
 ./usr/include/netiso				base-c-usr
 ./usr/include/netkey				base-c-usr
 ./usr/include/netnatm				base-c-usr
-./usr/include/netns				base-c-usr
+./usr/include/netns				base-obsolete		obsolete
 ./usr/include/netsmb				base-c-usr
 ./usr/include/nfs				base-c-usr
 ./usr/include/ntfs				base-c-usr
@@ -989,7 +990,8 @@
 ./usr/sbin/bootptest				base-bootserver-bin
 ./usr/sbin/bpm					base-pkgutil-bin
 ./usr/sbin/btconfig				base-sysutil-bin
-./usr/sbin/btcontrol				base-sysutil-bin
+./usr/sbin/btcontrol				base-obsolete		obsolete
+./usr/sbin/btdevctl				base-sysutil-bin
 ./usr/sbin/bthcid				base-sysutil-bin
 ./usr/sbin/catman				base-man-bin
 ./usr/sbin/chat					base-ppp-bin
@@ -1236,7 +1238,7 @@
 ./usr/sbin/traceroute				base-netutil-bin
 ./usr/sbin/traceroute6				base-netutil-bin	use_inet6
 ./usr/sbin/trpt					base-netutil-bin
-./usr/sbin/trsp					base-netutil-bin
+./usr/sbin/trsp					base-obsolete		obsolete
 ./usr/sbin/unlink				base-sysutil-bin
 ./usr/sbin/update				base-obsolete		obsolete
 ./usr/sbin/usbdevs				base-sysutil-bin
@@ -1666,7 +1668,17 @@
 ./usr/share/i18n/csmapper/EBCDIC/UCS%EBCDIC-UK.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/GB			base-sysutil-share
 ./usr/share/i18n/csmapper/GB/GB2312%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/GB/GB2312EXT%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/GB/GB2312UDA1%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/GB/GB2312UDA2%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/GB/GBKEXT%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/GB/GBKUDA%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/GB/UCS%GB2312.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/GB/UCS%GB2312EXT.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/GB/UCS%GB2312UDA1.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/GB/UCS%GB2312UDA2.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/GB/UCS%GBKEXT.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/GB/UCS%GBKUDA.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/GEORGIAN					base-sysutil-share
 ./usr/share/i18n/csmapper/GEORGIAN/GEORGIAN-ACADEMY%UCS.mps		base-sysutil-share	nls
 ./usr/share/i18n/csmapper/GEORGIAN/GEORGIAN-ACADEMY@OldCapital%UCS.mps	base-sysutil-share	nls
@@ -1967,6 +1979,7 @@
 ./usr/share/i18n/esdb/MISC/Big5.esdb		base-obsolete		obsolete
 ./usr/share/i18n/esdb/MISC/CTEXT.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/GB18030.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/MISC/GBK.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/KOI8-R.esdb		base-obsolete		obsolete
 ./usr/share/i18n/esdb/MISC/KOI8-U.esdb		base-obsolete		obsolete
 ./usr/share/i18n/esdb/MISC/PTCP154.esdb		base-sysutil-share	nls

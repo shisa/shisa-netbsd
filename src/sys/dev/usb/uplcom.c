@@ -1,4 +1,4 @@
-/*	$NetBSD: uplcom.c,v 1.41.10.2 2005/08/15 19:10:55 tron Exp $	*/
+/*	$NetBSD: uplcom.c,v 1.47 2005/12/11 12:24:01 christos Exp $	*/
 /*
  * Copyright (c) 2001 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -41,7 +41,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: uplcom.c,v 1.41.10.2 2005/08/15 19:10:55 tron Exp $");
+__KERNEL_RCSID(0, "$NetBSD: uplcom.c,v 1.47 2005/12/11 12:24:01 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -157,6 +157,8 @@ struct	ucom_methods uplcom_methods = {
 static const struct usb_devno uplcom_devs[] = {
 	/* I/O DATA USB-RSAQ2 */
 	{ USB_VENDOR_PROLIFIC, USB_PRODUCT_PROLIFIC_RSAQ2 },
+	/* I/O DATA USB-RSAQ3 */
+	{ USB_VENDOR_PROLIFIC, USB_PRODUCT_PROLIFIC_RSAQ3 },
 	/* I/O DATA USB-RSAQ */
 	{ USB_VENDOR_IODATA, USB_PRODUCT_IODATA_USBRSAQ },
 	/* PLANEX USB-RS232 URS-03 */
@@ -167,6 +169,10 @@ static const struct usb_devno uplcom_devs[] = {
 	{ USB_VENDOR_TRIPPLITE, USB_PRODUCT_TRIPPLITE_U209 },
 	/* ELECOM UC-SGT */
 	{ USB_VENDOR_ELECOM, USB_PRODUCT_ELECOM_UCSGT },
+	/* ELECOM UC-SGT0 */
+	{ USB_VENDOR_ELECOM, USB_PRODUCT_ELECOM_UCSGT0 },
+	/* Panasonic 50" Touch Panel */
+	{ USB_VENDOR_PANASONIC, USB_PRODUCT_PANASONIC_TYTP50P6S },
 	/* RATOC REX-USB60 */
 	{ USB_VENDOR_RATOC, USB_PRODUCT_RATOC_REXUSB60 },
 	/* TDK USB-PHS Adapter UHA6400 */
@@ -187,6 +193,16 @@ static const struct usb_devno uplcom_devs[] = {
 	{ USB_VENDOR_PROLIFIC, USB_PRODUCT_PROLIFIC_PL2303X },
 };
 #define uplcom_lookup(v, p) usb_lookup(uplcom_devs, v, p)
+
+static const struct {
+	uint16_t		vendor;
+	uint16_t		product;
+	enum pl2303_type	chiptype;
+} uplcom_devs_ext[] = {
+	/* I/O DATA USB-RSAQ3 */
+	{ USB_VENDOR_PROLIFIC, USB_PRODUCT_PROLIFIC_RSAQ3, UPLCOM_TYPE_HX },
+	{0, 0, 0}
+};
 
 
 USB_DECLARE_DRIVER(uplcom);
@@ -210,15 +226,16 @@ USB_ATTACH(uplcom)
 	usb_config_descriptor_t *cdesc;
 	usb_interface_descriptor_t *id;
 	usb_endpoint_descriptor_t *ed;
-	char devinfo[1024];
+	char *devinfop;
 	char *devname = USBDEVNAME(sc->sc_dev);
 	usbd_status err;
 	int i;
 	struct ucom_attach_args uca;
 
-	usbd_devinfo(dev, 0, devinfo, sizeof(devinfo));
+	devinfop = usbd_devinfo_alloc(dev, 0);
 	USB_ATTACH_SETUP;
-	printf("%s: %s\n", devname, devinfo);
+	printf("%s: %s\n", devname, devinfop);
+	usbd_devinfo_free(devinfop);
 
         sc->sc_udev = dev;
 
@@ -246,7 +263,15 @@ USB_ATTACH(uplcom)
 		sc->sc_dying = 1;
 		USB_ATTACH_ERROR_RETURN;
 	}
-	
+
+	/* determine chip type */
+	for (i = 0; uplcom_devs_ext[i].vendor != 0; i++) {
+		if (uplcom_devs_ext[i].vendor == uaa->vendor &&
+		    uplcom_devs_ext[i].product == uaa->product) {
+			sc->sc_type = uplcom_devs_ext[i].chiptype;
+			goto chiptype_determined;
+		}
+	}
 	/*
 	 * NOTE: The Linux driver distinguishes between UPLCOM_TYPE_0
 	 * and UPLCOM_TYPE_1 type chips by testing other fields in the
@@ -259,6 +284,7 @@ USB_ATTACH(uplcom)
 		sc->sc_type = UPLCOM_TYPE_HX;
 	else
 		sc->sc_type = UPLCOM_TYPE_0;
+chiptype_determined:
 
 	/* get the config descriptor */
 	cdesc = usbd_get_config_descriptor(sc->sc_udev);
@@ -398,8 +424,8 @@ USB_ATTACH(uplcom)
 
 	DPRINTF(("uplcom: in=0x%x out=0x%x intr=0x%x\n",
 			uca.bulkin, uca.bulkout, sc->sc_intr_number ));
-	/*sc->sc_subdev = config_found_sm(self, &uca, ucomprint, ucomsubmatch);*/
-	sc->sc_subdev = config_found_sm_loc(self, "ucombus", NULL, &uca, ucomprint, ucomsubmatch);
+	sc->sc_subdev = config_found_sm_loc(self, "ucombus", NULL, &uca,
+					    ucomprint, ucomsubmatch);
 
 	USB_ATTACH_SUCCESS_RETURN;
 }

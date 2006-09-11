@@ -1,4 +1,4 @@
-/*	$NetBSD: ip6_output.c,v 1.101 2006/07/23 22:06:13 ad Exp $	*/
+/*	$NetBSD: ip6_output.c,v 1.102 2006/08/30 17:15:22 christos Exp $	*/
 /*	$KAME: ip6_output.c,v 1.172 2001/03/25 09:55:56 itojun Exp $	*/
 
 /*
@@ -62,7 +62,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ip6_output.c,v 1.101 2006/07/23 22:06:13 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ip6_output.c,v 1.102 2006/08/30 17:15:22 christos Exp $");
 
 #include "opt_inet.h"
 #include "opt_inet6.h"
@@ -2703,8 +2703,7 @@ ip6_setmoptions(optname, im6op, m)
 		}
 		bcopy(mtod(m, u_int *), &ifindex, sizeof(ifindex));
 		if (ifindex != 0) {
-			if (ifindex < 0 || if_indexlim <= ifindex ||
-			    !ifindex2ifnet[ifindex]) {
+			if (if_indexlim <= ifindex || !ifindex2ifnet[ifindex]) {
 				error = ENXIO;	/* XXX EINVAL? */
 				break;
 			}
@@ -2811,8 +2810,7 @@ ip6_setmoptions(optname, im6op, m)
 			/*
 			 * If the interface is specified, validate it.
 			 */
-			if (mreq->ipv6mr_interface < 0 ||
-			    if_indexlim <= mreq->ipv6mr_interface ||
+			if (if_indexlim <= mreq->ipv6mr_interface ||
 			    !ifindex2ifnet[mreq->ipv6mr_interface]) {
 				error = ENXIO;	/* XXX EINVAL? */
 				break;
@@ -2873,8 +2871,7 @@ ip6_setmoptions(optname, im6op, m)
 		 * to its ifnet structure.
 		 */
 		if (mreq->ipv6mr_interface != 0) {
-			if (mreq->ipv6mr_interface < 0 ||
-			    if_indexlim <= mreq->ipv6mr_interface ||
+			if (if_indexlim <= mreq->ipv6mr_interface ||
 			    !ifindex2ifnet[mreq->ipv6mr_interface]) {
 				error = ENXIO;	/* XXX EINVAL? */
 				break;
@@ -3180,8 +3177,7 @@ ip6_setpktopt(int optname, u_char *buf, int len, struct ip6_pktopts *opt,
 		}
 
 		/* validate the interface index if specified. */
-		if (pktinfo->ipi6_ifindex >= if_indexlim ||
-		    pktinfo->ipi6_ifindex < 0) {
+		if (pktinfo->ipi6_ifindex >= if_indexlim) {
 			 return (ENXIO);
 		}
 		if (pktinfo->ipi6_ifindex) {

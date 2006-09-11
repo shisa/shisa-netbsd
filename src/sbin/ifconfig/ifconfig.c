@@ -1,4 +1,4 @@
-/*	$NetBSD: ifconfig.c,v 1.173 2006/07/13 14:02:03 martin Exp $	*/
+/*	$NetBSD: ifconfig.c,v 1.176 2006/08/26 18:14:28 christos Exp $	*/
 
 /*-
  * Copyright (c) 1997, 1998, 2000 The NetBSD Foundation, Inc.
@@ -76,7 +76,7 @@ __COPYRIGHT("@(#) Copyright (c) 1983, 1993\n\
 #if 0
 static char sccsid[] = "@(#)ifconfig.c	8.2 (Berkeley) 2/16/94";
 #else
-__RCSID("$NetBSD: ifconfig.c,v 1.173 2006/07/13 14:02:03 martin Exp $");
+__RCSID("$NetBSD: ifconfig.c,v 1.176 2006/08/26 18:14:28 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -111,7 +111,6 @@ __RCSID("$NetBSD: ifconfig.c,v 1.173 2006/07/13 14:02:03 martin Exp $");
 #ifndef INET_ONLY
 #include "af_atalk.h"
 #include "af_iso.h"
-#include "af_ns.h"
 #endif /* ! INET_ONLY */
 #include "af_inet.h"
 #ifdef INET6
@@ -367,8 +366,6 @@ const struct afswtch afs[] = {
 #ifndef INET_ONLY	/* small version, for boot media */
 	{ "atalk", AF_APPLETALK, at_status, at_getaddr, NULL,
 	     SIOCDIFADDR, SIOCAIFADDR, SIOCGIFADDR, &addreq, &addreq },
-	{ "ns", AF_NS, xns_status, xns_getaddr, NULL,
-	     SIOCDIFADDR, SIOCAIFADDR, SIOCGIFADDR, &ridreq, &addreq },
 	{ "iso", AF_ISO, iso_status, iso_getaddr, NULL,
 	     SIOCDIFADDR_ISO, SIOCAIFADDR_ISO, SIOCGIFADDR_ISO,
 	     &iso_ridreq, &iso_addreq },
@@ -617,9 +614,6 @@ main(int argc, char *argv[])
 
 	if (af == AF_APPLETALK)
 		checkatrange(&addreq.ifra_addr);
-
-	if (setipdst && af == AF_NS)
-		xns_set_nsip_route(&addreq.ifra_addr, &addreq.ifra_dstaddr);
 #endif	/* INET_ONLY */
 
 	if (clearaddr) {
@@ -1579,13 +1573,4 @@ usage(void)
 		"       %s interface destroy\n",
 		progname, progname, progname, progname, progname, progname);
 	exit(1);
-}
-
-void
-estrlcpy(char *dst, char *src, size_t len)
-{
-	if (strlcpy(dst, src, len) >= len) { 
-		errno = ENAMETOOLONG; 
-		err(1, "Cannot copy `%s'", src);
-	}
 }
