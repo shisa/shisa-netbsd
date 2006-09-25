@@ -376,8 +376,7 @@ ip6_forward(m, srcrt)
 
 	/* XXX need some policy to determine bid for MCOA */
 	if ((bce = mip6_bce_get(&ip6->ip6_dst, NULL, NULL, 0)) &&
-	    (bce->mbc_flags & IP6_MH_BU_HOME) &&
-	    (bce->mbc_encap != NULL)) {
+	    (bce->mbc_flags & IP6_MH_BU_HOME)){
 		if (IN6_IS_ADDR_LINKLOCAL(&bce->mbc_hoa)
 		    || IN6_IS_ADDR_SITELOCAL(&bce->mbc_hoa)) {
 			ip6stat.ip6s_cantforward++;

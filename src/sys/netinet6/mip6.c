@@ -1,4 +1,4 @@
-/*	$Id: mip6.c,v 1.2 2006/07/04 08:14:46 keiichi Exp $	*/
+/*	$Id: mip6.c,v 1.3 2006/09/25 12:47:09 keiichi Exp $	*/
 
 /*
  * Copyright (C) 2004 WIDE Project.  All rights reserved.
@@ -101,6 +101,7 @@
 	 % MIP6_BC_HASH_SIZE)
 struct mip6_bc_internal *mip6_bc_hash[MIP6_BC_HASH_SIZE];
 struct mip6_bc_list mip6_bc_list = LIST_HEAD_INITIALIZER(mip6_bc_list);
+const struct encaptab *mbc_encap = NULL;
 
 struct mip6stat mip6stat;
 u_int8_t mip6_nodetype = MIP6_NODETYPE_NONE;
@@ -526,7 +527,7 @@ mip6_bce_get(hoa, cnaddr, coa, bid)
 #ifdef MIP6_MCOA
 		if (bid && (mbc->mbc_bid != bid))
 			continue;
-		if (coa && !IN6_ARE_ADDR_EQUAL(&mbc->mbc_coa, coa)) 
+		if (coa && !IN6_ARE_ADDR_EQUAL(&mbc->mbc_coa, coa))
 			continue;
 #endif /* MIP6_COA */
 		if (IN6_ARE_ADDR_EQUAL(&mbc->mbc_hoa, hoa) &&
@@ -619,10 +620,12 @@ mip6_bce_update(cnaddr, hoa, coa, flags, bid)
 	/* a home agent creates a proxy ND entry for a mobile node. */
 	if (MIP6_IS_HA && bce != NULL &&
 	    (flags & IP6_MH_BU_HOME) != 0) {
-		bce->mbc_encap = encap_attach_func(AF_INET6, IPPROTO_IPV6,
-						   mip6_rev_encapcheck,
-						   (void *)&mip6_tunnel_protosw, bce);
-		if (bce->mbc_encap == NULL) {
+		if (mbc_encap == NULL) {
+			mbc_encap = encap_attach_func(AF_INET6, IPPROTO_IPV6,
+			    mip6_rev_encapcheck, (void *)&mip6_tunnel_protosw,
+			    NULL);
+		}
+		if (mbc_encap == NULL) {
 			mip6log((LOG_ERR, "mip6_bce_update: "
 			    "attaching an encaptab on a home agent "
 			    "failed.\n"));
@@ -705,7 +708,6 @@ mip6_bce_remove_bc(mbc)
 		mip6_stop_dad(&mbc->mbc_hoa, -1);
 		error = mip6_bc_proxy_control(&mbc->mbc_hoa,
 					      &mbc->mbc_cnaddr, RTM_DELETE);
-		error = encap_detach(mbc->mbc_encap);
 #ifdef IPSEC
 		mip6_bce_update_ipsecdb(mbc);
 #endif /* IPSEC */
@@ -1409,17 +1411,16 @@ mip6_rev_encapcheck(m, off, proto, arg)
 	void *arg;
 {
 	struct ip6_hdr *oip6, *iip6;
-	struct mip6_bc_internal *bce = (struct mip6_bc_internal *)arg;
+	struct mip6_bc_internal *mbc;
 
 	oip6 = mtod(m, struct ip6_hdr *);
 	iip6 = oip6 + 1;
 	
-	/* check addresses in inner and outer header */
-	if (!IN6_ARE_ADDR_EQUAL(&oip6->ip6_src, &bce->mbc_coa) ||
-	    !IN6_ARE_ADDR_EQUAL(&iip6->ip6_src, &bce->mbc_hoa)) {
-		return (0);
-	}
-	return (128);
+	mbc = mip6_bce_get(&iip6->ip6_src, &oip6->ip6_dst, &oip6->ip6_src, 0);
+	if (mbc && IN6_ARE_ADDR_EQUAL(&mbc->mbc_coa, &oip6->ip6_src))
+		return (128);
+
+	return (0);
 }
 
 int
@@ -1448,7 +1449,7 @@ mip6_encapsulate(mm, osrc, odst)
 	if (m && m->m_len < sizeof(struct ip6_hdr))
 		m = m_pullup(m, sizeof(struct ip6_hdr));
 	if (m == NULL)
-		return (0);
+		return (-1);
 
 	ip6 = mtod(m, struct ip6_hdr *);
 	ip6->ip6_flow = 0;
@@ -1462,24 +1463,7 @@ mip6_encapsulate(mm, osrc, odst)
 	mip6stat.mip6s_orevtunnel++;
 
    done:
-#ifdef IPV6_MINMTU
-                /* XXX */
-	return (ip6_output(m, 0, 0, IPV6_MINMTU, 0
-#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__APPLE__)
-		, NULL, NULL
-#else
-		, NULL
-#endif
-		));
-#else
-	return (ip6_output(m, 0, 0, 0, 0
-#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__APPLE__)
-		, NULL, NULL
-#else
-		, NULL
-#endif
-		));
-#endif
+	return (ip6_output(m, 0, 0, 0, 0, NULL, NULL));
 }
 
 #if NMIP > 0

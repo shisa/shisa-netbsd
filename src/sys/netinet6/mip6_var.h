@@ -62,7 +62,6 @@ struct mip6_bc_internal {
 #ifdef MIP6_MCOA
 	u_int16_t       mbc_bid;      /* Binding Unique Identifier */
 #endif /* MIP6_MCOA */
- 	const struct encaptab *mbc_encap;
 };
 LIST_HEAD(mip6_bc_list, mip6_bc_internal);
 
