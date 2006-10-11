@@ -1,4 +1,4 @@
-#	$NetBSD: mi,v 1.918 2006/08/31 19:24:37 dyoung Exp $
+#	$NetBSD: mi,v 1.939 2006/10/08 04:21:54 thorpej Exp $
 ./etc/mtree/set.comp				comp-sys-root
 ./usr/bin/addr2line				comp-debug-bin		bfd
 ./usr/bin/ar					comp-util-bin		bfd
@@ -156,6 +156,7 @@
 ./usr/include/dev/audiovar.h			comp-obsolete		obsolete
 ./usr/include/dev/bluetooth			comp-c-include
 ./usr/include/dev/bluetooth/btdev.h		comp-c-include
+./usr/include/dev/bluetooth/bthidev.h		comp-c-include
 ./usr/include/dev/bluetooth/bthset.h		comp-obsolete		obsolete
 ./usr/include/dev/bluetooth/btsco.h		comp-c-include
 ./usr/include/dev/ccdvar.h			comp-c-include
@@ -354,6 +355,7 @@
 ./usr/include/dev/isapnp/isapnpreg.h		comp-obsolete		obsolete
 ./usr/include/dev/isapnp/isapnpvar.h		comp-obsolete		obsolete
 ./usr/include/dev/kttcpio.h			comp-c-include
+./usr/include/dev/lockstat.h			comp-c-include
 ./usr/include/dev/md.h				comp-c-include
 ./usr/include/dev/microcode/aic7xxx/aic7xxx_reg.h	comp-obsolete		obsolete
 ./usr/include/dev/microcode/aic7xxx/aic7xxx_seq.h	comp-obsolete		obsolete
@@ -1748,6 +1750,7 @@
 ./usr/include/sys/disk.h			comp-c-include
 ./usr/include/sys/disklabel.h			comp-c-include
 ./usr/include/sys/disklabel_acorn.h		comp-c-include
+./usr/include/sys/disklabel_gpt.h		comp-c-include
 ./usr/include/sys/disklabel_mbr.h		comp-obsolete		obsolete
 ./usr/include/sys/dkbad.h			comp-c-include
 ./usr/include/sys/dkio.h			comp-c-include
@@ -1851,6 +1854,7 @@
 ./usr/include/sys/socketvar.h			comp-c-include
 ./usr/include/sys/sockio.h			comp-c-include
 ./usr/include/sys/soundcard.h			comp-c-include
+./usr/include/sys/specificdata.h		comp-c-include
 ./usr/include/sys/stat.h			comp-c-include
 ./usr/include/sys/statvfs.h			comp-c-include
 ./usr/include/sys/stdint.h			comp-c-include
@@ -1861,6 +1865,7 @@
 ./usr/include/sys/syslimits.h			comp-c-include
 ./usr/include/sys/syslog.h			comp-c-include
 ./usr/include/sys/systm.h			comp-obsolete		obsolete
+./usr/include/sys/systrace.h			comp-c-include
 ./usr/include/sys/tablet.h			comp-obsolete		obsolete
 ./usr/include/sys/tape.h			comp-c-include
 ./usr/include/sys/termios.h			comp-c-include
@@ -2335,6 +2340,7 @@
 ./usr/libdata/debug/usr/bin/crontab.debug	comp-cron-debug		debug
 ./usr/libdata/debug/usr/bin/crunchgen.debug	comp-c-debug		debug
 ./usr/libdata/debug/usr/bin/crunchide.debug	comp-c-debug		debug
+./usr/libdata/debug/usr/bin/csplit.debug	comp-c-debug		debug
 ./usr/libdata/debug/usr/bin/ctags.debug		comp-c-debug		debug
 ./usr/libdata/debug/usr/bin/cut.debug		comp-util-debug		debug
 ./usr/libdata/debug/usr/bin/cvs.debug		comp-cvs-debug		cvs,debug
@@ -2820,6 +2826,7 @@
 ./usr/libdata/debug/usr/sbin/link.debug		comp-sysutil-debug	debug
 ./usr/libdata/debug/usr/sbin/lmcconfig.debug	comp-netutil-debug	debug
 ./usr/libdata/debug/usr/sbin/lpc.debug		comp-lpr-debug		debug
+./usr/libdata/debug/usr/sbin/lockstat.debug	comp-sysutil-debug	debug
 ./usr/libdata/debug/usr/sbin/lpd.debug		comp-lpr-debug		debug
 ./usr/libdata/debug/usr/sbin/lptest.debug	comp-lpr-debug		debug
 ./usr/libdata/debug/usr/sbin/mailwrapper.debug	comp-mailwrapper-debug	debug
@@ -2938,11 +2945,12 @@
 ./usr/libdata/debug/usr/sbin/traceroute.debug	comp-netutil-debug	debug
 ./usr/libdata/debug/usr/sbin/traceroute6.debug	comp-netutil-debug	use_inet6,debug
 ./usr/libdata/debug/usr/sbin/trpt.debug		comp-netutil-debug	debug
-./usr/libdata/debug/usr/sbin/trsp.debug		comp-netutil-debug	debug
+./usr/libdata/debug/usr/sbin/trsp.debug		comp-obsolete		obsolete
 ./usr/libdata/debug/usr/sbin/unlink.debug	comp-sysutil-debug	debug
 ./usr/libdata/debug/usr/sbin/usbdevs.debug	comp-sysutil-debug	debug
 ./usr/libdata/debug/usr/sbin/user.debug		comp-sysutil-debug	debug
 ./usr/libdata/debug/usr/sbin/uuchk.debug	comp-uucp-debug		uucp,debug
+./usr/libdata/debug/usr/sbin/veriexecgen.debug	comp-sysutil-debug	debug
 ./usr/libdata/debug/usr/sbin/vipw.debug		comp-sysutil-debug	debug
 ./usr/libdata/debug/usr/sbin/vnconfig.debug	comp-sysutil-debug	debug
 ./usr/libdata/debug/usr/sbin/wiconfig.debug	comp-sysutil-debug	debug
@@ -5433,6 +5441,7 @@
 ./usr/share/man/cat3/prop_dictionary_remove.0	comp-c-catman		.cat
 ./usr/share/man/cat3/prop_dictionary_remove_keysym.0 comp-c-catman	.cat
 ./usr/share/man/cat3/prop_dictionary_send_ioctl.0 comp-c-catman		.cat
+./usr/share/man/cat3/prop_dictionary_sendrecv_ioctl.0 comp-c-catman	.cat
 ./usr/share/man/cat3/prop_dictionary_set.0	comp-c-catman		.cat
 ./usr/share/man/cat3/prop_dictionary_set_keysym.0 comp-c-catman		.cat
 ./usr/share/man/cat3/prop_ingest.0		comp-c-catman		.cat
@@ -6554,16 +6563,22 @@
 ./usr/share/man/cat9/config.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/config_activate.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/config_attach.0		comp-sys-catman		.cat
+./usr/share/man/cat9/config_attach_loc.0	comp-sys-catman		.cat
+./usr/share/man/cat9/config_attach_pseudo.0	comp-sys-catman		.cat
 ./usr/share/man/cat9/config_deactivate.0	comp-sys-catman		.cat
 ./usr/share/man/cat9/config_defer.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/config_detach.0		comp-sys-catman		.cat
+./usr/share/man/cat9/config_finalize_register.0	comp-sys-catman		.cat
 ./usr/share/man/cat9/config_found.0		comp-sys-catman		.cat
+./usr/share/man/cat9/config_found_ia.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/config_found_sm.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/config_interrupts.0	comp-sys-catman		.cat
 ./usr/share/man/cat9/config_match.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/config_pending_decr.0	comp-sys-catman		.cat
 ./usr/share/man/cat9/config_pending_incr.0	comp-sys-catman		.cat
-./usr/share/man/cat9/config_search.0		comp-sys-catman		.cat
+./usr/share/man/cat9/config_search.0		comp-obsolete		obsolete
+./usr/share/man/cat9/config_search_ia.0		comp-sys-catman		.cat
+./usr/share/man/cat9/config_search_loc.0	comp-sys-catman		.cat
 ./usr/share/man/cat9/cons.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/copy.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/copyin.0			comp-sys-catman		.cat
@@ -6729,18 +6744,31 @@
 ./usr/share/man/cat9/i386/bios32_service.0	comp-sys-catman		.cat
 ./usr/share/man/cat9/i386/bioscall.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/ieee80211.0		comp-sys-catman		.cat
+./usr/share/man/cat9/ieee80211_chan2ieee.0	comp-sys-catman		.cat
+./usr/share/man/cat9/ieee80211_chan2mode.0	comp-sys-catman		.cat
 ./usr/share/man/cat9/ieee80211_crypto.0		comp-sys-catman		.cat
+./usr/share/man/cat9/ieee80211_ieee2mhz.0	comp-sys-catman		.cat
+./usr/share/man/cat9/ieee80211_ifattach.0	comp-sys-catman		.cat
+./usr/share/man/cat9/ieee80211_ifdetach.0	comp-sys-catman		.cat
 ./usr/share/man/cat9/ieee80211_input.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/ieee80211_ioctl.0		comp-sys-catman		.cat
+./usr/share/man/cat9/ieee80211_media2rate.0	comp-sys-catman		.cat
+./usr/share/man/cat9/ieee80211_media_change.0	comp-sys-catman		.cat
+./usr/share/man/cat9/ieee80211_media_init.0	comp-sys-catman		.cat
+./usr/share/man/cat9/ieee80211_media_status.0	comp-sys-catman		.cat
+./usr/share/man/cat9/ieee80211_mhz2ieee.0	comp-sys-catman		.cat
 ./usr/share/man/cat9/ieee80211_node.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/ieee80211_output.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/ieee80211_proto.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/ieee80211_radiotap.0	comp-sys-catman		.cat
+./usr/share/man/cat9/ieee80211_rate2media.0	comp-sys-catman		.cat
 ./usr/share/man/cat9/ieee80211_rssadapt_choose.0	comp-sys-catman	.cat
 ./usr/share/man/cat9/ieee80211_rssadapt_input.0		comp-sys-catman	.cat
 ./usr/share/man/cat9/ieee80211_rssadapt_lower_rate.0	comp-sys-catman	.cat
 ./usr/share/man/cat9/ieee80211_rssadapt_raise_rate.0	comp-sys-catman	.cat
 ./usr/share/man/cat9/ieee80211_rssadapt_updatestats.0	comp-sys-catman	.cat
+./usr/share/man/cat9/ieee80211_setmode.0	comp-sys-catman		.cat
+./usr/share/man/cat9/ieee80211_watchdog.0	comp-sys-catman		.cat
 ./usr/share/man/cat9/iic.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/imax.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/imin.0			comp-sys-catman		.cat
@@ -6874,7 +6902,7 @@
 ./usr/share/man/cat9/mi_switch.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/microtime.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/microuptime.0		comp-sys-catman		.cat
-./usr/share/man/cat9/mono_time.0		comp-sys-catman		.cat
+./usr/share/man/cat9/mono_time.0		comp-obsolete		obsolete
 ./usr/share/man/cat9/mstohz.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/mtocl.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/mtod.0			comp-sys-catman		.cat
@@ -7047,6 +7075,9 @@
 ./usr/share/man/cat9/sched_unlock_idle.0	comp-sys-catman		.cat
 ./usr/share/man/cat9/scheduler.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/scsipi.0			comp-sys-catman		.cat
+./usr/share/man/cat9/secmodel.0			comp-sys-catman		.cat
+./usr/share/man/cat9/secmodel_bsd44.0		comp-sys-catman		.cat
+./usr/share/man/cat9/secmodel_overlay.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/selnotify.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/selrecord.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/selwakeup.0		comp-sys-catman		.cat
@@ -7141,14 +7172,16 @@
 ./usr/share/man/cat9/tc_mb.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/tc_syncbus.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/tc_wmb.0			comp-sys-catman		.cat
-./usr/share/man/cat9/time.0			comp-sys-catman		.cat
+./usr/share/man/cat9/time.0			comp-obsolete		obsolete
+./usr/share/man/cat9/time_second.0		comp-sys-catman		.cat
+./usr/share/man/cat9/time_uptime.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/timecounter.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/timeout.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/tmpfs.0			comp-obsolete		obsolete
 ./usr/share/man/cat9/todr.0			comp-sys-catman		.cat
-./usr/share/man/cat9/todr_getcal.0		comp-sys-catman		.cat
+./usr/share/man/cat9/todr_getcal.0		comp-obsolete		obsolete
 ./usr/share/man/cat9/todr_gettime.0		comp-sys-catman		.cat
-./usr/share/man/cat9/todr_setcal.0		comp-sys-catman		.cat
+./usr/share/man/cat9/todr_setcal.0		comp-obsolete		obsolete
 ./usr/share/man/cat9/todr_settime.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/tprintf.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/tprintf_close.0		comp-sys-catman		.cat
@@ -7172,7 +7205,7 @@
 ./usr/share/man/cat9/userret.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/uvm.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/uvm_chgkprot.0		comp-sys-catman		.cat
-./usr/share/man/cat9/uvm_coredump.0		comp-sys-catman		.cat
+./usr/share/man/cat9/uvm_coredump.0		comp-obsolete		obsolete
 ./usr/share/man/cat9/uvm_deallocate.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/uvm_fault.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/uvm_fork.0			comp-sys-catman		.cat
@@ -7323,6 +7356,7 @@
 ./usr/share/man/cat9/wdc.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/workqueue.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/workqueue_create.0		comp-sys-catman		.cat
+./usr/share/man/cat9/workqueue_destroy.0	comp-sys-catman		.cat
 ./usr/share/man/cat9/workqueue_enqueue.0	comp-sys-catman		.cat
 ./usr/share/man/cat9/writedisklabel.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/wscons.0			comp-sys-catman		.cat
@@ -9606,7 +9640,8 @@
 ./usr/share/man/man3/prop_dictionary_recv_ioctl.3 comp-c-man		.man
 ./usr/share/man/man3/prop_dictionary_remove.3	comp-c-man		.man
 ./usr/share/man/man3/prop_dictionary_remove_keysym.3 comp-c-man		.man
-./usr/share/man/man3/prop_dictionary_send_ioctl.3 comp-c-man		.man
+./usr/share/man/man3/prop_dictionary_send_ioctl.3	comp-c-man	.man
+./usr/share/man/man3/prop_dictionary_sendrecv_ioctl.3 comp-c-man	.man
 ./usr/share/man/man3/prop_dictionary_set.3	comp-c-man		.man
 ./usr/share/man/man3/prop_dictionary_set_keysym.3 comp-c-man		.man
 ./usr/share/man/man3/prop_ingest.3		comp-c-man		.man
@@ -10723,16 +10758,22 @@
 ./usr/share/man/man9/config.9			comp-sys-man		.man
 ./usr/share/man/man9/config_activate.9		comp-sys-man		.man
 ./usr/share/man/man9/config_attach.9		comp-sys-man		.man
+./usr/share/man/man9/config_attach_loc.9	comp-sys-man		.man
+./usr/share/man/man9/config_attach_pseudo.9	comp-sys-man		.man
 ./usr/share/man/man9/config_deactivate.9	comp-sys-man		.man
 ./usr/share/man/man9/config_defer.9		comp-sys-man		.man
 ./usr/share/man/man9/config_detach.9		comp-sys-man		.man
+./usr/share/man/man9/config_finalize_register.9	comp-sys-man		.man
 ./usr/share/man/man9/config_found.9		comp-sys-man		.man
 ./usr/share/man/man9/config_found_sm.9		comp-sys-man		.man
+./usr/share/man/man9/config_found_ia.9		comp-sys-man		.man
 ./usr/share/man/man9/config_interrupts.9	comp-sys-man		.man
 ./usr/share/man/man9/config_match.9		comp-sys-man		.man
 ./usr/share/man/man9/config_pending_decr.9	comp-sys-man		.man
 ./usr/share/man/man9/config_pending_incr.9	comp-sys-man		.man
-./usr/share/man/man9/config_search.9		comp-sys-man		.man
+./usr/share/man/man9/config_search.9		comp-obsolete		obsolete
+./usr/share/man/man9/config_search_ia.9		comp-sys-man		.man
+./usr/share/man/man9/config_search_loc.9	comp-sys-man		.man
 ./usr/share/man/man9/cons.9			comp-sys-man		.man
 ./usr/share/man/man9/copy.9			comp-sys-man		.man
 ./usr/share/man/man9/copyin.9			comp-sys-man		.man
@@ -10898,18 +10939,31 @@
 ./usr/share/man/man9/i386/bios32_service.9	comp-sys-man		.man
 ./usr/share/man/man9/i386/bioscall.9		comp-sys-man		.man
 ./usr/share/man/man9/ieee80211.9		comp-sys-man		.man
+./usr/share/man/man9/ieee80211_chan2ieee.9	comp-sys-man		.man
+./usr/share/man/man9/ieee80211_chan2mode.9	comp-sys-man		.man
 ./usr/share/man/man9/ieee80211_crypto.9		comp-sys-man		.man
+./usr/share/man/man9/ieee80211_ieee2mhz.9	comp-sys-man		.man
+./usr/share/man/man9/ieee80211_ifattach.9	comp-sys-man		.man
+./usr/share/man/man9/ieee80211_ifdetach.9	comp-sys-man		.man
 ./usr/share/man/man9/ieee80211_input.9		comp-sys-man		.man
 ./usr/share/man/man9/ieee80211_ioctl.9		comp-sys-man		.man
+./usr/share/man/man9/ieee80211_media2rate.9	comp-sys-man		.man
+./usr/share/man/man9/ieee80211_media_change.9	comp-sys-man		.man
+./usr/share/man/man9/ieee80211_media_init.9	comp-sys-man		.man
+./usr/share/man/man9/ieee80211_media_status.9	comp-sys-man		.man
+./usr/share/man/man9/ieee80211_mhz2ieee.9	comp-sys-man		.man
 ./usr/share/man/man9/ieee80211_node.9		comp-sys-man		.man
 ./usr/share/man/man9/ieee80211_output.9		comp-sys-man		.man
 ./usr/share/man/man9/ieee80211_proto.9		comp-sys-man		.man
 ./usr/share/man/man9/ieee80211_radiotap.9	comp-sys-man		.man
+./usr/share/man/man9/ieee80211_rate2media.9	comp-sys-man		.man
 ./usr/share/man/man9/ieee80211_rssadapt_choose.9	comp-sys-man	.man
 ./usr/share/man/man9/ieee80211_rssadapt_input.9		comp-sys-man	.man
 ./usr/share/man/man9/ieee80211_rssadapt_lower_rate.9	comp-sys-man	.man
 ./usr/share/man/man9/ieee80211_rssadapt_raise_rate.9	comp-sys-man	.man
 ./usr/share/man/man9/ieee80211_rssadapt_updatestats.9	comp-sys-man	.man
+./usr/share/man/man9/ieee80211_setmode.9	comp-sys-man		.man
+./usr/share/man/man9/ieee80211_watchdog.9	comp-sys-man		.man
 ./usr/share/man/man9/iic.9			comp-sys-man		.man
 ./usr/share/man/man9/imax.9			comp-sys-man		.man
 ./usr/share/man/man9/imin.9			comp-sys-man		.man
@@ -11043,7 +11097,7 @@
 ./usr/share/man/man9/mi_switch.9		comp-sys-man		.man
 ./usr/share/man/man9/microtime.9		comp-sys-man		.man
 ./usr/share/man/man9/microuptime.9		comp-sys-man		.man
-./usr/share/man/man9/mono_time.9		comp-sys-man		.man
+./usr/share/man/man9/mono_time.9		comp-obsolete		obsolete
 ./usr/share/man/man9/mstohz.9			comp-sys-man		.man
 ./usr/share/man/man9/mtocl.9			comp-sys-man		.man
 ./usr/share/man/man9/mtod.9			comp-sys-man		.man
@@ -11216,6 +11270,9 @@
 ./usr/share/man/man9/sched_unlock_idle.9	comp-sys-man		.man
 ./usr/share/man/man9/scheduler.9		comp-sys-man		.man
 ./usr/share/man/man9/scsipi.9			comp-sys-man		.man
+./usr/share/man/man9/secmodel.9			comp-sys-man		.man
+./usr/share/man/man9/secmodel_bsd44.9		comp-sys-man		.man
+./usr/share/man/man9/secmodel_overlay.9		comp-sys-man		.man
 ./usr/share/man/man9/selnotify.9		comp-sys-man		.man
 ./usr/share/man/man9/selrecord.9		comp-sys-man		.man
 ./usr/share/man/man9/selwakeup.9		comp-sys-man		.man
@@ -11310,14 +11367,16 @@
 ./usr/share/man/man9/tc_mb.9			comp-sys-man		.man
 ./usr/share/man/man9/tc_syncbus.9		comp-sys-man		.man
 ./usr/share/man/man9/tc_wmb.9			comp-sys-man		.man
-./usr/share/man/man9/time.9			comp-sys-man		.man
+./usr/share/man/man9/time.9			comp-obsolete		obsolete
+./usr/share/man/man9/time_second.9		comp-sys-man		.man
+./usr/share/man/man9/time_uptime.9		comp-sys-man		.man
 ./usr/share/man/man9/timecounter.9		comp-sys-man		.man
 ./usr/share/man/man9/timeout.9			comp-sys-man		.man
 ./usr/share/man/man9/tmpfs.9			comp-obsolete		obsolete
 ./usr/share/man/man9/todr.9			comp-sys-man		.man
-./usr/share/man/man9/todr_getcal.9		comp-sys-man		.man
+./usr/share/man/man9/todr_getcal.9		comp-obsolete		obsolete
 ./usr/share/man/man9/todr_gettime.9		comp-sys-man		.man
-./usr/share/man/man9/todr_setcal.9		comp-sys-man		.man
+./usr/share/man/man9/todr_setcal.9		comp-obsolete		obsolete
 ./usr/share/man/man9/todr_settime.9		comp-sys-man		.man
 ./usr/share/man/man9/tprintf.9			comp-sys-man		.man
 ./usr/share/man/man9/tprintf_close.9		comp-sys-man		.man
@@ -11341,7 +11400,7 @@
 ./usr/share/man/man9/userret.9			comp-sys-man		.man
 ./usr/share/man/man9/uvm.9			comp-sys-man		.man
 ./usr/share/man/man9/uvm_chgkprot.9		comp-sys-man		.man
-./usr/share/man/man9/uvm_coredump.9		comp-sys-man		.man
+./usr/share/man/man9/uvm_coredump.9		comp-obsolete		obsolete
 ./usr/share/man/man9/uvm_deallocate.9		comp-sys-man		.man
 ./usr/share/man/man9/uvm_fault.9		comp-sys-man		.man
 ./usr/share/man/man9/uvm_fork.9			comp-sys-man		.man
@@ -11492,6 +11551,7 @@
 ./usr/share/man/man9/wdc.9			comp-sys-man		.man
 ./usr/share/man/man9/workqueue.9		comp-sys-man		.man
 ./usr/share/man/man9/workqueue_create.9		comp-sys-man		.man
+./usr/share/man/man9/workqueue_destroy.9	comp-sys-man		.man
 ./usr/share/man/man9/workqueue_enqueue.9	comp-sys-man		.man
 ./usr/share/man/man9/writedisklabel.9		comp-sys-man		.man
 ./usr/share/man/man9/wscons.9			comp-sys-man		.man

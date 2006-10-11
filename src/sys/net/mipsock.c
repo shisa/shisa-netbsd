@@ -1,4 +1,4 @@
-/* $Id: mipsock.c,v 1.3 2006/09/11 06:23:30 keiichi Exp $ */
+/* $Id: mipsock.c,v 1.4 2006/10/11 11:03:33 keiichi Exp $ */
 
 /*
  * Copyright (C) 2004 WIDE Project.
@@ -73,9 +73,9 @@
 
 DOMAIN_DEFINE(mipdomain);	/* foward declare and add to link set */
 
-static struct	sockaddr mips_dst = { 2, PF_MOBILITY, };
-static struct	sockaddr mips_src = { 2, PF_MOBILITY, };
-static struct	sockproto mips_proto = { PF_MOBILITY, };
+static struct	sockaddr mips_dst = { .sa_len = 2, .sa_family = PF_MOBILITY, };
+static struct	sockaddr mips_src = { .sa_len = 2, .sa_family = PF_MOBILITY, };
+static struct	sockproto mips_proto = { .sp_family = PF_MOBILITY, };
 
 #if defined(__FreeBSD__) || defined(__APPLE__)
 static int mips_abort(struct socket *);
@@ -770,15 +770,11 @@ static struct protosw mipsw[] = {
 }
 };
 
-struct domain mipdomain =
-{ PF_MOBILITY, "mip", 0, 0, 0,
-  mipsw,
-#ifdef __APPLE__
-      0, 0, 0, 0, 0, 0, 0, 0, 
-      { 0, 0 }
-#else
-  &mipsw[sizeof(mipsw)/sizeof(mipsw[0])]
-#endif
+struct domain mipdomain = {
+	.dom_family = PF_MOBILITY,
+	.dom_name = "mip",
+	.dom_protosw = mipsw,
+	.dom_protoswNPROTOSW = &mipsw[sizeof(mipsw)/sizeof(mipsw[0])],
 };
 
 #if defined(__FreeBSD__) || defined(__APPLE__)
