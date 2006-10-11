@@ -1,4 +1,4 @@
-/*	$NetBSD: fw_port.h,v 1.16 2006/08/30 01:59:06 christos Exp $	*/
+/*	$NetBSD: fw_port.h,v 1.18 2006/10/04 15:48:36 christos Exp $	*/
 /*
  * Copyright (c) 2004 KIYOHARA Takashi
  * All rights reserved.
@@ -748,7 +748,8 @@ struct fwbus_attach_args {
 		struct fwbus_attach_args faa;				      \
 		faa.name = "ieee1394if";				      \
 		sc->sc_shutdownhook = shutdownhook_establish(fwohci_stop, sc);\
-		sc->sc_powerhook = powerhook_establish(fwohci_power, sc);     \
+		sc->sc_powerhook = powerhook_establish(sc->fc._dev.dv_xname,  \
+		    fwohci_power, sc);					      \
 		sc->fc.bdev = config_found(sc->fc.dev, &faa, fwohci_print);   \
 	} while (/*CONSTCOND*/0)
 #define FWOHCI_DETACH()	\
@@ -1074,7 +1075,9 @@ typedef struct scsipi_inquiry_data sbp_scsi_inquiry_data;
 #define splsoftvm()	splbio()
 
 #define roundup2(x, y) roundup((x), (y))
+#ifndef rounddown
 #define rounddown(x, y) ((x) / (y) * (y))
+#endif
 
 #define timevalcmp(tv1, tv2, op)	timercmp((tv1), (tv2), op)
 #define timevalsub(tv1, tv2)		timersub((tv1), (tv2), (tv1))

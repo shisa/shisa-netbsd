@@ -1,7 +1,8 @@
-#	$NetBSD: Makefile,v 1.22 2005/07/19 01:38:38 christos Exp $
+#	$NetBSD: Makefile,v 1.24 2006/09/20 09:29:42 he Exp $
 #	@(#)Makefile	8.3 (Berkeley) 4/20/95
 
 .include <bsd.own.mk>
+USE_READLINE=yes
 
 PROG=	mail
 SRCS=	version.c support.c cmd1.c cmd2.c cmd3.c cmdtab.c collect.c dotlock.c \
@@ -10,7 +11,16 @@ SRCS=	version.c support.c cmd1.c cmd2.c cmd3.c cmdtab.c collect.c dotlock.c \
 LINKS=	${BINDIR}/mail ${BINDIR}/Mail ${BINDIR}/mail ${BINDIR}/mailx
 MLINKS=	mail.1 Mail.1 mail.1 mailx.1
 
-WARNS=	3
+.if defined(USE_READLINE)
+SRCS+=	complete.c
+
+CPPFLAGS+=	-DUSE_READLINE
+LDADD+=		-ledit -ltermcap
+DPADD+=		${LIBEDIT} ${LIBTERMCAP}
+
+.endif
+
+WARNS=	4
 
 .PATH: ${.CURDIR}/misc
 

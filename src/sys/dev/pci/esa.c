@@ -1,7 +1,7 @@
-/* $NetBSD: esa.c,v 1.34 2006/08/30 00:54:28 christos Exp $ */
+/* $NetBSD: esa.c,v 1.38 2006/09/25 23:19:39 jmcneill Exp $ */
 
 /*
- * Copyright (c) 2001, 2002 Jared D. McNeill <jmcneill@invisible.ca>
+ * Copyright (c) 2001, 2002, 2006 Jared D. McNeill <jmcneill@invisible.ca>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,7 +39,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: esa.c,v 1.34 2006/08/30 00:54:28 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: esa.c,v 1.38 2006/09/25 23:19:39 jmcneill Exp $");
 
 #include <sys/types.h>
 #include <sys/errno.h>
@@ -136,7 +136,7 @@ static int		esa_freemem(struct esa_softc *, struct esa_dma *);
 static paddr_t		esa_mappage(void *, void *, off_t, int);
 
 /* Supporting subroutines */
-static uint16_t	esa_read_assp(struct esa_softc *, uint16_t, uint16_t);
+static uint16_t		esa_read_assp(struct esa_softc *, uint16_t, uint16_t);
 static void		esa_write_assp(struct esa_softc *, uint16_t, uint16_t,
 				       uint16_t);
 static int		esa_init_codec(struct esa_softc *);
@@ -152,7 +152,8 @@ static uint8_t		esa_assp_halt(struct esa_softc *);
 static void		esa_codec_reset(struct esa_softc *);
 static int		esa_amp_enable(struct esa_softc *);
 static void		esa_enable_interrupts(struct esa_softc *);
-static uint32_t	esa_get_pointer(struct esa_softc *, struct esa_channel *);
+static uint32_t		esa_get_pointer(struct esa_softc *,
+					struct esa_channel *);
 
 /* list management */
 static int		esa_add_list(struct esa_voice *, struct esa_list *,
@@ -250,7 +251,6 @@ esa_set_params(void *hdl, int setmode, int usemode,
 	       stream_filter_list_t *pfil, stream_filter_list_t *rfil)
 {
 	struct esa_voice *vc;
-	//struct esa_softc *sc = (struct esa_softc *)vc->parent;
 	struct esa_channel *ch;
 	struct audio_params *p;
 	stream_filter_list_t *fil;
@@ -669,9 +669,6 @@ esa_trigger_output(void *hdl, void *start, void *end, int blksize,
 #undef LO
 #undef HI
 
-	/* XXX */
-	//esa_commit_settings(vc);
-
 	sc->sc_ntimers++;
 
 	if (sc->sc_ntimers == 1) {
@@ -806,9 +803,6 @@ esa_trigger_input(void *hdl, void *start, void *end, int blksize,
 		     vc->index + ESA_NUM_VOICES);
 #undef LO
 #undef HI
-
-	/* XXX */
-	//esa_commit_settings(vc);
 
 	sc->sc_ntimers++;
 	if (sc->sc_ntimers == 1) {
@@ -1098,8 +1092,15 @@ esa_attach(struct device *parent, struct device *self, void *aux)
 	 *
 	 * So, we will swap the left and right mixer channels to compensate
 	 * for this.
+	 *
+	 * XXX PR# 23620: The Dell C810 channels are not swapped. Match
+	 *     on revision ID for now; this is probably wrong.
 	 */
-	sc->codec_flags = AC97_HOST_SWAPPED_CHANNELS;
+	if (revision == 0x10 && sc->type == ESS_MAESTRO3)
+		sc->codec_flags = 0;
+	else
+		sc->codec_flags = AC97_HOST_SWAPPED_CHANNELS;
+
 
 	/* Attach AC97 host interface */
 	sc->host_if.arg = self;
@@ -1136,7 +1137,8 @@ esa_attach(struct device *parent, struct device *self, void *aux)
 		    audio_attach_mi(&esa_hw_if, &sc->voice[i], &sc->sc_dev);
 	}
 
-	sc->powerhook = powerhook_establish(esa_powerhook, sc);
+	sc->powerhook = powerhook_establish(sc->sc_dev.dv_xname,
+	    esa_powerhook, sc);
 	if (sc->powerhook == NULL)
 		aprint_error("%s: WARNING: unable to establish powerhook\n",
 		    sc->sc_dev.dv_xname);
@@ -1454,10 +1456,10 @@ esa_assp_halt(struct esa_softc *sc)
 	ioh = sc->sc_ioh;
 	data = bus_space_read_1(iot, ioh, ESA_DSP_PORT_CONTROL_REG_B);
 	reset_state = data & ~ESA_REGB_STOP_CLOCK;
-	delay(10000);		/* XXX use tsleep */
+	delay(10000);
 	bus_space_write_1(iot, ioh, ESA_DSP_PORT_CONTROL_REG_B,
 			reset_state & ~ESA_REGB_ENABLE_RESET);
-	delay(10000);		/* XXX use tsleep */
+	delay(10000);
 
 	return reset_state;
 }
@@ -1660,7 +1662,6 @@ esa_suspend(struct esa_softc *sc)
 	bus_space_tag_t iot;
 	bus_space_handle_t ioh;
 	int i, index;
-	int error;
 
 	iot = sc->sc_iot;
 	ioh = sc->sc_ioh;
@@ -1681,10 +1682,6 @@ esa_suspend(struct esa_softc *sc)
 		sc->savemem[index++] = esa_read_assp(sc,
 		    ESA_MEMTYPE_INTERNAL_DATA, i);
 
-	if ((error = pci_set_powerstate(sc->sc_pct, sc->sc_tag,
-	    PCI_PMCSR_STATE_D3)))
-		return error;
-
 	return 0;
 }
 
@@ -1695,15 +1692,11 @@ esa_resume(struct esa_softc *sc)
 	bus_space_handle_t ioh;
 	int i, index;
 	uint8_t reset_state;
-	int error;
 
 	iot = sc->sc_iot;
 	ioh = sc->sc_ioh;
 	index = 0;
 
-	if ((error = pci_set_powerstate(sc->sc_pct, sc->sc_tag,
-	    PCI_PMCSR_STATE_D0)))
-		return error;
 	delay(10000);
 
 	esa_config(sc);

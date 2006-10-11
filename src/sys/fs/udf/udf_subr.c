@@ -1,4 +1,4 @@
-/* $NetBSD: udf_subr.c,v 1.14 2006/08/22 16:52:41 reinoud Exp $ */
+/* $NetBSD: udf_subr.c,v 1.21 2006/10/04 13:03:17 reinoud Exp $ */
 
 /*
  * Copyright (c) 2006 Reinoud Zandijk
@@ -36,7 +36,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: udf_subr.c,v 1.14 2006/08/22 16:52:41 reinoud Exp $");
+__RCSID("$NetBSD: udf_subr.c,v 1.21 2006/10/04 13:03:17 reinoud Exp $");
 #endif /* not lint */
 
 
@@ -368,7 +368,7 @@ udf_read_descriptor(struct udf_mount *ump, uint32_t sector,
 		src = (union dscrptr *) bp->b_data;
 		dscrlen = udf_tagsize(src, sector_size);
 		dst = malloc(dscrlen, mtype, M_WAITOK);
-		memcpy(dst, src, dscrlen);
+		memcpy(dst, src, sector_size);
 	}
 	/* dispose first block */
 	bp->b_flags |= B_AGE;
@@ -751,8 +751,10 @@ udf_process_vds_descriptor(struct udf_mount *ump, union dscrptr *dscr)
 
 		/* check partnr boundaries */
 		partnr = udf_rw16(dscr->pd.part_num);
-		if (partnr >= UDF_PARTITIONS)
+		if (partnr >= UDF_PARTITIONS) {
+			free(dscr, M_UDFVOLD);
 			return EINVAL;
+		}
 
 		UDF_UPDATE_DSCR(ump->partitions[partnr], &dscr->pd);
 		break;
@@ -793,8 +795,10 @@ udf_read_vds_extent(struct udf_mount *ump, uint32_t loc, uint32_t len)
 			return 0;
 
 		/* TERM descriptor is a terminator */
-		if (udf_rw16(dscr->tag.id) == TAGID_TERM)
+		if (udf_rw16(dscr->tag.id) == TAGID_TERM) {
+			free(dscr, M_UDFVOLD);
 			return 0;
+		}
 
 		/* process all others */
 		dscr_size = udf_tagsize(dscr, sector_size);
@@ -1178,7 +1182,7 @@ udf_check_for_vat(struct udf_node *vat_node)
 
 	/* try to allocate the space */
 	ump->vat_table_alloc_length = alloc_length;
-	ump->vat_table = malloc(alloc_length, M_UDFMNT, M_CANFAIL | M_WAITOK);
+	ump->vat_table = malloc(alloc_length, M_UDFVOLD, M_CANFAIL | M_WAITOK);
 	if (!ump->vat_table)
 		return ENOMEM;		/* impossible to allocate */
 	DPRINTF(VOLUMES, ("\talloced fine\n"));
@@ -1189,7 +1193,7 @@ udf_check_for_vat(struct udf_node *vat_node)
 	if (error) {
 		DPRINTF(VOLUMES, ("\tread failed : %d\n", error));
 		/* not completely readable... :( bomb out */
-		free(ump->vat_table, M_UDFMNT);
+		free(ump->vat_table, M_UDFVOLD);
 		ump->vat_table = NULL;
 		return error;
 	}
@@ -1214,7 +1218,7 @@ udf_check_for_vat(struct udf_node *vat_node)
 		error = strncmp(regid_name, "*UDF Virtual Alloc Tbl", 22);
 		if (error) {
 			DPRINTF(VOLUMES, ("VAT format 1.50 rejected\n"));
-			free(ump->vat_table, M_UDFMNT);
+			free(ump->vat_table, M_UDFVOLD);
 			ump->vat_table = NULL;
 			return ENOENT;
 		}
@@ -1363,10 +1367,12 @@ udf_read_vds_tables(struct udf_mount *ump, struct udf_args *args)
 		case UDF_VTOP_TYPE_SPARABLE :
 			/* load one of the sparable tables */
 			error = udf_read_sparables(ump, mapping);
+			if (error)
+				return ENOENT;
 			break;
 		case UDF_VTOP_TYPE_META :
 			/* TODO load metafile and metabitmapfile FE/EFEs */
-			break;
+			return ENOENT;
 		default:
 			break;
 		}
@@ -2334,24 +2340,33 @@ udf_lookup_name_in_dir(struct vnode *vp, const char *name, int namelen,
 	fid = malloc(lb_size, M_TEMP, M_WAITOK);
 
 	found = 0;
-	diroffset = 0;
-	while (!found && (diroffset < file_size)) {
+	diroffset = dir_node->last_diroffset;
+	while (!found) {
+		/* if not found in this track, turn trough zero */
+		if (diroffset >= file_size)
+			diroffset = 0;
+
 		/* transfer a new fid/dirent */
 		error = udf_read_fid_stream(vp, &diroffset, fid, &dirent);
 		if (error)
 			break;
 
 		/* skip deleted entries */
-		if (fid->file_char & UDF_FILE_CHAR_DEL)
-			continue;
+		if ((fid->file_char & UDF_FILE_CHAR_DEL) == 0) {
+			if ((strlen(dirent.d_name) == namelen) &&
+			    (strncmp(dirent.d_name, name, namelen) == 0)) {
+				found = 1;
+				*icb_loc = fid->icb;
+			}
+		}
 
-		if ((strlen(dirent.d_name) == namelen) &&
-		    (strncmp(dirent.d_name, name, namelen) == 0)) {
-			found = 1;
-			*icb_loc = fid->icb;
+		if (diroffset == dir_node->last_diroffset) {
+			/* we have cycled */
+			break;
 		}
 	}
 	free(fid, M_TEMP);
+	dir_node->last_diroffset = diroffset;
 
 	return found;
 }
@@ -2823,6 +2838,7 @@ udf_translate_file_extent(struct udf_node *node,
 				translen = overlap;
 				while (overlap && pages && translen) {
 					*map++ = transsec;
+					lb_num++;
 					overlap--; pages--; translen--;
 				}
 				break;
@@ -2836,7 +2852,7 @@ udf_translate_file_extent(struct udf_node *node,
 					return error;
 				while (overlap && pages && translen) {
 					*map++ = transsec;
-					transsec++;
+					lb_num++; transsec++;
 					overlap--; pages--; translen--;
 				}
 				break;

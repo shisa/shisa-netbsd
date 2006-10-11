@@ -1,4 +1,4 @@
-/*	$NetBSD: init_main.c,v 1.276 2006/07/26 09:33:57 dogcow Exp $	*/
+/*	$NetBSD: init_main.c,v 1.279 2006/10/08 04:28:44 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1989, 1991, 1992, 1993
@@ -71,7 +71,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.276 2006/07/26 09:33:57 dogcow Exp $");
+__KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.279 2006/10/08 04:28:44 thorpej Exp $");
 
 #include "opt_ipsec.h"
 #include "opt_kcont.h"
@@ -168,6 +168,8 @@ __KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.276 2006/07/26 09:33:57 dogcow Exp $
 
 #include <net/if.h>
 #include <net/raw_cb.h>
+
+#include <secmodel/secmodel.h>
 
 extern struct proc proc0;
 extern struct lwp lwp0;
@@ -269,6 +271,7 @@ main(void)
 
 	/* Initialize process and pgrp structures. */
 	procinit();
+	lwpinit();
 
 	/* Initialize signal-related data structures. */
 	signal_init();
@@ -302,6 +305,9 @@ main(void)
 	ntp_init();
 #endif /* __HAVE_TIMECOUNTER */
 
+	/* Initialize kauth. */
+	kauth_init();
+
 	/* Configure the system hardware.  This will enable interrupts. */
 	configure();
 
@@ -330,8 +336,8 @@ main(void)
 	ksem_init();
 #endif
 
-	/* Initialize kauth. */
-	kauth_init();
+	/* Initialize default security model. */
+	secmodel_start();
 
 #ifdef FILEASSOC
 	fileassoc_init();

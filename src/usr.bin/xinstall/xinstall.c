@@ -1,4 +1,4 @@
-/*	$NetBSD: xinstall.c,v 1.95 2006/05/11 06:09:44 mrg Exp $	*/
+/*	$NetBSD: xinstall.c,v 1.99 2006/10/06 20:22:59 rillig Exp $	*/
 
 /*
  * Copyright (c) 1987, 1993
@@ -46,7 +46,7 @@ __COPYRIGHT("@(#) Copyright (c) 1987, 1993\n\
 #if 0
 static char sccsid[] = "@(#)xinstall.c	8.1 (Berkeley) 7/21/93";
 #else
-__RCSID("$NetBSD: xinstall.c,v 1.95 2006/05/11 06:09:44 mrg Exp $");
+__RCSID("$NetBSD: xinstall.c,v 1.99 2006/10/06 20:22:59 rillig Exp $");
 #endif
 #endif /* not lint */
 
@@ -310,6 +310,8 @@ main(int argc, char *argv[])
 	if (fflags && !dounpriv) {
 		if (string_to_flags(&fflags, &fileflags, NULL))
 			errx(1, "%s: invalid flag", fflags);
+		/* restore fflags since string_to_flags() changed it */
+		fflags = flags_to_string(fileflags, "-");
 		iflags |= SETFLAGS;
 	}
 #endif
@@ -334,8 +336,11 @@ main(int argc, char *argv[])
 	}
 
 	/* can't do file1 file2 directory/file */
-	if (argc != 2)
-		usage();
+	if (argc != 2) {
+		errx(EXIT_FAILURE, "the last argument (%s) "
+		    "must name an existing directory", argv[argc - 1]);
+		/* NOTREACHED */
+	}
 
 	if (!no_target) {
 		/* makelink() handles checks for links */
@@ -405,9 +410,11 @@ do_link(char *from_name, char *to_name)
 		ret = link(from_name, tmpl);
 		if (ret == 0) {
 			ret = rename(tmpl, to_name);
-			if (ret < 0)
-				/* remove temporary link before exiting */
-				(void)unlink(tmpl);
+			/* If rename has posix semantics, then the temporary
+			 * file may still exist when from_name and to_name point
+			 * to the smae file, so unlink it unconditionally.
+			 */
+			(void)unlink(tmpl);
 		}
 		return (ret);
 	} else
@@ -1001,6 +1008,9 @@ install_dir(char *path, u_int flags)
 					err(1, "%s: mkdir", path);
                                 }
                         }
+			else if (!S_ISDIR(sb.st_mode)) {
+				errx(1, "%s exists but is not a directory", path);
+			}
                         if (!(*p = ch))
 				break;
                 }

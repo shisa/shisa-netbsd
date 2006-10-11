@@ -1,4 +1,4 @@
-/*	$NetBSD: machdep.c,v 1.40 2006/08/19 16:27:57 dsl Exp $	*/
+/*	$NetBSD: machdep.c,v 1.42 2006/10/05 15:10:31 chs Exp $	*/
 
 /*-
  * Copyright (c) 1996, 1997, 1998, 2000 The NetBSD Foundation, Inc.
@@ -72,7 +72,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.40 2006/08/19 16:27:57 dsl Exp $");
+__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.42 2006/10/05 15:10:31 chs Exp $");
 
 #include "opt_user_ldt.h"
 #include "opt_ddb.h"
@@ -575,10 +575,6 @@ cpu_reboot(int howto, char *bootstr)
 haltsys:
 	doshutdownhooks();
 
-#ifdef MULTIPROCESSOR
-	x86_broadcast_ipi(X86_IPI_HALT);
-#endif
-
         if ((howto & RB_POWERDOWN) == RB_POWERDOWN) {
 #if NACPI > 0
 		delay(500000);
@@ -587,6 +583,9 @@ haltsys:
 #endif
 	}
 
+#ifdef MULTIPROCESSOR
+	x86_broadcast_ipi(X86_IPI_HALT);
+#endif
 
 	if (howto & RB_HALT) {
 		printf("\n");
@@ -1144,7 +1143,8 @@ init_x86_64(paddr_t first_avail)
 
 			/* XXX XXX XXX */
 			if (mem_cluster_cnt >= VM_PHYSSEG_MAX)
-				panic("init386: too many memory segments");
+				panic("init386: too many memory segments "
+				    "(increase VM_PHYSSEG_MAX)");
 
 			seg_start = round_page(seg_start);
 			seg_end = trunc_page(seg_end);

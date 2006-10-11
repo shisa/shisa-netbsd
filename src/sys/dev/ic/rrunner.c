@@ -1,4 +1,4 @@
-/*	$NetBSD: rrunner.c,v 1.54 2006/07/21 16:48:49 ad Exp $	*/
+/*	$NetBSD: rrunner.c,v 1.57 2006/10/05 14:48:32 chs Exp $	*/
 
 /*
  * Copyright (c) 1997, 1998 The NetBSD Foundation, Inc.
@@ -42,10 +42,9 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: rrunner.c,v 1.54 2006/07/21 16:48:49 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: rrunner.c,v 1.57 2006/10/05 14:48:32 chs Exp $");
 
 #include "opt_inet.h"
-#include "opt_ns.h"
 
 #include "bpfilter.h"
 #include "esh.h"
@@ -83,10 +82,6 @@ __KERNEL_RCSID(0, "$NetBSD: rrunner.c,v 1.54 2006/07/21 16:48:49 ad Exp $");
 #include <netinet/if_inarp.h>
 #endif
 
-#ifdef NS
-#include <netns/ns.h>
-#include <netns/ns_if.h>
-#endif
 
 #if NBPFILTER > 0
 #include <net/bpf.h>
@@ -143,6 +138,7 @@ const struct cdevsw esh_cdevsw = {
 	nommap,
 #endif
 	nullkqfilter,
+	D_OTHER,
 };
 
 /* General routines, not externally visable */
@@ -1047,13 +1043,13 @@ esh_fpread(dev, uio, ioflag)
 	/* Lock down the pages */
 	for (i = 0; i < uio->uio_iovcnt; i++) {
 		iovp = &uio->uio_iov[i];
-		error = uvm_vslock(p, iovp->iov_base, iovp->iov_len,
+		error = uvm_vslock(p->p_vmspace, iovp->iov_base, iovp->iov_len,
 		    VM_PROT_WRITE);
 		if (error) {
 			/* Unlock what we've locked so far. */
 			for (--i; i >= 0; i--) {
 				iovp = &uio->uio_iov[i];
-				uvm_vsunlock(p, iovp->iov_base,
+				uvm_vsunlock(p->p_vmspace, iovp->iov_base,
 				    iovp->iov_len);
 			}
 			goto fpread_done;
@@ -1143,7 +1139,7 @@ esh_fpread(dev, uio, ioflag)
 	uio->uio_resid -= di->ed_read_len;
 	for (i = 0; i < uio->uio_iovcnt; i++) {
 		iovp = &uio->uio_iov[i];
-		uvm_vsunlock(p, iovp->iov_base, iovp->iov_len);
+		uvm_vsunlock(p->p_vmspace, iovp->iov_base, iovp->iov_len);
 	}
 
 	PRELE(l);	/* Release process info */
@@ -1208,13 +1204,13 @@ esh_fpwrite(dev, uio, ioflag)
 	/* Lock down the pages */
 	for (i = 0; i < uio->uio_iovcnt; i++) {
 		iovp = &uio->uio_iov[i];
-		error = uvm_vslock(p, iovp->iov_base, iovp->iov_len,
+		error = uvm_vslock(p->p_vmspace, iovp->iov_base, iovp->iov_len,
 		    VM_PROT_READ);
 		if (error) {
 			/* Unlock what we've locked so far. */
 			for (--i; i >= 0; i--) {
 				iovp = &uio->uio_iov[i];
-				uvm_vsunlock(p, iovp->iov_base,
+				uvm_vsunlock(p->p_vmspace, iovp->iov_base,
 				    iovp->iov_len);
 			}
 			goto fpwrite_done;
@@ -1300,7 +1296,7 @@ esh_fpwrite(dev, uio, ioflag)
 
 	for (i = 0; i < uio->uio_iovcnt; i++) {
 		iovp = &uio->uio_iov[i];
-		uvm_vsunlock(p, iovp->iov_base, iovp->iov_len);
+		uvm_vsunlock(p->p_vmspace, iovp->iov_base, iovp->iov_len);
 	}
 
 	PRELE(l);	/* Release process info */
@@ -3002,23 +2998,6 @@ eshioctl(ifp, cmd, data)
 			/* The driver doesn't really care about IP addresses */
 			break;
 #endif
-#ifdef NS
-		case AF_NS:
-		{
-			struct ns_addr *ina =
-				&IA_SNS(ifa)->sns_addr;
-
-			if (ns_nullhost(*ina))
-				ina->x_host = *(union ns_host *)
-					LLADDR(ifp->if_sadl);
-			else
-				memcpy(LLADDR(ifp->if_sadl),
-				    ina->x_host.c_host, ifp->if_addrlen);
-				/* Set new address. */
-			eshinit(sc);
-			break;
-		}
-#endif
 		default:
 			break;
 		}
@@ -3639,6 +3618,7 @@ esh_dma_sync(sc, mem, start, end, entries, size, do_equal, ops)
 	void *mem;
 	int start;
 	int end;
+	int entries;
 	int size;
 	int do_equal;
 	int ops;

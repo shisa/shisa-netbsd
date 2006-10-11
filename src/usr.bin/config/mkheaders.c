@@ -1,4 +1,4 @@
-/*	$NetBSD: mkheaders.c,v 1.6 2006/08/26 18:17:13 christos Exp $	*/
+/*	$NetBSD: mkheaders.c,v 1.9 2006/10/04 20:34:48 dsl Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -54,17 +54,22 @@
 #include <util.h>
 #include "defs.h"
 
+#ifdef notyet
+#include <crc_extern.h>
+#else
+#define fprint_global(fp, name, value)
+#endif
+
 static int emitcnt(struct nvlist *);
 static int emitlocs(void);
 static int emitopts(void);
 static int emitioconfh(void);
 static int emittime(void);
 static int herr(const char *, const char *, FILE *);
-static int locators_print(const char *, void *, void *);
 static int defopts_print(const char *, void *, void *);
 static char *cntname(const char *);
-static int fprintcnt(FILE *, struct nvlist *);
-static int fprintstr(FILE *, const char *);
+
+#define UNDEFINED ~0u
 
 /*
  * Make the various config-generated header files.
@@ -91,12 +96,47 @@ mkheaders(void)
 	return (0);
 }
 
+#ifdef notyet
+static void
+fprint_global(FILE *fp, const char *name, unsigned int value)
+{
+	fprintf(fp, "#ifdef _LOCORE\n"
+	    " .global _KERNEL_OPT_%s\n"
+	    " .set _KERNEL_OPT_%s,0x%x\n"
+	    "#else\n"
+	    "__asm(\" .global _KERNEL_OPT_%s\\n"
+	    " .set _KERNEL_OPT_%s,0x%x\");\n"
+	    "#endif\n",
+	    name, name, value,
+	    name, name, value);
+}
 
-static int
+/* Convert the option argument to a 32bit numder */
+static unsigned int
+global_hash(const char *str)
+{
+        unsigned int h;
+	char *ep;
+
+	/* If the value is a valid numeric, just use it */
+	h = strtoul(str, &ep, 0);
+	if (*ep != 0)
+		/* Otherwise shove through a 32bit CRC function */
+		h = crc_buf(0, str, strlen(str));
+
+	/* Avoid colliding with the value used for undefined options. */
+	/* At least until I stop any options being set to zero */
+	return h != UNDEFINED ? h : 0xcafebabe;
+}
+#endif
+
+static void
 fprintcnt(FILE *fp, struct nvlist *nv)
 {
-	return (fprintf(fp, "#define\t%s\t%d\n",
-	     cntname(nv->nv_name), nv->nv_int));
+	const char *name = cntname(nv->nv_name);
+
+	fprintf(fp, "#define\t%s\t%d\n", name, nv->nv_int);
+	fprint_global(fp, name, nv->nv_int);
 }
 
 static int
@@ -113,8 +153,11 @@ emitcnt(struct nvlist *head)
 		return (herr("open", tfname, NULL));
 
 	for (nv = head; nv != NULL; nv = nv->nv_next)
-		if (fprintcnt(fp, nv) < 0)
-			return (herr("writ", tfname, fp));
+		fprintcnt(fp, nv);
+
+	fflush(fp);
+	if (ferror(fp))
+		return herr("writ", tfname, fp);
 
 	if (fclose(fp) == EOF)
 		return (herr("clos", tfname, NULL));
@@ -127,29 +170,27 @@ emitcnt(struct nvlist *head)
  * The argument will be output as is if it doesn't start with \".
  * Otherwise the first backslash in a \? sequence will be dropped.
  */
-static int
+static void
 fprintstr(FILE *fp, const char *str)
 {
-	int n;
 
-	if (strncmp(str, "\\\"", 2))
-		return fprintf(fp, "\t%s", str);
+	if (strncmp(str, "\\\"", 2)) {
+		fprintf(fp, "\t%s", str);
+		return;
+	}
 
-	if (fputc('\t', fp) < 0)
-		return -1;
+	fputc('\t', fp);
 	
-	for (n = 1; *str; str++, n++) {
+	for (; *str; str++) {
 		switch (*str) {
 		case '\\':
 			if (!*++str)				/* XXX */
 				str--;
 		default:
-			if (fputc(*str, fp) < 0)
-				return -1;
+			fputc(*str, fp);
 			break;
 		}
 	}
-	return n;
 }
 
 /*
@@ -161,6 +202,7 @@ defopts_print(const char *name, void *value, void *arg)
 {
 	char tfname[BUFSIZ];
 	struct nvlist *nv, *option;
+	const char *opt_value;
 	int isfsoption;
 	FILE *fp;
 
@@ -171,31 +213,45 @@ defopts_print(const char *name, void *value, void *arg)
 	for (nv = value; nv != NULL; nv = nv->nv_next) {
 		isfsoption = OPT_FSOPT(nv->nv_name);
 
-		if ((nv->nv_flags & NV_OBSOLETE) != 0 ||
-		    ((option = ht_lookup(opttab, nv->nv_name)) == NULL &&
-		    (option = ht_lookup(fsopttab, nv->nv_name)) == NULL)) {
-			if (fprintf(fp, "/* %s `%s' not defined */\n",
+		if (nv->nv_flags & NV_OBSOLETE) {
+			fprintf(fp, "/* %s `%s' is obsolete */\n",
 			    isfsoption ? "file system" : "option",
-			    nv->nv_name) < 0)
-				goto bad;
-		} else {
-			if (fprintf(fp, "#define\t%s", option->nv_name) < 0)
-				goto bad;
-			if (option->nv_str != NULL && isfsoption == 0 &&
-			    fprintstr(fp, option->nv_str) < 0)
-				goto bad;
-			if (fputc('\n', fp) < 0)
-				goto bad;
+			    nv->nv_name);
+			fprint_global(fp, nv->nv_name, 0xdeadbeef);
+			continue;
 		}
+
+		if (((option = ht_lookup(opttab, nv->nv_name)) == NULL &&
+		    (option = ht_lookup(fsopttab, nv->nv_name)) == NULL) &&
+		    (nv->nv_str == NULL)) {
+			fprintf(fp, "/* %s `%s' not defined */\n",
+			    isfsoption ? "file system" : "option",
+			    nv->nv_name);
+			fprint_global(fp, nv->nv_name, UNDEFINED);
+			continue;
+		}
+
+		opt_value = option != NULL ? option->nv_str : nv->nv_str;
+		if (isfsoption == 1)
+			/* For filesysteme we'd output the lower case name */
+			opt_value = NULL;
+
+		fprintf(fp, "#define\t%s", nv->nv_name);
+		if (opt_value != NULL)
+			fprintstr(fp, opt_value);
+		fputc('\n', fp);
+		fprint_global(fp, nv->nv_name,
+		    opt_value == NULL ? 1 : global_hash(opt_value));
 	}
+
+	fflush(fp);
+	if (ferror(fp))
+		return herr("writ", tfname, fp);
 
 	if (fclose(fp) == EOF)
 		return (herr("clos", tfname, NULL));
 
 	return (moveifchanged(tfname, name));
-
- bad:
-	return (herr("writ", tfname, fp));
 }
 
 /*
@@ -249,27 +305,17 @@ locators_print(const char *name, void *value, void *arg)
 					*cp = toupper((unsigned char)*cp);
 				else if (*cp == ARRCHR)
 					*cp = '_';
-			if (fprintf(fp, "#define %sCF_%s %d\n",
-			    locdup, namedup, i) < 0)
-				goto bad;
-			if (nv->nv_str &&
-			    fprintf(fp, "#define %sCF_%s_DEFAULT %s\n",
-			    locdup, namedup, nv->nv_str) < 0)
-				goto bad;
+			fprintf(fp, "#define %sCF_%s %d\n", locdup, namedup, i);
+			if (nv->nv_str != NULL)
+				fprintf(fp, "#define %sCF_%s_DEFAULT %s\n",
+				    locdup, namedup, nv->nv_str);
 			free(namedup);
 		}
 		/* assert(i == a->a_loclen) */
-		if (fprintf(fp, "#define %sCF_NLOCS %d\n",
-					locdup, a->a_loclen) < 0)
-			goto bad1;
+		fprintf(fp, "#define %sCF_NLOCS %d\n", locdup, a->a_loclen);
 		free(locdup);
 	}
 	return 0;
-bad:
-	free(namedup);
-bad1:
-	free(locdup);
-	return 1;
 }
 
 /*
@@ -289,6 +335,10 @@ emitlocs(void)
 		return (herr("open", tfname, NULL));
 
 	rval = ht_enumerate(attrtab, locators_print, tfp);
+
+	fflush(tfp);
+	if (ferror(tfp))
+		return (herr("writ", tfname, NULL));
 	if (fclose(tfp) == EOF)
 		return (herr("clos", tfname, NULL));
 	if (rval)
@@ -314,12 +364,12 @@ emitioconfh(void)
 	TAILQ_FOREACH(d, &allbases, d_next) {
 		if (!devbase_has_instances(d, WILD))
 			continue;
-		if (fprintf(tfp, "extern struct cfdriver %s_cd;\n",
-		    d->d_name) < 0) {
-			(void)fclose(tfp);
-			return (1);
-		}
+		fprintf(tfp, "extern struct cfdriver %s_cd;\n", d->d_name);
 	}
+
+	fflush(tfp);
+	if (ferror(tfp))
+		return herr("writ", tfname, tfp);
 
 	if (fclose(tfp) == EOF)
 		return (herr("clos", tfname, NULL));
@@ -347,7 +397,7 @@ emittime(void)
 	if (strftime(buf, sizeof(buf), "%c %Z", tm) == 0)
 		return (herr("strftime", "config_time.src", fp));
 
-	if (fprintf(fp, "/* %s */\n"
+	fprintf(fp, "/* %s */\n"
 	    "#define CONFIG_TIME\t%2lld\n"
 	    "#define CONFIG_YEAR\t%2d\n"
 	    "#define CONFIG_MONTH\t%2d\n"
@@ -357,11 +407,14 @@ emittime(void)
 	    "#define CONFIG_SECS\t%2d\n",
 	    buf, (long long)t, 
 	    tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
-	    tm->tm_hour, tm->tm_min, tm->tm_sec) < 0)
+	    tm->tm_hour, tm->tm_min, tm->tm_sec);
+
+	fflush(fp);
+	if (ferror(fp))
 		return (herr("fprintf", "config_time.src", fp));
 
 	if (fclose(fp) != 0)
-		return (herr("close", "config_time.src", NULL));
+		return (herr("clos", "config_time.src", NULL));
 
 	/*
 	 * *Don't* moveifchanged this file.  Makefile.kern.inc will

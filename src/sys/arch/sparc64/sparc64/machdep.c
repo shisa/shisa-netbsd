@@ -1,4 +1,4 @@
-/*	$NetBSD: machdep.c,v 1.188 2006/09/01 09:21:18 mrg Exp $ */
+/*	$NetBSD: machdep.c,v 1.191 2006/10/05 14:48:32 chs Exp $ */
 
 /*-
  * Copyright (c) 1996, 1997, 1998 The NetBSD Foundation, Inc.
@@ -78,7 +78,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.188 2006/09/01 09:21:18 mrg Exp $");
+__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.191 2006/10/05 14:48:32 chs Exp $");
 
 #include "opt_ddb.h"
 #include "opt_multiprocessor.h"
@@ -615,7 +615,6 @@ cpu_reboot(register int howto, char *user_boot_string)
 	boothowto = howto;
 	if ((howto & RB_NOSYNC) == 0 && waittime < 0) {
 		extern struct lwp lwp0;
-		extern int sparc_clock_time_is_ok;
 
 		/* XXX protect against curlwp->p_stats.foo refs in sync() */
 		if (curlwp == NULL)
@@ -626,18 +625,16 @@ cpu_reboot(register int howto, char *user_boot_string)
 		/*
 		 * If we've been adjusting the clock, the todr
 		 * will be out of synch; adjust it now.
-		 * Do this only if the TOD clock has already been read out
-		 * successfully by inittodr() or set by an explicit call
-		 * to resettodr() (e.g. from settimeofday()).
+		 * resettodr will only do this only if inittodr()
+		 * has already been called.
 		 */
-		if (sparc_clock_time_is_ok)
-			resettodr();
+		resettodr();
 	}
 	(void) splhigh();		/* ??? */
 
 #if defined(MULTIPROCESSOR)
 	/* Stop all secondary cpus */
-	sparc64_ipi_halt_cpus();
+	mp_halt_cpus();
 #endif
 
 	/* If rebooting and a dump is requested, do it. */
@@ -1213,7 +1210,7 @@ _bus_dmamap_load_uio(bus_dma_tag_t t, bus_dmamap_t map, struct uio *uio,
 		 *    in the transfer.
 		 */
 		PHOLD(p);
-		if (__predict_false(uvm_vslock(p, vaddr, buflen,
+		if (__predict_false(uvm_vslock(p->p_vmspace, vaddr, buflen,
 			    (uio->uio_rw == UIO_WRITE) ?
 			    VM_PROT_WRITE : VM_PROT_READ) != 0)) {
 				goto after_vsunlock;
@@ -1245,7 +1242,7 @@ _bus_dmamap_load_uio(bus_dma_tag_t t, bus_dmamap_t map, struct uio *uio,
 			segs[i]._ds_mlist = NULL;
 			i++;
 		}
-		uvm_vsunlock(p, bp->b_data, todo);
+		uvm_vsunlock(p->p_vmspace, bp->b_data, todo);
 		PRELE(p);
  		if (buflen > 0 && i >= MAX_DMA_SEGS) 
 			/* Exceeded the size of our dmamap */

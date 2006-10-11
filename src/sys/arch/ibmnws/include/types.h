@@ -1,7 +1,7 @@
-/*	$NetBSD: types.h,v 1.4 2006/08/11 15:19:59 rjs Exp $	*/
+/*	$NetBSD: types.h,v 1.6 2006/09/07 18:27:09 rjs Exp $	*/
 
-#define __HAVE_NWSCONS
 #define __HAVE_GENERIC_SOFT_INTERRUPTS
 #define __HAVE_TIMECOUNTER
+#define __HAVE_GENERIC_TODR
 
 #include <powerpc/types.h>

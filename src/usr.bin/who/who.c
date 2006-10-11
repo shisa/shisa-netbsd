@@ -1,4 +1,4 @@
-/*	$NetBSD: who.c,v 1.16 2005/07/22 14:23:05 peter Exp $	*/
+/*	$NetBSD: who.c,v 1.20 2006/09/28 15:24:31 christos Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993
@@ -43,7 +43,7 @@ __COPYRIGHT(
 #if 0
 static char sccsid[] = "@(#)who.c	8.1 (Berkeley) 6/6/93";
 #endif
-__RCSID("$NetBSD: who.c,v 1.16 2005/07/22 14:23:05 peter Exp $");
+__RCSID("$NetBSD: who.c,v 1.20 2006/09/28 15:24:31 christos Exp $");
 #endif /* not lint */
 
 #include <sys/types.h>
@@ -57,41 +57,91 @@ __RCSID("$NetBSD: who.c,v 1.16 2005/07/22 14:23:05 peter Exp $");
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#ifdef SUPPORT_UTMP
+#include <utmp.h>
+#endif
+#ifdef SUPPORT_UTMPX
+#include <utmpx.h>
+#endif
 
 #include "utmpentry.h"
 
 static void output_labels(void);
 static void who_am_i(const char *, int);
-static void usage(void);
+static void usage(void) __attribute__((__noreturn__));
 static void process(const char *, int);
-static void print(const char *, const char *, time_t, const char *);
+static void eprint(const struct utmpentry *);
+static void print(const char *, const char *, time_t, const char *, pid_t pid,
+    uint16_t term, uint16_t xit, uint16_t sess, uint16_t type);
 static void quick(const char *);
 
 static int show_term;			/* show term state */
 static int show_idle;			/* show idle time */
+static int show_details;		/* show exit status etc. */
 
-extern int maxname, maxline, maxhost;
+struct ut_type_names {
+  int type;
+  const char *name;
+} ut_type_names[] = {
+#ifdef SUPPORT_UTMPX
+  { EMPTY, "empty" }, 
+  { RUN_LVL, "run level" }, 
+  { BOOT_TIME, "boot time" }, 
+  { OLD_TIME, "old time" }, 
+  { NEW_TIME, "new time" }, 
+  { INIT_PROCESS, "init process" }, 
+  { LOGIN_PROCESS, "login process" }, 
+  { USER_PROCESS, "user process" }, 
+  { DEAD_PROCESS, "dead process" }, 
+#if defined(_NETBSD_SOURCE)
+  { ACCOUNTING, "accounting" }, 
+  { SIGNATURE, "signature" },
+  { DOWN_TIME, "down time" },
+#endif /* _NETBSD_SOURCE */
+#endif /* SUPPORT_UTMPX */
+  { -1, "unknown" }
+};
 
 int
 main(int argc, char *argv[])
 {
 	int c, only_current_term, show_labels, quick_mode, default_mode;
+	int et = 0;
 
 	setlocale(LC_ALL, "");
 
 	only_current_term = show_term = show_idle = show_labels = 0;
 	quick_mode = default_mode = 0;
 
-	while ((c = getopt(argc, argv, "HmqsTu")) != -1) {
+	while ((c = getopt(argc, argv, "abdHlmpqrsTtuv")) != -1) {
 		switch (c) {
+		case 'a':
+			et = -1;
+			show_idle = show_details = 1;
+			break;
+		case 'b':
+			et |= (1 << BOOT_TIME);
+			break;
+		case 'd':
+			et |= (1 << DEAD_PROCESS);
+			break;
 		case 'H':
 			show_labels = 1;
+			break;
+		case 'l':
+			et |= (1 << LOGIN_PROCESS);
 			break;
 		case 'm':
 			only_current_term = 1;
 			break;
+		case 'p':
+			et |= (1 << INIT_PROCESS);
+			break;
 		case 'q':
 			quick_mode = 1;
+			break;
+		case 'r':
+			et |= (1 << RUN_LVL);
 			break;
 		case 's':
 			default_mode = 1;
@@ -99,8 +149,14 @@ main(int argc, char *argv[])
 		case 'T':
 			show_term = 1;
 			break;
+		case 't':
+			et |= (1 << NEW_TIME);
+			break;
 		case 'u':
 			show_idle = 1;
+			break;
+		case 'v':
+			show_details = 1;
 			break;
 		default:
 			usage();
@@ -109,6 +165,9 @@ main(int argc, char *argv[])
 	}
 	argc -= optind;
 	argv += optind;
+
+	if (et != 0)
+		etype = et;
 
 	if (chdir("/dev")) {
 		err(EXIT_FAILURE, "cannot change directory to /dev");
@@ -169,8 +228,7 @@ who_am_i(const char *fname, int show_labels)
 			if (strcmp(ep->line, p) == 0) {
 				if (show_labels)
 					output_labels();
-				print(ep->name, ep->line, (time_t)ep->tv.tv_sec,
-				    ep->host);
+				eprint(ep);
 				return;
 			}
 	} else
@@ -180,7 +238,7 @@ who_am_i(const char *fname, int show_labels)
 	pw = getpwuid(getuid());
 	if (show_labels)
 		output_labels();
-	print(pw ? pw->pw_name : "?", p, now, "");
+	print(pw ? pw->pw_name : "?", p, now, "", getpid(), 0, 0, 0, 0);
 }
 
 static void
@@ -191,20 +249,36 @@ process(const char *fname, int show_labels)
 	if (show_labels)
 		output_labels();
 	for (ep = ehead; ep != NULL; ep = ep->next)
-		print(ep->name, ep->line, (time_t)ep->tv.tv_sec, ep->host);
+		eprint(ep);
 }
 
 static void
-print(const char *name, const char *line, time_t t, const char *host)
+eprint(const struct utmpentry *ep)
+{
+	print(ep->name, ep->line, (time_t)ep->tv.tv_sec, ep->host, ep->pid,
+	    ep->term, ep->exit, ep->sess, ep->type);
+}
+
+static void
+print(const char *name, const char *line, time_t t, const char *host,
+    pid_t pid, uint16_t term, uint16_t xit, uint16_t sess, uint16_t type)
 {
 	struct stat sb;
 	char state;
 	static time_t now = 0;
 	time_t idle;
+	const char *types = NULL;
+	size_t i;
 
 	state = '?';
 	idle = 0;
 
+	for (i = 0; ut_type_names[i].type >= 0; i++) {
+		types = ut_type_names[i].name;
+		if (ut_type_names[i].type == type)
+			break;
+	}
+	
 	if (show_term || show_idle) {
 		if (now == 0)
 			time(&now);
@@ -233,6 +307,17 @@ print(const char *name, const char *line, time_t t, const char *host)
 				     (long)(idle % (60 * 60)) / 60);
 		else
 			(void)printf(" old  ");
+
+		(void)printf("\t%6d", pid);
+		
+		if (show_details) {
+			if (type == RUN_LVL)
+				(void)printf("\tnew=%c old=%c", term, xit);
+			else
+				(void)printf("\tterm=%d exit=%d", term, xit);
+			(void)printf(" sess=%d", sess);
+			(void)printf(" type=%s ", types);
+		}
 	}
 	
 	if (*host)
@@ -251,10 +336,12 @@ output_labels(void)
 	(void)printf("%-*.*s ", maxline, maxline, "LINE");
 	(void)printf("WHEN         ");
 
-	if (show_idle)
+	if (show_idle) {
 		(void)printf("IDLE  ");
+		(void)printf("\t   PID");
 	
-	(void)printf("\t%.*s", maxhost, "FROM");
+		(void)printf("\tCOMMENT");
+	}		
 
 	(void)putchar('\n');
 }
@@ -280,7 +367,7 @@ quick(const char *fname)
 static void
 usage(void)
 {
-	(void)fprintf(stderr, "usage: %s [-HmqsTu] [file]\n       %s am i\n",
+	(void)fprintf(stderr, "Usage: %s [-abdHlmqrsTtuv] [file]\n\t%s am i\n",
 	    getprogname(), getprogname());
 	exit(EXIT_FAILURE);
 }

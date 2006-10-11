@@ -1,4 +1,4 @@
-/*	$NetBSD: uvm_mmap.c,v 1.98 2006/07/21 16:48:53 ad Exp $	*/
+/*	$NetBSD: uvm_mmap.c,v 1.100 2006/10/05 14:48:33 chs Exp $	*/
 
 /*
  * Copyright (c) 1997 Charles D. Cranor and Washington University.
@@ -51,10 +51,11 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: uvm_mmap.c,v 1.98 2006/07/21 16:48:53 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: uvm_mmap.c,v 1.100 2006/10/05 14:48:33 chs Exp $");
 
 #include "opt_compat_netbsd.h"
 #include "opt_pax.h"
+#include "veriexec.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -68,6 +69,10 @@ __KERNEL_RCSID(0, "$NetBSD: uvm_mmap.c,v 1.98 2006/07/21 16:48:53 ad Exp $");
 #include <sys/vnode.h>
 #include <sys/conf.h>
 #include <sys/stat.h>
+
+#if NVERIEXEC > 0
+#include <sys/verified_exec.h>
+#endif /* NVERIEXEC > 0 */
  
 #ifdef PAX_MPROTECT
 #include <sys/pax.h>
@@ -176,7 +181,7 @@ sys_mincore(l, v, retval)
 	 */
 
 	npgs = len >> PAGE_SHIFT;
-	error = uvm_vslock(p, vec, npgs, VM_PROT_WRITE);
+	error = uvm_vslock(p->p_vmspace, vec, npgs, VM_PROT_WRITE);
 	if (error) {
 		return error;
 	}
@@ -267,7 +272,7 @@ sys_mincore(l, v, retval)
 
  out:
 	vm_map_unlock_read(map);
-	uvm_vsunlock(p, SCARG(uap, vec), npgs);
+	uvm_vsunlock(p->p_vmspace, SCARG(uap, vec), npgs);
 	return (error);
 }
 
@@ -409,6 +414,19 @@ sys_mmap(l, v, retval)
 			flags |= MAP_ANON;
 			goto is_anon;
 		}
+
+#if NVERIEXEC > 0
+		/*
+		 * If we are mapping the file as executable, we expect to
+		 * have the VERIEXEC_INDIRECT flag set for the entry if it
+		 * exists.
+		 */
+		if (prot & VM_PROT_EXECUTE) {
+			if (veriexec_verify(l, vp, "[mmap]",
+			    VERIEXEC_INDIRECT, NULL) != 0)
+				return (EPERM);
+		}
+#endif /* NVERIEXEC > 0 */
 
 		/*
 		 * Old programs may not select a specific sharing type, so
@@ -1047,6 +1065,7 @@ uvm_mmap(map, addr, size, prot, maxprot, flags, handle, foff, locklimit)
 	int error;
 	int advice = UVM_ADV_NORMAL;
 	uvm_flag_t uvmflag = 0;
+	boolean_t needwritemap;
 
 	/*
 	 * check params
@@ -1163,10 +1182,26 @@ uvm_mmap(map, addr, size, prot, maxprot, flags, handle, foff, locklimit)
 			return((vp->v_type == VREG) ? ENOMEM : EINVAL);
 		if ((flags & MAP_SHARED) == 0) {
 			uvmflag |= UVM_FLAG_COPYONW;
-		} else if ((maxprot & VM_PROT_WRITE) != 0) {
+		}
+
+		/*
+		 * Set vnode flags to indicate the new kinds of mapping.
+		 * We take the vnode lock in exclusive mode here to serialize
+		 * with direct I/O.
+		 */
+
+		needwritemap = (vp->v_flag & VWRITEMAP) == 0 &&
+			(flags & MAP_SHARED) != 0 &&
+			(maxprot & VM_PROT_WRITE) != 0;
+		if ((vp->v_flag & VMAPPED) == 0 || needwritemap) {
+			vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);
 			simple_lock(&vp->v_interlock);
-			vp->v_flag |= VWRITEMAP;
+			vp->v_flag |= VMAPPED;
+			if (needwritemap) {
+				vp->v_flag |= VWRITEMAP;
+			}
 			simple_unlock(&vp->v_interlock);
+			VOP_UNLOCK(vp, 0);
 		}
 	}
 

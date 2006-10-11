@@ -1,4 +1,4 @@
-/*	$NetBSD: extern.h,v 1.18 2005/09/02 17:39:23 elad Exp $	*/
+/*	$NetBSD: extern.h,v 1.19 2006/09/04 20:01:10 dsl Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -36,9 +36,9 @@
 #endif
 
 #include <sys/cdefs.h>
+#include "crc_extern.h"
 
 __BEGIN_DECLS
-int	crc(int, u_int32_t *, off_t *);
 void	pcrc(char *, u_int32_t, off_t);
 void	psum1(char *, u_int32_t, off_t);
 void	psum2(char *, u_int32_t, off_t);

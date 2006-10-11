@@ -1,4 +1,4 @@
-.\"	$NetBSD: exports.5,v 1.25 2005/10/18 11:01:39 wiz Exp $
+.\"	$NetBSD: exports.5,v 1.28 2006/09/18 16:03:36 wiz Exp $
 .\"
 .\" Copyright (c) 1989, 1991, 1993
 .\"	The Regents of the University of California.  All rights reserved.
@@ -29,7 +29,7 @@
 .\"
 .\"     @(#)exports.5	8.3 (Berkeley) 3/29/95
 .\"
-.Dd October 16, 2005
+.Dd September 18, 2006
 .Dt EXPORTS 5
 .Os
 .Sh NAME
@@ -52,7 +52,7 @@ and
 .%T "NFS: Network File System Version 3 Specification, Appendix I" .
 .Pp
 Each line in the file
-(other than comment lines that begin with a 
+(other than comment lines that begin with a
 .Sq # )
 specifies the mount point(s) and export flags within one local server
 filesystem for one or more hosts.
@@ -362,6 +362,14 @@ The default remote mount-point file.
 .Xr mountd 8 ,
 .Xr nfsd 8 ,
 .Xr showmount 8
+.Sh CAVEATS
+Don't re-export NFS-mounted filesystems unless you are sure of the
+implications.
+NFS has some assumptions about the characteristics of the file
+systems being exported, e.g. when timestamps are updated.
+Re-exporting should work to some extent and can even be useful in
+some cases, but don't expect it works as well as with local file
+systems.
 .Sh BUGS
 The export options are tied to the local mount points in the kernel and
 must be non-contradictory for any exported subdirectory of the local

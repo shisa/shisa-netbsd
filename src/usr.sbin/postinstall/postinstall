@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# $NetBSD: postinstall,v 1.24 2006/08/18 12:01:53 hubertf Exp $
+# $NetBSD: postinstall,v 1.29 2006/10/07 16:50:34 rpaulo Exp $
 #
 # Copyright (c) 2002-2005 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -365,6 +365,28 @@ stat()
 	return $?
 }
 
+# file_exists_exact path
+#	Returns true if file exists matching exact case for path
+#	Each path is relative to ${DEST_DIR}, and should
+#	be an absolute path or start with `./'.
+#
+file_exists_exact()
+{
+	[ -n "1" ] || err 2 "USAGE: file_exists_exact path"
+	_path=${1#.}
+	[ -h "${DEST_DIR}${_path}" ] || \
+        	[ -e "${DEST_DIR}${_path}" ] || return 1
+	while [ "${_path}" != "/" ] ; do
+		_dirname=$(dirname "${_path}" 2>/dev/null)
+		_basename=$(basename "${_path}" 2>/dev/null)
+		ls -fa "${DEST_DIR}${_dirname}" 2> /dev/null \
+			| grep -q -x -F "${_basename}" \
+			|| return 1
+		_path=${_dirname}
+	done
+	return 0
+}
+
 # obsolete_paths op
 #	Obsolete the list of paths provided on stdin.
 #	Each path is relative to ${DEST_DIR}, and should
@@ -377,6 +399,9 @@ obsolete_paths()
 
 	failed=0
 	while read ofile; do
+                if ! file_exists_exact "${ofile}"; then
+                    continue
+                fi
 		ofile=${DEST_DIR}${ofile#.}
 		cmd="rm"
 		ftype="file"
@@ -385,8 +410,6 @@ obsolete_paths()
 		elif [ -d "${ofile}" ]; then
 			ftype="directory"
 			cmd="rmdir"
-		elif [ ! -e "${ofile}" ]; then
-			continue
 		fi
 		if [ "${op}" = "check" ]; then
 			msg "Remove obsolete ${ftype} ${ofile}"
@@ -539,13 +562,23 @@ contents_owner()
 #
 #	bluetooth
 #
-additem bluetooth "/etc/bluetooth/ is populated"
+additem bluetooth "bluetooth configuration is up to date"
 do_bluetooth()
 {
 	[ -n "$1" ] || err 2 "USAGE: do_bluetooth fix|check"
+	op=$1
+	failed=0
 
-	populate_dir ${op} true ${SRC_DIR}/etc/bluetooth ${DEST_DIR}/etc/bluetooth 644 hosts protocols
-	return $?
+	populate_dir ${op} true \
+		${SRC_DIR}/etc/bluetooth ${DEST_DIR}/etc/bluetooth 644 \
+		hosts protocols btdevctl.conf
+	failed=$(( ${failed} + $? ))
+
+	move_file ${op} ${DEST_DIR}/var/db/btdev.xml \
+			${DEST_DIR}/var/db/btdevctl.plist
+	failed=$(( ${failed} + $? ))
+
+	return ${failed}
 }
 
 #
@@ -637,6 +670,44 @@ do_makedev()
 	    || return 1
 
 	compare_dir $1 ${dir} ${DEST_DIR}/dev 555 MAKEDEV
+}
+
+#
+#	motd
+#
+additem motd "contents of motd"
+do_motd()
+{
+	[ -n "$1" ] || err 2 "USAGE: do_motd  fix|check"
+
+	if grep 'http://www.NetBSD.org/Misc/send-pr.html' ${DEST_DIR}/etc/motd \
+	    >/dev/null 2>&1
+	then
+		tmp1=$(mktemp /tmp/postinstall.motd.XXXXXXXX)
+		tmp2=$(mktemp /tmp/postinstall.motd.XXXXXXXX)
+		sed '1,2d' <${SRC_DIR}/etc/motd >${tmp1}
+		sed '1,2d' <${DEST_DIR}/etc/motd >${tmp2}
+
+		if [ "$1" = check ]; then
+			cmp -s ${tmp1} ${tmp2}
+			result=$?
+			if [ ${result} -ne 0 ]; then
+				msg "bug reporting messages do not seem to" \
+				    "match the installed release"
+			fi
+		else
+			head -n 2 ${DEST_DIR}/etc/motd >${tmp1}
+			sed '1,2d' <${SRC_DIR}/etc/motd >>${tmp1}
+			cp ${tmp1} ${DEST_DIR}/etc/motd
+			result=0
+		fi
+
+		rm -f ${tmp1} ${tmp2}
+	else
+		result=0
+	fi
+
+	return ${result}
 }
 
 #
@@ -756,7 +827,7 @@ do_rc()
 		savecore screenblank sdpd securelevel sshd \
 		staticroute swap1 swap2 sysctl sysdb syslogd \
 		timed tpctl ttys \
-		veriexec virecover wdogctl wscons wsmoused \
+		veriexec virecover wdogctl wpa_supplicant wscons wsmoused \
 		xdm xfs \
 		ypbind yppasswdd ypserv
 	failed=$(( ${failed} + $? ))

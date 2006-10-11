@@ -1,4 +1,4 @@
-/*	$NetBSD: tcp.h,v 1.21 2005/12/10 23:36:23 elad Exp $	*/
+/*	$NetBSD: tcp.h,v 1.24 2006/09/25 13:21:53 rpaulo Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1993
@@ -66,8 +66,8 @@ struct tcphdr {
 #define	TH_PUSH	  0x08
 #define	TH_ACK	  0x10
 #define	TH_URG	  0x20
-#define	TH_ECE	  0x40			/* (unimplemented) */
-#define	TH_CWR	  0x80			/* (unimplemented) */
+#define	TH_ECE	  0x40
+#define	TH_CWR	  0x80
 	u_int16_t th_win;			/* window */
 	u_int16_t th_sum;			/* checksum */
 	u_int16_t th_urp;			/* urgent pointer */
@@ -97,11 +97,9 @@ struct tcphdr {
 
 /*
  * Default maximum segment size for TCP.
- * With an IP MSS of 576, this is 536,
- * but 512 is probably more convenient.
- * This should be defined as min(512, IP_MSS - sizeof (struct tcpiphdr)).
+ * This is defined by RFC 1112 Sec 4.2.2.6.
  */
-#define	TCP_MSS		512
+#define	TCP_MSS		536
 
 #define	TCP_MAXWIN	65535	/* largest value for (unscaled) window */
 

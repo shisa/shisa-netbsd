@@ -1,4 +1,4 @@
-/* $NetBSD: kern_tc.c,v 1.7 2006/08/06 13:29:42 bjh21 Exp $ */
+/* $NetBSD: kern_tc.c,v 1.13 2006/09/24 06:39:28 kardel Exp $ */
 
 /*-
  * ----------------------------------------------------------------------------
@@ -11,7 +11,7 @@
 
 #include <sys/cdefs.h>
 /* __FBSDID("$FreeBSD: src/sys/kern/kern_tc.c,v 1.166 2005/09/19 22:16:31 andre Exp $"); */
-__KERNEL_RCSID(0, "$NetBSD: kern_tc.c,v 1.7 2006/08/06 13:29:42 bjh21 Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_tc.c,v 1.13 2006/09/24 06:39:28 kardel Exp $");
 
 #include "opt_ntp.h"
 
@@ -27,11 +27,6 @@ __KERNEL_RCSID(0, "$NetBSD: kern_tc.c,v 1.7 2006/08/06 13:29:42 bjh21 Exp $");
 #include <sys/timex.h>
 #include <sys/evcnt.h>
 #include <sys/kauth.h>
-
-/*
- * maximum name length for TC names in sysctl interface
- */
-#define MAX_TCNAMELEN	64
 
 /*
  * A large step happens on boot.  This constant detects such steps.
@@ -56,7 +51,7 @@ dummy_get_timecount(struct timecounter *tc)
 }
 
 static struct timecounter dummy_timecounter = {
-	dummy_get_timecount, 0, ~0u, 1000000, "dummy", -1000000
+	dummy_get_timecount, 0, ~0u, 1000000, "dummy", -1000000, NULL, NULL,
 };
 
 struct timehands {
@@ -74,25 +69,21 @@ struct timehands {
 };
 
 static struct timehands th0;
-static struct timehands th9 = { NULL, 0, 0, 0, {0, 0}, {0, 0}, {0, 0}, 0, &th0};
-static struct timehands th8 = { NULL, 0, 0, 0, {0, 0}, {0, 0}, {0, 0}, 0, &th9};
-static struct timehands th7 = { NULL, 0, 0, 0, {0, 0}, {0, 0}, {0, 0}, 0, &th8};
-static struct timehands th6 = { NULL, 0, 0, 0, {0, 0}, {0, 0}, {0, 0}, 0, &th7};
-static struct timehands th5 = { NULL, 0, 0, 0, {0, 0}, {0, 0}, {0, 0}, 0, &th6};
-static struct timehands th4 = { NULL, 0, 0, 0, {0, 0}, {0, 0}, {0, 0}, 0, &th5};
-static struct timehands th3 = { NULL, 0, 0, 0, {0, 0}, {0, 0}, {0, 0}, 0, &th4};
-static struct timehands th2 = { NULL, 0, 0, 0, {0, 0}, {0, 0}, {0, 0}, 0, &th3};
-static struct timehands th1 = { NULL, 0, 0, 0, {0, 0}, {0, 0}, {0, 0}, 0, &th2};
+static struct timehands th9 = { .th_next = &th0, };
+static struct timehands th8 = { .th_next = &th9, };
+static struct timehands th7 = { .th_next = &th8, };
+static struct timehands th6 = { .th_next = &th7, };
+static struct timehands th5 = { .th_next = &th6, };
+static struct timehands th4 = { .th_next = &th5, };
+static struct timehands th3 = { .th_next = &th4, };
+static struct timehands th2 = { .th_next = &th3, };
+static struct timehands th1 = { .th_next = &th2, };
 static struct timehands th0 = {
-	&dummy_timecounter,
-	0,
-	(uint64_t)-1 / 1000000,
-	0,
-	{1, 0},
-	{0, 0},
-	{0, 0},
-	1,
-	&th1
+	.th_counter = &dummy_timecounter,
+	.th_scale = (uint64_t)-1 / 1000000,
+	.th_offset = { .sec = 1, .frac = 0 },
+	.th_generation = 1,
+	.th_next = &th1,
 };
 
 static struct timehands *volatile timehands = &th0;
@@ -166,7 +157,7 @@ sysctl_kern_timecounter_hardware(SYSCTLFN_ARGS)
 static int
 sysctl_kern_timecounter_choice(SYSCTLFN_ARGS)
 {
-	char buf[48];
+	char buf[MAX_TCNAMELEN+48];
 	char *where = oldp;
 	const char *spc;
 	struct timecounter *tc;
@@ -435,6 +426,7 @@ void
 tc_init(struct timecounter *tc)
 {
 	u_int u;
+	int s;
 
 	u = tc->tc_frequency / tc->tc_counter_mask;
 	/* XXX: We need some margin here, 10% is a guess */
@@ -453,7 +445,8 @@ tc_init(struct timecounter *tc)
 		    tc->tc_quality);
 	}
 
-	/* XXX locking */
+	s = splclock();
+
 	tc->tc_next = timecounters;
 	timecounters = tc;
 	/*
@@ -462,16 +455,19 @@ tc_init(struct timecounter *tc)
 	 * worse since this timecounter may not be monotonous.
 	 */
 	if (tc->tc_quality < 0)
-		return;
+		goto out;
 	if (tc->tc_quality < timecounter->tc_quality)
-		return;
+		goto out;
 	if (tc->tc_quality == timecounter->tc_quality &&
 	    tc->tc_frequency < timecounter->tc_frequency)
-		return;
+		goto out;
 	(void)tc->tc_get_timecount(tc);
 	(void)tc->tc_get_timecount(tc);
 	timecounter = tc;
 	tc_windup();
+
+ out:
+	splx(s);
 }
 
 /* Report the frequency of the current timecounter. */
@@ -522,9 +518,10 @@ tc_windup(void)
 	struct timehands *th, *tho;
 	u_int64_t scale;
 	u_int delta, ncount, ogen;
-	int i;
+	int i, s_update;
 	time_t t;
 
+	s_update = 0;
 	/*
 	 * Make the next timehands a copy of the current one, but do not
 	 * overwrite the generation or next pointer.  While we update
@@ -580,6 +577,7 @@ tc_windup(void)
 	for (; i > 0; i--) {
 		t = bt.sec;
 		ntp_update_second(&th->th_adjustment, &bt.sec);
+		s_update = 1;
 		if (bt.sec != t)
 			timebasebin.sec += bt.sec - t;
 	}
@@ -593,6 +591,7 @@ tc_windup(void)
 	if (th->th_counter != timecounter) {
 		th->th_counter = timecounter;
 		th->th_offset_count = ncount;
+		s_update = 1;
 
 		printf("timecounter: selected timecounter \"%s\" frequency %ju Hz quality %d\n",
 		    timecounter->tc_name, (uintmax_t)timecounter->tc_frequency,
@@ -622,11 +621,12 @@ tc_windup(void)
 	 * to the goddess of code clarity.
 	 *
 	 */
-	scale = (u_int64_t)1 << 63;
-	scale += (th->th_adjustment / 1024) * 2199;
-	scale /= th->th_counter->tc_frequency;
-	th->th_scale = scale * 2;
-
+	if (s_update) {
+		scale = (u_int64_t)1 << 63;
+		scale += (th->th_adjustment / 1024) * 2199;
+		scale /= th->th_counter->tc_frequency;
+		th->th_scale = scale * 2;
+	}
 	/*
 	 * Now that the struct timehands is again consistent, set the new
 	 * generation number, making sure to not make it zero.

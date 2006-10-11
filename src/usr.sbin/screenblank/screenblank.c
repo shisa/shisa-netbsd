@@ -1,4 +1,4 @@
-/*	$NetBSD: screenblank.c,v 1.23 2005/11/11 15:14:24 peter Exp $	*/
+/*	$NetBSD: screenblank.c,v 1.26 2006/09/24 01:57:03 uwe Exp $	*/
 
 /*-
  * Copyright (c) 1996-2002 The NetBSD Foundation, Inc.
@@ -45,7 +45,7 @@
 __COPYRIGHT(
 "@(#) Copyright (c) 1996-2002 \
 	The NetBSD Foundation, Inc.  All rights reserved.");
-__RCSID("$NetBSD: screenblank.c,v 1.23 2005/11/11 15:14:24 peter Exp $");
+__RCSID("$NetBSD: screenblank.c,v 1.26 2006/09/24 01:57:03 uwe Exp $");
 #endif
 
 #include <sys/types.h>
@@ -105,6 +105,7 @@ main(int argc, char *argv[])
 	struct sigaction sa;
 	struct stat st;
 	int ch, change, fflag = 0, kflag = 0, mflag = 0, state;
+	int bflag = 0, uflag = 0;
 	const char *kbd, *mouse, *display;
 
 	LIST_INIT(&ds_list);
@@ -117,8 +118,13 @@ main(int argc, char *argv[])
 	timo_off.tv_sec = 0;
 	timo_off.tv_nsec = 250000000;
 
-	while ((ch = getopt(argc, argv, "d:e:f:i:km")) != -1) {
+	while ((ch = getopt(argc, argv, "bd:e:f:i:kmu")) != -1) {
 		switch (ch) {
+		case 'b':
+			bflag = 1;
+			uflag = 0;
+			break;
+
 		case 'd':
 			cvt_arg(optarg, &timo_on);
 			break;
@@ -146,6 +152,11 @@ main(int argc, char *argv[])
 			if (kflag || mflag)
 				usage();
 			mflag = 1;
+			break;
+
+		case 'u':
+			uflag = 1;
+			bflag = 0;
 			break;
 
 		default:
@@ -190,16 +201,28 @@ main(int argc, char *argv[])
 #endif
 
 	/*
-	 * Add the keyboard, mouse, and default framebuffer devices
-	 * as necessary.  We _always_ check the console device.
+	 * Add the default framebuffer device if necessary.
+	 * We _always_ check the console device.
 	 */
 	add_dev(_PATH_CONSOLE, 0);
+	if (!fflag)
+		add_dev(display, 1);
+
+	/*
+	 * If this is an one-off blank/unblank request, handle it now.
+	 * We don't need to open keyboard/mouse device for that.
+	 */
+	if (bflag || uflag) {
+		change_state(bflag ? videooff : videoon);
+		exit(0);
+	}
+
+
+	/* Add the keyboard and mouse devices as necessary. */
 	if (!kflag)
 		add_dev(kbd, 0);
 	if (!mflag)
 		add_dev(mouse, 0);
-	if (!fflag)
-		add_dev(display, 1);
 
 	/* Ensure that the framebuffer is on. */
 	state = videoon;
@@ -417,7 +440,7 @@ cvt_arg(char *arg, struct timespec *tvp)
 	tvp->tv_sec = seconds;
 	if (factor > 1)
 		nanoseconds *= factor;
-		
+
 	tvp->tv_nsec = nanoseconds;
 }
 
@@ -427,7 +450,9 @@ usage(void)
 
 	(void)fprintf(stderr,
 	    "usage: %s [-k | -m] [-d inactivity-timeout] [-e wakeup-delay]\n"
-	    "\t\t[-f framebuffer] [-i input-device]\n",
+	    "\t\t[-f framebuffer] [-i input-device]\n"
+	    "       %s {-b | -u}\n",
+	    getprogname(),
 	    getprogname());
 	exit(1);
 }

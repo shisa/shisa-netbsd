@@ -1,4 +1,4 @@
-/*	$NetBSD: ypbind.c,v 1.54 2006/05/09 20:18:10 mrg Exp $	*/
+/*	$NetBSD: ypbind.c,v 1.56 2006/10/05 09:18:11 tron Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993 Theo de Raadt <deraadt@fsa.ca>
@@ -28,7 +28,7 @@
 
 #include <sys/cdefs.h>
 #ifndef LINT
-__RCSID("$NetBSD: ypbind.c,v 1.54 2006/05/09 20:18:10 mrg Exp $");
+__RCSID("$NetBSD: ypbind.c,v 1.56 2006/10/05 09:18:11 tron Exp $");
 #endif
 
 #include <sys/param.h>
@@ -395,6 +395,7 @@ ypbindprog_2(struct svc_req *rqstp, register SVCXPRT *transp)
 	union {
 		char ypbindproc_domain_2_arg[YPMAXDOMAIN + 1];
 		struct ypbind_setdom ypbindproc_setdom_2_arg;
+		void *alignment;
 	} argument;
 	struct authunix_parms *creds;
 	char *result;
@@ -774,7 +775,7 @@ nag_servers(struct _dom_binding *ypdb)
 
 		if (sendto(rpcsock, buf, outlen, 0, (struct sockaddr *)&bindsin,
 			   sizeof bindsin) == -1)
-			yp_log(LOG_WARNING, "broadcast: sendto: %m");
+			yp_log(LOG_WARNING, "nag_servers: sendto: %m");
 	}
 
 	switch (ypbindmode) {

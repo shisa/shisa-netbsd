@@ -1,4 +1,4 @@
-/* $NetBSD: udf_vfsops.c,v 1.11 2006/08/22 16:52:41 reinoud Exp $ */
+/* $NetBSD: udf_vfsops.c,v 1.15 2006/10/03 15:54:03 reinoud Exp $ */
 
 /*
  * Copyright (c) 2006 Reinoud Zandijk
@@ -36,7 +36,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: udf_vfsops.c,v 1.11 2006/08/22 16:52:41 reinoud Exp $");
+__RCSID("$NetBSD: udf_vfsops.c,v 1.15 2006/10/03 15:54:03 reinoud Exp $");
 #endif /* not lint */
 
 
@@ -63,6 +63,7 @@ __RCSID("$NetBSD: udf_vfsops.c,v 1.11 2006/08/22 16:52:41 reinoud Exp $");
 #include <sys/dirent.h>
 #include <sys/stat.h>
 #include <sys/conf.h>
+#include <sys/sysctl.h>
 #include <sys/kauth.h>
 
 #include <fs/udf/ecma167-udf.h>
@@ -144,8 +145,8 @@ struct vfsops udf_vfsops = {
 	udf_snapshot,
 	vfs_stdextattrctl,
 	udf_vnodeopv_descs,
-	/* int vfs_refcount   */
-	/* LIST_ENTRY(vfsops) */
+	0, /* int vfs_refcount   */
+	{ NULL, NULL, }, /* LIST_ENTRY(vfsops) */
 };
 VFS_ATTACH(udf_vfsops);
 
@@ -211,14 +212,18 @@ free_udf_mountinfo(struct mount *mp)
 	struct udf_mount *ump;
 	int i;
 
+	if (!mp)
+		return;
+
 	ump = VFSTOUDF(mp);
 	if (ump) {
 		/* dispose of our descriptor pool */
-		if (ump->desc_pool)
+		if (ump->desc_pool) {
 			pool_destroy(ump->desc_pool);
+			free(ump->desc_pool, M_UDFMNT);
+		}
 
 		/* clear our data */
-		mp->mnt_data = NULL;
 		for (i = 0; i < UDF_ANCHORS; i++)
 			MPFREE(ump->anchors[i], M_UDFVOLD);
 		MPFREE(ump->primary_vol,      M_UDFVOLD);
@@ -264,7 +269,7 @@ udf_mount(struct mount *mp, const char *path,
 		return EOPNOTSUPP;
 	}
 
-	/* OK, so we are asked to mount the device/file! */
+	/* OK, so we are asked to mount the device */
 	error = copyin(data, &args, sizeof(struct udf_args));
 	if (error)
 		return error;
@@ -277,13 +282,12 @@ udf_mount(struct mount *mp, const char *path,
 	}
 
 	/* lookup name to get its vnode */
-	NDINIT(ndp, LOOKUP, FOLLOW | LOCKLEAF, UIO_USERSPACE, args.fspec, l);
+	NDINIT(ndp, LOOKUP, FOLLOW, UIO_USERSPACE, args.fspec, l);
 	error = namei(ndp);
 	if (error)
 		return error;
-
-	/* devvp is *locked* now */
 	devvp = ndp->ni_vp;
+
 #ifdef DEBUG
 	if (udf_verbose & UDF_DEBUG_VOLUMES)
 		vprint("UDF mount, trying to mount \n", devvp);
@@ -310,10 +314,12 @@ udf_mount(struct mount *mp, const char *path,
 		accessmode = VREAD;
 		if ((mp->mnt_flag & MNT_RDONLY) == 0)
 			accessmode |= VWRITE;
+		vn_lock(devvp, LK_EXCLUSIVE | LK_RETRY);
 		error = VOP_ACCESS(devvp, accessmode, l->l_cred, l);
+		VOP_UNLOCK(devvp, 0);
 		if (error) {
-			vput(devvp);
-			return (error);
+			vrele(devvp);
+			return error;
 		}
 	}
 
@@ -324,11 +330,11 @@ udf_mount(struct mount *mp, const char *path,
 	 */
 	error = vfs_mountedon(devvp);
 	if (error) {
-		vput(devvp);
+		vrele(devvp);
 		return error;
 	}
 	if ((vcount(devvp) > 1) && (devvp != rootvp)) {
-		vput(devvp);
+		vrele(devvp);
 		return EBUSY;
 	}
 
@@ -346,13 +352,14 @@ udf_mount(struct mount *mp, const char *path,
 		error = udf_mountfs(devvp, mp, l, &args);
 		if (error) {
 			free_udf_mountinfo(mp);
-			/* devvp is still locked */
+			vn_lock(devvp, LK_EXCLUSIVE | LK_RETRY);
 			(void) VOP_CLOSE(devvp, openflags, NOCRED, l);
+			VOP_UNLOCK(devvp, 0);
 		}
 	}
 	if (error) {
 		/* devvp is still locked */
-		vput(devvp);
+		vrele(devvp);
 		return error;
 	}
 
@@ -362,10 +369,8 @@ udf_mount(struct mount *mp, const char *path,
 	/* successfully mounted */
 	DPRINTF(VOLUMES, ("udf_mount() successfull\n"));
 
-	/* unlock it but dont deref it */
-	VOP_UNLOCK(devvp, 0);
-
-	return set_statvfs_info(path, UIO_USERSPACE, args.fspec, UIO_USERSPACE, mp, l);
+	return set_statvfs_info(path, UIO_USERSPACE, args.fspec, UIO_USERSPACE,
+			mp, l);
 }
 
 /* --------------------------------------------------------------------- */
@@ -453,12 +458,12 @@ udf_unmount(struct mount *mp, int mntflags, struct lwp *l)
 	ump->devvp->v_specmountpoint = NULL;
 	vput(ump->devvp);
 
-	/* free ump struct */
-	mp->mnt_data = NULL;
-	mp->mnt_flag &= ~MNT_LOCAL;
-
 	/* free up umt structure */
 	free_udf_mountinfo(mp);
+
+	/* free ump struct reference */
+	mp->mnt_data = NULL;
+	mp->mnt_flag &= ~MNT_LOCAL;
 
 	DPRINTF(VOLUMES, ("Fin unmount\n"));
 	return error;
@@ -744,3 +749,44 @@ udf_snapshot(struct mount *mp, struct vnode *vp, struct timespec *tm)
 	DPRINTF(NOTIMPL, ("udf_snapshot called\n"));
 	return EOPNOTSUPP;
 }
+
+/* --------------------------------------------------------------------- */
+
+/*
+ * If running a DEBUG kernel, provide an easy way to set the debug flags when
+ * running into a problem.
+ */
+
+#ifdef DEBUG
+#define UDF_VERBOSE_SYSCTLOPT 1
+
+SYSCTL_SETUP(sysctl_vfs_udf_setup, "sysctl vfs.udf subtree setup")
+{
+	/*
+	 * XXX the "24" below could be dynamic, thereby eliminating one
+	 * more instance of the "number to vfs" mapping problem, but
+	 * "24" is the order as taken from sys/mount.h
+	 */
+
+	sysctl_createv(clog, 0, NULL, NULL,
+		       CTLFLAG_PERMANENT,
+		       CTLTYPE_NODE, "vfs", NULL,
+		       NULL, 0, NULL, 0,
+		       CTL_VFS, CTL_EOL);
+	sysctl_createv(clog, 0, NULL, NULL,
+		       CTLFLAG_PERMANENT,
+		       CTLTYPE_NODE, "udf",
+		       SYSCTL_DESCR("OSTA Universal File System"),
+		       NULL, 0, NULL, 0,
+		       CTL_VFS, 24, CTL_EOL);
+
+	sysctl_createv(clog, 0, NULL, NULL,
+		       CTLFLAG_PERMANENT|CTLFLAG_READWRITE,
+		       CTLTYPE_INT, "verbose",
+		       SYSCTL_DESCR("Bitmask for filesystem debugging"),
+		       NULL, 0, &udf_verbose, 0,
+		       CTL_VFS, 24, UDF_VERBOSE_SYSCTLOPT, CTL_EOL);
+}
+
+#endif /* DEBUG */
+

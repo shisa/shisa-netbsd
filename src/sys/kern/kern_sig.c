@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_sig.c,v 1.226 2006/08/30 13:55:03 cube Exp $	*/
+/*	$NetBSD: kern_sig.c,v 1.229 2006/10/04 23:10:42 dogcow Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1989, 1991, 1993
@@ -37,10 +37,11 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_sig.c,v 1.226 2006/08/30 13:55:03 cube Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_sig.c,v 1.229 2006/10/04 23:10:42 dogcow Exp $");
 
 #include "opt_coredump.h"
 #include "opt_ktrace.h"
+#include "opt_ptrace.h"
 #include "opt_multiprocessor.h"
 #include "opt_compat_sunos.h"
 #include "opt_compat_netbsd.h"
@@ -118,7 +119,8 @@ sigacts_poolpage_free(struct pool *pp, void *v)
 }
 
 static struct pool_allocator sigactspool_allocator = {
-        sigacts_poolpage_alloc, sigacts_poolpage_free,
+        .pa_alloc = sigacts_poolpage_alloc,
+	.pa_free = sigacts_poolpage_free,
 };
 
 POOL_INIT(siginfo_pool, sizeof(siginfo_t), 0, 0, 0, "siginfo",
@@ -1031,10 +1033,11 @@ kpsignal2(struct proc *p, const ksiginfo_t *ksi, int dolock)
 		panic("psignal signal number %d", signum);
 
 	/* XXXSMP: works, but icky */
-	if (dolock)
+	if (dolock) {
 		SCHED_ASSERT_UNLOCKED();
-	else
+	} else {
 		SCHED_ASSERT_LOCKED();
+	}
 #endif
 
 	/*
@@ -1414,8 +1417,10 @@ kpsendsig(struct lwp *l, const ksiginfo_t *ksi, const sigset_t *mask)
 		if (sa_upcall(l, SA_UPCALL_SIGNAL | SA_UPCALL_DEFER, le, li,
 		    sizeof(*si), si, siginfo_free) != 0) {
 			siginfo_free(si);
+#if 0
 			if (KSI_TRAP_P(ksi))
 				/* XXX What do we do here?? */;
+#endif
 		}
 		l->l_flag |= f;
 		return;
@@ -2210,6 +2215,10 @@ done:
  * Nonexistent system call-- signal process (may want to handle it).
  * Flag error in case process won't see signal immediately (blocked or ignored).
  */
+#ifndef PTRACE
+__weak_alias(sys_ptrace, sys_nosys);
+#endif
+
 /* ARGSUSED */
 int
 sys_nosys(struct lwp *l, void *v, register_t *retval)

@@ -1,4 +1,4 @@
-/*	$NetBSD: irframe_tty.c,v 1.36 2006/07/21 16:48:51 ad Exp $	*/
+/*	$NetBSD: irframe_tty.c,v 1.38 2006/10/07 14:31:53 peter Exp $	*/
 
 /*
  * TODO
@@ -48,7 +48,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: irframe_tty.c,v 1.36 2006/07/21 16:48:51 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: irframe_tty.c,v 1.38 2006/10/07 14:31:53 peter Exp $");
 
 #include <sys/param.h>
 #include <sys/proc.h>
@@ -223,8 +223,8 @@ irframetopen(dev_t dev, struct tty *tp)
 
 	DPRINTF(("%s\n", __FUNCTION__));
 
-	if ((error = kauth_authorize_generic(l->l_cred, KAUTH_GENERIC_ISSUSER,
-	    &l->l_acflag)) != 0)
+	if ((error = kauth_authorize_device_tty(l->l_cred, 
+		KAUTH_DEVICE_TTY_OPEN, tp)))
 		return (error);
 
 	s = spltty();
@@ -525,7 +525,7 @@ irframet_read(void *h, struct uio *uio, int flag)
 	int error = 0;
 	int s;
 
-	DPRINTF(("%s: resid=%d, iovcnt=%d, offset=%ld\n",
+	DPRINTF(("%s: resid=%zd, iovcnt=%d, offset=%ld\n",
 		 __FUNCTION__, uio->uio_resid, uio->uio_iovcnt,
 		 (long)uio->uio_offset));
 	DPRINTF(("%s: nframe=%d framei=%d frameo=%d\n",
@@ -552,7 +552,7 @@ irframet_read(void *h, struct uio *uio, int flag)
 	if (!error) {
 		if (uio->uio_resid < sc->sc_frames[sc->sc_frameo].len) {
 			DPRINTF(("%s: uio buffer smaller than frame size "
-				 "(%d < %d)\n", __FUNCTION__, uio->uio_resid,
+				 "(%zd < %d)\n", __FUNCTION__, uio->uio_resid,
 				 sc->sc_frames[sc->sc_frameo].len));
 			error = EINVAL;
 		} else {
@@ -613,7 +613,7 @@ irframet_write(void *h, struct uio *uio, int flag)
 	struct irframet_softc *sc = (struct irframet_softc *)tp->t_sc;
 	int n;
 
-	DPRINTF(("%s: resid=%d, iovcnt=%d, offset=%ld\n",
+	DPRINTF(("%s: resid=%zd, iovcnt=%d, offset=%ld\n",
 		 __FUNCTION__, uio->uio_resid, uio->uio_iovcnt,
 		 (long)uio->uio_offset));
 
@@ -634,7 +634,7 @@ irt_write_frame(struct tty *tp, u_int8_t *tbuf, size_t len)
 	struct irframet_softc *sc = (struct irframet_softc *)tp->t_sc;
 	int error, i;
 
-	DPRINTF(("%s: tp=%p len=%d\n", __FUNCTION__, tp, len));
+	DPRINTF(("%s: tp=%p len=%zd\n", __FUNCTION__, tp, len));
 
 	lockmgr(&sc->sc_wr_lk, LK_EXCLUSIVE, NULL);
 	error = 0;

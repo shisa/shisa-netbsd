@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.own.mk,v 1.469 2006/08/26 19:56:37 matt Exp $
+#	$NetBSD: bsd.own.mk,v 1.479 2006/10/01 05:06:20 tsutsui Exp $
 
 .if !defined(_BSD_OWN_MK_)
 _BSD_OWN_MK_=1
@@ -44,43 +44,25 @@ TOOLCHAIN_MISSING?=	no
 # Transitional for toolchain upgrade to GCC4.1
 #
 # not working:
-#	sh5
+#	ns32k
 #
 .if \
-    ${MACHINE_ARCH} == "alpha" || \
-    ${MACHINE_ARCH} == "arm" || \
-    ${MACHINE_ARCH} == "armeb" || \
-    ${MACHINE_ARCH} == "i386" || \
-    ${MACHINE_ARCH} == "m68000" || \
-    ${MACHINE_ARCH} == "mips64el" || \
-    ${MACHINE_ARCH} == "mips64eb" || \
-    ${MACHINE_ARCH} == "powerpc" || \
-    ${MACHINE_ARCH} == "powerpc64" || \
-    ${MACHINE_ARCH} == "sh3eb" || \
-    ${MACHINE_ARCH} == "sh3el" || \
-    ${MACHINE_ARCH} == "sparc" || \
-    ${MACHINE_ARCH} == "sparc64" || \
-    ${MACHINE_ARCH} == "vax" || \
-    ${MACHINE_ARCH} == "x86_64"
-HAVE_GCC?=	4
-.endif
-
-# These ones work (or mostly work), but aren't switched yet
-.if \
-    ${MACHINE_ARCH} == "hppa" || \
-    ${MACHINE_ARCH} == "m68k" || \
-    ${MACHINE_ARCH} == "mipsel" || \
-    ${MACHINE_ARCH} == "mipseb"
-#HAVE_GCC?=	4
-.endif
-
-# default to GCC3
+    ${MACHINE_ARCH} == "ns32k"
 HAVE_GCC?=	3
+.endif
+
+# default to GCC4
+HAVE_GCC?=	4
 
 #
 # Transitional for toolchain upgrade to GDB6
 #
-#HAVE_GDB?=	6
+.if \
+    ${MACHINE_ARCH} == "i386" || \
+    ${MACHINE_ARCH} == "powerpc" || \
+    ${MACHINE_ARCH} == "sparc64"
+HAVE_GDB?=	6
+.endif
 
 HAVE_GDB?=	5
 
@@ -469,6 +451,7 @@ MKGDB=		no
 #
 .if ${MACHINE_ARCH} == "ia64"
 MKLINT=		no
+MKGDB=		no
 .endif
 
 #

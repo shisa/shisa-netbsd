@@ -1,6 +1,6 @@
-/*	$NetBSD: algorithm.c,v 1.5 2005/11/21 14:20:28 manu Exp $	*/
+/*	$NetBSD: algorithm.c,v 1.8 2006/10/06 12:02:27 manu Exp $	*/
 
-/* Id: algorithm.c,v 1.11.4.1 2005/06/28 22:38:02 manubsd Exp */
+/* Id: algorithm.c,v 1.15 2006/05/23 20:23:09 manubsd Exp */
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -128,6 +128,11 @@ static struct enc_algorithm oakley_encdef[] = {
 { "aes",	algtype_aes,	OAKLEY_ATTR_ENC_ALG_AES,	16,
 		eay_aes_encrypt,	eay_aes_decrypt,
 		eay_aes_weakkey,	eay_aes_keylen, },
+#ifdef HAVE_OPENSSL_CAMELLIA_H
+{ "camellia",	algtype_camellia,	OAKLEY_ATTR_ENC_ALG_CAMELLIA,	16,
+		eay_camellia_encrypt,	eay_camellia_decrypt,
+		eay_camellia_weakkey,	eay_camellia_keylen, },
+#endif
 };
 
 static struct enc_algorithm ipsec_encdef[] = {
@@ -174,6 +179,11 @@ static struct enc_algorithm ipsec_encdef[] = {
 { "rc4",	algtype_rc4,		IPSECDOI_ESP_RC4,		8,
 		NULL,			NULL,
 		NULL,			NULL, },
+#ifdef HAVE_OPENSSL_CAMELLIA_H
+{ "camellia",	algtype_camellia,	IPSECDOI_ESP_CAMELLIA,		16,
+		NULL,			NULL,
+		NULL,			eay_camellia_keylen, },
+#endif
 };
 
 static struct hmac_algorithm ipsec_hmacdef[] = {
@@ -215,22 +225,46 @@ static struct misc_algorithm ipsec_compdef[] = {
 { "lzs",	algtype_lzs,		IPSECDOI_IPCOMP_LZS, },
 };
 
+/*
+ * In case of asymetric modes (hybrid xauth), what's racoon mode of
+ * operations ; it seems that the proposal should always use the
+ * initiator half (unless a server initiates a connection, which is
+ * not handled, and probably not useful).
+ */
 static struct misc_algorithm oakley_authdef[] = {
-{ "pre_shared_key",	algtype_psk,		OAKLEY_ATTR_AUTH_METHOD_PSKEY, },
-{ "dsssig",	algtype_dsssig,		OAKLEY_ATTR_AUTH_METHOD_DSSSIG, },
-{ "rsasig",	algtype_rsasig,		OAKLEY_ATTR_AUTH_METHOD_RSASIG, },
-{ "rsaenc",	algtype_rsaenc,		OAKLEY_ATTR_AUTH_METHOD_RSAENC, },
-{ "rsarev",	algtype_rsarev,		OAKLEY_ATTR_AUTH_METHOD_RSAREV, },
-{ "gssapi_krb",	algtype_gssapikrb,	OAKLEY_ATTR_AUTH_METHOD_GSSAPI_KRB, },
+{ "pre_shared_key",	algtype_psk,	OAKLEY_ATTR_AUTH_METHOD_PSKEY, },
+{ "dsssig",		algtype_dsssig,	OAKLEY_ATTR_AUTH_METHOD_DSSSIG, },
+{ "rsasig",		algtype_rsasig,	OAKLEY_ATTR_AUTH_METHOD_RSASIG, },
+{ "rsaenc",		algtype_rsaenc,	OAKLEY_ATTR_AUTH_METHOD_RSAENC, },
+{ "rsarev",		algtype_rsarev,	OAKLEY_ATTR_AUTH_METHOD_RSAREV, },
+
+{ "gssapi_krb",		algtype_gssapikrb,
+    OAKLEY_ATTR_AUTH_METHOD_GSSAPI_KRB, },
+
 #ifdef ENABLE_HYBRID
-{ "hybrid_rsa_server",        algtype_hybrid_rsa_s,
-	OAKLEY_ATTR_AUTH_METHOD_HYBRID_RSA_I, },
-{ "hybrid_dss_server",        algtype_hybrid_dss_s,
-	OAKLEY_ATTR_AUTH_METHOD_HYBRID_DSS_I, },
-{ "hybrid_rsa_client",        algtype_hybrid_rsa_c,
-	OAKLEY_ATTR_AUTH_METHOD_HYBRID_RSA_R, },
-{ "hybrid_dss_client",        algtype_hybrid_dss_c,
-	OAKLEY_ATTR_AUTH_METHOD_HYBRID_DSS_R, },
+{ "hybrid_rsa_server",	algtype_hybrid_rsa_s,	
+    OAKLEY_ATTR_AUTH_METHOD_HYBRID_RSA_R, },
+
+{ "hybrid_dss_server",	algtype_hybrid_dss_s,	
+    OAKLEY_ATTR_AUTH_METHOD_HYBRID_DSS_R, },
+
+{ "xauth_psk_server", 	algtype_xauth_psk_s,	
+    OAKLEY_ATTR_AUTH_METHOD_XAUTH_PSKEY_R, },
+
+{ "xauth_rsa_server", 	algtype_xauth_rsa_s,	
+    OAKLEY_ATTR_AUTH_METHOD_XAUTH_RSASIG_R, },
+
+{ "hybrid_rsa_client",	algtype_hybrid_rsa_c,	
+    OAKLEY_ATTR_AUTH_METHOD_HYBRID_RSA_I, },
+
+{ "hybrid_dss_client",	algtype_hybrid_dss_c,	
+    OAKLEY_ATTR_AUTH_METHOD_HYBRID_DSS_I, },
+
+{ "xauth_psk_client",	algtype_xauth_psk_c,	
+    OAKLEY_ATTR_AUTH_METHOD_XAUTH_PSKEY_I, },
+
+{ "xauth_rsa_client",	algtype_xauth_rsa_c,	
+    OAKLEY_ATTR_AUTH_METHOD_XAUTH_RSASIG_I, },
 #endif
 };
 
@@ -396,7 +430,7 @@ alg_oakley_hmacdef_one(doi, key, buf)
 
 #ifdef ENABLE_STATS
 	gettimeofday(&end, NULL);
-	syslog(LOG_NOTICE, "%s(%s size=%d): %8.6f", __func__,
+	syslog(LOG_NOTICE, "%s(%s size=%zu): %8.6f", __func__,
 		f->name, buf->l, timedelta(&start, &end));
 #endif
 
@@ -508,7 +542,7 @@ alg_oakley_encdef_decrypt(doi, buf, key, iv)
 
 #ifdef ENABLE_STATS
 	gettimeofday(&end, NULL);
-	syslog(LOG_NOTICE, "%s(%s klen=%d size=%d): %8.6f", __func__,
+	syslog(LOG_NOTICE, "%s(%s klen=%zu size=%zu): %8.6f", __func__,
 		f->name, key->l << 3, buf->l, timedelta(&start, &end));
 #endif
 	return res;
@@ -537,7 +571,7 @@ alg_oakley_encdef_encrypt(doi, buf, key, iv)
 
 #ifdef ENABLE_STATS
 	gettimeofday(&end, NULL);
-	syslog(LOG_NOTICE, "%s(%s klen=%d size=%d): %8.6f", __func__,
+	syslog(LOG_NOTICE, "%s(%s klen=%zu size=%zu): %8.6f", __func__,
 		f->name, key->l << 3, buf->l, timedelta(&start, &end));
 #endif
 	return res;
@@ -596,7 +630,7 @@ alg_ipsec_hmacdef(doi)
 	for (i = 0; i < ARRAYLEN(ipsec_hmacdef); i++)
 		if (doi == ipsec_hmacdef[i].doi) {
 			plog(LLV_DEBUG, LOCATION, NULL, "hmac(%s)\n",
-				oakley_hmacdef[i].name);
+				ipsec_hmacdef[i].name);
 			return &ipsec_hmacdef[i];
 		}
 	return NULL;
@@ -765,6 +799,7 @@ default_keylen(class, type)
 	case algtype_cast128:
 	case algtype_aes:
 	case algtype_twofish:
+	case algtype_camellia:
 		return 128;
 	default:
 		return 0;
@@ -800,6 +835,7 @@ check_keylen(class, type, len)
 	case algtype_cast128:
 	case algtype_aes:
 	case algtype_twofish:
+	case algtype_camellia:
 		if (len % 8 != 0) {
 			plog(LLV_ERROR, LOCATION, NULL,
 				"key length %d is not multiple of 8\n", len);
@@ -829,6 +865,10 @@ check_keylen(class, type, len)
 		break;
 	case algtype_twofish:
 		if (len < 40 || 256 < len)
+			badrange++;
+		break;
+	case algtype_camellia:
+		if (!(len == 128 || len == 192 || len == 256))
 			badrange++;
 		break;
 	default:

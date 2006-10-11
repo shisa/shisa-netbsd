@@ -1,4 +1,4 @@
-/*	$NetBSD: mb89352.c,v 1.40 2005/12/24 20:27:30 perry Exp $	*/
+/*	$NetBSD: mb89352.c,v 1.43 2006/10/04 15:57:45 christos Exp $	*/
 /*	NecBSD: mb89352.c,v 1.4 1998/03/14 07:31:20 kmatsuda Exp	*/
 
 /*-
@@ -70,7 +70,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mb89352.c,v 1.40 2005/12/24 20:27:30 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: mb89352.c,v 1.43 2006/10/04 15:57:45 christos Exp $");
 
 #ifdef DDB
 #define	integrate
@@ -812,9 +812,10 @@ spc_sched(struct spc_softc *sc)
 			sc->sc_nexus = acb;
 			spc_select(sc, acb);
 			return;
-		} else
+		} else {
 			SPC_MISC(("%d:%d busy\n",
 			    periph->periph_target, periph->periph_lun));
+		}
 	}
 	SPC_MISC(("idle  "));
 	/* Nothing to start; just enable reselections and wait. */
@@ -1036,7 +1037,6 @@ nextbyte:
 	/* We now have a complete message.  Parse it. */
 	switch (sc->sc_state) {
 		struct spc_acb *acb;
-		struct scsipi_periph *periph;
 		struct spc_tinfo *ti;
 
 	case SPC_CONNECTED:
@@ -1046,6 +1046,7 @@ nextbyte:
 
 		switch (sc->sc_imess[0]) {
 		case MSG_CMDCOMPLETE:
+#if 0
 			if (sc->sc_dleft < 0) {
 				periph = acb->xs->xs_periph;
 				printf("%s: %ld extra bytes from %d:%d\n",
@@ -1053,6 +1054,7 @@ nextbyte:
 				    periph->periph_target, periph->periph_lun);
 				sc->sc_dleft = 0;
 			}
+#endif
 			acb->xs->resid = acb->data_length = sc->sc_dleft;
 			sc->sc_state = SPC_CMDCOMPLETE;
 			break;

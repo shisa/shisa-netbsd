@@ -1,4 +1,4 @@
-/*	$NetBSD: sab.c,v 1.31 2006/07/28 14:08:11 hannken Exp $	*/
+/*	$NetBSD: sab.c,v 1.35 2006/10/01 20:31:50 elad Exp $	*/
 /*	$OpenBSD: sab.c,v 1.7 2002/04/08 17:49:42 jason Exp $	*/
 
 /*
@@ -42,7 +42,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: sab.c,v 1.31 2006/07/28 14:08:11 hannken Exp $");
+__KERNEL_RCSID(0, "$NetBSD: sab.c,v 1.35 2006/10/01 20:31:50 elad Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -616,7 +616,8 @@ sabtty_softintr(struct sabtty_softc *sc)
 	}
 
 	if (flags & SABTTYF_RINGOVERFLOW)
-		log(LOG_WARNING, "%s: ring overflow\n", sc->sc_dv.dv_xname);
+		log(LOG_WARNING, "%s: ring overflow\n",
+		    device_xname(&sc->sc_dv));
 
 	if (flags & SABTTYF_DONE) {
 		ndflush(&tp->t_outq, sc->sc_txp - tp->t_outq.c_cf);
@@ -640,6 +641,9 @@ sabopen(dev_t dev, int flags, int mode, struct lwp *l)
 	tp = sc->sc_tty;
 	tp->t_dev = dev;
 	p = l->l_proc;
+
+	if (kauth_authorize_device_tty(l->l_cred, KAUTH_DEVICE_TTY_OPEN, tp))
+		return (EBUSY);
 
 	if ((tp->t_state & TS_ISOPEN) == 0) {
 		ttychars(tp);
@@ -684,10 +688,6 @@ sabopen(dev_t dev, int flags, int mode, struct lwp *l)
 			tp->t_state |= TS_CARR_ON;
 		else
 			tp->t_state &= ~TS_CARR_ON;
-	} else if ((tp->t_state & TS_XCLUDE) &&
-	    (!kauth_authorize_generic(l->l_cred, KAUTH_GENERIC_ISSUSER,
-	    &l->l_acflag))) {
-		return (EBUSY);
 	} else {
 		s = spltty();
 	}
@@ -833,8 +833,8 @@ sabioctl(dev_t dev, u_long cmd, caddr_t data, int flags, struct lwp *l)
 		*((int *)data) = sc->sc_openflags;
 		break;
 	case TIOCSFLAGS:
-		if (kauth_authorize_generic(l->l_cred, KAUTH_GENERIC_ISSUSER,
-		    &l->l_acflag))
+		if (kauth_authorize_device_tty(l->l_cred,
+		    KAUTH_DEVICE_TTY_PRIVSET, tp))
 			error = EPERM;
 		else
 			sc->sc_openflags = *((int *)data) &
@@ -1008,6 +1008,7 @@ sabttyparam(struct sabtty_softc *sc, struct tty *tp, struct termios *t)
 			dafo |= SAB_DAFO_PAR_EVEN;
 	} else
 		dafo |= SAB_DAFO_PAR_NONE;
+	SAB_WRITE(sc, SAB_DAFO, dafo);
 
 	if (ospeed != 0) {
 		SAB_WRITE(sc, SAB_BGR, ospeed & 0xff);

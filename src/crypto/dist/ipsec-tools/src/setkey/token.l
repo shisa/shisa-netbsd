@@ -1,4 +1,4 @@
-/*	$NetBSD: token.l,v 1.8 2005/11/21 14:20:36 manu Exp $	*/
+/*	$NetBSD: token.l,v 1.11 2006/10/06 12:02:27 manu Exp $	*/
 
 /*	$KAME: token.l,v 1.44 2003/10/21 07:20:58 itojun Exp $	*/
 
@@ -56,7 +56,8 @@
 #include <netdb.h>
 
 #include "vchar.h"
-#if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__linux__)
+#if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__linux__) || \
+(defined(__APPLE__) && defined(__MACH__))
 #include "parse.h"
 #else
 #include "y.tab.h"
@@ -85,6 +86,9 @@
 #endif
 #ifndef SADB_X_EALG_AESCTR
 #define SADB_X_EALG_AESCTR	(-1)
+#endif
+#if defined(SADB_X_EALG_AES) && ! defined(SADB_X_EALG_AESCBC)
+#define SADB_X_EALG_AESCBC  SADB_X_EALG_AES
 #endif
 %}
 
@@ -215,6 +219,11 @@ tcp		{
 #endif
 }
 <S_ENCALG>aes-ctr	{ yylval.num = SADB_X_EALG_AESCTR; BEGIN INITIAL; return(ALG_ENC); }
+<S_ENCALG>camellia-cbc	{ 
+#ifdef SADB_X_EALG_CAMELLIACBC
+	yylval.num = SADB_X_EALG_CAMELLIACBC; BEGIN INITIAL; return(ALG_ENC); 
+#endif
+}
 
 	/* compression algorithms */
 {hyphen}C	{ return(F_COMP); }
@@ -238,6 +247,7 @@ nocyclic-seq	{ return(NOCYCLICSEQ); }
 {hyphen}ls	{ return(F_LIFETIME_SOFT); }
 {hyphen}bh	{ return(F_LIFEBYTE_HARD); }
 {hyphen}bs	{ return(F_LIFEBYTE_SOFT); }
+{hyphen}ctx	{ return(SECURITY_CTX); }
 
 	/* ... */
 any		{ return(ANY); }

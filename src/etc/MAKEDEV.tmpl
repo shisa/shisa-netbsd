@@ -1,5 +1,5 @@
 #!/bin/sh -
-#	$NetBSD: MAKEDEV.tmpl,v 1.60 2006/08/13 18:53:31 martin Exp $
+#	$NetBSD: MAKEDEV.tmpl,v 1.66 2006/09/24 08:23:36 manu Exp $
 #
 # Copyright (c) 2003 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -229,7 +229,7 @@
 #	bell*	OPM bell device (x68k)
 #	bktr	Brooktree 848/849/878/879 based TV cards
 #	bpf	packet filter
-#	btdev*	Bluetooth Device control interface
+#	bthub	Bluetooth Device Hub control interface
 #	cfs*	Coda file system device
 #	ch*	SCSI media changer
 #	cir*	Consumer IR
@@ -251,6 +251,7 @@
 #	joy*	joystick device
 #	kttcp	kernel ttcp helper device
 #	lkm	loadable kernel modules interface
+#	lockstat kernel locking statistics
 #	magma*	Magma multiport serial/parallel cards
 #	midi*	MIDI
 #	mlx*	Mylex DAC960 control interface
@@ -277,6 +278,7 @@
 #	systrace syscall tracer
 #	tap*	virtual Ethernet device
 #	tun*	network tunnel driver
+#	twa	3ware Apache control interface
 #	twe	3ware Escalade control interface
 #	uk*	unknown SCSI device
 #	veriexec verified executable fingerprint loader
@@ -460,16 +462,17 @@ all)
 	makedev fss0 fss1 fss2 fss3
 	makedev md0 md1
 	makedev raid0 raid1 raid2 raid3 raid4 raid5 raid6 raid7
+	makedev ses0 ses1 ses2 ses3
 	makedev vnd0 vnd1 vnd2 vnd3
 	makedev bpf
 	makedev tun0 tun1 tun2 tun3
 	makedev ipl pf crypto random systrace
-	makedev lkm clockctl
+	makedev lkm lockstat clockctl
 	makedev local
 	makedev atabus0 atabus1 atabus2 atabus3
 	makedev tap tap0 tap1 tap2 tap3
 	makedev gpio gpio0 gpio1 gpio2 gpio3 gpio4 gpio5 gpio6 gpio7
-	makedev btdev0 btdev1 btdev2 btdev3
+	makedev bthub
 	;;
 
 init)
@@ -951,9 +954,8 @@ bpf)
 	lndev bpf bpf0
 	;;
 
-btdev*)
-	unit=${i#btdev}
-	mkdev btdev$unit c %btdev_chr% $unit
+bthub)
+	mkdev bthub c %bthub_chr% 0
 	;;
 
 tun*)
@@ -990,6 +992,10 @@ speaker)
 
 lkm)
 	mkdev lkm c %lkm_chr% 0 640 $g_kmem
+	;;
+
+lockstat)
+	mkdev lockstat c %lockstat_chr% 0
 	;;
 
 audio*)
@@ -1097,6 +1103,11 @@ mlx*)
 mly*)
 	unit=${i#mly}
 	mkdev mly$unit c %mly_chr% $unit
+	;;
+
+twa*)
+	unit=${i#twa}
+	mkdev twa$unit c %twa_chr% $unit
 	;;
 
 twe*)

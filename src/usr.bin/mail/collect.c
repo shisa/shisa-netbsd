@@ -1,4 +1,4 @@
-/*	$NetBSD: collect.c,v 1.32 2005/07/19 23:07:10 christos Exp $	*/
+/*	$NetBSD: collect.c,v 1.34 2006/09/29 14:59:31 christos Exp $	*/
 
 /*
  * Copyright (c) 1980, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)collect.c	8.2 (Berkeley) 4/19/94";
 #else
-__RCSID("$NetBSD: collect.c,v 1.32 2005/07/19 23:07:10 christos Exp $");
+__RCSID("$NetBSD: collect.c,v 1.34 2006/09/29 14:59:31 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -72,27 +72,49 @@ static	jmp_buf	colljmp;		/* To get back to work */
 static	int	colljmp_p;		/* whether to long jump */
 static	jmp_buf	collabort;		/* To end collection with error */
 
+#if 0
+static void show_name(const char *prefix, struct name *np)
+{
+	int i = 0;
+
+	for (/* EMPTY */; np ; np = np->n_flink) {
+		printf("%s[%d]: %s\n", prefix, i, np->n_name);
+		i++;
+	}
+}
+
+void show_header(struct header *hp);
+void show_header(struct header *hp)
+{
+	show_name("TO", hp->h_to);
+	printf("SUBJECT: %s\n", hp->h_subject);
+	show_name("CC", hp->h_cc);
+	show_name("BCC", hp->h_bcc);
+	show_name("SMOPTS", hp->h_smopts);
+}
+#endif
+
+
 FILE *
 collect(struct header *hp, int printheaders)
 {
 	FILE *fbuf;
-	int lc, cc, escape, eofcount;
+	int lc, cc;
 	int c, fd, t;
 	char linebuf[LINESIZE];
 	const char *cp;
-	char getsub;
 	char tempname[PATHSIZE];
 	char mailtempname[PATHSIZE];
-	sigset_t nset;
-	int longline, lastlong, rc;	/* So we don't make 2 or more lines
+	int lastlong, rc;	/* So we don't make 2 or more lines
 					   out of a long input line. */
-#if __GNUC__
-	/* Avoid longjmp clobbering */
-	(void)&escape;
-	(void)&eofcount;
-	(void)&getsub;
-	(void)&longline;
-#endif
+
+	/* The following are declared volatile to avoid longjmp clobbering. */
+	volatile char getsub;
+	volatile int escape;
+	volatile sigset_t nset;
+	volatile int eofcount;
+	volatile int longline;
+
 
 	(void)memset(mailtempname, 0, sizeof(mailtempname));
 	collf = NULL;
@@ -100,10 +122,10 @@ collect(struct header *hp, int printheaders)
 	 * Start catching signals from here, but we're still die on interrupts
 	 * until we're in the main loop.
 	 */
-	(void)sigemptyset(&nset);
-	(void)sigaddset(&nset, SIGINT);
-	(void)sigaddset(&nset, SIGHUP);
-	(void)sigprocmask(SIG_BLOCK, &nset, NULL);
+	(void)sigemptyset(__UNVOLATILE(&nset));
+	(void)sigaddset(__UNVOLATILE(&nset), SIGINT);
+	(void)sigaddset(__UNVOLATILE(&nset), SIGHUP);
+	(void)sigprocmask(SIG_BLOCK, __UNVOLATILE(&nset), NULL);
 	if ((saveint = signal(SIGINT, SIG_IGN)) != SIG_IGN)
 		(void)signal(SIGINT, collint);
 	if ((savehup = signal(SIGHUP, SIG_IGN)) != SIG_IGN)
@@ -115,7 +137,7 @@ collect(struct header *hp, int printheaders)
 		(void)rm(mailtempname);
 		goto err;
 	}
-	(void)sigprocmask(SIG_UNBLOCK, &nset, NULL);
+	(void)sigprocmask(SIG_UNBLOCK, __UNVOLATILE(&nset), NULL);
 
 	noreset++;
 	(void)snprintf(mailtempname, sizeof(mailtempname),
@@ -134,7 +156,7 @@ collect(struct header *hp, int printheaders)
 	 * refrain from printing a newline after
 	 * the headers (since some people mind).
 	 */
-	t = GTO|GSUBJECT|GCC|GNL;
+	t = GTO|GSUBJECT|GCC|GNL|GSMOPTS;
 	getsub = 0;
 	if (hp->h_subject == NULL && value("interactive") != NULL &&
 	    (value("ask") != NULL || value("asksub") != NULL))
@@ -175,6 +197,18 @@ cont:
 		colljmp_p = 1;
 		c = readline(stdin, linebuf, LINESIZE);
 		colljmp_p = 0;
+#ifdef USE_READLINE
+		if (c < 0) {
+			char *p;
+			if (value("interactive") != NULL &&
+			    (p = value("ignoreeof")) != NULL &&
+			    ++eofcount < (*p == 0 ? 25 : atoi(p))) {
+				(void)printf("Use \".\" to terminate letter\n");
+				continue;
+			}
+			break;
+		}
+#else
 		if (c < 0) {
 			if (value("interactive") != NULL &&
 			    value("ignoreeof") != NULL && ++eofcount < 25) {
@@ -183,6 +217,7 @@ cont:
 			}
 			break;
 		}
+#endif
 		lastlong = longline;
 		longline = c == LINESIZE-1;
 		eofcount = 0;
@@ -254,7 +289,7 @@ cont:
 			/*
 			 * Grab a bunch of headers.
 			 */
-			(void)grabh(hp, GTO|GSUBJECT|GCC|GBCC);
+			(void)grabh(hp, GTO|GSUBJECT|GCC|GBCC|GSMOPTS);
 			goto cont;
 		case 't':
 			/*
@@ -481,13 +516,13 @@ out:
 	if (collf != NULL)
 		rewind(collf);
 	noreset--;
-	(void)sigprocmask(SIG_BLOCK, &nset, NULL);
+	(void)sigprocmask(SIG_BLOCK, __UNVOLATILE(&nset), NULL);
 	(void)signal(SIGINT, saveint);
 	(void)signal(SIGHUP, savehup);
 	(void)signal(SIGTSTP, savetstp);
 	(void)signal(SIGTTOU, savettou);
 	(void)signal(SIGTTIN, savettin);
-	(void)sigprocmask(SIG_UNBLOCK, &nset, NULL);
+	(void)sigprocmask(SIG_UNBLOCK, __UNVOLATILE(&nset), NULL);
 	return collf;
 }
 

@@ -1,4 +1,4 @@
-#	$NetBSD: files.i386,v 1.291 2006/08/06 15:46:54 christos Exp $
+#	$NetBSD: files.i386,v 1.293 2006/10/01 18:37:54 bouyer Exp $
 #
 # new style config file for i386 architecture
 #
@@ -143,7 +143,7 @@ define vesabiosbus {}
 
 # XXX BIOS32 only if something that uses it is configured!
 device	mainbus: isabus, eisabus, mcabus, pcibus, bios32, acpibus,
-	cpubus, apmbus, pnpbiosbus, vesabiosbus
+	cpubus, apmbus, pnpbiosbus, vesabiosbus, ipmibus
 attach	mainbus at root
 file	arch/i386/i386/mainbus.c	mainbus
 
@@ -246,7 +246,7 @@ file	arch/i386/pci/p64h2apic.c	p64h2apic
 include	"dev/isa/files.isa"
 
 # PC clock
-file	arch/i386/isa/clock.c		isa
+file	arch/x86/isa/clock.c		isa
 
 # TSC support
 file	arch/x86/x86/tsc.c		i586_cpu | i686_cpu

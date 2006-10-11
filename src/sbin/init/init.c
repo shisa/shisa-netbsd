@@ -1,4 +1,4 @@
-/*	$NetBSD: init.c,v 1.76 2006/07/30 20:01:26 elad Exp $	*/
+/*	$NetBSD: init.c,v 1.81 2006/09/28 15:20:14 christos Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -42,7 +42,7 @@ __COPYRIGHT("@(#) Copyright (c) 1991, 1993\n"
 #if 0
 static char sccsid[] = "@(#)init.c	8.2 (Berkeley) 4/28/95";
 #else
-__RCSID("$NetBSD: init.c,v 1.76 2006/07/30 20:01:26 elad Exp $");
+__RCSID("$NetBSD: init.c,v 1.81 2006/09/28 15:20:14 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -124,6 +124,14 @@ void badsys(int);
 typedef long (*state_func_t)(void);
 typedef state_func_t (*state_t)(void);
 
+#define	DEATH		'd'
+#define	SINGLE_USER	's'
+#define	RUNCOM		'r'
+#define	READ_TTYS	't'
+#define	MULTI_USER	'm'
+#define	CLEAN_TTYS	'T'
+#define	CATATONIA	'c'
+
 state_func_t single_user(void);
 state_func_t runcom(void);
 state_func_t read_ttys(void);
@@ -140,7 +148,7 @@ void setctty(const char *);
 typedef struct init_session {
 	int	se_index;		/* index of entry in ttys file */
 	pid_t	se_process;		/* controlling process */
-	time_t	se_started;		/* used to avoid thrashing */
+	struct timeval	se_started;	/* used to avoid thrashing */
 	int	se_flags;		/* status of session */
 #define	SE_SHUTDOWN	0x1		/* session won't be restarted */
 #define	SE_PRESENT	0x2		/* session is in /etc/ttys */
@@ -181,6 +189,15 @@ state_t requested_transition = runcom;
 
 void clear_session_logs(session_t *, int);
 state_func_t runetcrc(int);
+#ifdef SUPPORT_UTMPX
+static struct timeval boot_time;
+state_t current_state = death;
+static void session_utmpx(const session_t *, int);
+static void make_utmpx(const char *, const char *, int, pid_t,
+    const struct timeval *, int);
+static char get_runlevel(const state_t);
+static void utmpx_set_runlevel(char, char);
+#endif
 
 #ifdef CHROOT
 int did_multiuser_chroot = 0;
@@ -228,6 +245,10 @@ main(int argc, char **argv)
 	sigset_t mask;
 #ifndef LETS_GET_SMALL
 	int c;
+
+#ifdef SUPPORT_UTMPX
+	(void)gettimeofday(&boot_time, NULL);
+#endif /* SUPPORT_UTMPX */
 
 	/* Dispose of random users. */
 	if (getuid() != 0) {
@@ -282,7 +303,7 @@ main(int argc, char **argv)
 			runcom_mode = FASTBOOT;
 			break;
 		default:
-			warning("unrecognized flag '-%c'", c);
+			warning("unrecognized flag `%c'", c);
 			break;
 		}
 
@@ -512,7 +533,7 @@ setsecuritylevel(int newlevel)
 	name[0] = CTL_KERN;
 	name[1] = KERN_SECURELVL;
 	if (sysctl(name, 2, NULL, NULL, &newlevel, sizeof newlevel) == -1) {
-		emergency( "cannot change kernel security level from"
+		emergency("cannot change kernel security level from"
 		    " %d to %d: %m", curlevel, newlevel);
 		return;
 	}
@@ -533,8 +554,16 @@ transition(state_t s)
 
 	if (s == NULL)
 		return;
-	for (;;)
+	for (;;) {
+#ifdef SUPPORT_UTMPX
+#ifndef LETS_GET_SMALL
+		utmpx_set_runlevel(get_runlevel(current_state),
+		    get_runlevel(s));
+		current_state = s;
+#endif
+#endif
 		s = (state_t)(*s)();
+	}
 }
 
 #ifndef LETS_GET_SMALL
@@ -649,7 +678,7 @@ single_user(void)
 				(void)memset(clear, 0, _PASSWORD_LEN);
 				if (strcmp(password, pp->pw_passwd) == 0)
 					break;
-				warning("single-user login failed\n");
+				warning("single-user login failed");
 			}
 		}
 		endttyent();
@@ -692,11 +721,11 @@ single_user(void)
 		if (altshell[0])
 			argv[0] = altshell;
 		(void)execv(shell, __UNCONST(argv));
-		emergency("can't exec %s for single user: %m", shell);
+		emergency("can't exec `%s' for single user: %m", shell);
 		argv[0] = "-sh";
 #endif /* ALTSHELL */
 		(void)execv(INIT_BSHELL, __UNCONST(argv));
-		emergency("can't exec %s for single user: %m", INIT_BSHELL);
+		emergency("can't exec `%s' for single user: %m", INIT_BSHELL);
 		(void)sleep(STALL_TIMEOUT);
 		_exit(1);
 	}
@@ -705,7 +734,7 @@ single_user(void)
 		/*
 		 * We are seriously hosed.  Do our best.
 		 */
-		emergency("can't fork single-user shell, trying again");
+		emergency("can't fork single-user shell: %m, trying again");
 		while (waitpid(-1, NULL, WNOHANG) > 0)
 			continue;
 		(void)sigaction(SIGTSTP, &satstp, NULL);
@@ -725,7 +754,7 @@ single_user(void)
 			return (state_func_t)single_user;
 		}
 		if (wpid == pid && WIFSTOPPED(status)) {
-			warning("init: shell stopped, restarting\n");
+			warning("shell stopped, restarting");
 			kill(pid, SIGCONT);
 			wpid = -1;
 		}
@@ -794,18 +823,18 @@ runetcrc(int trychroot)
 #ifdef CHROOT
 		if (trychroot)
 			if (chroot(rootdir) != 0) {
-				warning("failed to chroot to %s, error: %m",
+				warning("failed to chroot to `%s': %m",
 				    rootdir);
 				_exit(1); 	/* force single user mode */
 			}
 #endif /* CHROOT */
 
 		(void)execv(INIT_BSHELL, __UNCONST(argv));
-		stall("can't exec %s for %s: %m", INIT_BSHELL, _PATH_RUNCOM);
+		stall("can't exec `%s' for `%s': %m", INIT_BSHELL, _PATH_RUNCOM);
 		_exit(1);	/* force single user mode */
 		/*NOTREACHED*/
 	case -1:
-		emergency("can't fork for %s on %s: %m", INIT_BSHELL,
+		emergency("can't fork for `%s' on `%s': %m", INIT_BSHELL,
 		    _PATH_RUNCOM);
 		while (waitpid(-1, NULL, WNOHANG) > 0)
 			continue;
@@ -824,12 +853,12 @@ runetcrc(int trychroot)
 		if (wpid == -1) {
 			if (errno == EINTR)
 				continue;
-			warning("wait for %s on %s failed: %m; going to "
+			warning("wait for `%s' on `%s' failed: %m; going to "
 			    "single user mode", INIT_BSHELL, _PATH_RUNCOM);
 			return (state_func_t)single_user;
 		}
 		if (wpid == pid && WIFSTOPPED(status)) {
-			warning("init: %s on %s stopped, restarting\n",
+			warning("`%s' on `%s' stopped, restarting",
 			    INIT_BSHELL, _PATH_RUNCOM);
 			(void)kill(pid, SIGCONT);
 			wpid = -1;
@@ -847,7 +876,7 @@ runetcrc(int trychroot)
 	}
 
 	if (!WIFEXITED(status)) {
-		warning("%s on %s terminated abnormally, going to "
+		warning("`%s' on `%s' terminated abnormally, going to "
 		    "single user mode", INIT_BSHELL, _PATH_RUNCOM);
 		return (state_func_t)single_user;
 	}
@@ -941,6 +970,9 @@ add_session(session_t *sp)
 
 	if ((*session_db->put)(session_db, &key, &data, 0))
 		emergency("insert %d: %m", sp->se_process);
+#ifdef SUPPORT_UTMPX
+	session_utmpx(sp, 1);
+#endif
 }
 
 /*
@@ -956,6 +988,9 @@ del_session(session_t *sp)
 
 	if ((*session_db->del)(session_db, &key, 0))
 		emergency("delete %d: %m", sp->se_process);
+#ifdef SUPPORT_UTMPX
+	session_utmpx(sp, 0);
+#endif
 }
 
 /*
@@ -1077,7 +1112,7 @@ setupargv(session_t *sp, struct ttyent *typ)
 		return (0);
 	sp->se_getty_argv = construct_argv(sp->se_getty);
 	if (sp->se_getty_argv == NULL) {
-		warning("can't parse getty for port %s", sp->se_device);
+		warning("can't parse getty for port `%s'", sp->se_device);
 		free(sp->se_getty);
 		sp->se_getty = NULL;
 		return (0);
@@ -1088,7 +1123,7 @@ setupargv(session_t *sp, struct ttyent *typ)
 		sp->se_window = strdup(typ->ty_window);
 		sp->se_window_argv = construct_argv(sp->se_window);
 		if (sp->se_window_argv == NULL) {
-			warning("can't parse window for port %s",
+			warning("can't parse window for port `%s'",
 			    sp->se_device);
 			free(sp->se_window);
 			sp->se_window = NULL;
@@ -1108,6 +1143,25 @@ read_ttys(void)
 	session_t *sp, *snext;
 	struct ttyent *typ;
 
+#ifdef SUPPORT_UTMPX
+	if (sessions == NULL) {
+		struct stat st;
+
+		make_utmpx("", BOOT_MSG, BOOT_TIME, 0, &boot_time, 0);
+
+		/*
+		 * If wtmpx is not empty, pick the the down time from there
+		 */
+		if (stat(_PATH_WTMPX, &st) != -1 && st.st_size != 0) {
+			struct timeval down_time;
+
+			TIMESPEC_TO_TIMEVAL(&down_time, 
+			    st.st_atime > st.st_mtime ?
+			    &st.st_atimespec : &st.st_mtimespec);
+			make_utmpx("", DOWN_MSG, DOWN_TIME, 0, &down_time, 0);
+		}
+	}
+#endif
 	/*
 	 * Destroy any previous session state.
 	 * There shouldn't be any, but just in case...
@@ -1123,7 +1177,7 @@ read_ttys(void)
 	sessions = NULL;
 
 	if (start_session_db()) {
-		warning("read_ttys: start_session_db failed, death\n");
+		warning("start_session_db failed, death");
 #ifdef CHROOT
 		/* If /etc/rc ran in chroot, we want to kill any survivors. */
 		if (did_multiuser_chroot)
@@ -1157,7 +1211,7 @@ start_window_system(session_t *sp)
 	sigset_t mask;
 
 	if ((pid = fork()) == -1) {
-		emergency("can't fork for window system on port %s: %m",
+		emergency("can't fork for window system on port `%s': %m",
 		    sp->se_device);
 		/* hope that getty fails and we can try again */
 		return;
@@ -1170,10 +1224,10 @@ start_window_system(session_t *sp)
 	sigprocmask(SIG_SETMASK, &mask, NULL);
 
 	if (setsid() < 0)
-		emergency("setsid failed (window) %m");
+		emergency("setsid failed (window): %m");
 
 	(void)execv(sp->se_window_argv[0], sp->se_window_argv);
-	stall("can't exec window system '%s' for port %s: %m",
+	stall("can't exec window system `%s' for port `%s': %m",
 	    sp->se_window_argv[0], sp->se_device);
 	_exit(1);
 }
@@ -1192,7 +1246,8 @@ start_getty(session_t *sp)
 	 * fork(), not vfork() -- we can't afford to block.
 	 */
 	if ((pid = fork()) == -1) {
-		emergency("can't fork for getty on port %s: %m", sp->se_device);
+		emergency("can't fork for getty on port `%s': %m",
+		    sp->se_device);
 		return -1;
 	}
 
@@ -1203,15 +1258,15 @@ start_getty(session_t *sp)
 	/* If /etc/rc did proceed inside chroot, we have to try as well. */
 	if (did_multiuser_chroot)
 		if (chroot(rootdir) != 0) {
-			stall("can't chroot getty '%s' inside %s: %m",
+			stall("can't chroot getty `%s' inside `%s': %m",
 			    sp->se_getty_argv[0], rootdir);
 			_exit(1);
 		}
 #endif /* CHROOT */
 
-	if (current_time > sp->se_started &&
-	    current_time - sp->se_started < GETTY_SPACING) {
-		warning("getty repeating too quickly on port %s, sleeping",
+	if (current_time > sp->se_started.tv_sec &&
+	    current_time - sp->se_started.tv_sec < GETTY_SPACING) {
+		warning("getty repeating too quickly on port `%s', sleeping",
 		    sp->se_device);
 		(void)sleep(GETTY_SLEEP);
 	}
@@ -1225,11 +1280,92 @@ start_getty(session_t *sp)
 	(void)sigprocmask(SIG_SETMASK, &mask, (sigset_t *) 0);
 
 	(void)execv(sp->se_getty_argv[0], sp->se_getty_argv);
-	stall("can't exec getty '%s' for port %s: %m",
+	stall("can't exec getty `%s' for port `%s': %m",
 	    sp->se_getty_argv[0], sp->se_device);
 	_exit(1);
 	/*NOTREACHED*/
 }
+#ifdef SUPPORT_UTMPX
+static void
+session_utmpx(const session_t *sp, int add)
+{
+	const char *name = sp->se_getty ? sp->se_getty :
+	    (sp->se_window ? sp->se_window : "");
+	const char *line = sp->se_device + sizeof(_PATH_DEV) - 1;
+
+	make_utmpx(name, line, add ? LOGIN_PROCESS : DEAD_PROCESS,
+	    sp->se_process, &sp->se_started, sp->se_index);
+}
+
+static void
+make_utmpx(const char *name, const char *line, int type, pid_t pid,
+    const struct timeval *tv, int session)
+{
+	struct utmpx ut;
+	const char *eline;
+
+	(void)memset(&ut, 0, sizeof(ut));
+	(void)strlcpy(ut.ut_name, name, sizeof(ut.ut_name));
+	ut.ut_type = type;
+	(void)strlcpy(ut.ut_line, line, sizeof(ut.ut_line));
+	ut.ut_pid = pid;
+	if (tv)
+		ut.ut_tv = *tv;
+	else
+		(void)gettimeofday(&ut.ut_tv, NULL);
+	ut.ut_session = session;
+
+	eline = line + strlen(line);
+	if (eline - line >= sizeof(ut.ut_id))
+		line = eline - sizeof(ut.ut_id);
+	(void)strncpy(ut.ut_id, line, sizeof(ut.ut_id));
+
+	if (pututxline(&ut) == NULL)
+		warning("can't add utmpx record for `%s': %m", ut.ut_line);
+}
+
+static char
+get_runlevel(const state_t s)
+{
+	if (s == (state_t)single_user)
+		return SINGLE_USER;
+	if (s == (state_t)runcom)
+		return RUNCOM;
+	if (s == (state_t)read_ttys)
+		return READ_TTYS;
+	if (s == (state_t)multi_user)
+		return MULTI_USER;
+	if (s == (state_t)clean_ttys)
+		return CLEAN_TTYS;
+	if (s == (state_t)catatonia)
+		return CATATONIA;
+	return DEATH;
+}
+
+static void
+utmpx_set_runlevel(char old, char new)
+{
+	struct utmpx ut;
+
+	/*
+	 * Don't record any transitions until we did the first transition
+	 * to read ttys, which is when we are guaranteed to have a read-write
+	 * /var. Perhaps use a different variable for this?
+	 */
+	if (sessions == NULL)
+		return;
+
+	(void)memset(&ut, 0, sizeof(ut));
+	(void)snprintf(ut.ut_line, sizeof(ut.ut_line), RUNLVL_MSG, new);
+	ut.ut_type = RUN_LVL;
+	(void)gettimeofday(&ut.ut_tv, NULL);
+	ut.ut_exit.e_exit = old;
+	ut.ut_exit.e_termination = new;
+	if (pututxline(&ut) == NULL)
+		warning("can't add utmpx record for `runlevel': %m");
+}
+#endif /* SUPPORT_UTMPX */
+
 #endif /* LETS_GET_SMALL */
 
 /*
@@ -1270,7 +1406,7 @@ collect_child(pid_t pid, int status)
 	}
 
 	sp->se_process = pid;
-	sp->se_started = time(NULL);
+	(void)gettimeofday(&sp->se_started, NULL);
 	add_session(sp);
 #endif /* LETS_GET_SMALL */
 }
@@ -1331,7 +1467,7 @@ multi_user(void)
 			break;
 		}
 		sp->se_process = pid;
-		sp->se_started = time(NULL);
+		(void)gettimeofday(&sp->se_started, NULL);
 		add_session(sp);
 	}
 
@@ -1369,7 +1505,7 @@ clean_ttys(void)
 		if (sp) {
 			sp->se_flags |= SE_PRESENT;
 			if (sp->se_index != session_index) {
-				warning("port %s changed utmp index from "
+				warning("port `%s' changed utmp index from "
 				    "%d to %d", sp->se_device, sp->se_index,
 				    session_index);
 				sp->se_index = session_index;
@@ -1383,7 +1519,7 @@ clean_ttys(void)
 			}
 			sp->se_flags &= ~SE_SHUTDOWN;
 			if (setupargv(sp, typ) == 0) {
-				warning("can't parse getty for port %s",
+				warning("can't parse getty for port `%s'",
 				    sp->se_device);
 				sp->se_flags |= SE_SHUTDOWN;
 				if (sp->se_process != 0)
@@ -1668,7 +1804,7 @@ createsysctlnode()
 	node.sysctl_num = CTL_CREATE;
 	snprintf(node.sysctl_name, SYSCTL_NAMELEN, "init");
 	if (sysctl(&mib[0], 1, &node, &len, &node, len) == -1) {
-		warning("could not create init node, error = %d", errno);
+		warning("could not create init node: %m");
 		return (-1);
 	}
 
@@ -1688,7 +1824,7 @@ createsysctlnode()
 	node.sysctl_num = CTL_CREATE;
 	snprintf(node.sysctl_name, SYSCTL_NAMELEN, "root");
 	if (sysctl(&mib[0], 2, NULL, NULL, &node, len) == -1) {
-		warning("could not create init.root node, error = %d", errno);
+		warning("could not create init.root node: %m");
 		return (-1);
 	}
 
@@ -1705,7 +1841,7 @@ shouldchroot()
 	len = sizeof(struct sysctlnode);
 
 	if (sysctlbyname("init.root", rootdir, &len, NULL, 0) == -1) {
-		warning("could not read init.root, error = %d", errno);
+		warning("could not read init.root: %m");
 
 		/* Child killed our node. Recreate it. */
 		if (errno == ENOENT) {

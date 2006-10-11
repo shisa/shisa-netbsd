@@ -1,4 +1,4 @@
-#	$NetBSD: BRANCHES,v 1.91 2006/08/30 20:40:36 wiz Exp $
+#	$NetBSD: BRANCHES,v 1.114 2006/10/07 02:53:57 tsutsui Exp $
 #
 # This file contains a list of branches that exist in the NetBSD CVS
 # tree and their current state.
@@ -220,17 +220,6 @@ Notes:		This code was on a branch because it involves changes to
 		cpuswitch.S which would otherwise make merging the
 		nathanw_sa branch difficult.
 
-Branch:		gdamore-uart
-Description:	Add register table support to com driver.
-Status:		Active
-Start Date:	14 June 2006
-End Date:
-Base Tag:	gdamore-uart-base
-Maintainer:	Garrett D'Amore <gdamore@NetBSD.org>
-Scope:		kernel
-Notes:		Results in consolidation of Alchemy (mips/dev/alchemy/aucom.c)
-		com support, and also removes a nasty hack from Atheros com.
-
 Branch:		gmcgarry_ctxsw
 Description:	Separate scheduler from context-switch code
 Status:		Dormant
@@ -305,6 +294,21 @@ Notes:		The goal is to replace the existing lockmgr() and
 		simple_lock() based locking mechanisms with the
 		primitives found in Solaris: mutexes and rwlocks.
 
+Branch:		newlock2
+Description:	New locking primitives, based on Solaris's
+Status:		Active
+Start Date:	September 9, 2006
+End Date:
+Base Tag:	newlock2-base
+Maintainer:	Andrew Doran <ad@NetBSD.org>
+Scope:		Kernel
+Notes:		As per the newlock branch, however given the amount of time
+		the original branch has lain dormant, a new one has been
+		created. Goals:
+		- Implement new locking primitives on most-used ports.
+		- Minor locking improvements.
+		- Remove spinlockmgr().
+
 Branch:		peter-altq
 Description:	New ALTQ framework:
 		- sync with KAME sources
@@ -375,6 +379,13 @@ Notes:		Kernels built from this branch are not expected
 
 Branch:		yamt-lazymbuf
 Description:	implement and evaluate lazy mapping of mbuf external data pages
+		it's intended as the first step of larger changes.
+			1. support operations (esp. bus_dma load) on
+			   unmapped mbuf.
+			2. unify mbuf and buf.
+			   (or, at least some parts of them)
+			3. then it should be trivial to implement
+			   i/o coalescing, etc.
 Status:		Active
 Start Date:	Wed Jul  6 2005
 End Date:	
@@ -383,18 +394,59 @@ Maintainer:	YAMAMOTO Takashi <yamt@NetBSD.org>
 Scope:		src/sys
 Notes:		
 
-Branch:		yamt-pdpolicy
-Description:	play with page replacement policy
-		- separate page replacement policy from the rest of kernel
-		- implement alternative replacement policy
-		- related read-ahead adjustment?
+Branch:		yamt-splraiseipl
+Description:	finish implementing splraiseipl (and makeiplcookie).
+		http://mail-index.NetBSD.org/tech-kern/2006/07/01/0000.html
 Status:		Active
-Start Date:	Sun Mar  5 2006
+Start Date:	Mon Sep 18 2006
 End Date:	
-Base Tag:	yamt-pdpolicy-base7
+Base Tag:	yamt-splraiseipl-base
 Maintainer:	YAMAMOTO Takashi <yamt@NetBSD.org>
 Scope:		src/sys  (src/common is tagged but not branched)
 Notes:		
+		tested:
+			alpha, i386, xen (yamt)
+			hp300, news68k, sparc(sun4c), sun2,
+			    sun3, sun3x (tsutsui)
+
+		compile-tested:
+			amd64, sparc, sparc64 (GENERIC),
+			vax, evbarm, evbmips, evbsh3, iyonix, acorn26,
+			hp700, evbppc (marvell, ibm4xx),
+			mac68k, x68k, hpcarm, shark, acorn32,
+			cats, netwinder, algor, arc, ews4800mips, hpcmips,
+			newsmips, luna68k, cobalt, pmax, sbmips, hpcsh,
+			landisk, next68k, macppc
+
+		not tested:
+			pdp10 (i don't know how to build)
+			sparc64 (GENERIC.MP seems to have an unrelated problem)
+			cesfic (GENERIC fails to build with the following
+			error.  i don't know if it's related to my changes.)
+
+      build  compat/libcompat.a
+      making sure the 68040 FPSP is up to date...
+      netbsd.s: Assembler messages:
+      netbsd.s:92: Error: can't resolve `0' {*UND* section} - `LOCAL_SIZE' {*UND* section}
+      netbsd.s:125: Error: can't resolve `0' {*UND* section} - `LOCAL_SIZE' {*UND* section}
+      netbsd.s:163: Error: can't resolve `0' {.text section} - `LOCAL_SIZE' {*UND* section}
+
+			amiga (GENERIC fails with the following error.)
+
+`libcompat.a' is up to date.
+making sure the 68040 FPSP is up to date...
+do_func.s: Assembler messages:
+do_func.s:564: Error: undefined symbol `neg_mask' in operation
+do_func.s:564: Error: undefined symbol `inf_mask' in operation
+do_func.s:591: Error: undefined symbol `neg_mask' in operation
+do_func.s:591: Error: undefined symbol `z_mask' in operation
+
+*** Failed target:  do_func.o
+*** Failed command: /exports/abhome/tools/bin/m68k--netbsdelf-gcc -x assembler-with-cpp -m68040 -Damiga -DFPCOPROC -I../../. -I/exports/nbsd/src/sys/../common/include -I/exports/nbsd/src/sys/arch -I/exports/nbsd/src/sys -nostdinc -DDRACO -DM68060 -DM68040 -DM68030 -DM68020 -DLKM -DMAXUSERS=8 -D_KERNEL -D_KERNEL_OPT -I/exports/nbsd/src/sys/lib/libkern/../../../common/lib/libc/quad -I/exports/nbsd/src/sys/lib/libkern/../../../common/lib/libc/string -I/exports/nbsd/src/sys/lib/libkern/../../../common/lib/libc/arch/m68k/string -I/exports/nbsd/src/sys/dist/ipf -c -o do_func.o do_func.s
+*** Error code 1
+
+		notyet:
+			others
 
 
 ########################################################################
@@ -929,6 +981,19 @@ Notes:		http://mail-index.NetBSD.org/tech-kern/2004/12/25/0005.html
 
 			src/sys/arch/playstation2/conf/GENERIC
 
+Branch:		yamt-pdpolicy
+Description:	play with page replacement policy
+		- separate page replacement policy from the rest of kernel
+		- implement alternative replacement policy
+		- related read-ahead adjustment?
+Status:		Terminated; merged to -current
+Start Date:	Sun Mar  5 2006
+End Date:	Sat Sep 16 2006
+Base Tag:	yamt-pdpolicy-base9
+Maintainer:	YAMAMOTO Takashi <yamt@NetBSD.org>
+Scope:		src/sys  (src/common is tagged but not branched)
+Notes:		
+
 Branch:		yamt-readahead
 Description:	play with file readahead
 Status:		Terminated; merged to -current
@@ -958,6 +1023,17 @@ Base Tag:	yamt-vop-base3
 Maintainer:	YAMAMOTO Takashi <yamt@NetBSD.org>
 Scope:		src/sys
 Notes:		http://mail-index.NetBSD.org/tech-kern/2005/09/27/0000.html
+
+Branch:		gdamore-uart
+Description:	Add register table support to com driver.
+Status:		Active
+Start Date:	14 June 2006
+End Date:	13 July 2006
+Base Tag:	gdamore-uart-base
+Maintainer:	Garrett D'Amore <gdamore@NetBSD.org>
+Scope:		kernel
+Notes:		Results in consolidation of Alchemy (mips/dev/alchemy/aucom.c)
+		com support, and also removes a nasty hack from Atheros com.
 
 
 ########################################################################

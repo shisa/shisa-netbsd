@@ -1,6 +1,6 @@
-/*	$NetBSD: eaytest.c,v 1.5 2005/11/21 14:20:29 manu Exp $	*/
+/*	$NetBSD: eaytest.c,v 1.7 2006/10/06 12:02:27 manu Exp $	*/
 
-/* Id: eaytest.c,v 1.20.4.2 2005/06/28 22:38:02 manubsd Exp */
+/* Id: eaytest.c,v 1.22 2005/06/19 18:02:54 manubsd Exp */
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -712,6 +712,14 @@ ciphertest(ac, av)
 			  &key, key.l,
 			  &iv0, 8,
 			  eay_rc5_encrypt, eay_rc5_decrypt) < 0)
+	  return -1;
+#endif
+#if defined(HAVE_OPENSSL_CAMELLIA_H)
+	if (ciphertest_1 ("CAMELLIA",
+			  &data, 16,
+			  &key, key.l,
+			  &iv0, 16,
+			  eay_camellia_encrypt, eay_camellia_decrypt) < 0)
 	  return -1;
 #endif
 	return 0;

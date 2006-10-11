@@ -1,4 +1,4 @@
-/*	$NetBSD: compat_defs.h,v 1.53 2006/08/20 18:52:05 thorpej Exp $	*/
+/*	$NetBSD: compat_defs.h,v 1.55 2006/10/07 22:00:22 apb Exp $	*/
 
 #ifndef	__NETBSD_COMPAT_DEFS_H__
 #define	__NETBSD_COMPAT_DEFS_H__
@@ -368,6 +368,10 @@ size_t strlcat(char *, const char *, size_t);
 size_t strlcpy(char *, const char *, size_t);
 #endif
 
+#if !HAVE_STRMODE
+void strmode(mode_t, char *);
+#endif
+
 #if !HAVE_STRSEP || defined(__NetBSD__)
 char *strsep(char **, const char *);
 #endif
@@ -482,9 +486,9 @@ void *setmode(const char *);
 
 /* <paths.h> */
 
-#ifndef _PATH_BSHELL
+/* The host's _PATH_BSHELL might be broken, so override it. */
+#undef _PATH_BSHELL
 #define _PATH_BSHELL PATH_BSHELL
-#endif
 #ifndef _PATH_DEFPATH
 #define _PATH_DEFPATH "/usr/bin:/bin:/usr/local/bin"
 #endif

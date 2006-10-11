@@ -1,4 +1,4 @@
-/*	$NetBSD: lfs_vfsops.c,v 1.218 2006/07/23 22:06:15 ad Exp $	*/
+/*	$NetBSD: lfs_vfsops.c,v 1.222 2006/10/04 15:56:46 christos Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2000, 2001, 2002, 2003 The NetBSD Foundation, Inc.
@@ -67,7 +67,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: lfs_vfsops.c,v 1.218 2006/07/23 22:06:15 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: lfs_vfsops.c,v 1.222 2006/10/04 15:56:46 christos Exp $");
 
 #if defined(_KERNEL_OPT)
 #include "opt_quota.h"
@@ -157,6 +157,8 @@ struct vfsops lfs_vfsops = {
 	(int (*)(struct mount *, struct vnode *, struct timespec *)) eopnotsupp,
 	vfs_stdextattrctl,
 	lfs_vnodeopv_descs,
+	0,
+	{ NULL, NULL },
 };
 VFS_ATTACH(lfs_vfsops);
 
@@ -252,17 +254,21 @@ lfs_writerd(void *arg)
 			locked_queue_bytes > LFS_MAX_BYTES ||
 			lfs_subsys_pages > LFS_MAX_PAGES) {
 
-			if (lfs_do_flush)
+			if (lfs_do_flush) {
 				DLOG((DLOG_FLUSH, "daemon: lfs_do_flush\n"));
-			if (locked_queue_count > LFS_MAX_BUFS)
+			}
+			if (locked_queue_count > LFS_MAX_BUFS) {
 				DLOG((DLOG_FLUSH, "daemon: lqc = %d, max %d\n",
 				      locked_queue_count, LFS_MAX_BUFS));
-			if (locked_queue_bytes > LFS_MAX_BYTES)
+			}
+			if (locked_queue_bytes > LFS_MAX_BYTES) {
 				DLOG((DLOG_FLUSH, "daemon: lqb = %ld, max %ld\n",
 				      locked_queue_bytes, LFS_MAX_BYTES));
-			if (lfs_subsys_pages > LFS_MAX_PAGES)
+			}
+			if (lfs_subsys_pages > LFS_MAX_PAGES) {
 				DLOG((DLOG_FLUSH, "daemon: lssp = %d, max %d\n",
 				      lfs_subsys_pages, LFS_MAX_PAGES));
+			}
 
 			lfs_flush(NULL, SEGM_WRITERD, 0);
 			lfs_do_flush = 0;
@@ -723,6 +729,7 @@ lfs_mountfs(struct vnode *devvp, struct mount *mp, struct lwp *l)
 	simple_lock_init(&fs->lfs_interlock);
 	lockinit(&fs->lfs_fraglock, PINOD, "lfs_fraglock", 0, 0);
 	lockinit(&fs->lfs_iflock, PINOD, "lfs_iflock", 0, 0);
+	lockinit(&fs->lfs_stoplock, PINOD, "lfs_stoplock", 0, 0);
 
 	/* Set the file system readonly/modify bits. */
 	fs->lfs_ronly = ronly;
@@ -997,8 +1004,10 @@ lfs_statvfs(struct mount *mp, struct statvfs *sbp, struct lwp *l)
 
 	sbp->f_bfree = fsbtofrags(fs, LFS_EST_BFREE(fs));
 	KASSERT(sbp->f_bfree <= fs->lfs_dsize);
+#if 0
 	if (sbp->f_bfree < 0)
 		sbp->f_bfree = 0;
+#endif
 
 	sbp->f_bresvd = fsbtofrags(fs, LFS_EST_RSVD(fs));
 	if (sbp->f_bfree > sbp->f_bresvd)
@@ -1749,18 +1758,19 @@ lfs_gop_write(struct vnode *vp, struct vm_page **pgs, int npages, int flags)
 	simple_lock(&vp->v_interlock);
 
 	/* Tell why we're here, if we know */
-	if (ip->i_lfs_iflags & LFSI_NO_GOP_WRITE)
+	if (ip->i_lfs_iflags & LFSI_NO_GOP_WRITE) {
 		DLOG((DLOG_PAGE, "lfs_gop_write: clean pages dirtied\n"));
-	else if ((pgs[0]->offset & fs->lfs_bmask) != 0)
+	} else if ((pgs[0]->offset & fs->lfs_bmask) != 0) {
 		DLOG((DLOG_PAGE, "lfs_gop_write: not on block boundary\n"));
-	else if (haveeof && startoffset >= eof)
+	} else if (haveeof && startoffset >= eof) {
 		DLOG((DLOG_PAGE, "lfs_gop_write: ino %d start 0x%" PRIx64
 		      " eof 0x%" PRIx64 " npages=%d\n", VTOI(vp)->i_number,
 		      pgs[0]->offset, eof, npages));
-	else if (LFS_STARVED_FOR_SEGS(fs))
+	} else if (LFS_STARVED_FOR_SEGS(fs)) {
 		DLOG((DLOG_PAGE, "lfs_gop_write: avail too low\n"));
-	else
+	} else {
 		DLOG((DLOG_PAGE, "lfs_gop_write: seglock not held\n"));
+	}
 
 	uvm_lock_pageq();
 	for (i = 0; i < npages; i++) {
@@ -1812,6 +1822,7 @@ lfs_vinit(struct mount *mp, struct vnode **vpp)
 	ip->i_gid = ip->i_ffs1_gid;
 
 	ip->i_lfs_effnblks = ip->i_ffs1_blocks;
+	ip->i_lfs_odnlink = ip->i_ffs1_nlink;
 
 	/*
 	 * Initialize the vnode from the inode, check for aliases.  In all

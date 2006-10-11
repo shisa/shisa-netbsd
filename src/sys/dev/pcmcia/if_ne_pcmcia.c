@@ -1,4 +1,4 @@
-/*	$NetBSD: if_ne_pcmcia.c,v 1.144 2006/08/30 16:55:06 christos Exp $	*/
+/*	$NetBSD: if_ne_pcmcia.c,v 1.147 2006/09/24 03:54:00 jmcneill Exp $	*/
 
 /*
  * Copyright (c) 1997 Marc Horowitz.  All rights reserved.
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_ne_pcmcia.c,v 1.144 2006/08/30 16:55:06 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_ne_pcmcia.c,v 1.147 2006/09/24 03:54:00 jmcneill Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -105,6 +105,10 @@ static const struct ne2000dev {
     { PCMCIA_VENDOR_EDIMAX, PCMCIA_PRODUCT_EDIMAX_EP4000A,
       PCMCIA_CIS_INVALID,
       0, -1, { 0x00, 0xa0, 0x0c }, 0 },
+
+    { PCMCIA_VENDOR_EDIMAX, PCMCIA_PRODUCT_EDIMAX_EP4101,
+      PCMCIA_CIS_INVALID,
+      0, -1, { 0x00, 0x90, 0xcc }, NE2000DVF_AX88190 },
 
     { PCMCIA_VENDOR_INVALID, PCMCIA_PRODUCT_INVALID,
       PCMCIA_CIS_SYNERGY21_S21810,
@@ -275,6 +279,10 @@ static const struct ne2000dev {
     { PCMCIA_VENDOR_IODATA, PCMCIA_PRODUCT_IODATA_PCLATE,
       PCMCIA_CIS_INVALID,
       0, -1, { 0xff, 0xff, 0xff }, 0 },
+
+    { PCMCIA_VENDOR_IODATA3, PCMCIA_PRODUCT_IODATA3_PCETTXR,
+      PCMCIA_CIS_IODATA3_PCETTXR,
+      0, -1, { 0x00, 0xa0, 0xb0 }, NE2000DVF_DL10019 },
 
     /*
      * This entry should be placed after above PCLA-TE entry.
@@ -724,7 +732,8 @@ found:
 	if (ne2000_attach(nsc, enaddr))
 		goto fail2;
 
-	psc->sc_powerhook = powerhook_establish(ne2000_power, nsc);
+	psc->sc_powerhook = powerhook_establish(self->dv_xname,
+	    ne2000_power, nsc);
 	if (psc->sc_powerhook == NULL)
 		printf("%s: WARNING: unable to establish power hook\n",
 		    self->dv_xname);

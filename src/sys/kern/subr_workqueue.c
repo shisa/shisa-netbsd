@@ -1,4 +1,4 @@
-/*	$NetBSD: subr_workqueue.c,v 1.3 2006/05/02 13:26:07 rpaulo Exp $	*/
+/*	$NetBSD: subr_workqueue.c,v 1.5 2006/09/16 11:15:00 yamt Exp $	*/
 
 /*-
  * Copyright (c)2002, 2005 YAMAMOTO Takashi,
@@ -27,12 +27,12 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: subr_workqueue.c,v 1.3 2006/05/02 13:26:07 rpaulo Exp $");
+__KERNEL_RCSID(0, "$NetBSD: subr_workqueue.c,v 1.5 2006/09/16 11:15:00 yamt Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/kthread.h>
-#include <sys/malloc.h>
+#include <sys/kmem.h>
 #include <sys/proc.h>
 #include <sys/workqueue.h>
 
@@ -54,8 +54,6 @@ struct workqueue {
 	int wq_prio;
 	int wq_ipl;
 };
-
-MALLOC_DEFINE(M_WORKQUEUE, "workqueue", "work queue");
 
 #define	POISON	0xaabbccdd
 
@@ -167,6 +165,56 @@ workqueue_initqueue(struct workqueue *wq)
 	return error;
 }
 
+struct workqueue_exitargs {
+	struct work wqe_wk;
+	struct workqueue_queue *wqe_q;
+};
+
+static void
+workqueue_exit(struct work *wk, void *arg)
+{
+	struct workqueue_exitargs *wqe = (void *)wk;
+	struct workqueue_queue *q = wqe->wqe_q;
+
+	/*
+	 * no need to raise ipl because only competition at this point
+	 * is workqueue_finiqueue.
+	 */
+
+	KASSERT(q->q_worker == curproc);
+	simple_lock(&q->q_lock);
+	q->q_worker = NULL;
+	simple_unlock(&q->q_lock);
+	wakeup(q);
+	kthread_exit(0);
+}
+
+static void
+workqueue_finiqueue(struct workqueue *wq)
+{
+	struct workqueue_queue *q = &wq->wq_queue;
+	struct workqueue_exitargs wqe;
+
+	wq->wq_func = workqueue_exit;
+
+	wqe.wqe_q = q;
+	KASSERT(SIMPLEQ_EMPTY(&q->q_queue));
+	KASSERT(q->q_worker != NULL);
+	workqueue_lock(wq, q);
+	SIMPLEQ_INSERT_TAIL(&q->q_queue, &wqe.wqe_wk, wk_entry);
+	wakeup(q);
+	while (q->q_worker != NULL) {
+		int error;
+
+		error = ltsleep(q, wq->wq_prio, "wqfini", 0, &q->q_lock);
+		if (error) {
+			panic("%s: %s error=%d",
+			    __func__, wq->wq_name, error);
+		}
+	}
+	workqueue_unlock(wq, q);
+}
+
 /* --- */
 
 int
@@ -177,7 +225,7 @@ workqueue_create(struct workqueue **wqp, const char *name,
 	struct workqueue *wq;
 	int error;
 
-	wq = malloc(sizeof(*wq), M_WORKQUEUE, 0);
+	wq = kmem_alloc(sizeof(*wq), KM_SLEEP);
 	if (wq == NULL) {
 		return ENOMEM;
 	}
@@ -186,12 +234,20 @@ workqueue_create(struct workqueue **wqp, const char *name,
 
 	error = workqueue_initqueue(wq);
 	if (error) {
-		free(wq, M_WORKQUEUE);
+		kmem_free(wq, sizeof(*wq));
 		return error;
 	}
 
 	*wqp = wq;
 	return 0;
+}
+
+void
+workqueue_destroy(struct workqueue *wq)
+{
+
+	workqueue_finiqueue(wq);
+	kmem_free(wq, sizeof(*wq));
 }
 
 void

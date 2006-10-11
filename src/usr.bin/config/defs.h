@@ -1,4 +1,4 @@
-/*	$NetBSD: defs.h,v 1.13 2006/08/30 13:48:11 cube Exp $	*/
+/*	$NetBSD: defs.h,v 1.16 2006/09/27 19:05:46 christos Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -98,7 +98,7 @@ extern const char *progname;
  * The next two lines define the current version of the config(1) binary,
  * and the minimum version of the configuration files it supports.
  */
-#define CONFIG_VERSION		20060830
+#define CONFIG_VERSION		20060904
 #define CONFIG_MINVERSION	0
 
 /*
@@ -106,17 +106,13 @@ extern const char *progname;
  * integers.  The names can be NULL, resulting in simple value lists.
  */
 struct nvlist {
-	struct	nvlist *nv_next;
-	const char *nv_name;
-	union {
-		const char *un_str;
-		void *un_ptr;
-	} nv_un;
-#define	nv_str	nv_un.un_str
-#define	nv_ptr	nv_un.un_ptr
-	int	nv_int;
-	int	nv_ifunit;		/* XXX XXX XXX */
-	int	nv_flags;
+	struct nvlist	*nv_next;
+	const char	*nv_name;
+	const char	*nv_str;
+	void		*nv_ptr;
+	int		nv_int;
+	int		nv_ifunit;		/* XXX XXX XXX */
+	int		nv_flags;
 #define	NV_DEPENDED	1
 #define	NV_OBSOLETE	2
 };
@@ -466,6 +462,7 @@ void	addobject(const char *, struct nvlist *, int);
 
 /* hash.c */
 struct	hashtab *ht_new(void);
+void	ht_free(struct hashtab *);
 int	ht_insrep(struct hashtab *, const char *, void *, int);
 #define	ht_insert(ht, nam, val) ht_insrep(ht, nam, val, 0)
 #define	ht_replace(ht, nam, val) ht_insrep(ht, nam, val, 1)

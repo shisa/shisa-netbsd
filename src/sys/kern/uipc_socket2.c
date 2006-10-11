@@ -1,4 +1,4 @@
-/*	$NetBSD: uipc_socket2.c,v 1.77 2006/08/16 18:31:54 plunky Exp $	*/
+/*	$NetBSD: uipc_socket2.c,v 1.79 2006/10/03 11:15:04 elad Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1988, 1990, 1993
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: uipc_socket2.c,v 1.77 2006/08/16 18:31:54 plunky Exp $");
+__KERNEL_RCSID(0, "$NetBSD: uipc_socket2.c,v 1.79 2006/10/03 11:15:04 elad Exp $");
 
 #include "opt_mbuftrace.h"
 #include "opt_sb_max.h"

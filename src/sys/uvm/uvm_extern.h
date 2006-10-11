@@ -1,4 +1,4 @@
-/*	$NetBSD: uvm_extern.h,v 1.116 2006/08/04 22:42:36 he Exp $	*/
+/*	$NetBSD: uvm_extern.h,v 1.119 2006/10/05 14:48:33 chs Exp $	*/
 
 /*
  *
@@ -87,6 +87,7 @@ typedef unsigned int uvm_flag_t;
 
 typedef int vm_inherit_t;	/* XXX: inheritance codes */
 typedef off_t voff_t;		/* XXX: offset within a uvm_object */
+typedef voff_t pgoff_t;		/* XXX: number of pages within a uvm object */
 
 /*
  * defines
@@ -255,8 +256,9 @@ struct vmtotal;
 #define	UVM_PCTPARAM_APPLY(pct, x) \
 	(((x) * (pct)->pct_scaled) >> UVM_PCTPARAM_SHIFT)
 struct uvm_pctparam {
-	int pct_pct;	/* percent [0, 100] */
+	int pct_pct;	/* percent [0, 100] */ /* should be the first member */
 	int pct_scaled;
+	int (*pct_check)(struct uvm_pctparam *, int);
 };
 
 /*
@@ -273,8 +275,6 @@ struct uvmexp {
 	/* vm_page counters */
 	int npages;     /* number of pages we manage */
 	int free;       /* number of free pages */
-	int active;     /* number of active pages */
-	int inactive;   /* number of pages that we free'd but may want back */
 	int paging;	/* number of pages in the process of being paged out */
 	int wired;      /* number of wired pages */
 
@@ -296,22 +296,7 @@ struct uvmexp {
 	/* pageout params */
 	int freemin;    /* min number of free pages */
 	int freetarg;   /* target number of free pages */
-	int inactarg;   /* target number of inactive pages */
 	int wiredmax;   /* max number of wired pages */
-	int anonmin;	/* min threshold for anon pages */
-	int execmin;	/* min threshold for executable pages */
-	int filemin;	/* min threshold for file pages */
-	int anonminpct;	/* min percent anon pages */
-	int execminpct;	/* min percent executable pages */
-	int fileminpct;	/* min percent file pages */
-	int anonmax;	/* max threshold for anon pages */
-	int execmax;	/* max threshold for executable pages */
-	int filemax;	/* max threshold for file pages */
-	int anonmaxpct;	/* max percent anon pages */
-	int execmaxpct;	/* max percent executable pages */
-	int filemaxpct;	/* max percent file pages */
-	struct uvm_pctparam inactivepct; /* length of inactive queue
-					    (pct of the whole queue) */
 
 	/* swap */
 	int nswapdev;	/* number of configured swap devices in system */
@@ -404,7 +389,7 @@ struct uvmexp_sysctl {
 	int64_t	reserve_kernel;
 	int64_t	freemin;
 	int64_t	freetarg;
-	int64_t	inactarg;
+	int64_t	inactarg; /* unused */
 	int64_t	wiredmax;
 	int64_t	nswapdev;
 	int64_t	swpages;
@@ -596,8 +581,8 @@ __dead void		uvm_scheduler(void) __attribute__((noreturn));
 void			uvm_swapin(struct lwp *);
 boolean_t		uvm_uarea_alloc(vaddr_t *);
 void			uvm_uarea_drain(boolean_t);
-int			uvm_vslock(struct proc *, caddr_t, size_t, vm_prot_t);
-void			uvm_vsunlock(struct proc *, caddr_t, size_t);
+int			uvm_vslock(struct vmspace *, void *, size_t, vm_prot_t);
+void			uvm_vsunlock(struct vmspace *, void *, size_t);
 
 
 /* uvm_init.c */
@@ -648,7 +633,13 @@ void			uvmspace_unshare(struct lwp *);
 void			uvm_meter(void);
 int			uvm_sysctl(int *, u_int, void *, size_t *,
 			    void *, size_t, struct proc *);
+int			uvm_pctparam_check(struct uvm_pctparam *, int);
 void			uvm_pctparam_set(struct uvm_pctparam *, int);
+int			uvm_pctparam_get(struct uvm_pctparam *);
+void			uvm_pctparam_init(struct uvm_pctparam *, int,
+			    int (*)(struct uvm_pctparam *, int));
+int			uvm_pctparam_createsysctlnode(struct uvm_pctparam *,
+			    const char *, const char *);
 
 /* uvm_mmap.c */
 int			uvm_mmap(struct vm_map *, vaddr_t *, vsize_t,
@@ -685,6 +676,7 @@ void			uvm_aio_aiodone(struct buf *);
 /* uvm_pdaemon.c */
 void			uvm_pageout(void *);
 void			uvm_aiodone_daemon(void *);
+void			uvm_estimatepageable(int *, int *);
 
 /* uvm_pglist.c */
 int			uvm_pglistalloc(psize_t, paddr_t, paddr_t,

@@ -1,4 +1,4 @@
-/*	$NetBSD: neo.c,v 1.31 2006/02/25 02:28:58 wiz Exp $	*/
+/*	$NetBSD: neo.c,v 1.33 2006/09/24 03:53:09 jmcneill Exp $	*/
 
 /*
  * Copyright (c) 1999 Cameron Grant <gandalf@vilnya.demon.co.uk>
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: neo.c,v 1.31 2006/02/25 02:28:58 wiz Exp $");
+__KERNEL_RCSID(0, "$NetBSD: neo.c,v 1.33 2006/09/24 03:53:09 jmcneill Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -272,6 +272,7 @@ static const struct audio_hw_if neo_hw_if = {
 	neo_get_props,
 	neo_trigger_output,
 	neo_trigger_input,
+	NULL,
 	NULL,
 };
 
@@ -632,7 +633,7 @@ neo_attach(struct device *parent, struct device *self, void *aux)
 	if (ac97_attach(&sc->host_if, self) != 0)
 		return;
 
-	sc->powerhook = powerhook_establish(neo_power, sc);
+	sc->powerhook = powerhook_establish(sc->dev.dv_xname, neo_power, sc);
 
 	audio_attach_mi(&neo_hw_if, sc, &sc->dev);
 }

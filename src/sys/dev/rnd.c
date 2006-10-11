@@ -1,4 +1,4 @@
-/*	$NetBSD: rnd.c,v 1.52 2006/07/21 16:48:47 ad Exp $	*/
+/*	$NetBSD: rnd.c,v 1.55 2006/09/23 01:13:08 jmcneill Exp $	*/
 
 /*-
  * Copyright (c) 1997 The NetBSD Foundation, Inc.
@@ -38,7 +38,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: rnd.c,v 1.52 2006/07/21 16:48:47 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: rnd.c,v 1.55 2006/09/23 01:13:08 jmcneill Exp $");
 
 #include <sys/param.h>
 #include <sys/ioctl.h>
@@ -166,7 +166,7 @@ dev_type_kqfilter(rndkqfilter);
 
 const struct cdevsw rnd_cdevsw = {
 	rndopen, nullclose, rndread, rndwrite, rndioctl,
-	nostop, notty, rndpoll, nommap, rndkqfilter,
+	nostop, notty, rndpoll, nommap, rndkqfilter, D_OTHER,
 };
 
 static inline void	rnd_wakeup_readers(void);
@@ -813,7 +813,7 @@ rnd_sample_free(rnd_sample_t *c)
  * Add a source to our list of sources.
  */
 void
-rnd_attach_source(rndsource_element_t *rs, char *name, u_int32_t type,
+rnd_attach_source(rndsource_element_t *rs, const char *name, u_int32_t type,
     u_int32_t flags)
 {
 	u_int32_t ts;
@@ -899,9 +899,8 @@ rnd_detach_source(rndsource_element_t *rs)
 }
 
 /*
- * Add a value to the entropy pool.  If rs is NULL no entropy estimation
- * will be performed, otherwise it should point to the source-specific
- * source structure.
+ * Add a value to the entropy pool. The rs parameter should point to the
+ * source-specific source structure.
  */
 void
 rnd_add_uint32(rndsource_element_t *rs, u_int32_t val)

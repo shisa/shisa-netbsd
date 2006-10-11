@@ -1,4 +1,4 @@
-/*	$NetBSD: tcp_output.c,v 1.142 2006/03/25 13:34:35 seanb Exp $	*/
+/*	$NetBSD: tcp_output.c,v 1.148 2006/10/08 11:10:59 yamt Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -70,7 +70,7 @@
  */
 
 /*-
- * Copyright (c) 1997, 1998, 2001, 2005 The NetBSD Foundation, Inc.
+ * Copyright (c) 1997, 1998, 2001, 2005, 2006 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
  * This code is derived from software contributed to The NetBSD Foundation
@@ -78,6 +78,8 @@
  * Facility, NASA Ames Research Center.
  * This code is derived from software contributed to The NetBSD Foundation
  * by Charles M. Hannum.
+ * This code is derived from software contributed to The NetBSD Foundation
+ * by Rui Paulo.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -140,7 +142,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: tcp_output.c,v 1.142 2006/03/25 13:34:35 seanb Exp $");
+__KERNEL_RCSID(0, "$NetBSD: tcp_output.c,v 1.148 2006/10/08 11:10:59 yamt Exp $");
 
 #include "opt_inet.h"
 #include "opt_ipsec.h"
@@ -671,14 +673,26 @@ tcp_output(struct tcpcb *tp)
 	txsegsize_nosack = txsegsize;
 again:
 	use_tso = has_tso;
+	if ((tp->t_flags & (TF_ECN_SND_CWR|TF_ECN_SND_ECE)) != 0) {
+		/* don't duplicate CWR/ECE. */
+		use_tso = 0;
+	}
 	TCP_REASS_LOCK(tp);
 	sack_numblks = tcp_sack_numblks(tp);
 	if (sack_numblks) {
-		if ((tp->rcv_sack_flags & TCPSACK_HAVED) != 0) {
-			/* don't duplicate D-SACK. */
-			use_tso = 0;
+		int sackoptlen;
+
+		sackoptlen = TCP_SACK_OPTLEN(sack_numblks);
+		if (sackoptlen > txsegsize_nosack) {
+			sack_numblks = 0; /* give up SACK */
+			txsegsize = txsegsize_nosack;
+		} else {
+			if ((tp->rcv_sack_flags & TCPSACK_HAVED) != 0) {
+				/* don't duplicate D-SACK. */
+				use_tso = 0;
+			}
+			txsegsize = txsegsize_nosack - sackoptlen;
 		}
-		txsegsize = txsegsize_nosack - TCP_SACK_OPTLEN(sack_numblks);
 	} else {
 		txsegsize = txsegsize_nosack;
 	}
@@ -793,13 +807,7 @@ again:
 		}
 	}
 
-	if (!TCP_SACK_ENABLED(tp)) {
-		if (win < so->so_snd.sb_cc) {
-			len = win - off;
-			flags &= ~TH_FIN;
-		} else
-			len = so->so_snd.sb_cc - off;
-	} else if (sack_rxmit == 0) {
+	if (sack_rxmit == 0) {
 		if (sack_bytes_rxmt != 0) {
 			long cwin;
 
@@ -826,8 +834,8 @@ again:
 			 */
 			if (len > 0) {
 				cwin = tp->snd_cwnd - 
-						(tp->snd_nxt - tp->sack_newdata) -
-						sack_bytes_rxmt;
+				    (tp->snd_nxt - tp->sack_newdata) -
+				    sack_bytes_rxmt;
 				if (cwin < 0)
 					cwin = 0;
 				if (cwin < len) {
@@ -838,8 +846,9 @@ again:
 		} else if (win < so->so_snd.sb_cc) {
 			len = win - off;
 			flags &= ~TH_FIN;
-		} else
+		} else {
 			len = so->so_snd.sb_cc - off;
+		}
 	}
 
 	if (len < 0) {
@@ -1233,6 +1242,58 @@ send:
 	if (tp->t_template->m_len < iphdrlen)
 		panic("tcp_output");
 	bcopy(mtod(tp->t_template, caddr_t), mtod(m, caddr_t), iphdrlen);
+
+	/*
+	 * If we are starting a connection, send ECN setup
+	 * SYN packet. If we are on a retransmit, we may
+	 * resend those bits a number of times as per
+	 * RFC 3168.
+	 */
+	if (tp->t_state == TCPS_SYN_SENT && tcp_do_ecn) {
+		if (tp->t_flags & TF_SYN_REXMT) {
+			if (tp->t_ecn_retries--)
+				flags |= TH_ECE|TH_CWR;
+		} else {
+			flags |= TH_ECE|TH_CWR;
+			tp->t_ecn_retries = tcp_ecn_maxretries;
+		}
+	}
+
+	if (TCP_ECN_ALLOWED(tp)) {
+		/*
+		 * If the peer has ECN, mark data packets
+		 * ECN capable. Ignore pure ack packets, retransmissions
+		 * and window probes.
+		 */
+		if (len > 0 && SEQ_GEQ(tp->snd_nxt, tp->snd_max) &&
+		    !(tp->t_force && len == 1)) {
+			switch (af) {
+#ifdef INET
+			case AF_INET:
+				tp->t_inpcb->inp_ip.ip_tos |= IPTOS_ECN_ECT0;
+				break;
+#endif
+#ifdef INET6
+			case AF_INET6:
+				ip6->ip6_flow |= htonl(IPTOS_ECN_ECT0 << 20);
+				break;
+#endif
+			}
+			tcpstat.tcps_ecn_ect++;
+		}
+
+		/*
+		 * Reply with proper ECN notifications.
+		 */
+		if (tp->t_flags & TF_ECN_SND_CWR) {
+			flags |= TH_CWR;
+			tp->t_flags &= ~TF_ECN_SND_CWR;
+		} 
+		if (tp->t_flags & TF_ECN_SND_ECE) {
+			flags |= TH_ECE;
+		}
+	}
+
 
 	/*
 	 * If we are doing retransmissions, then snd_nxt will

@@ -1,4 +1,4 @@
-.\" $NetBSD: veriexecctl.8,v 1.24 2006/07/22 10:43:51 elad Exp $
+.\" $NetBSD: veriexecctl.8,v 1.28 2006/09/30 10:56:31 elad Exp $
 .\"
 .\" Copyright (c) 1999
 .\"	Brett Lymn - blymn@baea.com.au, brett_lymn@yahoo.com.au
@@ -29,9 +29,9 @@
 .\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 .\" SUCH DAMAGE.
 .\"
-.\"	$Id: veriexecctl.8,v 1.24 2006/07/22 10:43:51 elad Exp $
+.\"	$Id: veriexecctl.8,v 1.28 2006/09/30 10:56:31 elad Exp $
 .\"
-.Dd July 22, 2006
+.Dd September 30, 2006
 .Dt VERIEXECCTL 8
 .Os
 .Sh NAME
@@ -50,7 +50,7 @@ The
 command is used to manipulate the Veriexec feature.
 Veriexec must have been configured into the booted kernel for this
 commaned to work.
-.Sh COMMANDS
+.Ss Commands
 .Bl -tag -width 25n
 .It Cm load Ar signatures
 Load the fingerprint entries contained in
@@ -71,7 +71,7 @@ Query Veriexec about information associated with
 Filename, mount, fingerprint, fingerprint algorithm, evaluation status,
 and entry type.
 .El
-.Sh SIGNATURES
+.Ss Signatures
 The
 .Pa signatures
 file contains lines of fields (separated by one or more whitespace
@@ -92,14 +92,15 @@ the file.
 The field
 .Em options
 contains the associated options for the file.
-Currently there are seven valid options:
+Currently there are eight valid options, five of which are aliases
+to improve readability of the database files:
 .Pp
-.Bl -tag -width INTERPRETER -compact
+.Bl -tag
 .It Dv DIRECT
 Allow direct execution only.
 .It Dv INDIRECT
 If this option is set then the executable cannot be invoked directly, it
-can only be used as an interpreter in shell scripts.
+can only be used as an interpreter in scripts.
 .It Dv FILE
 Indicates that the fingerprint is associated with a file, not an
 executable.
@@ -116,20 +117,21 @@ allow direct execution only.
 An alias for
 .Dv INDIRECT ,
 the executable may only be used as an interpreter
-for shell scripts.
+for scripts.
 .It Dv SCRIPT
-The file is a shell script.
+The file is a script.
 For correct operation of veriexec, a script must have both
 .Dv FILE
 and
 .Dv DIRECT
 attributes set.
 This option is a shorthand way of setting the options for correct
-operation of shell scripts.
+operation of scripts.
 .It Dv LIBRARY
-The file is a library, this option is an alias of the
+The file is a library, this option is an alias for
 .Dv FILE
-option.
+and
+.Dv INDIRECT .
 .It Dv UNTRUSTED
 This option is used to indicate that the file is located on
 untrusted storage, and its fingerprint should not be cached,
@@ -155,10 +157,7 @@ default signatures file
 .El
 .Sh SEE ALSO
 .Xr veriexec 4 ,
-.Pa /usr/share/examples/veriexecctl/fpgen.sh ,
-.Pa /usr/share/examples/veriexecctl/gen_md5 ,
-.Pa /usr/share/examples/veriexecctl/gen_rmd160 ,
-.Pa /usr/share/examples/veriexecctl/gen_sha1
+.Xr veriexecgen 8
 .Sh HISTORY
 .Nm
 first appeared in

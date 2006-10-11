@@ -1,4 +1,4 @@
-/*	$NetBSD: show.c,v 1.30 2006/08/26 15:26:02 matt Exp $	*/
+/*	$NetBSD: show.c,v 1.34 2006/09/23 23:01:01 pooka Exp $	*/
 
 /*
  * Copyright (c) 1983, 1988, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "from: @(#)route.c	8.3 (Berkeley) 3/9/94";
 #else
-__RCSID("$NetBSD: show.c,v 1.30 2006/08/26 15:26:02 matt Exp $");
+__RCSID("$NetBSD: show.c,v 1.34 2006/09/23 23:01:01 pooka Exp $");
 #endif
 #endif /* not lint */
 
@@ -48,9 +48,6 @@ __RCSID("$NetBSD: show.c,v 1.30 2006/08/26 15:26:02 matt Exp $");
 #include <net/if_types.h>
 #include <net/route.h>
 #include <netinet/in.h>
-#ifdef NS
-#include <netns/ns.h>
-#endif
 
 #include <sys/sysctl.h>
 
@@ -101,6 +98,70 @@ static void pr_family(int);
 static void p_sockaddr(struct sockaddr *, struct sockaddr *, int, int );
 static void p_flags(int);
 
+void
+parse_show_opts(int argc, char **argv, int *afp, int *flagsp,
+    const char **afnamep, int nolink)
+{
+	const char *afname = "unspec";
+	int af, flags;
+
+	flags = 0;
+	af = AF_UNSPEC;
+	for (; argc >= 2; argc--) {
+		if (*argv[argc - 1] != '-')
+			goto bad;
+		switch (keyword(argv[argc - 1] + 1)) {
+		case K_HOST:
+			flags |= RTF_HOST;
+			break;
+		case K_LLINFO:
+			flags |= RTF_LLINFO;
+			break;
+		case K_INET:
+			af = AF_INET;
+			afname = argv[argc - 1] + 1;
+			break;
+#ifdef INET6
+		case K_INET6:
+			af = AF_INET6;
+			afname = argv[argc - 1] + 1;
+			break;
+#endif
+#ifndef SMALL
+		case K_ATALK:
+			af = AF_APPLETALK;
+			afname = argv[argc - 1] + 1;
+			break;
+		case K_ISO:
+		case K_OSI:
+			af = AF_ISO;
+			afname = argv[argc - 1] + 1;
+			break;
+#endif /* SMALL */
+		case K_LINK:
+			if (nolink)
+				goto bad;
+			af = AF_LINK;
+			afname = argv[argc - 1] + 1;
+			break;
+		default:
+			goto bad;
+		}
+	}
+	switch (argc) {
+	case 1:
+	case 0:
+		break;
+	default:
+	bad:
+		usage(argv[argc - 1]);
+	}
+	if (afnamep != NULL)
+		*afnamep = afname;
+	*afp = af;
+	*flagsp = flags;
+}
+
 /*
  * Print routing tables.
  */
@@ -108,55 +169,12 @@ void
 show(int argc, char **argv)
 {
 	size_t needed;
-	int af, mib[6];
+	int af, flags, mib[6];
 	char *buf, *next, *lim;
 	struct rt_msghdr *rtm;
 	struct sockaddr *sa;
 
-	af = AF_UNSPEC;
-	if (argc > 1) {
-		argv++;
-		if (argc == 2 && **argv == '-')
-		    switch (keyword(*argv + 1)) {
-			case K_INET:
-				af = AF_INET;
-				break;
-#ifdef INET6
-			case K_INET6:
-				af = AF_INET6;
-				break;
-#endif
-#ifndef SMALL
-			case K_ATALK:
-				af = AF_APPLETALK;
-				break;
-#ifdef NS
-			case K_XNS:
-				af = AF_NS;
-				break;
-#endif
-#endif /* SMALL */
-#if 0
-			/* XXX Links are never destinations */
-			case K_LINK:
-				af = AF_LINK;
-				break;
-#endif
-#ifndef SMALL
-			case K_ISO:
-			case K_OSI:
-				af = AF_ISO;
-				break;
-#ifdef CCITT
-			case K_X25:
-				af = AF_CCITT;
-#endif
-#endif /* SMALL */
-			default:
-				goto bad;
-		} else
-bad:			usage(*argv);
-	}
+	parse_show_opts(argc, argv, &af, &flags, NULL, 1);
 	mib[0] = CTL_NET;
 	mib[1] = PF_ROUTE;
 	mib[2] = 0;
@@ -180,6 +198,8 @@ bad:			usage(*argv);
 		for (next = buf; next < lim; next += rtm->rtm_msglen) {
 			rtm = (struct rt_msghdr *)next;
 			sa = (struct sockaddr *)(rtm + 1);
+			if ((rtm->rtm_flags & flags) != flags)
+				continue;
 			if (af == AF_UNSPEC || af == sa->sa_family)
 				p_rtentry(rtm);
 		}
@@ -230,7 +250,8 @@ p_rtentry(struct rt_msghdr *rtm)
 	static int masks_done, banner_printed;
 #endif
 	static int old_af;
-	int af = 0, interesting = RTF_UP | RTF_GATEWAY | RTF_HOST | RTF_REJECT;
+	int af = 0, interesting = RTF_UP | RTF_GATEWAY | RTF_HOST |
+	    RTF_REJECT | RTF_LLINFO;
 
 #ifdef notdef
 	/* for the moment, netmasks are skipped over */
@@ -294,19 +315,9 @@ pr_family(int af)
 		break;
 #endif /* INET6 */
 #ifndef SMALL
-#ifdef NS
-	case AF_NS:
-		afname = "XNS";
-		break;
-#endif
 	case AF_ISO:
 		afname = "ISO";
 		break;
-#ifdef CCITT
-	case AF_CCITT:
-		afname = "X.25";
-		break;
-#endif
 #endif /* SMALL */
 	case AF_APPLETALK:
 		afname = "AppleTalk";
@@ -351,11 +362,6 @@ p_sockaddr(struct sockaddr *sa, struct sockaddr *nm, int flags, int width)
 #endif /* INET6 */
 
 #ifndef SMALL
-#ifdef NS
-	case AF_NS:
-		cp = ns_print((struct sockaddr_ns *)sa);
-		break;
-#endif
 #endif /* SMALL */
 
 	default:

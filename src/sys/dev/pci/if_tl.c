@@ -1,4 +1,4 @@
-/*	$NetBSD: if_tl.c,v 1.73 2006/08/30 23:29:01 rumble Exp $	*/
+/*	$NetBSD: if_tl.c,v 1.75 2006/09/07 02:40:33 dogcow Exp $	*/
 
 /*
  * Copyright (c) 1997 Manuel Bouyer.  All rights reserved.
@@ -36,7 +36,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_tl.c,v 1.73 2006/08/30 23:29:01 rumble Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_tl.c,v 1.75 2006/09/07 02:40:33 dogcow Exp $");
 
 #undef TLDEBUG
 #define TL_PRIV_STATS
@@ -45,7 +45,6 @@ __KERNEL_RCSID(0, "$NetBSD: if_tl.c,v 1.73 2006/08/30 23:29:01 rumble Exp $");
 #undef TLDEBUG_ADDR
 
 #include "opt_inet.h"
-#include "opt_ns.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -86,10 +85,6 @@ __KERNEL_RCSID(0, "$NetBSD: if_tl.c,v 1.73 2006/08/30 23:29:01 rumble Exp $");
 #include <netinet/ip.h>
 #endif
 
-#ifdef NS
-#include <netns/ns.h>
-#include <netns/ns_if.h>
-#endif
 
 #if defined(__NetBSD__)
 #include <net/if_ether.h>
@@ -1106,7 +1101,7 @@ tl_intr(v)
 			    sc->sc_dev.dv_xname);
 			tl_reset(sc);
 			/* shedule reinit of the board */
-			callout_reset(&sc->tl_restart_ch, 1, tl_restart, sc);
+			callout_reset(&sc->tl_restart_ch, 1, tl_restart, ifp);
 			return(1);
 		}
 #endif
@@ -1211,7 +1206,7 @@ tl_intr(v)
 			    TL_HR_READ(sc, TL_HOST_CH_PARM));
 			tl_reset(sc);
 			/* shedule reinit of the board */
-			callout_reset(&sc->tl_restart_ch, 1, tl_restart, sc);
+			callout_reset(&sc->tl_restart_ch, 1, tl_restart, ifp);
 			return(1);
 		} else {
 			u_int8_t netstat;

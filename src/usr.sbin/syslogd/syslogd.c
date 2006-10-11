@@ -1,4 +1,4 @@
-/*	$NetBSD: syslogd.c,v 1.78 2006/04/24 19:00:30 snj Exp $	*/
+/*	$NetBSD: syslogd.c,v 1.82 2006/09/16 17:05:32 christos Exp $	*/
 
 /*
  * Copyright (c) 1983, 1988, 1993, 1994
@@ -39,7 +39,7 @@ __COPYRIGHT("@(#) Copyright (c) 1983, 1988, 1993, 1994\n\
 #if 0
 static char sccsid[] = "@(#)syslogd.c	8.3 (Berkeley) 4/4/94";
 #else
-__RCSID("$NetBSD: syslogd.c,v 1.78 2006/04/24 19:00:30 snj Exp $");
+__RCSID("$NetBSD: syslogd.c,v 1.82 2006/09/16 17:05:32 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -257,7 +257,7 @@ void	die(struct kevent *);	/* SIGTERM kevent dispatch routine */
 void	domark(struct kevent *);/* timer kevent dispatch routine */
 void	fprintlog(struct filed *, int, char *);
 int	getmsgbufsize(void);
-int*	socksetup(int);
+int*	socksetup(int, const char *);
 void	init(struct kevent *);	/* SIGHUP kevent dispatch routine */
 void	logerror(const char *, ...);
 void	logmsg(int, char *, char *, int);
@@ -290,6 +290,7 @@ static void dispatch_read_funix(struct kevent *);
  */
 static char *linebuf;
 static size_t linebufsize;
+static const char *bindhostname = NULL;
 
 #define	A_CNT(x)	(sizeof((x)) / sizeof((x)[0]))
 
@@ -314,8 +315,11 @@ main(int argc, char *argv[])
 
 	(void)setlocale(LC_ALL, "");
 
-	while ((ch = getopt(argc, argv, "dnsSf:m:p:P:ru:g:t:TUv")) != -1)
+	while ((ch = getopt(argc, argv, "b:dnsSf:m:p:P:ru:g:t:TUv")) != -1)
 		switch(ch) {
+		case 'b':
+			bindhostname = optarg;
+			break;
 		case 'd':		/* debug */
 			Debug++;
 			break;
@@ -605,9 +609,10 @@ usage(void)
 {
 
 	(void)fprintf(stderr,
-	    "usage: %s [-dnrSsTUv] [-f config_file] [-g group] [-m mark_interval]\n"
-	    "\t[-P file_list] [-p log_socket [-p log_socket2 ...]]\n"
-	    "\t[-t chroot_dir] [-u user]\n", getprogname());
+	    "usage: %s [-dnrSsTUv] [-b bind_address] [-f config_file] [-g group]\n"
+	    "\t[-m mark_interval] [-P file_list] [-p log_socket\n"
+	    "\t[-p log_socket2 ...]] [-t chroot_dir] [-u user]\n",
+	    getprogname());
 	exit(1);
 }
 
@@ -1071,7 +1076,7 @@ fprintlog(struct filed *f, int flags, char *msg)
 	struct iovec iov[10];
 	struct iovec *v;
 	struct addrinfo *r;
-	int j, l, lsent;
+	int j, l, lsent, fail, retry;
 	char line[MAXLINE + 1], repbuf[80], greetings[200];
 #define ADDEV() assert(++v - iov < A_CNT(iov))
 
@@ -1182,7 +1187,9 @@ fprintlog(struct filed *f, int flags, char *msg)
 			l = MAXLINE;
 		if (finet) {
 			lsent = -1;
+			fail = 0;
 			for (r = f->f_un.f_forw.f_addr; r; r = r->ai_next) {
+				retry = 0;
 				for (j = 0; j < *finet; j++) {
 #if 0 
 					/*
@@ -1192,13 +1199,33 @@ fprintlog(struct filed *f, int flags, char *msg)
 					if (r->ai_family ==
 					    address_family_of(finet[j+1])) 
 #endif
+sendagain:
 					lsent = sendto(finet[j+1], line, l, 0,
 					    r->ai_addr, r->ai_addrlen);
-					if (lsent == l) 
+					if (lsent == -1) {
+						switch (errno) {
+						case ENOBUFS:
+							/* wait/retry/drop */
+							if (++retry < 5) {
+								usleep(1000);
+								goto sendagain;
+							}
+							break;
+						case EHOSTDOWN:
+						case EHOSTUNREACH:
+						case ENETDOWN:
+							/* drop */
+							break;
+						default:
+							/* busted */
+							fail++;
+							break;
+						}
+					} else if (lsent == l) 
 						break;
 				}
 			}
-			if (lsent != l) {
+			if (lsent != l && fail) {
 				f->f_type = F_UNUSED;
 				logerror("sendto() failed");
 			}
@@ -1590,7 +1617,7 @@ die(struct kevent *ev)
 void
 init(struct kevent *ev)
 {
-	int i;
+	size_t i;
 	FILE *cf;
 	struct filed *f, *next, **nextp;
 	char *p;
@@ -1708,9 +1735,15 @@ init(struct kevent *ev)
 				strcpy(host, "*");
 				continue;
 			}
-			if (*p == '@')
-				p = LocalHostName;
 			for (i = 1; i < MAXHOSTNAMELEN - 1; i++) {
+				if (*p == '@') {
+					(void)strncpy(&host[i], LocalHostName,
+					    sizeof(host) - 1 - i);
+					host[sizeof(host) - 1] = '\0';
+					i = strlen(host) - 1;
+					p++;
+					continue;
+				}
 				if (!isalnum((unsigned char)*p) &&
 				    *p != '.' && *p != '-' && *p != ',')
 					break;
@@ -1784,7 +1817,7 @@ init(struct kevent *ev)
 		}
 	}
 
-	finet = socksetup(PF_UNSPEC);
+	finet = socksetup(PF_UNSPEC, bindhostname);
 	if (finet) {
 		if (SecureMode) {
 			for (i = 0; i < *finet; i++) {
@@ -2093,7 +2126,7 @@ getmsgbufsize(void)
 }
 
 int *
-socksetup(int af)
+socksetup(int af, const char *hostname)
 {
 	struct addrinfo hints, *res, *r;
 	struct kevent *ev;
@@ -2107,7 +2140,7 @@ socksetup(int af)
 	hints.ai_flags = AI_PASSIVE;
 	hints.ai_family = af;
 	hints.ai_socktype = SOCK_DGRAM;
-	error = getaddrinfo(NULL, "syslog", &hints, &res);
+	error = getaddrinfo(hostname, "syslog", &hints, &res);
 	if (error) {
 		logerror(gai_strerror(error));
 		errno = 0;

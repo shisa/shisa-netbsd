@@ -1,6 +1,6 @@
-/*	$NetBSD: proposal.c,v 1.6 2005/11/21 14:20:29 manu Exp $	*/
+/*	$NetBSD: proposal.c,v 1.10 2006/10/02 07:15:09 manu Exp $	*/
 
-/* Id: proposal.c,v 1.13.8.5 2005/07/28 05:05:52 manubsd Exp */
+/* $Id: proposal.c,v 1.10 2006/10/02 07:15:09 manu Exp $ */
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -74,6 +74,8 @@
 #ifdef ENABLE_NATT
 #include "nattraversal.h"
 #endif
+
+static uint g_nextreqid = 1;
 
 /* %%%
  * modules for ipsec sa spec
@@ -961,7 +963,7 @@ set_proposal_from_policy(iph2, sp_main, sp_sub)
 {
 	struct saprop *newpp;
 	struct ipsecrequest *req;
-	int encmodesv = IPSEC_MODE_TRANSPORT; /* use only when complex_bundle */
+	int encmodesv = IPSECDOI_ATTR_ENC_MODE_TRNS; /* use only when complex_bundle */
 
 	newpp = newsaprop();
 	if (newpp == NULL) {
@@ -983,7 +985,6 @@ set_proposal_from_policy(iph2, sp_main, sp_sub)
 	 * of tunnel mode in the SPD.  otherwise the mode becomes
 	 * transport mode.
 	 */
-	encmodesv = IPSEC_MODE_TRANSPORT;
 	for (req = sp_main->req; req; req = req->next) {
 		if (req->saidx.mode == IPSEC_MODE_TUNNEL) {
 			encmodesv = pfkey2ipsecdoi_mode(req->saidx.mode);
@@ -1113,6 +1114,10 @@ set_proposal_from_proposal(iph2)
         for (i = 0; i < MAXPROPPAIRLEN; i++) {
                 if (pair[i] == NULL)
                         continue;
+
+		if (pp_peer != NULL)
+			flushsaprop(pp_peer);
+
 		pp_peer = aproppair2saprop(pair[i]);
 		if (pp_peer == NULL)
 			goto end;
@@ -1128,38 +1133,58 @@ set_proposal_from_proposal(iph2)
 		pp0->lifebyte = iph2->sainfo->lifebyte;
 		pp0->pfs_group = iph2->sainfo->pfs_group;
 
+
 		if (pp_peer->next != NULL) {
 			plog(LLV_ERROR, LOCATION, NULL,
 				"pp_peer is inconsistency, ignore it.\n");
 			/*FALLTHROUGH*/
 		}
 
-		for (pr = pp_peer->head; pr; pr = pr->next) { 
+		for (pr = pp_peer->head; pr; pr = pr->next)
+		{
+			struct remoteconf *conf;
 
 			newpr = newsaproto();
-			if (newpr == NULL) {
+			if (newpr == NULL)
+			{
 				plog(LLV_ERROR, LOCATION, NULL,
-				    "failed to allocate saproto.\n");
+					"failed to allocate saproto.\n");
 				goto end;
 			}
 			newpr->proto_id = pr->proto_id;
 			newpr->spisize = pr->spisize;
 			newpr->encmode = pr->encmode;
 			newpr->spi = 0;
-			newpr->spi_p = pr->spi;	/* copy peer's SPI */
+			newpr->spi_p = pr->spi;     /* copy peer's SPI */
 			newpr->reqid_in = 0;
 			newpr->reqid_out = 0;
+
+			conf = getrmconf(iph2->dst);
+			if (conf != NULL &&
+				conf->gen_policy == GENERATE_POLICY_UNIQUE){
+				newpr->reqid_in = g_nextreqid ;
+				newpr->reqid_out = g_nextreqid ++;
+				/* XXX there is a (very limited) risk of reusing the same reqid
+				 * as another SP entry for the same peer
+				 */
+				if(g_nextreqid >= IPSEC_MANUAL_REQID_MAX)
+					g_nextreqid = 1;
+			}else{
+				newpr->reqid_in = 0;
+				newpr->reqid_out = 0;
+			}
+ 
+			if (set_satrnsbysainfo(newpr, iph2->sainfo) < 0)
+			{
+				plog(LLV_ERROR, LOCATION, NULL,
+					"failed to get algorithms.\n");
+				goto end;
+			}
+			inssaproto(pp0, newpr);
 		}
 
-		if (set_satrnsbysainfo(newpr, iph2->sainfo) < 0) {
-			plog(LLV_ERROR, LOCATION, NULL,
-				"failed to get algorithms.\n");
-			goto end;
-		}
-
-		inssaproto(pp0, newpr);
 		inssaprop(&newpp, pp0);
-	}
+        }
 
 	plog(LLV_DEBUG, LOCATION, NULL, "make a proposal from peer's:\n");
 	printsaprop0(LLV_DEBUG, newpp);  
@@ -1174,18 +1199,7 @@ end:
 
 	if (pp_peer)
 		flushsaprop(pp_peer);
-	free_proppair(pair);
+	if (pair)
+		free_proppair(pair);
 	return error;
-}
-
-int
-tunnel_mode_prop(p)
-	struct saprop *p;
-{
-	struct saproto *pr;
-
-	for (pr = p->head; pr; pr = pr->next)
-		if (pr->encmode == IPSECDOI_ATTR_ENC_MODE_TUNNEL)
-			return 1;
-	return 0;
 }

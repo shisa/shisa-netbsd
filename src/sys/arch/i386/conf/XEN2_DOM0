@@ -1,4 +1,4 @@
-# $NetBSD: XEN2_DOM0,v 1.6 2006/08/26 20:26:45 christos Exp $
+# $NetBSD: XEN2_DOM0,v 1.11 2006/10/05 08:24:32 jnemeth Exp $
 
 include 	"arch/xen/conf/std.xen"
 
@@ -11,10 +11,10 @@ options 	INCLUDE_CONFIG_FILE	# embed config file in kernel binary
 maxusers	32		# estimated number of users
 
 #
-options  	XEN
+options 	XEN
 options 	DOM0OPS
-#making MCLBYTES == PAGE_SIZE avoids a copy when a mbuf cluster is sent
-# do a domU, at the expense of a highter memory usage by the network stack.
+# making MCLBYTES = PAGE_SIZE avoids a copy when a mbuf cluster is sent
+# to a domU, at the expense of a higher memory usage by the network stack.
 #options 	MCLSHIFT=12
 
 options 	I686_CPU
@@ -190,6 +190,9 @@ mainbus0 at root
 
 cpu* at mainbus?
 
+# IPMI support
+#ipmi0		at mainbus?
+
 hypervisor*	at mainbus?		# Xen hypervisor
 
 npx0		at hypervisor?		# x86 math coprocessor
@@ -275,6 +278,8 @@ ipw*	at pci? dev ? function ?	# Intel PRO/Wireless 2100
 iwi*	at pci? dev ? function ?	# Intel PRO/Wireless 2200BG
 le*	at pci? dev ? function ?	# PCnet-PCI Ethernet
 lmc*	at pci? dev ? function ?	# Lan Media Corp SSI/HSSI/DS3
+mskc*	at pci? dev ? function ?	# Marvell Yukon 2 Gigabit Ethernet
+msk*	at mskc?			# Marvell Yukon 2 Gigabit Ethernet
 mtd*	at pci? dev ? function ?	# Myson MTD803 3-in-1 Ethernet
 ne*	at pci? dev ? function ?	# NE2000-compatible Ethernet
 nfe*	at pci?	dev ? function ?	# NVIDIA nForce Ethernet
@@ -703,5 +708,5 @@ pseudo-device	nsmb			# experimental - SMB requester
 pseudo-device	wsmux			# mouse & keyboard multiplexor
 pseudo-device	wsfont
 
-#xen pseudo-devices
+# xen pseudo-devices
 pseudo-device	xenevt

@@ -1,4 +1,4 @@
-/*	$NetBSD: show.c,v 1.2 2006/06/09 16:39:11 christos Exp $	*/
+/*	$NetBSD: show.c,v 1.5 2006/10/03 08:30:12 mlelstv Exp $	*/
 /*	$OpenBSD: show.c,v 1.1 2006/05/27 19:16:37 claudio Exp $	*/
 
 /*
@@ -253,14 +253,16 @@ p_rtentry(struct rt_msghdr *rtm)
 	p_sockaddr(rti_info[RTAX_GATEWAY], NULL, RTF_HOST,
 	    WID_GW(sa->sa_family));
 	p_flags(rtm->rtm_flags, "%-6.6s ");
-#ifdef notyet /* XXX elad */
+#ifdef notyet /* XXX: elad */
 	printf("%6d %8ld ", (int)rtm->rtm_rmx.rmx_refcnt,
 	    rtm->rtm_rmx.rmx_pksent);
+#else
+	printf("%6s %8s ", "-", "-");
 #endif
 	if (rtm->rtm_rmx.rmx_mtu)
-		printf("%6ld ", rtm->rtm_rmx.rmx_mtu);
+		printf("%6ld", rtm->rtm_rmx.rmx_mtu);
 	else
-		printf("%6s ", "-");
+		printf("%6s", "-");
 	putchar((rtm->rtm_rmx.rmx_locks & RTV_MTU) ? 'L' : ' ');
 	printf(" %.16s", if_indextoname(rtm->rtm_index, ifbuf));
 	putchar('\n');
@@ -534,8 +536,10 @@ netname6(struct sockaddr_in6 *sa6, struct sockaddr_in6 *mask)
 	masklen = 0;
 	if (mask) {
 		lim = mask->sin6_len - offsetof(struct sockaddr_in6, sin6_addr);
-		lim = lim < sizeof(struct in6_addr) ?
-		    lim : sizeof(struct in6_addr);
+		if (lim < 0)
+			lim = 0;
+		else if (lim > sizeof(struct in6_addr))
+			lim = sizeof(struct in6_addr);
 		for (p = (u_char *)&mask->sin6_addr, i = 0; i < lim; p++) {
 			if (final && *p) {
 				illegal++;
@@ -672,9 +676,7 @@ link_print(struct sockaddr *sa)
 	}
 	switch (sdl->sdl_type) {
 	case IFT_ETHER:
-#ifdef notyet /* XXX elad */
 	case IFT_CARP:
-#endif
 		return (ether_ntoa((struct ether_addr *)lla));
 	default:
 		return (link_ntoa(sdl));

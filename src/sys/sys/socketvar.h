@@ -1,4 +1,4 @@
-/*	$NetBSD: socketvar.h,v 1.89 2006/08/16 18:17:23 plunky Exp $	*/
+/*	$NetBSD: socketvar.h,v 1.91 2006/10/03 11:15:03 elad Exp $	*/
 
 /*-
  * Copyright (c) 1982, 1986, 1990, 1993

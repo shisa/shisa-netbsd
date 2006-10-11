@@ -1,4 +1,4 @@
-/*	$NetBSD: route.c,v 1.100 2006/08/26 15:26:02 matt Exp $	*/
+/*	$NetBSD: route.c,v 1.104 2006/09/23 22:41:25 dyoung Exp $	*/
 
 /*
  * Copyright (c) 1983, 1989, 1991, 1993
@@ -39,7 +39,7 @@ __COPYRIGHT("@(#) Copyright (c) 1983, 1989, 1991, 1993\n\
 #if 0
 static char sccsid[] = "@(#)route.c	8.6 (Berkeley) 4/28/95";
 #else
-__RCSID("$NetBSD: route.c,v 1.100 2006/08/26 15:26:02 matt Exp $");
+__RCSID("$NetBSD: route.c,v 1.104 2006/09/23 22:41:25 dyoung Exp $");
 #endif
 #endif /* not lint */
 
@@ -243,45 +243,17 @@ main(int argc, char **argv)
 static int
 flushroutes(int argc, char *argv[], int doall)
 {
+	struct sockaddr *sa;
 	size_t needed;
-	int mib[6], rlen, seqno;
+	int flags, mib[6], rlen, seqno;
 	char *buf, *next, *lim;
+	const char *afname;
 	struct rt_msghdr *rtm;
 
-	af = 0;
+	flags = 0;
+	af = AF_UNSPEC;
 	shutdown(sock, SHUT_RD); /* Don't want to read back our messages */
-	if (argc > 1) {
-		argv++;
-		if (argc == 2 && **argv == '-') {
-			switch (keyword(*argv + 1)) {
-			case K_INET:
-				af = AF_INET;
-				break;
-#ifdef INET6
-			case K_INET6:
-				af = AF_INET6;
-				break;
-#endif
-#ifndef SMALL
-			case K_ATALK:
-				af = AF_APPLETALK;
-				break;
-#endif /* SMALL */
-			case K_LINK:
-				af = AF_LINK;
-				break;
-#ifndef SMALL
-			case K_ISO:
-			case K_OSI:
-				af = AF_ISO;
-				break;
-#endif /* SMALL */
-			default:
-				goto bad;
-			}
-		} else
-bad:			usage(*argv);
-	}
+	parse_show_opts(argc, argv, &af, &flags, &afname, 0);
 	mib[0] = CTL_NET;
 	mib[1] = PF_ROUTE;
 	mib[2] = 0;		/* protocol */
@@ -300,25 +272,24 @@ bad:			usage(*argv);
 	}
 	if (verbose) {
 		(void)printf("Examining routing table from sysctl\n");
-		if (af)
-			printf("(address family %s)\n", (*argv + 1));
+		if (af != AF_UNSPEC)
+			printf("(address family %s)\n", afname);
 	}
 	if (needed == 0)
 		return 0;
 	seqno = 0;		/* ??? */
 	for (next = buf; next < lim; next += rtm->rtm_msglen) {
 		rtm = (struct rt_msghdr *)next;
+		sa = (struct sockaddr *)(rtm + 1);
 		if (verbose)
 			print_rtmsg(rtm, rtm->rtm_msglen);
+		if ((rtm->rtm_flags & flags) != flags)
+			continue;
 		if (!(rtm->rtm_flags & (RTF_GATEWAY | RTF_STATIC |
 					RTF_LLINFO)) && !doall)
 			continue;
-		if (af) {
-			struct sockaddr *sa = (struct sockaddr *)(rtm + 1);
-
-			if (sa->sa_family != af)
-				continue;
-		}
+		if (af != AF_UNSPEC && sa->sa_family != af)
+			continue;
 		if (debugonly)
 			continue;
 		rtm->rtm_type = RTM_DELETE;
@@ -338,10 +309,10 @@ bad:			usage(*argv);
 		if (verbose)
 			print_rtmsg(rtm, rlen);
 		else {
-			struct sockaddr *sa = (struct sockaddr *)(rtm + 1);
 			(void)printf("%-20.20s ",
 			    routename(sa, NULL, rtm->rtm_flags));
-			sa = (struct sockaddr *)(ROUNDUP(sa->sa_len) + (char *)sa);
+			sa = (struct sockaddr *)(ROUNDUP(sa->sa_len) +
+			    (char *)sa);
 			(void)printf("%-20.20s ",
 			    routename(sa, NULL, RTF_HOST));
 			(void)printf("done\n");
@@ -673,22 +644,6 @@ netname(struct sockaddr *sa, struct sockaddr *nm)
 		if (cp)
 			(void)strlcpy(line, cp, sizeof(line));
 		else {
-#if 0	/* XXX - This is silly... */
-#define C(x)	((x) & 0xff)
-			if ((i & 0xffffff) == 0)
-				(void)snprintf(line, sizeof line, "%u",
-				    C(i >> 24));
-			else if ((i & 0xffff) == 0)
-				(void)snprintf(line, sizeof line, "%u.%u",
-				    C(i >> 24), C(i >> 16));
-			else if ((i & 0xff) == 0)
-				(void)snprintf(line, sizeof line, "%u.%u.%u",
-				    C(i >> 24), C(i >> 16), C(i >> 8));
-			else
-				(void)snprintf(line, sizeof line, "%u.%u.%u.%u",
-				    C(i >> 24), C(i >> 16), C(i >> 8), C(i));
-#undef C
-#else /* XXX */
 			if (nml == 0)
 				strlcpy(line, inet_ntoa(in), sizeof(line));
 			else if (nml < 0) {
@@ -699,7 +654,6 @@ netname(struct sockaddr *sa, struct sockaddr *nm)
 				snprintf(line, sizeof(line), "%s/%d",
 				    inet_ntoa(in), nml);
 			}
-#endif /* XXX */
 		}
 		break;
 
@@ -816,7 +770,7 @@ newroute(int argc, char **argv)
 	struct hostent *hp = 0;
 
 	cmd = argv[0];
-	af = 0;
+	af = AF_UNSPEC;
 	if (*cmd != 'g')
 		shutdown(sock, SHUT_RD); /* Don't want to read back our messages */
 	while (--argc > 0) {
@@ -1144,7 +1098,7 @@ getaddr(int which, char *s, struct hostent **hpp)
 	char *t;
 	int afamily;  /* local copy of af so we can change it */
 
-	if (af == 0) {
+	if (af == AF_UNSPEC) {
 		af = AF_INET;
 		aflen = sizeof(struct sockaddr_in);
 	}

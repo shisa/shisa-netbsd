@@ -1,4 +1,4 @@
-/*	$NetBSD: prop_object_impl.h,v 1.4 2006/08/21 04:13:28 thorpej Exp $	*/
+/*	$NetBSD: prop_object_impl.h,v 1.7 2006/10/04 09:43:45 dbj Exp $	*/
 
 /*-
  * Copyright (c) 2006 The NetBSD Foundation, Inc.
@@ -38,6 +38,12 @@
 
 #ifndef _PROPLIB_PROP_OBJECT_IMPL_H_
 #define	_PROPLIB_PROP_OBJECT_IMPL_H_
+
+#if defined(_KERNEL) || defined(_STANDALONE)
+#include <lib/libkern/libkern.h>
+#else
+#include <inttypes.h>
+#endif
 
 struct _prop_object_externalize_context {
 	char *		poec_buf;		/* string buffer */
@@ -193,6 +199,7 @@ struct _prop_object_iterator {
  * proplib in the kernel...
  */
 
+#include <sys/param.h>
 #include <sys/malloc.h>
 #include <sys/pool.h>
 #include <sys/systm.h>
@@ -214,10 +221,17 @@ struct _prop_object_iterator {
 #define	_PROP_MALLOC_DEFINE(t, s, l)					\
 		MALLOC_DEFINE(t, s, l);
 
-#define	_PROP_MUTEX_DECL(x)						\
+#define	_PROP_MUTEX_DECL_STATIC(x)					\
 		static struct simplelock x = SIMPLELOCK_INITIALIZER;
 #define	_PROP_MUTEX_LOCK(x)	simple_lock(&(x))
 #define	_PROP_MUTEX_UNLOCK(x)	simple_unlock(&(x))
+
+#define	_PROP_RWLOCK_DECL(x)	struct lock x ;
+#define	_PROP_RWLOCK_INIT(x)	lockinit(&(x), PZERO, "proprwlk", 0, 0)
+#define	_PROP_RWLOCK_RDLOCK(x)	lockmgr(&(x), LK_SHARED, NULL)
+#define	_PROP_RWLOCK_WRLOCK(x)	lockmgr(&(x), LK_EXCLUSIVE, NULL)
+#define	_PROP_RWLOCK_UNLOCK(x)	lockmgr(&(x), LK_RELEASE, NULL)
+#define	_PROP_RWLOCK_DESTROY(x)	lockmgr(&(x), LK_DRAIN, NULL)
 
 #elif defined(_STANDALONE)
 
@@ -226,7 +240,6 @@ struct _prop_object_iterator {
  */
 
 #include <lib/libsa/stand.h>
-#include <lib/libkern/libkern.h>
 
 void *		_prop_standalone_calloc(size_t);
 void *		_prop_standalone_realloc(void *, size_t);
@@ -245,9 +258,16 @@ void *		_prop_standalone_realloc(void *, size_t);
 
 #define	_PROP_MALLOC_DEFINE(t, s, l)	/* nothing */
 
-#define	_PROP_MUTEX_DECL(x)	/* nothing */
-#define	_PROP_MUTEX_LOCK(x)	/* nothing */
-#define	_PROP_MUTEX_UNLOCK(x)	/* nothing */
+#define	_PROP_MUTEX_DECL_STATIC(x)	/* nothing */
+#define	_PROP_MUTEX_LOCK(x)		/* nothing */
+#define	_PROP_MUTEX_UNLOCK(x)		/* nothing */
+
+#define	_PROP_RWLOCK_DECL(x)	/* nothing */
+#define	_PROP_RWLOCK_INIT(x)	/* nothing */
+#define	_PROP_RWLOCK_RDLOCK(x)	/* nothing */
+#define	_PROP_RWLOCK_WRLOCK(x)	/* nothing */
+#define	_PROP_RWLOCK_UNLOCK(x)	/* nothing */
+#define	_PROP_RWLOCK_DESTROY(x)	/* nothing */
 
 #else
 
@@ -259,6 +279,7 @@ void *		_prop_standalone_realloc(void *, size_t);
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stddef.h>
 
 #define	_PROP_ASSERT(x)		assert(x)
 
@@ -280,25 +301,46 @@ void *		_prop_standalone_realloc(void *, size_t);
  * programs and do-nothing stubs for non-threaded programs.
  */
 #include "reentrant.h"
-#define	_PROP_MUTEX_DECL(x)	static mutex_t x = MUTEX_INITIALIZER;
-#define	_PROP_MUTEX_LOCK(x)	mutex_lock(&(x))
-#define	_PROP_MUTEX_UNLOCK(x)	mutex_unlock(&(x))
+#define	_PROP_MUTEX_DECL_STATIC(x)	static mutex_t x = MUTEX_INITIALIZER;
+#define	_PROP_MUTEX_LOCK(x)		mutex_lock(&(x))
+#define	_PROP_MUTEX_UNLOCK(x)		mutex_unlock(&(x))
+
+#define	_PROP_RWLOCK_DECL(x)	rwlock_t x ;
+#define	_PROP_RWLOCK_INIT(x)	rwlock_init(&(x), NULL)
+#define	_PROP_RWLOCK_RDLOCK(x)	rwlock_rdlock(&(x))
+#define	_PROP_RWLOCK_WRLOCK(x)	rwlock_wrlock(&(x))
+#define	_PROP_RWLOCK_UNLOCK(x)	rwlock_unlock(&(x))
+#define	_PROP_RWLOCK_DESTROY(x)	rwlock_destroy(&(x))
 #elif defined(HAVE_NBTOOL_CONFIG_H)
 /*
  * None of NetBSD's build tools are multi-threaded.
  */
-#define	_PROP_MUTEX_DECL(x)	/* nothing */
-#define	_PROP_MUTEX_LOCK(x)	/* nothing */
-#define	_PROP_MUTEX_UNLOCK(x)	/* nothing */
+#define	_PROP_MUTEX_DECL_STATIC(x)	/* nothing */
+#define	_PROP_MUTEX_LOCK(x)		/* nothing */
+#define	_PROP_MUTEX_UNLOCK(x)		/* nothing */
+
+#define	_PROP_RWLOCK_DECL(x)	/* nothing */
+#define	_PROP_RWLOCK_INIT(x)	/* nothing */
+#define	_PROP_RWLOCK_RDLOCK(x)	/* nothing */
+#define	_PROP_RWLOCK_WRLOCK(x)	/* nothing */
+#define	_PROP_RWLOCK_UNLOCK(x)	/* nothing */
+#define	_PROP_RWLOCK_DESTROY(x)	/* nothing */
 #else
 /*
  * Use pthread mutexes everywhere else.
  */
 #include <pthread.h>
-#define	_PROP_MUTEX_DECL(x)						\
+#define	_PROP_MUTEX_DECL_STATIC(x)					\
 		static pthread_mutex_t x = PTHREAD_MUTEX_INITIALIZER;
 #define	_PROP_MUTEX_LOCK(x)	pthread_mutex_lock(&(x))
 #define	_PROP_MUTEX_UNLOCK(x)	pthread_mutex_unlock(&(x))
+
+#define	_PROP_RWLOCK_DECL(x)	pthread_rwlock_t x ;
+#define	_PROP_RWLOCK_INIT(x)	pthread_rwlock_init(&(x), NULL)
+#define	_PROP_RWLOCK_RDLOCK(x)	pthread_rwlock_rdlock(&(x))
+#define	_PROP_RWLOCK_WRLOCK(x)	pthread_rwlock_wrlock(&(x))
+#define	_PROP_RWLOCK_UNLOCK(x)	pthread_rwlock_unlock(&(x))
+#define	_PROP_RWLOCK_DESTROY(x)	pthread_rwlock_destroy(&(x))
 #endif
 
 #endif /* _KERNEL */

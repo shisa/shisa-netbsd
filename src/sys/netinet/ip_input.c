@@ -1,4 +1,4 @@
-/*	$NetBSD: ip_input.c,v 1.229 2006/08/30 18:55:09 christos Exp $	*/
+/*	$NetBSD: ip_input.c,v 1.233 2006/10/05 17:35:19 tls Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -98,7 +98,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ip_input.c,v 1.229 2006/08/30 18:55:09 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ip_input.c,v 1.233 2006/10/05 17:35:19 tls Exp $");
 
 #include "opt_inet.h"
 #include "opt_gateway.h"
@@ -121,6 +121,7 @@ __KERNEL_RCSID(0, "$NetBSD: ip_input.c,v 1.229 2006/08/30 18:55:09 christos Exp 
 #include <sys/kernel.h>
 #include <sys/pool.h>
 #include <sys/sysctl.h>
+#include <sys/kauth.h>
 
 #include <net/if.h>
 #include <net/if_dl.h>
@@ -487,12 +488,13 @@ ip_input(struct mbuf *m)
 	int downmatch;
 	int checkif;
 	int srcrt = 0;
+	int s;
 	u_int hash;
 #ifdef FAST_IPSEC
 	struct m_tag *mtag;
 	struct tdb_ident *tdbi;
 	struct secpolicy *sp;
-	int s, error;
+	int error;
 #endif /* FAST_IPSEC */
 
 	MCLAIM(m, &ip_rx_mowner);
@@ -941,7 +943,9 @@ found:
 		 */
 		if (mff || ip->ip_off != htons(0)) {
 			ipstat.ips_fragments++;
+			s = splvm();
 			ipqe = pool_get(&ipqent_pool, PR_NOWAIT);
+			splx(s);
 			if (ipqe == NULL) {
 				ipstat.ips_rcvmemdrop++;
 				IPQ_UNLOCK();
@@ -1054,7 +1058,7 @@ ip_reass(struct ipqent *ipqe, struct ipq *fp, struct ipqhead *ipqhead)
 	struct ip *ip;
 	struct mbuf *t;
 	int hlen = ipqe->ipqe_ip->ip_hl << 2;
-	int i, next;
+	int i, next, s;
 
 	IPQ_LOCK_CHECK();
 
@@ -1159,7 +1163,9 @@ ip_reass(struct ipqent *ipqe, struct ipq *fp, struct ipqhead *ipqhead)
 		nq = TAILQ_NEXT(q, ipqe_q);
 		m_freem(q->ipqe_m);
 		TAILQ_REMOVE(&fp->ipq_fragq, q, ipqe_q);
+		s = splvm();
 		pool_put(&ipqent_pool, q);
+		splx(s);
 		fp->ipq_nfrags--;
 		ip_nfrags--;
 	}
@@ -1200,11 +1206,15 @@ insert:
 	m->m_next = 0;
 	m_cat(m, t);
 	nq = TAILQ_NEXT(q, ipqe_q);
+	s = splvm();
 	pool_put(&ipqent_pool, q);
+	splx(s);
 	for (q = nq; q != NULL; q = nq) {
 		t = q->ipqe_m;
 		nq = TAILQ_NEXT(q, ipqe_q);
+		s = splvm();
 		pool_put(&ipqent_pool, q);
+		splx(s);
 		m_cat(m, t);
 	}
 	ip_nfrags -= fp->ipq_nfrags;
@@ -1239,7 +1249,9 @@ dropfrag:
 	ip_nfrags--;
 	ipstat.ips_fragdropped++;
 	m_freem(m);
+	s = splvm();
 	pool_put(&ipqent_pool, ipqe);
+	splx(s);
 	return (0);
 }
 
@@ -1252,6 +1264,7 @@ ip_freef(struct ipq *fp)
 {
 	struct ipqent *q, *p;
 	u_int nfrags = 0;
+	int s;
 
 	IPQ_LOCK_CHECK();
 
@@ -1260,7 +1273,9 @@ ip_freef(struct ipq *fp)
 		m_freem(q->ipqe_m);
 		nfrags++;
 		TAILQ_REMOVE(&fp->ipq_fragq, q, ipqe_q);
+		s = splvm();
 		pool_put(&ipqent_pool, q);
+		splx(s);
 	}
 
 	if (nfrags != fp->ipq_nfrags)
@@ -2111,7 +2126,8 @@ sysctl_net_inet_ip_forwsrcrt(SYSCTLFN_ARGS)
 	if (error || newp == NULL)
 		return (error);
 
-	if (securelevel > 0)
+	if (kauth_authorize_network(l->l_cred, KAUTH_NETWORK_FORWSRCRT,
+	    0, NULL, NULL, NULL))
 		return (EPERM);
 
 	ip_forwsrcrt = tmp;

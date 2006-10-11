@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_lkm.c,v 1.90 2006/07/05 14:31:00 drochner Exp $	*/
+/*	$NetBSD: kern_lkm.c,v 1.93 2006/09/13 10:07:42 elad Exp $	*/
 
 /*
  * Copyright (c) 1994 Christopher G. Demetriou
@@ -41,7 +41,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_lkm.c,v 1.90 2006/07/05 14:31:00 drochner Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_lkm.c,v 1.93 2006/09/13 10:07:42 elad Exp $");
 
 #include "opt_ddb.h"
 #include "opt_malloclog.h"
@@ -64,6 +64,7 @@ __KERNEL_RCSID(0, "$NetBSD: kern_lkm.c,v 1.90 2006/07/05 14:31:00 drochner Exp $
 #include <sys/ksyms.h>
 #include <sys/device.h>
 #include <sys/once.h>
+#include <sys/kauth.h>
 
 #include <sys/lkm.h>
 #include <sys/syscall.h>
@@ -128,7 +129,7 @@ dev_type_ioctl(lkmioctl);
 
 const struct cdevsw lkm_cdevsw = {
 	lkmopen, lkmclose, noread, nowrite, lkmioctl,
-	nostop, notty, nopoll, nommap, nokqfilter,
+	nostop, notty, nopoll, nommap, nokqfilter, D_OTHER,
 };
 
 static ONCE_DECL(lkm_init_once);
@@ -343,7 +344,8 @@ lkmioctl(dev_t dev, u_long cmd, caddr_t data, int flag, struct lwp *l)
 
 	switch(cmd) {
 	case LMRESERV:		/* reserve pages for a module */
-		if (securelevel > 0)
+		if (kauth_authorize_system(l->l_cred, KAUTH_SYSTEM_LKM,
+		    0, (void *)cmd, NULL, NULL))
 			return EPERM;
 
 		if ((flag & FWRITE) == 0) /* only allow this if writing */
@@ -394,7 +396,8 @@ lkmioctl(dev_t dev, u_long cmd, caddr_t data, int flag, struct lwp *l)
 		break;
 
 	case LMLOADBUF:		/* Copy in; stateful, follows LMRESERV */
-		if (securelevel > 0)
+		if (kauth_authorize_system(l->l_cred, KAUTH_SYSTEM_LKM,
+		    0, (void *)cmd, NULL, NULL))
 			return EPERM;
 
 		if ((flag & FWRITE) == 0) /* only allow this if writing */
@@ -462,7 +465,8 @@ lkmioctl(dev_t dev, u_long cmd, caddr_t data, int flag, struct lwp *l)
 		break;
 
 	case LMUNRESRV:		/* discard reserved pages for a module */
-		if (securelevel > 0)
+		if (kauth_authorize_system(l->l_cred, KAUTH_SYSTEM_LKM,
+		    0, (void *)cmd, NULL, NULL))
 			return EPERM;
 
 		if ((flag & FWRITE) == 0) /* only allow this if writing */
@@ -478,7 +482,8 @@ lkmioctl(dev_t dev, u_long cmd, caddr_t data, int flag, struct lwp *l)
 		break;
 
 	case LMREADY:		/* module loaded: call entry */
-		if (securelevel > 0)
+		if (kauth_authorize_system(l->l_cred, KAUTH_SYSTEM_LKM,
+		    0, (void *)cmd, NULL, NULL))
 			return EPERM;
 
 		if ((flag & FWRITE) == 0) /* only allow this if writing */
@@ -567,7 +572,8 @@ lkmioctl(dev_t dev, u_long cmd, caddr_t data, int flag, struct lwp *l)
 		break;
 
 	case LMUNLOAD:		/* unload a module */
-		if (securelevel > 0)
+		if (kauth_authorize_system(l->l_cred, KAUTH_SYSTEM_LKM,
+		    0, (void *)cmd, NULL, NULL))
 			return EPERM;
 
 		if ((flag & FWRITE) == 0) /* only allow this if writing */
@@ -620,7 +626,8 @@ lkmioctl(dev_t dev, u_long cmd, caddr_t data, int flag, struct lwp *l)
 
 #ifdef LMFORCE
 	case LMFORCE:		/* stateful, optionally follows LMRESERV */
-		if (securelevel > 0)
+		if (kauth_authorize_system(l->l_cred, KAUTH_SYSTEM_LKM,
+		    0, (void *)cmd, NULL, NULL))
 			return EPERM;
 
 		if ((flag & FWRITE) == 0) /* only allow this if writing */

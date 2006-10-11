@@ -1,4 +1,4 @@
-LIST OF CHANGES FROM LAST RELEASE:			<$Revision: 1.671 $>
+LIST OF CHANGES FROM LAST RELEASE:			<$Revision: 1.724 $>
 
 
 [Note: This file does not mention every change made to the NetBSD source tree.
@@ -26,5 +26,85 @@ Changes from NetBSD 4.0 to NetBSD 5.0:
 	mips64: Preliminary support for a MIPS64 toolchain using the N64
 		ABI. [matt 20060825]
 	postfix: Updated to 2.3.3 [rpaulo 20060827]
-	ndis(4): Ported FreeBSD's NDIS Wrapper.  See ndiscvt(8) for more 
-		information [rittera 20060831]
+	landisk: Initial import of landisk port for SuperH based
+		network storage appliances by I-O DATA.  The port was
+		done by NONAKA Kimihiro <nonaka@NetBSD.org>.
+		[uwe 20060901]
+	evbmips: Add timecounter support. [gdamore 20060901]
+	todr(9): New machine independent time-of-day chip framework for
+		drivers, which provides uniform handling across all ports.
+		Not all ports have adopted it yet.  [gdamore 20060902]
+	sun2: Add timecounter support. [gdamore 20060903]
+	gcc(1): Switch sh5 to GCC4. [scw 20060904]
+	tcp: Add support for Explicit Congestion Notification as defined
+		in RFC 3168. Sponsored by Google SoC. [rpaulo 20060905]
+	prep: Convert prep to MI todr(9) driver. [garbled 20060905]
+	sun3: Add timecounter support. [gdamore 20060905]
+	cesfic: Add timecounter support. [gdamore 20060906]
+	prep: Add support for the IBM 7025-F40. [garbled 20060907]
+	lockstat(8): Add the lockstat command: displays a summary of kernel
+		locking events recorded over the lifetime of a called program.
+		[ad 20060907]
+	cobalt: Add timecounter support. [gdamore 20060907]
+	njata(4): Add driver for Workbit NinjaATA-32 busmastering PIO IDE
+		controller. [itohy 20060907]
+	ews4800mips: Add timecounter support. [gdamore 20060909]
+	arc: Add timecounter support. [gdamore 20060909]
+	news68k: Add timecounter support. From gdamore. [tsutsui 20060909]
+	msk(4): Driver for Marvell Yukon 2 Gigabit Ethernet. [riz 20060909]
+	evbsh5: Add timecounter support.  [gdamore 20060909]
+	hp300: Add timecounter support.  [tsutsui 20060909]
+	ipsec-tools: ipsec-tools CVS is now part of NetBSD. [manu 20060909]
+	iyonix: Add timecounter support.  [gdamore 20060910]
+	next68k: Add timecounter support.  [gdamore 20060911]
+	cats: Add timecounter support.  [gdamore 20060911]
+	netwinder: Add timecounter support.  [gdamore 20060911]
+	shark: Add timecounter support.  [gdamore 20060913]
+	newsmips: Add timecounter support. From gdamore. [tsutsui 20060913]
+	luna68k: Add timecounter support.  [gdamore 20060914]
+	mipsco: Add timecounter support.  [gdamore 20060915]
+	hpcmips: Add timecounter support.  [gdamore 20060915]
+	sgimips: Add timecounter support.  [gdamore 20060916]
+	veriexec: Add veriexecgen(8), a tool for easy and fast generation
+		  of Veriexec fingerprint files. [elad 20060916]
+	gcc(1): Switch m68k to GCC4 [tsutsui 20060917]
+	gcc(1): Switch mips to GCC4 [simonb 20060919]
+	x68k: Add timecounter support.  [gdamore 20060919]
+	who(1): Change -u behaviour to also print PID of process on 
+		terminal, and add -d to print more information from
+		utmpx. [hubertf 20060919]
+	init(8): Add system boot, login process, runlevel, system down
+		utmpx records [christos 20060919]
+	gcc(1): Switch hppa to GCC4. [skrll 20060922]
+	cdplay(1): Add digital transfer mode support, not enabled by
+		default. Thanks to Sergey Svishchev for the patch.
+		[xtraeme 20060922]
+	wscons: Add fr_CA.iso8859-1 keyboard mapping support. Thanks to
+		Matthew Mondor for the patch. [jmcneill 20060922]
+	sh3: Add timecounter support to all sh3 ports. From gdamore with
+		some fixes by me. [tsutsui 20060924]
+	kernel: Modify powerhook_establish(9) API to accept a name
+		argument. [jmcneill 20060924]
+	twa(4): 3ware's tw_cli management tools now works [manu 20060924]
+	csplit(1): Added from FreeBSD/OpenBSD [christos 20060925]
+	evbmips: Add AR5315/2315 support, specifically the Meraki Mini,
+		which can be found at http://www.meraki.net/
+		[gdamore 20060925]
+	ssh: Import openssh-4.4 [christos 20060928]
+	macppc: add timecounter support [macallan 20060929]
+	ofctl(8): initial import, formerly known as ofdump2. For macppc,
+		shark, sparc64.
+		Written by Matt Thomas. [macallan 20060929]
+	pcictl(8): Add "list -n" to print ID and class numerical, instead
+		of resolving to strings [hubertf 20061001]
+	sun3: Add initial bus_space(9) support. [tsutsui 20061001]
+	sec(4): New driver for Acorn SCSI Expansion Card, intended to replace
+		acorn32 asc(4).  [bjh21 20061001]
+	ipmi(4): added driver from OpenBSD [bouyer 20061001]
+	spi(4): initial import of new machine-independent SPI bus framework,
+		including a sample driver for the TI TMP121 sensor.
+		[gdamore 20061002]
+	sun3: Add MI softintr(9) support by shared sources with sun2 port.
+		[tsutsui 20061005]
+	sparc64: Add floppy support based on sparc driver and hints from
+		from OpenBSD for sbus/ebus attachment.  [jnemeth 20061006]

@@ -1,4 +1,4 @@
-.\" $NetBSD: kauth.9,v 1.11 2006/08/14 13:59:30 ad Exp $
+.\" $NetBSD: kauth.9,v 1.19 2006/10/03 02:06:28 wiz Exp $
 .\"
 .\" Copyright (c) 2005, 2006 Elad Efrat <elad@NetBSD.org>
 .\" All rights reserved.
@@ -28,7 +28,7 @@
 .\" (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 .\" THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 .\"
-.Dd July 22, 2006
+.Dd September 30, 2006
 .Dt KAUTH 9
 .Os
 .Sh NAME
@@ -51,11 +51,11 @@ and
 .Dq listeners ,
 which will be detailed together with other useful information for kernel
 developers in this document.
-.Sh TYPES
+.Ss Types
 Some
 .Nm
 types include the following:
-.Bl -tag -width "123456"
+.Bl -tag
 .It kauth_cred_t
 Representing credentials that can be associated with an object.
 Includes user- and group-ids (real, effective, and save) as well as group
@@ -128,19 +128,13 @@ The authorization wrapper for this scope is declared as
 "void *arg0"
 .Pp
 The following operations are available for this scope:
-.Bl -tag -width "123456"
+.Bl -tag
 .It Dv KAUTH_GENERIC_ISSUSER
 Checks whether the credentials belong to the super-user.
 .Pp
-If
-.Ar arg0
-is not
-.Dv NULL ,
-it's treated as a
-.Ft u_short *
-to accounting flags, and the
-.Dv ACU
-flag is set.
+Using this request is strongly discouraged and should only be done as a
+temporary place-holder, as it is breaking the separation between the
+interface for authorization requests from the back-end implementation.
 .It Dv KAUTH_GENERIC_CANSEE
 Checks whether an object with one set of credentials can access
 information about another object, possibly with a different set of
@@ -152,6 +146,140 @@ contains the credentials of the object looked at.
 This request should be issued only in cases where generic credentials
 check is required; otherwise it is recommended to use the object-specific
 routines.
+.El
+.Ss System Scope
+The system scope,
+.Dq org.netbsd.kauth.system ,
+manages authorization requests affecting the entire system.
+.Pp
+The authorization wrapper for this scope is declared as
+.Pp
+.Ft int Fn kauth_authorize_system "kauth_cred_t cred" \
+"kauth_action_t op" "enum kauth_system_req req" "void *arg1" "void *arg2" \
+"void *arg3"
+.Pp
+The following requests are available for this scope:
+.Bl -tag
+.It Dv KAUTH_SYSTEM_ACCOUNTING
+Check if enabling/disabling accounting allowed.
+.It Dv KAUTH_SYSTEM_CHROOT
+.Ar req
+can be any of the following:
+.Bl -tag
+.It Dv KAUTH_REQ_SYSTEM_CHROOT_CHROOT
+Check if calling
+.Xr chroot 2
+is allowed.
+.It Dv KAUTH_REQ_SYSTEM_CHROOT_FCHROOT
+Check if calling
+.Xr fchroot 2
+is allowed.
+.El
+.It Dv KAUTH_SYSTEM_DEBUG
+This request concentrates several debugging-related operations.
+.Ar req
+can be any of the following:
+.Bl -tag
+.It Dv KAUTH_REQ_SYSTEM_DEBUG_IPKDB
+Check if using
+.Xr ipkdb 4
+is allowed.
+.El
+.It Dv KAUTH_SYSTEM_FILEHANDLE
+Check if filehandle operations allowed.
+.It Dv KAUTH_SYSTEM_LKM
+Check if an LKM request is allowed.
+.Pp
+.Ar arg1
+is the command.
+.It Dv KAUTH_SYSTEM_MKNOD
+Check if creating devices is allowed.
+.It Dv KAUTH_SYSTEM_RAWIO
+This request groups raw access to system resources.
+.Pp
+.Ar req
+indicates what is the underlying resource being access, and can be one of the
+following:
+.Bl -tag
+.It Dv KAUTH_REQ_SYSTEM_RAWIO_DISK
+The underlying resource is a disk.
+.It Dv KAUTH_REQ_SYSTEM_RAWIO_MEMORY
+The underlying resource is the machine memory.
+.El
+.Pp
+.Ar arg1
+indicates the access requested, and can be one of the following:
+.Bl -tag
+.It Dv KAUTH_REQ_SYSTEM_RAWIO_READ
+Read access is requested.
+.It Dv KAUTH_REQ_SYSTEM_RAWIO_RW
+Both read and write access are requested.
+.It Dv KAUTH_REQ_SYSTEM_RAWIO_WRITE
+Write access is requested.
+.El
+.Pp
+If the request is for a disk device,
+.Ar arg2
+should contain a
+.Ft struct vnode *
+for the vnode in question, and
+.Ar arg3
+should contain the device number.
+.Pp
+The behavior if any of the above is not provided is policy-dependent.
+.It Dv KAUTH_SYSTEM_REBOOT
+Check if rebooting is allowed.
+.It Dv KAUTH_SYSTEM_SETIDCORE
+Check if changing coredump settings for set-id processes is allowed.
+.It Dv KAUTH_SYSTEM_SWAPCTL
+Check if privileged
+.Xr swapctl 2
+requests are allowed.
+.It Dv KAUTH_SYSTEM_SYSCTL
+This requests operations related to
+.Xr sysctl 9 .
+.Ar req
+indicates the specific request and can be one of the following:
+.Bl -tag
+.It Dv KAUTH_REQ_SYSTEM_SYSCTL_ADD
+Check if adding a
+.Xr sysctl 9
+node is allowed.
+.It Dv KAUTH_REQ_SYSTEM_SYSCTL_DELETE
+Check if deleting a
+.Xr sysctl 9
+node is allowed.
+.It Dv KAUTH_REQ_SYSTEM_SYSCTL_DESC
+Check if adding description to a
+.Xr sysctl 9
+node is allowed.
+.It Dv KAUTH_REQ_SYSTEM_SYSCTL_PRVT
+Check if accessing private
+.Xr sysctl 9
+nodes is allowed.
+.El
+.It Dv KAUTH_SYSTEM_TIME
+This request groups time-related operations.
+.Ar req
+can be any of the following:
+.Bl -tag
+.It Dv KAUTH_REQ_SYSTEM_TIME_ADJTIME
+Check if changing the time using
+.Xr adjtime 2
+is allowed.
+.It Dv KAUTH_REQ_SYSTEM_TIME_BACKWARDS
+Check if setting the time backwards is allowed.
+.It Dv KAUTH_REQ_SYSTEM_TIME_NTPADJTIME
+Check if setting the time using
+.Xr ntp_adjtime 2
+is allowed.
+.It Dv KAUTH_REQ_SYSTEM_TIME_SYSTEM
+Check if changing the time (usually via
+.Xr settimeofday 2 )
+is allowed.
+.It Dv KAUTH_REQ_SYSTEM_TIME_RTCOFFSET
+Check if changing the RTC offset is allowed.
+.El
 .El
 .Ss Process Scope
 The process scope,
@@ -165,14 +293,7 @@ The authorization wrapper for this scope is declared as
 "void *arg3"
 .Pp
 The following operations are available for this scope:
-.Bl -tag -width "123456"
-.It Dv KAUTH_PROCESS_CANPTRACE
-Checks whether an object with one set of credentials can use
-.Xr ptrace 2
-on another process, possibly with a different set of credentials.
-.Pp
-.Ar arg1
-contains the credentials of the process being attached to.
+.Bl -tag
 .It Dv KAUTH_PROCESS_CANSIGNAL
 Checks whether an object with one set of credentials can post signals
 to another process.
@@ -191,6 +312,184 @@ is the signal to be posted.
 Checks whether an object with one set of credentials can access
 information about another process, possibly with a different set of
 credentials.
+.It Dv KAUTH_PROCESS_CORENAME
+Checks whether the coredump name for the process
+.Ar p
+can be changed.
+.It Dv KAUTH_PROCESS_RESOURCE
+Groups authorization requests related to resource management.
+.Ar arg0
+indicates the sub-action, and can be one of the following:
+.Bl -tag
+.It Dv KAUTH_REQ_PROCESS_RESOURCE_NICE
+Checks whether the
+.Em nice
+value of
+.Ar p
+can be changed to
+.Ar arg2 .
+.It Dv KAUTH_REQ_PROCESS_RESOURCE_RLIMIT
+Checks whether the
+.Em rlimit
+value for
+.Ar arg3
+in
+.Ar p
+can be set to
+.Ar arg2 .
+.El
+.It Dv KAUTH_PROCESS_SETID
+Check if changing the user- or group-ids, groups, or login-name for
+.Ar p
+is allowed.
+.El
+.Ss Network Scope
+The network scope,
+.Dq org.netbsd.kauth.network ,
+manages networking-related authorization requests in the kernel.
+.Pp
+The authorization wrapper for this scope is declared as
+.Pp
+.Ft int Fn kauth_authorize_network "kauth_cred_t cred" "kauth_action_t op" \
+"enum kauth_network_req req" "void *arg1" "void *arg2" "void *arg3"
+.Pp
+The following operations are available for this scope:
+.Bl -tag
+.It Dv KAUTH_NETWORK_ALTQ
+Checks if an ALTQ operation is allowed.
+.Pp
+.Ar req
+indicates the ALTQ subsystem in question, and can be one of the following:
+.Pp
+.Bl -tag -compact
+.It Dv KAUTH_REQ_NETWORK_ALTQ_AFMAP
+.It Dv KAUTH_REQ_NETWORK_ALTQ_BLUE
+.It Dv KAUTH_REQ_NETWORK_ALTQ_CBQ
+.It Dv KAUTH_REQ_NETWORK_ALTQ_CDNR
+.It Dv KAUTH_REQ_NETWORK_ALTQ_CONF
+.It Dv KAUTH_REQ_NETWORK_ALTQ_FIFOQ
+.It Dv KAUTH_REQ_NETWORK_ALTQ_HFSC
+.It Dv KAUTH_REQ_NETWORK_ALTQ_PRIQ
+.It Dv KAUTH_REQ_NETWORK_ALTQ_RED
+.It Dv KAUTH_REQ_NETWORK_ALTQ_RIO
+.It Dv KAUTH_REQ_NETWORK_ALTQ_WFQ
+.El
+.It Dv KAUTH_NETWORK_BIND
+Checks if a
+.Xr bind 2
+request is allowed.
+.Pp
+.Ar req
+allows to indicate the type of the request to structure listeners and callers
+easier.
+Supported request types:
+.Bl -tag
+.It Dv KAUTH_REQ_NETWORK_BIND_PRIVPORT
+Checks if binding to a privileged/reserved port is allowed.
+.El
+.It Dv KAUTH_NETWORK_FIREWALL
+Checks if firewall-related operations are allowed.
+.Pp
+.Ar req
+indicates the sub-action, and can be one of the following:
+.Bl -tag
+.It Dv KAUTH_REQ_NETWORK_FIREWALL_FW
+Modification of packet filtering rules.
+.It Dv KAUTH_REQ_NETWORK_FIREWALL_NAT
+Modification of NAT rules.
+.El
+.It Dv KAUTH_NETWORK_FORWSRCRT
+Checks whether status of forwarding of source-routed packets can be modified
+or not.
+.It Dv KAUTH_NETWORK_ROUTE
+Checks if a routing-related request is allowed.
+.Pp
+.Ar arg1
+is the
+.Ft struct rt_msghdr *
+for the request.
+.It Dv KAUTH_NETWORK_SOCKET
+Checks if a
+.Xr socket 2
+request is allowed.
+.Pp
+.Ar req
+allows to indicate the type of the request to structure listeners and callers
+easier.
+Supported request types:
+.Bl -tag
+.It Dv KAUTH_REQ_NETWORK_SOCKET_RAWSOCK
+Checks if opening a raw socket is allowed.
+.El
+.El
+.Ss Machine-dependent Scope
+The machine-dependent (machdep) scope,
+.Dq org.netbsd.kauth.machdep ,
+manages machine-dependent authorization requests in the kernel.
+.Pp
+The authorization wrapper for this scope is declared as
+.Pp
+.Ft int Fn kauth_authorize_machdep "kauth_cred_t cred" "kauth_action_t op" \
+"enum kauth_machdep_req req" "void *arg1" "void *arg2" "void *arg3"
+.Pp
+In this scope,
+.Ar req
+always indicates the machine for the request.
+Below is the list of available request hierarchy.
+.Bl -tag
+.It Dv KAUTH_MACHDEP_X86
+The request is x86 specific.
+.Pp
+Available requests as
+.Ar arg1
+are:
+.Bl -tag
+.It Dv KAUTH_REQ_MACHDEP_X86_IOPL
+Checks if IOPL is allowed to be modified.
+.It Dv KAUTH_REQ_MACHDEP_X86_IOPERM
+Checks if IOPERM is allowed to be modified.
+.It Dv KAUTH_REQ_MACHDEP_X86_MTRR_SET
+Checks if the MTRR can be set.
+.El
+.It Dv KAUTH_MACHDEP_X86_64
+The request is x86-64 specific.
+.Pp
+Available requests as
+.Ar arg1
+are:
+.Bl -tag
+.It Dv KAUTH_REQ_MACHDEP_X86_64_MTRR_GET
+Check if MTRR values can be retrieved.
+.El
+.El
+.Ss Device Scope
+The device scope,
+.Dq org.netbsd.kauth.device ,
+manages authorization requests related to devices on the system.
+Devices can be, for example, terminals, tape drives, and any other hardware.
+Network devices specifically are handled by the
+.Em network
+scope.
+.Pp
+This scope has an authorization routine per device class on the system.
+.Pp
+.Ft int Fn kauth_authorize_device_tty "kauth_cred_t cred" "kauth_action_t op" \
+"struct tty *tty"
+.Pp
+Authorizes requests for
+.Em terminal devices
+on the system.
+The third argument,
+.Ar tty ,
+is the terminal device in question.
+The second argument is one of the following:
+.Bl -tag
+.It Dv KAUTH_DEVICE_TTY_OPEN
+Open the terminal device pointed to by
+.Ar tty .
+.It Dv KAUTH_DEVICE_TTY_PRIVSET
+Set privileged settings on the terminal device pointed to by
+.Ar tty .
 .El
 .Ss Credentials Accessors and Mutators
 .Nm
@@ -201,7 +500,7 @@ objects.
 The following routines can be used to access and modify the user- and
 group-ids in a
 .Ft kauth_cred_t :
-.Bl -tag -width "123456"
+.Bl -tag
 .It Ft uid_t Fn kauth_cred_getuid "kauth_cred_t cred"
 Returns the real user-id from
 .Ar cred .
@@ -258,7 +557,7 @@ Return the reference count for
 The following routines can be used to access and modify the group
 list in a
 .Ft kauth_cred_t :
-.Bl -tag -width "123456"
+.Bl -tag
 .It Ft int Fn kauth_cred_ismember_gid "kauth_cred_t cred" "gid_t gid" \
 "int *resultp"
 Checks if the group-id
@@ -328,7 +627,7 @@ To prevent freeing a
 .Ft kauth_cred_t
 while it is still referenced, the following routines are available to maintain
 its reference count:
-.Bl -tag -width "123456"
+.Bl -tag
 .It Ft void Fn kauth_cred_hold "kauth_cred_t cred"
 Increases reference count to
 .Ar cred
@@ -351,7 +650,7 @@ subsystem.
 The
 .Ft kauth_cred_t
 objects have their own memory management routines:
-.Bl -tag -width "123456"
+.Bl -tag
 .It Ft kauth_cred_t Fn kauth_cred_alloc "void"
 Allocates a new
 .Ft kauth_cred_t ,
@@ -370,7 +669,7 @@ to a
 .Ft kauth_cred_t .
 .Pp
 The following routines are available for these cases:
-.Bl -tag -width "123456"
+.Bl -tag
 .It Ft void Fn kauth_cred_topcred "kauth_cred_t cred" "struct pcred *pcred"
 Convert a
 .Ft kauth_cred_t
@@ -425,7 +724,7 @@ the group list.
 Other routines provided by
 .Nm
 are:
-.Bl -tag -width "123456"
+.Bl -tag
 .It Ft void Fn kauth_cred_clone "kauth_cred_t cred1" "kauth_cred_t cred2"
 Clone credentials from
 .Ar cred1
@@ -472,7 +771,7 @@ Note that the built-in scopes, the
 scope and the
 .Dq process
 scope, can't be deleted.
-.Bl -tag -width "123456"
+.Bl -tag
 .It Ft kauth_scope_t Fn kauth_register_scope "const char *id" \
 "kauth_scope_callback_t cb" "void *cookie"
 Register a new scope on the system.
@@ -508,7 +807,7 @@ and in a case where all listeners defer the request -- leaving the decision
 for other listeners -- the request is denied.
 .Pp
 The following KPI is provided for the management of listeners:
-.Bl -tag -width "123456"
+.Bl -tag
 .It Ft kauth_listener_t Fn kauth_listen_scope "const char *id" \
 "kauth_scope_callback_t cb" "void *cookie"
 Create a new listener on the scope with the id
@@ -552,7 +851,8 @@ When that happens, it is safe to do the final cleanup.
 Listeners might sleep, so no locks can be held when calling an authorization
 wrapper.
 .\".Sh EXAMPLES
-.\" .Sh SEE ALSO
+.Sh SEE ALSO
+.Xr secmodel 9
 .Sh HISTORY
 The kernel authorization framework first appeared in Mac OS X 10.4.
 .Pp

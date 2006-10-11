@@ -1,4 +1,4 @@
-/*	$NetBSD: if_gre.c,v 1.63 2006/09/01 01:34:05 dyoung Exp $ */
+/*	$NetBSD: if_gre.c,v 1.65 2006/09/07 02:40:33 dogcow Exp $ */
 
 /*
  * Copyright (c) 1998 The NetBSD Foundation, Inc.
@@ -48,11 +48,10 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_gre.c,v 1.63 2006/09/01 01:34:05 dyoung Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_gre.c,v 1.65 2006/09/07 02:40:33 dogcow Exp $");
 
 #include "opt_gre.h"
 #include "opt_inet.h"
-#include "opt_ns.h"
 #include "bpfilter.h"
 
 #ifdef INET
@@ -93,10 +92,6 @@ __KERNEL_RCSID(0, "$NetBSD: if_gre.c,v 1.63 2006/09/01 01:34:05 dyoung Exp $");
 #error "Huh? if_gre without inet?"
 #endif
 
-#ifdef NS
-#include <netns/ns.h>
-#include <netns/ns_if.h>
-#endif
 
 #ifdef NETATALK
 #include <netatalk/at.h>
@@ -199,8 +194,7 @@ gre_clone_create(struct if_clone *ifc, int unit)
 	sc->g_dst.s_addr = sc->g_src.s_addr = INADDR_ANY;
 	sc->g_dstport = sc->g_srcport = 0;
 	sc->g_proto = IPPROTO_GRE;
-	IFQ_SET_READY(&sc->sc_snd);
-	IFQ_SET_MAXLEN(&sc->sc_snd, IFQ_MAXLEN);
+	sc->sc_snd.ifq_maxlen = 256;
 	sc->sc_if.if_flags |= IFF_LINK0;
 	if_attach(&sc->sc_if);
 	if_alloc_sadl(&sc->sc_if);
@@ -481,7 +475,10 @@ out:
 	GRE_DPRINTF(sc, "%s: stopping\n", __func__);
 	if (sc->g_proto == IPPROTO_UDP)
 		ifp->if_flags &= ~IFF_RUNNING;
-	IFQ_PURGE(&sc->sc_snd);
+	while (!IF_IS_EMPTY(&sc->sc_snd)) {
+		IF_DEQUEUE(&sc->sc_snd, m);
+		m_freem(m);
+	}
 	gre_stop(&sc->sc_thread);
 	/* must not touch sc after this! */
 	GRE_DPRINTF(sc, "%s: restore ipl\n", __func__);
@@ -535,15 +532,6 @@ gre_input3(struct gre_softc *sc, struct mbuf *m, int hlen, u_char proto,
 			ifq = &ipintrq;          /* we are in ip_input */
 			isr = NETISR_IP;
 			break;
-#ifdef NS
-		case ETHERTYPE_NS:
-			ifq = &nsintrq;
-			isr = NETISR_NS;
-#if NBPFILTER > 0
-			af = AF_NS;
-#endif
-			break;
-#endif
 #ifdef NETATALK
 		case ETHERTYPE_ATALK:
 			ifq = &atintrq1;
@@ -702,11 +690,6 @@ gre_output(struct ifnet *ifp, struct mbuf *m, struct sockaddr *dst,
 #ifdef NETATALK
 		case AF_APPLETALK:
 			etype = ETHERTYPE_ATALK;
-			break;
-#endif
-#ifdef NS
-		case AF_NS:
-			etype = ETHERTYPE_NS;
 			break;
 #endif
 #ifdef INET6

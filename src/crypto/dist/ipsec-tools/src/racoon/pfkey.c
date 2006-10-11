@@ -1,6 +1,6 @@
-/*	$NetBSD: pfkey.c,v 1.11 2005/11/21 14:20:29 manu Exp $	*/
+/*	$NetBSD: pfkey.c,v 1.16 2006/10/06 12:02:27 manu Exp $	*/
 
-/* Id: pfkey.c,v 1.31.2.10 2005/10/03 14:52:19 manubsd Exp */
+/* $Id: pfkey.c,v 1.16 2006/10/06 12:02:27 manu Exp $ */
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -49,7 +49,8 @@
 # ifdef __linux__
 #  include <linux/udp.h>
 # endif
-# if defined(__NetBSD__) || defined(__FreeBSD__)
+# if defined(__NetBSD__) || defined(__FreeBSD__) ||	\
+  (defined(__APPLE__) && defined(__MACH__))
 #  include <netinet/udp.h>
 # endif
 #endif
@@ -69,6 +70,7 @@
 #else
 #include <netinet6/ipsec.h>
 #endif
+#include <fcntl.h>
 
 #include "libpfkey.h"
 
@@ -82,17 +84,17 @@
 #include "schedule.h"
 #include "localconf.h"
 #include "remoteconf.h"
+#include "handler.h"
+#include "proposal.h"
 #include "isakmp_var.h"
 #include "isakmp.h"
 #include "isakmp_inf.h"
 #include "ipsec_doi.h"
 #include "oakley.h"
 #include "pfkey.h"
-#include "handler.h"
 #include "policy.h"
 #include "algorithm.h"
 #include "sainfo.h"
-#include "proposal.h"
 #include "admin.h"
 #include "privsep.h"
 #include "strnames.h"
@@ -156,7 +158,7 @@ NULL,	/* SADB_X_SPDSETIDX */
 pk_recvspdexpire,
 NULL,	/* SADB_X_SPDDELETE2 */
 NULL,	/* SADB_X_NAT_T_NEW_MAPPING */
-NULL, /* SADB_X_MIGRATE */
+NULL,	/* SADB_X_MIGRATE */
 #if (SADB_MAX > 24)
 #error "SADB extra message?"
 #endif
@@ -318,7 +320,14 @@ pfkey_dump_sadb(satype)
 		}
 
 		if (msg->sadb_msg_type != SADB_DUMP || msg->sadb_msg_pid != pid)
-			continue;
+		{
+		    plog(LLV_DEBUG, LOCATION, NULL,
+			 "discarding non-sadb dump msg %p, our pid=%i\n", msg, pid);
+		    plog(LLV_DEBUG, LOCATION, NULL,
+			 "type %i, pid %i\n", msg->sadb_msg_type, msg->sadb_msg_pid);
+		    continue;
+		}
+		
 
 		ml = msg->sadb_msg_len << 3;
 		bl = buf ? buf->l : 0;
@@ -399,6 +408,9 @@ pfkey_init()
 			"libipsec failed pfkey open (%s)\n", ipsec_strerror());
 		return -1;
 	}
+	if (fcntl(lcconf->sock_pfkey, F_SETFL, O_NONBLOCK) == -1)
+		plog(LLV_WARNING, LOCATION, NULL,
+		    "failed to set the pfkey socket to NONBLOCK\n");
 
 	for (i = 0, reg_fail = 0; i < pfkey_nsatypes; i++) {
 		plog(LLV_DEBUG, LOCATION, NULL,
@@ -521,6 +533,10 @@ ipsecdoi2pfkey_ealg(t_id)
 #ifdef SADB_X_EALG_TWOFISHCBC
 	case IPSECDOI_ESP_TWOFISH:
 		return SADB_X_EALG_TWOFISHCBC;
+#endif
+#ifdef SADB_X_EALG_CAMELLIACBC
+	case IPSECDOI_ESP_CAMELLIA:
+		return SADB_X_EALG_CAMELLIACBC;
 #endif
 
 	/* not supported */
@@ -876,6 +892,15 @@ pk_sendgetspi(iph2)
 			return -1;
 		}
 
+#ifdef ENABLE_NATT
+		/* XXX should we do a copy of src/dst for each pr ?
+		 */
+		if (! pr->udp_encap) {
+			/* Remove port information, that SA doesn't use it */
+			set_port(src, 0);
+			set_port(dst, 0);
+		}
+#endif
 		plog(LLV_DEBUG, LOCATION, NULL, "call pfkey_send_getspi\n");
 		if (pfkey_send_getspi(
 				lcconf->sock_pfkey,
@@ -1083,6 +1108,10 @@ pk_sendupdate(iph2)
 			natt.frag = iph2->ph1->rmconf->esp_frag;
 		} else {
 			memset (&natt, 0, sizeof (natt));
+
+			/* Remove port information, that SA doesn't use it */
+			set_port(src, 0);
+			set_port(dst, 0);
 		}
 
 		if (pfkey_send_update_nat(
@@ -1308,6 +1337,7 @@ pk_sendadd(iph2)
 	if (iph2->approval == NULL) {
 		plog(LLV_ERROR, LOCATION, NULL,
 			"no approvaled SAs found.\n");
+		return -1;
 	}
 
 	if (iph2->side == INITIATOR)
@@ -1645,6 +1675,7 @@ pk_recvacquire(mhp)
 	struct ph2handle *iph2[MAXNESTEDSA];
 	struct sockaddr *src, *dst;
 	int n;	/* # of phase 2 handler */
+	int remoteid=0;
 
 	/* ignore this message because of local test mode. */
 	if (f_local)
@@ -1827,7 +1858,17 @@ pk_recvacquire(mhp)
 		delph2(iph2[n]);
 		return -1;
 	}
-	iph2[n]->sainfo = getsainfo(idsrc, iddst, NULL);
+	{
+		struct remoteconf *conf;
+		conf = getrmconf(iph2[n]->dst);
+		if (conf != NULL)
+			remoteid=conf->ph1id;
+		else{
+			plog(LLV_DEBUG, LOCATION, NULL, "Warning: no valid rmconf !\n");
+			remoteid=0;
+		}
+	}
+	iph2[n]->sainfo = getsainfo(idsrc, iddst, NULL, remoteid);
 	vfree(idsrc);
 	vfree(iddst);
 	if (iph2[n]->sainfo == NULL) {
@@ -1837,6 +1878,9 @@ pk_recvacquire(mhp)
 		return -1;
 		/* XXX should use the algorithm list from register message */
 	}
+
+	plog(LLV_DEBUG, LOCATION, NULL,
+		"selected sainfo: %s\n", sainfo2str(iph2[n]->sainfo));
     }
 
 	if (set_proposal_from_policy(iph2[n], sp_out, sp_in) < 0) {
@@ -1888,7 +1932,7 @@ pk_recvdelete(mhp)
 	 || mhp[SADB_EXT_ADDRESS_SRC] == NULL
 	 || mhp[SADB_EXT_ADDRESS_DST] == NULL) {
 		plog(LLV_ERROR, LOCATION, NULL,
-			"inappropriate sadb acquire message passed.\n");
+			"inappropriate sadb delete message passed.\n");
 		return -1;
 	}
 	msg = (struct sadb_msg *)mhp[0];
@@ -1949,7 +1993,7 @@ pk_recvflush(mhp)
 	/* sanity check */
 	if (mhp[0] == NULL) {
 		plog(LLV_ERROR, LOCATION, NULL,
-			"inappropriate sadb acquire message passed.\n");
+			"inappropriate sadb flush message passed.\n");
 		return -1;
 	}
 
@@ -1968,6 +2012,8 @@ getsadbpolicy(policy0, policylen0, type, iph2)
 	struct sadb_x_policy *xpl;
 	struct sadb_x_ipsecrequest *xisr;
 	struct saproto *pr;
+	struct saproto **pr_rlist;
+	int rlist_len = 0;
 	caddr_t policy, p;
 	int policylen;
 	int xisrlen;
@@ -1989,6 +2035,7 @@ getsadbpolicy(policy0, policylen0, type, iph2)
 
 	/* make policy structure */
 	policy = racoon_malloc(policylen);
+	memset((void*)policy, 0xcd, policylen);
 	if (!policy) {
 		plog(LLV_ERROR, LOCATION, NULL,
 			"buffer allocation failed.\n");
@@ -2011,7 +2058,19 @@ getsadbpolicy(policy0, policylen0, type, iph2)
 
 	xisr = (struct sadb_x_ipsecrequest *)(xpl + 1);
 
-	for (pr = iph2->approval->head; pr; pr = pr->next) {
+	/* The order of things is reversed for use in add policy messages */
+	for (pr = iph2->approval->head; pr; pr = pr->next) rlist_len++;
+	pr_rlist = racoon_malloc((rlist_len+1)*sizeof(struct saproto*));
+	if (!pr_rlist) {
+		plog(LLV_ERROR, LOCATION, NULL,
+			"buffer allocation failed.\n");
+		return -1;
+	}
+	pr_rlist[rlist_len--] = NULL;
+	for (pr = iph2->approval->head; pr; pr = pr->next) pr_rlist[rlist_len--] = pr;
+	rlist_len = 0;
+
+	for (pr = pr_rlist[rlist_len++]; pr; pr = pr_rlist[rlist_len++]) {
 
 		satype = doi2ipproto(pr->proto_id);
 		if (satype == ~0) {
@@ -2032,8 +2091,13 @@ getsadbpolicy(policy0, policylen0, type, iph2)
 		 */
 		xisr->sadb_x_ipsecrequest_proto = satype;
 		xisr->sadb_x_ipsecrequest_mode = mode;
-		xisr->sadb_x_ipsecrequest_level = IPSEC_LEVEL_REQUIRE;
-		xisr->sadb_x_ipsecrequest_reqid = 0;
+		if(iph2->proposal->head->reqid_in > 0){
+			xisr->sadb_x_ipsecrequest_level = IPSEC_LEVEL_UNIQUE;
+			xisr->sadb_x_ipsecrequest_reqid = iph2->proposal->head->reqid_in;
+		}else{
+			xisr->sadb_x_ipsecrequest_level = IPSEC_LEVEL_REQUIRE;
+			xisr->sadb_x_ipsecrequest_reqid = 0;
+		}
 		p = (caddr_t)(xisr + 1);
 
 		xisrlen = sizeof(*xisr);
@@ -2053,7 +2117,10 @@ getsadbpolicy(policy0, policylen0, type, iph2)
 		}
 
 		xisr->sadb_x_ipsecrequest_len = PFKEY_ALIGN8(xisrlen);
+		xisr = (struct sadb_x_ipsecrequest *)p;
+		
 	}
+	racoon_free(pr_rlist);
 
 end:
 	*policy0 = policy;
@@ -2064,6 +2131,7 @@ end:
 err:
 	if (policy)
 		racoon_free(policy);
+	if (pr_rlist) racoon_free(pr_rlist);
 
 	return -1;
 }
@@ -2610,10 +2678,22 @@ pk_recv(so, lenp)
 {
 	struct sadb_msg buf, *newmsg;
 	int reallen;
-
-	*lenp = recv(so, (caddr_t)&buf, sizeof(buf), MSG_PEEK);
+	int retry = 0;
+	
+	*lenp = -1;
+	do
+	{
+	    plog(LLV_DEBUG, LOCATION, NULL, "pk_recv: retry[%d] recv() \n", retry );
+	    *lenp = recv(so, (caddr_t)&buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT);
+	    retry++;
+	}
+	while (*lenp < 0 && errno == EAGAIN && retry < 3);
 	if (*lenp < 0)
-		return NULL;	/*fatal*/
+	{
+	    if ( errno == EAGAIN ) *lenp = 0; /* non-fatal */
+ 	    return NULL;	/*fatal*/
+	}
+	
 	else if (*lenp < sizeof(buf))
 		return NULL;
 
@@ -2653,7 +2733,7 @@ static int
 addnewsp(mhp)
 	caddr_t *mhp;
 {
-	struct secpolicy *new;
+	struct secpolicy *new = NULL;
 	struct sadb_address *saddr, *daddr;
 	struct sadb_x_policy *xpl;
 
@@ -2663,7 +2743,7 @@ addnewsp(mhp)
 	 || mhp[SADB_X_EXT_POLICY] == NULL) {
 		plog(LLV_ERROR, LOCATION, NULL,
 			"inappropriate sadb spd management message passed.\n");
-		return -1;
+		goto bad;
 	}
 
 	saddr = (struct sadb_address *)mhp[SADB_EXT_ADDRESS_SRC];
@@ -2682,7 +2762,7 @@ addnewsp(mhp)
 	if (new == NULL) {
 		plog(LLV_ERROR, LOCATION, NULL,
 			"failed to allocate buffer\n");
-		return -1;
+		goto bad;
 	}
 
 	new->spidx.dir = xpl->sadb_x_policy_dir;
@@ -2708,7 +2788,7 @@ addnewsp(mhp)
 		if (PFKEY_EXTLEN(xpl) < sizeof(*xpl)) {
 			plog(LLV_ERROR, LOCATION, NULL,
 				"invalid msg length.\n");
-			return -1;
+			goto bad;
 		}
 
 		tlen = PFKEY_EXTLEN(xpl) - sizeof(*xpl);
@@ -2720,7 +2800,7 @@ addnewsp(mhp)
 			if (xisr->sadb_x_ipsecrequest_len < sizeof(*xisr)) {
 				plog(LLV_ERROR, LOCATION, NULL,
 					"invalid msg length.\n");
-				return -1;
+				goto bad;
 			}
 
 			/* allocate request buffer */
@@ -2728,7 +2808,7 @@ addnewsp(mhp)
 			if (*p_isr == NULL) {
 				plog(LLV_ERROR, LOCATION, NULL,
 					"failed to get new ipsecreq.\n");
-				return -1;
+				goto bad;
 			}
 
 			/* set values */
@@ -2743,7 +2823,7 @@ addnewsp(mhp)
 				plog(LLV_ERROR, LOCATION, NULL,
 					"invalid proto type: %u\n",
 					xisr->sadb_x_ipsecrequest_proto);
-				return -1;
+				goto bad;
 			}
 			(*p_isr)->saidx.proto = xisr->sadb_x_ipsecrequest_proto;
 
@@ -2756,7 +2836,7 @@ addnewsp(mhp)
 				plog(LLV_ERROR, LOCATION, NULL,
 					"invalid mode: %u\n",
 					xisr->sadb_x_ipsecrequest_mode);
-				return -1;
+				goto bad;
 			}
 			(*p_isr)->saidx.mode = xisr->sadb_x_ipsecrequest_mode;
 
@@ -2774,7 +2854,7 @@ addnewsp(mhp)
 				plog(LLV_ERROR, LOCATION, NULL,
 					"invalid level: %u\n",
 					xisr->sadb_x_ipsecrequest_level);
-				return -1;
+				goto bad;
 			}
 			(*p_isr)->level = xisr->sadb_x_ipsecrequest_level;
 
@@ -2812,7 +2892,7 @@ addnewsp(mhp)
 	default:
 		plog(LLV_ERROR, LOCATION, NULL,
 			"invalid policy type.\n");
-		return -1;
+		goto bad;
 	}
 
 #ifdef HAVE_PFKEY_POLICY_PRIORITY
@@ -2837,6 +2917,13 @@ addnewsp(mhp)
 	inssp(new);
 
 	return 0;
+bad:
+	if (new != NULL) {
+		if (new->req != NULL)
+			racoon_free(new->req);
+		racoon_free(new);
+	}
+	return -1;
 }
 
 /* proto/mode/src->dst spi */

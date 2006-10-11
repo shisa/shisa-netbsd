@@ -1,4 +1,4 @@
-/*	$NetBSD: cpu.c,v 1.47 2006/02/20 19:00:27 cdi Exp $ */
+/*	$NetBSD: cpu.c,v 1.54 2006/10/03 21:05:22 mrg Exp $ */
 
 /*
  * Copyright (c) 1996
@@ -52,7 +52,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: cpu.c,v 1.47 2006/02/20 19:00:27 cdi Exp $");
+__KERNEL_RCSID(0, "$NetBSD: cpu.c,v 1.54 2006/10/03 21:05:22 mrg Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -77,6 +77,7 @@ struct cacheinfo cacheinfo;
 /* Linked list of all CPUs in system. */
 int sparc_ncpus = 0;
 struct cpu_info *cpus = NULL;
+static int cpu_instance;
 
 volatile cpuset_t cpus_active;/* set of active cpus */
 struct cpu_bootargs *cpu_args;	/* allocated very early in pmap_bootstrap. */
@@ -146,7 +147,7 @@ alloc_cpuinfo(u_int cpu_node)
 	 */
 	cpi->ci_next = NULL;
 	cpi->ci_curlwp = NULL;
-	cpi->ci_number = portid;
+	cpi->ci_number = ++cpu_instance;
 	cpi->ci_cpuid = portid;
 	cpi->ci_upaid = portid;
 	cpi->ci_fplwp = NULL;
@@ -188,6 +189,7 @@ cpu_attach(struct device *parent, struct device *dev, void *aux)
 	long clk;
 	int impl, vers, fver;
 	struct mainbus_attach_args *ma = aux;
+	struct cpu_info *ci;
 	struct fpstate64 *fpstate;
 	struct fpstate64 fps[2];
 	const char *sep;
@@ -326,14 +328,12 @@ cpu_attach(struct device *parent, struct device *dev, void *aux)
 	 * Allocate cpu_info structure if needed and save cache information
 	 * in there.
 	 */
-	alloc_cpuinfo((u_int)node);
-	printf("%s: upa id %" PRIu64 "\n", dev->dv_xname, CPU_UPAID);
+	ci = alloc_cpuinfo((u_int)node);
+	printf("%s: upa id %d\n", dev->dv_xname, ci->ci_upaid);
 }
 
 #if defined(MULTIPROCESSOR)
 vaddr_t cpu_spinup_trampoline;
-
-u_long dump_rtf_info = 0;
 
 /*
  * Start secondary processors in motion.
@@ -358,8 +358,9 @@ cpu_boot_secondary_processors()
 		membar_sync();
 
 #ifdef DEBUG
-		printf("node %x, cpuinfo %lx, initstack %p\n",
-		       cpu_args->cb_node, cpu_args->cb_cpuinfo,
+		printf("node %x, cpuinfo %llx, initstack %p\n",
+		       cpu_args->cb_node,
+		       (unsigned long long)cpu_args->cb_cpuinfo,
 		       cpu_args->cb_initstack);
 #endif
 
@@ -382,7 +383,7 @@ cpu_boot_secondary_processors()
 			printf("cpu%d: startup failed\n", ci->ci_upaid);
 		else
 			printf("cpu%d now spinning idle (waited %d iterations)\n",
-			       ci->ci_upaid, i);
+			       ci->ci_number, i);
 	}
 
 	printf("\n");
@@ -396,8 +397,6 @@ cpu_hatch()
 
 	for (i = 0; i < 4*PAGE_SIZE; i += sizeof(long))
 		flush(v + i);
-
-	dump_rtf_info = 1;
 
 	printf("cpu%d fired up.\n", cpu_number());
 	CPUSET_ADD(cpus_active, cpu_number());

@@ -1,4 +1,4 @@
-/* $NetBSD: tsc.c,v 1.5 2006/06/13 17:37:06 dogcow Exp $ */
+/* $NetBSD: tsc.c,v 1.8 2006/09/23 18:43:56 xtraeme Exp $ */
 
 
 /*-
@@ -83,12 +83,16 @@
 
 #include <sys/cdefs.h>
 /* __FBSDID("$FreeBSD: src/sys/i386/i386/tsc.c,v 1.204 2003/10/21 18:28:34 silby Exp $"); */
-__KERNEL_RCSID(0, "$NetBSD: tsc.c,v 1.5 2006/06/13 17:37:06 dogcow Exp $");
+__KERNEL_RCSID(0, "$NetBSD: tsc.c,v 1.8 2006/09/23 18:43:56 xtraeme Exp $");
 
 #include "opt_multiprocessor.h"
 #ifdef i386
 #include "opt_enhanced_speedstep.h"
 #endif
+#ifdef i386
+#include "opt_powernow_k7.h"
+#endif
+#include "opt_powernow_k8.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -120,12 +124,14 @@ static struct timecounter tsc_timecounter = {
  	~0u,			/* counter_mask */
 	0,			/* frequency */
 	 "TSC",			/* name */
-#if defined(ENHANCED_SPEEDSTEP)
+#if (defined(ENHANCED_SPEEDSTEP) || defined(POWERNOW_K7) || defined(POWERNOW_K8))
 	-100,			/* don't pick TSC automatically */
 				/* if frequency changes might affect TSC */
 #else
 	800,			/* quality (adjusted in code) */
 #endif
+	NULL,
+	NULL,
 };
 
 void

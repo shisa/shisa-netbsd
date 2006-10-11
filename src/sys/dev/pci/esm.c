@@ -1,4 +1,4 @@
-/*      $NetBSD: esm.c,v 1.36 2006/08/30 01:10:46 christos Exp $      */
+/*      $NetBSD: esm.c,v 1.39 2006/09/25 23:20:33 jmcneill Exp $      */
 
 /*-
  * Copyright (c) 2002, 2003 Matt Fredette
@@ -66,7 +66,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: esm.c,v 1.36 2006/08/30 01:10:46 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: esm.c,v 1.39 2006/09/25 23:20:33 jmcneill Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -1700,7 +1700,8 @@ esm_attach(struct device *parent, struct device *self, void *aux)
 	audio_attach_mi(&esm_hw_if, self, &ess->sc_dev);
 
 	ess->esm_suspend = PWR_RESUME;
-	ess->esm_powerhook = powerhook_establish(esm_powerhook, ess);
+	ess->esm_powerhook = powerhook_establish(ess->sc_dev.dv_xname,
+	    esm_powerhook, ess);
 }
 
 /* Power Hook */
@@ -1732,7 +1733,6 @@ int
 esm_suspend(struct esm_softc *ess)
 {
 	int x;
-	int error;
 
 	x = splaudio();
 	wp_stoptimer(ess);
@@ -1747,8 +1747,6 @@ esm_suspend(struct esm_softc *ess)
 	delay(20);
 	bus_space_write_4(ess->st, ess->sh, PORT_RINGBUS_CTRL, 0);
 	delay(1);
-	if ((error = pci_set_powerstate(ess->pc, ess->tag, PCI_PMCSR_STATE_D3)))
-		return error;
 
 	return 0;
 }
@@ -1757,12 +1755,15 @@ int
 esm_resume(struct esm_softc *ess)
 {
 	int x;
-	int error;
+	uint16_t pcmbar;
 
-	if ((error = pci_set_powerstate(ess->pc, ess->tag, PCI_PMCSR_STATE_D0)))
-		return error;
 	delay(100000);
 	esm_init(ess);
+
+	/* set DMA base address */
+	for (pcmbar = WAVCACHE_PCMBAR; pcmbar < WAVCACHE_PCMBAR + 4; pcmbar++)
+		wc_wrreg(ess, pcmbar,
+		    DMAADDR(&ess->sc_dma) >> WAVCACHE_BASEADDR_SHIFT);
 
 	ess->codec_if->vtbl->restore_ports(ess->codec_if);
 #if 0

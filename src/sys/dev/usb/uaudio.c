@@ -1,4 +1,4 @@
-/*	$NetBSD: uaudio.c,v 1.103 2006/05/11 19:09:25 mrg Exp $	*/
+/*	$NetBSD: uaudio.c,v 1.105 2006/10/04 16:00:15 christos Exp $	*/
 
 /*
  * Copyright (c) 1999 The NetBSD Foundation, Inc.
@@ -44,7 +44,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: uaudio.c,v 1.103 2006/05/11 19:09:25 mrg Exp $");
+__KERNEL_RCSID(0, "$NetBSD: uaudio.c,v 1.105 2006/10/04 16:00:15 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -353,6 +353,7 @@ Static const struct audio_hw_if uaudio_hw_if = {
 	uaudio_get_props,
 	uaudio_trigger_output,
 	uaudio_trigger_input,
+	NULL,
 	NULL,
 };
 
@@ -2616,9 +2617,10 @@ uaudio_chan_open(struct uaudio_softc *sc, struct chan *ch)
 	 */
 	if (as->asf1desc->bSamFreqType != 1) {
 		err = uaudio_set_speed(sc, endpt, ch->sample_rate);
-		if (err)
+		if (err) {
 			DPRINTF(("uaudio_chan_open: set_speed failed err=%s\n",
 				 usbd_errstr(err)));
+		}
 	}
 
 	ch->pipe = 0;

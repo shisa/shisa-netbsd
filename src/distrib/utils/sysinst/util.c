@@ -1,4 +1,4 @@
-/*	$NetBSD: util.c,v 1.143 2006/02/26 10:25:52 dsl Exp $	*/
+/*	$NetBSD: util.c,v 1.145 2006/09/04 02:20:40 hubertf Exp $	*/
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.
@@ -56,6 +56,9 @@
 
 #ifndef MD_SETS_SELECTED
 #define MD_SETS_SELECTED SET_KERNEL_1, SET_SYSTEM, SET_X11, SET_MD
+#endif
+#ifndef MD_SETS_SELECTED_MINIMAL
+#define MD_SETS_SELECTED_MINIMAL SET_KERNEL_1, SET_CORE
 #endif
 #ifndef MD_SETS_VALID
 #define MD_SETS_VALID SET_KERNEL, SET_SYSTEM, SET_X11, SET_MD
@@ -145,12 +148,19 @@ distinfo dist_list[] = {
 static int check_for(unsigned int mode, const char *pathname);
 
 void
-init_set_status(void)
+init_set_status(int minimal)
 {
 	const static uint8_t sets_valid[] = {MD_SETS_VALID};
-	const static uint8_t sets_selected[] = {MD_SETS_SELECTED};
+	const static uint8_t sets_selected_full[] = {MD_SETS_SELECTED};
+	const static uint8_t sets_selected_minimal[] = {MD_SETS_SELECTED_MINIMAL};
+	const static uint8_t *sets_selected;
 	unsigned int i, len;
 	const char *longest;
+
+	if (minimal)
+		sets_selected = sets_selected_minimal;
+	else
+		sets_selected = sets_selected_full;
 
 	for (i = 0; i < nelem(sets_valid); i++)
 		set_status[sets_valid[i]] = SET_VALID;
@@ -1225,11 +1235,9 @@ add_rc_conf(const char *fmt, ...)
 void
 enable_rc_conf(void)
 {
-	const char *tp = target_prefix();
-
-	run_program(0, "sed -an -e 's/^rc_configured=NO/rc_configured=YES/;"
-				    "H;$!d;g;w %s/etc/rc.conf' %s/etc/rc.conf",
-		tp, tp);
+	run_program(RUN_CHROOT,
+		    "sed -an -e 's/^rc_configured=NO/rc_configured=YES/;"
+				    "H;$!d;g;w /etc/rc.conf' /etc/rc.conf");
 }
 
 int

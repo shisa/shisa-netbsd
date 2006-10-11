@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.335 2006/08/13 14:11:36 jmmv Exp $
+#	$NetBSD: Makefile,v 1.337 2006/09/18 22:39:37 hubertf Exp $
 #	from: @(#)Makefile	8.7 (Berkeley) 5/25/95
 
 # Environment variables without default values:
@@ -93,7 +93,7 @@ BIN1+=	bootptab changelist csh.cshrc csh.login csh.logout daily \
 	netconfig networks newsyslog.conf nsswitch.conf ntp.conf \
 	passwd.conf phones printcap profile protocols \
 	rbootd.conf rc rc.conf rc.lkm rc.local rc.subr rc.shutdown remote rpc \
-	security security.conf services shells sysctl.conf syslog.conf \
+	security security.conf services shells shrc sysctl.conf syslog.conf \
 	weekly weekly.conf wscons.conf
 
 # Use machine-specific disktab if it exists, or the MI one otherwise
@@ -291,7 +291,6 @@ install-etc-files: .PHONY .MAKE check_DESTDIR MAKEDEV
 		${BINOWN} operator	600	/etc/skeykeys \
 		root wheel		600	/var/at/at.deny \
 		nobody ${BINGRP}	664	/var/db/locate.database \
-		uucp dialer		640	/var/log/aculog \
 		${BINOWN} ${BINGRP}	600	/var/log/authlog \
 		root wheel		600	/var/log/cron \
 		${BINOWN} ${UTMPGRP}	664	/var/log/lastlog \

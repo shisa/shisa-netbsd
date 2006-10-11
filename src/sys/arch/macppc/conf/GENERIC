@@ -1,4 +1,4 @@
-# $NetBSD: GENERIC,v 1.235 2006/08/26 20:26:55 christos Exp $
+# $NetBSD: GENERIC,v 1.239 2006/09/28 07:57:49 dyoung Exp $
 #
 # GENERIC machine description file
 # 
@@ -22,7 +22,7 @@ include		"arch/macppc/conf/std.macppc"
 
 options 	INCLUDE_CONFIG_FILE	# embed config file in kernel binary
 
-#ident 		"GENERIC-$Revision: 1.235 $"
+#ident 		"GENERIC-$Revision: 1.239 $"
 
 maxusers	32
 
@@ -75,6 +75,7 @@ options 	COMPAT_11	# NetBSD 1.1,
 options 	COMPAT_12	# NetBSD 1.2,
 options 	COMPAT_13	# NetBSD 1.3,
 options 	COMPAT_14	# NetBSD 1.4,
+options 	COMPAT_15	# NetBSD 1.5,
 options 	COMPAT_16	# NetBSD 1.6,
 options 	COMPAT_20	# NetBSD 2.0
 options 	COMPAT_30	# NetBSD 3.0 compatibility.
@@ -223,7 +224,7 @@ lpt*	at puc? port ?			# || ports on > "universal" comm boards
 
 # PCI Network devices
 an*	at pci? dev ? function ?	# Aironet PC4500/PC4800 (802.11)
-#ath*	at pci? dev ? function ?	# Atheros 5210/5211/5212 802.11
+ath*	at pci? dev ? function ?	# Atheros 5210/5211/5212 802.11
 atw*	at pci? dev ? function ?	# ADMtek ADM8211 (802.11)
 bge*	at pci? dev ? function ?	# Broadcom 570x Gigabit Ethernet
 ep*	at pci? dev ? function ?	# 3Com 3c59x
@@ -366,6 +367,7 @@ mbe*	at pcmcia? function ?		# MB8696x based Ethernet
 ne*	at pcmcia? function ?		# NE2000-compatible Ethernet
 awi*	at pcmcia? function ?		# BayStack 650/660 (802.11FH/DS)
 wi*	at pcmcia? function ?		# Lucent WaveLan IEEE (802.11)
+ath*	at cardbus? function ?	# Atheros 5210/5211/5212 802.11
 atw*	at cardbus? function ?	# ADMtek ADM8211 (802.11)
 ex*	at cardbus? function ?	# 3Com 3C575TX
 tlp*	at cardbus? function ?	# DECchip 21143
@@ -567,3 +569,5 @@ pseudo-device	nsmb			# SMB requester
 #options VERIFIED_EXEC_FP_SHA512
 #options VERIFIED_EXEC_FP_SHA1
 #options VERIFIED_EXEC_FP_MD5
+
+#options PAX_MPROTECT=0			# PaX mprotect(2) restrictions

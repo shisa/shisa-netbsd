@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.401 2006/08/26 16:14:29 matt Exp $
+#	$NetBSD: Makefile,v 1.407 2006/10/01 18:43:11 bouyer Exp $
 #	@(#)Makefile	8.1 (Berkeley) 6/18/93
 
 MAN=	aac.4 ac97.4 acardide.4 aceride.4 acphy.4 adc.4 adt7467c.4 adv.4 \
@@ -8,7 +8,7 @@ MAN=	aac.4 ac97.4 acardide.4 aceride.4 acphy.4 adc.4 adt7467c.4 adv.4 \
 	auacer.4 audio.4 audiocs.4 auich.4 \
 	auixp.4 autri.4 auvia.4 awi.4 azalia.4 \
 	bba.4 bce.4 be.4 bge.4 bha.4 bktr.4 bluetooth.4 bmtphy.4 \
-	bpf.4 brgphy.4 bridge.4 btdev.4 bthidev.4 btkbd.4 btms.4 btsco.4 \
+	bpf.4 brgphy.4 bridge.4 bthidev.4 bthub.4 btkbd.4 btms.4 btsco.4 \
 	cac.4 cardbus.4 carp.4 ccd.4 cd.4 \
 	cec.4 cgd.4 cfb.4 ch.4 ciphy.4 ciss.4 clcs.4 clct.4 clnp.4 \
 	clockctl.4 cltp.4 cmdide.4 cmpci.4 cms.4 cnw.4 \
@@ -19,15 +19,15 @@ MAN=	aac.4 ac97.4 acardide.4 aceride.4 acphy.4 adc.4 adt7467c.4 adv.4 \
 	esa.4 esiop.4 esl.4 esm.4 eso.4 exphy.4 fast_ipsec.4 fd.4 \
 	fpa.4 fms.4 fss.4 fxp.4 gem.4 gentbi.4 \
 	glxtphy.4 gpib.4 gpio.4 gre.4 gphyter.4 gsip.4 hifn.4 hme.4 \
-	hptide.4 icmp.4 icp.4 icsphy.4 idp.4 ieee80211.4 ifmedia.4 \
+	hptide.4 icmp.4 icp.4 icsphy.4 ieee80211.4 ifmedia.4 \
 	igsfb.4 iha.4 inet.4 inphy.4 intersil7170.4 \
-	ioasic.4 ioat.4 iop.4 iophy.4 iopsp.4 ip.4 ipkdb.4 ipw.4 \
+	ioasic.4 ioat.4 iop.4 iophy.4 iopsp.4 ip.4 ipkdb.4 ipmi.4 ipw.4 \
 	iso.4 isp.4 it.4 iteide.4 iwi.4 ixpide.4 joy.4 kloader.4 kse.4 \
 	ksyms.4 kttcp.4 lc.4 ld.4 lkm.4 lo.4 lxtphy.4 mainbus.4 makphy.4 \
 	mbe.4 mca.4 mcclock.4 md.4 mfb.4 mhzc.4 midi.4 \
 	mii.4 mk48txx.4 mlx.4 mly.4 mpt.4 mpu.4 mtd.4 \
-	mtio.4 multicast.4 ne.4 neo.4 netintro.4 nfe.4 njs.4 \
-	nsclpcsio.4 nsip.4 nsphy.4 nsphyter.4 ntwoc.4 \
+	mtio.4 multicast.4 ne.4 neo.4 netintro.4 nfe.4 njata.4 njs.4 \
+	nsclpcsio.4 nsphy.4 nsphyter.4 ntwoc.4 \
 	null.4 nsmb.4 oak.4 oosiop.4 opl.4 options.4 \
 	optiide.4 osiop.4 pas.4 pcdisplay.4 pciide.4 \
 	pdcide.4 pdcsata.4 piixide.4 piixpm.4 pckbc.4 pckbd.4 pcn.4 pcppi.4 \
@@ -37,7 +37,7 @@ MAN=	aac.4 ac97.4 acardide.4 aceride.4 acphy.4 adc.4 adt7467c.4 adv.4 \
 	rs5c372rtc.4 rtk.4 rtw.4 \
 	satalink.4 sbus.4 scc.4 scsi.4 sd.4 se.4 sem.4 ses.4 sf.4 sfb.4 shb.4 \
 	shpcic.4 siop.4 sip.4 siside.4 sk.4 sl.4 slide.4 \
-	sm.4 spc.4 speaker.4 spif.4 spp.4 sqphy.4 ss.4 \
+	sm.4 spc.4 speaker.4 spif.4 sqphy.4 ss.4 \
 	st.4 ste.4 stge.4 sti.4 stpcide.4 sv.4 strip.4 \
 	svwsata.4 swwdog.4 systrace.4 \
 	tap.4 tc.4 tcds.4 tcp.4 termios.4 tfb.4 ti.4 \
@@ -87,7 +87,7 @@ MAN+=	bt3c.4 pcic.4 tcic.4 pcmcom.4 xi.4
 MAN+=	adb.4 akbd.4 ams.4 mc.4
 
 # machine-independent podulebus devices
-MAN+=	dtide.4 ea.4 eb.4 hcide.4
+MAN+=	dtide.4 ea.4 eb.4 hcide.4 sec.4
 
 # machine-independent VME devices
 MAN+=	sc.4 si.4
@@ -138,7 +138,7 @@ MLINKS+=scsi.4 atapi.4
 MLINKS+=scsi.4 atapibus.4
 MLINKS+=scsi.4 scsibus.4
 MLINKS+=si.4 sw.4
-MLINKS+=sk.4 skc.4
+MLINKS+=sk.4 skc.4 sk.4 msk.4 sk.4 mskc.4
 MLINKS+=sl.4 slip.4
 MLINKS+=speaker.4 spkr.4
 MLINKS+=tty.4 dty.4

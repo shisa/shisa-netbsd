@@ -1,4 +1,4 @@
-# $NetBSD: Makefile,v 1.13 2005/11/26 02:32:32 christos Exp $
+# $NetBSD: Makefile,v 1.16 2006/09/29 05:06:34 manu Exp $
 
 WARNS=	0	# Will be fixed later
 
@@ -21,15 +21,16 @@ SRCS=	main.c session.c isakmp.c handler.c 			\
 MAN=	racoon.8 racoon.conf.5
 
 DIST=	${NETBSDSRCDIR}/crypto/dist/ipsec-tools
-CPPFLAGS+= -I${DIST}/src/racoon -I${DIST}/src/libipsec
+CPPFLAGS+= -I${DIST}/src/racoon -I${DIST}/src/racoon/missing
+CPPFLAGS+= -I${DIST}/src/libipsec
 CPPFLAGS+= -I${NETBSDSRCDIR}/lib/libipsec -I.
 CPPFLAGS+= -DIPSEC_DEBUG -DHAVE_CONFIG_H
 CPPFLAGS+= -DADMINPORTDIR=\"/var/run\"
 CPPFLAGS+= -DSYSCONFDIR=\"/etc/racoon\"
 CPPFLAGS+= -DSADB_X_EALG_AESCBC=SADB_X_EALG_AES
 
-LDADD+= -ll -ly -lipsec
-DPADD+= ${LIBL} ${LIBY} ${LIBCRYPTO}
+LDADD+= -ll -ly -lipsec -lutil
+DPADD+= ${LIBL} ${LIBY} ${LIBCRYPTO} ${LIBUTIL}
 
 YHEADER=cfparse.h
 

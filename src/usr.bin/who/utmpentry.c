@@ -1,4 +1,4 @@
-/*	$NetBSD: utmpentry.c,v 1.7 2006/03/17 20:44:28 elad Exp $	*/
+/*	$NetBSD: utmpentry.c,v 1.10 2006/09/20 19:43:33 christos Exp $	*/
 
 /*-
  * Copyright (c) 2002 The NetBSD Foundation, Inc.
@@ -38,7 +38,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: utmpentry.c,v 1.7 2006/03/17 20:44:28 elad Exp $");
+__RCSID("$NetBSD: utmpentry.c,v 1.10 2006/09/20 19:43:33 christos Exp $");
 #endif
 
 #include <sys/stat.h>
@@ -72,6 +72,7 @@ static void adjust_size(struct utmpentry *e);
 #endif
 
 int maxname = 8, maxline = 8, maxhost = 16;
+int etype = 1 << USER_PROCESS;
 static int numutmp = 0;
 static struct utmpentry *ehead;
 
@@ -205,7 +206,7 @@ getutentries(const char *fname, struct utmpentry **epp)
 
 #ifdef SUPPORT_UTMPX
 	while ((what & 1) && (utx = getutxent()) != NULL) {
-		if (fname == NULL && utx->ut_type != USER_PROCESS)
+		if (fname == NULL && ((1 << utx->ut_type) & etype) == 0)
 			continue;
 		if ((ep = calloc(1, sizeof(struct utmpentry))) == NULL) {
 			warn(NULL);
@@ -218,25 +219,27 @@ getutentries(const char *fname, struct utmpentry **epp)
 #endif
 
 #ifdef SUPPORT_UTMP
-	while ((what & 2) && (ut = getutent()) != NULL) {
-		if (fname == NULL && (*ut->ut_name == '\0' ||
-		    *ut->ut_line == '\0'))
-			continue;
-		/* Don't process entries that we have utmpx for */
-		for (ep = ehead; ep != NULL; ep = ep->next) {
-			if (strncmp(ep->line, ut->ut_line,
-			    sizeof(ut->ut_line)) == 0)
-				break;
+	if ((etype & (1 << USER_PROCESS)) != 0) {
+		while ((what & 2) && (ut = getutent()) != NULL) {
+			if (fname == NULL && (*ut->ut_name == '\0' ||
+			    *ut->ut_line == '\0'))
+				continue;
+			/* Don't process entries that we have utmpx for */
+			for (ep = ehead; ep != NULL; ep = ep->next) {
+				if (strncmp(ep->line, ut->ut_line,
+				    sizeof(ut->ut_line)) == 0)
+					break;
+			}
+			if (ep != NULL)
+				continue;
+			if ((ep = calloc(1, sizeof(*ep))) == NULL) {
+				warn(NULL);
+				return 0;
+			}
+			getentry(ep, ut);
+			*nextp = ep;
+			nextp = &(ep->next);
 		}
-		if (ep != NULL)
-			continue;
-		if ((ep = calloc(1, sizeof(struct utmpentry))) == NULL) {
-			warn(NULL);
-			return 0;
-		}
-		getentry(ep, ut);
-		*nextp = ep;
-		nextp = &(ep->next);
 	}
 #endif
 	numutmp = 0;
@@ -277,6 +280,11 @@ getentry(struct utmpentry *e, struct utmp *up)
 	e->name[sizeof(e->name) - 1] = '\0';
 	e->tv.tv_sec = up->ut_time;
 	e->tv.tv_usec = 0;
+	e->pid = 0;
+	e->term = 0;
+	e->exit = 0;
+	e->sess = 0;
+	e->type = USER_PROCESS;
 	adjust_size(e);
 }
 #endif
@@ -292,6 +300,11 @@ getentryx(struct utmpentry *e, struct utmpx *up)
 	(void)strncpy(e->host, up->ut_host, sizeof(up->ut_host));
 	e->name[sizeof(e->name) - 1] = '\0';
 	e->tv = up->ut_tv;
+	e->pid = up->ut_pid;
+	e->term = up->ut_exit.e_termination;
+	e->exit = up->ut_exit.e_exit;
+	e->sess = up->ut_session;
+	e->type = up->ut_type;
 	adjust_size(e);
 }
 #endif

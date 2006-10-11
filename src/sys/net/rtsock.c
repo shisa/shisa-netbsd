@@ -1,4 +1,4 @@
-/*	$NetBSD: rtsock.c,v 1.86 2006/07/23 22:06:13 ad Exp $	*/
+/*	$NetBSD: rtsock.c,v 1.89 2006/09/19 21:42:29 elad Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -61,7 +61,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: rtsock.c,v 1.86 2006/07/23 22:06:13 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: rtsock.c,v 1.89 2006/09/19 21:42:29 elad Exp $");
 
 #include "opt_inet.h"
 
@@ -84,9 +84,9 @@ __KERNEL_RCSID(0, "$NetBSD: rtsock.c,v 1.86 2006/07/23 22:06:13 ad Exp $");
 
 DOMAIN_DEFINE(routedomain);	/* forward declare and add to link set */
 
-struct	sockaddr route_dst = { 2, PF_ROUTE, };
-struct	sockaddr route_src = { 2, PF_ROUTE, };
-struct	sockproto route_proto = { PF_ROUTE, };
+struct	sockaddr route_dst = { .sa_len = 2, .sa_family = PF_ROUTE, };
+struct	sockaddr route_src = { .sa_len = 2, .sa_family = PF_ROUTE, };
+struct	sockproto route_proto = { .sp_family = PF_ROUTE, };
 
 struct walkarg {
 	int	w_op;
@@ -260,9 +260,8 @@ route_output(struct mbuf *m, ...)
 	 * Verify that the caller has the appropriate privilege; RTM_GET
 	 * is the only operation the non-superuser is allowed.
 	 */
-	if (rtm->rtm_type != RTM_GET &&
-	    kauth_authorize_generic(curlwp->l_cred, KAUTH_GENERIC_ISSUSER,
-	    &curlwp->l_acflag) != 0)
+	if (kauth_authorize_network(curlwp->l_cred, KAUTH_NETWORK_ROUTE,
+	    0, rtm, NULL, NULL) != 0)
 		senderr(EACCES);
 
 	switch (rtm->rtm_type) {
@@ -1162,8 +1161,11 @@ const struct protosw routesw[] = {
 } };
 
 struct domain routedomain = {
-	PF_ROUTE, "route", route_init, 0, 0,
-	routesw, &routesw[sizeof(routesw)/sizeof(routesw[0])]
+	.dom_family = PF_ROUTE,
+	.dom_name = "route",
+	.dom_init = route_init,
+	.dom_protosw = routesw,
+	.dom_protoswNPROTOSW = &routesw[sizeof(routesw)/sizeof(routesw[0])],
 };
 
 SYSCTL_SETUP(sysctl_net_route_setup, "sysctl net.route subtree setup")

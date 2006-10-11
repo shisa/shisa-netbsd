@@ -1,4 +1,4 @@
-/*	$NetBSD: if_aue.c,v 1.93 2006/03/13 16:29:58 christos Exp $	*/
+/*	$NetBSD: if_aue.c,v 1.96 2006/09/15 11:22:21 is Exp $	*/
 /*
  * Copyright (c) 1997, 1998, 1999, 2000
  *	Bill Paul <wpaul@ee.columbia.edu>.  All rights reserved.
@@ -77,11 +77,10 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_aue.c,v 1.93 2006/03/13 16:29:58 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_aue.c,v 1.96 2006/09/15 11:22:21 is Exp $");
 
 #if defined(__NetBSD__)
 #include "opt_inet.h"
-#include "opt_ns.h"
 #include "bpfilter.h"
 #include "rnd.h"
 #elif defined(__OpenBSD__)
@@ -133,10 +132,6 @@ __KERNEL_RCSID(0, "$NetBSD: if_aue.c,v 1.93 2006/03/13 16:29:58 christos Exp $")
 #endif
 #endif /* defined(__OpenBSD__) */
 
-#ifdef NS
-#include <netns/ns.h>
-#include <netns/ns_if.h>
-#endif
 
 #include <dev/mii/mii.h>
 #include <dev/mii/miivar.h>
@@ -145,6 +140,10 @@ __KERNEL_RCSID(0, "$NetBSD: if_aue.c,v 1.93 2006/03/13 16:29:58 christos Exp $")
 #include <dev/usb/usbdi.h>
 #include <dev/usb/usbdi_util.h>
 #include <dev/usb/usbdevs.h>
+
+#if defined(__NetBSD__)
+#include <sys/workqueue.h>
+#endif
 
 #include <dev/usb/if_auereg.h>
 
@@ -234,6 +233,10 @@ Static const struct aue_type aue_devs[] = {
 #define aue_lookup(v, p) ((const struct aue_type *)usb_lookup(aue_devs, v, p))
 
 USB_DECLARE_DRIVER(aue);
+
+#if defined(__NetBSD__)
+Static void aue_multiwork(struct work *wkp, void *arg);
+#endif
 
 Static void aue_reset_pegasus_II(struct aue_softc *sc);
 Static int aue_tx_list_init(struct aue_softc *);
@@ -759,7 +762,16 @@ USB_ATTACH(aue)
 		    USBDEVNAME(sc->aue_dev));
 		USB_ATTACH_ERROR_RETURN;
 	}
+#if defined(__NetBSD__)
+	err = workqueue_create(&sc->wqp, USBDEVNAME(sc->aue_dev),
+		aue_multiwork, sc, 0, IPL_NET, 0);
 
+	if (err) {
+		printf("%s: creating multicast configuration work queue\n",
+		    USBDEVNAME(sc->aue_dev));
+		USB_ATTACH_ERROR_RETURN;
+	}
+#endif
 	sc->aue_flags = aue_lookup(uaa->vendor, uaa->product)->aue_flags;
 
 	sc->aue_udev = dev;
@@ -1569,21 +1581,6 @@ aue_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 #endif
 			break;
 #endif /* INET */
-#ifdef NS
-		case AF_NS:
-		    {
-			struct ns_addr *ina = &IA_SNS(ifa)->sns_addr;
-
-			if (ns_nullhost(*ina))
-				ina->x_host = *(union ns_host *)
-					LLADDR(ifp->if_sadl);
-			else
-				memcpy(LLADDR(ifp->if_sadl),
-				       ina->x_host.c_host,
-				       ifp->if_addrlen);
-			break;
-		    }
-#endif /* NS */
 		}
 		break;
 
@@ -1620,8 +1617,13 @@ aue_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 			ether_delmulti(ifr, &sc->aue_ec);
 		if (error == ENETRESET) {
 			if (ifp->if_flags & IFF_RUNNING) {
+#if defined(__NetBSD__)
+				workqueue_enqueue(sc->wqp,&sc->wk);
+				/* XXX */
+#else
 				aue_init(sc);
 				aue_setmulti(sc);
+#endif
 			}
 			error = 0;
 		}
@@ -1756,3 +1758,17 @@ aue_stop(struct aue_softc *sc)
 
 	ifp->if_flags &= ~(IFF_RUNNING | IFF_OACTIVE);
 }
+
+#if defined(__NetBSD__)
+Static void
+aue_multiwork(struct work *wkp, void *arg) {
+	struct aue_softc *sc;
+
+	sc = (struct aue_softc *)arg;
+	(void)wkp;
+
+	aue_init(sc);
+	/* XXX called by aue_init, but rc ifconfig hangs without it: */
+	aue_setmulti(sc);
+}
+#endif

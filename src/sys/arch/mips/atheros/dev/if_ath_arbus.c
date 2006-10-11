@@ -1,4 +1,4 @@
-/* $NetBSD: if_ath_arbus.c,v 1.6 2006/08/28 07:21:15 gdamore Exp $ */
+/* $NetBSD: if_ath_arbus.c,v 1.8 2006/09/26 06:37:32 gdamore Exp $ */
 
 /*-
  * Copyright (c) 2006 Jared D. McNeill <jmcneill@invisible.ca>
@@ -34,10 +34,11 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_ath_arbus.c,v 1.6 2006/08/28 07:21:15 gdamore Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_ath_arbus.c,v 1.8 2006/09/26 06:37:32 gdamore Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
+#include <sys/device.h>
 #include <sys/mbuf.h>
 #include <sys/malloc.h>
 #include <sys/kernel.h>
@@ -58,7 +59,6 @@ __KERNEL_RCSID(0, "$NetBSD: if_ath_arbus.c,v 1.6 2006/08/28 07:21:15 gdamore Exp
 #include <net80211/ieee80211_netbsd.h>
 #include <net80211/ieee80211_var.h>
 
-#include <mips/atheros/include/ar5312reg.h>
 #include <mips/atheros/include/ar531xvar.h>
 #include <mips/atheros/include/arbusvar.h>
 
@@ -66,6 +66,7 @@ __KERNEL_RCSID(0, "$NetBSD: if_ath_arbus.c,v 1.6 2006/08/28 07:21:15 gdamore Exp
 #include <dev/ic/ath_netbsd.h>
 #include <dev/ic/athvar.h>
 #include <contrib/dev/ath/ah.h>
+#include <contrib/dev/ath/ah_soc.h>	/* XXX really doesn't belong in hal */
 
 struct ath_arbus_softc {
 	struct ath_softc	sc_ath;
@@ -103,16 +104,23 @@ ath_arbus_attach(struct device *parent, struct device *self, void *opaque)
 	struct ath_softc *sc;
 	struct arbus_attach_args *aa;
 	const char *name;
+	prop_number_t prop;
 	int rv;
 	uint16_t devid;
-	uint32_t rev;
 
 	asc = (struct ath_arbus_softc *)self;
 	sc = &asc->sc_ath;
 	aa = (struct arbus_attach_args *)opaque;
 
-	rev = GETSYSREG(AR5312_SYSREG_REVISION);
-	devid = AR5312_REVISION_WMAC(rev);
+	prop = prop_dictionary_get(device_properties(&sc->sc_dev),
+	    "wmac-rev");
+	if (prop == NULL) {
+		printf(": unable to get wmac-rev property\n");
+		return;
+	}
+	KDASSERT(prop_object_type(prop) == PROP_TYPE_NUMBER);
+
+	devid = (uint16_t)prop_number_integer_value(prop);
 	name = ath_hal_probe(PCI_VENDOR_ATHEROS, devid);
 
 	printf(": %s\n", name ? name : "Unknown AR531X WLAN");
@@ -144,7 +152,8 @@ ath_arbus_attach(struct device *parent, struct device *self, void *opaque)
 
 	sc->sc_invalid = 1;
 
-	asc->sc_ih = arbus_intr_establish(aa->aa_irq, ath_intr, sc);
+	asc->sc_ih = arbus_intr_establish(aa->aa_cirq, aa->aa_mirq, ath_intr,
+	    sc);
 	if (asc->sc_ih == NULL) {
 		aprint_error("%s: couldn't establish interrupt\n",
 		    sc->sc_dev.dv_xname);

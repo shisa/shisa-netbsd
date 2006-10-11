@@ -1,4 +1,4 @@
-.\" $NetBSD: bthidev.4,v 1.4 2006/08/13 09:03:23 plunky Exp $
+.\" $NetBSD: bthidev.4,v 1.7 2006/10/04 19:29:25 wiz Exp $
 .\"
 .\" Copyright (c) 2006 Itronix Inc.
 .\" All rights reserved.
@@ -29,14 +29,14 @@
 .\" ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 .\" POSSIBILITY OF SUCH DAMAGE.
 .\"
-.Dd August 12, 2006
+.Dd October 4, 2006
 .Dt BTHIDEV 4
 .Os
 .Sh NAME
 .Nm bthidev
 .Nd Bluetooth Human Interface Device support
 .Sh SYNOPSIS
-.Cd "bthidev* at btdev?"
+.Cd "bthidev* at bthub?"
 .Pp
 .Cd "btkbd*   at bthidev? reportid ?"
 .Cd "btms*    at bthidev? reportid ?"
@@ -64,10 +64,12 @@ driver during autoconfiguration:
 Local device address.
 .It remote-bdaddr
 Remote device address.
-.It device-type
-Should be
-.Sq bthidev ,
-indicating a Human Interface Device.
+.It service-name
+The
+.Nm
+driver matches the
+.Sq HID
+service.
 .It control-psm
 This, if set, will indicate the PSM to use for the Control channel.
 If not set,
@@ -96,7 +98,7 @@ If this fails and the reconnect flag is not set, it will then wait for
 the device to initiate the connection.
 .Sh SEE ALSO
 .Xr bluetooth 4 ,
-.Xr btdev 4 ,
+.Xr bthub 4 ,
 .Xr btkbd 4 ,
 .Xr btms 4 ,
 .Xr btdevctl 8
