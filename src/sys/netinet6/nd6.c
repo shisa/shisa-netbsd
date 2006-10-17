@@ -937,6 +937,7 @@ nd6_is_addr_neighbor(addr, ifp)
 	struct ifnet *ifp;
 {
 	struct nd_prefix *pr;
+	struct ifaddr *dstaddr;
 
 	/*
 	 * A link-local address is always a neighbor.
@@ -976,6 +977,14 @@ nd6_is_addr_neighbor(addr, ifp)
 		    &addr->sin6_addr, &pr->ndpr_mask))
 			return (1);
 	}
+
+	/*
+	 * If the address is assigned on the node of the other side of
+	 * a p2p interface, the address should be a neighbor.
+	 */
+	dstaddr = ifa_ifwithdstaddr((struct sockaddr *)addr);
+	if ((dstaddr != NULL) && (dstaddr->ifa_ifp == ifp))
+		return (1);
 
 	/*
 	 * If the default router list is empty, all addresses are regarded
