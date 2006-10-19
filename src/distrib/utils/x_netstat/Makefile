@@ -5,7 +5,7 @@ SRCDIR=		${.CURDIR}/../../../usr.bin/netstat
 PROG=		netstat
 NOMAN=		# defined
 
-SRCS=		if.c inet.c main.c mbuf.c route.c
+SRCS=		if.c inet.c main.c mbuf.c route.c show.c
 
 CPPFLAGS+=	-DSMALL -I${SRCDIR}
 DPADD=		${LIBKVM}

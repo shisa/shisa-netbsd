@@ -78,8 +78,8 @@ struct slhci_softc {
 #define SLTYPE_SL811HS_R12	SLTYPE_SL811HS
 #define SLTYPE_SL811HS_R14	(0x02)
 
-	u_int8_t		 sc_addr;	/* device address of root hub */
-	u_int8_t		 sc_conf;
+	uint8_t			 sc_addr;	/* device address of root hub */
+	uint8_t			 sc_conf;
 	SIMPLEQ_HEAD(, usbd_xfer) sc_free_xfers;
 
 	/* Information for the root hub interrupt pipe */
@@ -99,4 +99,5 @@ struct slhci_softc {
 
 int  sl811hs_find(struct slhci_softc *);
 int  slhci_attach(struct slhci_softc *, struct device *);
+int  slhci_detach(struct slhci_softc *, int);
 int  slhci_intr(void *);

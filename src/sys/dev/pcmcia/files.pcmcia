@@ -141,6 +141,9 @@ file	dev/pcmcia/esl.c			esl
 attach	opl at esl with opl_esl
 file	dev/pcmcia/opl_esl.c			opl_esl
 
+# USB controller
+attach	slhci at pcmcia with slhci_pcmcia
+file	dev/pcmcia/slhci_pcmcia.c			slhci_pcmcia
 # 3Com Bluetooth controller 3CRW6096
 device	bt3c: btbus, bluetooth, firmload
 attach	bt3c at pcmcia

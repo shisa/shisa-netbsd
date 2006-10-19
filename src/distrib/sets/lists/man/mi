@@ -1760,6 +1760,7 @@
 ./usr/share/man/cat8/atari/makedev.0		man-obsolete		obsolete
 ./usr/share/man/cat8/atrun.0			man-cron-catman		.cat
 ./usr/share/man/cat8/authpf.0			man-pf-catman		pf,.cat
+./usr/share/man/cat8/babymdd.0			man-netutil-catman	inet6,.cat
 ./usr/share/man/cat8/bad144.0			man-sysutil-catman	.cat
 ./usr/share/man/cat8/badsect.0			man-sysutil-catman	.cat
 ./usr/share/man/cat8/bebox/MAKEDEV.0		man-obsolete		obsolete
@@ -1789,6 +1790,7 @@
 ./usr/share/man/cat8/chrtbl.0			man-sysutil-catman	.cat
 ./usr/share/man/cat8/cleanup.0			man-postfix-catman	postfix,.cat
 ./usr/share/man/cat8/clri.0			man-sysutil-catman	.cat
+./usr/share/man/cat8/cnd.0			man-netutil-catman	inet6,.cat
 ./usr/share/man/cat8/cnwctl.0			man-sysutil-catman	.cat
 ./usr/share/man/cat8/cobalt/MAKEDEV.0		man-obsolete		obsolete
 ./usr/share/man/cat8/cobalt/boot.0		man-sys-catman		.cat
@@ -1888,6 +1890,7 @@
 ./usr/share/man/cat8/groupinfo.0		man-sysutil-catman	.cat
 ./usr/share/man/cat8/groupmod.0			man-sysutil-catman	.cat
 ./usr/share/man/cat8/gspa.0			man-sysutil-catman	.cat
+./usr/share/man/cat8/had.0			man-netutil-catman	inet6,.cat
 ./usr/share/man/cat8/halt.0			man-sysutil-catman	.cat
 ./usr/share/man/cat8/hlfsd.0			man-amd-catman		.cat
 ./usr/share/man/cat8/hostapd.0			man-sysutil-catman	.cat
@@ -2024,6 +2027,7 @@
 ./usr/share/man/cat8/mlxctl.0			man-sysutil-catman	.cat
 ./usr/share/man/cat8/mmeye/MAKEDEV.0		man-obsolete		obsolete
 ./usr/share/man/cat8/mmeye/makedev.0		man-obsolete		obsolete
+./usr/share/man/cat8/mnd.0			man-netutil-catman	inet6,.cat
 ./usr/share/man/cat8/modload.0			man-sysutil-catman	.cat
 ./usr/share/man/cat8/modstat.0			man-sysutil-catman	.cat
 ./usr/share/man/cat8/modunload.0		man-sysutil-catman	.cat
@@ -2055,6 +2059,7 @@
 ./usr/share/man/cat8/mount_union.0		man-miscfs-catman	.cat
 ./usr/share/man/cat8/mountd.0			man-nfsserver-catman	.cat
 ./usr/share/man/cat8/moused.0			man-sysutil-catman	.cat
+./usr/share/man/cat8/mrd.0			man-netutil-catman	inet6,.cat
 ./usr/share/man/cat8/mrinfo.0			man-netutil-catman	.cat
 ./usr/share/man/cat8/mrouted.0			man-router-catman	.cat
 ./usr/share/man/cat8/mscdlabel.0		man-sysutil-catman	.cat
@@ -2079,6 +2084,7 @@
 ./usr/share/man/cat8/ndc.0			man-obsolete		obsolete
 ./usr/share/man/cat8/ndiscvt.0			man-netutil-catman	.cat
 ./usr/share/man/cat8/ndp.0			man-netutil-catman	inet6,.cat
+./usr/share/man/cat8/nemonetd.0			man-netutil-catman	inet6,.cat
 ./usr/share/man/cat8/netbsd32.0			man-sys-catman		.cat
 ./usr/share/man/cat8/netgroup_mkdb.0		man-nis-catman		.cat
 ./usr/share/man/cat8/netwinder/MAKEDEV.0	man-obsolete		obsolete
@@ -4143,6 +4149,7 @@
 ./usr/share/man/man8/atari/makedev.8		man-obsolete		obsolete
 ./usr/share/man/man8/atrun.8			man-cron-man		.man
 ./usr/share/man/man8/authpf.8			man-pf-man		pf,.man
+./usr/share/man/man8/babymdd.8			man-netutil-man		inet6,.man
 ./usr/share/man/man8/bad144.8			man-sysutil-man		.man
 ./usr/share/man/man8/badsect.8			man-sysutil-man		.man
 ./usr/share/man/man8/bebox/MAKEDEV.8		man-obsolete		obsolete
@@ -4172,6 +4179,7 @@
 ./usr/share/man/man8/chrtbl.8			man-sysutil-man		.man
 ./usr/share/man/man8/cleanup.8			man-postfix-man		postfix,.man
 ./usr/share/man/man8/clri.8			man-sysutil-man		.man
+./usr/share/man/man8/cnd.8			man-netutil-man		inet6,.man
 ./usr/share/man/man8/cnwctl.8			man-sysutil-man		.man
 ./usr/share/man/man8/cobalt/MAKEDEV.8		man-obsolete		obsolete
 ./usr/share/man/man8/cobalt/boot.8		man-sys-man		.man
@@ -4271,6 +4279,7 @@
 ./usr/share/man/man8/groupinfo.8		man-sysutil-man		.man
 ./usr/share/man/man8/groupmod.8			man-sysutil-man		.man
 ./usr/share/man/man8/gspa.8			man-sysutil-man		.man
+./usr/share/man/man8/had.8			man-netutil-man		inet6,.man
 ./usr/share/man/man8/halt.8			man-sysutil-man		.man
 ./usr/share/man/man8/hlfsd.8			man-amd-man		.man
 ./usr/share/man/man8/hostapd.8			man-sysutil-man		.man
@@ -4408,6 +4417,7 @@
 ./usr/share/man/man8/mlxctl.8			man-sysutil-man		.man
 ./usr/share/man/man8/mmeye/MAKEDEV.8		man-obsolete		obsolete
 ./usr/share/man/man8/mmeye/makedev.8		man-obsolete		obsolete
+./usr/share/man/man8/mnd.8			man-netutil-man		inet6,.man
 ./usr/share/man/man8/modload.8			man-sysutil-man		.man
 ./usr/share/man/man8/modstat.8			man-sysutil-man		.man
 ./usr/share/man/man8/modunload.8		man-sysutil-man		.man
@@ -4439,6 +4449,7 @@
 ./usr/share/man/man8/mount_union.8		man-miscfs-man		.man
 ./usr/share/man/man8/mountd.8			man-nfsserver-man	.man
 ./usr/share/man/man8/moused.8			man-sysutil-man		.man
+./usr/share/man/man8/mrd.8			man-netutil-man		inet6,.man
 ./usr/share/man/man8/mrinfo.8			man-netutil-man		.man
 ./usr/share/man/man8/mrouted.8			man-router-man		.man
 ./usr/share/man/man8/mscdlabel.8		man-sysutil-man		.man
@@ -4463,6 +4474,7 @@
 ./usr/share/man/man8/ndc.8			man-obsolete		obsolete
 ./usr/share/man/man8/ndiscvt.8			man-netutil-man		.man
 ./usr/share/man/man8/ndp.8			man-netutil-man		inet6,.man
+./usr/share/man/man8/nemonetd.8			man-netutil-man		inet6,.man
 ./usr/share/man/man8/netbsd32.8			man-sys-man		.man
 ./usr/share/man/man8/netgroup_mkdb.8		man-nis-man		.man
 ./usr/share/man/man8/netwinder/MAKEDEV.8	man-obsolete		obsolete
