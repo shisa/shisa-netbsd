@@ -1,4 +1,4 @@
-/*	$NetBSD: genfs_vnops.c,v 1.130 2006/10/05 14:48:32 chs Exp $	*/
+/*	$NetBSD: genfs_vnops.c,v 1.137 2006/10/20 18:58:12 reinoud Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1989, 1993
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: genfs_vnops.c,v 1.130 2006/10/05 14:48:32 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: genfs_vnops.c,v 1.137 2006/10/20 18:58:12 reinoud Exp $");
 
 #if defined(_KERNEL_OPT)
 #include "opt_nfsserver.h"
@@ -45,7 +45,7 @@ __KERNEL_RCSID(0, "$NetBSD: genfs_vnops.c,v 1.130 2006/10/05 14:48:32 chs Exp $"
 #include <sys/namei.h>
 #include <sys/vnode.h>
 #include <sys/fcntl.h>
-#include <sys/malloc.h>
+#include <sys/kmem.h>
 #include <sys/poll.h>
 #include <sys/mman.h>
 #include <sys/file.h>
@@ -142,7 +142,7 @@ genfs_fcntl(void *v)
 
 /*ARGSUSED*/
 int
-genfs_badop(void *v)
+genfs_badop(void *v __unused)
 {
 
 	panic("genfs: bad op");
@@ -150,7 +150,7 @@ genfs_badop(void *v)
 
 /*ARGSUSED*/
 int
-genfs_nullop(void *v)
+genfs_nullop(void *v __unused)
 {
 
 	return (0);
@@ -158,7 +158,7 @@ genfs_nullop(void *v)
 
 /*ARGSUSED*/
 int
-genfs_einval(void *v)
+genfs_einval(void *v __unused)
 {
 
 	return (EINVAL);
@@ -215,7 +215,7 @@ genfs_eopnotsupp(void *v)
 
 /*ARGSUSED*/
 int
-genfs_ebadf(void *v)
+genfs_ebadf(void *v __unused)
 {
 
 	return (EBADF);
@@ -223,7 +223,7 @@ genfs_ebadf(void *v)
 
 /* ARGSUSED */
 int
-genfs_enoioctl(void *v)
+genfs_enoioctl(void *v __unused)
 {
 
 	return (EPASSTHROUGH);
@@ -361,14 +361,14 @@ genfs_nolock(void *v)
 }
 
 int
-genfs_nounlock(void *v)
+genfs_nounlock(void *v __unused)
 {
 
 	return (0);
 }
 
 int
-genfs_noislocked(void *v)
+genfs_noislocked(void *v __unused)
 {
 
 	return (0);
@@ -397,12 +397,13 @@ genfs_lease_check(void *v)
 	    NQLOCALSLP, ap->a_l, (struct mbuf *)0, &cache, &frev, ap->a_cred);
 	return (0);
 #else
+	(void) v;
 	return (0);
 #endif /* NFSSERVER */
 }
 
 int
-genfs_mmap(void *v)
+genfs_mmap(void *v __unused)
 {
 
 	return (0);
@@ -607,8 +608,7 @@ startover:
 	pgs_size = sizeof(struct vm_page *) *
 	    ((endoffset - startoffset) >> PAGE_SHIFT);
 	if (pgs_size > sizeof(pgs_onstack)) {
-		pgs = malloc(pgs_size, M_DEVBUF,
-		    (async ? M_NOWAIT : M_WAITOK) | M_ZERO);
+		pgs = kmem_zalloc(pgs_size, async ? KM_NOSLEEP : KM_SLEEP);
 		if (pgs == NULL) {
 			return (ENOMEM);
 		}
@@ -634,7 +634,7 @@ startover:
 	if (vp->v_size < origvsize) {
 		lockmgr(&gp->g_glock, LK_RELEASE, NULL);
 		if (pgs != pgs_onstack)
-			free(pgs, M_DEVBUF);
+			kmem_free(pgs, pgs_size);
 		goto startover;
 	}
 
@@ -645,7 +645,7 @@ startover:
 		genfs_rel_pages(&pgs[ridx], orignpages);
 		simple_unlock(&uobj->vmobjlock);
 		if (pgs != pgs_onstack)
-			free(pgs, M_DEVBUF);
+			kmem_free(pgs, pgs_size);
 		return (EBUSY);
 	}
 
@@ -713,7 +713,7 @@ startover:
 			genfs_rel_pages(pgs, npages);
 			simple_unlock(&uobj->vmobjlock);
 			if (pgs != pgs_onstack)
-				free(pgs, M_DEVBUF);
+				kmem_free(pgs, pgs_size);
 			return (EBUSY);
 		}
 	}
@@ -885,7 +885,7 @@ loopdone:
 		UVMHIST_LOG(ubchist, "returning 0 (async)",0,0,0,0);
 		lockmgr(&gp->g_glock, LK_RELEASE, NULL);
 		if (pgs != pgs_onstack)
-			free(pgs, M_DEVBUF);
+			kmem_free(pgs, pgs_size);
 		return (0);
 	}
 	if (bp != NULL) {
@@ -945,7 +945,7 @@ loopdone:
 		simple_unlock(&uobj->vmobjlock);
 		UVMHIST_LOG(ubchist, "returning error %d", error,0,0,0);
 		if (pgs != pgs_onstack)
-			free(pgs, M_DEVBUF);
+			kmem_free(pgs, pgs_size);
 		return (error);
 	}
 
@@ -990,7 +990,7 @@ out:
 		    orignpages * sizeof(struct vm_page *));
 	}
 	if (pgs != pgs_onstack)
-		free(pgs, M_DEVBUF);
+		kmem_free(pgs, pgs_size);
 	return (0);
 }
 
@@ -1090,10 +1090,8 @@ genfs_putpages(void *v)
 		s = splbio();
 		if (vp->v_flag & VONWORKLST) {
 			vp->v_flag &= ~VWRITEMAPDIRTY;
-			if (LIST_FIRST(&vp->v_dirtyblkhd) == NULL) {
-				vp->v_flag &= ~VONWORKLST;
-				LIST_REMOVE(vp, v_synclist);
-			}
+			if (LIST_FIRST(&vp->v_dirtyblkhd) == NULL)
+				vn_syncer_remove_from_worklist(vp);
 		}
 		splx(s);
 		simple_unlock(slock);
@@ -1339,7 +1337,8 @@ genfs_putpages(void *v)
 				pg = tpg;
 			if (tpg->offset < startoff || tpg->offset >= endoff)
 				continue;
-			if (flags & PGO_DEACTIVATE && tpg->wire_count == 0) {
+			if (flags & PGO_DEACTIVATE && tpg->wire_count == 0
+			    && tpg->loan_count == 0) {
 				(void) pmap_clear_reference(tpg);
 				uvm_pagedeactivate(tpg);
 			} else if (flags & PGO_FREE) {
@@ -1434,10 +1433,8 @@ genfs_putpages(void *v)
 	if (cleanall && wasclean && gp->g_dirtygen == dirtygen &&
 	    (vp->v_flag & VONWORKLST) != 0) {
 		vp->v_flag &= ~VWRITEMAPDIRTY;
-		if (LIST_FIRST(&vp->v_dirtyblkhd) == NULL) {
-			vp->v_flag &= ~VONWORKLST;
-			LIST_REMOVE(vp, v_synclist);
-		}
+		if (LIST_FIRST(&vp->v_dirtyblkhd) == NULL)
+			vn_syncer_remove_from_worklist(vp);
 	}
 	splx(s);
 
@@ -1603,7 +1600,9 @@ genfs_do_io(struct vnode *vp, off_t off, vaddr_t kva, size_t len, int flags,
 	}
 	UVMHIST_LOG(ubchist, "waiting for mbp %p", mbp,0,0,0);
 	error = biowait(mbp);
+	s = splbio();
 	(*iodone)(mbp);
+	splx(s);
 	UVMHIST_LOG(ubchist, "returning, error %d", error,0,0,0);
 	return (error);
 }
@@ -1638,7 +1637,7 @@ genfs_node_init(struct vnode *vp, const struct genfs_ops *ops)
 }
 
 void
-genfs_size(struct vnode *vp, off_t size, off_t *eobp, int flags)
+genfs_size(struct vnode *vp, off_t size, off_t *eobp, int flags __unused)
 {
 	int bsize;
 
@@ -1742,7 +1741,7 @@ genfs_compat_getpages(void *v)
 
 int
 genfs_compat_gop_write(struct vnode *vp, struct vm_page **pgs, int npages,
-    int flags)
+    int flags __unused)
 {
 	off_t offset;
 	struct iovec iov;
@@ -1795,7 +1794,7 @@ genfs_compat_gop_write(struct vnode *vp, struct vm_page **pgs, int npages,
  */
 
 void
-genfs_directio(struct vnode *vp, struct uio *uio, int ioflag)
+genfs_directio(struct vnode *vp, struct uio *uio, int ioflag __unused)
 {
 	struct vmspace *vs;
 	struct iovec *iov;
@@ -2071,4 +2070,28 @@ genfs_kqfilter(void *v)
 	SLIST_INSERT_HEAD(&vp->v_klist, kn, kn_selnext);
 
 	return (0);
+}
+
+void
+genfs_node_wrlock(struct vnode *vp)
+{
+	struct genfs_node *gp = VTOG(vp);
+
+	lockmgr(&gp->g_glock, LK_EXCLUSIVE, NULL);
+}
+
+void
+genfs_node_rdlock(struct vnode *vp)
+{
+	struct genfs_node *gp = VTOG(vp);
+
+	lockmgr(&gp->g_glock, LK_SHARED, NULL);
+}
+
+void
+genfs_node_unlock(struct vnode *vp)
+{
+	struct genfs_node *gp = VTOG(vp);
+
+	lockmgr(&gp->g_glock, LK_RELEASE, NULL);
 }

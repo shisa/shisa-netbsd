@@ -1,4 +1,4 @@
-#	$NetBSD: 3RDPARTY,v 1.471 2006/09/29 01:25:43 taca Exp $
+#	$NetBSD: 3RDPARTY,v 1.476 2006/10/26 17:14:12 kleink Exp $
 #
 # This file contains a list of the software that has been integrated into
 # NetBSD where we are not the primary maintainer.
@@ -296,6 +296,10 @@ Mailing List:	bug-gdb@gnu.org
 Responsible:	thorpej, mrg
 License:	GPLv2, LGPLv2
 Notes:
+When updating GDB, it is imperative to test that:
+	- Debugging of kernel cores ("target kvm") works correctly
+	- Support for our kernel's remote serial debugging protocol
+	  ("options KGDB") works correctly.
 
 Package:	gettext
 Version:	0.14.4
@@ -419,8 +423,8 @@ http://www.kame.net/dev/cvsweb.cgi/kame/COVERAGE has functionality comparison
 among KAME/*BSD, *BSD-current and recent *BSD releases.
 
 Package:	less
-Version:	less381
-Current Vers:	less395
+Version:	less394
+Current Vers:	less394
 Maintainer:	Mark Nudleman <markn@greenwoodsoftware.com>
 Archive Site:	http://www.greenwoodsoftware.com/less/download.html
 Home Page:	http://www.greenwoodsoftware.com/less/
@@ -452,7 +456,7 @@ leave it alone.  (garbled 1/4/2001)
 
 Package:	libevent
 Version:	1.0c
-Current Vers:	1.1a
+Current Vers:	1.2
 Maintainer:	Niels Provos <provos@citi.umich.edu>
 Archive Site:	http://www.monkey.org/~provos/libevent/
 Home Page:	http://www.monkey.org/~provos/libevent/
@@ -830,8 +834,8 @@ License:	BSD (4-clause)
 Notes:
 
 Package:	tz
-Version:	tzcode2004a / tzdata2006l
-Current Vers:	tzcode2006k / tzdata2006l
+Version:	tzcode2004a / tzdata2006n
+Current Vers:	tzcode2006n / tzdata2006n
 Maintainer:	Arthur David Olson <ado@elsie.nci.nih.gov>
 Archive Site:	ftp://elsie.nci.nih.gov/pub/
 Home Page:

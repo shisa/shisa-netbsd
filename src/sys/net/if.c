@@ -1,4 +1,4 @@
-/*	$NetBSD: if.c,v 1.168 2006/08/25 19:33:50 matt Exp $	*/
+/*	$NetBSD: if.c,v 1.175 2006/10/27 15:33:11 christos Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2000, 2001 The NetBSD Foundation, Inc.
@@ -97,7 +97,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if.c,v 1.168 2006/08/25 19:33:50 matt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if.c,v 1.175 2006/10/27 15:33:11 christos Exp $");
 
 #include "opt_inet.h"
 
@@ -204,57 +204,57 @@ ifinit(void)
  */
 
 int
-if_nulloutput(struct ifnet *ifp, struct mbuf *m, struct sockaddr *so,
-    struct rtentry *rt)
+if_nulloutput(struct ifnet *ifp __unused, struct mbuf *m __unused,
+    struct sockaddr *so __unused, struct rtentry *rt __unused)
 {
 
 	return (ENXIO);
 }
 
 void
-if_nullinput(struct ifnet *ifp, struct mbuf *m)
+if_nullinput(struct ifnet *ifp __unused, struct mbuf *m __unused)
 {
 
 	/* Nothing. */
 }
 
 void
-if_nullstart(struct ifnet *ifp)
+if_nullstart(struct ifnet *ifp __unused)
 {
 
 	/* Nothing. */
 }
 
 int
-if_nullioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
+if_nullioctl(struct ifnet *ifp __unused, u_long cmd __unused, caddr_t data __unused)
 {
 
 	return (ENXIO);
 }
 
 int
-if_nullinit(struct ifnet *ifp)
+if_nullinit(struct ifnet *ifp __unused)
 {
 
 	return (ENXIO);
 }
 
 void
-if_nullstop(struct ifnet *ifp, int disable)
+if_nullstop(struct ifnet *ifp __unused, int disable __unused)
 {
 
 	/* Nothing. */
 }
 
 void
-if_nullwatchdog(struct ifnet *ifp)
+if_nullwatchdog(struct ifnet *ifp __unused)
 {
 
 	/* Nothing. */
 }
 
 void
-if_nulldrain(struct ifnet *ifp)
+if_nulldrain(struct ifnet *ifp __unused)
 {
 
 	/* Nothing. */
@@ -886,9 +886,10 @@ if_clone_list(struct if_clonereq *ifcr)
 
 	for (ifc = LIST_FIRST(&if_cloners); ifc != NULL && count != 0;
 	     ifc = LIST_NEXT(ifc, ifc_list), count--, dst += IFNAMSIZ) {
-		strncpy(outbuf, ifc->ifc_name, IFNAMSIZ);
-		outbuf[IFNAMSIZ - 1] = '\0';	/* sanity */
-		error = copyout(outbuf, dst, IFNAMSIZ);
+		(void)strncpy(outbuf, ifc->ifc_name, sizeof(outbuf));
+		if (outbuf[sizeof(outbuf) - 1] != '\0')
+			return ENAMETOOLONG;
+		error = copyout(outbuf, dst, sizeof(outbuf));
 		if (error)
 			break;
 	}
@@ -971,7 +972,7 @@ ifa_ifwithnet(const struct sockaddr *addr)
 	const struct sockaddr_dl *sdl;
 	struct ifaddr *ifa_maybe = 0;
 	u_int af = addr->sa_family;
-	char *addr_data = addr->sa_data, *cplim;
+	const char *addr_data = addr->sa_data, *cplim;
 
 	if (af == AF_LINK) {
 		sdl = (const struct sockaddr_dl *)addr;
@@ -1008,7 +1009,7 @@ ifa_ifwithnet(const struct sockaddr *addr)
 			continue;
 		for (ifa = TAILQ_FIRST(&ifp->if_addrlist); ifa != NULL;
 		     ifa = TAILQ_NEXT(ifa, ifa_list)) {
-			char *cp, *cp2, *cp3;
+			const char *cp, *cp2, *cp3;
 
 			if (ifa->ifa_addr->sa_family != af ||
 			    ifa->ifa_netmask == 0)
@@ -1016,7 +1017,7 @@ ifa_ifwithnet(const struct sockaddr *addr)
 			cp = addr_data;
 			cp2 = ifa->ifa_addr->sa_data;
 			cp3 = ifa->ifa_netmask->sa_data;
-			cplim = (char *)ifa->ifa_netmask +
+			cplim = (const char *)ifa->ifa_netmask +
 			    ifa->ifa_netmask->sa_len;
 			while (cp3 < cplim) {
 				if ((*cp++ ^ *cp2++) & *cp3++) {
@@ -1214,7 +1215,7 @@ if_up(struct ifnet *ifp)
  * call the appropriate interface routine on expiration.
  */
 void
-if_slowtimo(void *arg)
+if_slowtimo(void *arg __unused)
 {
 	struct ifnet *ifp;
 	int s = splnet();
@@ -1345,12 +1346,16 @@ ifioctl(struct socket *so, u_long cmd, caddr_t data, struct lwp *l)
 	ifcr = (struct ifcapreq *)data;
 	ifdr = (struct ifdatareq *)data;
 
+	ifp = ifunit(ifr->ifr_name);
+
 	switch (cmd) {
 	case SIOCIFCREATE:
 	case SIOCIFDESTROY:
 		if (l) {
-			error = kauth_authorize_generic(l->l_cred,
-			    KAUTH_GENERIC_ISSUSER, &l->l_acflag);
+			error = kauth_authorize_network(l->l_cred,
+			    KAUTH_NETWORK_INTERFACE,
+			    KAUTH_REQ_NETWORK_INTERFACE_SETPRIV, ifp,
+			    (void *)cmd, NULL);
 			if (error)
 				return error;
 		}
@@ -1362,7 +1367,6 @@ ifioctl(struct socket *so, u_long cmd, caddr_t data, struct lwp *l)
 		return (if_clone_list((struct if_clonereq *)data));
 	}
 
-	ifp = ifunit(ifr->ifr_name);
 	if (ifp == 0)
 		return (ENXIO);
 
@@ -1388,8 +1392,10 @@ ifioctl(struct socket *so, u_long cmd, caddr_t data, struct lwp *l)
 	case SIOCS80211BSSID:
 	case SIOCS80211CHANNEL:
 		if (l) {
-			error = kauth_authorize_generic(l->l_cred,
-			    KAUTH_GENERIC_ISSUSER, &l->l_acflag);
+			error = kauth_authorize_network(l->l_cred,
+			    KAUTH_NETWORK_INTERFACE,
+			    KAUTH_REQ_NETWORK_INTERFACE_SETPRIV, ifp,
+			    (void *)cmd, NULL);
 			if (error)
 				return error;
 		}
@@ -1594,7 +1600,7 @@ ifioctl(struct socket *so, u_long cmd, caddr_t data, struct lwp *l)
  */
 /*ARGSUSED*/
 int
-ifconf(u_long cmd, caddr_t data)
+ifconf(u_long cmd __unused, caddr_t data)
 {
 	struct ifconf *ifc = (struct ifconf *)data;
 	struct ifnet *ifp;
@@ -1611,7 +1617,10 @@ ifconf(u_long cmd, caddr_t data)
 		sign = 1;
 	}
 	IFNET_FOREACH(ifp) {
-		bcopy(ifp->if_xname, ifr.ifr_name, IFNAMSIZ);
+		(void)strncpy(ifr.ifr_name, ifp->if_xname,
+		    sizeof(ifr.ifr_name));
+		if (ifr.ifr_name[sizeof(ifr.ifr_name) - 1] != '\0')
+			return ENAMETOOLONG;
 		if ((ifa = TAILQ_FIRST(&ifp->if_addrlist)) == 0) {
 			memset(&ifr.ifr_addr, 0, sizeof(ifr.ifr_addr));
 			if (ifrp != NULL && space >= sz) {

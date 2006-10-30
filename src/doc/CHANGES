@@ -1,4 +1,4 @@
-LIST OF CHANGES FROM LAST RELEASE:			<$Revision: 1.724 $>
+LIST OF CHANGES FROM LAST RELEASE:			<$Revision: 1.738 $>
 
 
 [Note: This file does not mention every change made to the NetBSD source tree.
@@ -95,6 +95,8 @@ Changes from NetBSD 4.0 to NetBSD 5.0:
 	ofctl(8): initial import, formerly known as ofdump2. For macppc,
 		shark, sparc64.
 		Written by Matt Thomas. [macallan 20060929]
+	build: Improved support for using shells other than /bin/sh
+		during a cross build.  [apb 20060929]
 	pcictl(8): Add "list -n" to print ID and class numerical, instead
 		of resolving to strings [hubertf 20061001]
 	sun3: Add initial bus_space(9) support. [tsutsui 20061001]
@@ -104,7 +106,35 @@ Changes from NetBSD 4.0 to NetBSD 5.0:
 	spi(4): initial import of new machine-independent SPI bus framework,
 		including a sample driver for the TI TMP121 sensor.
 		[gdamore 20061002]
+	ps(1): Improved support for customised headers via -o and -O options.
+		[apb 20061002]
 	sun3: Add MI softintr(9) support by shared sources with sun2 port.
 		[tsutsui 20061005]
 	sparc64: Add floppy support based on sparc driver and hints from
 		from OpenBSD for sbus/ebus attachment.  [jnemeth 20061006]
+	find(1): Add support for "find ... -exec ... +".  Written by
+		John Hawkinson.  [apb 20061007]
+	tcp_congctl(9): API for TCP congestion control algorithms.
+		net.inet.tcp.newreno was removed, please use
+		net.inet.tcp.congctl.selected instead. [rpaulo 20061009]
+	proplib(3): prop_number_t can now handle both signed and unsigned
+		integers.  [thorpej 20061011]
+	pf(4): Added support for ALTQ. [peter 20061012]
+	vge(4): Make this driver work on big endian machines
+		(at least on macppc). [tsutsui 20061014]
+	gpt(8): Added from FreeBSD [christos 20061015]
+	tcp(4): Added RFC 3465 Appropriate Byte Counting (ABC) [yamt 20061019]
+	wm(4): Added support for the Intel 80003 gigabit ethernet controller.
+		[bouyer 20061021]
+	mail(1): Mime and multi-character set handling; command line editing
+		and completion. Thanks to Anon Ymous [christos 20061021]
+	acorn32: Standard kernels now use the machine-independent sec(4)
+		and ei(4) drivers for Acorn SCSI Expansion Cards and
+		Ethernet 1 cards respectively, in place of asc(4) and ie(4).
+		[bjh21 20061022]
+	puffs: Integrate Pass-to-Userspace Framework File System, which
+		can be used to build userspace file system servers
+		[pooka 20061022]
+	hpcarm: Add timecounter support and convert to MI todr(9).
+		[peter 20061023]
+	less: Updated to version 394.  [mrg 20061025]

@@ -1,4 +1,4 @@
-/*	$NetBSD: identcpu.c,v 1.44 2006/10/04 13:18:10 cube Exp $	*/
+/*	$NetBSD: identcpu.c,v 1.47 2006/10/12 01:30:42 christos Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2000, 2001 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: identcpu.c,v 1.44 2006/10/04 13:18:10 cube Exp $");
+__KERNEL_RCSID(0, "$NetBSD: identcpu.c,v 1.47 2006/10/12 01:30:42 christos Exp $");
 
 #include "opt_cputype.h"
 #include "opt_enhanced_speedstep.h"
@@ -340,8 +340,8 @@ const struct cpu_cpuid_nameclass i386_cpuid_cpus[] = {
 				"Unknown K7 (Athlon)"	/* Default */
 			},
 			NULL,
-			NULL,
-			NULL,
+			amd_family6_probe,
+			amd_cpu_cacheinfo,
 		} }
 	},
 	{
@@ -567,7 +567,7 @@ const struct cpu_cpuid_nameclass i386_cpuid_cpus[] = {
  * because some CPUs got the implementation wrong.
  */
 static void
-disable_tsc(struct cpu_info *ci)
+disable_tsc(struct cpu_info *ci __unused)
 {
 	if (cpu_feature & CPUID_TSC) {
 		cpu_feature &= ~CPUID_TSC;
@@ -637,8 +637,7 @@ cyrix6x86_cpu_setup(ci)
 }
 
 void
-winchip_cpu_setup(ci)
-	struct cpu_info *ci;
+winchip_cpu_setup(struct cpu_info *ci __unused)
 {
 #if defined(I586_CPU)
 	switch (CPUID2MODEL(ci->ci_signature)) { /* model */
@@ -1256,7 +1255,7 @@ transmeta_cpu_info(struct cpu_info *ci)
 }
 
 void
-transmeta_cpu_setup(struct cpu_info *ci)
+transmeta_cpu_setup(struct cpu_info *ci __unused)
 {
 	u_int nreg = 0, dummy;
 
@@ -1461,7 +1460,7 @@ identifycpu(struct cpu_info *ci)
 
 	x86_print_cacheinfo(ci);
 
-	if (cpu_feature & CPUID_TM) {
+	if (vendor != CPUVENDOR_AMD && (cpu_feature & CPUID_TM)) {
 		if (rdmsr(MSR_MISC_ENABLE) & (1 << 3)) {
 			if ((cpu_feature2 & CPUID2_TM2) &&
 			    (rdmsr(MSR_THERM2_CTL) & (1 << 16)))

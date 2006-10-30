@@ -1,4 +1,4 @@
-/* $NetBSD: secmodel_example.c,v 1.1 2006/09/15 15:49:29 elad Exp $ */
+/* $NetBSD: secmodel_example.c,v 1.5 2006/10/25 22:49:23 elad Exp $ */
 
 /*
  * This file is placed in the public domain.
@@ -13,7 +13,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: secmodel_example.c,v 1.1 2006/09/15 15:49:29 elad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: secmodel_example.c,v 1.5 2006/10/25 22:49:23 elad Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -296,6 +296,7 @@ secmodel_example_network_cb(kauth_cred_t cred, kauth_action_t action,
                 case KAUTH_REQ_NETWORK_ALTQ_CONF:
                 case KAUTH_REQ_NETWORK_ALTQ_FIFOQ:
                 case KAUTH_REQ_NETWORK_ALTQ_HFSC:
+		case KAUTH_REQ_NETWORK_ALTQ_JOBS:
                 case KAUTH_REQ_NETWORK_ALTQ_PRIQ:
                 case KAUTH_REQ_NETWORK_ALTQ_RED:
                 case KAUTH_REQ_NETWORK_ALTQ_RIO:
@@ -326,18 +327,35 @@ secmodel_example_network_cb(kauth_cred_t cred, kauth_action_t action,
                 }
                 break;
 
+        case KAUTH_NETWORK_FORWSRCRT:
+		break;
+
+	case KAUTH_NETWORK_INTERFACE:
+		switch ((u_long)arg0) {
+		case KAUTH_REQ_NETWORK_INTERFACE_GET:
+		case KAUTH_REQ_NETWORK_INTERFACE_SET:
+		case KAUTH_REQ_NETWORK_INTERFACE_GETPRIV:
+		case KAUTH_REQ_NETWORK_INTERFACE_SETPRIV:
+		default:
+			result = KAUTH_RESULT_DEFER;
+			break;
+		}
+		break;
+
+        case KAUTH_NETWORK_ROUTE:
+		break;
+
         case KAUTH_NETWORK_SOCKET:
                 switch((u_long)arg0) {
-                case KAUTH_REQ_NETWORK_SOCKET_ATTACH:
+                case KAUTH_REQ_NETWORK_SOCKET_OPEN:
                 case KAUTH_REQ_NETWORK_SOCKET_RAWSOCK:
+		case KAUTH_REQ_NETWORK_SOCKET_CANSEE:
                 default:
                         result = KAUTH_RESULT_DEFER;
                         break;
                 }
                 break;
 
-        case KAUTH_NETWORK_FORWSRCRT:
-        case KAUTH_NETWORK_ROUTE:
         default:
                 result = KAUTH_RESULT_DEFER;
                 break;

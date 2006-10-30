@@ -1,4 +1,4 @@
-/*	$NetBSD: vfs_vnops.c,v 1.125 2006/10/05 14:48:32 chs Exp $	*/
+/*	$NetBSD: vfs_vnops.c,v 1.127 2006/10/28 11:43:45 elad Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1989, 1993
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: vfs_vnops.c,v 1.125 2006/10/05 14:48:32 chs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: vfs_vnops.c,v 1.127 2006/10/28 11:43:45 elad Exp $");
 
 #include "fs_union.h"
 #include "veriexec.h"
@@ -105,20 +105,25 @@ vn_open(struct nameidata *ndp, int fmode, int cmode)
 	int error;
 #if NVERIEXEC > 0
 	struct veriexec_file_entry *vfe = NULL;
-	char pathbuf[MAXPATHLEN];
-	size_t pathlen;
-	int (*copyfun)(const void *, void *, size_t, size_t *) =
-	    ndp->ni_segflg == UIO_SYSSPACE ? copystr : copyinstr;
+	const char *pathbuf;
+	char *tmppathbuf;
 #endif /* NVERIEXEC > 0 */
 
 #if NVERIEXEC > 0
-	error = (*copyfun)(ndp->ni_dirp, pathbuf, sizeof(pathbuf), &pathlen);
-	if (error) {
-		if (veriexec_verbose >= 1)
-			printf("veriexec: Can't copy path. (error=%d)\n",
-			    error);
-
-		return (error);
+	if (ndp->ni_segflg == UIO_USERSPACE) {	
+		tmppathbuf = PNBUF_GET();
+		error = copyinstr(ndp->ni_dirp, tmppathbuf, MAXPATHLEN,
+		    NULL);
+		if (error) {
+			if (veriexec_verbose >= 1)
+				printf("Veriexec: Can't copy path. (err=%d\n",
+				    error);
+			goto bad2;
+		}
+		pathbuf = tmppathbuf;
+	} else {
+		tmppathbuf = NULL;
+		pathbuf = ndp->ni_dirp;
 	}
 #endif /* NVERIEXEC > 0 */
 
@@ -130,7 +135,7 @@ restart:
 		    ((fmode & O_NOFOLLOW) == 0))
 			ndp->ni_cnd.cn_flags |= FOLLOW;
 		if ((error = namei(ndp)) != 0)
-			return (error);
+			goto bad2;
 		if (ndp->ni_vp == NULL) {
 #if NVERIEXEC > 0
 			/* Lockdown mode: Prevent creation of new files. */
@@ -157,7 +162,7 @@ restart:
 				vput(ndp->ni_dvp);
 				if ((error = vn_start_write(NULL, &mp,
 				    V_WAIT | V_SLEEPONLY | V_PCATCH)) != 0)
-					return (error);
+					goto bad2;
 				goto restart;
 			}
 			VOP_LEASE(ndp->ni_dvp, l, cred, LEASE_WRITE);
@@ -165,7 +170,7 @@ restart:
 					   &ndp->ni_cnd, &va);
 			vn_finished_write(mp, 0);
 			if (error)
-				return (error);
+				goto bad2;
 			fmode &= ~O_TRUNC;
 			vp = ndp->ni_vp;
 		} else {
@@ -188,7 +193,7 @@ restart:
 		if ((fmode & O_NOFOLLOW) == 0)
 			ndp->ni_cnd.cn_flags |= FOLLOW;
 		if ((error = namei(ndp)) != 0)
-			return (error);
+			goto bad2;
 		vp = ndp->ni_vp;
 	}
 	if (vp->v_type == VSOCK) {
@@ -264,7 +269,7 @@ restart:
 
 		if ((error = vn_start_write(vp, &mp, V_WAIT | V_PCATCH)) != 0) {
 			vrele(vp);
-			return (error);
+			goto bad2;
 		}
 		VOP_LEASE(vp, l, cred, LEASE_WRITE);
 		vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);	/* XXX */
@@ -285,9 +290,16 @@ restart:
 	if (fmode & FWRITE)
 		vp->v_writecount++;
 
-	return (0);
 bad:
-	vput(vp);
+	if (error)
+		vput(vp);
+
+bad2:
+#if NVERIEXEC > 0
+	if (tmppathbuf != NULL)
+		PNBUF_PUT(tmppathbuf);
+#endif /* NVERIEXEC > 0 */
+
 	return (error);
 }
 

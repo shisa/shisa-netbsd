@@ -1,4 +1,4 @@
-/*	$NetBSD: uipc_socket.c,v 1.125 2006/10/03 11:15:04 elad Exp $	*/
+/*	$NetBSD: uipc_socket.c,v 1.127 2006/10/25 22:49:23 elad Exp $	*/
 
 /*-
  * Copyright (c) 2002 The NetBSD Foundation, Inc.
@@ -68,7 +68,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: uipc_socket.c,v 1.125 2006/10/03 11:15:04 elad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: uipc_socket.c,v 1.127 2006/10/25 22:49:23 elad Exp $");
 
 #include "opt_sock_counters.h"
 #include "opt_sosend_loan.h"
@@ -151,7 +151,7 @@ static size_t sodopendfree(void);
 static size_t sodopendfreel(void);
 
 static vsize_t
-sokvareserve(struct socket *so, vsize_t len)
+sokvareserve(struct socket *so __unused, vsize_t len)
 {
 	int s;
 	int error;
@@ -342,7 +342,7 @@ sodopendfreel()
 }
 
 void
-soloanfree(struct mbuf *m, caddr_t buf, size_t size, void *arg)
+soloanfree(struct mbuf *m, caddr_t buf, size_t size, void *arg __unused)
 {
 	int s;
 
@@ -432,7 +432,8 @@ sosend_loan(struct socket *so, struct uio *uio, struct mbuf *m, long space)
 }
 
 static int
-sokva_reclaim_callback(struct callback_entry *ce, void *obj, void *arg)
+sokva_reclaim_callback(struct callback_entry *ce __unused, void *obj __unused,
+    void *arg __unused)
 {
 
 	KASSERT(ce == &sokva_reclaimerentry);
@@ -472,6 +473,10 @@ socreate(int dom, struct socket **aso, int type, int proto, struct lwp *l)
 	struct socket	*so;
 	uid_t		uid;
 	int		error, s;
+
+	if (kauth_authorize_network(l->l_cred, KAUTH_NETWORK_SOCKET,
+	    KAUTH_REQ_NETWORK_SOCKET_OPEN, &dom, &type, &proto) != 0)
+		return (EPERM);
 
 	if (proto)
 		prp = pffindproto(dom, proto, type);
@@ -1666,7 +1671,7 @@ filt_sordetach(struct knote *kn)
 
 /*ARGSUSED*/
 static int
-filt_soread(struct knote *kn, long hint)
+filt_soread(struct knote *kn, long hint __unused)
 {
 	struct socket	*so;
 
@@ -1697,7 +1702,7 @@ filt_sowdetach(struct knote *kn)
 
 /*ARGSUSED*/
 static int
-filt_sowrite(struct knote *kn, long hint)
+filt_sowrite(struct knote *kn, long hint __unused)
 {
 	struct socket	*so;
 
@@ -1720,7 +1725,7 @@ filt_sowrite(struct knote *kn, long hint)
 
 /*ARGSUSED*/
 static int
-filt_solisten(struct knote *kn, long hint)
+filt_solisten(struct knote *kn, long hint __unused)
 {
 	struct socket	*so;
 
@@ -1742,7 +1747,7 @@ static const struct filterops sowrite_filtops =
 	{ 1, NULL, filt_sowdetach, filt_sowrite };
 
 int
-soo_kqfilter(struct file *fp, struct knote *kn)
+soo_kqfilter(struct file *fp __unused, struct knote *kn)
 {
 	struct socket	*so;
 	struct sockbuf	*sb;

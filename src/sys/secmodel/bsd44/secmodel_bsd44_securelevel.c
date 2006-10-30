@@ -1,4 +1,4 @@
-/* $NetBSD: secmodel_bsd44_securelevel.c,v 1.7 2006/09/22 15:39:09 elad Exp $ */
+/* $NetBSD: secmodel_bsd44_securelevel.c,v 1.9 2006/10/12 01:32:50 christos Exp $ */
 /*-
  * Copyright (c) 2006 Elad Efrat <elad@NetBSD.org>
  * All rights reserved.
@@ -38,7 +38,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: secmodel_bsd44_securelevel.c,v 1.7 2006/09/22 15:39:09 elad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: secmodel_bsd44_securelevel.c,v 1.9 2006/10/12 01:32:50 christos Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_insecure.h"
@@ -136,8 +136,9 @@ secmodel_bsd44_securelevel_start(void)
  * Responsibility: Securelevel
  */
 int
-secmodel_bsd44_securelevel_system_cb(kauth_cred_t cred, kauth_action_t action,
-    void *cookie, void *arg0, void *arg1, void *arg2, void *arg3)
+secmodel_bsd44_securelevel_system_cb(kauth_cred_t cred __unused,
+    kauth_action_t action, void *cookie __unused, void *arg0, void *arg1,
+    void *arg2, void *arg3)
 {
 	int result;
 	enum kauth_system_req req;
@@ -176,8 +177,25 @@ secmodel_bsd44_securelevel_system_cb(kauth_cred_t cred, kauth_action_t action,
 			struct vnode *vp = arg2;
 			dev_t dev = (dev_t)(u_long)arg3;
 
-			if (vp == NULL || dev == NODEV)
+			if (vp == NULL || dev == NODEV) {
+				switch (rw) {
+				case KAUTH_REQ_SYSTEM_RAWIO_READ:
+					result = KAUTH_RESULT_ALLOW;
+					break;
+
+				case KAUTH_REQ_SYSTEM_RAWIO_RW:
+				case KAUTH_REQ_SYSTEM_RAWIO_WRITE:
+					if (securelevel < 1)
+						result = KAUTH_RESULT_ALLOW;
+					break;
+
+				default:
+					result = KAUTH_RESULT_DEFER;
+					break;
+				}
+
 				break;
+			}
 
 			switch (vp->v_type) {
 			case VCHR: {
@@ -322,8 +340,9 @@ secmodel_bsd44_securelevel_system_cb(kauth_cred_t cred, kauth_action_t action,
  * Responsibility: Securelevel
  */
 int
-secmodel_bsd44_securelevel_process_cb(kauth_cred_t cred, kauth_action_t action,
-    void *cookie, void *arg0, void *arg1, void *arg2, void *arg3)
+secmodel_bsd44_securelevel_process_cb(kauth_cred_t cred __unused,
+    kauth_action_t action, void *cookie __unused, void *arg0 __unused,
+    void *arg1 __unused, void *arg2 __unused, void *arg3 __unused)
 {
 	int result;
 
@@ -351,8 +370,9 @@ secmodel_bsd44_securelevel_process_cb(kauth_cred_t cred, kauth_action_t action,
  * Responsibility: Securelevel
  */
 int
-secmodel_bsd44_securelevel_network_cb(kauth_cred_t cred, kauth_action_t action,
-    void *cookie, void *arg0, void *arg1, void *arg2, void *arg3)
+secmodel_bsd44_securelevel_network_cb(kauth_cred_t cred __unused,
+    kauth_action_t action, void *cookie __unused, void *arg0 __unused,
+    void *arg1 __unused, void *arg2 __unused, void *arg3 __unused)
 {
 	int result;
 	enum kauth_network_req req;
@@ -396,8 +416,9 @@ secmodel_bsd44_securelevel_network_cb(kauth_cred_t cred, kauth_action_t action,
  * Responsibility: Securelevel
  */
 int
-secmodel_bsd44_securelevel_machdep_cb(kauth_cred_t cred, kauth_action_t action,
-    void *cookie, void *arg0, void *arg1, void *arg2, void *arg3)
+secmodel_bsd44_securelevel_machdep_cb(kauth_cred_t cred __unused,
+    kauth_action_t action, void *cookie __unused, void *arg0 __unused,
+    void *arg1 __unused, void *arg2 __unused, void *arg3 __unused)
 {
         int result;
 	enum kauth_machdep_req req;

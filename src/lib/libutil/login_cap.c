@@ -1,4 +1,4 @@
-/*	$NetBSD: login_cap.c,v 1.23 2005/12/20 21:32:20 christos Exp $	*/
+/*	$NetBSD: login_cap.c,v 1.25 2006/10/15 19:33:03 christos Exp $	*/
 
 /*-
  * Copyright (c) 1995,1997 Berkeley Software Design, Inc. All rights reserved.
@@ -36,7 +36,7 @@
 
 #include <sys/cdefs.h>
 #if defined(LIBC_SCCS) && !defined(lint)
-__RCSID("$NetBSD: login_cap.c,v 1.23 2005/12/20 21:32:20 christos Exp $");
+__RCSID("$NetBSD: login_cap.c,v 1.25 2006/10/15 19:33:03 christos Exp $");
 #endif /* LIBC_SCCS and not lint */
  
 #include <sys/types.h>
@@ -435,8 +435,8 @@ gsetrl(login_cap_t *lc, int what, const char *name, int type)
 
 	_DIAGASSERT(name != NULL);
 
-	sprintf(name_cur, "%s-cur", name);
-	sprintf(name_max, "%s-max", name);
+	(void)snprintf(name_cur, sizeof(name_cur), "%s-cur", name);
+	(void)snprintf(name_max, sizeof(name_max), "%s-max", name);
 
 	if (getrlimit(what, &r)) {
 		syslog(LOG_ERR, "getting resource limit: %m");
@@ -466,6 +466,8 @@ gsetrl(login_cap_t *lc, int what, const char *name, int type)
 		rl.rlim_max = login_getcapnum(lc, name_max, RMAX, RMAX);
 		break;
 	default:
+		syslog(LOG_ERR, "%s: invalid type %d setting resource limit %s",
+		    lc->lc_class, type, name);
 		return (-1);
 	}
 
@@ -490,7 +492,7 @@ int
 setuserenv(login_cap_t *lc, envfunc_t senv, void *envp)
 {
 	const char *stop = ", \t";
-	int i, count;
+	size_t i, count;
 	char *ptr;
 	char **res;
 	char *str = login_getcapstr(lc, "setenv", NULL, NULL);
@@ -498,7 +500,10 @@ setuserenv(login_cap_t *lc, envfunc_t senv, void *envp)
 	if (str == NULL || *str == '\0')
 		return 0;
 	
-	/* count the sub-strings */
+	/*
+	 * count the sub-strings, this may over-count since we don't
+	 * account for escaped delimiters.
+	 */
 	for (i = 1, ptr = str; *ptr; i++) {
 		ptr += strcspn(ptr, stop);
 		if (*ptr)
@@ -512,27 +517,22 @@ setuserenv(login_cap_t *lc, envfunc_t senv, void *envp)
 	if (!res)
 		return -1;
 	
-	ptr = (char *)(void *)res + count * sizeof(char *);
-	strcpy(ptr, str);
+	ptr = (char *)(void *)&res[count];
+	(void)strcpy(ptr, str);
 
 	/* split string */
-	for (i = 0; *ptr && i < count; i++) {
-		res[i] = ptr;
-		ptr += strcspn(ptr, stop);
-		if (*ptr)
-			*ptr++ = '\0';
-	}
+	for (i = 0; (res[i] = stresep(&ptr, stop, '\\')) != NULL; )
+		if (*res[i])
+			i++;
 	
-	res[i] = NULL;
+	count = i;
 
-	for (i = 0; i < count && res[i]; i++) {
-		if (*res[i] != '\0') {
-			if ((ptr = strchr(res[i], '=')) != NULL)
-				*ptr++ = '\0';
-			else 
-				ptr = NULL;
-			(void)(*senv)(envp, res[i], ptr ? ptr : "", 1);
-		}
+	for (i = 0; i < count; i++) {
+		if ((ptr = strchr(res[i], '=')) != NULL)
+			*ptr++ = '\0';
+		else 
+			ptr = NULL;
+		(void)(*senv)(envp, res[i], ptr ? ptr : "", 1);
 	}
 	
 	free(res);
@@ -575,9 +575,8 @@ setusercontext(login_cap_t *lc, struct passwd *pwd, uid_t uid, u_int flags)
 
 	if (flags & LOGIN_SETRESOURCES)
 		for (i = 0; r_list[i].name; ++i) 
-			if (gsetrl(lc, r_list[i].what, r_list[i].name,
-			    r_list[i].type))
-				/* XXX - call syslog()? */;
+			(void)gsetrl(lc, r_list[i].what, r_list[i].name,
+			    r_list[i].type);
 
 	if (flags & LOGIN_SETPRIORITY) {
 		p = login_getcapnum(lc, "priority", (quad_t)0, (quad_t)0);

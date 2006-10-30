@@ -1,4 +1,4 @@
-/*	$NetBSD: init.c,v 1.18 2004/06/20 22:20:17 jmc Exp $	*/
+/*	$NetBSD: init.c,v 1.21 2006/10/15 18:18:54 christos Exp $	*/
 
 /*
  * Copyright (c) 1994, 1995 Jochen Pohl
@@ -37,7 +37,7 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID) && !defined(lint)
-__RCSID("$NetBSD: init.c,v 1.18 2004/06/20 22:20:17 jmc Exp $");
+__RCSID("$NetBSD: init.c,v 1.21 2006/10/15 18:18:54 christos Exp $");
 #endif
 
 #include <stdlib.h>
@@ -164,6 +164,10 @@ popi2(void)
 	istk_t	*istk;
 	sym_t	*m;
 
+	DPRINTF(("popi2(%s): brace=%d count=%d namedmem %d\n",
+	    tyname(buf, sizeof(buf),
+	    initstk->i_type ? initstk->i_type : initstk->i_subt),
+	    initstk->i_brace, initstk->i_cnt, initstk->i_namedmem));
 	initstk = (istk = initstk)->i_nxt;
 	if (initstk == NULL)
 		LERROR("popi2()");
@@ -285,11 +289,15 @@ again:
 	switch (istk->i_type->t_tspec) {
 	case ARRAY:
 		if (namedmem) {
-			DPRINTF(("pushinit ARRAY %s\n", namedmem->n_name));
-			free(istk);
-			initstk = initstk->i_nxt;
-			goto again;
+			DPRINTF(("pushinit ARRAY %s brace=%d\n",
+			    namedmem->n_name, istk->i_brace));
+			goto pop;
+		} else if (istk->i_nxt->i_namedmem) {
+			DPRINTF(("pushinit ARRAY brace=%d, namedmem=%d\n",
+			    istk->i_brace, istk->i_nxt->i_namedmem));
+			istk->i_brace = 1;
 		}
+
 		if (incompl(istk->i_type) && istk->i_nxt->i_nxt != NULL) {
 			/* initialisation of an incomplete type */
 			error(175);
@@ -337,14 +345,15 @@ again:
 			}
 		}
 		if (namedmem != NULL) {
-			istk->i_namedmem = 1;
 			if (m == NULL) {
-				error(101, namedmem->n_name);
-				initerr = 1;
+				DPRINTF(("pushinit(): struct pop\n"));
+				goto pop;
 			} else {
 				istk->i_mem = m;
 				istk->i_subt = m->s_type;
 			}
+			istk->i_namedmem = 1;
+			istk->i_brace = 1;
 			memberpop();
 			cnt = istk->i_type->t_tspec == STRUCT ? 2 : 1;
 		}
@@ -359,6 +368,7 @@ again:
 	default:
 		if (namedmem) {
 			DPRINTF(("pushinit(): pop\n"));
+	pop:
 			free(istk);
 			initstk = initstk->i_nxt;
 			goto again;
@@ -441,6 +451,7 @@ nextinit(int brace)
 void
 initlbr(void)
 {
+	DPRINTF(("initlbr\n"));
 
 	if (initerr)
 		return;
@@ -464,6 +475,7 @@ initlbr(void)
 void
 initrbr(void)
 {
+	DPRINTF(("initrbr\n"));
 
 	if (initerr)
 		return;
@@ -481,10 +493,11 @@ mkinit(tnode_t *tn)
 	struct	mbl *tmem;
 	scl_t	sc;
 #ifdef DEBUG
-	char	buf[64];
+	char	buf[64], sbuf[64];
 #endif
 
-	DPRINTF(("mkinit(%s)\n", tyname(buf, sizeof(buf), tn->tn_type)));
+	DPRINTF(("mkinit(%s %s)\n", tyname(buf, sizeof(buf), tn->tn_type),
+	   prtnode(sbuf, sizeof(sbuf), tn)));
 	if (initerr || tn == NULL)
 		goto end;
 
@@ -611,6 +624,7 @@ strginit(tnode_t *tn)
 	 * the string.
 	 */
 	if (istk->i_subt != NULL && istk->i_subt->t_tspec == ARRAY) {
+		DPRINTF(("strginit subt array\n"));
 		t = istk->i_subt->t_subt->t_tspec;
 		if (!((strg->st_tspec == CHAR &&
 		       (t == CHAR || t == UCHAR || t == SCHAR)) ||
@@ -621,6 +635,7 @@ strginit(tnode_t *tn)
 		pushinit();
 		istk = initstk;
 	} else if (istk->i_type != NULL && istk->i_type->t_tspec == ARRAY) {
+		DPRINTF(("strginit type array\n"));
 		t = istk->i_type->t_subt->t_tspec;
 		if (!((strg->st_tspec == CHAR &&
 		       (t == CHAR || t == UCHAR || t == SCHAR)) ||

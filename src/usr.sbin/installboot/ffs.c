@@ -1,4 +1,4 @@
-/*	$NetBSD: ffs.c,v 1.21 2006/09/20 21:49:12 bad Exp $	*/
+/*	$NetBSD: ffs.c,v 1.23 2006/10/23 19:44:32 christos Exp $	*/
 
 /*-
  * Copyright (c) 2002 The NetBSD Foundation, Inc.
@@ -42,7 +42,7 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID) && !defined(__lint)
-__RCSID("$NetBSD: ffs.c,v 1.21 2006/09/20 21:49:12 bad Exp $");
+__RCSID("$NetBSD: ffs.c,v 1.23 2006/10/23 19:44:32 christos Exp $");
 #endif	/* !__lint */
 
 #include <sys/param.h>
@@ -81,7 +81,7 @@ __RCSID("$NetBSD: ffs.c,v 1.21 2006/09/20 21:49:12 bad Exp $");
 #endif
 
 static int	ffs_match_common(ib_params *, off_t);
-static int	ffs_read_disk_block(ib_params *, uint64_t, int, char *);
+static int	ffs_read_disk_block(ib_params *, uint64_t, int, char []);
 static int	ffs_find_disk_blocks_ufs1(ib_params *, ino_t,
 		    int (*)(ib_params *, void *, uint64_t, uint32_t), void *);
 static int	ffs_find_disk_blocks_ufs2(ib_params *, ino_t,
@@ -94,15 +94,13 @@ static int is_ufs2;
 
 /* This reads a disk block from the filesystem. */
 static int
-ffs_read_disk_block(ib_params *params, uint64_t blkno, int size, char *blk)
+ffs_read_disk_block(ib_params *params, uint64_t blkno, int size, char blk[])
 {
 	int	rv;
 
 	assert(params != NULL);
-	assert(blk != NULL);
 	assert(params->filesystem != NULL);
 	assert(params->fsfd != -1);
-	assert(blkno >= 0);
 	assert(size > 0);
 	assert(blk != NULL);
 

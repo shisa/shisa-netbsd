@@ -1,4 +1,4 @@
-.\" $NetBSD: kauth.9,v 1.19 2006/10/03 02:06:28 wiz Exp $
+.\" $NetBSD: kauth.9,v 1.29 2006/10/26 16:11:17 elad Exp $
 .\"
 .\" Copyright (c) 2005, 2006 Elad Efrat <elad@NetBSD.org>
 .\" All rights reserved.
@@ -28,7 +28,7 @@
 .\" (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 .\" THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 .\"
-.Dd September 30, 2006
+.Dd October 26, 2006
 .Dt KAUTH 9
 .Os
 .Sh NAME
@@ -298,16 +298,10 @@ The following operations are available for this scope:
 Checks whether an object with one set of credentials can post signals
 to another process.
 .Pp
+.Ar p
+is the process the signal is being posted to, and
 .Ar arg1
-and
-.Ar arg2
-contain the credentials
-.Ft ( kauth_cred_t )
-and the process data
-.Ft ( struct proc * )
-of the process the signal is posted to, respectively.
-.Ar arg3
-is the signal to be posted.
+is the signal number.
 .It Dv KAUTH_PROCESS_CANSEE
 Checks whether an object with one set of credentials can access
 information about another process, possibly with a different set of
@@ -369,6 +363,7 @@ indicates the ALTQ subsystem in question, and can be one of the following:
 .It Dv KAUTH_REQ_NETWORK_ALTQ_CONF
 .It Dv KAUTH_REQ_NETWORK_ALTQ_FIFOQ
 .It Dv KAUTH_REQ_NETWORK_ALTQ_HFSC
+.It Dv KAUTH_REQ_NETWORK_ALTQ_JOBS
 .It Dv KAUTH_REQ_NETWORK_ALTQ_PRIQ
 .It Dv KAUTH_REQ_NETWORK_ALTQ_RED
 .It Dv KAUTH_REQ_NETWORK_ALTQ_RIO
@@ -398,6 +393,39 @@ Modification of packet filtering rules.
 .It Dv KAUTH_REQ_NETWORK_FIREWALL_NAT
 Modification of NAT rules.
 .El
+.It Dv KAUTH_NETWORK_INTERFACE
+Checks if network interface-related operations are allowed.
+.Pp
+.Ar arg1
+is (optionally) the
+.Ft struct ifnet *
+associated with the interface.
+.Ar arg2
+is (optionally) an
+.Ft int
+describing the interface-specific operation.
+.Ar arg3
+is (optionally) a pointer to the interface-specific request structure.
+.Ar req
+indicates the sub-action, and can be one of the following:
+.Bl -tag
+.It Dv KAUTH_REQ_NETWORK_INTERFACE_GET
+Check if retrieving information from the device is allowed.
+.It Dv KAUTH_REQ_NETWORK_INTERFACE_GETPRIV
+Check if retrieving privileged information from the device is allowed.
+.It Dv KAUTH_REQ_NETWORK_INTERFACE_SET
+Check if setting parameters on the device is allowed.
+.It Dv KAUTH_REQ_NETWORK_INTERFACE_SETPRIV
+Check if setting privileged parameters on the device is allowed.
+.El
+.Pp
+Note that unless the
+.Ft struct ifnet *
+for the interface was passed in
+.Ar arg1 ,
+there's no way to tell what structure
+.Ar arg3
+is.
 .It Dv KAUTH_NETWORK_FORWSRCRT
 Checks whether status of forwarding of source-routed packets can be modified
 or not.
@@ -409,9 +437,7 @@ is the
 .Ft struct rt_msghdr *
 for the request.
 .It Dv KAUTH_NETWORK_SOCKET
-Checks if a
-.Xr socket 2
-request is allowed.
+Checks if a socket related operation is allowed.
 .Pp
 .Ar req
 allows to indicate the type of the request to structure listeners and callers
@@ -420,6 +446,22 @@ Supported request types:
 .Bl -tag
 .It Dv KAUTH_REQ_NETWORK_SOCKET_RAWSOCK
 Checks if opening a raw socket is allowed.
+.It Dv KAUTH_REQ_NETWORK_SOCKET_OPEN
+Checks if opening a socket is allowed.
+.Ar arg1 , arg2 ,
+and
+.Ar arg3
+are all
+.Ft int *
+pointing to integers describing the domain, socket type, and protocol,
+respectively.
+.It Dv KAUTH_REQ_NETWORK_SOCKET_CANSEE
+Checks if looking at the socket passed is allowed.
+.Pp
+.Ar arg1
+is a
+.Ft struct socket *
+describing the socket.
 .El
 .El
 .Ss Machine-dependent Scope
@@ -659,46 +701,13 @@ initializes its lock, and sets its reference count to one.
 .Ss Conversion Routines
 Sometimes it might be necessary to convert a
 .Ft kauth_cred_t
-to a predecessing type, such as
-.Ft struct pcred
-or
-.Ft struct ucred ,
-or convert credentials passed from userland as a
-.Ft struct uucred
-to a
-.Ft kauth_cred_t .
+to userland's view of credentials, a
+.Ft struct uucred ,
+or vice versa.
 .Pp
 The following routines are available for these cases:
 .Bl -tag
-.It Ft void Fn kauth_cred_topcred "kauth_cred_t cred" "struct pcred *pcred"
-Convert a
-.Ft kauth_cred_t
-to a
-.Ft struct pcred .
-.Pp
-This includes real and saved user- and group-ids and reference count, copied
-from
-.Ar cred .
-The
-.Ar pc_ucred
-field in the destination is set to
-.Dv NULL .
-.It Ft void Fn kauth_cred_toucred "kauth_cred_t cred" "struct ucred *ucred"
-Convert a
-.Ft kauth_cred_t
-to a
-.Ft struct ucred .
-.Pp
-This includes effective user- and group-ids, number of groups, and the group
-list from
-.Ar cred .
-.Pp
-Note that
-.Nm
-will try to copy as many groups as
-.Ar ucred
-can hold.
-.It Ft void Fn kauth_cred_uucvt "kauth_cred_t cred" "const struct uucred *uucred"
+.It Ft void Fn kauth_uucred_to_cred "kauth_cred_t cred" "const struct uucred *uucred"
 Convert userland's view of credentials to a
 .Ft kauth_cred_t .
 .Pp
@@ -710,7 +719,18 @@ Note that
 .Nm
 will try to copy as many groups as can be held inside a
 .Ft kauth_cred_t .
-The addition of groups will also guarantee order and no duplicates.
+.It Ft void Fn kauth_cred_to_uucred "struct uucred *uucred" "const kauth_cred_t cred"
+Convert
+.Ft kauth_cred_t
+to userland's view of credentials.
+.Pp
+This includes effective user- and group-ids, a number of groups, and a group
+list.
+.Pp
+Note that
+.Nm
+will try to copy as many groups as can be held inside a
+.Ft struct uucred .
 .It Ft int Fn kauth_cred_uucmp "kauth_cred_t cred" "struct uucred *uucred"
 Compares
 .Ar cred

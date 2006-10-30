@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.7 2006/09/22 04:20:23 thorpej Exp $
+#	$NetBSD: Makefile,v 1.14 2006/10/27 01:29:37 uwe Exp $
 
 .include <bsd.own.mk>
 
@@ -11,17 +11,48 @@ PROPLIBDIR=${NETBSDSRCDIR}/common/lib/libprop
 CPPFLAGS+=-D_LIBPROP
 CPPFLAGS+=-D_REENTRANT -I${NETBSDSRCDIR}/lib/libc/include
 
+LINTFLAGS+=-w
 LIB=	prop
 
 MAN=	prop_array.3 prop_bool.3 prop_data.3 prop_dictionary.3 \
 	prop_ingest.3 prop_number.3 prop_object.3 prop_string.3 proplib.3
 
-MAN+=	prop_dictionary_copyin_ioctl.9
-MLINKS+= prop_dictionary_copyin_ioctl.9 prop_dictionary_copyout_ioctl.9
+MAN+=	prop_copyin_ioctl.9
+MLINKS+= prop_copyin_ioctl.9 prop_array_copyin_ioctl.9
+MLINKS+= prop_copyin_ioctl.9 prop_array_copyout_ioctl.9
+MLINKS+= prop_copyin_ioctl.9 prop_dictionary_copyin_ioctl.9
+MLINKS+= prop_copyin_ioctl.9 prop_dictionary_copyout_ioctl.9
 
-MAN+=	prop_dictionary_send_ioctl.3
-MLINKS+= prop_dictionary_send_ioctl.3 prop_dictionary_recv_ioctl.3
-MLINKS+= prop_dictionary_send_ioctl.3 prop_dictionary_sendrecv_ioctl.3
+MAN+=	prop_send_ioctl.3
+MLINKS+= prop_send_ioctl.3 prop_array_send_ioctl.3
+MLINKS+= prop_send_ioctl.3 prop_array_recv_ioctl.3
+MLINKS+= prop_send_ioctl.3 prop_dictionary_send_ioctl.3
+MLINKS+= prop_send_ioctl.3 prop_dictionary_recv_ioctl.3
+MLINKS+= prop_send_ioctl.3 prop_dictionary_sendrecv_ioctl.3
+
+MAN+=	prop_dictionary_util.3
+MLINKS+= prop_dictionary_util.3 prop_dictionary_get_bool.3
+MLINKS+= prop_dictionary_util.3 prop_dictionary_set_bool.3
+MLINKS+= prop_dictionary_util.3 prop_dictionary_get_int8.3
+MLINKS+= prop_dictionary_util.3 prop_dictionary_get_uint8.3
+MLINKS+= prop_dictionary_util.3 prop_dictionary_set_int8.3
+MLINKS+= prop_dictionary_util.3 prop_dictionary_set_uint8.3
+MLINKS+= prop_dictionary_util.3 prop_dictionary_get_int16.3
+MLINKS+= prop_dictionary_util.3 prop_dictionary_get_uint16.3
+MLINKS+= prop_dictionary_util.3 prop_dictionary_set_int16.3
+MLINKS+= prop_dictionary_util.3 prop_dictionary_set_uint16.3
+MLINKS+= prop_dictionary_util.3 prop_dictionary_get_int32.3
+MLINKS+= prop_dictionary_util.3 prop_dictionary_get_uint32.3
+MLINKS+= prop_dictionary_util.3 prop_dictionary_set_int32.3
+MLINKS+= prop_dictionary_util.3 prop_dictionary_set_uint32.3
+MLINKS+= prop_dictionary_util.3 prop_dictionary_get_int64.3
+MLINKS+= prop_dictionary_util.3 prop_dictionary_get_uint64.3
+MLINKS+= prop_dictionary_util.3 prop_dictionary_set_int64.3
+MLINKS+= prop_dictionary_util.3 prop_dictionary_set_uint64.3
+MLINKS+= prop_dictionary_util.3 prop_dictionary_get_cstring.3
+MLINKS+= prop_dictionary_util.3 prop_dictionary_set_cstring.3
+MLINKS+= prop_dictionary_util.3 prop_dictionary_get_cstring_nocopy.3
+MLINKS+= prop_dictionary_util.3 prop_dictionary_set_cstring_nocopy.3
 
 MLINKS+= prop_array.3 prop_array_add.3
 MLINKS+= prop_array.3 prop_array_capacity.3
@@ -56,6 +87,7 @@ MLINKS+= prop_data.3 prop_data_equals.3
 MLINKS+= prop_data.3 prop_data_equals_data.3
 MLINKS+= prop_data.3 prop_data_size.3
 
+MLINKS+= prop_dictionary.3 prop_dictionary_all_keys.3
 MLINKS+= prop_dictionary.3 prop_dictionary_capacity.3
 MLINKS+= prop_dictionary.3 prop_dictionary_copy.3
 MLINKS+= prop_dictionary.3 prop_dictionary_copy_mutable.3
@@ -90,10 +122,14 @@ MLINKS+= prop_ingest.3 prop_dictionary_ingest.3
 
 MLINKS+= prop_number.3 prop_number_copy.3
 MLINKS+= prop_number.3 prop_number_create_integer.3
+MLINKS+= prop_number.3 prop_number_create_unsigned_integer.3
 MLINKS+= prop_number.3 prop_number_equals.3
 MLINKS+= prop_number.3 prop_number_equals_integer.3
+MLINKS+= prop_number.3 prop_number_equals_unsigned_integer.3
 MLINKS+= prop_number.3 prop_number_size.3
+MLINKS+= prop_number.3 prop_number_unsigned.3
 MLINKS+= prop_number.3 prop_number_integer_value.3
+MLINKS+= prop_number.3 prop_number_unsigned_integer_value.3
 
 MLINKS+= prop_object.3 prop_object_equals.3
 MLINKS+= prop_object.3 prop_object_iterator_next.3

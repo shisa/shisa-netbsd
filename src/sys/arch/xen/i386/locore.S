@@ -1,4 +1,4 @@
-/*	$NetBSD: locore.S,v 1.19 2006/10/01 21:36:11 bouyer Exp $	*/
+/*	$NetBSD: locore.S,v 1.22 2006/10/17 22:16:20 bouyer Exp $	*/
 /*	NetBSD: locore.S,v 1.31 2004/08/26 10:12:33 junyoung Exp	*/
 
 /*
@@ -190,21 +190,24 @@
 .section __xen_guest
 #ifdef XEN3
 	.ascii	"GUEST_OS=netbsd,GUEST_VER=3.0,XEN_VER=xen-3.0"
-	.ascii  ",VIRT_BASE=0xc0100000" /* KERNTEXTOFF */
-#ifndef XEN_NO_HYPERCALLPAGE
-#ifdef DOM0OPS
-	.ascii  ",HYPERCALL_PAGE=0x00000101"
+#if defined(DOM0OPS) || !defined(XEN_COMPAT_030001)
+	.ascii  ",VIRT_BASE=0xc0000000" /* KERNBASE */
+	.ascii  ",ELF_PADDR_OFFSET=0xc0000000" /* KERNBASE */
 #else
-	.ascii  ",HYPERCALL_PAGE=0x00000001"
+	.ascii  ",VIRT_BASE=0xc0100000" /* KERNTEXTOFF */
+	.ascii  ",ELF_PADDR_OFFSET=0xc0100000" /* KERNTEXTOFF */
+#endif
+	.ascii  ",VIRT_ENTRY=0xc0100000" /* KERNTEXTOFF */
+#if !defined(XEN_COMPAT_030001)
+	.ascii  ",HYPERCALL_PAGE=0x00000101"
 		/* (???+HYPERCALL_PAGE_OFFSET)/PAGE_SIZE) */
-#endif 
-#endif /* XEN_NO_HYPERCALLPAGE */
+#endif
 #else /* !XEN3 */
 	.ascii	"GUEST_OS=netbsd,GUEST_VER=2.0,XEN_VER=2.0"
 #endif /* XEN3 */
 	.ascii	",LOADER=generic"
 #if (NKSYMS || defined(DDB) || defined(LKM)) && !defined(SYMTAB_SPACE)
-	.ascii	",BSD_SYMTAB"
+	.ascii	",BSD_SYMTAB=yes"
 #endif
 	.byte	0
 
@@ -517,7 +520,7 @@ start:
 
 	call 	_C_LABEL(main)
 
-#if defined(XEN3) && !defined(XEN_NO_HYPERCALLPAGE)
+#if defined(XEN3) && !defined(XEN_COMPAT_030001)
 /* space for the hypercall call page */
 #define HYPERCALL_PAGE_OFFSET 0x1000
 .org HYPERCALL_PAGE_OFFSET
@@ -784,7 +787,7 @@ idle_loop:
 	addl	$4,%esp
 	jmp	idle_start
 4:
-#if defined(XEN3) && !defined(XEN_NO_HYPERCALLPAGE)
+#if defined(XEN3) && !defined(XEN_COMPAT_030001)
 	movl    $SCHEDOP_yield,%ebx
 	call	(hypercall_page + (HYPERVISOR_sched_op * 32))
 #else

@@ -1,4 +1,4 @@
-/*	$NetBSD: darwin_iohidsystem.c,v 1.33 2006/03/28 17:38:29 thorpej Exp $ */
+/*	$NetBSD: darwin_iohidsystem.c,v 1.35 2006/10/22 18:18:08 christos Exp $ */
 
 /*-
  * Copyright (c) 2003 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: darwin_iohidsystem.c,v 1.33 2006/03/28 17:38:29 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: darwin_iohidsystem.c,v 1.35 2006/10/22 18:18:08 christos Exp $");
 
 #include "ioconf.h"
 #include "wsmux.h"
@@ -694,9 +694,7 @@ darwin_wscons_to_iohidsystem(wsevt, hidevt)
 }
 
 static void
-mach_notify_iohidsystem(l, mr)
-	struct lwp *l;
-	struct mach_right *mr;
+mach_notify_iohidsystem(struct lwp *l __unused, struct mach_right *mr)
 {
 	struct mach_port *mp;
 	mach_notify_iohidsystem_request_t *req;
@@ -722,7 +720,7 @@ mach_notify_iohidsystem(l, mr)
 
 #ifdef KTRACE
 	if (KTRPOINT(l->l_proc, KTR_USER))
-		ktruser(l, "notify_iohidsystem", NULL, 0, 0);
+		(void)ktruser(l, "notify_iohidsystem", NULL, 0, 0);
 #endif
 
 	mr->mr_refcount++;

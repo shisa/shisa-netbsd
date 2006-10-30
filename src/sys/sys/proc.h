@@ -1,4 +1,4 @@
-/*	$NetBSD: proc.h,v 1.228 2006/10/08 04:28:44 thorpej Exp $	*/
+/*	$NetBSD: proc.h,v 1.231 2006/10/23 21:39:18 skrll Exp $	*/
 
 /*-
  * Copyright (c) 1986, 1989, 1991, 1993
@@ -468,7 +468,6 @@ int	inferior(struct proc *, struct proc *);
 int	leavepgrp(struct proc *);
 void	sessdelete(struct session *);
 void	yield(void);
-struct lwp *chooselwp(void);
 void	pgdelete(struct pgrp *);
 void	procinit(void);
 void	resetprocpriority(struct proc *);
@@ -519,6 +518,8 @@ void	proc_crmod_enter(struct proc *);
 
 int	proc_specific_key_create(specificdata_key_t *, specificdata_dtor_t);
 void	proc_specific_key_delete(specificdata_key_t);
+void 	proc_initspecific(struct proc *);
+void 	proc_finispecific(struct proc *);
 void *	proc_getspecific(struct proc *, specificdata_key_t);
 void	proc_setspecific(struct proc *, specificdata_key_t, void *);
 

@@ -1,4 +1,4 @@
-/* $NetBSD: secmodel_bsd44_suser.c,v 1.7 2006/09/30 20:05:57 elad Exp $ */
+/* $NetBSD: secmodel_bsd44_suser.c,v 1.13 2006/10/25 22:49:23 elad Exp $ */
 /*-
  * Copyright (c) 2006 Elad Efrat <elad@NetBSD.org>
  * All rights reserved.
@@ -16,8 +16,6 @@
  *      This product includes software developed by Elad Efrat.
  * 4. The name of the author may not be used to endorse or promote products
  *    derived from this software without specific prior written permission.
- * 5. Use of the code by Wasabi Systems Inc. is hereby prohibited without
- *    written approval from the author.
  *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
  * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
@@ -43,7 +41,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: secmodel_bsd44_suser.c,v 1.7 2006/09/30 20:05:57 elad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: secmodel_bsd44_suser.c,v 1.13 2006/10/25 22:49:23 elad Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -52,7 +50,7 @@ __KERNEL_RCSID(0, "$NetBSD: secmodel_bsd44_suser.c,v 1.7 2006/09/30 20:05:57 ela
 #include <sys/acct.h>
 #include <sys/ktrace.h>
 #include <sys/mount.h>
-#include <sys/socket.h>
+#include <sys/socketvar.h>
 #include <sys/sysctl.h>
 #include <sys/tty.h>
 #include <net/route.h>
@@ -85,7 +83,8 @@ secmodel_bsd44_suser_start(void)
  */
 int
 secmodel_bsd44_suser_generic_cb(kauth_cred_t cred, kauth_action_t action,
-    void *cookie, void *arg0, void *arg1, void *arg2, void *arg3)
+    void *cookie __unused, void *arg0 __unused, void *arg1 __unused,
+    void *arg2 __unused, void *arg3 __unused)
 {
 	boolean_t isroot;
 	int result;
@@ -124,7 +123,8 @@ secmodel_bsd44_suser_generic_cb(kauth_cred_t cred, kauth_action_t action,
  */
 int
 secmodel_bsd44_suser_system_cb(kauth_cred_t cred, kauth_action_t action,
-    void *cookie, void *arg0, void *arg1, void *arg2, void *arg3)
+    void *cookie __unused, void *arg0 __unused, void *arg1 __unused,
+    void *arg2 __unused, void *arg3 __unused)
 {
 	boolean_t isroot;
 	int result;
@@ -182,7 +182,7 @@ secmodel_bsd44_suser_system_cb(kauth_cred_t cred, kauth_action_t action,
  */
 int
 secmodel_bsd44_suser_process_cb(kauth_cred_t cred, kauth_action_t action,
-    void *cookie, void *arg0, void *arg1, void *arg2, void *arg3)
+    void *cookie __unused, void *arg0, void *arg1, void *arg2, void *arg3)
 {
 	struct proc *p;
 	boolean_t isroot;
@@ -264,7 +264,8 @@ secmodel_bsd44_suser_process_cb(kauth_cred_t cred, kauth_action_t action,
  */
 int
 secmodel_bsd44_suser_network_cb(kauth_cred_t cred, kauth_action_t action,
-    void *cookie, void *arg0, void *arg1, void *arg2, void *arg3)
+    void *cookie __unused, void *arg0, void *arg1, void *arg2 __unused,
+    void *arg3 __unused)
 {
 	boolean_t isroot;
 	int result;
@@ -284,6 +285,7 @@ secmodel_bsd44_suser_network_cb(kauth_cred_t cred, kauth_action_t action,
 		case KAUTH_REQ_NETWORK_ALTQ_CONF:
 		case KAUTH_REQ_NETWORK_ALTQ_FIFOQ:
 		case KAUTH_REQ_NETWORK_ALTQ_HFSC:
+		case KAUTH_REQ_NETWORK_ALTQ_JOBS:
 		case KAUTH_REQ_NETWORK_ALTQ_PRIQ:
 		case KAUTH_REQ_NETWORK_ALTQ_RED:
 		case KAUTH_REQ_NETWORK_ALTQ_RIO:
@@ -294,20 +296,6 @@ secmodel_bsd44_suser_network_cb(kauth_cred_t cred, kauth_action_t action,
 
 		default:
 			result = KAUTH_RESULT_DEFER;
-			break;
-		}
-
-		break;
-
-	case KAUTH_NETWORK_SOCKET:
-		switch (req) {
-		case KAUTH_REQ_NETWORK_SOCKET_RAWSOCK:
-			if (isroot)
-				result = KAUTH_RESULT_ALLOW;
-			break;
-
-		default:
-			result = KAUTH_RESULT_ALLOW;
 			break;
 		}
 
@@ -325,6 +313,25 @@ secmodel_bsd44_suser_network_cb(kauth_cred_t cred, kauth_action_t action,
 		}
 		break;
 
+	case KAUTH_NETWORK_INTERFACE:
+		switch (req) {
+		case KAUTH_REQ_NETWORK_INTERFACE_GET:
+		case KAUTH_REQ_NETWORK_INTERFACE_SET:
+			result = KAUTH_RESULT_ALLOW;
+			break;
+
+		case KAUTH_REQ_NETWORK_INTERFACE_GETPRIV:
+		case KAUTH_REQ_NETWORK_INTERFACE_SETPRIV:
+			if (isroot)
+				result = KAUTH_RESULT_ALLOW;
+			break;
+
+		default:
+			result = KAUTH_RESULT_DEFER;
+			break;
+		}
+		break;
+
 	case KAUTH_NETWORK_ROUTE:
 		switch (((struct rt_msghdr *)arg1)->rtm_type) {
 		case RTM_GET:
@@ -336,6 +343,41 @@ secmodel_bsd44_suser_network_cb(kauth_cred_t cred, kauth_action_t action,
 				result = KAUTH_RESULT_ALLOW;
 			break;
 		}
+		break;
+
+	case KAUTH_NETWORK_SOCKET:
+		switch (req) {
+		case KAUTH_REQ_NETWORK_SOCKET_OPEN:
+			if (*((int *)arg2) == SOCK_RAW) {
+				if (isroot)
+					result = KAUTH_RESULT_ALLOW;
+			} else
+				result = KAUTH_RESULT_ALLOW;
+			break;
+
+		case KAUTH_REQ_NETWORK_SOCKET_RAWSOCK:
+			if (isroot)
+				result = KAUTH_RESULT_ALLOW;
+			break;
+
+		case KAUTH_REQ_NETWORK_SOCKET_CANSEE:
+			if (secmodel_bsd44_curtain) {
+				uid_t so_uid;
+
+				so_uid =
+				    ((struct socket *)arg1)->so_uidinfo->ui_uid;
+				if (isroot ||
+				    kauth_cred_geteuid(cred) == so_uid)
+					result = KAUTH_RESULT_ALLOW;
+			} else
+				result = KAUTH_RESULT_ALLOW;
+			break;
+
+		default:
+			result = KAUTH_RESULT_ALLOW;
+			break;
+		}
+
 		break;
 
 	default:
@@ -355,7 +397,8 @@ secmodel_bsd44_suser_network_cb(kauth_cred_t cred, kauth_action_t action,
  */
 int
 secmodel_bsd44_suser_machdep_cb(kauth_cred_t cred, kauth_action_t action,
-    void *cookie, void *arg0, void *arg1, void *arg2, void *arg3)
+    void *cookie __unused, void *arg0, void *arg1 __unused, void *arg2 __unused,
+    void *arg3 __unused)
 {
         boolean_t isroot;
         int result;
@@ -411,7 +454,8 @@ secmodel_bsd44_suser_machdep_cb(kauth_cred_t cred, kauth_action_t action,
  */
 int
 secmodel_bsd44_suser_device_cb(kauth_cred_t cred, kauth_action_t action,
-    void *cookie, void *arg0, void *arg1, void *arg2, void *arg3)
+    void *cookie __unused, void *arg0, void *arg1 __unused, void *arg2 __unused,
+    void *arg3 __unused)
 {
 	struct tty *tty;
         boolean_t isroot;

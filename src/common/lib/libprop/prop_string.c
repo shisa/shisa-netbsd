@@ -1,4 +1,4 @@
-/*	$NetBSD: prop_string.c,v 1.4 2006/08/22 21:21:23 thorpej Exp $	*/
+/*	$NetBSD: prop_string.c,v 1.6 2006/10/18 19:15:46 martin Exp $	*/
 
 /*-
  * Copyright (c) 2006 The NetBSD Foundation, Inc.

@@ -1,4 +1,4 @@
-/*	$NetBSD: main.c,v 1.130 2006/08/26 22:19:03 christos Exp $	*/
+/*	$NetBSD: main.c,v 1.134 2006/10/27 21:00:19 dsl Exp $	*/
 
 /*
  * Copyright (c) 1988, 1989, 1990, 1993
@@ -69,7 +69,7 @@
  */
 
 #ifndef MAKE_NATIVE
-static char rcsid[] = "$NetBSD: main.c,v 1.130 2006/08/26 22:19:03 christos Exp $";
+static char rcsid[] = "$NetBSD: main.c,v 1.134 2006/10/27 21:00:19 dsl Exp $";
 #else
 #include <sys/cdefs.h>
 #ifndef lint
@@ -81,7 +81,7 @@ __COPYRIGHT("@(#) Copyright (c) 1988, 1989, 1990, 1993\n\
 #if 0
 static char sccsid[] = "@(#)main.c	8.3 (Berkeley) 3/19/94";
 #else
-__RCSID("$NetBSD: main.c,v 1.130 2006/08/26 22:19:03 christos Exp $");
+__RCSID("$NetBSD: main.c,v 1.134 2006/10/27 21:00:19 dsl Exp $");
 #endif
 #endif /* not lint */
 #endif
@@ -156,7 +156,7 @@ static Lst		makefiles;	/* ordered list of makefiles to read */
 static Boolean		printVars;	/* print value of one or more vars */
 static Lst		variables;	/* list of variables to print */
 int			maxJobs;	/* -j argument */
-int			maxJobTokens;	/* -j argument */
+static int		maxJobTokens;	/* -j argument */
 Boolean			compatMake;	/* -B argument */
 int			debug;		/* -d argument */
 Boolean			noExecute;	/* -n flag */
@@ -164,13 +164,13 @@ Boolean			noRecursiveExecute;	/* -N flag */
 Boolean			keepgoing;	/* -k flag */
 Boolean			queryFlag;	/* -q flag */
 Boolean			touchFlag;	/* -t flag */
-Boolean			usePipes;	/* !-P flag */
 Boolean			ignoreErrors;	/* -i flag */
 Boolean			beSilent;	/* -s flag */
 Boolean			oldVars;	/* variable substitution style */
 Boolean			checkEnvFirst;	/* -e flag */
 Boolean			parseWarnFatal;	/* -W flag */
 Boolean			jobServer; 	/* -J flag */
+static int jp_0 = -1, jp_1 = -1;	/* ends of parent job pipe */
 Boolean			varNoExportEnv;	/* -X flag */
 static Boolean		jobsRunning;	/* TRUE if the jobs might be running */
 static const char *	tracefile;
@@ -186,6 +186,100 @@ char *progname;				/* the program name */
 Boolean forceJobs = FALSE;
 
 extern Lst parseIncPath;
+
+static void
+parse_debug_options(const char *argvalue)
+{
+	const char *modules;
+
+	for (modules = argvalue; *modules; ++modules) {
+		switch (*modules) {
+		case 'A':
+			debug = ~0;
+			break;
+		case 'a':
+			debug |= DEBUG_ARCH;
+			break;
+		case 'c':
+			debug |= DEBUG_COND;
+			break;
+		case 'd':
+			debug |= DEBUG_DIR;
+			break;
+		case 'e':
+			debug |= DEBUG_ERROR;
+			break;
+		case 'f':
+			debug |= DEBUG_FOR;
+			break;
+		case 'g':
+			if (modules[1] == '1') {
+				debug |= DEBUG_GRAPH1;
+				++modules;
+			}
+			else if (modules[1] == '2') {
+				debug |= DEBUG_GRAPH2;
+				++modules;
+			}
+			else if (modules[1] == '3') {
+				debug |= DEBUG_GRAPH3;
+				++modules;
+			}
+			break;
+		case 'j':
+			debug |= DEBUG_JOB;
+			break;
+		case 'm':
+			debug |= DEBUG_MAKE;
+			break;
+		case 'n':
+			debug |= DEBUG_SCRIPT;
+			break;
+		case 'p':
+			debug |= DEBUG_PARSE;
+			break;
+		case 's':
+			debug |= DEBUG_SUFF;
+			break;
+		case 't':
+			debug |= DEBUG_TARG;
+			break;
+		case 'v':
+			debug |= DEBUG_VAR;
+			break;
+		case 'x':
+			debug |= DEBUG_SHELL;
+			break;
+		case 'F':
+			if (debug_file != stdout && debug_file != stderr)
+				fclose(debug_file);
+			if (*++modules == '+')
+				debug_file = fopen(++modules, "a");
+			else {
+				if (!strcmp(modules, "stdout"))
+					debug_file = stdout;
+				else if (!strcmp(modules, "stderr"))
+					debug_file = stderr;
+				else
+					debug_file = fopen(modules, "w");
+			}
+			if (!debug_file) {
+				fprintf(stderr, "Cannot open debug file %s",
+				    modules);
+				usage();
+			}
+			/* Have this non-buffered */
+			if (debug_file != stdout && debug_file != stderr)
+				setbuf(debug_file, NULL);
+			return;
+		default:
+			(void)fprintf(stderr,
+			    "%s: illegal argument to d option -- %c\n",
+			    progname, *modules);
+			usage();
+		}
+	}
+}
 
 /*-
  * MainParseArgs --
@@ -207,13 +301,13 @@ MainParseArgs(int argc, char **argv)
 	char *p;
 	int c = '?';
 	int arginc;
-	char *argvalue, *modules;
+	char *argvalue;
 	const char *getopt_def;
 	char *optscan;
 	Boolean inOption, dashDash = FALSE;
 	char found_path[MAXPATHLEN + 1];	/* for searching for sys.mk */
 
-#define OPTFLAGS "BD:I:J:NPST:V:WXd:ef:ij:km:nqrst"
+#define OPTFLAGS "BD:I:J:NST:V:WXd:ef:ij:km:nqrst"
 /* Can't actually use getopt(3) because rescanning is not portable */
 
 	getopt_def = OPTFLAGS;
@@ -278,23 +372,22 @@ rearg:
 			break;
 		case 'J':
 			if (argvalue == NULL) goto noarg;
-			if (sscanf(argvalue, "%d,%d", &job_pipe[0], &job_pipe[1]) != 2) {
-			    /* backslash to avoid trigraph ??) */
+			if (sscanf(argvalue, "%d,%d", &jp_0, &jp_1) != 2) {
 			    (void)fprintf(stderr,
-				"%s: internal error -- J option malformed (%s?\?)\n",
+				"%s: internal error -- J option malformed (%s)\n",
 				progname, argvalue);
 				usage();
 			}
-			if ((fcntl(job_pipe[0], F_GETFD, 0) < 0) ||
-			    (fcntl(job_pipe[1], F_GETFD, 0) < 0)) {
+			if ((fcntl(jp_0, F_GETFD, 0) < 0) ||
+			    (fcntl(jp_1, F_GETFD, 0) < 0)) {
 #if 0
 			    (void)fprintf(stderr,
 				"%s: ###### warning -- J descriptors were closed!\n",
 				progname);
 			    exit(2);
 #endif
-			    job_pipe[0] = -1;
-			    job_pipe[1] = -1;
+			    jp_0 = -1;
+			    jp_1 = -1;
 			    compatMake = TRUE;
 			} else {
 			    Var_Append(MAKEFLAGS, "-J", VAR_GLOBAL);
@@ -306,10 +399,6 @@ rearg:
 			noExecute = TRUE;
 			noRecursiveExecute = TRUE;
 			Var_Append(MAKEFLAGS, "-N", VAR_GLOBAL);
-			break;
-		case 'P':
-			usePipes = FALSE;
-			Var_Append(MAKEFLAGS, "-P", VAR_GLOBAL);
 			break;
 		case 'S':
 			keepgoing = FALSE;
@@ -324,7 +413,7 @@ rearg:
 		case 'V':
 			if (argvalue == NULL) goto noarg;
 			printVars = TRUE;
-			(void)Lst_AtEnd(variables, (ClientData)argvalue);
+			(void)Lst_AtEnd(variables, argvalue);
 			Var_Append(MAKEFLAGS, "-V", VAR_GLOBAL);
 			Var_Append(MAKEFLAGS, argvalue, VAR_GLOBAL);
 			break;
@@ -335,83 +424,24 @@ rearg:
 			varNoExportEnv = TRUE;
 			Var_Append(MAKEFLAGS, "-X", VAR_GLOBAL);
 			break;
-		case 'd': {
+		case 'd':
 			if (argvalue == NULL) goto noarg;
-			for (modules = argvalue; *modules; ++modules)
-				switch (*modules) {
-				case 'A':
-					debug = ~0;
-					break;
-				case 'a':
-					debug |= DEBUG_ARCH;
-					break;
-				case 'c':
-					debug |= DEBUG_COND;
-					break;
-				case 'd':
-					debug |= DEBUG_DIR;
-					break;
-				case 'e':
-					debug |= DEBUG_ERROR;
-					break;
-				case 'f':
-					debug |= DEBUG_FOR;
-					break;
-				case 'g':
-					if (modules[1] == '1') {
-						debug |= DEBUG_GRAPH1;
-						++modules;
-					}
-					else if (modules[1] == '2') {
-						debug |= DEBUG_GRAPH2;
-						++modules;
-					}
-					else if (modules[1] == '3') {
-						debug |= DEBUG_GRAPH3;
-						++modules;
-					}
-					break;
-				case 'j':
-					debug |= DEBUG_JOB;
-					break;
-				case 'm':
-					debug |= DEBUG_MAKE;
-					break;
-				case 'n':
-					debug |= DEBUG_SCRIPT;
-					break;
-				case 'p':
-					debug |= DEBUG_PARSE;
-					break;
-				case 's':
-					debug |= DEBUG_SUFF;
-					break;
-				case 't':
-					debug |= DEBUG_TARG;
-					break;
-				case 'v':
-					debug |= DEBUG_VAR;
-					break;
-				case 'x':
-					debug |= DEBUG_SHELL;
-					break;
-				default:
-					(void)fprintf(stderr,
-				"%s: illegal argument to d option -- %c\n",
-					    progname, *modules);
-					usage();
-				}
-			Var_Append(MAKEFLAGS, "-d", VAR_GLOBAL);
-			Var_Append(MAKEFLAGS, argvalue, VAR_GLOBAL);
+			/* If '-d-opts' don't pass to children */
+			if (argvalue[0] == '-')
+			    argvalue++;
+			else {
+			    Var_Append(MAKEFLAGS, "-d", VAR_GLOBAL);
+			    Var_Append(MAKEFLAGS, argvalue, VAR_GLOBAL);
+			}
+			parse_debug_options(argvalue);
 			break;
-		}
 		case 'e':
 			checkEnvFirst = TRUE;
 			Var_Append(MAKEFLAGS, "-e", VAR_GLOBAL);
 			break;
 		case 'f':
 			if (argvalue == NULL) goto noarg;
-			(void)Lst_AtEnd(makefiles, (ClientData)argvalue);
+			(void)Lst_AtEnd(makefiles, argvalue);
 			break;
 		case 'i':
 			ignoreErrors = TRUE;
@@ -496,7 +526,7 @@ rearg:
 				Punt("illegal (null) argument.");
 			if (*argv[1] == '-' && !dashDash)
 				goto rearg;
-			(void)Lst_AtEnd(create, (ClientData)estrdup(argv[1]));
+			(void)Lst_AtEnd(create, estrdup(argv[1]));
 		}
 
 	return;
@@ -642,6 +672,9 @@ main(int argc, char **argv)
 #ifdef MAKE_NATIVE
 	struct utsname utsname;
 #endif
+
+	/* default to writing debug to stdout */
+	debug_file = stdout;
 
 	/*
 	 * Set the seed to produce a different random sequences
@@ -791,7 +824,6 @@ main(int argc, char **argv)
 	queryFlag = FALSE;		/* This is not just a check-run */
 	noBuiltins = FALSE;		/* Read the built-in rules */
 	touchFlag = FALSE;		/* Actually update targets */
-	usePipes = TRUE;		/* Catch child output in pipes */
 	debug = 0;			/* No debug verbosity, please. */
 	jobsRunning = FALSE;
 
@@ -917,7 +949,7 @@ main(int argc, char **argv)
 		if (Lst_IsEmpty(sysMkPath))
 			Fatal("%s: no system rules (%s).", progname,
 			    _PATH_DEFSYSMK);
-		ln = Lst_Find(sysMkPath, (ClientData)NULL, ReadMakefile);
+		ln = Lst_Find(sysMkPath, NULL, ReadMakefile);
 		if (ln == NILLNODE)
 			Fatal("%s: cannot open %s.", progname,
 			    (char *)Lst_Datum(ln));
@@ -926,7 +958,7 @@ main(int argc, char **argv)
 	if (!Lst_IsEmpty(makefiles)) {
 		LstNode ln;
 
-		ln = Lst_Find(makefiles, (ClientData)NULL, ReadAllMakefiles);
+		ln = Lst_Find(makefiles, NULL, ReadAllMakefiles);
 		if (ln != NILLNODE)
 			Fatal("%s: cannot open %s.", progname, 
 			    (char *)Lst_Datum(ln));
@@ -939,11 +971,11 @@ main(int argc, char **argv)
 	if (p1)
 	    free(p1);
 
-	if (!jobServer && !compatMake)
-	    Job_ServerStart();
+	if (!compatMake)
+	    Job_ServerStart(maxJobTokens, jp_0, jp_1);
 	if (DEBUG(JOB))
-	    printf("job_pipe %d %d, maxjobs %d, tokens %d, compat %d\n",
-		job_pipe[0], job_pipe[1], maxJobs, maxJobTokens, compatMake);
+	    fprintf(debug_file, "job_pipe %d %d, maxjobs %d, tokens %d, compat %d\n",
+		jp_0, jp_1, maxJobs, maxJobTokens, compatMake);
 
 	Main_ExportMAKEFLAGS(TRUE);	/* initial export */
 

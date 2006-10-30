@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_proc.c,v 1.95 2006/10/08 04:28:44 thorpej Exp $	*/
+/*	$NetBSD: kern_proc.c,v 1.99 2006/10/21 17:01:56 pooka Exp $	*/
 
 /*-
  * Copyright (c) 1999 The NetBSD Foundation, Inc.
@@ -69,7 +69,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_proc.c,v 1.95 2006/10/08 04:28:44 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_proc.c,v 1.99 2006/10/21 17:01:56 pooka Exp $");
 
 #include "opt_kstack.h"
 #include "opt_maxuprc.h"
@@ -377,6 +377,9 @@ proc0_init(void)
 	/* Initialize signal state for proc0. */
 	p->p_sigacts = &sigacts0;
 	siginit(p);
+
+	proc_initspecific(p);
+	lwp_initspecific(l);
 }
 
 /*
@@ -608,16 +611,14 @@ struct proc *
 proc_alloc(void)
 {
 	struct proc *p;
-	int s, nxt, error;
+	int s, nxt;
 	pid_t pid;
 	struct pid_table *pt;
 
 	p = pool_get(&proc_pool, PR_WAITOK);
 	p->p_stat = SIDL;			/* protect against others */
 
-	error = specificdata_init(proc_specificdata_domain, &p->p_specdataref);
-	KASSERT(error == 0);
-
+	proc_initspecific(p);
 	/* allocate next free pid */
 
 	for (;;expand_pid_table()) {
@@ -662,8 +663,6 @@ proc_free_mem(struct proc *p)
 	int s;
 	pid_t pid = p->p_pid;
 	struct pid_table *pt;
-
-	specificdata_fini(proc_specificdata_domain, &p->p_specdataref);
 
 	s = proclist_lock_write();
 
@@ -724,7 +723,7 @@ enterpgrp(struct proc *p, pid_t pgid, int mksess)
 		new_pgrp = NULL;
 	}
 	if (mksess)
-		sess = pool_get(&session_pool, M_WAITOK);
+		sess = pool_get(&session_pool, PR_WAITOK);
 	else
 		sess = NULL;
 
@@ -1294,8 +1293,7 @@ int
 proc_specific_key_create(specificdata_key_t *keyp, specificdata_dtor_t dtor)
 {
 
-	return (specificdata_key_create(proc_specificdata_domain,
-					keyp, dtor));
+	return (specificdata_key_create(proc_specificdata_domain, keyp, dtor));
 }
 
 /*
@@ -1307,6 +1305,30 @@ proc_specific_key_delete(specificdata_key_t key)
 {
 
 	specificdata_key_delete(proc_specificdata_domain, key);
+}
+
+/*
+ * proc_initspecific --
+ *	Initialize a proc's specificdata container.
+ */
+void
+proc_initspecific(struct proc *p)
+{
+	int error;
+
+	error = specificdata_init(proc_specificdata_domain, &p->p_specdataref);
+	KASSERT(error == 0);
+}
+
+/*
+ * proc_finispecific --
+ *	Finalize a proc's specificdata container.
+ */
+void
+proc_finispecific(struct proc *p)
+{
+
+	specificdata_fini(proc_specificdata_domain, &p->p_specdataref);
 }
 
 /*

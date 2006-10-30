@@ -1,4 +1,4 @@
-/*	$NetBSD: autoconf.c,v 1.128 2006/10/07 18:14:42 rjs Exp $ */
+/*	$NetBSD: autoconf.c,v 1.134 2006/10/26 00:19:44 macallan Exp $ */
 
 /*
  * Copyright (c) 1996
@@ -48,7 +48,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.128 2006/10/07 18:14:42 rjs Exp $");
+__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.134 2006/10/26 00:19:44 macallan Exp $");
 
 #include "opt_ddb.h"
 #include "opt_kgdb.h"
@@ -130,7 +130,6 @@ struct evcnt intr_evcnts[] = {
 void *bootinfo = 0;
 
 #ifdef KGDB
-extern	int kgdb_debug_panic;
 int kgdb_break_at_attach;
 #endif
 
@@ -356,11 +355,10 @@ get_bootpath_from_prom(void)
 		ofboottarget = cp;
 
 	DPRINTF(ACDB_BOOTDEV, ("bootpath phandle: 0x%x\n", ofbootpackage));
-	if (ofboottarget)
-		DPRINTF(ACDB_BOOTDEV, ("boot target: %s\n", ofboottarget));
-	if (ofbootpartition)
-		DPRINTF(ACDB_BOOTDEV, ("boot partition: %s\n",
-		    ofbootpartition));
+	DPRINTF(ACDB_BOOTDEV, ("boot target: %s\n",
+	    ofboottarget ? ofboottarget : "<none>"));
+	DPRINTF(ACDB_BOOTDEV, ("boot partition: %s\n",
+	    ofbootpartition ? ofbootpartition : "<none>"));
 
 	/* Setup pointer to boot flags */
 	if (OF_getprop(chosen, "bootargs", sbuf, sizeof(sbuf)) == -1)
@@ -561,7 +559,8 @@ mbprint(void *aux, const char *name)
 }
 
 int
-mainbus_match(struct device *parent, struct cfdata *cf, void *aux)
+mainbus_match(struct device * parent __unused, struct cfdata * cf __unused,
+	void * aux __unused)
 {
 
 	return (1);
@@ -575,7 +574,8 @@ mainbus_match(struct device *parent, struct cfdata *cf, void *aux)
  * We also record the `node id' of the default frame buffer, if any.
  */
 static void
-mainbus_attach(struct device *parent, struct device *dev, void *aux)
+mainbus_attach(struct device * parent __unused, struct device *dev,
+	void * aux __unused)
 {
 extern struct sparc_bus_dma_tag mainbus_dma_tag;
 extern struct sparc_bus_space_tag mainbus_space_tag;
@@ -806,6 +806,9 @@ dev_path_drive_match(struct device *dev, int ctrlnode, int target, int lun)
 	int child = 0;
 	char buf[OFPATHLEN];
 
+	DPRINTF(ACDB_BOOTDEV, ("dev_path_drive_match: %s, controller %x, "
+	    "target %d lun %d\n", device_xname(dev), ctrlnode, target, lun));
+
 	/*
 	 * The ofbootpackage points to a disk on this controller, so
 	 * iterate over all child nodes and compare.
@@ -873,6 +876,8 @@ device_setofnode(struct device *dev, int node)
 		return;
 	prop_dictionary_set(props, OFNODEKEY, obj);
 	prop_object_release(obj);
+	DPRINTF(ACDB_BOOTDEV, (" [device %s has node %x] ",
+	    device_xname(dev), node));
 }
 
 /*
@@ -906,7 +911,7 @@ device_register(struct device *dev, void *aux)
 		ofnode = PCITAG_NODE(pa->pa_tag);
 		device_setofnode(dev, ofnode);
 		dev_path_exact_match(dev, ofnode);
-	} else if (device_is_a(busdev, "sbus")) {
+	} else if (device_is_a(busdev, "sbus") || device_is_a(busdev, "dma")) {
 		struct sbus_attach_args *sa = aux;
 
 		ofnode = sa->sa_node;
@@ -916,27 +921,14 @@ device_register(struct device *dev, void *aux)
 		struct scsipibus_attach_args *sa = aux;
 		struct scsipi_periph *periph = sa->sa_periph;
 
-		ofnode = device_ofnode(
-		    device_parent(device_parent(dev)));
+		ofnode = device_ofnode(device_parent(busdev));
 		dev_path_drive_match(dev, ofnode, periph->periph_target,
 		    periph->periph_lun);
-	} else if (device_is_a(busdev, "wd")) {
+	} else if (device_is_a(dev, "wd")) {
 		struct ata_device *adev = aux;
 
-		ofnode = device_ofnode(
-		    device_parent(device_parent(dev)));
+		ofnode = device_ofnode(device_parent(busdev));
 		dev_path_drive_match(dev, ofnode, adev->adev_channel*2+
 		    adev->adev_drv_data->drive, 0);
 	}
-
-#ifdef KGDB
-#ifndef	KGDB_DEVNAME
-#error you need to add options KGDB_DEVNAME
-#endif
-	if (kgdb_break_at_attach &&
-	    strcmp(device_xname(dev), KGDB_DEVNAME) == 0) {
-		kgdb_debug_panic = 1;
-		kgdb_connect(1);
-	}
-#endif
 }

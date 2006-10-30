@@ -1,4 +1,4 @@
-/*	$NetBSD: machdep.c,v 1.579 2006/09/27 17:10:34 cube Exp $	*/
+/*	$NetBSD: machdep.c,v 1.585 2006/10/25 13:56:15 jmmv Exp $	*/
 
 /*-
  * Copyright (c) 1996, 1997, 1998, 2000, 2004, 2006 The NetBSD Foundation, Inc.
@@ -72,7 +72,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.579 2006/09/27 17:10:34 cube Exp $");
+__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.585 2006/10/25 13:56:15 jmmv Exp $");
 
 #include "opt_beep.h"
 #include "opt_compat_ibcs2.h"
@@ -321,7 +321,7 @@ void	native_loader(int, int, struct bootinfo_source *, paddr_t, int, int);
  *        can be obtained using the RELOC macro.
  */
 void
-native_loader(int bl_boothowto, int bl_bootdev,
+native_loader(int bl_boothowto, int bl_bootdev __unused,
     struct bootinfo_source *bl_bootinfo, paddr_t bl_esym,
     int bl_biosextmem, int bl_biosbasemem)
 {
@@ -841,7 +841,7 @@ int	waittime = -1;
 struct pcb dumppcb;
 
 void
-cpu_reboot(int howto, char *bootstr)
+cpu_reboot(int howto, char *bootstr __unused)
 {
 
 	if (cold) {
@@ -1036,8 +1036,10 @@ cpu_dumpconf()
 	if (dumpdev == NODEV)
 		goto bad;
 	bdev = bdevsw_lookup(dumpdev);
-	if (bdev == NULL)
-		panic("dumpconf: bad dumpdev=0x%x", dumpdev);
+	if (bdev == NULL) {
+		dumpdev = NODEV;
+		goto bad;
+	}
 	if (bdev->d_psize == NULL)
 		goto bad;
 	nblks = (*bdev->d_psize)(dumpdev);
@@ -1981,22 +1983,28 @@ init386(paddr_t first_avail)
 #if NKSYMS || defined(DDB) || defined(LKM)
 	{
 		extern int end;
+		boolean_t loaded;
 		struct btinfo_symtab *symtab;
 
 #ifdef DDB
 		db_machine_init();
 #endif
 
-		symtab = lookup_bootinfo(BTINFO_SYMTAB);
-
-		if (symtab) {
-			symtab->ssym += KERNBASE;
-			symtab->esym += KERNBASE;
-			ksyms_init(symtab->nsym, (int *)symtab->ssym,
-			    (int *)symtab->esym);
+#if defined(MULTIBOOT)
+		loaded = multiboot_ksyms_init();
+#else
+		loaded = FALSE;
+#endif
+		if (!loaded) {
+		    symtab = lookup_bootinfo(BTINFO_SYMTAB);
+		    if (symtab) {
+			    symtab->ssym += KERNBASE;
+			    symtab->esym += KERNBASE;
+			    ksyms_init(symtab->nsym, (int *)symtab->ssym,
+				(int *)symtab->esym);
+		    } else
+			    ksyms_init(*(int *)&end, ((int *)&end) + 1, esym);
 		}
-		else
-			ksyms_init(*(int *)&end, ((int *)&end) + 1, esym);
 	}
 #endif
 #ifdef DDB
@@ -2129,6 +2137,9 @@ cpu_exec_aout_makecmds(struct lwp *l, struct exec_package *epp)
 #ifdef COMPAT_NOMID
 	if ((error = exec_nomid(l, epp)) == 0)
 		return error;
+#else
+	(void) l;
+	(void) epp;
 #endif /* ! COMPAT_NOMID */
 
 	return error;
@@ -2282,7 +2293,7 @@ int
 cpu_setmcontext(struct lwp *l, const mcontext_t *mcp, unsigned int flags)
 {
 	struct trapframe *tf = l->l_md.md_regs;
-	__greg_t *gr = mcp->__gregs;
+	const __greg_t *gr = mcp->__gregs;
 
 	/* Restore register context, if any. */
 	if ((flags & _UC_CPU) != 0) {

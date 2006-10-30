@@ -1,5 +1,5 @@
-/*	$NetBSD: qdisc_cdnr.c,v 1.3 2001/08/16 07:48:10 itojun Exp $	*/
-/*	$KAME: qdisc_cdnr.c,v 1.4 2001/08/15 12:51:58 kjc Exp $	*/
+/*	$NetBSD: qdisc_cdnr.c,v 1.5 2006/10/28 11:43:02 peter Exp $	*/
+/*	$KAME: qdisc_cdnr.c,v 1.6 2002/11/08 06:36:18 kjc Exp $	*/
 /*
  * Copyright (C) 1999-2000
  *	Sony Computer Science Laboratories, Inc.  All rights reserved.
@@ -39,7 +39,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <math.h>
+#include <signal.h>
 #include <errno.h>
 #include <err.h>
 
@@ -66,6 +66,7 @@ cdnr_stat_loop(int fd, const char *ifname, int count, int interval)
 	char			**profile_names, _ifname[32];
 	int			i, j, nprofile;
 	int cnt = count;
+	sigset_t		omask;
 
 	if (ifname[0] == '_')
 		ifname++;
@@ -79,7 +80,7 @@ cdnr_stat_loop(int fd, const char *ifname, int count, int interval)
 	for (i = 0; i < NELEMENTS; i++)
 		stats1[i].tce_handle = stats2[i].tce_handle = CDNR_NULL_HANDLE;
 
-	while (count == 0 || cnt-- > 0) {
+	for (;;) {
 		get_stats.nskip = 0;
 		get_stats.nelements = NELEMENTS;
 		get_stats.tce_stats = new;
@@ -105,8 +106,7 @@ cdnr_stat_loop(int fd, const char *ifname, int count, int interval)
 
 			if (sp->tce_handle != lp->tce_handle) {
 				quip_chandle2name(_ifname, sp->tce_handle,
-						  cdnrnames[i], sizeof(cdnrnames[0]));
-				continue;
+				    cdnrnames[i], sizeof(cdnrnames[0]));
 			}
 
 			switch (sp->tce_type) {
@@ -131,14 +131,18 @@ cdnr_stat_loop(int fd, const char *ifname, int count, int interval)
 			       element_names[sp->tce_type], cdnrnames[i],
 			       sp->tce_handle);
 			for (j = 0; j < nprofile; j++) {
-				printf("  %s %10llu pkts %16llu bytes (%sbps)\n",
-				       profile_names[j], 
-				       (ull)sp->tce_cnts[j].packets,
-				       (ull)sp->tce_cnts[j].bytes,
-				       rate2str(
-					       calc_rate(sp->tce_cnts[j].bytes,
-							 lp->tce_cnts[j].bytes,
-							 sec)));
+				printf("  %s %10llu pkts %16llu bytes",
+				    profile_names[j],
+				    (ull)sp->tce_cnts[j].packets,
+				    (ull)sp->tce_cnts[j].bytes);
+				if (lp->tce_handle != CDNR_NULL_HANDLE) {
+					printf(" (%sbps)\n",
+					    rate2str(calc_rate(
+					        sp->tce_cnts[j].bytes,
+						lp->tce_cnts[j].bytes, sec)));
+				} else {
+					printf("\n");
+				}
 			}
 		}
 		printf("\n");
@@ -149,6 +153,12 @@ cdnr_stat_loop(int fd, const char *ifname, int count, int interval)
 		new = tmp;
 
 		last_time = cur_time;
-		sleep(interval);
+
+		if (count != 0 && --cnt == 0)
+			break;
+
+		/* wait for alarm signal */
+		if (sigprocmask(SIG_BLOCK, NULL, &omask) == 0)
+			sigsuspend(&omask);
 	}
 }

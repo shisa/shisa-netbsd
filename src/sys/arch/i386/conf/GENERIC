@@ -1,4 +1,4 @@
-# $NetBSD: GENERIC,v 1.787 2006/10/01 18:37:54 bouyer Exp $
+# $NetBSD: GENERIC,v 1.792 2006/10/27 17:37:44 perry Exp $
 #
 # GENERIC machine description file
 #
@@ -22,7 +22,7 @@ include 	"arch/i386/conf/std.i386"
 
 options 	INCLUDE_CONFIG_FILE	# embed config file in kernel binary
 
-#ident 		"GENERIC-$Revision: 1.787 $"
+#ident 		"GENERIC-$Revision: 1.792 $"
 
 maxusers	32		# estimated number of users
 
@@ -54,7 +54,6 @@ options 	MTRR		# memory-type range register syscall support
 #options 	PERFCTRS	# performance-monitoring counters support
 
 options 	MULTIBOOT	# Multiboot support (see multiboot(8))
-#options 	MULTIBOOT_SYMTAB_SPACE=1048576
 
 # delay between "rebooting ..." message and hardware reset, in milliseconds
 #options 	CPURESET_DELAY=2000
@@ -270,7 +269,7 @@ options 	WSDISPLAY_COMPAT_RAWKBD		# can get raw scancodes
 options 	PCKBD_CNATTACH_MAY_FAIL
 # see dev/pckbport/wskbdmap_mfii.c for implemented layouts
 #options 	PCKBD_LAYOUT="(KB_DE | KB_NODEAD)" # for pckbd driver
-#options 	UKBD_LAYOUT="(KB_DE | KB_NODEAD)"  # for ukbd driver 
+#options 	UKBD_LAYOUT="(KB_DE | KB_NODEAD)"  # for ukbd driver
 # allocate a number of virtual screens at autoconfiguration time
 #options 	WSDISPLAY_DEFAULTSCREENS=4
 # use a large software cursor that doesn't blink
@@ -967,6 +966,7 @@ glxtphy* at mii? phy ?			# Level One LXT-1000 PHYs
 gphyter* at mii? phy ?			# NS83861 Gig-E PHY
 icsphy* at mii? phy ?			# Integrated Circuit Systems ICS189x
 igphy*	at mii? phy ?			# Intel IGP01E1000
+ikphy*	at mii? phy ?			# Intel 82563 PHYs
 inphy*	at mii? phy ?			# Intel 82555 PHYs
 iophy*	at mii? phy ?			# Intel 82553 PHYs
 lxtphy* at mii? phy ?			# Level One LXT-970 PHYs
@@ -1121,7 +1121,7 @@ radio*	at udsbr?
 # USB Generic driver
 ugen*	at uhub? port ?
 # On ugen bulk endpoints, perform read-ahead and write-behind.
-options	UGEN_BULK_RA_WB
+options UGEN_BULK_RA_WB
 
 
 # IrDA and Consumer Ir devices
@@ -1391,21 +1391,21 @@ pseudo-device	nsmb			# experimental - SMB requester
 pseudo-device	wsmux			# mouse & keyboard multiplexor
 pseudo-device	wsfont
 
-#options	FILEASSOC		# fileassoc(9) - required for Veriexec 
-#options	FILEASSOC_NHOOKS=4	# Default number of storage slots
+options 	FILEASSOC		# fileassoc(9) - required for Veriexec
+#options 	FILEASSOC_NHOOKS=4	# Default number of storage slots
 
 # Veriexec
-#pseudo-device	veriexec
+pseudo-device	veriexec
 #
 # Uncomment the fingerprint methods below that are desired. Note that
 # removing fingerprint methods will have almost no impact on the kernel
 # code size.
 #
-#options VERIFIED_EXEC_FP_RMD160
-#options VERIFIED_EXEC_FP_SHA256
-#options VERIFIED_EXEC_FP_SHA384
-#options VERIFIED_EXEC_FP_SHA512
-#options VERIFIED_EXEC_FP_SHA1
-#options VERIFIED_EXEC_FP_MD5
+options VERIFIED_EXEC_FP_RMD160
+options VERIFIED_EXEC_FP_SHA256
+options VERIFIED_EXEC_FP_SHA384
+options VERIFIED_EXEC_FP_SHA512
+options VERIFIED_EXEC_FP_SHA1
+options VERIFIED_EXEC_FP_MD5
 
 options PAX_MPROTECT=0			# PaX mprotect(2) restrictions

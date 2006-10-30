@@ -1,4 +1,4 @@
-/*	$NetBSD: prop_object.c,v 1.6 2006/10/03 15:45:04 thorpej Exp $	*/
+/*	$NetBSD: prop_object.c,v 1.12 2006/10/19 10:10:35 he Exp $	*/
 
 /*-
  * Copyright (c) 2006 The NetBSD Foundation, Inc.
@@ -96,7 +96,7 @@ _prop_object_init(struct _prop_object *po, const struct _prop_object_type *pot)
  */
 /*ARGSUSED*/
 void
-_prop_object_fini(struct _prop_object *po)
+_prop_object_fini(struct _prop_object *po _PROP_ARG_UNUSED)
 {
 	/* Nothing to do, currently. */
 }
@@ -828,7 +828,7 @@ _prop_object_internalize_map_file(const char *fname)
 {
 	struct stat sb;
 	struct _prop_object_internalize_mapped_file *mf;
-	size_t pgsize = sysconf(_SC_PAGESIZE);
+	size_t pgsize = (size_t)sysconf(_SC_PAGESIZE);
 	size_t pgmask = pgsize - 1;
 	boolean_t need_guard = FALSE;
 	int fd;

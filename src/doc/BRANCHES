@@ -1,4 +1,4 @@
-#	$NetBSD: BRANCHES,v 1.114 2006/10/07 02:53:57 tsutsui Exp $
+#	$NetBSD: BRANCHES,v 1.118 2006/10/12 19:59:07 peter Exp $
 #
 # This file contains a list of branches that exist in the NetBSD CVS
 # tree and their current state.
@@ -309,21 +309,6 @@ Notes:		As per the newlock branch, however given the amount of time
 		- Minor locking improvements.
 		- Remove spinlockmgr().
 
-Branch:		peter-altq
-Description:	New ALTQ framework:
-		- sync with KAME sources
-		- share mtag/name mapping functions
-		- separate altq + pf attachment 
-Status:		Active
-Start Date:	March 16, 2006
-End Date:
-Base Tag:	peter-altq-base
-Maintainer:	Peter Postma <peter@NetBSD.org>,
-		Martin Husemann <martin@NetBSD.org>,
-		Matthias Scheler <tron@NetBSD.org>
-Scope:		dist/pf dist/ipf distrib/sets/lists sys usr.sbin/altq
-Notes:
-
 Branch:	  	pkgviews
 Description:  	package views, enabling multiple conflicting packages to co-exist
 Status:		Active
@@ -416,34 +401,11 @@ Notes:
 			mac68k, x68k, hpcarm, shark, acorn32,
 			cats, netwinder, algor, arc, ews4800mips, hpcmips,
 			newsmips, luna68k, cobalt, pmax, sbmips, hpcsh,
-			landisk, next68k, macppc
+			landisk, next68k, macppc, amiga, cesfic, sgimips
 
 		not tested:
 			pdp10 (i don't know how to build)
 			sparc64 (GENERIC.MP seems to have an unrelated problem)
-			cesfic (GENERIC fails to build with the following
-			error.  i don't know if it's related to my changes.)
-
-      build  compat/libcompat.a
-      making sure the 68040 FPSP is up to date...
-      netbsd.s: Assembler messages:
-      netbsd.s:92: Error: can't resolve `0' {*UND* section} - `LOCAL_SIZE' {*UND* section}
-      netbsd.s:125: Error: can't resolve `0' {*UND* section} - `LOCAL_SIZE' {*UND* section}
-      netbsd.s:163: Error: can't resolve `0' {.text section} - `LOCAL_SIZE' {*UND* section}
-
-			amiga (GENERIC fails with the following error.)
-
-`libcompat.a' is up to date.
-making sure the 68040 FPSP is up to date...
-do_func.s: Assembler messages:
-do_func.s:564: Error: undefined symbol `neg_mask' in operation
-do_func.s:564: Error: undefined symbol `inf_mask' in operation
-do_func.s:591: Error: undefined symbol `neg_mask' in operation
-do_func.s:591: Error: undefined symbol `z_mask' in operation
-
-*** Failed target:  do_func.o
-*** Failed command: /exports/abhome/tools/bin/m68k--netbsdelf-gcc -x assembler-with-cpp -m68040 -Damiga -DFPCOPROC -I../../. -I/exports/nbsd/src/sys/../common/include -I/exports/nbsd/src/sys/arch -I/exports/nbsd/src/sys -nostdinc -DDRACO -DM68060 -DM68040 -DM68030 -DM68020 -DLKM -DMAXUSERS=8 -D_KERNEL -D_KERNEL_OPT -I/exports/nbsd/src/sys/lib/libkern/../../../common/lib/libc/quad -I/exports/nbsd/src/sys/lib/libkern/../../../common/lib/libc/string -I/exports/nbsd/src/sys/lib/libkern/../../../common/lib/libc/arch/m68k/string -I/exports/nbsd/src/sys/dist/ipf -c -o do_func.o do_func.s
-*** Error code 1
 
 		notyet:
 			others
@@ -712,6 +674,22 @@ Maintainer:	Konrad Schroder <perseant@NetBSD.org>
 Scope:		basesrc/{sbin/*lfs,libexec/lfs_cleanerd,usr.sbin/dumplfs}, syssrc/sys/ufs
 Notes:		This branch should be short-lived, I expect to merge as soon
 		as the data structures required for unremove are in and tested.
+
+Branch:		peter-altq
+Description:	New ALTQ framework:
+		- sync with KAME sources
+		- share mtag/name mapping functions
+		- separate altq + pf attachment
+Status:		Terminated; merged to -current
+Start Date:	March 16, 2006
+End Date:	October 12, 2006
+Base Tag:	peter-altq-base
+Maintainer:	Peter Postma <peter@NetBSD.org>,
+		Martin Husemann <martin@NetBSD.org>,
+		Matthias Scheler <tron@NetBSD.org>
+Scope:		dist/pf dist/ipf distrib/sets/lists sys usr.sbin/altq
+Notes:		Only the first item in the description was finished
+		in this branch.
 
 Branch:		sommerfeld_i386mp_1
 Description:	Multiprocessor support for i386 using Intel MP BIOS.

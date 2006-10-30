@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile.kern.inc,v 1.87 2006/10/04 16:03:01 christos Exp $
+#	$NetBSD: Makefile.kern.inc,v 1.90 2006/10/26 05:10:55 thorpej Exp $
 #
 # This file contains common `MI' targets and definitions and it is included
 # at the bottom of each `MD' ${MACHINE}/conf/Makefile.${MACHINE}.
@@ -74,8 +74,8 @@ CWARNFLAGS+=	-Wcast-qual -Wwrite-strings
 CWARNFLAGS+=	-Wno-sign-compare
 . if ${HAVE_GCC} > 3
 CWARNFLAGS+=	-Wno-pointer-sign -Wno-attributes
-.  if ${MACHINE} == "i386"
-CWARNFLAGS+=	-Wextra -Wno-unused
+.  if ${MACHINE} == "i386" || ${MACHINE_ARCH} == "sparc64" 
+CWARNFLAGS+=	-Wextra -Wno-unused-parameter
 .  endif
 . endif
 .endif
@@ -306,7 +306,7 @@ __CLEANDEPEND: .USE
 cleandir distclean: __CLEANKERNEL __CLEANDEPEND
 clean: __CLEANKERNEL
 depend: .depend
-dependall: depend all
+dependall: depend .WAIT all
 
 .if !target(.depend)
 MKDEP_AFLAGS?=	${AFLAGS}

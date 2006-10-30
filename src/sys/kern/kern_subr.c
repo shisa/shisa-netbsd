@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_subr.c,v 1.146 2006/10/08 02:39:01 oster Exp $	*/
+/*	$NetBSD: kern_subr.c,v 1.149 2006/10/17 18:21:29 dogcow Exp $	*/
 
 /*-
  * Copyright (c) 1997, 1998, 1999, 2002 The NetBSD Foundation, Inc.
@@ -86,7 +86,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_subr.c,v 1.146 2006/10/08 02:39:01 oster Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_subr.c,v 1.149 2006/10/17 18:21:29 dogcow Exp $");
 
 #include "opt_ddb.h"
 #include "opt_md.h"
@@ -458,7 +458,7 @@ hook_establish(hook_list_t *list, void (*fn)(void *), void *arg)
 }
 
 static void
-hook_disestablish(hook_list_t *list, void *vhook)
+hook_disestablish(hook_list_t *list __unused, void *vhook)
 {
 #ifdef DIAGNOSTIC
 	struct hook_desc *hd;
@@ -1362,9 +1362,10 @@ int
 trace_enter(struct lwp *l, register_t code,
     register_t realcode, const struct sysent *callp, void *args)
 {
-#if defined(SYSCALL_DEBUG) || defined(KTRACE) || defined(PTRACE) || defined(SYSTRACE)
 	struct proc *p = l->l_proc;
 
+
+#if defined(SYSCALL_DEBUG) || defined(KTRACE) || defined(PTRACE) || defined(SYSTRACE)
 #ifdef SYSCALL_DEBUG
 	scdebug_call(l, code, args);
 #endif /* SYSCALL_DEBUG */
@@ -1395,12 +1396,12 @@ trace_enter(struct lwp *l, register_t code,
  * system call number range for emulation the process runs under.
  */
 void
-trace_exit(struct lwp *l, register_t code, void *args, register_t rval[],
-    int error)
+trace_exit(struct lwp *l, register_t code, void *args __unused,
+    register_t rval[], int error)
 {
-#if defined(SYSCALL_DEBUG) || defined(KTRACE) || defined(PTRACE) || defined(SYSTRACE)
 	struct proc *p = l->l_proc;
 
+#if defined(SYSCALL_DEBUG) || defined(KTRACE) || defined(PTRACE) || defined(SYSTRACE)
 #ifdef SYSCALL_DEBUG
 	scdebug_ret(l, code, error, rval);
 #endif /* SYSCALL_DEBUG */

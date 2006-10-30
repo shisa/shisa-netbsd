@@ -1,4 +1,4 @@
-/*	$NetBSD: prop_rb.c,v 1.2 2006/09/09 15:19:18 thorpej Exp $	*/
+/*	$NetBSD: prop_rb.c,v 1.6 2006/10/16 03:21:07 thorpej Exp $	*/
 
 /*-
  * Copyright (c) 2001 The NetBSD Foundation, Inc.
@@ -55,6 +55,10 @@
 #undef false
 #define	false		FALSE
 
+#ifndef __predict_false
+#define	__predict_false(x)	(x)
+#endif
+
 static void rb_tree_reparent_nodes(struct rb_tree *, struct rb_node *,
 				   unsigned int);
 static void rb_tree_insert_rebalance(struct rb_tree *, struct rb_node *);
@@ -83,17 +87,12 @@ static bool rb_tree_check_node(const struct rb_tree *, const struct rb_node *,
  * it to be const, that on some architectures trying to write to it will
  * cause a fault.
  */
-#ifdef __lint__
-/* XXX Work around for bug in lint. */
-static const struct rb_node sentinel_node = { 0 };
-#else
 static const struct rb_node sentinel_node = {
 	.rb_nodes = { RBUNCONST(&sentinel_node),
 		      RBUNCONST(&sentinel_node),
 		      NULL },
-	.rb_sentinel = 1,
+	.rb_u = { .u_s = { .s_sentinel = 1 } },
 };
-#endif /* __lint__ */
 
 void
 _prop_rb_tree_init(struct rb_tree *rbt, const struct rb_tree_ops *ops)
@@ -112,8 +111,8 @@ _prop_rb_tree_init(struct rb_tree *rbt, const struct rb_tree_ops *ops)
  */
 /*ARGSUSED*/
 static void
-rb_tree_reparent_nodes(struct rb_tree *rbt, struct rb_node *old_father,
-    unsigned int which)
+rb_tree_reparent_nodes(struct rb_tree *rbt _PROP_ARG_UNUSED,
+    struct rb_node *old_father, unsigned int which)
 {
 	const unsigned int other = which ^ RB_NODE_OTHER;
 	struct rb_node * const grandpa = old_father->rb_parent;
@@ -536,8 +535,8 @@ rb_tree_swap_prune_and_rebalance(struct rb_tree *rbt, struct rb_node *self,
  */
 /*ARGSUSED*/
 static void
-rb_tree_prune_blackred_branch(struct rb_tree *rbt, struct rb_node *self,
-	unsigned int which)
+rb_tree_prune_blackred_branch(struct rb_tree *rbt _PROP_ARG_UNUSED,
+    struct rb_node *self, unsigned int which)
 {
 	struct rb_node *parent = self->rb_parent;
 	struct rb_node *child = self->rb_nodes[which];

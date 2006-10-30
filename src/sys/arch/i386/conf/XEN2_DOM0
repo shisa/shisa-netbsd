@@ -1,4 +1,4 @@
-# $NetBSD: XEN2_DOM0,v 1.11 2006/10/05 08:24:32 jnemeth Exp $
+# $NetBSD: XEN2_DOM0,v 1.13 2006/10/21 14:10:33 bouyer Exp $
 
 include 	"arch/xen/conf/std.xen"
 
@@ -316,6 +316,7 @@ glxtphy* at mii? phy ?			# Level One LXT-1000 PHYs
 gphyter* at mii? phy ?			# NS83861 Gig-E PHY
 icsphy* at mii? phy ?			# Integrated Circuit Systems ICS189x
 igphy*	at mii? phy ?			# Intel IGP01E1000
+ikphy*	at mii? phy ?			# Intel 82563 PHYs
 inphy*	at mii? phy ?			# Intel 82555 PHYs
 iophy*	at mii? phy ?			# Intel 82553 PHYs
 lxtphy* at mii? phy ?			# Level One LXT-970 PHYs
@@ -636,6 +637,32 @@ mpu*	at yds?
 
 # MIDI support
 midi*	at midibus?
+
+# Bluetooth Controller and Device support
+
+# Bluetooth PCMCIA Controllers
+# bt3c* at pcmcia? function ?             # 3Com 3CRWB6096-A
+
+# Bluetooth USB Controllers
+ubt* at uhub? port ? configuration ? interface ?
+
+# Bluetooth Device Hub
+#bthub* at bt3c?
+bthub* at ubt?
+
+# Bluetooth HID support
+bthidev* at bthub?
+
+# Bluetooth Mouse
+btms* at bthidev? reportid ?
+wsmouse* at btms? mux 0
+
+# Bluetooth Keyboard
+btkbd* at bthidev? reportid ?
+wskbd* at btkbd? console ? mux 1
+
+# Bluetooth Audio support
+btsco* at bthub?
 
 # Cryptographic Devices
 

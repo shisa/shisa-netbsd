@@ -1,4 +1,4 @@
-.\"	$NetBSD: options.4,v 1.336 2006/09/27 21:42:04 manu Exp $
+.\"	$NetBSD: options.4,v 1.339 2006/10/25 13:58:02 jmmv Exp $
 .\"
 .\" Copyright (c) 1996
 .\" 	Perry E. Metzger.  All rights reserved.
@@ -30,7 +30,7 @@
 .\" THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 .\"
 .\"
-.Dd September 26, 2006
+.Dd October 25, 2006
 .Os
 .Dt OPTIONS 4
 .Sh NAME
@@ -1741,7 +1741,10 @@ Include support for IPsec in IPv4 ALTQ.
 This option assumes
 .Em ALTQ .
 .It Cd options ALTQ_JOBS
-Undocumented at this time.
+Include support for ALTQ-implemented JoBS (Joint Buffer Management
+and Scheduling).
+This option assumes
+.Em ALTQ .
 .It Cd options ALTQ_AFMAP
 Include support for an undocumented ALTQ feature that is used to map an IP
 flow to an ATM VC (Virtual Circuit).
@@ -2481,13 +2484,6 @@ a Multiboot-compliant boot manager such as GRUB.
 See
 .Xr multiboot 8
 for more information.
-.It Cd options MULTIBOOT_SYMTAB_SPACE=nbytes
-Space (in bytes) reserved in memory to store the kernel's symbol table.
-If the symbol table is bigger than this space, it will not be loaded;
-if it is smaller, the unused memory will be claimed by the kernel and
-used normally.
-You shouldn't need to touch this variable.
-Defaults to 1048576 bytes (one megabyte).
 .El
 .Ss isa-specific Options
 Options specific to

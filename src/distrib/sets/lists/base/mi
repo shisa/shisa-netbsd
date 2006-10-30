@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.659 2006/10/07 08:48:03 elad Exp $
+# $NetBSD: mi,v 1.665 2006/10/26 17:12:34 kleink Exp $
 .						base-sys-root
 ./altroot					base-sys-root
 ./bin						base-sys-root
@@ -143,6 +143,7 @@
 ./sbin/fsck_msdos				base-sysutil-root
 ./sbin/fsdb					base-sysutil-root
 ./sbin/fsirand					base-sysutil-root
+./sbin/gpt					base-sysutil-root
 ./sbin/halt					base-sysutil-root
 ./sbin/ifconfig					base-netutil-root
 ./sbin/init					base-sysutil-root
@@ -760,6 +761,7 @@
 ./usr/include/dev/wscons			base-c-usr
 ./usr/include/filecorefs			base-c-usr
 ./usr/include/fs				base-c-usr
+./usr/include/fs/puffs				base-c-usr
 ./usr/include/fs/smbfs				base-c-usr
 ./usr/include/fs/sysvbfs			base-c-usr
 ./usr/include/fs/udf				base-c-usr
@@ -1684,12 +1686,14 @@
 ./usr/share/i18n/csmapper/GB/GB2312UDA2%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/GB/GBKEXT%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/GB/GBKUDA%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/GB/ISO-IR-165EXT%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/GB/UCS%GB2312.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/GB/UCS%GB2312EXT.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/GB/UCS%GB2312UDA1.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/GB/UCS%GB2312UDA2.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/GB/UCS%GBKEXT.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/GB/UCS%GBKUDA.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/GB/UCS%ISO-IR-165EXT.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/GB/UCS@BMP%GB18030.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/GEORGIAN					base-sysutil-share
 ./usr/share/i18n/csmapper/GEORGIAN/GEORGIAN-ACADEMY%UCS.mps		base-sysutil-share	nls
@@ -1799,16 +1803,28 @@
 ./usr/share/i18n/csmapper/KOI/UCS%KOI8-U.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/KOI/UCS%KOI8.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/KS			base-sysutil-share
-./usr/share/i18n/csmapper/KS/KSC5601%UCS.mps	base-sysutil-share	nls
-./usr/share/i18n/csmapper/KS/UCS%KSC5601.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/KS/JOHAB%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/KS/KSC5601%UCS.mps	base-obsolete		obsolete
+./usr/share/i18n/csmapper/KS/KSC5601HANGUL%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/KS/KSC5601HANJA%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/KS/UCS%JOHAB.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/KS/UCS%KSC5601.mps	base-obsolete		obsolete
+./usr/share/i18n/csmapper/KS/UCS%KSC5601HANGUL.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/KS/UCS%KSC5601HANJA.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC			base-sysutil-share
+./usr/share/i18n/csmapper/MISC/ATARIST%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/Big5%UCS.mps	base-obsolete		obsolete
+./usr/share/i18n/csmapper/MISC/HP-ROMAN8%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/KOI8-R%UCS.mps	base-obsolete		obsolete
 ./usr/share/i18n/csmapper/MISC/KOI8-U%UCS.mps	base-obsolete		obsolete
+./usr/share/i18n/csmapper/MISC/NEXTSTEP%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/PTCP154%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/MISC/UCS%ATARIST.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/UCS%Big5.mps	base-obsolete		obsolete
+./usr/share/i18n/csmapper/MISC/UCS%HP-ROMAN8.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/UCS%KOI8-R.mps	base-obsolete		obsolete
 ./usr/share/i18n/csmapper/MISC/UCS%KOI8-U.mps	base-obsolete		obsolete
+./usr/share/i18n/csmapper/MISC/UCS%NEXTSTEP.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/UCS%PTCP154.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/charset.pivot		base-sysutil-share	nls
 ./usr/share/i18n/csmapper/charset.pivot.pvdb	base-sysutil-share	nls
@@ -1934,6 +1950,7 @@
 ./usr/share/i18n/esdb/GEORGIAN/GEORGIAN-PS-OldCapital.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/GEORGIAN/GEORGIAN-PS.esdb			base-sysutil-share	nls
 ./usr/share/i18n/esdb/ISO-2022			base-sysutil-share
+./usr/share/i18n/esdb/ISO-2022/ISO-2022-CN-EXT.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/ISO-2022/ISO-2022-CN.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/ISO-2022/ISO-2022-JP-2.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/ISO-2022/ISO-2022-JP.esdb	base-sysutil-share	nls
@@ -1992,12 +2009,16 @@
 ./usr/share/i18n/esdb/KOI/KOI8-U.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/KOI/KOI8.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC			base-sysutil-share
+./usr/share/i18n/esdb/MISC/ATARIST.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/Big5.esdb		base-obsolete		obsolete
 ./usr/share/i18n/esdb/MISC/CTEXT.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/GB18030.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/GBK.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/MISC/HP-ROMAN8.esdb	base-sysutil-share	nls
+./usr/share/i18n/esdb/MISC/JOHAB.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/KOI8-R.esdb		base-obsolete		obsolete
 ./usr/share/i18n/esdb/MISC/KOI8-U.esdb		base-obsolete		obsolete
+./usr/share/i18n/esdb/MISC/NEXTSTEP.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/PTCP154.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/Shift_JIS.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/UTF			base-sysutil-share
@@ -3620,6 +3641,7 @@
 ./usr/share/zoneinfo/Europe/Nicosia		base-sys-share		share
 ./usr/share/zoneinfo/Europe/Oslo		base-sys-share		share
 ./usr/share/zoneinfo/Europe/Paris		base-sys-share		share
+./usr/share/zoneinfo/Europe/Podgorica		base-sys-share		share
 ./usr/share/zoneinfo/Europe/Prague		base-sys-share		share
 ./usr/share/zoneinfo/Europe/Riga		base-sys-share		share
 ./usr/share/zoneinfo/Europe/Rome		base-sys-share		share

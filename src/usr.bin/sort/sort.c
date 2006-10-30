@@ -1,4 +1,4 @@
-/*	$NetBSD: sort.c,v 1.41 2004/07/23 13:26:11 wiz Exp $	*/
+/*	$NetBSD: sort.c,v 1.44 2006/10/23 19:53:25 jdolecek Exp $	*/
 
 /*-
  * Copyright (c) 2000-2003 The NetBSD Foundation, Inc.
@@ -83,7 +83,7 @@ __COPYRIGHT("@(#) Copyright (c) 1993\n\
 #endif /* not lint */
 
 #ifndef lint
-__RCSID("$NetBSD: sort.c,v 1.41 2004/07/23 13:26:11 wiz Exp $");
+__RCSID("$NetBSD: sort.c,v 1.44 2006/10/23 19:53:25 jdolecek Exp $");
 __SCCSID("@(#)sort.c	8.1 (Berkeley) 6/6/93");
 #endif /* not lint */
 
@@ -137,6 +137,7 @@ main(argc, argv)
 	struct filelist filelist;
 	FILE *outfp = NULL;
 	struct rlimit rl;
+	struct stat st;
 
 	setlocale(LC_ALL, "");
 
@@ -289,12 +290,12 @@ main(argc, argv)
 		/* NOT REACHED */
 	}
 	if (!outpath) {
-		(void)snprintf(toutpath,
-		    sizeof(toutpath), "%sstdout", _PATH_DEV);
+		toutpath[0] = '\0';	/* path not used in this case */
 		outfile = outpath = toutpath;
 		outfp = stdout;
-	} else if (!(ch = access(outpath, 0)) &&
-	    strncmp(_PATH_DEV, outpath, 5)) {
+	} else if (lstat(outpath, &st) == 0
+	    && !S_ISCHR(st.st_mode) && !S_ISBLK(st.st_mode)) {
+		/* output file exists and isn't character or block device */
 		struct sigaction act;
 		static const int sigtable[] = {SIGHUP, SIGINT, SIGPIPE,
 		    SIGXCPU, SIGXFSZ, SIGVTALRM, SIGPROF, 0};
@@ -315,11 +316,12 @@ main(argc, argv)
 		act.sa_flags = SA_RESTART | SA_RESETHAND;
 		for (i = 0; sigtable[i]; ++i)	/* always unlink toutpath */
 			sigaction(sigtable[i], &act, 0);
-	} else
+	} else {
 		outfile = outpath;
 
-	if (outfp == NULL && (outfp = fopen(outfile, "w")) == NULL)
-		err(2, "output file %s", outfile);
+		if ((outfp = fopen(outfile, "w")) == NULL)
+			err(2, "output file %s", outfile);
+	}
 
 	if (mflag) {
 		fmerge(-1, 0, &filelist, argc-optind, get, outfp, putline,
@@ -328,8 +330,19 @@ main(argc, argv)
 		fsort(-1, 0, 0, &filelist, argc-optind, outfp, fldtab);
 
 	if (outfile != outpath) {
-		if (access(outfile, 0))
+		if (access(outfile, F_OK))
 			err(2, "%s", outfile);
+
+		/*
+		 * Copy file permissions bits of the original file.
+		 * st is initialized above, when we create the
+		 * temporary spool file.
+		 */
+		if (lchmod(outfile, st.st_mode & ALLPERMS) != 0) {
+			err(2, "cannot chmod %s: output left in %s",
+			    outpath, outfile);
+		}
+
 		(void)unlink(outpath);
 		if (link(outfile, outpath))
 			err(2, "cannot link %s: output left in %s",

@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_exit.c,v 1.159 2006/09/23 15:36:12 xtraeme Exp $	*/
+/*	$NetBSD: kern_exit.c,v 1.161 2006/10/12 01:32:15 christos Exp $	*/
 
 /*-
  * Copyright (c) 1998, 1999 The NetBSD Foundation, Inc.
@@ -74,7 +74,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_exit.c,v 1.159 2006/09/23 15:36:12 xtraeme Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_exit.c,v 1.161 2006/10/12 01:32:15 christos Exp $");
 
 #include "opt_ktrace.h"
 #include "opt_perfctrs.h"
@@ -133,7 +133,7 @@ static void lwp_exit_hook(struct lwp *, void *);
  * Fill in the appropriate signal information, and signal the parent.
  */
 static void
-exit_psignal(struct proc *p, struct proc *pp, ksiginfo_t *ksi)
+exit_psignal(struct proc *p, struct proc *pp __unused, ksiginfo_t *ksi)
 {
 
 	(void)memset(ksi, 0, sizeof(ksiginfo_t));
@@ -163,7 +163,7 @@ exit_psignal(struct proc *p, struct proc *pp, ksiginfo_t *ksi)
  *	Death of process.
  */
 int
-sys_exit(struct lwp *l, void *v, register_t *retval)
+sys_exit(struct lwp *l, void *v, register_t *retval __unused)
 {
 	struct sys_exit_args /* {
 		syscallarg(int)	rval;
@@ -341,6 +341,13 @@ exit1(struct lwp *l, int rv)
 	p->p_xstat = rv;
 	if (p->p_emul->e_proc_exit)
 		(*p->p_emul->e_proc_exit)(p);
+
+	/*
+	 * Finalize the last LWP's specificdata, as well as the
+	 * specificdata for the proc itself.
+	 */
+	lwp_finispecific(l);
+	proc_finispecific(p);
 
 	/*
 	 * Free the VM resources we're still holding on to.
@@ -645,7 +652,7 @@ retry:
 
 /* Wrapper function for use in p_userret */
 static void
-lwp_exit_hook(struct lwp *l, void *arg)
+lwp_exit_hook(struct lwp *l, void *arg __unused)
 {
 	KERNEL_PROC_LOCK(l);
 	lwp_exit(l);

@@ -1,4 +1,4 @@
-/*	$NetBSD: tcp_output.c,v 1.148 2006/10/08 11:10:59 yamt Exp $	*/
+/*	$NetBSD: tcp_output.c,v 1.150 2006/10/17 11:11:40 yamt Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -142,7 +142,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: tcp_output.c,v 1.148 2006/10/08 11:10:59 yamt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: tcp_output.c,v 1.150 2006/10/17 11:11:40 yamt Exp $");
 
 #include "opt_inet.h"
 #include "opt_ipsec.h"
@@ -196,6 +196,7 @@ __KERNEL_RCSID(0, "$NetBSD: tcp_output.c,v 1.148 2006/10/08 11:10:59 yamt Exp $"
 #include <netinet/tcp_seq.h>
 #include <netinet/tcp_timer.h>
 #include <netinet/tcp_var.h>
+#include <netinet/tcp_congctl.h>
 #include <netinet/tcpip.h>
 #include <netinet/tcp_debug.h>
 #include <netinet/in_offload.h>
@@ -808,7 +809,7 @@ again:
 	}
 
 	if (sack_rxmit == 0) {
-		if (sack_bytes_rxmt != 0) {
+		if (TCP_SACK_ENABLED(tp) && tp->t_partialacks >= 0) {
 			long cwin;
 
 			/*
@@ -1611,7 +1612,7 @@ out:
 	if (maxburst < 0)
 		printf("tcp_output: maxburst exceeded by %d\n", -maxburst);
 #endif
-	if (sendalot && (!tcp_do_newreno || --maxburst))
+	if (sendalot && (tp->t_congctl == &tcp_reno_ctl || --maxburst))
 		goto again;
 	return (0);
 }

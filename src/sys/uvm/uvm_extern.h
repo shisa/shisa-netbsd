@@ -1,4 +1,4 @@
-/*	$NetBSD: uvm_extern.h,v 1.119 2006/10/05 14:48:33 chs Exp $	*/
+/*	$NetBSD: uvm_extern.h,v 1.121 2006/10/12 10:14:20 yamt Exp $	*/
 
 /*
  *
@@ -653,6 +653,12 @@ int			uvm_mremap(struct vm_map *, vaddr_t, vsize_t,
 			    struct proc *, int);
 #define	UVM_MREMAP_FIXED	1
 
+/* uvm_object.c */
+int			uobj_wirepages(struct uvm_object *uobj, off_t start,
+			    off_t end);
+void			uobj_unwirepages(struct uvm_object *uobj, off_t start,
+			    off_t end);
+
 /* uvm_page.c */
 struct vm_page		*uvm_pagealloc_strat(struct uvm_object *,
 			    voff_t, struct vm_anon *, int, int, int);
@@ -699,6 +705,9 @@ struct uvm_object	*uvn_attach(void *, vm_prot_t);
 int			uvn_findpages(struct uvm_object *, voff_t,
 			    int *, struct vm_page **, int);
 void			uvm_vnp_zerorange(struct vnode *, off_t, size_t);
+boolean_t		uvn_text_p(struct uvm_object *);
+boolean_t		uvn_clean_p(struct uvm_object *);
+boolean_t		uvn_needs_writefault_p(struct uvm_object *);
 
 /* kern_malloc.c */
 void			kmeminit_nkmempages(void);

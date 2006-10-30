@@ -1,4 +1,4 @@
-.\"     $NetBSD: driver.9,v 1.15 2005/12/20 19:53:15 rpaulo Exp $
+.\"     $NetBSD: driver.9,v 1.18 2006/10/13 21:06:51 wiz Exp $
 .\"
 .\" Copyright (c) 2001 The NetBSD Foundation, Inc.
 .\" All rights reserved.
@@ -34,7 +34,7 @@
 .\" ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 .\" POSSIBILITY OF SUCH DAMAGE.
 .\"
-.Dd December 20, 2005
+.Dd October 8, 2006
 .Dt DRIVER 9
 .Os
 .Sh NAME
@@ -136,9 +136,11 @@ const struct cdevsw foo_cdevsw {
 	int (*d_read)(dev_t, struct uio *, int);
 	int (*d_write)(dev_t, struct uio *, int);
 	int (*d_ioctl)(dev_t, u_long, caddr_t, int, struct lwp *);
+	void (*d_stop)(struct tty *, int);
 	struct tty *(*d_tty)(dev_t);
 	int (*d_poll)(dev_t, int, struct lwp *);
 	paddr_t (*d_mmap)(dev_t, off_t, int);
+	int (*d_kqfilter)(dev_t, struct knote *);
 	int d_type;
 };
 .Ed
@@ -363,7 +365,7 @@ foo*	at bar?
 For device interfaces of a driver to be compiled into the kernel,
 .Xr config 1
 must be aware of its existence.
-This is done by including an entry in majors.<arch>.
+This is done by including an entry in majors.\*[Lt]arch\*[Gt].
 For example, the driver
 .Dq foo
 with character device interfaces, a character major device number

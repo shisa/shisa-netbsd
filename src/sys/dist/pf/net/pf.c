@@ -1,4 +1,4 @@
-/*	$NetBSD: pf.c,v 1.25 2006/10/07 21:45:49 peter Exp $	*/
+/*	$NetBSD: pf.c,v 1.27 2006/10/12 19:59:08 peter Exp $	*/
 /*	$OpenBSD: pf.c,v 1.487 2005/04/22 09:53:18 dhartmei Exp $ */
 
 /*
@@ -1464,11 +1464,11 @@ pf_change_icmp(struct pf_addr *ia, u_int16_t *ip, struct pf_addr *oa,
 }
 
 void
-pf_send_tcp(const struct pf_rule *r, sa_family_t af,
+pf_send_tcp(const struct pf_rule *r __unused, sa_family_t af,
     const struct pf_addr *saddr, const struct pf_addr *daddr,
     u_int16_t sport, u_int16_t dport, u_int32_t seq, u_int32_t ack,
     u_int8_t flags, u_int16_t win, u_int16_t mss, u_int8_t ttl, int tag,
-    u_int16_t rtag, struct ether_header *eh, struct ifnet *ifp)
+    u_int16_t rtag, struct ether_header *eh, struct ifnet *ifp __unused)
 {
 	struct mbuf	*m;
 	int		 len, tlen;
@@ -1520,7 +1520,7 @@ pf_send_tcp(const struct pf_rule *r, sa_family_t af,
 			m_freem(m);
 			return;
 		}
-#ifdef ALTQ_NEW
+#ifdef ALTQ
 	if (r != NULL && r->qid) {
 		struct m_tag	*mtag;
 		struct altq_tag *atag;
@@ -1535,7 +1535,7 @@ pf_send_tcp(const struct pf_rule *r, sa_family_t af,
 			m_tag_prepend(m, mtag);
 		}
 	}
-#endif /* ALTQ_NEW */
+#endif /* ALTQ */
 	m->m_data += max_linkhdr;
 	m->m_pkthdr.len = m->m_len = len;
 	m->m_pkthdr.rcvif = NULL;
@@ -1656,7 +1656,7 @@ pf_send_tcp(const struct pf_rule *r, sa_family_t af,
 
 void
 pf_send_icmp(struct mbuf *m, u_int8_t type, u_int8_t code, sa_family_t af,
-    struct pf_rule *r)
+    struct pf_rule *r __unused)
 {
 	struct m_tag	*mtag;
 	struct mbuf	*m0;
@@ -1671,7 +1671,7 @@ pf_send_icmp(struct mbuf *m, u_int8_t type, u_int8_t code, sa_family_t af,
 	}
 	m_tag_prepend(m0, mtag);
 
-#ifdef ALTQ_NEW
+#ifdef ALTQ
 	if (r->qid) {
 		struct altq_tag *atag;
 
@@ -1685,7 +1685,7 @@ pf_send_icmp(struct mbuf *m, u_int8_t type, u_int8_t code, sa_family_t af,
 			m_tag_prepend(m0, mtag);
 		}
 	}
-#endif /* ALTQ_NEW */
+#endif /* ALTQ */
 
 	switch (af) {
 #ifdef INET
@@ -2780,7 +2780,7 @@ pf_set_rt_ifp(struct pf_state *s, struct pf_addr *saddr)
 
 int
 pf_test_tcp(struct pf_rule **rm, struct pf_state **sm, int direction,
-    struct pfi_kif *kif, struct mbuf *m, int off, void *h,
+    struct pfi_kif *kif, struct mbuf *m, int off, void *h __unused,
     struct pf_pdesc *pd, struct pf_rule **am, struct pf_ruleset **rsm,
     struct ifqueue *ifq)
 {
@@ -3156,7 +3156,7 @@ cleanup:
 
 int
 pf_test_udp(struct pf_rule **rm, struct pf_state **sm, int direction,
-    struct pfi_kif *kif, struct mbuf *m, int off, void *h,
+    struct pfi_kif *kif, struct mbuf *m, int off, void *h __unused,
     struct pf_pdesc *pd, struct pf_rule **am, struct pf_ruleset **rsm,
     struct ifqueue *ifq)
 {
@@ -3434,7 +3434,7 @@ cleanup:
 
 int
 pf_test_icmp(struct pf_rule **rm, struct pf_state **sm, int direction,
-    struct pfi_kif *kif, struct mbuf *m, int off, void *h,
+    struct pfi_kif *kif, struct mbuf *m, int off, void *h __unused,
     struct pf_pdesc *pd, struct pf_rule **am, struct pf_ruleset **rsm,
     struct ifqueue *ifq)
 {
@@ -3727,8 +3727,9 @@ cleanup:
 
 int
 pf_test_other(struct pf_rule **rm, struct pf_state **sm, int direction,
-    struct pfi_kif *kif, struct mbuf *m, int off, void *h, struct pf_pdesc *pd,
-    struct pf_rule **am, struct pf_ruleset **rsm, struct ifqueue *ifq)
+    struct pfi_kif *kif, struct mbuf *m, int off, void *h __unused,
+    struct pf_pdesc *pd, struct pf_rule **am, struct pf_ruleset **rsm,
+    struct ifqueue *ifq)
 {
 	struct pf_rule		*nr = NULL;
 	struct pf_rule		*r, *a = NULL;
@@ -3992,7 +3993,7 @@ cleanup:
 
 int
 pf_test_fragment(struct pf_rule **rm, int direction, struct pfi_kif *kif,
-    struct mbuf *m, void *h, struct pf_pdesc *pd, struct pf_rule **am,
+    struct mbuf *m, void *h __unused, struct pf_pdesc *pd, struct pf_rule **am,
     struct pf_ruleset **rsm)
 {
 	struct pf_rule		*r, *a = NULL;
@@ -4067,7 +4068,7 @@ pf_test_fragment(struct pf_rule **rm, int direction, struct pfi_kif *kif,
 
 int
 pf_test_state_tcp(struct pf_state **state, int direction, struct pfi_kif *kif,
-    struct mbuf *m, int off, void *h, struct pf_pdesc *pd,
+    struct mbuf *m, int off, void *h __unused, struct pf_pdesc *pd,
     u_short *reason)
 {
 	struct pf_state		 key;
@@ -4504,7 +4505,7 @@ pf_test_state_tcp(struct pf_state **state, int direction, struct pfi_kif *kif,
 
 int
 pf_test_state_udp(struct pf_state **state, int direction, struct pfi_kif *kif,
-    struct mbuf *m, int off, void *h, struct pf_pdesc *pd)
+    struct mbuf *m, int off, void *h __unused, struct pf_pdesc *pd)
 {
 	struct pf_state_peer	*src, *dst;
 	struct pf_state		 key;
@@ -4565,7 +4566,8 @@ pf_test_state_udp(struct pf_state **state, int direction, struct pfi_kif *kif,
 
 int
 pf_test_state_icmp(struct pf_state **state, int direction, struct pfi_kif *kif,
-    struct mbuf *m, int off, void *h, struct pf_pdesc *pd, u_short *reason)
+    struct mbuf *m, int off, void *h __unused, struct pf_pdesc *pd,
+    u_short *reason)
 {
 	struct pf_addr	*saddr = pd->src, *daddr = pd->dst;
 	u_int16_t	 icmpid = 0, *icmpsum;
@@ -5315,7 +5317,8 @@ pf_routable(struct pf_addr *addr, sa_family_t af)
 }
 
 int
-pf_rtlabel_match(struct pf_addr *addr, sa_family_t af, struct pf_addr_wrap *aw)
+pf_rtlabel_match(struct pf_addr *addr, sa_family_t af,
+    struct pf_addr_wrap *aw __unused)
 {
 	struct sockaddr_in	*dst;
 #ifdef INET6
@@ -6061,7 +6064,7 @@ done:
 	if (s && s->tag)
 		pf_tag_packet(m, pf_get_tag(m), s->tag);
 
-#ifdef ALTQ_NEW
+#ifdef ALTQ
 	if (action == PF_PASS && r->qid) {
 		struct m_tag	*mtag;
 		struct altq_tag	*atag;
@@ -6079,7 +6082,7 @@ done:
 			m_tag_prepend(m, mtag);
 		}
 	}
-#endif /* ALTQ_NEW */
+#endif /* ALTQ */
 
 	/*
 	 * connections redirected to loopback should not match sockets
@@ -6183,7 +6186,7 @@ pf_test6(int dir, struct ifnet *ifp, struct mbuf **m0,
 	struct pfi_kif		*kif;
 	u_short			 action, reason = 0, log = 0;
 	struct mbuf		*m = *m0;
-	struct ip6_hdr		*h;
+	struct ip6_hdr		*h = NULL;
 	struct pf_rule		*a = NULL, *r = &pf_default_rule, *tr, *nr;
 	struct pf_state		*s = NULL;
 	struct pf_ruleset	*ruleset = NULL;
@@ -6402,7 +6405,7 @@ done:
 	if (s && s->tag)
 		pf_tag_packet(m, pf_get_tag(m), s->tag);
 
-#ifdef ALTQ_NEW
+#ifdef ALTQ
 	if (action == PF_PASS && r->qid) {
 		struct m_tag	*mtag;
 		struct altq_tag	*atag;
@@ -6420,7 +6423,7 @@ done:
 			m_tag_prepend(m, mtag);
 		}
 	}
-#endif /* ALTQ_NEW */
+#endif /* ALTQ */
 
 	if (dir == PF_IN && action == PF_PASS && (pd.proto == IPPROTO_TCP ||
 	    pd.proto == IPPROTO_UDP) && s != NULL && s->nat_rule.ptr != NULL &&
@@ -6512,7 +6515,7 @@ done:
 #endif /* INET6 */
 
 int
-pf_check_congestion(struct ifqueue *ifq)
+pf_check_congestion(struct ifqueue *ifq __unused)
 {
 #ifdef __OpenBSD__
 	if (ifq->ifq_congestion)

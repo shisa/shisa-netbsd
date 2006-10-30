@@ -1,5 +1,5 @@
-/*	$NetBSD: qdisc_red.c,v 1.3 2001/08/16 07:48:12 itojun Exp $	*/
-/*	$KAME: qdisc_red.c,v 1.3 2001/08/15 12:51:59 kjc Exp $	*/
+/*	$NetBSD: qdisc_red.c,v 1.5 2006/10/28 11:43:02 peter Exp $	*/
+/*	$KAME: qdisc_red.c,v 1.5 2002/11/08 06:36:18 kjc Exp $	*/
 /*
  * Copyright (C) 1999-2000
  *	Sony Computer Science Laboratories, Inc.  All rights reserved.
@@ -39,7 +39,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <math.h>
+#include <signal.h>
 #include <errno.h>
 #include <err.h>
 
@@ -55,6 +55,7 @@ red_stat_loop(int fd, const char *ifname, int count, int interval)
 	u_int64_t last_bytes;
 	double sec;
 	int cnt = count;
+	sigset_t		omask;
 	
 	strlcpy(red_stats.iface.red_ifname, ifname,
 		sizeof(red_stats.iface.red_ifname));
@@ -63,8 +64,7 @@ red_stat_loop(int fd, const char *ifname, int count, int interval)
 	last_time.tv_sec -= interval;
 	last_bytes = 0;
 
-	while (count == 0 || cnt-- > 0) {
-	
+	for (;;) {	
 		if (ioctl(fd, RED_GETSTATS, &red_stats) < 0)
 			err(1, "ioctl RED_GETSTATS");
 
@@ -98,7 +98,13 @@ red_stat_loop(int fd, const char *ifname, int count, int interval)
 
 		last_bytes = red_stats.xmit_cnt.bytes;
 		last_time = cur_time;
-		sleep(interval);
+
+		if (count != 0 && --cnt == 0)
+			break;
+
+		/* wait for alarm signal */
+		if (sigprocmask(SIG_BLOCK, NULL, &omask) == 0)
+			sigsuspend(&omask);
 	}
 }
 

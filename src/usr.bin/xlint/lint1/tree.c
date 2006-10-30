@@ -1,4 +1,4 @@
-/*	$NetBSD: tree.c,v 1.42 2006/03/22 02:08:55 christos Exp $	*/
+/*	$NetBSD: tree.c,v 1.44 2006/10/18 21:34:39 he Exp $	*/
 
 /*
  * Copyright (c) 1994, 1995 Jochen Pohl
@@ -37,7 +37,7 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID) && !defined(lint)
-__RCSID("$NetBSD: tree.c,v 1.42 2006/03/22 02:08:55 christos Exp $");
+__RCSID("$NetBSD: tree.c,v 1.44 2006/10/18 21:34:39 he Exp $");
 #endif
 
 #include <stdlib.h>
@@ -1745,9 +1745,10 @@ ptconv(int arg, tspec_t nt, tspec_t ot, type_t *tp, tnode_t *tn)
 
 	if (isftyp(nt) != isftyp(ot) || psize(nt) != psize(ot)) {
 		/* representation and/or width change */
-		if (styp(nt) != SHORT || !isityp(ot) || psize(ot) > psize(INT))
+		if (!isityp(ot) || psize(ot) > psize(INT)) {
 			/* conversion to '%s' due to prototype, arg #%d */
 			warning(259, tyname(buf, sizeof(buf), tp), arg);
+		}
 	} else if (hflag) {
 		/*
 		 * they differ in sign or base type (char, short, int,

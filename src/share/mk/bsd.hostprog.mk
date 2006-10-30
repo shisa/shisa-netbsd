@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.hostprog.mk,v 1.47 2006/06/19 15:44:44 gdamore Exp $
+#	$NetBSD: bsd.hostprog.mk,v 1.49 2006/10/22 22:53:41 pooka Exp $
 #	@(#)bsd.prog.mk	8.2 (Berkeley) 4/2/94
 
 .include <bsd.init.mk>
@@ -12,7 +12,6 @@ LIBBLUETOOTH?=	/usr/lib/libbluetooth.a
 LIBBZ2?=	/usr/lib/libbz2.a
 LIBC?=		/usr/lib/libc.a
 LIBC_PIC?=	/usr/lib/libc_pic.a
-LIBCDK?=	/usr/lib/libcdk.a
 LIBCOMPAT?=	/usr/lib/libcompat.a
 LIBCRYPT?=	/usr/lib/libcrypt.a
 LIBCURSES?=	/usr/lib/libcurses.a
@@ -38,11 +37,13 @@ LIBPCAP?=	/usr/lib/libpcap.a
 LIBPCI?=	/usr/lib/libpci.a
 LIBPLOT?=	/usr/lib/libplot.a
 LIBPOSIX?=	/usr/lib/libposix.a
+LIBPUFFS?=	/usr/lib/libpuffs.a
 LIBRESOLV?=	/usr/lib/libresolv.a
 LIBRPCSVC?=	/usr/lib/librpcsvc.a
 LIBSDP?=	/usr/lib/libsdp.a
 LIBSKEY?=	/usr/lib/libskey.a
-LIBSTDCPP?=	/usr/lib/libstdc++.a
+LIBSTDCXX?=	/usr/lib/libstdc++.a
+LIBSUPCXX?=	/usr/lib/libsupc++.a
 LIBTERMCAP?=	/usr/lib/libtermcap.a
 LIBUTIL?=	/usr/lib/libutil.a
 LIBWRAP?=	/usr/lib/libwrap.a

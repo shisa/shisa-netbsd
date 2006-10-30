@@ -1,4 +1,4 @@
-/* $NetBSD: kauth.h,v 1.11 2006/10/01 09:06:41 elad Exp $ */
+/* $NetBSD: kauth.h,v 1.16 2006/10/25 22:49:23 elad Exp $ */
 
 /*-
  * Copyright (c) 2005, 2006 Elad Efrat <elad@NetBSD.org>  
@@ -143,6 +143,7 @@ enum {
 	KAUTH_NETWORK_ALTQ=1,
 	KAUTH_NETWORK_BIND,
 	KAUTH_NETWORK_FIREWALL,
+	KAUTH_NETWORK_INTERFACE,
 	KAUTH_NETWORK_FORWSRCRT,
 	KAUTH_NETWORK_ROUTE,
 	KAUTH_NETWORK_SOCKET
@@ -159,6 +160,7 @@ enum kauth_network_req {
 	KAUTH_REQ_NETWORK_ALTQ_CONF,
 	KAUTH_REQ_NETWORK_ALTQ_FIFOQ,
 	KAUTH_REQ_NETWORK_ALTQ_HFSC,
+	KAUTH_REQ_NETWORK_ALTQ_JOBS,
 	KAUTH_REQ_NETWORK_ALTQ_PRIQ,
 	KAUTH_REQ_NETWORK_ALTQ_RED,
 	KAUTH_REQ_NETWORK_ALTQ_RIO,
@@ -167,8 +169,13 @@ enum kauth_network_req {
 	KAUTH_REQ_NETWORK_BIND_PRIVPORT,
 	KAUTH_REQ_NETWORK_FIREWALL_FW,
 	KAUTH_REQ_NETWORK_FIREWALL_NAT,
-	KAUTH_REQ_NETWORK_SOCKET_ATTACH,
-	KAUTH_REQ_NETWORK_SOCKET_RAWSOCK
+	KAUTH_REQ_NETWORK_INTERFACE_GET,
+	KAUTH_REQ_NETWORK_INTERFACE_GETPRIV,
+	KAUTH_REQ_NETWORK_INTERFACE_SET,
+	KAUTH_REQ_NETWORK_INTERFACE_SETPRIV,
+	KAUTH_REQ_NETWORK_SOCKET_OPEN,
+	KAUTH_REQ_NETWORK_SOCKET_RAWSOCK,
+	KAUTH_REQ_NETWORK_SOCKET_CANSEE
 };
 
 /*
@@ -254,7 +261,8 @@ int kauth_cred_setgroups(kauth_cred_t, gid_t *, size_t, uid_t);
 int kauth_cred_getgroups(kauth_cred_t, gid_t *, size_t);
 
 int kauth_cred_uidmatch(kauth_cred_t, kauth_cred_t);
-void kauth_cred_uucvt(kauth_cred_t, const struct uucred *);
+void kauth_uucred_to_cred(kauth_cred_t, const struct uucred *);
+void kauth_cred_to_uucred(struct uucred *, const kauth_cred_t);
 int kauth_cred_uucmp(kauth_cred_t, const struct uucred *);
 void kauth_cred_toucred(kauth_cred_t, struct ucred *);
 void kauth_cred_topcred(kauth_cred_t, struct pcred *);

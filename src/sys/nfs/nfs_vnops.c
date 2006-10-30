@@ -1,4 +1,4 @@
-/*	$NetBSD: nfs_vnops.c,v 1.242 2006/09/29 16:19:50 drochner Exp $	*/
+/*	$NetBSD: nfs_vnops.c,v 1.244 2006/10/14 09:18:57 yamt Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993
@@ -39,7 +39,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: nfs_vnops.c,v 1.242 2006/09/29 16:19:50 drochner Exp $");
+__KERNEL_RCSID(0, "$NetBSD: nfs_vnops.c,v 1.244 2006/10/14 09:18:57 yamt Exp $");
 
 #include "opt_inet.h"
 #include "opt_nfs.h"
@@ -71,6 +71,7 @@ __KERNEL_RCSID(0, "$NetBSD: nfs_vnops.c,v 1.242 2006/09/29 16:19:50 drochner Exp
 
 #include <miscfs/fifofs/fifo.h>
 #include <miscfs/genfs/genfs.h>
+#include <miscfs/genfs/genfs_node.h>
 #include <miscfs/specfs/specdev.h>
 
 #include <nfs/rpcv2.h>
@@ -685,6 +686,7 @@ nfs_setattr(v)
 			 */
 			if (vp->v_mount->mnt_flag & MNT_RDONLY)
 				return (EROFS);
+			genfs_node_wrlock(vp);
  			uvm_vnp_setsize(vp, vap->va_size);
  			tsize = np->n_size;
 			np->n_size = vap->va_size;
@@ -696,6 +698,7 @@ nfs_setattr(v)
 				     ap->a_cred, ap->a_l, 1);
 			if (error) {
 				uvm_vnp_setsize(vp, tsize);
+				genfs_node_unlock(vp);
 				return (error);
 			}
  			np->n_vattr->va_size = vap->va_size;
@@ -714,9 +717,12 @@ nfs_setattr(v)
 			return (error);
 	}
 	error = nfs_setattrrpc(vp, vap, ap->a_cred, ap->a_l);
-	if (error && vap->va_size != VNOVAL) {
-		np->n_size = np->n_vattr->va_size = tsize;
-		uvm_vnp_setsize(vp, np->n_size);
+	if (vap->va_size != VNOVAL) {
+		if (error) {
+			np->n_size = np->n_vattr->va_size = tsize;
+			uvm_vnp_setsize(vp, np->n_size);
+		}
+		genfs_node_unlock(vp);
 	}
 	VN_KNOTE(vp, NOTE_ATTRIB);
 	return (error);
@@ -778,10 +784,10 @@ nfs_setattrrpc(vp, vap, cred, l)
 	nfsm_request(np, NFSPROC_SETATTR, l, cred);
 #ifndef NFS_V2_ONLY
 	if (v3) {
-		nfsm_wcc_data(vp, wccflag, 0, FALSE);
+		nfsm_wcc_data(vp, wccflag, NAC_NOTRUNC, FALSE);
 	} else
 #endif
-		nfsm_loadattr(vp, (struct vattr *)0, 0);
+		nfsm_loadattr(vp, (struct vattr *)0, NAC_NOTRUNC);
 	nfsm_reqdone;
 	return (error);
 }
@@ -1326,7 +1332,8 @@ struct nfs_writerpc_context {
  * called at splvm.
  */
 static void
-nfs_writerpc_extfree(struct mbuf *m, caddr_t tbuf, size_t size, void *arg)
+nfs_writerpc_extfree(struct mbuf *m, caddr_t tbuf __unused,
+    size_t size __unused, void *arg)
 {
 	struct nfs_writerpc_context *ctx = arg;
 
@@ -3328,12 +3335,13 @@ nfs_fsync(v)
  * Flush all the data associated with a vnode.
  */
 int
-nfs_flush(vp, cred, waitfor, l, commit)
-	struct vnode *vp;
-	kauth_cred_t cred;
-	int waitfor;
-	struct lwp *l;
-	int commit;
+nfs_flush(
+    struct vnode *vp,
+    kauth_cred_t cred __unused,
+    int waitfor __unused,
+    struct lwp *l __unused,
+    int commit __unused
+)
 {
 	struct nfsnode *np = VTONFS(vp);
 	int error;

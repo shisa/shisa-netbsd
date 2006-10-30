@@ -1,4 +1,4 @@
-/*	$NetBSD: make.h,v 1.61 2006/08/26 22:13:00 christos Exp $	*/
+/*	$NetBSD: make.h,v 1.63 2006/10/15 08:38:22 dsl Exp $	*/
 
 /*
  * Copyright (c) 1988, 1989, 1990, 1993
@@ -372,10 +372,6 @@ extern Boolean  keepgoing;    	/* True if should continue on unaffected
 				 * in one portion */
 extern Boolean 	touchFlag;    	/* TRUE if targets should just be 'touched'
 				 * if out of date. Set by the -t flag */
-extern Boolean  usePipes;    	/* TRUE if should capture the output of
-				 * subshells by means of pipes. Otherwise it
-				 * is routed to temporary files from which it
-				 * is retrieved when the shell exits */
 extern Boolean 	queryFlag;    	/* TRUE if we aren't supposed to really make
 				 * anything, just see if the targets are out-
 				 * of-date */
@@ -419,6 +415,7 @@ extern char	*progname;	/* The program name */
  *	There is one bit per module.  It is up to the module what debug
  *	information to print.
  */
+FILE *debug_file;		/* Output written here - default stdout */
 extern int debug;
 #define	DEBUG_ARCH	0x0001
 #define	DEBUG_COND	0x0002

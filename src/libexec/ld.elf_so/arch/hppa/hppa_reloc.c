@@ -1,4 +1,4 @@
-/*	$NetBSD: hppa_reloc.c,v 1.23 2005/08/20 19:01:17 skrll Exp $	*/
+/*	$NetBSD: hppa_reloc.c,v 1.25 2006/10/17 08:33:36 skrll Exp $	*/
 
 /*-
  * Copyright (c) 2002, 2004 The NetBSD Foundation, Inc.
@@ -38,13 +38,15 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: hppa_reloc.c,v 1.23 2005/08/20 19:01:17 skrll Exp $");
+__RCSID("$NetBSD: hppa_reloc.c,v 1.25 2006/10/17 08:33:36 skrll Exp $");
 #endif /* not lint */
 
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/queue.h>
+
+#include <string.h>
 
 #include "rtld.h"
 #include "debug.h"
@@ -58,6 +60,35 @@ __RCSID("$NetBSD: hppa_reloc.c,v 1.23 2005/08/20 19:01:17 skrll Exp $");
 caddr_t _rtld_bind(const Obj_Entry *, const Elf_Addr);
 void _rtld_bind_start(void);
 void __rtld_setup_hppa_pltgot(const Obj_Entry *, Elf_Addr *);
+
+/*
+ * It is possible for the compiler to emit relocations for unaligned data.
+ * We handle this situation with these inlines.
+ */
+#define	RELOC_ALIGNED_P(x) \
+	(((uintptr_t)(x) & (sizeof(void *) - 1)) == 0)
+
+static inline Elf_Addr
+load_ptr(void *where)
+{
+	if (__predict_true(RELOC_ALIGNED_P(where)))
+		return *(Elf_Addr *)where;
+	else {
+		Elf_Addr res;
+
+		(void)memcpy(&res, where, sizeof(res));
+		return res;
+	}
+}
+
+static inline void
+store_ptr(void *where, Elf_Addr val)
+{
+	if (__predict_true(RELOC_ALIGNED_P(where)))
+		*(Elf_Addr *)where = val;
+	else
+		(void)memcpy(where, &val, sizeof(val));
+}
 
 /*
  * In the runtime architecture (ABI), PLABEL function 
@@ -99,6 +130,9 @@ static int hppa_plabel_pre_next = 0;
 
 void _rtld_relocate_nonplt_self(Elf_Dyn *, Elf_Addr);
 int _rtld_relocate_plt_objects(const Obj_Entry *);
+static inline int _rtld_relocate_plt_object(const Obj_Entry *,
+    const Elf_Rela *, Elf_Addr *);
+
 /*
  * This bootstraps the dynamic linker by relocating its GOT.
  * On the hppa, unlike on other architectures, static strings
@@ -117,7 +151,7 @@ _rtld_relocate_nonplt_self(Elf_Dyn *dynp, Elf_Addr relocbase)
 {
 	const Elf_Rela	*relafirst, *rela, *relalim;
 	Elf_Addr        relasz;
-	Elf_Addr	where;
+	void		*where;
 	Elf_Addr	*pltgot;
 	const Elf_Rela	*plabel_relocs[HPPA_PLABEL_PRE];
 	int		nplabel_relocs = 0;
@@ -160,16 +194,17 @@ _rtld_relocate_nonplt_self(Elf_Dyn *dynp, Elf_Addr relocbase)
 
 	for (rela = relafirst; rela < relalim; rela++) {
 		symnum = ELF_R_SYM(rela->r_info);
-		where = (Elf_Addr)(relocbase + rela->r_offset);
+		where = (void *)(relocbase + rela->r_offset);
 
 		switch (ELF_R_TYPE(rela->r_info)) {
 		case R_TYPE(DIR32):
 			if (symnum == 0)
-				*((Elf_Addr *)where) = relocbase + rela->r_addend;
+				store_ptr(where, 
+				    relocbase + rela->r_addend);
 			else {
 				sym = symtab + symnum;
-				*((Elf_Addr *)where) = 
-				    relocbase + rela->r_addend + sym->st_value;
+				store_ptr(where, 
+				    relocbase + rela->r_addend + sym->st_value);
 			}
 			break;
 
@@ -200,7 +235,7 @@ _rtld_relocate_nonplt_self(Elf_Dyn *dynp, Elf_Addr relocbase)
 	assert(nplabel_relocs < HPPA_PLABEL_PRE);
 	for (i = 0; i < nplabel_relocs; i++) {
 		rela = plabel_relocs[i];
-		where = (Elf_Addr)(relocbase + rela->r_offset);
+		where = (void *)(relocbase + rela->r_offset);
 		sym = symtab + ELF_R_SYM(rela->r_info);
 		
 		plabel = &hppa_plabel_pre[hppa_plabel_pre_next++];
@@ -215,7 +250,7 @@ _rtld_relocate_nonplt_self(Elf_Dyn *dynp, Elf_Addr relocbase)
 	
 #if defined(RTLD_DEBUG_HPPA)
 	for (rela = relafirst; rela < relalim; rela++) {
-		where = (Elf_Addr)(relocbase + rela->r_offset);
+		where = (void *)(relocbase + rela->r_offset);
 
 		switch (ELF_R_TYPE(rela->r_info)) {
 		case R_TYPE(DIR32):
@@ -370,19 +405,19 @@ _rtld_relocate_nonplt_objects(const Obj_Entry *obj)
 				tmp = (Elf_Addr)(defobj->relocbase +
 				    def->st_value + rela->r_addend);
 
-				if (*where != tmp)
-					*where = tmp;
+				if (load_ptr(where) != tmp)
+					store_ptr(where, tmp);
 				rdbg(("DIR32 %s in %s --> %p in %s",
 				    obj->strtab + obj->symtab[symnum].st_name,
-				    obj->path, (void *)*where, defobj->path));
+				    obj->path, (void *)load_ptr(where), defobj->path));
 			} else {
 				tmp = (Elf_Addr)(obj->relocbase +
 				    rela->r_addend);
 
-				if (*where != tmp)
-					*where = tmp;
+				if (load_ptr(where) != tmp)
+					store_ptr(where, tmp);
 				rdbg(("DIR32 in %s --> %p", obj->path,
-					    (void *)*where));
+					    (void *)load_ptr(where)));
 			}
 			break;
 
@@ -452,7 +487,7 @@ _rtld_relocate_nonplt_objects(const Obj_Entry *obj)
 			    "addend = %p, contents = %p, symbol = %s",
 			    symnum, (u_long)ELF_R_TYPE(rela->r_info),
 			    (void *)rela->r_offset, (void *)rela->r_addend,
-			    (void *)*where,
+			    (void *)load_ptr(where),
 			    obj->strtab + obj->symtab[symnum].st_name));
 			_rtld_error("%s: Unsupported relocation type %ld "
 			    "in non-PLT relocations\n",
@@ -514,29 +549,32 @@ _rtld_relocate_plt_lazy(const Obj_Entry *obj)
 	return 0;
 }
 
-caddr_t
-_rtld_bind(const Obj_Entry *obj, Elf_Addr reloff)
+static inline int
+_rtld_relocate_plt_object(const Obj_Entry *obj, const Elf_Rela *rela, Elf_Addr *tp)
 {
-	const Elf_Rela *rela = (const Elf_Rela *)((caddr_t)obj->pltrela + reloff);
 	Elf_Word *where = (Elf_Word *)(obj->relocbase + rela->r_offset);
 	const Elf_Sym *def;
 	const Obj_Entry *defobj;
 	Elf_Addr	func_pc, func_sl;
 
 	assert(ELF_R_TYPE(rela->r_info) == R_TYPE(IPLT));
-	assert(ELF_R_SYM(rela->r_info) != 0);
 
-	def = _rtld_find_symdef(ELF_R_SYM(rela->r_info), obj, &defobj, true);
-	if (def == NULL)
-		_rtld_die();
+	if (ELF_R_SYM(rela->r_info) == 0) {
+		func_pc = (Elf_Addr)(obj->relocbase + rela->r_addend);
+		func_sl = (Elf_Addr)(obj->pltgot);
+	} else {
+		def = _rtld_find_symdef(ELF_R_SYM(rela->r_info), obj, &defobj, true);
+		if (def == NULL)
+			return -1;
 
-	func_pc = (Elf_Addr)(defobj->relocbase + def->st_value + rela->r_addend);
-	func_sl = (Elf_Addr)(defobj->pltgot);
+		func_pc = (Elf_Addr)(defobj->relocbase + def->st_value + rela->r_addend);
+		func_sl = (Elf_Addr)(defobj->pltgot);
 
-	rdbg(("bind now/fixup in %s --> old=(%p,%p) new=(%p,%p)",
-	    defobj->strtab + def->st_name,
-	    (void *)where[0], (void *)where[1], 
-	    (void *)func_pc, (void *)func_sl));
+		rdbg(("bind now/fixup in %s --> old=(%p,%p) new=(%p,%p)",
+		    defobj->strtab + def->st_name,
+		    (void *)where[0], (void *)where[1], 
+		    (void *)func_pc, (void *)func_sl));
+	}
 	/*
 	 * Fill this PLT entry and return.
 	 */
@@ -545,46 +583,36 @@ _rtld_bind(const Obj_Entry *obj, Elf_Addr reloff)
 	if (where[1] != func_sl)
 		where[1] = func_sl;
 
-	return (caddr_t)where;
+	if (tp)
+		*tp = (Elf_Addr)where;
+
+	return 0;
+}
+
+caddr_t
+_rtld_bind(const Obj_Entry *obj, Elf_Word reloff)
+{
+	const Elf_Rela *rela = (const Elf_Rela *)((caddr_t)obj->pltrela + reloff);
+	Elf_Addr new_value;
+	int err;
+
+	assert(ELF_R_SYM(rela->r_info) != 0);
+
+	err = _rtld_relocate_plt_object(obj, rela, &new_value); 
+	if (err)
+		_rtld_die();
+
+	return (caddr_t)new_value;
 }
 
 int
 _rtld_relocate_plt_objects(const Obj_Entry *obj)
 {
-	const Elf_Rela *rela;
+	const Elf_Rela *rela = obj->pltrela;
 	
-	for (rela = obj->pltrela; rela < obj->pltrelalim; rela++) {
-		Elf_Addr	*where = (Elf_Addr *)(obj->relocbase + rela->r_offset);
-		const Elf_Sym	*def;
-		const Obj_Entry	*defobj;
-		Elf_Addr	func_pc, func_sl;
-
-		assert(ELF_R_TYPE(rela->r_info) == R_TYPE(IPLT));
-
-		if (ELF_R_SYM(rela->r_info) == 0) {
-			func_pc = (Elf_Addr)(obj->relocbase + rela->r_addend);
-			func_sl = (Elf_Addr)(obj->pltgot);
-		} else {
-			def = _rtld_find_symdef(ELF_R_SYM(rela->r_info), obj, &defobj,
-			    true);
-			if (def == NULL)
-				return -1;
-			func_pc = (Elf_Addr)(defobj->relocbase + def->st_value +
-			    rela->r_addend);
-			func_sl = (Elf_Addr)(defobj->pltgot);
-			rdbg(("bind now/fixup in %s --> old=(%p,%p) new=(%p,%p)",
-			    defobj->strtab + def->st_name,
-			    (void *)where[0], (void *)where[1], 
-			    (void *)func_pc, (void *)func_sl));
-		}
-	
-		/*
-		 * Fill this PLT entry and return.
-		 */
-		if (where[0] != func_pc)
-			where[0] = func_pc;
-		if (where[1] != func_sl)
-			where[1] = func_sl;
+	for (; rela < obj->pltrelalim; rela++) {
+		if (_rtld_relocate_plt_object(obj, rela, NULL) < 0)
+			return -1;
 	}
 	return 0;
 }
