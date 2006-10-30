@@ -128,8 +128,8 @@ options 	MIIVERBOSE	# Verbose MII autoconfuration messages
 
 # Development and Debugging options
 
-options 	DIAGNOSTIC	# internally consistency checks
-options 	DEBUG
+#options 	DIAGNOSTIC	# internally consistency checks
+#options 	DEBUG
 #options 	PMAP_DEBUG	# Enable pmap_debug_level code
 #options 	VERBOSE_INIT_ARM # verbose bootstraping messages
 options 	DDB		# in-kernel debugger
@@ -140,7 +140,7 @@ options 	DDB		# in-kernel debugger
 #options 	IPKDBKEY="\"Debug_it_over_network\""
 #options  	DEBUG_KGDB
 makeoptions	DEBUG="-g -O2"	# compile full symbol table
-options 	SYMTAB_SPACE=200000
+options 	SYMTAB_SPACE=300000
 #options 	AUDIO_DEBUG=2
 
 config		netbsd		root on ? type ?

@@ -63,7 +63,12 @@ if [ "X${DONEPROFILE}" = "X" ]; then
 	# mount the kern_fs so that we can examine the dmesg state
 	mount -t kernfs /kern /kern
 
-	dhclient
+	# SHISA
+	/sbin/sysctl -w net.inet6.ip6.accept_rtadv=1
+	/sbin/ifconfig mip0 inet6 2001:200:0:8430::1004 home
+	/usr/sbin/mnd -n -c /etc/mnd.conf mip0
+	/usr/sbin/babymdd -n -h mip0 sm0
+	/sbin/rtsol sm0
 
 	# pull in the functions that people will use from the shell prompt.
 	# . /.commonutils
