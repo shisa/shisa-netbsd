@@ -1,4 +1,4 @@
-/*	$NetBSD: verified_exec.c,v 1.44 2006/10/12 01:30:51 christos Exp $	*/
+/*	$NetBSD: verified_exec.c,v 1.47 2006/10/30 12:37:08 elad Exp $	*/
 
 /*-
  * Copyright 2005 Elad Efrat <elad@NetBSD.org>
@@ -31,9 +31,9 @@
 
 #include <sys/cdefs.h>
 #if defined(__NetBSD__)
-__KERNEL_RCSID(0, "$NetBSD: verified_exec.c,v 1.44 2006/10/12 01:30:51 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: verified_exec.c,v 1.47 2006/10/30 12:37:08 elad Exp $");
 #else
-__RCSID("$Id: verified_exec.c,v 1.44 2006/10/12 01:30:51 christos Exp $\n$NetBSD: verified_exec.c,v 1.44 2006/10/12 01:30:51 christos Exp $");
+__RCSID("$Id: verified_exec.c,v 1.47 2006/10/30 12:37:08 elad Exp $\n$NetBSD: verified_exec.c,v 1.47 2006/10/30 12:37:08 elad Exp $");
 #endif
 
 #include <sys/param.h>
@@ -282,34 +282,8 @@ veriexec_load(struct veriexec_params *params, struct lwp *l)
 		goto out;
 	}
 
-	hh = veriexec_lookup(nid.ni_vp);
-	if (hh != NULL) {
-		/*
-		 * Duplicate entry means something is wrong in
-		 * the signature file. Just give collision info
-		 * and return.
-		 */
-		log(LOG_NOTICE, "Veriexec: Duplicate entry for `%s': "
-		    "old[type=0x%02x, algorithm=%s], "
-		    "new[type=0x%02x, algorithm=%s] (%s fingerprint)\n",
-		    params->file, hh->type, hh->ops->type,
-		    params->type, params->fp_type,
-		    (((hh->ops->hash_len != params->size) ||
-		     (memcmp(hh->fp, params->fingerprint,
-		      min(hh->ops->hash_len, params->size))
-		      != 0)) ? "different" : "same"));
-
-			error = 0;
-			goto out;
-	}
-
 	e = malloc(sizeof(*e), M_TEMP, M_WAITOK);
-	e->type = params->type;
-	e->status = FINGERPRINT_NOTEVAL;
-	e->page_fp = NULL;
-	e->page_fp_status = PAGE_FP_NONE;
-	e->npages = 0;
-	e->last_page_size = 0;
+
 	if ((e->ops = veriexec_find_ops(params->fp_type)) == NULL) {
 		free(e, M_TEMP);
 		log(LOG_ERR, "Veriexec: Invalid or unknown fingerprint type "
@@ -318,31 +292,51 @@ veriexec_load(struct veriexec_params *params, struct lwp *l)
 		goto out;
 	}
 
-	/*
-	 * Just a bit of a sanity check - require the size of
-	 * the fp to be passed in, check this against the expected
-	 * size.  Of course userland could lie deliberately, this
-	 * really only protects against the obvious fumble of
-	 * changing the fp type but not updating the fingerprint
-	 * string.
-	 */
-	if (e->ops->hash_len != params->size) {
-		log(LOG_ERR, "Veriexec: Inconsistent fingerprint size for "
-		    "type `%s' for file `%s': Size was %u, should be %zu.\n",
-		    params->fp_type, params->file, params->size,
-		    e->ops->hash_len);
-
+	e->fp = malloc(e->ops->hash_len, M_TEMP, M_WAITOK|M_ZERO);
+	error = copyin(params->fingerprint, e->fp, e->ops->hash_len);
+	if (error) {
+		free(e->fp, M_TEMP);
 		free(e, M_TEMP);
-		error = EINVAL;
 		goto out;
 	}
 
-	e->fp = malloc(e->ops->hash_len, M_TEMP, M_WAITOK);
-	memcpy(e->fp, params->fingerprint, e->ops->hash_len);
+	hh = veriexec_lookup(nid.ni_vp);
+	if (hh != NULL) {
+		boolean_t fp_mismatch;
 
-	veriexec_report("New entry.", params->file, NULL, REPORT_DEBUG);
+		if (strcmp(e->ops->type, params->fp_type) ||
+		    memcmp(hh->fp, e->fp, hh->ops->hash_len))
+			fp_mismatch = TRUE;
+		else
+			fp_mismatch = FALSE;
+
+		if ((veriexec_verbose >= 1) || fp_mismatch)
+			log(LOG_NOTICE, "Veriexec: Duplicate entry for `%s' "
+			    "ignored. (%s fingerprint)\n", params->file, 
+			    fp_mismatch ? "different" : "same");
+
+		free(e->fp, M_TEMP);
+		free(e, M_TEMP);
+
+		error = 0;
+		goto out;
+	}
+
+	e->type = params->type;
+	e->status = FINGERPRINT_NOTEVAL;
+	e->page_fp = NULL;
+	e->page_fp_status = PAGE_FP_NONE;
+	e->npages = 0;
+	e->last_page_size = 0;
 
 	error = veriexec_hashadd(nid.ni_vp, e);
+	if (error) {
+		free(e->fp, M_TEMP);
+		free(e, M_TEMP);
+		goto out;
+	}
+
+	veriexec_report("New entry.", params->file, NULL, REPORT_DEBUG);
 
  out:
 	vrele(nid.ni_vp);

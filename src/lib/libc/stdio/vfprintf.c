@@ -1,4 +1,4 @@
-/*	$NetBSD: vfprintf.c,v 1.52 2006/10/28 14:38:55 christos Exp $	*/
+/*	$NetBSD: vfprintf.c,v 1.54 2006/10/30 05:10:40 christos Exp $	*/
 
 /*-
  * Copyright (c) 1990 The Regents of the University of California.
@@ -37,7 +37,7 @@
 #if 0
 static char *sccsid = "@(#)vfprintf.c	5.50 (Berkeley) 12/16/92";
 #else
-__RCSID("$NetBSD: vfprintf.c,v 1.52 2006/10/28 14:38:55 christos Exp $");
+__RCSID("$NetBSD: vfprintf.c,v 1.54 2006/10/30 05:10:40 christos Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
@@ -214,7 +214,7 @@ __vfprintf_unlocked(fp, fmt0, ap)
 	wchar_t wc;
 	mbstate_t ps;
 #ifndef NO_FLOATING_POINT
-	char *decimal_point;
+	char *decimal_point = NULL;
 	char softsign;		/* temporary negative sign for floats */
 	double _double;		/* double precision arguments %[eEfgG] */
 	int expt;		/* integer value of exponent */
@@ -338,8 +338,9 @@ __vfprintf_unlocked(fp, fmt0, ap)
 	for (;;) {
 		cp = fmt;
 		if (fp->_flags & __SAFE) {
-			for (; *fmt &&*fmt != '%'; fmt++)
+			for (; *fmt && *fmt != '%'; fmt++)
 				continue;
+			n = *fmt == '%';
 		} else {
 			while ((n = mbrtowc(&wc, fmt, MB_CUR_MAX, &ps)) > 0) {
 				fmt += n;

@@ -1,4 +1,4 @@
-/*	$NetBSD: pmap.c,v 1.25 2006/10/23 14:15:09 skrll Exp $	*/
+/*	$NetBSD: pmap.c,v 1.28 2006/10/30 08:41:27 skrll Exp $	*/
 
 /*-
  * Copyright (c) 2001, 2002 The NetBSD Foundation, Inc.
@@ -171,7 +171,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.25 2006/10/23 14:15:09 skrll Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.28 2006/10/30 08:41:27 skrll Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -269,7 +269,6 @@ struct simplelock pmap_freelock;	/* and lock */
 struct simplelock pmap_lock;	/* XXX this is all broken */
 struct simplelock sid_pid_lock;	/* pids */
 
-u_int	pages_per_vm_page;
 u_int	pid_counter;
 
 #ifdef PMAPDEBUG
@@ -795,12 +794,10 @@ pmap_bootstrap(vaddr_t *vstart, vaddr_t *vend)
 	vaddr_t kernel_data;
 	paddr_t phys_start, phys_end;
 
-        PMAP_PRINTF(PDB_INIT, (": phys addresses %p - %p\n",
+	PMAP_PRINTF(PDB_INIT, (": phys addresses %p - %p\n",
 	    (void *)*vstart, (void *)*vend));
 
 	uvm_setpagesize();
-
-	pages_per_vm_page = 1;	/* XXX This should die */
 
 	kern_prot[VM_PROT_NONE | VM_PROT_NONE  | VM_PROT_NONE]    =TLB_AR_NA;
 	kern_prot[VM_PROT_READ | VM_PROT_NONE  | VM_PROT_NONE]    =TLB_AR_KR;
@@ -863,7 +860,7 @@ pmap_bootstrap(vaddr_t *vstart, vaddr_t *vend)
 		hptp->hpt_tlbprot = 0;
 		hptp->hpt_entry   = NULL;
 	}
-        PMAP_PRINTF(PDB_INIT, (": hpt_table 0x%lx @ %p\n", size + 1,
+	PMAP_PRINTF(PDB_INIT, (": hpt_table 0x%lx @ %p\n", size + 1,
 	    (caddr_t)addr));
 	/*
 	 * load cr25 with the address of the HPT table
@@ -882,11 +879,17 @@ pmap_bootstrap(vaddr_t *vstart, vaddr_t *vend)
 	memset(pv_head_tbl, 0, sizeof(*pv_head_tbl) * totalphysmem);
 	addr = (vaddr_t) (pv_head_tbl + totalphysmem);
 
+	PMAP_PRINTF(PDB_INIT, (": pv_head array 0x%lx @ %p\n",
+	    sizeof(*pv_head_tbl) * totalphysmem, pv_head_tbl));
+
 	/* Allocate the page aliased bitmap. */
 	addr = ALIGN(addr);
 	page_aliased_bitmap = (u_int *) addr;
 	addr = (vaddr_t) (&_PAGE_ALIASED_WORD(totalphysmem) + 1);
 	memset(page_aliased_bitmap, 0, addr - (vaddr_t) page_aliased_bitmap);
+
+	PMAP_PRINTF(PDB_INIT, (": page_aliased_bitmap 0x%lx @ %p\n",
+	    addr - (vaddr_t) page_aliased_bitmap, page_aliased_bitmap));
 
 	/*
 	 * Allocate the largest struct pv_entry region.   The
@@ -980,6 +983,9 @@ pmap_bootstrap(vaddr_t *vstart, vaddr_t *vend)
 	kernel_data = (vaddr_t) &__data_start;
 	addr = (vaddr_t) &kernel_text;
 
+	PMAP_PRINTF(PDB_INIT, (": mapping text and rodata @ %p - %p\n",
+	    (void *)addr, (void *)&__rodata_end));
+
 	btlb_j = 0;
 	while (addr < (vaddr_t) &__rodata_end) {
 
@@ -1020,6 +1026,10 @@ pmap_bootstrap(vaddr_t *vstart, vaddr_t *vend)
 	 * The only thing this wastes is kernel virtual space,
 	 * which is plentiful.
 	 */
+
+	PMAP_PRINTF(PDB_INIT, (": mapping data, bss, etc @ %p - %p\n",
+	    (void *)addr, (void *)*vstart));
+
 	while (addr < *vstart) {
 
 		/* Make the next BTLB entry. */
@@ -1070,7 +1080,7 @@ pmap_bootstrap(vaddr_t *vstart, vaddr_t *vend)
 	phys_start = resvmem;
 	phys_end = atop(hppa_trunc_page(&kernel_text));
 
-        PMAP_PRINTF(PDB_INIT, (": phys segment 0x%05x 0x%05x\n",
+	PMAP_PRINTF(PDB_INIT, (": phys segment 0x%05x 0x%05x\n",
 	    (u_int)phys_start, (u_int)phys_end));
 	if (phys_end > phys_start) {
 		uvm_page_physload(phys_start, phys_end,
@@ -1082,7 +1092,7 @@ pmap_bootstrap(vaddr_t *vstart, vaddr_t *vend)
 	phys_start = atop(&__rodata_end);
 	phys_end = atop(&__data_start);
 
-        PMAP_PRINTF(PDB_INIT, (": phys segment 0x%05x 0x%05x\n",
+	PMAP_PRINTF(PDB_INIT, (": phys segment 0x%05x 0x%05x\n",
 	    (u_int)phys_start, (u_int)phys_end));
 	if (phys_end > phys_start) {
 		uvm_page_physload(phys_start, phys_end,
@@ -1094,7 +1104,7 @@ pmap_bootstrap(vaddr_t *vstart, vaddr_t *vend)
 	phys_start = atop(virtual_steal);
 	phys_end = totalphysmem;
 
-        PMAP_PRINTF(PDB_INIT, (": phys segment 0x%05x 0x%05x\n",
+	PMAP_PRINTF(PDB_INIT, (": phys segment 0x%05x 0x%05x\n",
 	    (u_int)phys_start, (u_int)phys_end));
 	if (phys_end > phys_start) {
 		uvm_page_physload(phys_start, phys_end,
