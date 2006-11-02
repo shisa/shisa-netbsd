@@ -1,4 +1,4 @@
-#	$NetBSD: mi,v 1.939 2006/10/08 04:21:54 thorpej Exp $
+#	$NetBSD: mi,v 1.961 2006/10/28 04:25:54 christos Exp $
 ./etc/mtree/set.comp				comp-sys-root
 ./usr/bin/addr2line				comp-debug-bin		bfd
 ./usr/bin/ar					comp-util-bin		bfd
@@ -82,6 +82,7 @@
 ./usr/include/altq/altq_fifoq.h			comp-c-include
 ./usr/include/altq/altq_flowvalve.h		comp-c-include
 ./usr/include/altq/altq_hfsc.h			comp-c-include
+./usr/include/altq/altq_jobs.h			comp-c-include
 ./usr/include/altq/altq_priq.h			comp-c-include
 ./usr/include/altq/altq_red.h			comp-c-include
 ./usr/include/altq/altq_rio.h			comp-c-include
@@ -533,6 +534,7 @@
 ./usr/include/fnmatch.h				comp-c-include
 ./usr/include/form.h				comp-c-include
 ./usr/include/frame.h				comp-obsolete		obsolete
+./usr/include/fs/puffs/puffs_msgif.h		comp-c-include
 ./usr/include/fs/sysvbfs/bfs.h			comp-c-include
 ./usr/include/fs/udf/ecma167-udf.h		comp-c-include
 ./usr/include/fs/udf/udf_mount.h		comp-c-include
@@ -1625,6 +1627,8 @@
 ./usr/include/pthread_dbg.h			comp-c-include
 ./usr/include/pthread_queue.h			comp-c-include
 ./usr/include/pthread_types.h			comp-c-include
+./usr/include/puffs.h				comp-c-include
+./usr/include/puffsdump.h			comp-c-include
 ./usr/include/pwd.h				comp-c-include
 ./usr/include/radlib.h				comp-c-include
 ./usr/include/radlib_vs.h			comp-c-include
@@ -1706,6 +1710,7 @@
 ./usr/include/semaphore.h			comp-c-include
 ./usr/include/setjmp.h				comp-c-include
 ./usr/include/sgtty.h				comp-c-include
+./usr/include/sha1.h				comp-c-include
 ./usr/include/sha1.h				comp-c-include
 ./usr/include/signal.h				comp-c-include
 ./usr/include/skey.h				comp-c-include		skey
@@ -1836,6 +1841,7 @@
 ./usr/include/sys/reboot.h			comp-c-include
 ./usr/include/sys/resource.h			comp-c-include
 ./usr/include/sys/resourcevar.h			comp-c-include
+./usr/include/sys/rmd160.h			comp-c-include
 ./usr/include/sys/rnd.h				comp-c-include
 ./usr/include/sys/sa.h				comp-c-include
 ./usr/include/sys/scanio.h			comp-c-include
@@ -1845,6 +1851,7 @@
 ./usr/include/sys/selinfo.h			comp-c-include
 ./usr/include/sys/sem.h				comp-c-include
 ./usr/include/sys/sha1.h			comp-c-include
+./usr/include/sys/sha2.h			comp-c-include
 ./usr/include/sys/shm.h				comp-c-include
 ./usr/include/sys/siginfo.h			comp-c-include
 ./usr/include/sys/signal.h			comp-c-include
@@ -2004,6 +2011,7 @@
 ./usr/lib/i18n/libEUCTW.a			comp-i18n-lib
 ./usr/lib/i18n/libGBK2K.a			comp-i18n-lib
 ./usr/lib/i18n/libISO2022.a			comp-i18n-lib
+./usr/lib/i18n/libJOHAB.a			comp-i18n-lib
 ./usr/lib/i18n/libMSKanji.a			comp-i18n-lib
 ./usr/lib/i18n/libUTF1632.a			comp-i18n-lib
 ./usr/lib/i18n/libUTF7.a			comp-i18n-lib
@@ -2129,6 +2137,8 @@
 ./usr/lib/libpthread_dbg.a			comp-c-lib
 ./usr/lib/libpthread_dbg_p.a			comp-c-proflib		profile
 ./usr/lib/libpthread_p.a			comp-c-proflib		profile
+./usr/lib/libpuffs.a				comp-c-lib
+./usr/lib/libpuffs_p.a				comp-c-proflib		profile
 ./usr/lib/libradius.a				comp-c-lib
 ./usr/lib/libradius_p.a				comp-c-proflib		profile
 ./usr/lib/libresolv.a				comp-c-lib
@@ -2232,6 +2242,7 @@
 ./usr/libdata/debug/sbin/fsck_msdos.debug	comp-sysutil-debug	debug
 ./usr/libdata/debug/sbin/fsdb.debug		comp-sysutil-debug	debug
 ./usr/libdata/debug/sbin/fsirand.debug		comp-sysutil-debug	debug
+./usr/libdata/debug/sbin/gpt.debug		comp-sysutil-debug	debug
 ./usr/libdata/debug/sbin/ifconfig.debug		comp-netutil-debug	debug
 ./usr/libdata/debug/sbin/init.debug		comp-sysutil-debug	debug
 ./usr/libdata/debug/sbin/ipf.debug		comp-ipf-debug		ipfilter,debug
@@ -2522,6 +2533,7 @@
 ./usr/libdata/debug/usr/bin/refer.debug		comp-groff-debug	debug
 ./usr/libdata/debug/usr/bin/renice.debug	comp-util-debug		debug
 ./usr/libdata/debug/usr/bin/rev.debug		comp-util-debug		debug
+./usr/libdata/debug/usr/bin/revoke.debug	comp-util-debug		debug
 ./usr/libdata/debug/usr/bin/rfcomm_sppd.debug	comp-util-debug		debug
 ./usr/libdata/debug/usr/bin/rlog.debug		comp-rcs-debug		debug
 ./usr/libdata/debug/usr/bin/rlogin.debug	comp-netutil-debug	debug
@@ -2825,8 +2837,8 @@
 ./usr/libdata/debug/usr/sbin/lastlogin.debug	comp-sysutil-debug	debug
 ./usr/libdata/debug/usr/sbin/link.debug		comp-sysutil-debug	debug
 ./usr/libdata/debug/usr/sbin/lmcconfig.debug	comp-netutil-debug	debug
-./usr/libdata/debug/usr/sbin/lpc.debug		comp-lpr-debug		debug
 ./usr/libdata/debug/usr/sbin/lockstat.debug	comp-sysutil-debug	debug
+./usr/libdata/debug/usr/sbin/lpc.debug		comp-lpr-debug		debug
 ./usr/libdata/debug/usr/sbin/lpd.debug		comp-lpr-debug		debug
 ./usr/libdata/debug/usr/sbin/lptest.debug	comp-lpr-debug		debug
 ./usr/libdata/debug/usr/sbin/mailwrapper.debug	comp-mailwrapper-debug	debug
@@ -3005,6 +3017,7 @@
 ./usr/libdata/lint/llib-lprop.ln		comp-c-lintlib		lint
 ./usr/libdata/lint/llib-lpthread.ln		comp-c-lintlib		lint
 ./usr/libdata/lint/llib-lpthread_dbg.ln		comp-c-lintlib		lint
+./usr/libdata/lint/llib-lpuffs.ln		comp-c-lintlib		lint
 ./usr/libdata/lint/llib-lradius.ln		comp-c-lintlib		lint
 ./usr/libdata/lint/llib-lresolv.ln		comp-c-lintlib		lint
 ./usr/libdata/lint/llib-lrmt.ln			comp-c-lintlib		lint
@@ -3236,6 +3249,7 @@
 ./usr/share/man/cat1/objdump.0			comp-util-catman	bfd,.cat
 ./usr/share/man/cat1/openssl_ocsp.0		comp-c-catman		crypto,.cat
 ./usr/share/man/cat1/ranlib.0			comp-util-catman	bfd,.cat
+./usr/share/man/cat1/rcs2log.0			comp-cvs-catman		.cat
 ./usr/share/man/cat1/readelf.0			comp-util-catman	bfd,.cat
 ./usr/share/man/cat1/rpcgen.0			comp-c-catman		.cat
 ./usr/share/man/cat1/size.0			comp-util-catman	bfd,.cat
@@ -4113,6 +4127,7 @@
 ./usr/share/man/cat3/closedir.0			comp-c-catman		.cat
 ./usr/share/man/cat3/closefrom.0		comp-c-catman		.cat
 ./usr/share/man/cat3/closelog.0			comp-c-catman		.cat
+./usr/share/man/cat3/closelog_r.0		comp-c-catman		.cat
 ./usr/share/man/cat3/clrtobot.0			comp-c-catman		.cat
 ./usr/share/man/cat3/clrtoeol.0			comp-c-catman		.cat
 ./usr/share/man/cat3/color_content.0		comp-c-catman		.cat
@@ -4271,6 +4286,7 @@
 ./usr/share/man/cat3/dupwin.0			comp-c-catman		.cat
 ./usr/share/man/cat3/dynamic_field_info.0	comp-c-catman		.cat
 ./usr/share/man/cat3/easprintf.0		comp-c-catman		.cat
+./usr/share/man/cat3/ecalloc.0			comp-c-catman		.cat
 ./usr/share/man/cat3/echo.0			comp-c-catman		.cat
 ./usr/share/man/cat3/echochar.0			comp-c-catman		.cat
 ./usr/share/man/cat3/edata.0			comp-c-catman		.cat
@@ -5273,6 +5289,7 @@
 ./usr/share/man/cat3/opendir.0			comp-c-catman		.cat
 ./usr/share/man/cat3/opendisk.0			comp-c-catman		.cat
 ./usr/share/man/cat3/openlog.0			comp-c-catman		.cat
+./usr/share/man/cat3/openlog_r.0		comp-c-catman		.cat
 ./usr/share/man/cat3/openpam.0			comp-c-catman		.cat,pam
 ./usr/share/man/cat3/openpam_borrow_cred.0	comp-c-catman		.cat,pam
 ./usr/share/man/cat3/openpam_free_data.0	comp-c-catman		.cat,pam
@@ -5400,7 +5417,9 @@
 ./usr/share/man/cat3/prop_array_iterator.0	comp-c-catman		.cat
 ./usr/share/man/cat3/prop_array_make_immutable.0 comp-c-catman		.cat
 ./usr/share/man/cat3/prop_array_mutable.0	comp-c-catman		.cat
+./usr/share/man/cat3/prop_array_recv_ioctl.0	comp-c-catman		.cat
 ./usr/share/man/cat3/prop_array_remove.0	comp-c-catman		.cat
+./usr/share/man/cat3/prop_array_send_ioctl.0	comp-c-catman		.cat
 ./usr/share/man/cat3/prop_array_set.0		comp-c-catman		.cat
 ./usr/share/man/cat3/prop_bool.0		comp-c-catman		.cat
 ./usr/share/man/cat3/prop_bool_copy.0		comp-c-catman		.cat
@@ -5416,6 +5435,7 @@
 ./usr/share/man/cat3/prop_data_equals_data.0	comp-c-catman		.cat
 ./usr/share/man/cat3/prop_data_size.0		comp-c-catman		.cat
 ./usr/share/man/cat3/prop_dictionary.0		comp-c-catman		.cat
+./usr/share/man/cat3/prop_dictionary_all_keys.0	comp-c-catman		.cat
 ./usr/share/man/cat3/prop_dictionary_capacity.0	comp-c-catman		.cat
 ./usr/share/man/cat3/prop_dictionary_copy.0	comp-c-catman		.cat
 ./usr/share/man/cat3/prop_dictionary_copy_mutable.0 comp-c-catman	.cat
@@ -5427,7 +5447,18 @@
 ./usr/share/man/cat3/prop_dictionary_externalize.0 comp-c-catman	.cat
 ./usr/share/man/cat3/prop_dictionary_externalize_to_file.0 comp-c-catman .cat
 ./usr/share/man/cat3/prop_dictionary_get.0	comp-c-catman		.cat
+./usr/share/man/cat3/prop_dictionary_get_bool.0	comp-c-catman		.cat
+./usr/share/man/cat3/prop_dictionary_get_cstring.0 comp-c-catman	.cat
+./usr/share/man/cat3/prop_dictionary_get_cstring_nocopy.0 comp-c-catman	.cat
+./usr/share/man/cat3/prop_dictionary_get_int8.0	comp-c-catman		.cat
+./usr/share/man/cat3/prop_dictionary_get_int16.0 comp-c-catman		.cat
+./usr/share/man/cat3/prop_dictionary_get_int32.0 comp-c-catman		.cat
+./usr/share/man/cat3/prop_dictionary_get_int64.0 comp-c-catman		.cat
 ./usr/share/man/cat3/prop_dictionary_get_keysym.0 comp-c-catman		.cat
+./usr/share/man/cat3/prop_dictionary_get_uint8.0 comp-c-catman		.cat
+./usr/share/man/cat3/prop_dictionary_get_uint16.0 comp-c-catman		.cat
+./usr/share/man/cat3/prop_dictionary_get_uint32.0 comp-c-catman		.cat
+./usr/share/man/cat3/prop_dictionary_get_uint64.0 comp-c-catman		.cat
 ./usr/share/man/cat3/prop_dictionary_ingest.0	comp-c-catman		.cat
 ./usr/share/man/cat3/prop_dictionary_internalize.0 comp-c-catman	.cat
 ./usr/share/man/cat3/prop_dictionary_internalize_from_file.0 comp-c-catman .cat
@@ -5443,7 +5474,19 @@
 ./usr/share/man/cat3/prop_dictionary_send_ioctl.0 comp-c-catman		.cat
 ./usr/share/man/cat3/prop_dictionary_sendrecv_ioctl.0 comp-c-catman	.cat
 ./usr/share/man/cat3/prop_dictionary_set.0	comp-c-catman		.cat
+./usr/share/man/cat3/prop_dictionary_set_bool.0	comp-c-catman		.cat
+./usr/share/man/cat3/prop_dictionary_set_cstring.0 comp-c-catman	.cat
+./usr/share/man/cat3/prop_dictionary_set_cstring_nocopy.0 comp-c-catman	.cat
+./usr/share/man/cat3/prop_dictionary_set_int8.0	comp-c-catman		.cat
+./usr/share/man/cat3/prop_dictionary_set_int16.0 comp-c-catman		.cat
+./usr/share/man/cat3/prop_dictionary_set_int32.0 comp-c-catman		.cat
+./usr/share/man/cat3/prop_dictionary_set_int64.0 comp-c-catman		.cat
 ./usr/share/man/cat3/prop_dictionary_set_keysym.0 comp-c-catman		.cat
+./usr/share/man/cat3/prop_dictionary_set_uint8.0 comp-c-catman		.cat
+./usr/share/man/cat3/prop_dictionary_set_uint16.0 comp-c-catman		.cat
+./usr/share/man/cat3/prop_dictionary_set_uint32.0 comp-c-catman		.cat
+./usr/share/man/cat3/prop_dictionary_set_uint64.0 comp-c-catman		.cat
+./usr/share/man/cat3/prop_dictionary_util.0	comp-c-catman		.cat
 ./usr/share/man/cat3/prop_ingest.0		comp-c-catman		.cat
 ./usr/share/man/cat3/prop_ingest_context_alloc.0 comp-c-catman		.cat
 ./usr/share/man/cat3/prop_ingest_context_error.0 comp-c-catman		.cat
@@ -5454,10 +5497,14 @@
 ./usr/share/man/cat3/prop_number.0		comp-c-catman		.cat
 ./usr/share/man/cat3/prop_number_copy.0		comp-c-catman		.cat
 ./usr/share/man/cat3/prop_number_create_integer.0 comp-c-catman		.cat
+./usr/share/man/cat3/prop_number_create_unsigned_integer.0 comp-c-catman .cat
 ./usr/share/man/cat3/prop_number_equals.0	comp-c-catman		.cat
 ./usr/share/man/cat3/prop_number_equals_integer.0 comp-c-catman		.cat
+./usr/share/man/cat3/prop_number_equals_unsigned_integer.0 comp-c-catman .cat
 ./usr/share/man/cat3/prop_number_integer_value.0 comp-c-catman		.cat
 ./usr/share/man/cat3/prop_number_size.0		comp-c-catman		.cat
+./usr/share/man/cat3/prop_number_unsigned.0	comp-c-catman		.cat
+./usr/share/man/cat3/prop_number_unsigned_integer_value.0 comp-c-catman	.cat
 ./usr/share/man/cat3/prop_object.0		comp-c-catman		.cat
 ./usr/share/man/cat3/prop_object_equals.0	comp-c-catman		.cat
 ./usr/share/man/cat3/prop_object_iterator_next.0 comp-c-catman		.cat
@@ -5466,6 +5513,7 @@
 ./usr/share/man/cat3/prop_object_release.0	comp-c-catman		.cat
 ./usr/share/man/cat3/prop_object_retain.0	comp-c-catman		.cat
 ./usr/share/man/cat3/prop_object_type.0		comp-c-catman		.cat
+./usr/share/man/cat3/prop_send_ioctl.0		comp-c-catman		.cat
 ./usr/share/man/cat3/prop_string.0		comp-c-catman		.cat
 ./usr/share/man/cat3/prop_string_append.0	comp-c-catman		.cat
 ./usr/share/man/cat3/prop_string_append_cstring.0 comp-c-catman		.cat
@@ -5757,6 +5805,7 @@
 ./usr/share/man/cat3/setlinebuf.0		comp-c-catman		.cat
 ./usr/share/man/cat3/setlocale.0		comp-c-catman		.cat
 ./usr/share/man/cat3/setlogmask.0		comp-c-catman		.cat
+./usr/share/man/cat3/setlogmask_r.0		comp-c-catman		.cat
 ./usr/share/man/cat3/setmode.0			comp-c-catman		.cat
 ./usr/share/man/cat3/setnetconfig.0		comp-c-catman		.cat
 ./usr/share/man/cat3/setnetent.0		comp-c-catman		.cat
@@ -5979,6 +6028,8 @@
 ./usr/share/man/cat3/sysctlnametomib.0		comp-c-catman		.cat
 ./usr/share/man/cat3/sysexits.0			comp-c-catman		.cat
 ./usr/share/man/cat3/syslog.0			comp-c-catman		.cat
+./usr/share/man/cat3/syslog_r.0			comp-c-catman		.cat
+./usr/share/man/cat3/syslog_ss.0		comp-c-catman		.cat
 ./usr/share/man/cat3/system.0			comp-c-catman		.cat
 ./usr/share/man/cat3/t_freent.0			comp-c-catman		.cat
 ./usr/share/man/cat3/t_getent.0			comp-c-catman		.cat
@@ -6126,6 +6177,8 @@
 ./usr/share/man/cat3/vswprintf.0		comp-c-catman		.cat
 ./usr/share/man/cat3/vswscanf.0			comp-c-catman		.cat
 ./usr/share/man/cat3/vsyslog.0			comp-c-catman		.cat
+./usr/share/man/cat3/vsyslog_r.0		comp-c-catman		.cat
+./usr/share/man/cat3/vsyslog_ss.0		comp-c-catman		.cat
 ./usr/share/man/cat3/vtimes.0			comp-obsolete		obsolete
 ./usr/share/man/cat3/vwarn.0			comp-c-catman		.cat
 ./usr/share/man/cat3/vwarnx.0			comp-c-catman		.cat
@@ -6157,6 +6210,7 @@
 ./usr/share/man/cat3/wcscat.0			comp-c-catman		.cat
 ./usr/share/man/cat3/wcschr.0			comp-c-catman		.cat
 ./usr/share/man/cat3/wcscmp.0			comp-c-catman		.cat
+./usr/share/man/cat3/wcscoll.0			comp-c-catman		.cat
 ./usr/share/man/cat3/wcscpy.0			comp-c-catman		.cat
 ./usr/share/man/cat3/wcscspn.0			comp-c-catman		.cat
 ./usr/share/man/cat3/wcsdup.0			comp-c-catman		.cat
@@ -6184,7 +6238,9 @@
 ./usr/share/man/cat3/wcstoul.0			comp-c-catman		.cat
 ./usr/share/man/cat3/wcstoull.0			comp-c-catman		.cat
 ./usr/share/man/cat3/wcstoumax.0		comp-c-catman		.cat
+./usr/share/man/cat3/wcswcs.0			comp-c-catman		.cat
 ./usr/share/man/cat3/wcswidth.0			comp-c-catman		.cat
+./usr/share/man/cat3/wcsxfrm.0			comp-c-catman		.cat
 ./usr/share/man/cat3/wctob.0			comp-c-catman		.cat
 ./usr/share/man/cat3/wctomb.0			comp-c-catman		.cat
 ./usr/share/man/cat3/wctrans.0			comp-c-catman		.cat
@@ -7030,7 +7086,10 @@
 ./usr/share/man/cat9/printf.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/printf_nolog.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/proc_trampoline.0		comp-sys-catman		.cat
+./usr/share/man/cat9/prop_array_copyin_ioctl.0	comp-sys-catman		.cat
+./usr/share/man/cat9/prop_array_copyout_ioctl.0	comp-sys-catman		.cat
 ./usr/share/man/cat9/prop_copy.0		comp-obsolete		obsolete
+./usr/share/man/cat9/prop_copyin_ioctl.0	comp-sys-catman		.cat
 ./usr/share/man/cat9/prop_delete.0		comp-obsolete		obsolete
 ./usr/share/man/cat9/prop_dictionary_copyin_ioctl.0 comp-sys-catman	.cat
 ./usr/share/man/cat9/prop_dictionary_copyout_ioctl.0 comp-sys-catman	.cat
@@ -7172,6 +7231,7 @@
 ./usr/share/man/cat9/tc_mb.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/tc_syncbus.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/tc_wmb.0			comp-sys-catman		.cat
+./usr/share/man/cat9/tcp_congctl.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/time.0			comp-obsolete		obsolete
 ./usr/share/man/cat9/time_second.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/time_uptime.0		comp-sys-catman		.cat
@@ -7312,6 +7372,11 @@
 ./usr/share/man/cat9/vme_space_get.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/vme_space_map.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/vme_space_unmap.0		comp-sys-catman		.cat
+./usr/share/man/cat9/vmem.0			comp-sys-catman		.cat
+./usr/share/man/cat9/vmem_alloc.0		comp-sys-catman		.cat
+./usr/share/man/cat9/vmem_create.0		comp-sys-catman		.cat
+./usr/share/man/cat9/vmem_destroy.0		comp-sys-catman		.cat
+./usr/share/man/cat9/vmem_free.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/vn_bwrite.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/vn_close.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/vn_closefile.0		comp-sys-catman		.cat
@@ -7440,6 +7505,7 @@
 ./usr/share/man/man1/objdump.1			comp-util-man		bfd,.man
 ./usr/share/man/man1/openssl_ocsp.1		comp-c-man		crypto,.man
 ./usr/share/man/man1/ranlib.1			comp-util-man		bfd,.man
+./usr/share/man/man1/rcs2log.1			comp-cvs-man		.man
 ./usr/share/man/man1/readelf.1			comp-util-man		bfd,.man
 ./usr/share/man/man1/rpcgen.1			comp-c-man		.man
 ./usr/share/man/man1/size.1			comp-util-man		bfd,.man
@@ -8315,6 +8381,7 @@
 ./usr/share/man/man3/closedir.3			comp-c-man		.man
 ./usr/share/man/man3/closefrom.3		comp-c-man		.man
 ./usr/share/man/man3/closelog.3			comp-c-man		.man
+./usr/share/man/man3/closelog_r.3		comp-c-man		.man
 ./usr/share/man/man3/clrtobot.3			comp-c-man		.man
 ./usr/share/man/man3/clrtoeol.3			comp-c-man		.man
 ./usr/share/man/man3/color_content.3		comp-c-man		.man
@@ -8473,6 +8540,7 @@
 ./usr/share/man/man3/dupwin.3			comp-c-man		.man
 ./usr/share/man/man3/dynamic_field_info.3	comp-c-man		.man
 ./usr/share/man/man3/easprintf.3		comp-c-man		.man
+./usr/share/man/man3/ecalloc.3			comp-c-man		.man
 ./usr/share/man/man3/echo.3			comp-c-man		.man
 ./usr/share/man/man3/echochar.3			comp-c-man		.man
 ./usr/share/man/man3/edata.3			comp-c-man		.man
@@ -9475,6 +9543,7 @@
 ./usr/share/man/man3/opendir.3			comp-c-man		.man
 ./usr/share/man/man3/opendisk.3			comp-c-man		.man
 ./usr/share/man/man3/openlog.3			comp-c-man		.man
+./usr/share/man/man3/openlog_r.3		comp-c-man		.man
 ./usr/share/man/man3/openpam.3			comp-c-man		.man,pam
 ./usr/share/man/man3/openpam_borrow_cred.3	comp-c-man		.man,pam
 ./usr/share/man/man3/openpam_free_data.3	comp-c-man		.man,pam
@@ -9601,7 +9670,9 @@
 ./usr/share/man/man3/prop_array_iterator.3	comp-c-man		.man
 ./usr/share/man/man3/prop_array_make_immutable.3 comp-c-man		.man
 ./usr/share/man/man3/prop_array_mutable.3	comp-c-man		.man
+./usr/share/man/man3/prop_array_recv_ioctl.3	comp-c-man		.man
 ./usr/share/man/man3/prop_array_remove.3	comp-c-man		.man
+./usr/share/man/man3/prop_array_send_ioctl.3	comp-c-man		.man
 ./usr/share/man/man3/prop_array_set.3		comp-c-man		.man
 ./usr/share/man/man3/prop_bool.3		comp-c-man		.man
 ./usr/share/man/man3/prop_bool_copy.3		comp-c-man		.man
@@ -9617,6 +9688,7 @@
 ./usr/share/man/man3/prop_data_equals_data.3	comp-c-man		.man
 ./usr/share/man/man3/prop_data_size.3		comp-c-man		.man
 ./usr/share/man/man3/prop_dictionary.3		comp-c-man		.man
+./usr/share/man/man3/prop_dictionary_all_keys.3	comp-c-man		.man
 ./usr/share/man/man3/prop_dictionary_capacity.3	comp-c-man		.man
 ./usr/share/man/man3/prop_dictionary_copy.3	comp-c-man		.man
 ./usr/share/man/man3/prop_dictionary_copy_mutable.3 comp-c-man		.man
@@ -9628,7 +9700,18 @@
 ./usr/share/man/man3/prop_dictionary_externalize.3 comp-c-man		.man
 ./usr/share/man/man3/prop_dictionary_externalize_to_file.3 comp-c-man	.man
 ./usr/share/man/man3/prop_dictionary_get.3	comp-c-man		.man
+./usr/share/man/man3/prop_dictionary_get_bool.3	comp-c-man		.man
+./usr/share/man/man3/prop_dictionary_get_cstring.3 comp-c-man		.man
+./usr/share/man/man3/prop_dictionary_get_cstring_nocopy.3 comp-c-man	.man
+./usr/share/man/man3/prop_dictionary_get_int8.3	comp-c-man		.man
+./usr/share/man/man3/prop_dictionary_get_int16.3 comp-c-man		.man
+./usr/share/man/man3/prop_dictionary_get_int32.3 comp-c-man		.man
+./usr/share/man/man3/prop_dictionary_get_int64.3 comp-c-man		.man
 ./usr/share/man/man3/prop_dictionary_get_keysym.3 comp-c-man		.man
+./usr/share/man/man3/prop_dictionary_get_uint8.3 comp-c-man		.man
+./usr/share/man/man3/prop_dictionary_get_uint16.3 comp-c-man		.man
+./usr/share/man/man3/prop_dictionary_get_uint32.3 comp-c-man		.man
+./usr/share/man/man3/prop_dictionary_get_uint64.3 comp-c-man		.man
 ./usr/share/man/man3/prop_dictionary_ingest.3	comp-c-man		.man
 ./usr/share/man/man3/prop_dictionary_internalize.3 comp-c-man		.man
 ./usr/share/man/man3/prop_dictionary_internalize_from_file.3 comp-c-man	.man
@@ -9643,7 +9726,19 @@
 ./usr/share/man/man3/prop_dictionary_send_ioctl.3	comp-c-man	.man
 ./usr/share/man/man3/prop_dictionary_sendrecv_ioctl.3 comp-c-man	.man
 ./usr/share/man/man3/prop_dictionary_set.3	comp-c-man		.man
+./usr/share/man/man3/prop_dictionary_set_bool.3	comp-c-man		.man
+./usr/share/man/man3/prop_dictionary_set_cstring.3 comp-c-man		.man
+./usr/share/man/man3/prop_dictionary_set_cstring_nocopy.3 comp-c-man	.man
+./usr/share/man/man3/prop_dictionary_set_int8.3	comp-c-man		.man
+./usr/share/man/man3/prop_dictionary_set_int16.3 comp-c-man		.man
+./usr/share/man/man3/prop_dictionary_set_int32.3 comp-c-man		.man
+./usr/share/man/man3/prop_dictionary_set_int64.3 comp-c-man		.man
 ./usr/share/man/man3/prop_dictionary_set_keysym.3 comp-c-man		.man
+./usr/share/man/man3/prop_dictionary_set_uint8.3 comp-c-man		.man
+./usr/share/man/man3/prop_dictionary_set_uint16.3 comp-c-man		.man
+./usr/share/man/man3/prop_dictionary_set_uint32.3 comp-c-man		.man
+./usr/share/man/man3/prop_dictionary_set_uint64.3 comp-c-man		.man
+./usr/share/man/man3/prop_dictionary_util.3	comp-c-man		.man
 ./usr/share/man/man3/prop_ingest.3		comp-c-man		.man
 ./usr/share/man/man3/prop_ingest_context_alloc.3 comp-c-man		.man
 ./usr/share/man/man3/prop_ingest_context_error.3 comp-c-man		.man
@@ -9654,10 +9749,14 @@
 ./usr/share/man/man3/prop_number.3		comp-c-man		.man
 ./usr/share/man/man3/prop_number_copy.3		comp-c-man		.man
 ./usr/share/man/man3/prop_number_create_integer.3 comp-c-man		.man
+./usr/share/man/man3/prop_number_create_unsigned_integer.3 comp-c-man	.man
 ./usr/share/man/man3/prop_number_equals.3	comp-c-man		.man
 ./usr/share/man/man3/prop_number_equals_integer.3 comp-c-man		.man
+./usr/share/man/man3/prop_number_equals_unsigned_integer.3 comp-c-man	.man
 ./usr/share/man/man3/prop_number_integer_value.3 comp-c-man		.man
 ./usr/share/man/man3/prop_number_size.3		comp-c-man		.man
+./usr/share/man/man3/prop_number_unsigned.3	comp-c-man		.man
+./usr/share/man/man3/prop_number_unsigned_integer_value.3 comp-c-man	.man
 ./usr/share/man/man3/prop_object.3		comp-c-man		.man
 ./usr/share/man/man3/prop_object_equals.3	comp-c-man		.man
 ./usr/share/man/man3/prop_object_iterator_next.3 comp-c-man		.man
@@ -9666,6 +9765,7 @@
 ./usr/share/man/man3/prop_object_release.3	comp-c-man		.man
 ./usr/share/man/man3/prop_object_retain.3	comp-c-man		.man
 ./usr/share/man/man3/prop_object_type.3		comp-c-man		.man
+./usr/share/man/man3/prop_send_ioctl.3		comp-c-man		.cat
 ./usr/share/man/man3/prop_string.3		comp-c-man		.man
 ./usr/share/man/man3/prop_string_append.3	comp-c-man		.man
 ./usr/share/man/man3/prop_string_append_cstring.3 comp-c-man		.man
@@ -9956,6 +10056,7 @@
 ./usr/share/man/man3/setlinebuf.3		comp-c-man		.man
 ./usr/share/man/man3/setlocale.3		comp-c-man		.man
 ./usr/share/man/man3/setlogmask.3		comp-c-man		.man
+./usr/share/man/man3/setlogmask_r.3		comp-c-man		.man
 ./usr/share/man/man3/setmode.3			comp-c-man		.man
 ./usr/share/man/man3/setnetconfig.3		comp-c-man		.man
 ./usr/share/man/man3/setnetent.3		comp-c-man		.man
@@ -10175,6 +10276,8 @@
 ./usr/share/man/man3/sysctlnametomib.3		comp-c-man		.man
 ./usr/share/man/man3/sysexits.3			comp-c-man		.man
 ./usr/share/man/man3/syslog.3			comp-c-man		.man
+./usr/share/man/man3/syslog_r.3			comp-c-man		.man
+./usr/share/man/man3/syslog_ss.3		comp-c-man		.man
 ./usr/share/man/man3/system.3			comp-c-man		.man
 ./usr/share/man/man3/t_freent.3			comp-c-man		.man
 ./usr/share/man/man3/t_getent.3			comp-c-man		.man
@@ -10322,6 +10425,8 @@
 ./usr/share/man/man3/vswprintf.3		comp-c-man		.man
 ./usr/share/man/man3/vswscanf.3			comp-c-man		.man
 ./usr/share/man/man3/vsyslog.3			comp-c-man		.man
+./usr/share/man/man3/vsyslog_r.3		comp-c-man		.man
+./usr/share/man/man3/vsyslog_ss.3		comp-c-man		.man
 ./usr/share/man/man3/vtimes.3			comp-obsolete		obsolete
 ./usr/share/man/man3/vwarn.3			comp-c-man		.man
 ./usr/share/man/man3/vwarnx.3			comp-c-man		.man
@@ -10353,6 +10458,7 @@
 ./usr/share/man/man3/wcscat.3			comp-c-man		.man
 ./usr/share/man/man3/wcschr.3			comp-c-man		.man
 ./usr/share/man/man3/wcscmp.3			comp-c-man		.man
+./usr/share/man/man3/wcscoll.3			comp-c-man		.man
 ./usr/share/man/man3/wcscpy.3			comp-c-man		.man
 ./usr/share/man/man3/wcscspn.3			comp-c-man		.man
 ./usr/share/man/man3/wcsdup.3			comp-c-man		.man
@@ -10380,7 +10486,9 @@
 ./usr/share/man/man3/wcstoul.3			comp-c-man		.man
 ./usr/share/man/man3/wcstoull.3			comp-c-man		.man
 ./usr/share/man/man3/wcstoumax.3		comp-c-man		.man
+./usr/share/man/man3/wcswcs.3			comp-c-man		.man
 ./usr/share/man/man3/wcswidth.3			comp-c-man		.man
+./usr/share/man/man3/wcsxfrm.3			comp-c-man		.man
 ./usr/share/man/man3/wctob.3			comp-c-man		.man
 ./usr/share/man/man3/wctomb.3			comp-c-man		.man
 ./usr/share/man/man3/wctrans.3			comp-c-man		.man
@@ -10765,8 +10873,8 @@
 ./usr/share/man/man9/config_detach.9		comp-sys-man		.man
 ./usr/share/man/man9/config_finalize_register.9	comp-sys-man		.man
 ./usr/share/man/man9/config_found.9		comp-sys-man		.man
-./usr/share/man/man9/config_found_sm.9		comp-sys-man		.man
 ./usr/share/man/man9/config_found_ia.9		comp-sys-man		.man
+./usr/share/man/man9/config_found_sm.9		comp-sys-man		.man
 ./usr/share/man/man9/config_interrupts.9	comp-sys-man		.man
 ./usr/share/man/man9/config_match.9		comp-sys-man		.man
 ./usr/share/man/man9/config_pending_decr.9	comp-sys-man		.man
@@ -11225,7 +11333,10 @@
 ./usr/share/man/man9/printf.9			comp-sys-man		.man
 ./usr/share/man/man9/printf_nolog.9		comp-sys-man		.man
 ./usr/share/man/man9/proc_trampoline.9		comp-sys-man		.man
+./usr/share/man/man9/prop_array_copyin_ioctl.9	comp-sys-man		.man
+./usr/share/man/man9/prop_array_copyout_ioctl.9	comp-sys-man		.man
 ./usr/share/man/man9/prop_copy.9		comp-obsolete		obsolete
+./usr/share/man/man9/prop_copyin_ioctl.9	comp-sys-man		.man
 ./usr/share/man/man9/prop_delete.9		comp-obsolete		obsolete
 ./usr/share/man/man9/prop_dictionary_copyin_ioctl.9 comp-sys-man	.man
 ./usr/share/man/man9/prop_dictionary_copyout_ioctl.9 comp-sys-man	.man
@@ -11367,6 +11478,7 @@
 ./usr/share/man/man9/tc_mb.9			comp-sys-man		.man
 ./usr/share/man/man9/tc_syncbus.9		comp-sys-man		.man
 ./usr/share/man/man9/tc_wmb.9			comp-sys-man		.man
+./usr/share/man/man9/tcp_congctl.9		comp-sys-man		.man
 ./usr/share/man/man9/time.9			comp-obsolete		obsolete
 ./usr/share/man/man9/time_second.9		comp-sys-man		.man
 ./usr/share/man/man9/time_uptime.9		comp-sys-man		.man
@@ -11507,6 +11619,11 @@
 ./usr/share/man/man9/vme_space_get.9		comp-sys-man		.man
 ./usr/share/man/man9/vme_space_map.9		comp-sys-man		.man
 ./usr/share/man/man9/vme_space_unmap.9		comp-sys-man		.man
+./usr/share/man/man9/vmem.9			comp-sys-man		.man
+./usr/share/man/man9/vmem_alloc.9		comp-sys-man		.man
+./usr/share/man/man9/vmem_create.9		comp-sys-man		.man
+./usr/share/man/man9/vmem_destroy.9		comp-sys-man		.man
+./usr/share/man/man9/vmem_free.9		comp-sys-man		.man
 ./usr/share/man/man9/vn_bwrite.9		comp-sys-man		.man
 ./usr/share/man/man9/vn_close.9			comp-sys-man		.man
 ./usr/share/man/man9/vn_closefile.9		comp-sys-man		.man

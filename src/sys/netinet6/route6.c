@@ -1,4 +1,4 @@
-/*	$NetBSD: route6.c,v 1.14 2006/01/21 00:15:37 rpaulo Exp $	*/
+/*	$NetBSD: route6.c,v 1.15 2006/10/12 01:32:39 christos Exp $	*/
 /*	$KAME: route6.c,v 1.22 2000/12/03 00:54:00 itojun Exp $	*/
 
 /*
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: route6.c,v 1.14 2006/01/21 00:15:37 rpaulo Exp $");
+__KERNEL_RCSID(0, "$NetBSD: route6.c,v 1.15 2006/10/12 01:32:39 christos Exp $");
 
 #include "opt_mip6.h"
 
@@ -65,9 +65,7 @@ static int ip6_rthdr2 __P((struct mbuf *, struct ip6_hdr *,
 #endif /* defined(MIP6) && NMIP > 0 */
 
 int
-route6_input(mp, offp, proto)
-	struct mbuf **mp;
-	int *offp, proto;	/* proto is unused */
+route6_input(struct mbuf **mp, int *offp, int proto __unused)
 {
 	struct ip6_hdr *ip6;
 	struct mbuf *m = *mp;
