@@ -1,4 +1,4 @@
-/*	$NetBSD: uhub.c,v 1.74 2005/03/02 11:37:27 mycroft Exp $	*/
+/*	$NetBSD: uhub.c,v 1.80 2006/10/24 21:03:30 drochner Exp $	*/
 /*	$FreeBSD: src/sys/dev/usb/uhub.c,v 1.18 1999/11/17 22:33:43 n_hibma Exp $	*/
 
 /*
@@ -43,7 +43,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: uhub.c,v 1.74 2005/03/02 11:37:27 mycroft Exp $");
+__KERNEL_RCSID(0, "$NetBSD: uhub.c,v 1.80 2006/10/24 21:03:30 drochner Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -103,10 +103,6 @@ Static bus_child_detached_t uhub_child_detached;
 
 #if defined(__NetBSD__) || defined(__OpenBSD__)
 USB_DECLARE_DRIVER(uhub);
-
-/* Create the driver instance for the hub connected to hub case */
-CFATTACH_DECL(uhub_uhub, sizeof(struct uhub_softc),
-    uhub_match, uhub_attach, uhub_detach, uhub_activate);
 #elif defined(__FreeBSD__)
 USB_DECLARE_DRIVER_INIT(uhub,
 			DEVMETHOD(bus_child_detached, uhub_child_detached));
@@ -148,7 +144,7 @@ USB_ATTACH(uhub)
 {
 	USB_ATTACH_START(uhub, sc, uaa);
 	usbd_device_handle dev = uaa->device;
-	char devinfo[1024];
+	char *devinfop;
 	usbd_status err;
 	struct usbd_hub *hub = NULL;
 	usb_device_request_t req;
@@ -160,11 +156,13 @@ USB_ATTACH(uhub)
 
 	DPRINTFN(1,("uhub_attach\n"));
 	sc->sc_hub = dev;
-	usbd_devinfo(dev, 1, devinfo, sizeof(devinfo));
-	USB_ATTACH_SETUP;
-	printf("%s: %s\n", USBDEVNAME(sc->sc_dev), devinfo);
 
-	if (UHUB_IS_HIGH_SPEED(sc)) {
+	devinfop = usbd_devinfo_alloc(dev, 1);
+	USB_ATTACH_SETUP;
+	printf("%s: %s\n", USBDEVNAME(sc->sc_dev), devinfop);
+	usbd_devinfo_free(devinfop);
+
+	if (dev->depth > 0 && UHUB_IS_HIGH_SPEED(sc)) {
 		printf("%s: %s transaction translator%s\n",
 		       USBDEVNAME(sc->sc_dev),
 		       UHUB_IS_SINGLE_TT(sc) ? "single" : "multiple",
@@ -187,7 +185,7 @@ USB_ATTACH(uhub)
 	/* Get hub descriptor. */
 	req.bmRequestType = UT_READ_CLASS_DEVICE;
 	req.bRequest = UR_GET_DESCRIPTOR;
-	USETW2(req.wValue, UDESC_HUB, 0);
+	USETW2(req.wValue, (dev->address > 1 ? UDESC_HUB : 0), 0);
 	USETW(req.wIndex, 0);
 	USETW(req.wLength, USB_HUB_DESCRIPTOR_SIZE);
 	DPRINTFN(1,("usb_init_hub: getting hub descriptor\n"));
@@ -292,7 +290,7 @@ USB_ATTACH(uhub)
 	 *        proceed with device attachment
 	 */
 
-	if (UHUB_IS_HIGH_SPEED(sc)) {
+	if (UHUB_IS_HIGH_SPEED(sc) && nports > 0) {
 		tts = malloc((UHUB_IS_SINGLE_TT(sc) ? 1 : nports) *
 			     sizeof (struct usbd_tt), M_USBDEV, M_NOWAIT);
 		if (!tts)
@@ -638,7 +636,8 @@ uhub_child_detached(device_t self, device_t child)
  * to be explored again.
  */
 void
-uhub_intr(usbd_xfer_handle xfer, usbd_private_handle addr, usbd_status status)
+uhub_intr(usbd_xfer_handle xfer __unused, usbd_private_handle addr,
+    usbd_status status)
 {
 	struct uhub_softc *sc = addr;
 

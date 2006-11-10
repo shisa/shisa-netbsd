@@ -992,6 +992,7 @@
 ./usr/sbin/amq					base-amd-bin
 ./usr/sbin/arp					base-netutil-bin
 ./usr/sbin/authpf				base-pf-bin		pf
+./usr/sbin/babymdd				base-netutil-bin	inet6
 ./usr/sbin/bootpd				base-bootserver-bin
 ./usr/sbin/bootpef				base-bootserver-bin
 ./usr/sbin/bootpgw				base-bootserver-bin
@@ -1006,6 +1007,7 @@
 ./usr/sbin/chown				base-sysutil-bin
 ./usr/sbin/chroot				base-sysutil-bin
 ./usr/sbin/chrtbl				base-sysutil-bin
+./usr/sbin/cnd					base-netutil-bin	inet6
 ./usr/sbin/cnwctl				base-netutil-bin
 ./usr/sbin/cron					base-cron-bin
 ./usr/sbin/daicctl				base-isdn-bin
@@ -1047,6 +1049,7 @@
 ./usr/sbin/groupdel				base-sysutil-bin
 ./usr/sbin/groupinfo				base-sysutil-bin
 ./usr/sbin/groupmod				base-sysutil-bin
+./usr/sbin/had					base-netutil-bin	inet6
 ./usr/sbin/hlfsd				base-amd-bin
 ./usr/sbin/host					base-obsolete		obsolete
 ./usr/sbin/hostapd				base-sysutil-bin
@@ -1107,6 +1110,7 @@
 ./usr/sbin/mknetid				base-nis-bin		yp
 ./usr/sbin/mld6query				base-netutil-bin	use_inet6
 ./usr/sbin/mlxctl				base-sysutil-bin
+./usr/sbin/mnd					base-netutil-bin	inet6
 ./usr/sbin/mopa.out				base-obsolete		obsolete
 ./usr/sbin/mopchk				base-bootserver-bin
 ./usr/sbin/mopcopy				base-bootserver-bin
@@ -1115,6 +1119,7 @@
 ./usr/sbin/moptrace				base-bootserver-bin
 ./usr/sbin/mountd				base-nfsserver-bin
 ./usr/sbin/moused				base-sysutil-bin
+./usr/sbin/mrd					base-netutil-bin	inet6
 ./usr/sbin/mrinfo				base-router-bin
 ./usr/sbin/mrouted				base-router-bin
 ./usr/sbin/mscdlabel				base-sysutil-bin
@@ -1131,6 +1136,7 @@
 ./usr/sbin/ndbootd				base-bootserver-bin
 ./usr/sbin/ndc					base-obsolete		obsolete
 ./usr/sbin/ndp					base-netutil-bin	inet6
+./usr/sbin/nemonetd				base-netutil-bin	inet6
 ./usr/sbin/netgroup_mkdb			base-nis-bin
 ./usr/sbin/nfsd					base-nfsserver-bin
 ./usr/sbin/nfsiod				base-obsolete		obsolete

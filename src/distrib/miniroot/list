@@ -58,7 +58,7 @@ SPECIAL	ping		srcdir	distrib/utils/x_ping
 SPECIAL	route		srcdir	distrib/utils/x_route
 
 LIBS	libhack.o
-LIBS	-lrmt -ledit -lutil -lcurses -ltermcap -lbz2 -lcrypt -lintl -ll -lm -lkvm -lmagic -lz
+LIBS	-lrmt -ledit -lutil -lcurses -ltermcap -lbz2 -lcrypt -lcrypto -lipsec -lintl -ll -lm -lkvm -lmagic -lz
 
 # various files that we need in /etc for the install
 COPY	${NETBSDSRCDIR}/etc/group		etc/group

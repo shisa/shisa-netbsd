@@ -1,4 +1,4 @@
-/*	$NetBSD: sl811hs.c,v 1.5 2005/02/27 00:27:02 perry Exp $	*/
+/*	$NetBSD: sl811hs.c,v 1.10 2006/10/12 01:31:01 christos Exp $	*/
 
 /*
  * Copyright (c) 2001 The NetBSD Foundation, Inc.
@@ -44,7 +44,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: sl811hs.c,v 1.5 2005/02/27 00:27:02 perry Exp $");
+__KERNEL_RCSID(0, "$NetBSD: sl811hs.c,v 1.10 2006/10/12 01:31:01 christos Exp $");
 
 #include "opt_slhci.h"
 
@@ -67,10 +67,10 @@ __KERNEL_RCSID(0, "$NetBSD: sl811hs.c,v 1.5 2005/02/27 00:27:02 perry Exp $");
 #include <dev/ic/sl811hsreg.h>
 #include <dev/ic/sl811hsvar.h>
 
-static inline u_int8_t sl11read(struct slhci_softc *, int);
-static inline void     sl11write(struct slhci_softc *, int, u_int8_t);
-static inline void sl11read_region(struct slhci_softc *, u_char *, int, int);
-static inline void sl11write_region(struct slhci_softc *, int, u_char *, int);
+static inline uint8_t	sl11read(struct slhci_softc *, int);
+static inline void	sl11write(struct slhci_softc *, int, uint8_t);
+static inline void    sl11read_region(struct slhci_softc *, u_char *, int, int);
+static inline void   sl11write_region(struct slhci_softc *, int, u_char *, int);
 
 static void		sl11_reset(struct slhci_softc *);
 static void		sl11_speed(struct slhci_softc *);
@@ -80,12 +80,12 @@ static void		slhci_softintr(void *);
 static void		slhci_poll(struct usbd_bus *);
 static void		slhci_poll_hub(void *);
 static void		slhci_poll_device(void *arg);
-static usbd_status	slhci_allocm(struct usbd_bus *, usb_dma_t *, u_int32_t);
+static usbd_status	slhci_allocm(struct usbd_bus *, usb_dma_t *, uint32_t);
 static void		slhci_freem(struct usbd_bus *, usb_dma_t *);
 static usbd_xfer_handle slhci_allocx(struct usbd_bus *);
 static void		slhci_freex(struct usbd_bus *, usbd_xfer_handle);
 
-static int		slhci_str(usb_string_descriptor_t *, int, char *);
+static int		slhci_str(usb_string_descriptor_t *, int, const char *);
 
 static usbd_status	slhci_root_ctrl_transfer(usbd_xfer_handle);
 static usbd_status	slhci_root_ctrl_start(usbd_xfer_handle);
@@ -124,7 +124,7 @@ static void		slhci_device_bulk_close(usbd_pipe_handle);
 static void		slhci_device_bulk_done(usbd_xfer_handle);
 
 static int		slhci_transaction(struct slhci_softc *,
-	usbd_pipe_handle, u_int8_t, int, u_char *, u_int8_t);
+	usbd_pipe_handle, uint8_t, int, u_char *, uint8_t);
 static void		slhci_noop(usbd_pipe_handle);
 static void		slhci_abort_xfer(usbd_xfer_handle, usbd_status);
 static void		slhci_device_clear_toggle(usbd_pipe_handle);
@@ -135,6 +135,8 @@ int slhci_dummy;
 /* For root hub */
 #define SLHCI_INTR_ENDPT	(1)
 
+#define SLHCI_NAK_RETRY_MAX	8	/* XXXX */
+
 #ifdef SLHCI_DEBUG
 #define D_TRACE	(0x0001)	/* function trace */
 #define D_MSG	(0x0002)	/* debug messages */
@@ -143,17 +145,17 @@ int slhci_dummy;
 
 int slhci_debug = D_MSG | D_XFER;
 #define DPRINTF(z,x)	if((slhci_debug&(z))!=0)printf x
-void		print_req(usb_device_request_t *);
-void		print_req_hub(usb_device_request_t *);
-void		print_dumpreg(struct slhci_softc *);
-void		print_xfer(usbd_xfer_handle);
+static void		print_req(usb_device_request_t *);
+static void		print_req_hub(usb_device_request_t *);
+static void		print_dumpreg(struct slhci_softc *);
+static void		print_xfer(usbd_xfer_handle);
 #else
 #define DPRINTF(z,x)
 #endif
 
 
 /* XXX: sync with argument */
-static char *sltypestr [] = {
+static const char *sltypestr [] = {
 	"SL11H/T",
 	"SL811HS/T",
 };
@@ -231,16 +233,18 @@ struct slhci_pipe {
 /*
  * SL811HS Register read/write routine
  */
-static inline u_int8_t
+static inline uint8_t
 sl11read(struct slhci_softc *sc, int reg)
 {
+
 	bus_space_write_1(sc->sc_iot, sc->sc_ioh, SL11_IDX_ADDR, reg);
 	return bus_space_read_1(sc->sc_iot, sc->sc_ioh, SL11_IDX_DATA);
 }
 
 static inline void
-sl11write(struct slhci_softc *sc, int reg, u_int8_t data)
+sl11write(struct slhci_softc *sc, int reg, uint8_t data)
 {
+
 	bus_space_write_1(sc->sc_iot, sc->sc_ioh, SL11_IDX_ADDR, reg);
 	bus_space_write_1(sc->sc_iot, sc->sc_ioh, SL11_IDX_DATA, data);
 }
@@ -251,7 +255,8 @@ sl11read_region(struct slhci_softc *sc, u_char *buf, int reg, int len)
 	int i;
 	bus_space_write_1(sc->sc_iot, sc->sc_ioh, SL11_IDX_ADDR, reg);
 	for (i = 0; i < len; i++)
-		buf[i] = bus_space_read_1(sc->sc_iot, sc->sc_ioh, SL11_IDX_DATA);
+		buf[i] =
+		    bus_space_read_1(sc->sc_iot, sc->sc_ioh, SL11_IDX_DATA);
 }
 
 static inline void
@@ -260,7 +265,8 @@ sl11write_region(struct slhci_softc *sc, int reg, u_char *buf, int len)
 	int i;
 	bus_space_write_1(sc->sc_iot, sc->sc_ioh, SL11_IDX_ADDR, reg);
 	for (i = 0; i < len; i++)
-		bus_space_write_1(sc->sc_iot, sc->sc_ioh, SL11_IDX_DATA, buf[i]);
+		bus_space_write_1(sc->sc_iot,
+		    sc->sc_ioh, SL11_IDX_DATA, buf[i]);
 }
 
 /*
@@ -269,14 +275,13 @@ sl11write_region(struct slhci_softc *sc, int reg, u_char *buf, int len)
 static void
 sl11_reset(struct slhci_softc *sc)
 {
-	u_int8_t r;
+	uint8_t r;
 
 	DPRINTF(D_TRACE, ("%s() ", __FUNCTION__));
-	r = sl11read(sc, SL11_CTRL);
+	r = 0;
 	sl11write(sc, SL11_CTRL, r | SL11_CTRL_RESETENGINE);
 	delay_ms(250);
-	sl11write(sc, SL11_CTRL, r | SL11_CTRL_RESETENGINE | SL11_CTRL_SUSPEND);
-	delay_ms(150);
+	sl11write(sc, SL11_CTRL, r | SL11_CTRL_JKSTATE | SL11_CTRL_RESETENGINE);
 	sl11write(sc, SL11_CTRL, r | SL11_CTRL_RESETENGINE);
 	delay_ms(10);
 	sl11write(sc, SL11_CTRL, r);
@@ -288,7 +293,7 @@ sl11_reset(struct slhci_softc *sc)
 static void
 sl11_speed(struct slhci_softc *sc)
 {
-	u_int8_t r;
+	uint8_t r;
 
 	sl11write(sc, SL11_ISR, 0xff);
 	r = sl11read(sc, SL11_ISR);
@@ -296,18 +301,23 @@ sl11_speed(struct slhci_softc *sc)
 		DPRINTF(D_MSG, ("NC "));
 		sl11write(sc, SL11_ISR, SL11_ISR_RESET);
 		sc->sc_connect = 0;
+		sl11write(sc, SL11_IER, SL11_IER_INSERT);
 	}
 
 	if ((sl11read(sc, SL11_ISR) & SL11_ISR_RESET)) {
 		sl11write(sc, SL11_ISR, 0xff);
 	} else {
-		u_int8_t pol = 0, ctrl = 0;
+		uint8_t pol = 0, ctrl = 0;
 
 		sc->sc_connect = 1;
 		if (r & SL11_ISR_DATA) {
 			DPRINTF(D_MSG, ("FS "));
 			pol  = 0;
+#if 0
 			ctrl = SL11_CTRL_EOF2;
+#else
+			ctrl = 0;	/* XXXX: What is SL11_CTRL_EOF2 ? */
+#endif
 			sc->sc_fullspeed = 1;
 		} else {
 			DPRINTF(D_MSG, ("LS "));
@@ -318,6 +328,7 @@ sl11_speed(struct slhci_softc *sc)
 		sl11write(sc, SL811_CSOF, pol | SL811_CSOF_MASTER | 0x2e);
 		sl11write(sc, SL11_DATA, 0xe0);
 		sl11write(sc, SL11_CTRL, ctrl | SL11_CTRL_ENABLESOF);
+		sl11write(sc, SL11_IER, SL11_IER_INSERT | SL11_IER_RESET);
 	}
 
 	sl11write(sc, SL11_E0PID,  (SL11_PID_SOF << 4) + 0);
@@ -382,22 +393,27 @@ slhci_attach(struct slhci_softc *sc, struct device *self)
 
 	usb_callout_init(sc->sc_poll_handle);
 
-	/* Initialize controller */
-	sl11write(sc, SL811_CSOF, SL811_CSOF_MASTER | 0x2e);
+	/* Disable interrupt, then wait 40msec */
+	sl11write(sc, SL11_IER, 0x00);
+	delay_ms(40);
+
 	sl11write(sc, SL11_ISR, 0xff);
+	delay_ms(40);
+
+	/* Reset USB engine */
+	sl11write(sc, SL11_CTRL, SL11_CTRL_RESETENGINE);
+	delay_ms(40);
 
 	/* Disable interrupt, then wait 40msec */
 	sl11write(sc, SL11_IER, 0x00);
 	delay_ms(40);
 
-	/* Reset USB engine */
-	sl11write(sc, SL11_CTRL, SL11_CTRL_RESETENGINE | SL11_CTRL_SUSPEND);
-	delay_ms(40);
 	sl11write(sc, SL11_CTRL, 0x00);
 	delay_ms(10);
 
-	/* USB Bus reset for GET_PORT_STATUS */
-	sl11_reset(sc);
+	/* Initialize controller */
+	sl11write(sc, SL811_CSOF, SL811_CSOF_MASTER | 0x2e);
+	delay_ms(40);
 
 	/* Enable interrupt */
 	sl11write(sc, SL11_IER, SL11_IER_INSERT);
@@ -416,10 +432,20 @@ slhci_attach(struct slhci_softc *sc, struct device *self)
 }
 
 int
+slhci_detach(struct slhci_softc *sc, int flags)
+{
+	int error;
+
+	if ((error = config_detach(sc->sc_child, flags)) != 0)
+		return error;
+	return 0;
+}
+
+int
 slhci_intr(void *arg)
 {
 	struct slhci_softc *sc = arg;
-	u_int8_t r;
+	uint8_t r;
 #ifdef SLHCI_DEBUG
 	char bitbuf[256];
 #endif
@@ -428,13 +454,23 @@ slhci_intr(void *arg)
 
 	sl11write(sc, SL11_ISR, SL11_ISR_DATA | SL11_ISR_SOFTIMER);
 
+	if ((r & SL11_ISR_USBA)) {
+		sl11write(sc, SL11_ISR, SL11_ISR_USBA);
+		wakeup(sc);
+	}
 	if ((r & SL11_ISR_RESET)) {
+printf("%s: device not present\n", sc->sc_bus.bdev.dv_xname);
 		sc->sc_flags |= SLF_RESET;
 		sl11write(sc, SL11_ISR, SL11_ISR_RESET);
 	}
 	if ((r & SL11_ISR_INSERT)) {
+printf("%s: device inserted\n", sc->sc_bus.bdev.dv_xname);
 		sc->sc_flags |= SLF_INSERT;
 		sl11write(sc, SL11_ISR, SL11_ISR_INSERT);
+	}
+	if ((r & SL11_ISR_BABBLE)) {
+		printf("%s: babble detect\n", sc->sc_bus.bdev.dv_xname);
+		/* XXXX: nothing? */
 	}
 
 #ifdef SLHCI_DEBUG
@@ -449,7 +485,7 @@ slhci_intr(void *arg)
 	return 0;
 }
 
-usbd_status
+static usbd_status
 slhci_open(usbd_pipe_handle pipe)
 {
 	usbd_device_handle dev = pipe->device;
@@ -495,13 +531,13 @@ slhci_open(usbd_pipe_handle pipe)
 }
 
 void
-slhci_softintr(void *arg)
+slhci_softintr(void *arg __unused)
 {
 	DPRINTF(D_TRACE, ("%s()", __FUNCTION__));
 }
 
 void
-slhci_poll(struct usbd_bus *bus)
+slhci_poll(struct usbd_bus *bus __unused)
 {
 	DPRINTF(D_TRACE, ("%s()", __FUNCTION__));
 }
@@ -510,7 +546,7 @@ slhci_poll(struct usbd_bus *bus)
  * Emulation of interrupt transfer for status change endpoint
  * of root hub.
  */
-void
+static void
 slhci_poll_hub(void *arg)
 {
 	usbd_xfer_handle xfer = arg;
@@ -542,25 +578,47 @@ slhci_poll_hub(void *arg)
 	splx(s);
 }
 
-usbd_status
-slhci_allocm(struct usbd_bus *bus, usb_dma_t *dma, u_int32_t size)
+static usbd_status
+slhci_allocm(struct usbd_bus *bus, usb_dma_t *dma, uint32_t size)
 {
-	struct slhci_softc *sc = (struct slhci_softc *)bus;
+	usb_dma_block_t *p;
+	caddr_t kaddr;
 
 	DPRINTF(D_MEM, ("SLallocm"));
-	return usb_allocmem(&sc->sc_bus, size, 0, dma);
+
+	p = malloc(sizeof *p, M_USB, M_NOWAIT);
+	if (p == NULL)
+		return USBD_NOMEM;
+	kaddr = malloc(size, M_USB, M_NOWAIT);
+	if (kaddr == NULL)
+		return USBD_NOMEM;
+
+	p->tag = 0;
+	p->map = 0;
+	p->kaddr = kaddr;
+	p->segs[0].ds_addr = 0;
+	p->segs[0].ds_len = 0;
+	p->nsegs = 1;
+	p->size = size;
+	p->align = 0;
+	p->flags = USB_DMA_FULLBLOCK;
+	dma->block = p;
+	dma->offs = 0;
+
+	return USBD_NORMAL_COMPLETION;
 }
 
-void
+static void
 slhci_freem(struct usbd_bus *bus, usb_dma_t *dma)
 {
-	struct slhci_softc *sc = (struct slhci_softc *)bus;
 
 	DPRINTF(D_MEM, ("SLfreem"));
-	usb_freemem(&sc->sc_bus, dma);
+
+	free(dma->block->kaddr, M_USB);
+	free(dma->block, M_USB);
 }
 
-usbd_xfer_handle
+static usbd_xfer_handle
 slhci_allocx(struct usbd_bus *bus)
 {
 	struct slhci_softc *sc = (struct slhci_softc *)bus;
@@ -591,7 +649,7 @@ slhci_allocx(struct usbd_bus *bus)
 	return xfer;
 }
 
-void
+static void
 slhci_freex(struct usbd_bus *bus, usbd_xfer_handle xfer)
 {
 	struct slhci_softc *sc = (struct slhci_softc *)bus;
@@ -610,7 +668,7 @@ slhci_freex(struct usbd_bus *bus, usbd_xfer_handle xfer)
 }
 
 void
-slhci_noop(usbd_pipe_handle pipe)
+slhci_noop(usbd_pipe_handle pipe __unused)
 {
 	DPRINTF(D_TRACE, ("%s()", __FUNCTION__));
 }
@@ -621,7 +679,7 @@ slhci_noop(usbd_pipe_handle pipe)
 usb_device_descriptor_t slhci_devd = {
 	USB_DEVICE_DESCRIPTOR_SIZE,
 	UDESC_DEVICE,		/* type */
-	{0x01, 0x01},			/* USB version */
+	{0x01, 0x01},		/* USB version */
 	UDCLASS_HUB,		/* class */
 	UDSUBCLASS_HUB,		/* subclass */
 	0,			/* protocol */
@@ -682,7 +740,7 @@ usb_hub_descriptor_t slhci_hubd = {
 };
 
 static int
-slhci_str(usb_string_descriptor_t *p, int l, char *s)
+slhci_str(usb_string_descriptor_t *p, int l, const char *s)
 {
 	int i;
 
@@ -698,7 +756,7 @@ slhci_str(usb_string_descriptor_t *p, int l, char *s)
 	return 2 * i + 2;
 }
 
-usbd_status
+static usbd_status
 slhci_root_ctrl_transfer(usbd_xfer_handle xfer)
 {
 	usbd_status error;
@@ -719,7 +777,7 @@ slhci_root_ctrl_transfer(usbd_xfer_handle xfer)
 	return slhci_root_ctrl_start(SIMPLEQ_FIRST(&xfer->pipe->queue));
 }
 
-usbd_status
+static usbd_status
 slhci_root_ctrl_start(usbd_xfer_handle xfer)
 {
 	struct slhci_softc *sc = (struct slhci_softc *)xfer->pipe->device->bus;
@@ -730,7 +788,7 @@ slhci_root_ctrl_start(usbd_xfer_handle xfer)
 	usb_port_status_t ps;
 	usbd_status error;
 	char slbuf[50];
-	u_int8_t r;
+	uint8_t r;
 
 	DPRINTF(D_TRACE, ("SLRCstart "));
 
@@ -758,7 +816,7 @@ slhci_root_ctrl_start(usbd_xfer_handle xfer)
 	case C(UR_GET_CONFIG, UT_READ_DEVICE):
 		DPRINTF(D_MSG, ("UR_GET_CONFIG "));
 		if (len > 0) {
-			*(u_int8_t *)buf = sc->sc_conf;
+			*(uint8_t *)buf = sc->sc_conf;
 			totlen = 1;
 		}
 		break;
@@ -798,7 +856,7 @@ slhci_root_ctrl_start(usbd_xfer_handle xfer)
 			DPRINTF(D_MSG, ("UDESC_STR "));
 			if (len == 0)
 				break;
-			*(u_int8_t *)buf = 0;
+			*(uint8_t *)buf = 0;
 			totlen = 1;
 			switch (value & 0xff) {
 			case 0:
@@ -808,7 +866,7 @@ slhci_root_ctrl_start(usbd_xfer_handle xfer)
 				break;
 			case 2:	/* Product */
 				snprintf(slbuf, sizeof(slbuf), "%s root hub",
-				    sltypestr[sc->sc_sltype]);
+				    sltypestr[sc->sc_sltype > 0]);
 				totlen = slhci_str(buf, len, slbuf);
 				break;
 			default:
@@ -825,7 +883,7 @@ slhci_root_ctrl_start(usbd_xfer_handle xfer)
 	case C(UR_GET_INTERFACE, UT_READ_INTERFACE):
 		/* Get Interface, 9.4.4 */
 		if (len > 0) {
-			*(u_int8_t *)buf = 0;
+			*(uint8_t *)buf = 0;
 			totlen = 1;
 		}
 		break;
@@ -1053,19 +1111,19 @@ slhci_root_ctrl_start(usbd_xfer_handle xfer)
 }
 
 void
-slhci_root_ctrl_abort(usbd_xfer_handle xfer)
+slhci_root_ctrl_abort(usbd_xfer_handle xfer __unused)
 {
 	DPRINTF(D_TRACE, ("SLRCabort "));
 }
 
 void
-slhci_root_ctrl_close(usbd_pipe_handle pipe)
+slhci_root_ctrl_close(usbd_pipe_handle pipe __unused)
 {
 	DPRINTF(D_TRACE, ("SLRCclose "));
 }
 
 void
-slhci_root_ctrl_done(usbd_xfer_handle xfer)
+slhci_root_ctrl_done(usbd_xfer_handle xfer __unused)
 {
 	DPRINTF(D_TRACE, ("SLRCdone\n"));
 }
@@ -1104,7 +1162,7 @@ slhci_root_intr_start(usbd_xfer_handle xfer)
 }
 
 static void
-slhci_root_intr_abort(usbd_xfer_handle xfer)
+slhci_root_intr_abort(usbd_xfer_handle xfer __unused)
 {
 	DPRINTF(D_TRACE, ("SLRIabort "));
 }
@@ -1121,7 +1179,7 @@ slhci_root_intr_close(usbd_pipe_handle pipe)
 }
 
 static void
-slhci_root_intr_done(usbd_xfer_handle xfer)
+slhci_root_intr_done(usbd_xfer_handle xfer __unused)
 {
 	//DPRINTF(D_XFER, ("RIdn "));
 }
@@ -1147,11 +1205,11 @@ slhci_device_ctrl_start(usbd_xfer_handle xfer)
 	usbd_pipe_handle pipe = xfer->pipe;
 	struct slhci_softc *sc = (struct slhci_softc *)pipe->device->bus;
 	usbd_status status =  USBD_NORMAL_COMPLETION;
-	void *buf;
+	u_char *buf;
 	int pid = SL11_PID_OUT;
-	int len, actlen, size;
+	int len, actlen, size, maxpsz;
 	int s;
-	u_int8_t toggle = 0;
+	uint8_t toggle = 0;
 
 	DPRINTF(D_TRACE, ("st "));
 #ifdef SLHCI_DEBUG
@@ -1162,6 +1220,7 @@ slhci_device_ctrl_start(usbd_xfer_handle xfer)
 	/* SETUP transaction */
 	if (slhci_transaction(sc, pipe, SL11_PID_SETUP,
 			sizeof(*req), (u_char*)req, toggle) == -1) {
+printf("SETUP error\n");
 		status = USBD_IOERROR;
 		goto ret;
 	}
@@ -1169,17 +1228,28 @@ slhci_device_ctrl_start(usbd_xfer_handle xfer)
 
 	/* DATA transaction */
 	actlen = 0;
+	maxpsz = UGETW(pipe->endpoint->edesc->wMaxPacketSize);
 	len = UGETW(req->wLength);
 	if (len) {
 		buf = KERNADDR(&xfer->dmabuf, 0);
 		if (req->bmRequestType & UT_READ)
 			pid = SL11_PID_IN;
 		for (; actlen < len; ) {
+#if 0
 			size = min(len - actlen, 8/* Minimum size */);
-			if (slhci_transaction(sc, pipe, pid, size, buf, toggle) == -1)
+#else
+#define SLHCI_MAX_PACKET_SIZE	0x80
+			size = min(len - actlen, maxpsz);
+			size = min(size, SLHCI_MAX_PACKET_SIZE);
+#endif
+			if (slhci_transaction(sc,
+			    pipe, pid, size, buf, toggle) == -1)
+{
+printf("DATA error\n");
 				break;
+}
 			toggle ^= SL11_EPCTRL_DATATOGGLE;
-			(u_char*)buf += size;
+			buf = (u_char*)buf + size;
 			actlen += size;
 		}
 	}
@@ -1190,8 +1260,12 @@ slhci_device_ctrl_start(usbd_xfer_handle xfer)
 		pid = SL11_PID_OUT;
 	else
 		pid = SL11_PID_IN;
+toggle = SL11_EPCTRL_DATATOGGLE;
 	if (slhci_transaction(sc, pipe, pid, 0, NULL, toggle) == -1)
+{
+printf("ACK error: toggle=%d\n", toggle);
 		status = USBD_IOERROR;
+}
 
  ret:
 	xfer->status = status;
@@ -1200,13 +1274,19 @@ slhci_device_ctrl_start(usbd_xfer_handle xfer)
 	if((slhci_debug & D_TRACE) && UGETW(req->wLength) > 0){
 		int i;
 		for(i=0; i < UGETW(req->wLength); i++)
-			printf("%02x", *(unsigned char*)(KERNADDR(&xfer->dmabuf, i)));
+			printf("%02x",
+			    *(unsigned char*)(KERNADDR(&xfer->dmabuf, i)));
 		printf(" ");
 	}
 #endif
 	s = splusb();
 	usb_transfer_complete(xfer);
 	splx(s);
+#if 0
+printf("slhci_device_ctrl_start: toggle=%d\n", toggle);
+printf("    : bmRequestType=0x%x, bRequest=0x%x\n", req->bmRequestType, req->bRequest);
+printf("    : wValue=0x%x, wIndex=0x%x, wLength=0x%x\n", UGETW(req->wValue), UGETW(req->wIndex), UGETW(req->wLength));
+#endif
 	return USBD_IN_PROGRESS;
 }
 
@@ -1218,13 +1298,13 @@ slhci_device_ctrl_abort(usbd_xfer_handle xfer)
 }
 
 static void
-slhci_device_ctrl_close(usbd_pipe_handle pipe)
+slhci_device_ctrl_close(usbd_pipe_handle pipe __unused)
 {
 	DPRINTF(D_TRACE, ("Ccl "));
 }
 
 static void
-slhci_device_ctrl_done(usbd_xfer_handle xfer)
+slhci_device_ctrl_done(usbd_xfer_handle xfer __unused)
 {
 	DPRINTF(D_TRACE, ("Cdn "));
 }
@@ -1330,84 +1410,84 @@ slhci_device_intr_abort(usbd_xfer_handle xfer)
 }
 
 static void
-slhci_device_intr_close(usbd_pipe_handle pipe)
+slhci_device_intr_close(usbd_pipe_handle pipe __unused)
 {
 	DPRINTF(D_TRACE, ("INTRclose "));
 }
 
 static void
-slhci_device_intr_done(usbd_xfer_handle xfer)
+slhci_device_intr_done(usbd_xfer_handle xfer __unused)
 {
 	DPRINTF(D_TRACE, ("INTRdone "));
 }
 
 static usbd_status
-slhci_device_isoc_transfer(usbd_xfer_handle xfer)
+slhci_device_isoc_transfer(usbd_xfer_handle xfer __unused)
 {
 	DPRINTF(D_TRACE, ("S"));
 	return USBD_NORMAL_COMPLETION;
 }
 
 static usbd_status
-slhci_device_isoc_start(usbd_xfer_handle xfer)
+slhci_device_isoc_start(usbd_xfer_handle xfer __unused)
 {
 	DPRINTF(D_TRACE, ("st "));
 	return USBD_NORMAL_COMPLETION;
 }
 
 static void
-slhci_device_isoc_abort(usbd_xfer_handle xfer)
+slhci_device_isoc_abort(usbd_xfer_handle xfer __unused)
 {
 	DPRINTF(D_TRACE, ("Sab "));
 }
 
 static void
-slhci_device_isoc_close(usbd_pipe_handle pipe)
+slhci_device_isoc_close(usbd_pipe_handle pipe __unused)
 {
 	DPRINTF(D_TRACE, ("Scl "));
 }
 
 static void
-slhci_device_isoc_done(usbd_xfer_handle xfer)
+slhci_device_isoc_done(usbd_xfer_handle xfer __unused)
 {
 	DPRINTF(D_TRACE, ("Sdn "));
 }
 
 static usbd_status
-slhci_device_bulk_transfer(usbd_xfer_handle xfer)
+slhci_device_bulk_transfer(usbd_xfer_handle xfer __unused)
 {
 	DPRINTF(D_TRACE, ("B"));
 	return USBD_NORMAL_COMPLETION;
 }
 
 static usbd_status
-slhci_device_bulk_start(usbd_xfer_handle xfer)
+slhci_device_bulk_start(usbd_xfer_handle xfer __unused)
 {
 	DPRINTF(D_TRACE, ("st "));
 	return USBD_NORMAL_COMPLETION;
 }
 
 static void
-slhci_device_bulk_abort(usbd_xfer_handle xfer)
+slhci_device_bulk_abort(usbd_xfer_handle xfer __unused)
 {
 	DPRINTF(D_TRACE, ("Bab "));
 }
 
 static void
-slhci_device_bulk_close(usbd_pipe_handle pipe)
+slhci_device_bulk_close(usbd_pipe_handle pipe __unused)
 {
 	DPRINTF(D_TRACE, ("Bcl "));
 }
 
 static void
-slhci_device_bulk_done(usbd_xfer_handle xfer)
+slhci_device_bulk_done(usbd_xfer_handle xfer __unused)
 {
 	DPRINTF(D_TRACE, ("Bdn "));
 }
 
 #define DATA0_RD	(0x03)
 #define DATA0_WR	(0x07)
-#define SLHCI_TIMEOUT	(5000)
+#define SLHCI_TIMEOUT	(500000)
 
 /*
  * Do a transaction.
@@ -1415,25 +1495,31 @@ slhci_device_bulk_done(usbd_xfer_handle xfer)
  */
 static int
 slhci_transaction(struct slhci_softc *sc, usbd_pipe_handle pipe,
-	u_int8_t pid, int len, u_char *buf, u_int8_t toggle)
+	uint8_t pid, int len, u_char *buf, uint8_t toggle)
 {
 #ifdef SLHCI_DEBUG
 	char str[64];
 	int i;
 #endif
-	int timeout;
 	int ls_via_hub = 0;
+#if 0
 	int pl;
-	u_int8_t isr;
-	u_int8_t result = 0;
-	u_int8_t devaddr = pipe->device->address;
-	u_int8_t endpointaddr = pipe->endpoint->edesc->bEndpointAddress;
-	u_int8_t endpoint;
-	u_int8_t cmd = DATA0_RD;
+#else
+	int fclock;
+#endif
+	int nak_cnt = 0;
+	uint8_t result = 0;
+	uint8_t devaddr = pipe->device->address;
+	uint8_t endpointaddr = pipe->endpoint->edesc->bEndpointAddress;
+	uint8_t endpoint;
+	uint8_t cmd;
 
 	endpoint = UE_GET_ADDR(endpointaddr);
-	DPRINTF(D_XFER, ("\n(%x,%d%s%d,%d) ",
-		pid, len, (pid == SL11_PID_IN) ? "<-" : "->", devaddr, endpoint));
+	DPRINTF(D_XFER, ("\n(%x,%d%s%d,%d) ", pid, len,
+	    (pid == SL11_PID_IN) ? "<-" : "->", devaddr, endpoint));
+
+retry:
+	cmd = DATA0_RD;
 
 	/* Set registers */
 	sl11write(sc, SL11_E0ADDR, 0x40);
@@ -1448,6 +1534,7 @@ slhci_transaction(struct slhci_softc *sc, usbd_pipe_handle pipe,
 		cmd = DATA0_WR;
 	}
 
+#if 0
 	/* timing ? */
 	pl = (len >> 3) + 3;
 
@@ -1468,11 +1555,31 @@ slhci_transaction(struct slhci_softc *sc, usbd_pipe_handle pipe,
 	}
 
 	/* timing ? */
-	if (sl11read(sc, SL811_CSOF) <= (u_int8_t)pl)
+	if (sl11read(sc, SL811_CSOF) <= (uint8_t)pl)
 		cmd |= SL11_EPCTRL_SOF;
+#else
+	fclock = sl11read(sc, SL811_CSOF) << 6;
+	fclock -= 100;
+	if (pipe->device->speed == USB_SPEED_LOW) {
+		/*
+		 * We necessary PREAMBLE, when communicate to a low-speed
+		 * device via hub.
+		 */
+		/* XXXXX */
+	} else {
+		fclock -= 12000 / 19;
+		if (fclock < 0 || nak_cnt > 0)
+			cmd |= SL11_EPCTRL_SOF;
+	}
+#endif
 
 	/* Transfer */
 	sl11write(sc, SL11_ISR, 0xff);
+#if 0
+{
+	int timeout;
+	uint8_t isr;
+
 	sl11write(sc, SL11_E0CTRL, cmd | toggle);
 
 	/* Polling */
@@ -1481,19 +1588,60 @@ slhci_transaction(struct slhci_softc *sc, usbd_pipe_handle pipe,
 		if ((isr & SL11_ISR_USBA))
 			break;
 	}
+	if (timeout == 0) {
+		printf("%s: transaction timeout\n", sc->sc_bus.bdev.dv_xname);
+		/* XXX */
+	}
+	DPRINTF(D_XFER, ("t=%d i=%x ", SLHCI_TIMEOUT - timeout, isr));
+}
+#else
+if (curlwp == NULL) {	/* XXXXX */
+	uint8_t isr;
+	static struct timeval t0, t1; 
+
+	sl11write(sc, SL11_E0CTRL, cmd | toggle);
+	microtime(&t1);
+#define SEC	1000000
+#define MSEC	1000
+	if ((t1.tv_usec += (20 * MSEC)) > 1 * SEC) {
+		t1.tv_sec ++;
+		t1.tv_usec -= (1 * SEC);
+	}       
+	do {    
+		microtime(&t0);
+		if (timercmp(&t0, &t1, >)) {
+			printf("%s: transaction timeout\n",
+			    sc->sc_bus.bdev.dv_xname);
+			break;
+		}
+		isr = sl11read(sc, SL11_ISR);
+	} while (!(isr & SL11_ISR_USBA));
+} else {
+	int rv;
+	uint8_t ier;
+
+	ier = sl11read(sc, SL11_IER);
+	sl11write(sc, SL11_IER, ier | SL11_IER_USBA);	/* intr done enable */
+	sl11write(sc, SL11_E0CTRL, cmd | toggle);
+	rv = tsleep(sc, PZERO, "transaction", 2 /*20ms*/);
+	sl11write(sc, SL11_IER, ier);
+	if (rv == EWOULDBLOCK) {
+		printf("%s: transaction timeout\n", sc->sc_bus.bdev.dv_xname);
+		/* XXXX */
+	} else if (rv != 0)
+		return -1;
+}
+#endif
 
 	/* Check result status */
 	result = sl11read(sc, SL11_E0STAT);
 	if (!(result & SL11_EPSTAT_NAK) && ls_via_hub) {
 		/* Resend PID_IN within 20usec */
-		sl11write(sc, SL11_ISR, 0xff);
 		sl11write(sc, SL11_E0CTRL, SL11_EPCTRL_ARM);
+		sl11write(sc, SL11_ISR, 0xff);
 	}
 
-	sl11write(sc, SL11_ISR, 0xff);
-
-	DPRINTF(D_XFER, ("t=%d i=%x ", SLHCI_TIMEOUT - timeout, isr));
-#if SLHCI_DEBUG
+#ifdef SLHCI_DEBUG
 	bitmask_snprintf(result,
 		"\20\x8STALL\7NAK\6OV\5SETUP\4DATA1\3TIMEOUT\2ERR\1ACK",
 		str, sizeof(str));
@@ -1501,24 +1649,47 @@ slhci_transaction(struct slhci_softc *sc, usbd_pipe_handle pipe,
 #endif
 
 	if ((result & SL11_EPSTAT_ERROR))
+{
+printf("EPSTAT_ERROR: result=0x%x, cmd=0x%x, toggle=%d, nak_cnt=%d\n", result, cmd, toggle, nak_cnt);
 		return -1;
+}
 
-	if ((result & SL11_EPSTAT_NAK))
+	if ((result & SL11_EPSTAT_NAK)) {
+		if (nak_cnt++ < SLHCI_NAK_RETRY_MAX)
+			goto retry;
+printf("EPSTAT_NAK: result=0x%x, cmd=0x%x, toggle=%d\n", result, cmd, toggle);
 		return 0;
+	}
 
 	/* Read buffer if PID_IN */
 	if (pid == SL11_PID_IN && len > 0) {
+#if 1
+		DELAY(400);	/* XXXX: wait for the reception completion */
+#endif
 		sl11read_region(sc, buf, 0x40, len);
-#if SLHCI_DEBUG
+#ifdef SLHCI_DEBUG
 		for (i = 0; i < len; i++)
 			DPRINTF(D_XFER, ("%02X ", buf[i]));
 #endif
 	}
+#if 0
+	else
+		DELAY(400);	/* XXXX */
+#endif
+#if 0
+{
+int i;
+printf("  len=%d, cmd=0x%x, toggle=%d: ", len, cmd, toggle);
+for (i = 0; i < len; i++)
+printf(" %02X ", buf[i]);
+printf("\n");
+}
+#endif
 
 	return 1;
 }
 
-void
+static void
 slhci_abort_xfer(usbd_xfer_handle xfer, usbd_status status)
 {
 	xfer->status = status;
@@ -1526,29 +1697,29 @@ slhci_abort_xfer(usbd_xfer_handle xfer, usbd_status status)
 }
 
 void
-slhci_device_clear_toggle(usbd_pipe_handle pipe)
+slhci_device_clear_toggle(usbd_pipe_handle pipe __unused)
 {
 	DPRINTF(D_TRACE, ("SLdevice_clear_toggle "));
 }
 
 #ifdef SLHCI_DEBUG
-void
+static void
 print_req(usb_device_request_t *r)
 {
 	char *xmes[]={
-		"GETSTAT",
-		"CLRFEAT",
-		"res",
-		"SETFEAT",
-		"res",
-		"SETADDR",
-		"GETDESC",
-		"SETDESC",
-		"GETCONF",
-		"SETCONF",
-		"GETIN/F",
-		"SETIN/F",
-		"SYNC_FR"
+		__UNCONST("GETSTAT"),
+		__UNCONST("CLRFEAT"),
+		__UNCONST("res"),
+		__UNCONST("SETFEAT"),
+		__UNCONST("res"),
+		__UNCONST("SETADDR"),
+		__UNCONST("GETDESC"),
+		__UNCONST("SETDESC"),
+		__UNCONST("GETCONF"),
+		__UNCONST("SETCONF"),
+		__UNCONST("GETIN/F"),
+		__UNCONST("SETIN/F"),
+		__UNCONST("SYNC_FR")
 	};
 	int req, type, value, index, len;
 
@@ -1562,23 +1733,23 @@ print_req(usb_device_request_t *r)
 		type, xmes[req], value, index, len);
 }
 
-void
+static void
 print_req_hub(usb_device_request_t *r)
 {
 	struct {
 		int req;
 		int type;
-		char *str;
+		const char *str;
 	} conf[] = {
-		{ 1, 0x20, "ClrHubFeat"  },
-		{ 1, 0x23, "ClrPortFeat" },
-		{ 2, 0xa3, "GetBusState" },
-		{ 6, 0xa0, "GetHubDesc"  },
-		{ 0, 0xa0, "GetHubStat"  },
-		{ 0, 0xa3, "GetPortStat" },
-		{ 7, 0x20, "SetHubDesc"  },
-		{ 3, 0x20, "SetHubFeat"  },
-		{ 3, 0x23, "SetPortFeat" },
+		{ 1, 0x20, __UNCONST("ClrHubFeat")  },
+		{ 1, 0x23, __UNCONST("ClrPortFeat") },
+		{ 2, 0xa3, __UNCONST("GetBusState") },
+		{ 6, 0xa0, __UNCONST("GetHubDesc")  },
+		{ 0, 0xa0, __UNCONST("GetHubStat")  },
+		{ 0, 0xa3, __UNCONST("GetPortStat") },
+		{ 7, 0x20, __UNCONST("SetHubDesc")  },
+		{ 3, 0x20, __UNCONST("SetHubFeat")  },
+		{ 3, 0x23, __UNCONST("SetPortFeat") },
 		{-1, 0, NULL},
 	};
 	int i;
@@ -1590,7 +1761,8 @@ print_req_hub(usb_device_request_t *r)
 	for (i = 0; ; i++) {
 		if (conf[i].req == -1 )
 			return print_req(r);
-		if (r->bmRequestType == conf[i].type && r->bRequest == conf[i].req) {
+		if (r->bmRequestType == conf[i].type &&
+		    r->bRequest == conf[i].req) {
 			printf("%s", conf[i].str);
 			break;
 		}
@@ -1598,7 +1770,7 @@ print_req_hub(usb_device_request_t *r)
 	printf(",v=%d,i=%d,l=%d ", value, index, len);
 }
 
-void
+static void
 print_dumpreg(struct slhci_softc *sc)
 {
 	printf("00=%02x,01=%02x,02=%02x,03=%02x,04=%02x,"
@@ -1615,7 +1787,7 @@ print_dumpreg(struct slhci_softc *sc)
 	);
 }
 
-void
+static void
 print_xfer(usbd_xfer_handle xfer)
 {
 	printf("xfer: length=%d, actlen=%d, flags=%x, timeout=%d,",
