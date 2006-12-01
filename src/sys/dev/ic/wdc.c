@@ -1,4 +1,4 @@
-/*	$NetBSD: wdc.c,v 1.240 2006/10/25 20:14:00 bouyer Exp $ */
+/*	$NetBSD: wdc.c,v 1.242 2006/11/20 23:42:21 bouyer Exp $ */
 
 /*
  * Copyright (c) 1998, 2001, 2003 Manuel Bouyer.  All rights reserved.
@@ -70,7 +70,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: wdc.c,v 1.240 2006/10/25 20:14:00 bouyer Exp $");
+__KERNEL_RCSID(0, "$NetBSD: wdc.c,v 1.242 2006/11/20 23:42:21 bouyer Exp $");
 
 #ifndef ATADEBUG
 #define ATADEBUG
@@ -214,7 +214,6 @@ void
 wdc_sataprobe(struct ata_channel *chp)
 {
 	struct wdc_regs *wdr = CHAN_TO_WDC_REGS(chp);
-	uint32_t scontrol, sstatus;
 	uint16_t scnt, sn, cl, ch;
 	int i, s;
 
@@ -224,38 +223,9 @@ wdc_sataprobe(struct ata_channel *chp)
 		chp->ch_drive[i].drive = i;
 	}
 
-	/* bring the PHYs online.
-	 * The work-around for errata #1 for the 31244 says that we must
-	 * write 0 to the port first to be sure of correctly initializing
-	 * the device. It doesn't hurt for other devices.
-	 */
-	bus_space_write_4(wdr->sata_iot, wdr->sata_control, 0, 0);
-	scontrol = SControl_IPM_NONE | SControl_SPD_ANY | SControl_DET_INIT;
-	bus_space_write_4 (wdr->sata_iot, wdr->sata_control, 0, scontrol);
-
-	tsleep(wdr, PRIBIO, "sataup", mstohz(50));
-	scontrol &= ~SControl_DET_INIT;
-	bus_space_write_4(wdr->sata_iot, wdr->sata_control, 0, scontrol);
-
-	tsleep(wdr, PRIBIO, "sataup", mstohz(50));
-	sstatus = bus_space_read_4(wdr->sata_iot, wdr->sata_status, 0);
-
-	switch (sstatus & SStatus_DET_mask) {
-	case SStatus_DET_NODEV:
-		/* No Device; be silent.  */
-		break;
-
-	case SStatus_DET_DEV_NE:
-		aprint_error("%s: port %d: device connected, but "
-		    "communication not established\n",
-		    chp->ch_atac->atac_dev.dv_xname, chp->ch_channel);
-		break;
-
-	case SStatus_DET_OFFLINE:
-		aprint_error("%s: port %d: PHY offline\n",
-		    chp->ch_atac->atac_dev.dv_xname, chp->ch_channel);
-		break;
-
+	/* reset the PHY and bring online */
+	switch (sata_reset_interface(chp, wdr->sata_iot, wdr->sata_control,
+	    wdr->sata_status)) {
 	case SStatus_DET_DEV:
 		bus_space_write_1(wdr->cmd_iot, wdr->cmd_iohs[wd_sdh], 0,
 		    WDSD_IBM);
@@ -283,15 +253,16 @@ wdc_sataprobe(struct ata_channel *chp)
 			chp->ch_drive[0].drive_flags |= DRIVE_ATA;
 		splx(s);
 
-		aprint_normal("%s: port %d: device present, speed: %s\n",
-		    chp->ch_atac->atac_dev.dv_xname, chp->ch_channel,
-		    sata_speed(sstatus));
+		/*
+		 * issue a reset in case only the interface part of the drive
+		 * is up
+		 */
+		if (wdcreset(chp, RESET_SLEEP) != 0)
+			chp->ch_drive[0].drive_flags = 0;
 		break;
 
 	default:
-		aprint_error("%s: port %d: unknown SStatus: 0x%08x\n",
-		    chp->ch_atac->atac_dev.dv_xname, chp->ch_channel,
-		    sstatus);
+		break;
 	}
 }
 #endif /* NSATA > 0 */

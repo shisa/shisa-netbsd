@@ -1,4 +1,4 @@
-/*	$NetBSD: ncr5380sbc.c,v 1.60 2006/10/12 01:31:01 christos Exp $	*/
+/*	$NetBSD: ncr5380sbc.c,v 1.62 2006/11/24 19:46:59 christos Exp $	*/
 
 /*
  * Copyright (c) 1995 David Jones, Gordon W. Ross
@@ -71,7 +71,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ncr5380sbc.c,v 1.60 2006/10/12 01:31:01 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ncr5380sbc.c,v 1.62 2006/11/24 19:46:59 christos Exp $");
 
 #include "opt_ddb.h"
 
@@ -1520,7 +1520,7 @@ success:
 /*
  * The message system:
  *
- * This is a revamped message system that now should easier accomodate
+ * This is a revamped message system that now should easier accommodate
  * new messages, if necessary.
  *
  * Currently we accept these messages:
@@ -2615,7 +2615,7 @@ ncr5380_attach(sc)
 }
 
 int
-ncr5380_detach(struct ncr5380_softc *sc __unused, int flags __unused)
+ncr5380_detach(struct ncr5380_softc *sc, int flags)
 {
 
 	return (EOPNOTSUPP);

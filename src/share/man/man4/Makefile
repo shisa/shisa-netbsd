@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.411 2006/10/26 21:37:08 bjh21 Exp $
+#	$NetBSD: Makefile,v 1.414 2006/11/23 04:07:07 rpaulo Exp $
 #	@(#)Makefile	8.1 (Berkeley) 6/18/93
 
 MAN=	aac.4 ac97.4 acardide.4 aceride.4 acphy.4 adc.4 adt7467c.4 adv.4 \
@@ -16,7 +16,7 @@ MAN=	aac.4 ac97.4 acardide.4 aceride.4 acphy.4 adc.4 adt7467c.4 adv.4 \
 	ddb.4 ddc.4 de.4 dge.4 dk.4 dmoverio.4 \
 	dmphy.4 dpt.4 dpti.4 drum.4 eap.4 ebus.4 edc.4 \
 	elmc.4 emuxki.4 en.4 envsys.4 ep.4 esh.4 esis.4 \
-	esa.4 esiop.4 esl.4 esm.4 eso.4 exphy.4 fast_ipsec.4 fd.4 \
+	esa.4 esiop.4 esl.4 esm.4 eso.4 etherip.4 exphy.4 fast_ipsec.4 fd.4 \
 	fpa.4 fms.4 fss.4 fxp.4 gem.4 gentbi.4 \
 	glxtphy.4 gpib.4 gpio.4 gre.4 gphyter.4 gsip.4 hifn.4 hme.4 \
 	hptide.4 icmp.4 icp.4 icsphy.4 ieee80211.4 ifmedia.4 \
@@ -32,9 +32,9 @@ MAN=	aac.4 ac97.4 acardide.4 aceride.4 acphy.4 adc.4 adt7467c.4 adv.4 \
 	optiide.4 osiop.4 pas.4 pcdisplay.4 pciide.4 \
 	pdcide.4 pdcsata.4 piixide.4 piixpm.4 pckbc.4 pckbd.4 pcn.4 pcppi.4 \
 	pcscp.4 pcweasel.4 pim.4 plip.4 pms.4 pnaphy.4 ppbus.4 ppp.4 \
-	pppoe.4 ptm.4 pty.4 puc.4 px.4 pxg.4 qe.4 qec.4 qsphy.4 \
+	pppoe.4 ptm.4 pty.4 puc.4 puffs.4 px.4 pxg.4 qe.4 qec.4 qsphy.4 \
 	raid.4 ral.4 ray.4 rcons.4 re.4 rgephy.4 rlphy.4 rnd.4 route.4 \
-	rs5c372rtc.4 rtk.4 rtw.4 \
+	rs5c372rtc.4 rtk.4 rtw.4 rum.4 \
 	satalink.4 sbus.4 scc.4 scsi.4 sd.4 se.4 sem.4 ses.4 sf.4 sfb.4 shb.4 \
 	shpcic.4 siop.4 sip.4 siside.4 sk.4 sl.4 slide.4 \
 	sm.4 spc.4 speaker.4 spif.4 sqphy.4 ss.4 \

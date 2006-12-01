@@ -1,4 +1,4 @@
-/*	$NetBSD: puffs_msgif.c,v 1.2 2006/10/25 12:04:14 pooka Exp $	*/
+/*	$NetBSD: puffs_msgif.c,v 1.8 2006/11/21 01:53:33 pooka Exp $	*/
 
 /*
  * Copyright (c) 2005, 2006  Antti Kantee.  All Rights Reserved.
@@ -33,7 +33,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: puffs_msgif.c,v 1.2 2006/10/25 12:04:14 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: puffs_msgif.c,v 1.8 2006/11/21 01:53:33 pooka Exp $");
 
 #include <sys/param.h>
 #include <sys/conf.h>
@@ -56,10 +56,10 @@ __KERNEL_RCSID(0, "$NetBSD: puffs_msgif.c,v 1.2 2006/10/25 12:04:14 pooka Exp $"
  * kernel-user-kernel waitqueues
  */
 
-static int touser(struct puffs_mount *, struct puffs_park *, unsigned int,
+static int touser(struct puffs_mount *, struct puffs_park *, uint64_t,
 		  struct vnode *, struct vnode *);
 
-unsigned int
+uint64_t
 puffs_getreqid(struct puffs_mount *pmp)
 {
 	unsigned int rv;
@@ -75,19 +75,17 @@ puffs_getreqid(struct puffs_mount *pmp)
 int
 puffs_vfstouser(struct puffs_mount *pmp, int optype, void *kbuf, size_t buflen)
 {
-	struct puffs_req preq;
 	struct puffs_park park;
 
-	memset(&preq, 0, sizeof(struct puffs_req));
+	memset(&park.park_preq, 0, sizeof(struct puffs_req));
 
-	preq.preq_opclass = PUFFSOP_VFS; 
-	preq.preq_optype = optype;
+	park.park_opclass = PUFFSOP_VFS; 
+	park.park_optype = optype;
 
 	park.park_kernbuf = kbuf;
 	park.park_buflen = buflen;
 	park.park_copylen = buflen;
 	park.park_flags = 0;
-	park.park_preq = &preq;
 
 	return touser(pmp, &park, puffs_getreqid(pmp), NULL, NULL);
 }
@@ -100,20 +98,18 @@ puffs_vntouser(struct puffs_mount *pmp, int optype,
 	void *kbuf, size_t buflen, void *cookie,
 	struct vnode *vp1, struct vnode *vp2)
 {
-	struct puffs_req preq;
 	struct puffs_park park;
 
-	memset(&preq, 0, sizeof(struct puffs_req));
+	memset(&park.park_preq, 0, sizeof(struct puffs_req));
 
-	preq.preq_opclass = PUFFSOP_VN; 
-	preq.preq_optype = optype;
-	preq.preq_cookie = cookie;
+	park.park_opclass = PUFFSOP_VN; 
+	park.park_optype = optype;
+	park.park_cookie = cookie;
 
 	park.park_kernbuf = kbuf;
 	park.park_buflen = buflen;
 	park.park_copylen = buflen;
 	park.park_flags = 0;
-	park.park_preq = &preq;
 
 	return touser(pmp, &park, puffs_getreqid(pmp), vp1, vp2);
 }
@@ -123,23 +119,21 @@ puffs_vntouser(struct puffs_mount *pmp, int optype,
  */
 int
 puffs_vntouser_req(struct puffs_mount *pmp, int optype,
-	void *kbuf, size_t buflen, void *cookie, unsigned int reqid,
+	void *kbuf, size_t buflen, void *cookie, uint64_t reqid,
 	struct vnode *vp1, struct vnode *vp2)
 {
-	struct puffs_req preq;
 	struct puffs_park park;
 
-	memset(&preq, 0, sizeof(struct puffs_req));
+	memset(&park.park_preq, 0, sizeof(struct puffs_req));
 
-	preq.preq_opclass = PUFFSOP_VN; 
-	preq.preq_optype = optype;
-	preq.preq_cookie = cookie;
+	park.park_opclass = PUFFSOP_VN; 
+	park.park_optype = optype;
+	park.park_cookie = cookie;
 
 	park.park_kernbuf = kbuf;
 	park.park_buflen = buflen;
 	park.park_copylen = buflen;
 	park.park_flags = 0;
-	park.park_preq = &preq;
 
 	return touser(pmp, &park, reqid, vp1, vp2);
 }
@@ -152,27 +146,52 @@ puffs_vntouser_adjbuf(struct puffs_mount *pmp, int optype,
 	void **kbuf, size_t *buflen, size_t copylen, void *cookie,
 	struct vnode *vp1, struct vnode *vp2)
 {
-	struct puffs_req preq;
 	struct puffs_park park;
 	int error;
 
-	memset(&preq, 0, sizeof(struct puffs_req));
+	memset(&park.park_preq, 0, sizeof(struct puffs_req));
 
-	preq.preq_opclass = PUFFSOP_VN; 
-	preq.preq_optype = optype;
-	preq.preq_cookie = cookie;
+	park.park_opclass = PUFFSOP_VN; 
+	park.park_optype = optype;
+	park.park_cookie = cookie;
 
 	park.park_kernbuf = *kbuf;
 	park.park_buflen = *buflen;
 	park.park_copylen = copylen;
 	park.park_flags = PUFFS_REQFLAG_ADJBUF;
-	park.park_preq = &preq;
 
 	error = touser(pmp, &park, puffs_getreqid(pmp), vp1, vp2);
 	*kbuf = park.park_kernbuf;
 	*buflen = park.park_buflen;
 
 	return error;
+}
+
+/*
+ * Notice: kbuf will be free'd later.  I must be allocated from the
+ * kernel heap and it's ownership is shifted to this function from
+ * now on, i.e. the caller is not allowed to use it anymore!
+ */
+void
+puffs_vntouser_faf(struct puffs_mount *pmp, int optype,
+	void *kbuf, size_t buflen, void *cookie)
+{
+	struct puffs_park *ppark;
+
+	/* XXX: is it allowable to sleep here? */
+	ppark = malloc(sizeof(struct puffs_park), M_PUFFS, M_NOWAIT | M_ZERO);
+	if (ppark == NULL)
+		return; /* 2bad */
+
+	ppark->park_opclass = PUFFSOP_VN | PUFFSOPFLAG_FAF;
+	ppark->park_optype = optype;
+	ppark->park_cookie = cookie;
+
+	ppark->park_kernbuf = kbuf;
+	ppark->park_buflen = buflen;
+	ppark->park_copylen = buflen;
+
+	(void)touser(pmp, ppark, 0, NULL, NULL);
 }
 
 /*
@@ -186,7 +205,7 @@ puffs_vntouser_adjbuf(struct puffs_mount *pmp, int optype,
  * there's a slight ugly-factor also, but let's not worry about that.
  */
 static int
-touser(struct puffs_mount *pmp, struct puffs_park *park, unsigned int reqid,
+touser(struct puffs_mount *pmp, struct puffs_park *ppark, uint64_t reqid,
 	struct vnode *vp1, struct vnode *vp2)
 {
 
@@ -197,9 +216,9 @@ touser(struct puffs_mount *pmp, struct puffs_park *park, unsigned int reqid,
 		return ENXIO;
 	}
 
-	park->park_preq->preq_id = reqid;
+	ppark->park_id = reqid;
 
-	TAILQ_INSERT_TAIL(&pmp->pmp_req_touser, park, park_entries);
+	TAILQ_INSERT_TAIL(&pmp->pmp_req_touser, ppark, park_entries);
 	pmp->pmp_req_touser_waiters++;
 
 	/*
@@ -221,14 +240,16 @@ touser(struct puffs_mount *pmp, struct puffs_park *park, unsigned int reqid,
 	/*
 	 * XXX: does releasing the lock here cause trouble?  Can't hold
 	 * it, because otherwise the below would cause locking against
-	 * oneself-problems in the kqueue stuff
+	 * oneself-problems in the kqueue stuff.  yes, it is a
+	 * theoretical race, so it must be solved
 	 */
 	simple_unlock(&pmp->pmp_lock);
 
 	wakeup(&pmp->pmp_req_touser);
 	selnotify(pmp->pmp_sel, 0);
 
-	ltsleep(park, PUSER, "puffs1", 0, NULL);
+	if (PUFFSOP_WANTREPLY(ppark->park_opclass))
+		ltsleep(ppark, PUSER, "puffs1", 0, NULL);
 
 #if 0
 	/* relock */
@@ -238,7 +259,7 @@ touser(struct puffs_mount *pmp, struct puffs_park *park, unsigned int reqid,
 		KASSERT(vn_lock(vp2, LK_EXCLUSIVE | LK_RETRY) == 0);
 #endif
 
-	return park->park_preq->preq_rv;
+	return ppark->park_rv;
 }
 
 /*
@@ -261,14 +282,14 @@ puffs_userdead(struct puffs_mount *pmp)
 
 	/* and wakeup processes waiting for a reply from userspace */
 	TAILQ_FOREACH(park, &pmp->pmp_req_replywait, park_entries) {
-		park->park_preq->preq_rv = ENXIO;
+		park->park_rv = ENXIO;
 		TAILQ_REMOVE(&pmp->pmp_req_replywait, park, park_entries);
 		wakeup(park);
 	}
 
 	/* wakeup waiters for completion of vfs/vnode requests */
 	TAILQ_FOREACH(park, &pmp->pmp_req_touser, park_entries) {
-		park->park_preq->preq_rv = ENXIO;
+		park->park_rv = ENXIO;
 		TAILQ_REMOVE(&pmp->pmp_req_touser, park, park_entries);
 		wakeup(park);
 	}
@@ -538,6 +559,7 @@ puffs_fop_close(struct file *fp, struct lwp *l)
 	struct puffs_instance *pi;
 	struct puffs_mount *pmp;
 	struct mount *mp;
+	int gone;
 
 	DPRINTF(("puffs_fop_close: device closed, force filesystem unmount\n"));
 
@@ -592,8 +614,33 @@ puffs_fop_close(struct file *fp, struct lwp *l)
 	 *
 	 * XXX Freeze syncer.  Must do this before locking the
 	 * mount point.  See dounmount() for details.
+	 *
+	 * XXX2: take a reference to the mountpoint before starting to
+	 * wait for syncer_lock.  Otherwise the mointpoint can be
+	 * wiped out while we wait.
 	 */
+	simple_lock(&mp->mnt_slock);
+	mp->mnt_wcnt++;
+	simple_unlock(&mp->mnt_slock);
+
 	lockmgr(&syncer_lock, LK_EXCLUSIVE, NULL);
+
+	simple_lock(&mp->mnt_slock);
+	mp->mnt_wcnt--;
+	if (mp->mnt_wcnt == 0)
+		wakeup(&mp->mnt_wcnt);
+	gone = mp->mnt_iflag & IMNT_GONE;
+	simple_unlock(&mp->mnt_slock);
+	if (gone) {
+		lockmgr(&syncer_lock, LK_RELEASE, NULL);
+		return 0;
+	}
+
+	/*
+	 * microscopic race condition here (although not with the current
+	 * kernel), but can't really fix it without starting a crusade
+	 * against vfs_busy(), so let it be, let it be, let it be
+	 */
 
 	/*
 	 * The only way vfs_busy() will fail for us is if the filesystem
@@ -619,6 +666,7 @@ static int
 puffs_fop_ioctl(struct file *fp, u_long cmd, void *data, struct lwp *l)
 {
 	struct puffs_mount *pmp = FPTOPMP(fp);
+	int rv;
 
 	if (pmp == PMP_EMBRYO || pmp == PMP_DEAD) {
 		printf("puffs_fop_ioctl: puffs %p, not mounted\n", pmp);
@@ -627,28 +675,32 @@ puffs_fop_ioctl(struct file *fp, u_long cmd, void *data, struct lwp *l)
 
 	switch (cmd) {
 	case PUFFSGETOP:
-		return puffsgetop(pmp, data, fp->f_flag & FNONBLOCK);
+		rv = puffsgetop(pmp, data, fp->f_flag & FNONBLOCK);
 		break;
 
 	case PUFFSPUTOP:
-		return puffsputop(pmp, data);
+		rv =  puffsputop(pmp, data);
 		break;
 
 	case PUFFSSIZEOP:
-		return puffssizeop(pmp, data);
+		rv = puffssizeop(pmp, data);
 		break;
 
-	case PUFFSMOUNTOP:
-		return puffs_start2(pmp, data);
+	case PUFFSSTARTOP:
+		rv = puffs_start2(pmp, data);
+		break;
 
 	/* already done in sys_ioctl() */
 	case FIONBIO:
-		return 0;
+		rv = 0;
+		break;
 
 	default:
-		return EINVAL;
-
+		rv = EINVAL;
+		break;
 	}
+
+	return rv;
 }
 
 static void
@@ -742,10 +794,10 @@ puffsgetop(struct puffs_mount *pmp, struct puffs_req *preq, int nonblock)
 	pmp->pmp_req_touser_waiters--;
 	simple_unlock(&pmp->pmp_lock);
 
-	preq->preq_id = park->park_preq->preq_id;
-	preq->preq_opclass = park->park_preq->preq_opclass;
-	preq->preq_optype = park->park_preq->preq_optype;
-	preq->preq_cookie = park->park_preq->preq_cookie;
+	preq->preq_id = park->park_id;
+	preq->preq_opclass = park->park_opclass;
+	preq->preq_optype = park->park_optype;
+	preq->preq_cookie = park->park_cookie;
 	preq->preq_auxlen = park->park_copylen;
 
 	if ((error = copyout(park->park_kernbuf, preq->preq_aux,
@@ -759,9 +811,15 @@ puffsgetop(struct puffs_mount *pmp, struct puffs_req *preq, int nonblock)
 		 simple_unlock(&pmp->pmp_lock);
 		 return error;
 	}
-	simple_lock(&pmp->pmp_lock);
-	TAILQ_INSERT_TAIL(&pmp->pmp_req_replywait, park, park_entries);
-	simple_unlock(&pmp->pmp_lock);
+
+	if (PUFFSOP_WANTREPLY(park->park_opclass)) {
+		simple_lock(&pmp->pmp_lock);
+		TAILQ_INSERT_TAIL(&pmp->pmp_req_replywait, park, park_entries);
+		simple_unlock(&pmp->pmp_lock);
+	} else {
+		free(park->park_kernbuf, M_PUFFS);
+		free(park, M_PUFFS);
+	}
 
 	return 0;
 }
@@ -775,7 +833,7 @@ puffsputop(struct puffs_mount *pmp, struct puffs_req *preq)
 
 	simple_lock(&pmp->pmp_lock);
 	TAILQ_FOREACH(park, &pmp->pmp_req_replywait, park_entries) {
-		if (park->park_preq->preq_id == preq->preq_id) {
+		if (park->park_id == preq->preq_id) {
 			TAILQ_REMOVE(&pmp->pmp_req_replywait, park,
 			    park_entries);
 			break;
@@ -818,9 +876,9 @@ puffsputop(struct puffs_mount *pmp, struct puffs_req *preq)
 	 */
  out:
 	if (error)
-		park->park_preq->preq_rv = error;
+		park->park_rv = error;
 	else
-		park->park_preq->preq_rv = preq->preq_rv;
+		park->park_rv = preq->preq_rv;
 	wakeup(park);
 
 	return error;

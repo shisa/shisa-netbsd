@@ -1,4 +1,4 @@
-/*	$NetBSD: puffs_vfsops.c,v 1.4 2006/10/27 12:25:16 pooka Exp $	*/
+/*	$NetBSD: puffs_vfsops.c,v 1.11 2006/11/18 19:46:32 pooka Exp $	*/
 
 /*
  * Copyright (c) 2005, 2006  Antti Kantee.  All Rights Reserved.
@@ -33,7 +33,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: puffs_vfsops.c,v 1.4 2006/10/27 12:25:16 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: puffs_vfsops.c,v 1.11 2006/11/18 19:46:32 pooka Exp $");
 
 #include <sys/param.h>
 #include <sys/mount.h>
@@ -81,6 +81,9 @@ puffs_mount(struct mount *mp, const char *path, void *data,
 	if (error)
 		return error;
 
+	/* nuke spy bits */
+	args.pa_flags &= PUFFSFLAG_MASK;
+
 	/* build real name */
 	(void)strlcpy(namebuf, "puffs:", sizeof(namebuf));
 	(void)strlcat(namebuf, args.pa_name, sizeof(namebuf));
@@ -100,11 +103,16 @@ puffs_mount(struct mount *mp, const char *path, void *data,
 	    UIO_SYSSPACE, mp, l);
 	if (error)
 		return error;
+	mp->mnt_stat.f_iosize = DEV_BSIZE;
 
 	MALLOC(pmp, struct puffs_mount *, sizeof(struct puffs_mount),
 	    M_PUFFS, M_WAITOK | M_ZERO);
 
+	mp->mnt_fs_bshift = DEV_BSHIFT;
+	mp->mnt_dev_bshift = DEV_BSHIFT;
+	mp->mnt_flag &= ~MNT_LOCAL; /* we don't really know, so ... */
 	mp->mnt_data = pmp;
+
 	pmp->pmp_status = PUFFSTAT_MOUNTING;
 	pmp->pmp_nextreq = 0;
 	pmp->pmp_mp = mp;
@@ -139,7 +147,7 @@ puffs_mount(struct mount *mp, const char *path, void *data,
  * from userspace.
  */
 int
-puffs_start2(struct puffs_mount *pmp, struct puffs_vfsreq_start *sreq)
+puffs_start2(struct puffs_mount *pmp, struct puffs_startreq *sreq)
 {
 	struct puffs_node *pn;
 	struct mount *mp;
@@ -161,9 +169,12 @@ puffs_start2(struct puffs_mount *pmp, struct puffs_vfsreq_start *sreq)
 	/* We're good to fly */
 	pmp->pmp_rootcookie = sreq->psr_cookie;
 	pmp->pmp_status = PUFFSTAT_RUNNING;
-	sreq->psr_fsidx = mp->mnt_stat.f_fsidx; 
-
 	simple_unlock(&pmp->pmp_lock);
+
+	/* do the VFS_STATVFS() we missed out on in sys_mount() */
+	copy_statvfs_info(&sreq->psr_sb, mp);
+	(void)memcpy(&mp->mnt_stat, &sreq->psr_sb, sizeof(mp->mnt_stat));
+	mp->mnt_stat.f_iosize = DEV_BSIZE;
 
 	DPRINTF(("puffs_start2: root vp %p, cur root pnode %p, cookie %p\n",
 	    pmp->pmp_root, pn, sreq->psr_cookie));
@@ -278,7 +289,7 @@ puffs_root(struct mount *mp, struct vnode **vpp)
 	 * So, didn't have the magic root vnode available.
 	 * No matter, grab another an stuff it with the cookie.
 	 */
-	if (puffs_getvnode(mp, pmp->pmp_rootcookie, VDIR, 0, &vp))
+	if (puffs_getvnode(mp, pmp->pmp_rootcookie, VDIR, 0, 0, &vp))
 		panic("sloppy programming");
 
 	simple_lock(&pmp->pmp_lock);
@@ -338,6 +349,7 @@ puffs_statvfs(struct mount *mp, struct statvfs *sbp, struct lwp *l)
 
 	error = puffs_vfstouser(pmp, PUFFS_VFS_STATVFS,
 	    statvfs_arg, sizeof(*statvfs_arg));
+	statvfs_arg->pvfsr_sb.f_iosize = DEV_BSIZE;
 
 	/*
 	 * Try to produce a sensible result even in the event
@@ -405,12 +417,23 @@ void
 puffs_init()
 {
 
+#ifdef _LKM
+	malloc_type_attach(M_PUFFS);
+	pool_init(&puffs_pnpool, sizeof(struct puffs_node), 0, 0, 0,
+	    "puffspnpl", &pool_allocator_nointr);
+#endif
+
 	return;
 }
 
 void
 puffs_done()
 {
+
+#ifdef _LKM
+	pool_destroy(&puffs_pnpool);
+	malloc_type_detach(M_PUFFS);
+#endif
 
 	return;
 }

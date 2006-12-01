@@ -1,4 +1,4 @@
-/*	$NetBSD: nfs_export.c,v 1.19 2006/10/24 21:53:11 mjf Exp $	*/
+/*	$NetBSD: nfs_export.c,v 1.22 2006/11/09 09:53:57 yamt Exp $	*/
 
 /*-
  * Copyright (c) 1997, 1998, 2004, 2005 The NetBSD Foundation, Inc.
@@ -82,7 +82,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: nfs_export.c,v 1.19 2006/10/24 21:53:11 mjf Exp $");
+__KERNEL_RCSID(0, "$NetBSD: nfs_export.c,v 1.22 2006/11/09 09:53:57 yamt Exp $");
 
 #include "opt_compat_netbsd.h"
 #include "opt_inet.h"
@@ -406,7 +406,7 @@ netexport_check(const fsid_t *fsid, struct mbuf *mb, struct mount **mpp,
  * Otherwise, returns 0 on success or an appropriate error code otherwise.
  */
 int
-nfs_update_exports_30(struct mount *mp __unused, const char *path, void *data,
+nfs_update_exports_30(struct mount *mp, const char *path, void *data,
     struct lwp *l)
 {
 	int error;
@@ -454,7 +454,7 @@ nfs_update_exports_30(struct mount *mp __unused, const char *path, void *data,
  * vfs_fhtovp operations are NULL or not.
  *
  * If successful, returns 0 and sets *mnpp to the address of the new
- * mount_netexport_pair item; otherwise returns and appropriate error code
+ * mount_netexport_pair item; otherwise returns an appropriate error code
  * and *mnpp remains unmodified.
  */
 static int
@@ -705,9 +705,6 @@ export(struct netexport *nep, const struct export_args *argp)
 	int error;
 
 	if (argp->ex_flags & MNT_EXPORTED) {
-		if (mp->mnt_flag & MNT_NOSHARE)
-			return (EPERM);
-
 		if (argp->ex_flags & MNT_EXPUBLIC) {
 			if ((error = setpublicfs(mp, nep, argp)) != 0)
 				return error;
@@ -725,7 +722,7 @@ export(struct netexport *nep, const struct export_args *argp)
  * one public filesystem is possible in the spec (RFC 2054 and 2055)
  */
 static int
-setpublicfs(struct mount *mp, struct netexport *nep __unused,
+setpublicfs(struct mount *mp, struct netexport *nep,
     const struct export_args *argp)
 {
 	char *cp;

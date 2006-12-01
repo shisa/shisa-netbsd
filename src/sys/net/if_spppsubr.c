@@ -1,4 +1,4 @@
-/*	$NetBSD: if_spppsubr.c,v 1.100 2006/10/26 15:11:22 elad Exp $	 */
+/*	$NetBSD: if_spppsubr.c,v 1.102 2006/11/24 21:23:07 wiz Exp $	 */
 
 /*
  * Synchronous PPP/Cisco link level subroutines.
@@ -41,7 +41,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_spppsubr.c,v 1.100 2006/10/26 15:11:22 elad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_spppsubr.c,v 1.102 2006/11/24 21:23:07 wiz Exp $");
 
 #include "opt_inet.h"
 #include "opt_ipx.h"
@@ -457,7 +457,7 @@ static const struct cp *cps[IDX_COUNT] = {
 void spppattach(int);
 void
 /*ARGSUSED*/
-spppattach(int count __unused)
+spppattach(int count)
 {
 }
 
@@ -676,7 +676,7 @@ queue_pkt:
  */
 static int
 sppp_output(struct ifnet *ifp, struct mbuf *m,
-    struct sockaddr *dst, struct rtentry *rt __unused)
+    struct sockaddr *dst, struct rtentry *rt)
 {
 	struct sppp *sp = (struct sppp *) ifp;
 	struct ppp_header *h = NULL;
@@ -2146,7 +2146,7 @@ sppp_lcp_RCR(struct sppp *sp, struct lcp_header *h, int len)
 		/* Sanity check option length */
 		if (p[1] > len) {
 			/*
-			 * Malicious option - drop imediately.
+			 * Malicious option - drop immediately.
 			 * XXX Maybe we should just RXJ it?
 			 */
 			addlog("%s: received malicious LCP option 0x%02x, "
@@ -2377,7 +2377,7 @@ sppp_lcp_RCN_rej(struct sppp *sp, struct lcp_header *h, int len)
 		/* Sanity check option length */
 		if (p[1] > len) {
 			/*
-			 * Malicious option - drop imediately.
+			 * Malicious option - drop immediately.
 			 * XXX Maybe we should just RXJ it?
 			 */
 			addlog("%s: received malicious LCP option, "
@@ -2452,7 +2452,7 @@ sppp_lcp_RCN_nak(struct sppp *sp, struct lcp_header *h, int len)
 		/* Sanity check option length */
 		if (p[1] > len) {
 			/*
-			 * Malicious option - drop imediately.
+			 * Malicious option - drop immediately.
 			 * XXX Maybe we should just RXJ it?
 			 */
 			addlog("%s: received malicious LCP option, "
@@ -3186,7 +3186,7 @@ sppp_ipcp_tlu(struct sppp *sp)
 }
 
 static void
-sppp_ipcp_tld(struct sppp *sp __unused)
+sppp_ipcp_tld(struct sppp *sp)
 {
 }
 
@@ -3675,7 +3675,7 @@ sppp_ipv6cp_tlu(struct sppp *sp)
 }
 
 static void
-sppp_ipv6cp_tld(struct sppp *sp __unused)
+sppp_ipv6cp_tld(struct sppp *sp)
 {
 }
 
@@ -3723,76 +3723,76 @@ sppp_ipv6cp_scr(struct sppp *sp)
 }
 #else /*INET6*/
 static void
-sppp_ipv6cp_init(struct sppp *sp __unused)
+sppp_ipv6cp_init(struct sppp *sp)
 {
 }
 
 static void
-sppp_ipv6cp_up(struct sppp *sp __unused)
+sppp_ipv6cp_up(struct sppp *sp)
 {
 }
 
 static void
-sppp_ipv6cp_down(struct sppp *sp __unused)
+sppp_ipv6cp_down(struct sppp *sp)
 {
 }
 
 static void
-sppp_ipv6cp_open(struct sppp *sp __unused)
+sppp_ipv6cp_open(struct sppp *sp)
 {
 }
 
 static void
-sppp_ipv6cp_close(struct sppp *sp __unused)
+sppp_ipv6cp_close(struct sppp *sp)
 {
 }
 
 static void
-sppp_ipv6cp_TO(void *sp __unused)
+sppp_ipv6cp_TO(void *sp)
 {
 }
 
 static int
-sppp_ipv6cp_RCR(struct sppp *sp __unused, struct lcp_header *h __unused,
-		int len __unused)
+sppp_ipv6cp_RCR(struct sppp *sp, struct lcp_header *h,
+		int len)
 {
 	return 0;
 }
 
 static void
-sppp_ipv6cp_RCN_rej(struct sppp *sp __unused, struct lcp_header *h __unused,
-		    int len __unused)
+sppp_ipv6cp_RCN_rej(struct sppp *sp, struct lcp_header *h,
+		    int len)
 {
 }
 
 static void
-sppp_ipv6cp_RCN_nak(struct sppp *sp __unused, struct lcp_header *h __unused,
-		    int len __unused)
+sppp_ipv6cp_RCN_nak(struct sppp *sp, struct lcp_header *h,
+		    int len)
 {
 }
 
 static void
-sppp_ipv6cp_tlu(struct sppp *sp __unused)
+sppp_ipv6cp_tlu(struct sppp *sp)
 {
 }
 
 static void
-sppp_ipv6cp_tld(struct sppp *sp __unused)
+sppp_ipv6cp_tld(struct sppp *sp)
 {
 }
 
 static void
-sppp_ipv6cp_tls(struct sppp *sp __unused)
+sppp_ipv6cp_tls(struct sppp *sp)
 {
 }
 
 static void
-sppp_ipv6cp_tlf(struct sppp *sp __unused)
+sppp_ipv6cp_tlf(struct sppp *sp)
 {
 }
 
 static void
-sppp_ipv6cp_scr(struct sppp *sp __unused)
+sppp_ipv6cp_scr(struct sppp *sp)
 {
 }
 #endif /*INET6*/
@@ -4746,7 +4746,7 @@ sppp_auth_send(const struct cp *cp, struct sppp *sp,
  * Send keepalive packets, every 10 seconds.
  */
 static void
-sppp_keepalive(void *dummy __unused)
+sppp_keepalive(void *dummy)
 {
 	struct sppp *sp;
 	int s;
@@ -4802,7 +4802,7 @@ sppp_keepalive(void *dummy __unused)
 				/* And now prepare LCP to reestablish the link, if configured to do so. */
 				sppp_cp_change_state(&lcp, sp, STATE_STOPPED);
 
-				/* Close connection imediatly, completition of this
+				/* Close connection immediately, completition of this
 				 * will summon the magic needed to reestablish it. */
 				if (sp->pp_tlf)
 					sp->pp_tlf(sp);
@@ -5543,7 +5543,7 @@ sppp_dotted_quad(u_int32_t addr)
 
 /* a dummy, used to drop uninteresting events */
 static void
-sppp_null(struct sppp *unused __unused)
+sppp_null(struct sppp *unused)
 {
 	/* do just nothing */
 }

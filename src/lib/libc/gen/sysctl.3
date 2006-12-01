@@ -1,4 +1,4 @@
-.\"	$NetBSD: sysctl.3,v 1.187 2006/10/19 11:48:02 yamt Exp $
+.\"	$NetBSD: sysctl.3,v 1.191 2006/11/27 17:55:12 elad Exp $
 .\"
 .\" Copyright (c) 1993
 .\"	The Regents of the University of California.  All rights reserved.
@@ -29,7 +29,7 @@
 .\"
 .\"	@(#)sysctl.3	8.4 (Berkeley) 5/9/95
 .\"
-.Dd October 19, 2006
+.Dd November 27, 2006
 .Dt SYSCTL 3
 .Os
 .Sh NAME
@@ -469,14 +469,10 @@ information.
 .It KERN\_SAVED\_IDS	integer	no
 .It KERN\_SECURELVL	integer	raise only
 .It KERN\_SYNCHRONIZED\_IO	integer	no
-.It KERN\_SYSVIPC\_INFO	node	not applicable
-.It KERN\_SYSVMSG	integer	no
-.It KERN\_SYSVSEM	integer	no
-.It KERN\_SYSVSHM	integer	no
+.It KERN\_SYSVIPC	node	not applicable
 .It KERN\_TIMEX	struct	no
 .It KERN\_TKSTAT	node	not applicable
 .It KERN\_URANDOM	integer	no
-.It KERN\_VERIEXEC	node	not applicable
 .It KERN\_VERSION	string	no
 .It KERN\_VNODE	struct vnode	no
 .El
@@ -862,11 +858,39 @@ Maximum amount of kernel memory to be used for socket buffers.
 Returns 1 if the POSIX 1003.1b Synchronized I/O Option is available
 on this system,
 otherwise 0.
+.It Li KERN_SYSVIPC
+Return information about the SysV IPC parameters. The third
+level names for the ipc variables are detailed below.
+.Bl -column "KERN_SYSVIPC_MSGXXX" "integerXXX" "noXXX" -offset indent
+.It Sy Third level name		Type		Changeable
+.It KERN\_SYSVIPC\_MSG		integer		no
+.It KERN\_SYSVIPC\_SEM		integer		no
+.It KERN\_SYSVIPC\_SHM		integer		no
+.It KERN\_SYSVIPC\_INFO		struct		no
+.It KERN\_SYSVIPC\_SHMMAX		integer		no
+.It KERN\_SYSVIPC\_SHMMNI		integer		yes
+.It KERN\_SYSVIPC\_SHMSEG		integer		yes
+.It KERN\_SYSVIPC\_SHMMAXPGS		integer		yes
+.It KERN\_SYSVIPC\_SHMUSEPHYS	integer		yes
+.El
+.Bl -tag -width "123456"
+.It Li KERN_SYSVIPC_MSG
+Returns 1 if System V style message queue functionality is available
+on this system,
+otherwise 0.
+.It Li KERN_SYSVIPC_SEM
+Returns 1 if System V style semaphore functionality is available
+on this system,
+otherwise 0.
+.It Li KERN_SYSVIPC_SHM
+Returns 1 if System V style share memory functionality is available
+on this system,
+otherwise 0.
 .It Li KERN_SYSVIPC_INFO
 Return System V style IPC configuration and run-time information.
 The third level name selects the System V style IPC facility.
 .Bl -column "KERN_SYSVIPC_MSG_INFOXXX" "struct shm_sysctl_infoXXX" -offset indent
-.It Sy Third level name	Type
+.It Sy Fourth level name	Type
 .It KERN\_SYSVIPC\_MSG\_INFO	struct msg_sysctl_info
 .It KERN\_SYSVIPC\_SEM\_INFO	struct sem_sysctl_info
 .It KERN\_SYSVIPC\_SHM\_INFO	struct shm_sysctl_info
@@ -892,18 +916,18 @@ The
 structure is defined in
 .Aq Pa sys/shm.h .
 .El
-.It Li KERN_SYSVMSG
-Returns 1 if System V style message queue functionality is available
-on this system,
-otherwise 0.
-.It Li KERN_SYSVSEM
-Returns 1 if System V style semaphore functionality is available
-on this system,
-otherwise 0.
-.It Li KERN_SYSVSHM
-Returns 1 if System V style share memory functionality is available
-on this system,
-otherwise 0.
+.It Li KERN_SYSVIPC_SHMMAX
+Max shared memory segment size in bytes.
+.It Li KERN_SYSVIPC_SHMMNI
+Max number of shared memory identifiers.
+.It Li KERN_SYSVIPC_SHMSEG
+Max shared memory segments per process.
+.It Li KERN_SYSVIPC_SHMMAXPGS
+Max amount of shared memory in pages.
+.It Li KERN_SYSVIPC_SHMUSEPHYS
+Locking of shared memory in physical memory. If 0, memory can be swaped
+out, otherwise it will be locked in physical memory.
+.El
 .It Li KERN_TIMEX
 Not available.
 .It Li KERN_TKSTAT
@@ -933,66 +957,24 @@ The number of raw input characters.
 .El
 .It Li KERN_URND
 Random integer value.
-.It Li KERN_VERIEXEC
+.It Li kern.veriexec
 Tunings for Verixec.
-Third level names for the Veriexec variables are detailed below.
-The changeable column shows whether a process with appropriate privilege may
-change the value or only raise it.
-Only the superuser can modify these variables.
-.Bl -column "VERIEXECXALGORITHMSXXX" "struct integerXXX" -offset indent
-.It Sy Third level name	Type	Changeable
-.It VERIEXEC\_ALGORITHMS	string	no
-.It VERIEXEC\_COUNT	node	not applicable
-.It VERIEXEC\_STRICT	integer	raise only
-.It VERIEXEC\_VERBOSE	integer	yes
-.El
-.Pp
-The variables are as follows:
 .Bl -tag -width "123456"
-.It Li VERIEXEC_ALGORITHMS
+.It Li kern.veriexec.algorithms
 Returns a string with the supported algorithms in Veriexec.
-.It Li VERIEXEC_COUNT
+.It Li kern.veriexec.count
 Sub-nodes are added to this node as new mounts are monitored by Veriexec.
 Each mount will be under its own
 .No tableN
 node.
 Under each node there will be three variables, indicating the mount
 point, the file-system type, and the number of entries.
-.It Li VERIEXEC_STRICT
+.It Li kern.veriexec.strict
 Controls the strict level of Veriexec.
-The strict level defines how Veriexec will treat various situations.
-.Pp
-In strict level 0, the system is in learning mode and will only warn about
-fingerprint mismatches, as well as allow removal of fingerprinted files.
-It is the only level where fingerprints can be loaded.
-.Pp
-In strict level 1, the system is in IDS mode.
-It will deny access to files with mismatched fingerprints.
-Write access to monitored files will be permitted, but once modified, further
-access to them will be denied.
-Monitored files cannot be removed.
-If a disk will be opened for raw writing, Veriexec will invalidate all
-fingerprints on that disk, if it is monitored.
-.Pp
-In strict level 2, the system is in IPS mode.
-It has all effects of
-strict level 1, plus it will deny write access to monitored files and enforce
-access type (direct, indirect, file).
-Execution of non-monitored files is denied.
-Opening of raw disks for writing will be denied if the disk is monitored.
-Attempts to write to kernel memory, either via
-.Pa /dev/mem
-or
-.Pa /dev/kmem ,
-will be denied to protect Veriexec's internal data-structures.
-.Pp
-Strict level 3 operates as lockdown mode.
-It will have all effects of
-strict level 2, but it will also prevent access to non-monitored files.
-Furthermore, it will prevent addition of new files to the system, and
-allow writing only to files opened before the strict level was raised.
-All attempts to open a disk for raw writing will be denied.
-.It Li VERIEXEC_VERBOSE
+See
+.Xr security 8
+for more information on each level's implications.
+.It Li kern.veriexec.verbose
 Controls the verbosity level of Veriexec.
 If 0, only the minimal
 indication required will be given about what's happening - fingerprint
@@ -2102,8 +2084,7 @@ These are
 .Xr mprotect 2
 restrictions to better enforce a W^X policy. The value of this
 knob must be non-zero for PaX MPROTECT to be enabled, even if a
-process is already marked with
-.Em P_PAXMPROTECT .
+program is set to explicit enable.
 .It Li security.pax.mprotect.global
 Specifies the default global policy for programs without an
 explicit enable/disable flag.
@@ -2114,6 +2095,40 @@ except those exempted with
 Otherwise, all programs will not get the PaX MPROTECT restrictions,
 except those specifically marked as such with
 .Xr paxctl 1 .
+.It Li security.pax.segvguard.enable
+Enable PaX Segvguard.
+.Pp
+Please see
+.Xr security 8
+for more information.
+.Pp
+PaX Segvguard can detect and prevent certain exploitation attempts, where
+an attacker may try for example to brute-force function return addresses
+of respawning daemons.
+.Pp
+.Em Note :
+The
+.Nx
+interface and implementation of the Segvguard is still experimental, and may
+change in future releases.
+.It Li security.pax.segvguard.global
+Specifies the default global policy for programs without an
+explicit enable/disable flag.
+.Pp
+When non-zero, all programs will get the PaX Segvguard,
+except those exempted with
+.Xr paxctl 1  .
+Otherwise, all programs will not get the PaX Segvguard restrictions,
+except those specifically marked as such with
+.Xr paxctl 1 .
+.It Li security.pax.segvguard.expiry_timeout
+If the max number was not reached within this timeout (in seconds), the entry
+will expire.
+.It Li security.pax.segvguard.suspend_timeout
+Number of seconds to suspend a user from running a faulting program when the
+limit was exceeded.
+.It Li security.pax.segvguard.max_crashes
+Max number of segfaults a program can receive before suspension.
 .El
 .El
 .Sh CTL_VENDOR

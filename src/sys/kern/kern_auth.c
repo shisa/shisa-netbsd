@@ -1,4 +1,4 @@
-/* $NetBSD: kern_auth.c,v 1.29 2006/10/22 13:07:15 pooka Exp $ */
+/* $NetBSD: kern_auth.c,v 1.32 2006/11/19 00:11:29 elad Exp $ */
 
 /*-
  * Copyright (c) 2005, 2006 Elad Efrat <elad@NetBSD.org>
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_auth.c,v 1.29 2006/10/22 13:07:15 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_auth.c,v 1.32 2006/11/19 00:11:29 elad Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -349,8 +349,7 @@ kauth_cred_group(kauth_cred_t cred, u_int idx)
 
 /* XXX elad: gmuid is unused for now. */
 int
-kauth_cred_setgroups(kauth_cred_t cred, gid_t *grbuf, size_t len,
-    uid_t gmuid __unused)
+kauth_cred_setgroups(kauth_cred_t cred, gid_t *grbuf, size_t len, uid_t gmuid)
 {
 	KASSERT(cred != NULL);
 	KASSERT(cred->cr_refcnt == 1);
@@ -662,7 +661,7 @@ kauth_deregister_scope(kauth_scope_t scope)
  */
 kauth_listener_t
 kauth_listen_scope(const char *id, kauth_scope_callback_t callback,
-    void *cookie __unused)
+   void *cookie)
 {
 	kauth_scope_t scope;
 	kauth_listener_t listener;
@@ -812,9 +811,33 @@ kauth_authorize_machdep(kauth_cred_t cred, kauth_action_t action,
 }
 
 int
+kauth_authorize_device(kauth_cred_t cred, kauth_action_t action,
+    void *arg0, void *arg1, void *arg2, void *arg3)
+{
+	return (kauth_authorize_action(kauth_builtin_scope_device, cred,
+	    action, arg0, arg1, arg2, arg3));
+}
+
+int
 kauth_authorize_device_tty(kauth_cred_t cred, kauth_action_t action,
     struct tty *tty)
 {
 	return (kauth_authorize_action(kauth_builtin_scope_device, cred,
 	    action, tty, NULL, NULL, NULL));
+}
+
+int
+kauth_authorize_device_spec(kauth_cred_t cred, enum kauth_device_req req,
+    struct vnode *vp)
+{
+	return (kauth_authorize_action(kauth_builtin_scope_device, cred,
+	    KAUTH_DEVICE_RAWIO_SPEC, (void *)req, vp, NULL, NULL));
+}
+
+int
+kauth_authorize_device_passthru(kauth_cred_t cred, dev_t dev, void *data)
+{
+	return (kauth_authorize_action(kauth_builtin_scope_device, cred,
+	    KAUTH_DEVICE_RAWIO_PASSTHRU, 0, (void *)(u_long)dev, data,
+	    NULL));
 }

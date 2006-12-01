@@ -1,4 +1,4 @@
-#	$NetBSD: BRANCHES,v 1.118 2006/10/12 19:59:07 peter Exp $
+#	$NetBSD: BRANCHES,v 1.136 2006/11/20 15:55:17 tsutsui Exp $
 #
 # This file contains a list of branches that exist in the NetBSD CVS
 # tree and their current state.
@@ -323,13 +323,33 @@ Notes:		A more flexible infrastructure for third-party packages by
 
 Branch:		rpaulo-netinet-merge-pcb
 Description:	merge in6pcb with inpcb
-Status:		Active
+Status:		Dormant
 Start Date:	Wed Feb 01 2006
 End Date:	
 Base Tag:	rpaulo-netinet-merge-pcb-base
 Maintainer:	Rui Paulo <rpaulo@NetBSD.org>
 Scope:		src/sys
-Notes:
+Notes:		No longer active due to the lack of time. If you plan to
+		continue this branch, sys/netinet/in_pcb.h already contains
+		the proposed structure layout (which was roughly discussed
+		in the tech-net mailing list).
+		I also defined INP_*() macros to mimicate FreeBSD's inpcb
+		locking style, but currently they do nothing and are not
+		yet called at the correct places (needs discussion about
+		kernel fine-grained locking).
+		To continue this branch, one needs to read all the relevant
+		inpcb/in6pcb source files and change the function names,
+		structure names, structure fileds according to the new
+		layout (in6pcb is gone).
+		Don't try to build a kernel from this branch because it won't
+		work. The missing pieces required to do a complete build
+		were not committed because they were incomplete and generated
+		panics.
+		You shouldn't need to worry about KAME syncs because
+		they did most of them by now.
+		After the work is done, you are required to test the branch
+		(before the merge to -current) with an interop IPv6 test.
+		More info at: http://www.tahi.org/
 
 Branch:		rtr-xorg-branch
 Description:	xorg & static build alterations to src/x11
@@ -385,30 +405,80 @@ Description:	finish implementing splraiseipl (and makeiplcookie).
 Status:		Active
 Start Date:	Mon Sep 18 2006
 End Date:	
-Base Tag:	yamt-splraiseipl-base
+Base Tag:	yamt-splraiseipl-base2
 Maintainer:	YAMAMOTO Takashi <yamt@NetBSD.org>
 Scope:		src/sys  (src/common is tagged but not branched)
 Notes:		
-		tested:
-			alpha, i386, xen (yamt)
-			hp300, news68k, sparc(sun4c), sun2,
-			    sun3, sun3x (tsutsui)
+		tested (by who):
+			alpha		(yamt)
+			cobalt		(tsutsui)
+			ews4800mips	(tsutsui)
+			hp300		(tsutsui)
+			i386		(yamt)
+			macppc		(tsutsui)
+			news68k		(tsutsui)
+			sparc(sun4c)	(tsutsui)
+			sun2		(tsutsui)
+			sun3		(tsutsui)
+			sun3x		(tsutsui)
+			xen		(yamt)
 
 		compile-tested:
-			amd64, sparc, sparc64 (GENERIC),
-			vax, evbarm, evbmips, evbsh3, iyonix, acorn26,
-			hp700, evbppc (marvell, ibm4xx),
-			mac68k, x68k, hpcarm, shark, acorn32,
-			cats, netwinder, algor, arc, ews4800mips, hpcmips,
-			newsmips, luna68k, cobalt, pmax, sbmips, hpcsh,
-			landisk, next68k, macppc, amiga, cesfic, sgimips
+			acorn26
+			acorn32
+			algor
+			amd64
+			amiga
+			arc
+			atari
+			cats
+			cesfic
+			evbarm
+			evbmips
+			evbppc(marvell)
+			evbppc(ibm4xx)
+			evbsh3
+			hp700
+			hpcarm
+			hpcmips
+			hpcsh
+			ia64
+			ibmnws
+			iyonix
+			landisk
+			luna68k
+			mac68k
+			netwinder
+			newsmips
+			next68k
+			pc532
+			pmax
+			prep
+			sandpoint
+			sbmips
+			sgimips
+			shark
+			sparc
+			sparc64(GENERIC)
+			vax
+			x68k
 
 		not tested:
 			pdp10 (i don't know how to build)
 			sparc64 (GENERIC.MP seems to have an unrelated problem)
 
 		notyet:
-			others
+			amigappc
+			bebox
+			dreamcast
+			mipsco
+			mmeye
+			mvme68k
+			mvmeppc
+			ofppc
+			playstation2
+			pmppc
+			sh5
 
 
 ########################################################################

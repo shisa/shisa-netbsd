@@ -1,4 +1,4 @@
-LIST OF CHANGES FROM LAST RELEASE:			<$Revision: 1.738 $>
+LIST OF CHANGES FROM LAST RELEASE:			<$Revision: 1.763 $>
 
 
 [Note: This file does not mention every change made to the NetBSD source tree.
@@ -126,6 +126,7 @@ Changes from NetBSD 4.0 to NetBSD 5.0:
 	tcp(4): Added RFC 3465 Appropriate Byte Counting (ABC) [yamt 20061019]
 	wm(4): Added support for the Intel 80003 gigabit ethernet controller.
 		[bouyer 20061021]
+	gcc(1): Update to GCC 4.1.2-20061021 snapshot.  [mrg 20061021]
 	mail(1): Mime and multi-character set handling; command line editing
 		and completion. Thanks to Anon Ymous [christos 20061021]
 	acorn32: Standard kernels now use the machine-independent sec(4)
@@ -138,3 +139,63 @@ Changes from NetBSD 4.0 to NetBSD 5.0:
 	hpcarm: Add timecounter support and convert to MI todr(9).
 		[peter 20061023]
 	less: Updated to version 394.  [mrg 20061025]
+	i386: The support for the Multiboot Specification no longer relies
+		on the a.out kludge which means that a stock GRUB (without
+		custom patches) can be used to successfully boot the kernel.
+		[jmmv 20061025]
+	file(1): update to 4.18.  [pooka 20061031]
+	puc(4): Add support for Perle PCI-RAS 4 port multimodem [manu 20061101]
+	rum(4): Added driver for Ralink 2501/2601 USB 802.11a/b/g
+		devices from OpenBSD. [joerg 20061101]
+	gkermit(1): Add gkermit, which is a program for transferring
+		files using the Kermit protocol.  gkermit has no
+		interactive commands, no scripting, and no ability to
+		make connections.  [apb 20061101]
+	i386: Change GENERIC, GENERIC.MP, GENERIC.MPACPI, GENERIC_LAPTOP,
+		INSTALL, INSTALL.MP, INSTALL_LAPTOP, and DISKLESS kernels
+		so that they are smaller and faster by removing support
+		for actual i386 CPUs (which lack write protection in
+		supervisor mode, which requires a costly workaround) and
+		math coprocessor emulation.  Coprocessor emulation is
+		retained in the LAPTOP kernels, but not in the others.
+		Where it is known that a configuration cannot be run
+		with particular CPUs (i486 in *MP kernels) remove that
+		support as well.  Compile all kernels with appropriate
+		architecture and tuning flags (reduces size, makes things
+		faster).  Those requiring support for machines with i386
+		CPU or lacking coprocessor can use the *SMALL or *TINY
+		kernels. [tls 20061101]
+	useradd(8): Change the default shell for newly added users to
+		/bin/sh. [pavel 20061102]
+	tmpfs: NFS support is now complete.  At the very least, all the
+		relevant tmpfs regression tests pass successfully when
+		executed over a remote tmpfs mounted through NFS.
+		[jmmv 20061105]
+	tmpfs: Add a LKM for this file system. [jmmv 20061105]
+	postfix: Updated to 2.3.4 [rpaulo 20061107]
+	macppc: use accelerated wsdisplay drivers [macallan 20061107]
+	evbarm: Add support for Certance CP-3100 [scw 20061108]
+	tmpfs: Audit kqueue notifications and add several regression
+		tests for them.  [jmmv 20061109]
+	vnd: Make this work with files stored on file systems without
+		the bmap and strategy operations.  This includes tmpfs
+		and smbfs.  [jmmv 20061109]
+	paxctl: Enable as a tool, and add make rules to run paxctl on
+		binaries to what PROG_PAX is set. [christos 20061110]
+	lfs_cleanerd: Move from /usr/libexec to /libexec so that the
+		root file system can be safely placed on a LFS volume.
+		[jmmv 20061110]
+	tmpfs: Drop experimental status and enable it by default in the
+		GENERIC kernels of amd64, i386, macppc and sparc64.
+		[jmmv 20061110]
+	ssp: New library modelled after the gcc libssp. Stack protector
+		code from OpenBSD. Enable stack protection both in
+		the kernel and userland code by using USE_SSP=yes in
+		/etc/mk.conf [christos 20061111]
+	uucp: Removed from base; package can be found in pkgsrc
+		[christos 20061111]
+	openssl: update to 0.9.8d [christos 20061113]
+	wm(4): Add IPv6 Rx tcp/udp checksum offloading. [yamt 20061116]
+	mac68k: Add timecounter support. [hauke 20061120]
+	tcp(4), ifconfig(8), wm(4): Add TCPv6 hardware transmit segment
+		offload support. [yamt 20061124]

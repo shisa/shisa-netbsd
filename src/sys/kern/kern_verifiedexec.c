@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_verifiedexec.c,v 1.69 2006/10/30 11:29:12 elad Exp $	*/
+/*	$NetBSD: kern_verifiedexec.c,v 1.74 2006/11/28 22:22:02 elad Exp $	*/
 
 /*-
  * Copyright 2005 Elad Efrat <elad@NetBSD.org>
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_verifiedexec.c,v 1.69 2006/10/30 11:29:12 elad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_verifiedexec.c,v 1.74 2006/11/28 22:22:02 elad Exp $");
 
 #include "opt_veriexec.h"
 
@@ -61,6 +61,8 @@ __KERNEL_RCSID(0, "$NetBSD: kern_verifiedexec.c,v 1.69 2006/10/30 11:29:12 elad 
 #include <uvm/uvm_extern.h>
 #include <sys/fileassoc.h>
 #include <sys/kauth.h>
+#include <sys/conf.h>
+#include <miscfs/specfs/specdev.h>
 
 int veriexec_verbose;
 int veriexec_strict;
@@ -75,11 +77,98 @@ int veriexec_hook;
 /* Veriexecs table of hash types and their associated information. */
 LIST_HEAD(veriexec_ops_head, veriexec_fp_ops) veriexec_ops_list;
 
+static int veriexec_raw_cb(kauth_cred_t, kauth_action_t, void *,
+    void *, void *, void *, void *);
+static int sysctl_kern_veriexec(SYSCTLFN_PROTO);
+
+/*
+ * Sysctl helper routine for Veriexec.
+ */
+static int
+sysctl_kern_veriexec(SYSCTLFN_ARGS)
+{
+	int newval, error;
+	int *var = NULL, raise_only = 0;
+	struct sysctlnode node;
+
+	node = *rnode;
+
+	if (strcmp(rnode->sysctl_name, "strict") == 0) {
+		raise_only = 1;
+		var = &veriexec_strict;
+	} else if (strcmp(rnode->sysctl_name, "algorithms") == 0) {
+		node.sysctl_data = veriexec_fp_names;
+		node.sysctl_size = strlen(veriexec_fp_names) + 1;
+		return (sysctl_lookup(SYSCTLFN_CALL(&node)));
+	} else {
+		return (EINVAL);
+	}
+
+	newval = *var;
+
+	node.sysctl_data = &newval;
+	error = sysctl_lookup(SYSCTLFN_CALL(&node));
+	if (error || newp == NULL) {
+		return (error);
+	}
+
+	if (raise_only && (newval < *var))
+		return (EPERM);
+
+	*var = newval;
+
+	return (error);
+}
+
+SYSCTL_SETUP(sysctl_security_pax_setup, "sysctl security.pax setup")
+{
+	const struct sysctlnode *rnode = NULL;
+
+	sysctl_createv(clog, 0, NULL, &rnode,
+		       CTLFLAG_PERMANENT,
+		       CTLTYPE_NODE, "kern", NULL,
+		       NULL, 0, NULL, 0,
+		       CTL_CREATE, CTL_EOL);
+
+	sysctl_createv(clog, 0, &rnode, &rnode,
+		       CTLFLAG_PERMANENT,
+		       CTLTYPE_NODE, "veriexec",
+		       SYSCTL_DESCR("Veriexec"),
+		       NULL, 0, NULL, 0,
+		       CTL_CREATE, CTL_EOL);
+
+	sysctl_createv(clog, 0, &rnode, NULL,
+		       CTLFLAG_PERMANENT|CTLFLAG_READWRITE,
+		       CTLTYPE_INT, "verbose",
+		       SYSCTL_DESCR("Veriexec verbose level"),
+		       NULL, 0, &veriexec_verbose, 0,
+		       CTL_CREATE, CTL_EOL);
+	sysctl_createv(clog, 0, &rnode, NULL,
+		       CTLFLAG_PERMANENT|CTLFLAG_READWRITE,
+		       CTLTYPE_INT, "strict",
+		       SYSCTL_DESCR("Veriexec strict level"),
+		       sysctl_kern_veriexec, 0, NULL, 0,
+		       CTL_CREATE, CTL_EOL);
+	sysctl_createv(clog, 0, &rnode, NULL,
+		       CTLFLAG_PERMANENT,
+		       CTLTYPE_STRING, "algorithms",
+		       SYSCTL_DESCR("Veriexec supported hashing "
+				    "algorithms"),
+		       sysctl_kern_veriexec, 0, NULL, 0,
+		       CTL_CREATE, CTL_EOL);
+	sysctl_createv(clog, 0, &rnode, &veriexec_count_node,
+		       CTLFLAG_PERMANENT,
+		       CTLTYPE_NODE, "count",
+		       SYSCTL_DESCR("Number of fingerprints on mount(s)"),
+		       NULL, 0, NULL, 0,
+		       CTL_CREATE, CTL_EOL);
+}
+
 /*
  * Add fingerprint names to the global list.
  */
 static void
-veriexec_add_fp_name(char *name)
+veriexec_add_fp_name(const char *name)
 {
 	char *newp;
 	unsigned int new_max;
@@ -93,7 +182,7 @@ veriexec_add_fp_name(char *name)
 	 * we can support at the moment)
 	 */
 	if (veriexec_fp_names == NULL) {
-		veriexec_name_max = (VERIEXEC_TYPE_MAXLEN + 1) * 6;
+		veriexec_name_max = 64;
 		veriexec_fp_names = malloc(veriexec_name_max, M_TEMP,
 		    M_WAITOK|M_ZERO);
 	}
@@ -102,11 +191,12 @@ veriexec_add_fp_name(char *name)
 	 * If we're running out of space for storing supported algorithms,
 	 * extend the buffer with space for four names.
 	 */
-	if ((veriexec_name_max - strlen(veriexec_fp_names)) <=
-	     VERIEXEC_TYPE_MAXLEN + 1) {
+	while (veriexec_name_max - (strlen(veriexec_fp_names) + 1) <
+	    strlen(name)) {
 		/* Add space for four algorithm names. */
-		new_max = veriexec_name_max + 4 * (VERIEXEC_TYPE_MAXLEN + 1);
-		newp = realloc(veriexec_fp_names, new_max, M_TEMP, M_WAITOK);
+		new_max = veriexec_name_max + 64;
+		newp = realloc(veriexec_fp_names, new_max, M_TEMP,
+		    M_WAITOK|M_ZERO);
 		veriexec_fp_names = newp;
 		veriexec_name_max = new_max;
 	}
@@ -130,8 +220,6 @@ int veriexec_add_fp_ops(struct veriexec_fp_ops *ops)
 	    (ops->final == NULL))
 		return (EFAULT);
 
-	ops->type[sizeof(ops->type) - 1] = '\0';
-
 	if (veriexec_find_ops(ops->type) != NULL)
 		return (EEXIST);
 
@@ -142,10 +230,10 @@ int veriexec_add_fp_ops(struct veriexec_fp_ops *ops)
 }
 
 /*
- * Initialise the internal "default" fingerprint ops vector list.
+ * Initialise Veriexec.
  */
 void
-veriexec_init_fp_ops(void)
+veriexec_init(void)
 {
 	struct veriexec_fp_ops *ops;
 
@@ -153,6 +241,11 @@ veriexec_init_fp_ops(void)
 	veriexec_hook = fileassoc_register("veriexec", veriexec_clear);
 	if (veriexec_hook == FILEASSOC_INVAL)
 		panic("Veriexec: Can't register fileassoc");
+
+	/* Register listener to handle raw disk access. */
+	if (kauth_listen_scope(KAUTH_SCOPE_DEVICE, veriexec_raw_cb, NULL) ==
+	    NULL)
+		panic("Veriexec: Can't listen on device scope");
 
 	LIST_INIT(&veriexec_ops_list);
 	veriexec_fp_names = NULL;
@@ -207,14 +300,12 @@ veriexec_init_fp_ops(void)
 }
 
 struct veriexec_fp_ops *
-veriexec_find_ops(u_char *name)
+veriexec_find_ops(const char *name)
 {
 	struct veriexec_fp_ops *ops;
 
 	if ((name == NULL) || (strlen(name) == 0))
 		return (NULL);
-
-	name[VERIEXEC_TYPE_MAXLEN - 1] = '\0';
 
 	LIST_FOREACH(ops, &veriexec_ops_list, entries) {
 		if (strncasecmp(name, ops->type, sizeof(ops->type) - 1) == 0)
@@ -705,27 +796,146 @@ veriexec_purge(struct veriexec_file_entry *vfe)
  * IDS mode: Invalidate fingerprints on a mount if it's opened for writing.
  * IPS mode: Don't allow raw writing to disks we monitor.
  * Lockdown mode: Don't allow raw writing to all disks.
+ *
+ * XXX: This is bogus. There's an obvious race condition between the time
+ * XXX: the disk is open for writing, in which an attacker can access a
+ * XXX: monitored file to get its signature cached again, and when the raw
+ * XXX: file is overwritten on disk.
+ * XXX:
+ * XXX: To solve this, we need something like the following:
+ * XXX:		open raw disk:
+ * XXX:		  - raise refcount,
+ * XXX:		  - invalidate fingerprints,
+ * XXX:		  - mark all entries for that disk with "no cache" flag
+ * XXX:
+ * XXX:		veriexec_verify:
+ * XXX:		  - if "no cache", don't cache evaluation result
+ * XXX:
+ * XXX:		close raw disk:
+ * XXX:		  - lower refcount,
+ * XXX:		  - if refcount == 0, remove "no cache" flag from all entries
  */
-int
-veriexec_rawchk(struct vnode *vp)
+static int
+veriexec_raw_cb(kauth_cred_t cred, kauth_action_t action, void *cookie,
+    void *arg0, void *arg1, void *arg2, void *arg3)
 {
-	int monitored;
+	int result;
+	enum kauth_device_req req;
+	struct veriexec_table_entry *vte;
 
-	monitored = (vp && veriexec_tblfind(vp));
+	result = KAUTH_RESULT_DEFER;
+	req = (enum kauth_device_req)arg0;
 
-	switch (veriexec_strict) {
-	case VERIEXEC_IDS:
-		if (monitored)
-			fileassoc_table_run(vp->v_mount, veriexec_hook,
+	switch (action) {
+	case KAUTH_DEVICE_RAWIO_SPEC: {
+		struct vnode *vp, *bvp;
+		dev_t dev;
+		int d_type;
+
+		if (req == KAUTH_REQ_DEVICE_RAWIO_SPEC_READ) {
+			result = KAUTH_RESULT_ALLOW;
+			break;
+		}
+
+		vp = arg1;
+
+		KASSERT(vp != NULL);
+
+		dev = vp->v_un.vu_specinfo->si_rdev;
+		d_type = D_OTHER;
+		bvp = NULL;
+
+		/* Handle /dev/mem and /dev/kmem. */
+		if ((vp->v_type == VCHR) && iskmemdev(dev)) {
+			if (veriexec_strict < VERIEXEC_IPS)
+				result = KAUTH_RESULT_ALLOW;
+
+			break;
+		}
+
+		switch (vp->v_type) {
+		case VCHR: {
+			const struct cdevsw *cdev;
+
+			cdev = cdevsw_lookup(dev);
+			if (cdev != NULL) {
+				dev_t blkdev;
+
+				blkdev = devsw_chr2blk(dev);
+				if (blkdev != NODEV) {
+					vfinddev(blkdev, VBLK, &bvp);
+					if (bvp != NULL)
+						d_type = cdev->d_type;
+				}
+			}
+
+			break;
+			}
+		case VBLK: {
+			const struct bdevsw *bdev;
+
+			bdev = bdevsw_lookup(dev);
+			if (bdev != NULL)
+				d_type = bdev->d_type;
+
+			bvp = vp;
+
+			break;
+			}
+		default:
+			result = KAUTH_RESULT_DEFER;
+			break;
+		}
+
+		if (d_type != D_DISK) {
+			result = KAUTH_RESULT_ALLOW;
+			break;
+		}
+
+		/*
+		 * XXX: See vfs_mountedon() comment in secmodel/bsd44.
+		 */
+		vte = veriexec_tblfind(bvp);
+		if (vte == NULL) {
+			result = KAUTH_RESULT_ALLOW;
+			break;
+		}
+
+		switch (veriexec_strict) {
+		case VERIEXEC_LEARNING:
+			result = KAUTH_RESULT_ALLOW;
+			break;
+		case VERIEXEC_IDS:
+			result = KAUTH_RESULT_ALLOW;
+
+			fileassoc_table_run(bvp->v_mount, veriexec_hook,
 			    (fileassoc_cb_t)veriexec_purge);
+
+			break;
+		case VERIEXEC_IPS:
+			result = KAUTH_RESULT_DENY;
+			break;
+		case VERIEXEC_LOCKDOWN:
+			result = KAUTH_RESULT_DENY;
+			break;
+		}
+
 		break;
-	case VERIEXEC_IPS:
-		if (monitored)
-			return (EPERM);
+		}
+
+	case KAUTH_DEVICE_RAWIO_PASSTHRU:
+		/* XXX What can we do here? */
+		if (veriexec_strict < VERIEXEC_IPS)
+			result = KAUTH_RESULT_ALLOW;
+		else
+			result = KAUTH_RESULT_DENY;
+
 		break;
-	case VERIEXEC_LOCKDOWN:
-		return (EPERM);
+
+	default:
+		result = KAUTH_RESULT_DEFER;
+		break;
 	}
 
-	return (0);
+	return (result);
 }

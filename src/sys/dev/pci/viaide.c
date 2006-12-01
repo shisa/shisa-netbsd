@@ -1,4 +1,4 @@
-/*	$NetBSD: viaide.c,v 1.35 2006/10/27 08:22:31 bouyer Exp $	*/
+/*	$NetBSD: viaide.c,v 1.37 2006/11/16 01:33:10 christos Exp $	*/
 
 /*
  * Copyright (c) 1999, 2000, 2001 Manuel Bouyer.
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: viaide.c,v 1.35 2006/10/27 08:22:31 bouyer Exp $");
+__KERNEL_RCSID(0, "$NetBSD: viaide.c,v 1.37 2006/11/16 01:33:10 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -303,7 +303,7 @@ viaide_lookup(pcireg_t id)
 }
 
 static int
-viaide_match(struct device *parent __unused, struct cfdata *match __unused,
+viaide_match(struct device *parent, struct cfdata *match,
     void *aux)
 {
 	struct pci_attach_args *pa = aux;
@@ -314,7 +314,7 @@ viaide_match(struct device *parent __unused, struct cfdata *match __unused,
 }
 
 static void
-viaide_attach(struct device *parent __unused, struct device *self, void *aux)
+viaide_attach(struct device *parent, struct device *self, void *aux)
 {
 	struct pci_attach_args *pa = aux;
 	struct pciide_softc *sc = (struct pciide_softc *)self;
@@ -651,6 +651,7 @@ static int
 via_sata_chip_map_common(struct pciide_softc *sc, struct pci_attach_args *pa)
 {
 	bus_size_t satasize;
+	int maptype, ret;
 
 	if (pciide_chipen(sc, pa) == 0)
 		return 0;
@@ -674,17 +675,30 @@ via_sata_chip_map_common(struct pciide_softc *sc, struct pci_attach_args *pa)
 	sc->sc_wdcdev.sc_atac.atac_set_modes = sata_setup_channel;
 
 	wdc_allocate_regs(&sc->sc_wdcdev);
-	if (pci_mapreg_map(pa, PCI_MAPREG_START + 0x14,
-	    PCI_MAPREG_TYPE_IO, 0, &sc->sc_ba5_st, &sc->sc_ba5_sh,
-	    NULL, &satasize) != 0) {
-		if (pci_mapreg_map(pa, PCI_MAPREG_START + 0x14,
+	maptype = pci_mapreg_type(pa->pa_pc, pa->pa_tag,
+	    PCI_MAPREG_START + 0x14);
+	switch(maptype) {
+	case PCI_MAPREG_TYPE_IO:
+		ret = pci_mapreg_map(pa, PCI_MAPREG_START + 0x14,
+		    PCI_MAPREG_TYPE_IO, 0, &sc->sc_ba5_st, &sc->sc_ba5_sh,
+		    NULL, &satasize);
+		break;
+	case PCI_MAPREG_MEM_TYPE_32BIT:
+		ret = pci_mapreg_map(pa, PCI_MAPREG_START + 0x14,
 		    PCI_MAPREG_TYPE_MEM | PCI_MAPREG_MEM_TYPE_32BIT,
 		    0, &sc->sc_ba5_st, &sc->sc_ba5_sh,
-		    NULL, &satasize) != 0) {
-			aprint_error("%s: couldn't map sata regs\n",
-			sc->sc_wdcdev.sc_atac.atac_dev.dv_xname);
-			return 0;
-		}
+		    NULL, &satasize);
+		break;
+	default:
+		aprint_error("%s: couldn't map sata regs, unsupported"
+		    "maptype (0x%x)\n", sc->sc_wdcdev.sc_atac.atac_dev.dv_xname,
+		    maptype);
+		return 0;
+	}
+	if (ret != 0) {
+		aprint_error("%s: couldn't map sata regs\n",
+		    sc->sc_wdcdev.sc_atac.atac_dev.dv_xname);
+		return 0;
 	}
 	return 1;
 }

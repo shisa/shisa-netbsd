@@ -1,4 +1,4 @@
-/*	$NetBSD: main.c,v 1.134 2006/10/27 21:00:19 dsl Exp $	*/
+/*	$NetBSD: main.c,v 1.137 2006/11/17 22:07:39 dsl Exp $	*/
 
 /*
  * Copyright (c) 1988, 1989, 1990, 1993
@@ -69,7 +69,7 @@
  */
 
 #ifndef MAKE_NATIVE
-static char rcsid[] = "$NetBSD: main.c,v 1.134 2006/10/27 21:00:19 dsl Exp $";
+static char rcsid[] = "$NetBSD: main.c,v 1.137 2006/11/17 22:07:39 dsl Exp $";
 #else
 #include <sys/cdefs.h>
 #ifndef lint
@@ -81,7 +81,7 @@ __COPYRIGHT("@(#) Copyright (c) 1988, 1989, 1990, 1993\n\
 #if 0
 static char sccsid[] = "@(#)main.c	8.3 (Berkeley) 3/19/94";
 #else
-__RCSID("$NetBSD: main.c,v 1.134 2006/10/27 21:00:19 dsl Exp $");
+__RCSID("$NetBSD: main.c,v 1.137 2006/11/17 22:07:39 dsl Exp $");
 #endif
 #endif /* not lint */
 #endif
@@ -191,6 +191,9 @@ static void
 parse_debug_options(const char *argvalue)
 {
 	const char *modules;
+	const char *mode;
+	char *fname;
+	int len;
 
 	for (modules = argvalue; *modules; ++modules) {
 		switch (*modules) {
@@ -254,23 +257,33 @@ parse_debug_options(const char *argvalue)
 			if (debug_file != stdout && debug_file != stderr)
 				fclose(debug_file);
 			if (*++modules == '+')
-				debug_file = fopen(++modules, "a");
+				mode = "a";
 			else {
-				if (!strcmp(modules, "stdout"))
+				if (!strcmp(modules, "stdout")) {
 					debug_file = stdout;
-				else if (!strcmp(modules, "stderr"))
+					return;
+				}
+				if (!strcmp(modules, "stderr")) {
 					debug_file = stderr;
-				else
-					debug_file = fopen(modules, "w");
+					return;
+				}
+				mode = "w";
 			}
+			len = strlen(modules);
+			fname = malloc(len + 20);
+			memcpy(fname, modules, len + 1);
+			/* Let the filename be modified by the pid */
+			if (strcmp(fname + len - 3, ".%d") == 0)
+				snprintf(fname + len - 2, 20, "%d", getpid());
+			debug_file = fopen(fname, mode);
 			if (!debug_file) {
 				fprintf(stderr, "Cannot open debug file %s",
-				    modules);
+				    fname);
 				usage();
 			}
+			free(fname);
 			/* Have this non-buffered */
-			if (debug_file != stdout && debug_file != stderr)
-				setbuf(debug_file, NULL);
+			setbuf(debug_file, NULL);
 			return;
 		default:
 			(void)fprintf(stderr,
@@ -656,7 +669,7 @@ int
 main(int argc, char **argv)
 {
 	Lst targs;	/* target nodes to create -- passed to Make_Init */
-	Boolean outOfDate = TRUE; 	/* FALSE if all targets up to date */
+	Boolean outOfDate = FALSE; 	/* FALSE if all targets up to date */
 	struct stat sb, sa;
 	char *p1, *path, *pwd;
 	char mdpath[MAXPATHLEN];
@@ -1022,8 +1035,6 @@ main(int argc, char **argv)
 
 	/*
 	 * Propagate attributes through :: dependency lists.
-	 *
-	 * Also propagate recursive dependencies for .WAIT.
 	 */
 	Targ_Propagate();
 
@@ -1105,10 +1116,7 @@ main(int argc, char **argv)
 	Job_End();
 	Trace_End();
 
-	if (queryFlag && outOfDate)
-		return(1);
-	else
-		return(0);
+	return outOfDate ? 1 : 0;
 }
 
 /*-
@@ -1628,7 +1636,7 @@ Finish(int errors)
 	Fatal("%d error%s", errors, errors == 1 ? "" : "s");
 }
 
-#ifndef MAKE_NATIVE
+#ifndef HAVE_EMALLOC
 /*
  * emalloc --
  *	malloc, but die on error.

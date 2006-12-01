@@ -1,4 +1,4 @@
-/*	$NetBSD: puffs.c,v 1.4 2006/10/26 22:53:01 pooka Exp $	*/
+/*	$NetBSD: puffs.c,v 1.8 2006/11/18 12:40:35 pooka Exp $	*/
 
 /*
  * Copyright (c) 2005, 2006  Antti Kantee.  All Rights Reserved.
@@ -34,7 +34,7 @@
 
 #include <sys/cdefs.h>
 #if !defined(lint)
-__RCSID("$NetBSD: puffs.c,v 1.4 2006/10/26 22:53:01 pooka Exp $");
+__RCSID("$NetBSD: puffs.c,v 1.8 2006/11/18 12:40:35 pooka Exp $");
 #endif /* !lint */
 
 #include <sys/param.h>
@@ -52,58 +52,67 @@ __RCSID("$NetBSD: puffs.c,v 1.4 2006/10/26 22:53:01 pooka Exp $");
 
 static int puffcall(struct puffs_usermount *, struct puffs_req *);
 
-#define eret(a) do {errno=(a);goto failfree;}while/*NOTREACHED*/(/*CONSTCOND*/0)
-
 struct puffs_usermount *
 puffs_mount(struct puffs_vfsops *pvfs, struct puffs_vnops *pvn,
 	const char *dir, int mntflags, const char *puffsname,
 	uint32_t pflags, size_t maxreqlen)
 {
+	struct puffs_startreq sreq;
 	struct puffs_args pargs;
-	struct puffs_vfsreq_start sreq;
 	struct puffs_usermount *pu;
-	int fd;
+	int fd = 0, rv;
 
-	pu = NULL;
-
-	if (pvfs->puffs_start == NULL)
-		 eret(EINVAL);
+	if (pvfs->puffs_mount == NULL) {
+		errno = EINVAL;
+		return NULL;
+	}
 
 	fd = open("/dev/puffs", O_RDONLY);
 	if (fd == -1)
 		return NULL;
 
 	pargs.pa_vers = 0; /* XXX: for now */
-	pargs.pa_flags = pflags;
+	pargs.pa_flags = PUFFSFLAG_KERN(pflags);
 	pargs.pa_fd = fd;
 	pargs.pa_maxreqlen = maxreqlen;
 	(void)strlcpy(pargs.pa_name, puffsname, sizeof(pargs.pa_name));
 
 	pu = malloc(sizeof(struct puffs_usermount));
 	if (!pu)
-		eret(ENOMEM);
+		return NULL;
 
 	pu->pu_flags = pflags;
 	pu->pu_pvfs = *pvfs;
 	pu->pu_pvn = *pvn;
 	pu->pu_fd = fd;
 	if ((pu->pu_rootpath = strdup(dir)) == NULL)
-		eret(ENOMEM);
+		goto failfree;
 	LIST_INIT(&pu->pu_pnodelst);
 
 	if (mount(MOUNT_PUFFS, dir, mntflags, &pargs) == -1)
-		return NULL;
+		goto failfree;
 	pu->pu_maxreqlen = pargs.pa_maxreqlen;
 
-	if (pu->pu_pvfs.puffs_start(pu, &sreq) != 0)
-		return NULL;
+	if ((rv = pu->pu_pvfs.puffs_mount(pu, &sreq.psr_cookie)) != 0) {
+		errno = rv;
+		goto failfree;
+	}
+
+	if ((rv = pu->pu_pvfs.puffs_statvfs(pu, &sreq.psr_sb, 0)) != 0) {
+		errno = rv;
+		goto failfree;
+	}
 
 	/* tell kernel we're flying */
-	if (ioctl(pu->pu_fd, PUFFSMOUNTOP, &sreq) == -1)
-		return NULL;
+	if (ioctl(pu->pu_fd, PUFFSSTARTOP, &sreq) == -1)
+		goto failfree;
 
 	return pu;
+
  failfree:
+	/* can't unmount() from here for obvious reasons */
+	if (fd)
+		close(fd);
 	free(pu);
 	return NULL;
 }
@@ -139,9 +148,11 @@ puffs_oneop(struct puffs_usermount *pu, uint8_t *buf, size_t buflen)
 	/* deal with it */
 	rv = puffcall(pu, &preq);
 
-	/* stuff result back to the kernel */
-	if (ioctl(pu->pu_fd, PUFFSPUTOP, &preq) == -1)
-		return -1;
+	/* stuff result back to the kernel in case required */
+	if (PUFFSOP_WANTREPLY(preq.preq_opclass)) {
+		if (ioctl(pu->pu_fd, PUFFSPUTOP, &preq) == -1)
+			return -1;
+	}
 
 	return rv;
 }
@@ -154,11 +165,11 @@ puffs_getselectable(struct puffs_usermount *pu)
 }
 
 int
-puffs_setblockingmode(struct puffs_usermount *pu, int block)
+puffs_setblockingmode(struct puffs_usermount *pu, int mode)
 {
 	int x;
 
-	x = !block;
+	x = mode;
 	return ioctl(pu->pu_fd, FIONBIO, &x);
 }
 
@@ -173,7 +184,7 @@ puffcall(struct puffs_usermount *pu, struct puffs_req *preq)
 	if (pu->pu_flags & PUFFSFLAG_OPDUMP)
 		puffsdump_req(preq);
 
-	if (preq->preq_opclass == PUFFSOP_VFS) {
+	if (PUFFSOP_OPCLASS(preq->preq_opclass) == PUFFSOP_VFS) {
 		switch (preq->preq_optype) {
 		case PUFFS_VFS_UNMOUNT:
 		{
@@ -210,7 +221,7 @@ puffcall(struct puffs_usermount *pu, struct puffs_req *preq)
 		}
 
 	/* XXX: audit return values */
-	} else if (preq->preq_opclass == PUFFSOP_VN) {
+	} else if (PUFFSOP_OPCLASS(preq->preq_opclass) == PUFFSOP_VN) {
 		switch (preq->preq_optype) {
 		case PUFFS_VN_LOOKUP:
 		{
@@ -219,7 +230,8 @@ puffcall(struct puffs_usermount *pu, struct puffs_req *preq)
 			/* lookup *must* be present */
 			error = pu->pu_pvn.puffs_lookup(pu, preq->preq_cookie,
 			    &auxt->pvnr_newnode, &auxt->pvnr_vtype,
-			    &auxt->pvnr_rdev, &auxt->pvnr_cn);
+			    &auxt->pvnr_size, &auxt->pvnr_rdev,
+			    &auxt->pvnr_cn);
 			break;
 		}
 
@@ -787,32 +799,6 @@ puffcall(struct puffs_usermount *pu, struct puffs_req *preq)
 			}
 
 			error = pu->pu_pvn.puffs_whiteout(pu,
-			    preq->preq_cookie, );
-			break;
-		}
-
-		case PUFFS_VN_GETPAGES:
-		{
-			struct puffs_vnreq_getpages *auxt = preq->preq_aux;
-			if (pu->pu_pvn.puffs_getpages == NULL) {
-				error = 0;
-				break;
-			}
-
-			error = pu->pu_pvn.puffs_getpages(pu,
-			    preq->preq_cookie, );
-			break;
-		}
-
-		case PUFFS_VN_PUTPAGES:
-		{
-			struct puffs_vnreq_putpages *auxt = preq->preq_aux;
-			if (pu->pu_pvn.puffs_putpages == NULL) {
-				error = 0;
-				break;
-			}
-
-			error = pu->pu_pvn.puffs_putpages(pu,
 			    preq->preq_cookie, );
 			break;
 		}

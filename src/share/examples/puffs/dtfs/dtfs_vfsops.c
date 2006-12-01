@@ -1,4 +1,4 @@
-/*	$NetBSD: dtfs_vfsops.c,v 1.1 2006/10/23 00:44:53 pooka Exp $	*/
+/*	$NetBSD: dtfs_vfsops.c,v 1.6 2006/11/18 12:41:06 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006  Antti Kantee.  All Rights Reserved.
@@ -29,6 +29,7 @@
  */
 
 #include <sys/types.h>
+#include <sys/resource.h>
 
 #include <err.h>
 #include <puffs.h>
@@ -39,7 +40,7 @@
 #include "dtfs.h"
 
 int
-dtfs_start(struct puffs_usermount *pu, struct puffs_vfsreq_start *arg)
+dtfs_mount(struct puffs_usermount *pu, void **rootcookie)
 {
 	struct dtfs_mount *dtm;
 	struct dtfs_file *dff;
@@ -48,7 +49,6 @@ dtfs_start(struct puffs_usermount *pu, struct puffs_vfsreq_start *arg)
 	/* create mount-local thingie */
 	dtm = emalloc(sizeof(struct dtfs_mount));
 	dtm->dtm_nextfileid = 2;
-	dtm->dtm_fsidx = arg->psr_fsidx;
 	dtm->dtm_nfiles = 1;
 	dtm->dtm_fsizes = 0;
 	pu->pu_privdata = dtm;
@@ -63,21 +63,12 @@ dtfs_start(struct puffs_usermount *pu, struct puffs_vfsreq_start *arg)
 	if (!pn)
 		errx(1, "puffs_newpnode");
 
-	dtfs_baseattrs(&pn->pn_va, VDIR, dtm->dtm_fsidx.__fsid_val[0],
-	    dtm->dtm_nextfileid);
-	dtm->dtm_nextfileid++;
+	dtfs_baseattrs(&pn->pn_va, VDIR, dtm->dtm_nextfileid++);
 	/* not adddented, so compensate */
 	pn->pn_va.va_nlink = 2;
 
 	pu->pu_rootnode = pn;
-	arg->psr_cookie = pn;
-
-	return 0;
-}
-
-int
-dtfs_unmount(struct puffs_usermount *pu, int flags, pid_t pid)
-{
+	*rootcookie = pn;
 
 	return 0;
 }
@@ -100,42 +91,43 @@ dtfs_unmount(struct puffs_usermount *pu, int flags, pid_t pid)
  * fsfilcnt_t      f_favail;        free file nodes avail to non-root
  * fsfilcnt_t      f_fresvd;        file nodes reserved for root
  *
- * fsid_t          f_fsidx;         NetBSD compatible fsid
- *
  *
  * The rest are filled in by the kernel.
  */
 #define ROUND(a,b) (((a) + ((b)-1)) & ~((b)-1))
+#define NFILES 1024*1024
 int
 dtfs_statvfs(struct puffs_usermount *pu, struct statvfs *sbp, pid_t pid)
 {
+	struct rlimit rlim;
 	struct dtfs_mount *dtm;
+	off_t btot, bfree;
 	int pgsize;
 
 	dtm = pu->pu_privdata;
 	pgsize = getpagesize();
 	memset(sbp, 0, sizeof(struct statvfs));
 
-	sbp->f_bsize = sbp->f_frsize = sbp->f_iosize = pgsize;
-	sbp->f_bfree = sbp->f_bavail = 0;
-	sbp->f_ffree = sbp->f_favail = 0;
+	/*
+	 * Use datasize rlimit as an _approximation_ for free size.
+	 * This, of course, is not accurate due to overhead and not
+	 * accounting for metadata.
+	 */
+	if (getrlimit(RLIMIT_DATA, &rlim) == 0)
+		btot = rlim.rlim_cur;
+	else
+		btot = 16*1024*1024;
+	bfree = btot - dtm->dtm_fsizes;
 
-	sbp->f_blocks = ROUND(dtm->dtm_fsizes, pgsize) / pgsize;
-	sbp->f_files = dtm->dtm_nfiles;
+	sbp->f_blocks = ROUND(btot, pgsize) / pgsize;
+	sbp->f_files = NFILES;
+
+	sbp->f_bsize = sbp->f_frsize = sbp->f_iosize = pgsize;
+	sbp->f_bfree = sbp->f_bavail = ROUND(bfree, pgsize) / pgsize;
+	sbp->f_ffree = sbp->f_favail = NFILES - dtm->dtm_nfiles;
 
 	sbp->f_bresvd = sbp->f_fresvd = 0;
-
-	sbp->f_fsidx = dtm->dtm_fsidx;
 
 	return 0;
 }
 #undef ROUND 
-
-/* we're pretty much in sync all the time */
-int
-dtfs_sync(struct puffs_usermount *pu, int waitfor,
-	const struct puffs_cred *cred, pid_t pid)
-{
-
-	return 0;
-}

@@ -1,4 +1,4 @@
-/*	$NetBSD: main.c,v 1.4 2006/09/10 21:09:48 wiz Exp $	*/
+/*	$NetBSD: main.c,v 1.6 2006/11/13 19:08:52 ad Exp $	*/
 
 /*-
  * Copyright (c) 2006 The NetBSD Foundation, Inc.
@@ -51,7 +51,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: main.c,v 1.4 2006/09/10 21:09:48 wiz Exp $");
+__RCSID("$NetBSD: main.c,v 1.6 2006/11/13 19:08:52 ad Exp $");
 #endif /* not lint */
 
 #include <sys/types.h>
@@ -97,6 +97,7 @@ typedef struct lockstruct {
  	double			times[LB_NEVENT];
 	uint32_t		counts[LB_NEVENT];
 	u_int			flags;
+	u_int			nbufs;
 } lock_t;
 
 typedef struct name {
@@ -106,10 +107,13 @@ typedef struct name {
 
 const name_t locknames[] = {
 	{ "adaptive_mutex", LB_ADAPTIVE_MUTEX },
-	{ "adaptive_rwlock", LB_ADAPTIVE_RWLOCK },
 	{ "spin_mutex", LB_SPIN_MUTEX },
-	{ "spin_rwlock", LB_SPIN_RWLOCK },
+	{ "rwlock", LB_ADAPTIVE_RWLOCK },
 	{ "lockmgr", LB_LOCKMGR },
+#ifdef LB_KERNEL_LOCK
+	/* XXX newlock2 */
+	{ "kernel_lock", LB_KERNEL_LOCK },
+#endif
 	{ NULL, 0 }
 };
 
@@ -122,15 +126,17 @@ const name_t eventnames[] = {
 const name_t alltypes[] = {
 	{ "Adaptive mutex spin", LB_ADAPTIVE_MUTEX | LB_SPIN },
 	{ "Adaptive mutex sleep", LB_ADAPTIVE_MUTEX | LB_SLEEP },
-	{ "Adaptive RW lock spin", LB_ADAPTIVE_RWLOCK | LB_SPIN },
-	{ "Adaptive RW lock sleep", LB_ADAPTIVE_RWLOCK | LB_SLEEP },
 	{ "Spin mutex spin", LB_SPIN_MUTEX | LB_SPIN },
-	{ "Spin RW lock spin", LB_SPIN_RWLOCK | LB_SPIN },
+	{ "RW lock sleep", LB_ADAPTIVE_RWLOCK | LB_SLEEP },
 	{ "lockmgr sleep", LB_LOCKMGR | LB_SLEEP },
+#ifdef LB_KERNEL_LOCK
+	/* XXX newlock2 */
+	{ "Kernel lock spin", LB_KERNEL_LOCK | LB_SPIN },
+#endif
 	{ NULL, 0 }
 };
 
-locklist_t	locklist[LB_NLOCK];
+locklist_t	locklist[LB_NLOCK >> LB_LOCK_SHIFT];
 
 lsbuf_t		*bufs;
 lsdisable_t	ld;
@@ -230,7 +236,8 @@ main(int argc, char **argv)
 		usage();
 
 	if (outf) {
-		if ((fd = open(outf, O_WRONLY | O_CREAT, 0600)) == -1)
+		fd = open(outf, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+		if (fd == -1)
 			err(EXIT_FAILURE, "opening %s", outf);
 		outfp = fdopen(fd, "w");
 	} else
@@ -465,7 +472,7 @@ findsym(findsym_t find, char *name, uintptr_t *start, uintptr_t *end)
 	}
 
 	if (rv == -1)
-		sprintf(name, "0x%016lx", (long)*start);
+		sprintf(name, "%016lx", (long)*start);
 }
 
 /*
@@ -506,7 +513,7 @@ makelists(void)
 	int i, type;
 	lock_t *l;
 
-	for (i = 0; i < LB_NLOCK; i++)
+	for (i = 0; i < LB_NLOCK >> LB_LOCK_SHIFT; i++)
 		TAILQ_INIT(&locklist[i]);
 
 	for (lb = bufs, max = bufs + nbufs; lb < max; lb++) {
@@ -526,6 +533,7 @@ makelists(void)
 			l = (lock_t *)malloc(sizeof(*l));
 			l->flags = lb->lb_flags;
 			l->lock = lb->lb_lock;
+			l->nbufs = 0;
 			memset(&l->counts, 0, sizeof(l->counts));
 			memset(&l->times, 0, sizeof(l->times));
 			TAILQ_INIT(&l->bufs);
@@ -555,8 +563,10 @@ makelists(void)
 				lb2->lb_counts[i] += lb->lb_counts[i];
 				lb2->lb_times[i] += lb->lb_times[i];
 			}
-		} else
+		} else {
 			TAILQ_INSERT_HEAD(&l->bufs, lb, lb_chain.tailq);
+			l->nbufs++;
+		}
 	}
 }
 
@@ -634,15 +644,15 @@ display(int mask, const char *name)
 	char lname[256], fname[256];
 
 	type = ((mask & LB_LOCK_MASK) >> LB_LOCK_SHIFT) - 1;
-	if (TAILQ_FIRST(&locklist[type]) == NULL)
+	if (TAILQ_EMPTY(&locklist[type]))
 		return;
 
 	event = (mask & LB_EVENT_MASK) - 1;
 	resort(type, event);
 
 	fprintf(outfp, "\n-- %s\n\n"
-	    "Total%%  Count   Time/ms         Lock                      Caller\n"
-	    "------ ------- --------- ------------------ ----------------------------------\n",
+	    "Total%%  Count   Time/ms          Lock                     Caller\n"
+	    "------ ------- --------- ---------------------- ------------------------------\n",
 	    name);
 
 	/*
@@ -674,9 +684,10 @@ display(int mask, const char *name)
 
 		findsym(LOCK_BYADDR, lname, &l->lock, NULL);
 
-		fprintf(outfp, "%6.2f %7d %9.2f %-18s <all>\n", metric,
-		    (int)(l->counts[event] * cscale),
-		    l->times[event] * tscale, lname);
+		if (lflag || l->nbufs > 1)
+			fprintf(outfp, "%6.2f %7d %9.2f %-22s <all>\n", metric,
+			    (int)(l->counts[event] * cscale),
+			    l->times[event] * tscale, lname);
 
 		if (lflag)
 			continue;
@@ -688,9 +699,8 @@ display(int mask, const char *name)
 				metric = lb->lb_times[event];
 			metric *= pcscale;
 
-			findsym(LOCK_BYADDR, lname, &lb->lb_lock, NULL);
 			findsym(FUNC_BYADDR, fname, &lb->lb_callsite, NULL);
-			fprintf(outfp, "%6.2f %7d %9.2f %-18s %s\n", metric,
+			fprintf(outfp, "%6.2f %7d %9.2f %-22s %s\n", metric,
 			    (int)(lb->lb_counts[event] * cscale),
 			    lb->lb_times[event] * tscale,
 			    lname, fname);

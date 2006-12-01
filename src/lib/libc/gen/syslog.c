@@ -1,4 +1,4 @@
-/*	$NetBSD: syslog.c,v 1.35 2006/10/27 21:36:50 christos Exp $	*/
+/*	$NetBSD: syslog.c,v 1.39 2006/11/22 17:23:25 christos Exp $	*/
 
 /*
  * Copyright (c) 1983, 1988, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)syslog.c	8.5 (Berkeley) 4/29/95";
 #else
-__RCSID("$NetBSD: syslog.c,v 1.35 2006/10/27 21:36:50 christos Exp $");
+__RCSID("$NetBSD: syslog.c,v 1.39 2006/11/22 17:23:25 christos Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
@@ -56,6 +56,7 @@ __RCSID("$NetBSD: syslog.c,v 1.35 2006/10/27 21:36:50 christos Exp $");
 #include <time.h>
 #include <unistd.h>
 #include "reentrant.h"
+#include "extern.h"
 
 #ifdef __weak_alias
 __weak_alias(closelog,_closelog)
@@ -69,6 +70,8 @@ __weak_alias(openlog_r,_openlog_r)
 __weak_alias(setlogmask_r,_setlogmask_r)
 __weak_alias(syslog_r,_syslog_r)
 __weak_alias(vsyslog_r,_vsyslog_r)
+__weak_alias(syslog_ss,_syslog_ss)
+__weak_alias(vsyslog_ss,_vsyslog_ss)
 #endif
 
 static struct syslog_data sdata = SYSLOG_DATA_INIT;
@@ -370,12 +373,13 @@ connectlog_r(struct syslog_data *data)
 		.sun_path = _PATH_LOG,
 	};
 
-	if (data->log_file == -1) {
+	if (data->log_file == -1 || fcntl(data->log_file, F_GETFL, 0) == -1) {
 		if ((data->log_file = socket(AF_UNIX, SOCK_DGRAM, 0)) == -1)
 			return;
-		(void)fcntl(data->log_file, F_SETFD, 1);
+		(void)fcntl(data->log_file, F_SETFD, FD_CLOEXEC);
+		data->connected = 0;
 	}
-	if (data->log_file != -1 && !data->connected) {
+	if (!data->connected) {
 		if (connect(data->log_file,
 		    (const struct sockaddr *)(const void *)&sun,
 		    sizeof(sun)) == -1) {

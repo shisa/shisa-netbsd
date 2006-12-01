@@ -1,4 +1,4 @@
-/*	$NetBSD: execvp.c,v 1.26 2005/11/29 03:11:59 christos Exp $	*/
+/*	$NetBSD: execvp.c,v 1.29 2006/11/09 03:57:26 christos Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)exec.c	8.1 (Berkeley) 6/4/93";
 #else
-__RCSID("$NetBSD: execvp.c,v 1.26 2005/11/29 03:11:59 christos Exp $");
+__RCSID("$NetBSD: execvp.c,v 1.29 2006/11/09 03:57:26 christos Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 

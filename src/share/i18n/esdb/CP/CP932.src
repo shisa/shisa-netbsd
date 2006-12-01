@@ -1,4 +1,4 @@
-# $NetBSD: CP932.src,v 1.2 2003/07/16 06:57:34 tshiozak Exp $
+# $NetBSD: CP932.src,v 1.4 2006/11/04 03:53:11 tnozaki Exp $
 
 NAME		"CP932"
 ENCODING	"MSKanji"

@@ -1,4 +1,4 @@
-/*	$NetBSD: netbsd32_machdep.c,v 1.63 2006/10/22 10:50:44 mrg Exp $	*/
+/*	$NetBSD: netbsd32_machdep.c,v 1.65 2006/11/21 15:02:18 christos Exp $	*/
 
 /*
  * Copyright (c) 1998, 2001 Matthew R. Green
@@ -29,7 +29,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: netbsd32_machdep.c,v 1.63 2006/10/22 10:50:44 mrg Exp $");
+__KERNEL_RCSID(0, "$NetBSD: netbsd32_machdep.c,v 1.65 2006/11/21 15:02:18 christos Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_compat_netbsd.h"

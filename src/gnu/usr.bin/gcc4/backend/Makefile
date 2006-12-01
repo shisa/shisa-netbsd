@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.6 2006/09/29 20:14:10 apb Exp $
+#	$NetBSD: Makefile,v 1.8 2006/11/20 07:13:36 skrll Exp $
 
 MKPRIVATELIB=	yes
 
@@ -186,8 +186,8 @@ auto-build.h: Makefile
 		MAKE=${MAKE:Q} \
 		CONFIG_SHELL=${HOST_SH:Q} \
 		${HOST_SH} ${GNUHOSTDIST}/gcc/configure \
-			--build=`${HOST_SH} ${.CURDIR}/../../../dist/gcc/config.guess` \
-			--host=`${HOST_SH} ${.CURDIR}/../../../dist/gcc/config.guess` \
+			--build=`${HOST_SH} ${GNUHOSTDIST}/config.guess` \
+			--host=`${HOST_SH} ${GNUHOSTDIST}/config.guess` \
 			--target=${MACHINE_GNU_PLATFORM} && \
 		mv auto-host.h ../auto-build.h) && \
 	rm -rf .ab
@@ -300,5 +300,7 @@ insn-attrtab.o: insn-config.h
 insn-extract.o: insn-config.h
 toplev.d toplev.o: options.h
 coverage.d: gcov-iov.h
+
+COPTS+=-Wno-stack-protector
 
 .PATH: ${DIST}/gcc ${DIST}/libiberty ${GCCARCH} ${G_out_file:H} ${DIST}/include

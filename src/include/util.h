@@ -1,4 +1,4 @@
-/*	$NetBSD: util.h,v 1.41 2006/08/26 18:11:12 christos Exp $	*/
+/*	$NetBSD: util.h,v 1.44 2006/11/20 20:33:33 christos Exp $	*/
 
 /*-
  * Copyright (c) 1995
@@ -40,6 +40,12 @@
 #include <termios.h>
 #include <utmp.h>
 #include <utmpx.h>
+#include <machine/ansi.h>
+
+#ifdef  _BSD_TIME_T_
+typedef _BSD_TIME_T_    time_t;
+#undef  _BSD_TIME_T_
+#endif
 
 #define	PIDLOCK_NONBLOCK	1
 #define	PIDLOCK_USEHOSTNAME	2
@@ -85,6 +91,7 @@ void		logwtmpx(const char *, const char *, const char *, int, int);
 int		opendisk(const char *, int, char *, size_t, int);
 int		openpty(int *, int *, char *, struct termios *,
 		    struct winsize *);
+time_t		parsedate(const char *, const time_t *, const int *);
 int		pidfile(const char *);
 int		pidlock(const char *, int, pid_t *, const char *);
 int		pw_abort(void);

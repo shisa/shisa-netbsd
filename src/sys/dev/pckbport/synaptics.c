@@ -1,4 +1,4 @@
-/*	$NetBSD: synaptics.c,v 1.11 2006/10/12 01:31:49 christos Exp $	*/
+/*	$NetBSD: synaptics.c,v 1.13 2006/11/16 01:33:20 christos Exp $	*/
 
 /*
  * Copyright (c) 2005, Steve C. Woodford
@@ -1052,7 +1052,7 @@ synaptics_check_edge(int x, int y)
 }
 
 static inline int
-synaptics_edge_motion(struct synaptics_softc *sc __unused, int delta, int dir)
+synaptics_edge_motion(struct synaptics_softc *sc, int delta, int dir)
 {
 
 	/*
@@ -1227,8 +1227,10 @@ pms_synaptics_process_packet(struct pms_softc *psc, struct synaptics_packet *sp)
 	 */
 	if (dx || dy || dz || changed) {
 		s = spltty();
-		wsmouse_input(psc->sc_wsmousedev, buttons, dx, dy, dz,
-		    WSMOUSE_INPUT_DELTA);
+		wsmouse_input(psc->sc_wsmousedev,
+				buttons,
+				dx, dy, dz, 0,
+		    		WSMOUSE_INPUT_DELTA);
 		splx(s);
 	}
 }

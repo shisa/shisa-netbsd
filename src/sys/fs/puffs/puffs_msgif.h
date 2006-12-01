@@ -1,4 +1,4 @@
-/*	$NetBSD: puffs_msgif.h,v 1.4 2006/10/26 22:52:47 pooka Exp $	*/
+/*	$NetBSD: puffs_msgif.h,v 1.8 2006/11/18 12:39:48 pooka Exp $	*/
 
 /*
  * Copyright (c) 2005, 2006  Antti Kantee.  All Rights Reserved.
@@ -47,6 +47,11 @@
 
 #define PUFFSOP_VFS	1
 #define PUFFSOP_VN	2
+#define PUFFSOPFLAG_FAF	0x10	/* fire-and-forget */
+
+#define PUFFSOP_OPCMASK		0x03
+#define PUFFSOP_OPCLASS(a)	((a) & PUFFSOP_OPCMASK)
+#define PUFFSOP_WANTREPLY(a)	(((a) & PUFFSOPFLAG_FAF) == 0)
 
 enum {
 	PUFFS_VFS_MOUNT,	PUFFS_VFS_START,	PUFFS_VFS_UNMOUNT,
@@ -86,8 +91,9 @@ struct puffs_args {
 	size_t		pa_maxreqlen;
 	char		pa_name[PUFFSNAMESIZE];	/* name for puffs type	*/
 };
-#define PUFFS_FLAG_ALLOWCTL	0x01	/* ioctl/fcntl commands allowed */
-#define PUFFS_FLAG_MASK		0x01
+#define PUFFSFLAG_ALLOWCTL	0x01	/* ioctl/fcntl commands allowed */
+#define PUFFSFLAG_NOCACHE	0x02	/* flush page cache immediately	*/
+#define PUFFSFLAG_MASK		0x03
 
 /*
  * This is the device minor number for the cloning device.  Make it
@@ -152,10 +158,10 @@ struct puffs_cred {
 #define PUFFCRED_CRED_FSCRED	2
 
 
-#define PUFFSGETOP	_IOWR('p', 1, struct puffs_req)
-#define PUFFSPUTOP	_IOWR('p', 2, struct puffs_req)
-#define PUFFSSIZEOP	_IOWR('p', 3, struct puffs_sizeop)
-#define PUFFSMOUNTOP	_IOWR('p', 4, struct puffs_vfsreq_start)
+#define PUFFSSTARTOP	_IOWR('p', 1, struct puffs_startreq)
+#define PUFFSGETOP	_IOWR('p', 2, struct puffs_req)
+#define PUFFSPUTOP	_IOWR('p', 3, struct puffs_req)
+#define PUFFSSIZEOP	_IOWR('p', 4, struct puffs_sizeop)
 
 /*
  * 4x MAXPHYS is the max size the system will attempt to copy,
@@ -192,9 +198,10 @@ struct puffs_cn {
 #define PUFFSLOOKUP_NOFOLLOW	0x08	/* don't follow symlinks */
 #define PUFFSLOOKUP_OPTIONS	0x0c
 
-struct puffs_vfsreq_start {
-	fsid_t	psr_fsidx;		/* fsid value */
-	void	*psr_cookie;		/* root node cookie */
+
+struct puffs_startreq {
+	void		*psr_cookie;	/* IN: root node cookie */
+	struct statvfs	psr_sb;		/* IN: statvfs buffer */
 };
 
 /*
@@ -224,6 +231,7 @@ struct puffs_vnreq_lookup {
 	struct puffs_cn		pvnr_cn;		/* OUT	*/
 	void			*pvnr_newnode;		/* IN	*/
 	enum vtype		pvnr_vtype;		/* IN	*/
+	voff_t			pvnr_size;		/* IN	*/
 	dev_t			pvnr_rdev;		/* IN	*/
 };
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: mime_child.c,v 1.1 2006/10/21 21:37:21 christos Exp $	*/
+/*	$NetBSD: mime_child.c,v 1.5 2006/11/29 01:29:46 christos Exp $	*/
 
 /*-
  * Copyright (c) 2006 The NetBSD Foundation, Inc.
@@ -41,7 +41,7 @@
 
 #include <sys/cdefs.h>
 #ifndef __lint__
-__RCSID("$NetBSD: mime_child.c,v 1.1 2006/10/21 21:37:21 christos Exp $");
+__RCSID("$NetBSD: mime_child.c,v 1.5 2006/11/29 01:29:46 christos Exp $");
 #endif /* not __lint__ */
 
 #include <assert.h>
@@ -111,7 +111,14 @@ prepare_pipe(sigset_t *nset, int p[2])
 	 * We _must_ ignore SIGINT and SIGPIPE or the child
 	 * will end up in our earlier handlers.
 	 */
-	(void)sigfillset(nset);	/* XXX - ignore all of em? */
+	(void)sigemptyset(nset);
+	(void)sigaddset(nset, SIGINT);
+	(void)sigaddset(nset, SIGPIPE);
+	(void)sigaddset(nset, SIGHUP);
+	(void)sigaddset(nset, SIGTSTP);
+	(void)sigaddset(nset, SIGTTOU);
+	(void)sigaddset(nset, SIGTTIN);
+
 	return 0;
 }
 
@@ -135,14 +142,10 @@ mime_run_command(const char *cmd, FILE *fo)
 	if ((flags & CMD_FLAG_SHELLCMD) != 0) {	/* run command under the shell */
 		char *cp;
 		char *shellcmd;
-		if ((shellcmd = value("SHELL")) == NULL)
+		if ((shellcmd = value(ENAME_SHELL)) == NULL)
 			shellcmd = __UNCONST(_PATH_CSHELL);
-		if (asprintf(&cp, "%s -c '%s'", shellcmd, cmd) == -1)
-			warn("mime_run_command: asprintf");
-		else {
-			cmd = savestr(cp);
-			free(cp);
-		}
+		(void)sasprintf(&cp, "%s -c '%s'", shellcmd, cmd);
+		cmd = cp;
 	}
 	if (prepare_pipe(&nset, p) != 0) {
 		warn("mime_run_command: prepare_pipe");

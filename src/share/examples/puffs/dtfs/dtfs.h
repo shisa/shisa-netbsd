@@ -1,4 +1,4 @@
-/*	$NetBSD: dtfs.h,v 1.4 2006/10/27 14:03:52 pooka Exp $	*/
+/*	$NetBSD: dtfs.h,v 1.6 2006/11/18 12:41:06 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006  Antti Kantee.  All Rights Reserved.
@@ -40,7 +40,6 @@ PUFFSVN_PROTOS(dtfs);
 
 struct dtfs_mount {
 	ino_t		dtm_nextfileid;	/* running number for file id	*/
-	fsid_t		dtm_fsidx;	/* fsidx from puffs_start()	*/
 
 	size_t		dtm_fsizes;	/* sum of file sizes in bytes	*/
 	fsfilcnt_t	dtm_nfiles;	/* number of files		*/
@@ -98,7 +97,7 @@ void			dtfs_setsize(struct puffs_node *, off_t, int);
 void	dtfs_adddent(struct puffs_node *, struct dtfs_dirent *);
 void	dtfs_removedent(struct puffs_node *, struct dtfs_dirent *);
 
-void	dtfs_baseattrs(struct vattr *, enum vtype, int32_t, ino_t);
+void	dtfs_baseattrs(struct vattr *, enum vtype, ino_t);
 void	dtfs_updatetimes(struct puffs_node *, int, int, int);
 
 

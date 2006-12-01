@@ -1,4 +1,4 @@
-# $NetBSD: XEN2_DOM0,v 1.13 2006/10/21 14:10:33 bouyer Exp $
+# $NetBSD: XEN2_DOM0,v 1.17 2006/11/28 16:15:37 christos Exp $
 
 include 	"arch/xen/conf/std.xen"
 
@@ -18,7 +18,7 @@ options 	DOM0OPS
 #options 	MCLSHIFT=12
 
 options 	I686_CPU
-makeoptions	COPTS="-O2 -march=i686"
+makeoptions	CPUFLAGS="-march=i686"
 
 #options 	VM86		# virtual 8086 emulation
 #options 	USER_LDT	# user-settable LDT; used by WINE
@@ -109,7 +109,7 @@ file-system 	UNION		# union file system
 file-system	CODA		# Coda File System; also needs vcoda (below)
 file-system	SMBFS		# experimental - CIFS; also needs nsmb (below)
 file-system	PTYFS		# /dev/pts/N support
-#file-system	TMPFS		# experimental - Efficient memory file-system
+file-system	TMPFS		# Efficient memory file-system
 
 # File system options
 options 	QUOTA		# UFS quotas
@@ -540,6 +540,7 @@ url*    at uhub? port ?         # Realtek RTL8150L based adapters
 # USB 802.11 adapters
 atu*    at uhub? port ?         # Atmel AT76C50XX based adapters
 ral*	at uhub? port ?		# Ralink Technology RT25x0 802.11a/b/g
+rum*	at uhub? port ?		# Ralink Technology RT2501/RT2601 802.11a/b/g
 
 # Prolific PL2301/PL2302 host-to-host adapter
 upl*    at uhub? port ?

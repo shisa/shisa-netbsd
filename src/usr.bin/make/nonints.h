@@ -1,4 +1,4 @@
-/*	$NetBSD: nonints.h,v 1.39 2006/08/26 22:19:03 christos Exp $	*/
+/*	$NetBSD: nonints.h,v 1.41 2006/11/17 22:07:39 dsl Exp $	*/
 
 /*-
  * Copyright (c) 1988, 1989, 1990, 1993
@@ -115,7 +115,7 @@ void Punt(const char *, ...)
 void DieHorribly(void) __attribute__((__noreturn__));
 int PrintAddr(ClientData, ClientData);
 void Finish(int);
-#ifndef MAKE_NATIVE
+#ifndef HAVE_EMALLOC
 char *estrdup(const char *);
 void *emalloc(size_t);
 void *erealloc(void *, size_t);
@@ -181,6 +181,7 @@ char *Targ_FmtTime(time_t);
 void Targ_PrintType(int);
 void Targ_PrintGraph(int);
 void Targ_Propagate(void);
+void Targ_Propagate_Wait(void);
 
 /* var.c */
 void Var_Delete(const char *, GNode *);

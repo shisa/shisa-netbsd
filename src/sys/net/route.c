@@ -1,4 +1,4 @@
-/*	$NetBSD: route.c,v 1.73 2006/10/12 01:32:30 christos Exp $	*/
+/*	$NetBSD: route.c,v 1.76 2006/11/16 01:33:40 christos Exp $	*/
 
 /*-
  * Copyright (c) 1998 The NetBSD Foundation, Inc.
@@ -98,7 +98,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: route.c,v 1.73 2006/10/12 01:32:30 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: route.c,v 1.76 2006/11/16 01:33:40 christos Exp $");
 
 
 #include <sys/param.h>
@@ -162,8 +162,12 @@ route_init(void)
 void
 rtalloc(struct route *ro)
 {
-	if (ro->ro_rt && ro->ro_rt->rt_ifp && (ro->ro_rt->rt_flags & RTF_UP))
-		return;				 /* XXX */
+	if (ro->ro_rt != NULL) {
+		if (ro->ro_rt->rt_ifp != NULL &&
+		    (ro->ro_rt->rt_flags & RTF_UP) != 0)
+			return;
+		RTFREE(ro->ro_rt);
+	}
 	ro->ro_rt = rtalloc1(&ro->ro_dst, 1);
 }
 
@@ -423,7 +427,7 @@ rtflushclone(struct radix_node_head *rnh, struct rtentry *parent)
  * Routing table ioctl interface.
  */
 int
-rtioctl(u_long req __unused, caddr_t data __unused, struct lwp *l __unused)
+rtioctl(u_long req, caddr_t data, struct lwp *l)
 {
 	return (EOPNOTSUPP);
 }
@@ -493,7 +497,6 @@ int
 rt_getifa(struct rt_addrinfo *info)
 {
 	struct ifaddr *ifa;
-	int error = 0;
 	const struct sockaddr *dst = info->rti_info[RTAX_DST];
 	const struct sockaddr *gateway = info->rti_info[RTAX_GATEWAY];
 	const struct sockaddr *ifaaddr = info->rti_info[RTAX_IFA];
@@ -522,12 +525,13 @@ rt_getifa(struct rt_addrinfo *info)
 		else if (sa != NULL)
 			info->rti_ifa = ifa_ifwithroute(flags, sa, sa);
 	}
-	if ((ifa = info->rti_ifa) != NULL) {
-		if (info->rti_ifp == NULL)
-			info->rti_ifp = ifa->ifa_ifp;
-	} else
-		error = ENETUNREACH;
-	return (error);
+	if ((ifa = info->rti_ifa) == NULL)
+		return ENETUNREACH;
+	if (ifa->ifa_getifa != NULL)
+		info->rti_ifa = ifa = (*ifa->ifa_getifa)(ifa, dst);
+	if (info->rti_ifp == NULL)
+		info->rti_ifp = ifa->ifa_ifp;
+	return 0;
 }
 
 int
@@ -623,8 +627,7 @@ rtrequest1(int req, struct rt_addrinfo *info, struct rtentry **ret_nrt)
 			rt_maskedcopy(dst, ndst, netmask);
 		} else
 			Bcopy(dst, ndst, dst->sa_len);
-		IFAREF(ifa);
-		rt->rt_ifa = ifa;
+		rt_set_ifa(rt, ifa);
 		rt->rt_ifp = ifa->ifa_ifp;
 		if (req == RTM_RESOLVE) {
 			rt->rt_rmx = (*ret_nrt)->rt_rmx; /* copy metrics */
@@ -791,10 +794,8 @@ rtinit(struct ifaddr *ifa, int cmd, int flags)
 				rt->rt_ifa);
 			if (rt->rt_ifa->ifa_rtrequest)
 				rt->rt_ifa->ifa_rtrequest(RTM_DELETE, rt, NULL);
-			IFAFREE(rt->rt_ifa);
-			rt->rt_ifa = ifa;
+			rt_replace_ifa(rt, ifa);
 			rt->rt_ifp = ifa->ifa_ifp;
-			IFAREF(ifa);
 			if (ifa->ifa_rtrequest)
 				ifa->ifa_rtrequest(RTM_ADD, rt, NULL);
 		}
@@ -977,7 +978,7 @@ rt_timer_add(struct rtentry *rt,
 
 /* ARGSUSED */
 void
-rt_timer_timer(void *arg __unused)
+rt_timer_timer(void *arg)
 {
 	struct rttimer_queue *rtq;
 	struct rttimer *r;

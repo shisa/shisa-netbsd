@@ -1,4 +1,4 @@
-/*	$NetBSD: puffs_sys.h,v 1.3 2006/10/27 12:25:16 pooka Exp $	*/
+/*	$NetBSD: puffs_sys.h,v 1.9 2006/11/18 08:18:24 pooka Exp $	*/
 
 /*
  * Copyright (c) 2005, 2006  Antti Kantee.  All Rights Reserved.
@@ -41,8 +41,11 @@
 #include <sys/lock.h>
 #include <sys/queue.h>
 #include <sys/lock.h>
+#include <sys/pool.h>
 
 #include <fs/puffs/puffs_msgif.h>
+
+#include <miscfs/genfs/genfs_node.h>
 
 extern int (**puffs_vnodeop_p)(void *);
 extern int (**puffs_specop_p)(void *);
@@ -52,12 +55,14 @@ extern const struct vnodeopv_desc puffs_vnodeop_opv_desc;
 extern const struct vnodeopv_desc puffs_specop_opv_desc;
 extern const struct vnodeopv_desc puffs_fifoop_opv_desc;
 
+extern struct pool puffs_pnpool;
+
 /*
  * While a request is going to userspace, park the caller within the
  * kernel.  This is the kernel counterpart of "struct puffs_req".
  */
 struct puffs_park {
-	struct puffs_req *park_preq;	/* the relevant preq		*/
+	struct puffs_req park_preq;	/* the relevant preq		*/
 
 	void		*park_kernbuf;	/* kernel buffer address	*/
 	size_t		park_buflen;	/* buffer length		*/
@@ -67,6 +72,12 @@ struct puffs_park {
 
 	TAILQ_ENTRY(puffs_park) park_entries;
 };
+#define park_id		park_preq.preq_id
+#define park_opclass	park_preq.preq_opclass
+#define park_optype	park_preq.preq_optype
+#define park_cookie	park_preq.preq_cookie
+#define park_rv		park_preq.preq_rv
+
 
 #define PUFFS_SIZEOPREQ_UIO_IN 1
 #define PUFFS_SIZEOPREQ_UIO_OUT 2
@@ -123,6 +134,8 @@ struct puffs_mount {
 	unsigned int			pmp_nextreq;
 	uint8_t				pmp_status;
 };
+#define pmp_flags pmp_args.pa_flags
+
 #define PUFFSTAT_BEFOREINIT	0
 #define PUFFSTAT_MOUNTING	1
 #define PUFFSTAT_RUNNING	2
@@ -132,6 +145,8 @@ struct puffs_mount {
 #define PNODE_LOCKED	0x02
 #define PNODE_WANTED	0x04	
 struct puffs_node {
+	struct genfs_node pn_gnode;	/* genfs glue			*/
+
 	void		*pn_cookie;	/* userspace pnode cookie	*/
 	struct vnode	*pn_vp;		/* backpointer to vnode		*/
 	uint32_t	pn_stat;	/* node status			*/
@@ -139,18 +154,18 @@ struct puffs_node {
 	LIST_ENTRY(puffs_node) pn_entries;
 };
 
-int	puffs_start2(struct puffs_mount *, struct puffs_vfsreq_start *);
+int	puffs_start2(struct puffs_mount *, struct puffs_startreq *);
 
 int	puffs_vfstouser(struct puffs_mount *, int, void *, size_t);
 int	puffs_vntouser(struct puffs_mount *, int, void *, size_t, void *,
 		       struct vnode *, struct vnode *);
+void	puffs_vntouser_faf(struct puffs_mount *, int, void *, size_t, void *);
 int	puffs_vntouser_req(struct puffs_mount *, int, void *, size_t,
-			   void *, unsigned int,
-			   struct vnode *, struct vnode *);
+			   void *, uint64_t, struct vnode *, struct vnode *);
 int	puffs_vntouser_adjbuf(struct puffs_mount *, int, void **, size_t *,
 		              size_t, void *, struct vnode *, struct vnode *);
 
-int	puffs_getvnode(struct mount *, void *, enum vtype, dev_t,
+int	puffs_getvnode(struct mount *, void *, enum vtype, voff_t, dev_t,
 		       struct vnode **);
 int	puffs_newnode(struct mount *, struct vnode *, struct vnode **,
 		      void *, struct componentname *, enum vtype, dev_t);
@@ -160,10 +175,17 @@ void	puffs_makecn(struct puffs_cn *, const struct componentname *);
 void	puffs_credcvt(struct puffs_cred *, kauth_cred_t);
 pid_t	puffs_lwp2pid(struct lwp *);
 
+void	puffs_updatenode(struct vnode *, int);
+#define PUFFS_UPDATEATIME	0x01
+#define PUFFS_UPDATECTIME	0x02
+#define PUFFS_UPDATEMTIME	0x04
+#define PUFFS_UPDATESIZE	0x08
+void	puffs_updatevpsize(struct vnode *);
+
 int	puffs_setpmp(pid_t, int, struct puffs_mount *);
 void	puffs_nukebypmp(struct puffs_mount *);
 
-unsigned int	puffs_getreqid(struct puffs_mount *);
+uint64_t	puffs_getreqid(struct puffs_mount *);
 void		puffs_userdead(struct puffs_mount *);
 
 extern int (**puffs_vnodeop_p)(void *);

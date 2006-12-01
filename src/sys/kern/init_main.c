@@ -1,4 +1,4 @@
-/*	$NetBSD: init_main.c,v 1.279 2006/10/08 04:28:44 thorpej Exp $	*/
+/*	$NetBSD: init_main.c,v 1.283 2006/11/26 16:22:36 elad Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1989, 1991, 1992, 1993
@@ -71,7 +71,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.279 2006/10/08 04:28:44 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.283 2006/11/26 16:22:36 elad Exp $");
 
 #include "opt_ipsec.h"
 #include "opt_kcont.h"
@@ -82,6 +82,7 @@ __KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.279 2006/10/08 04:28:44 thorpej Exp 
 #include "opt_syscall_debug.h"
 #include "opt_sysv.h"
 #include "opt_fileassoc.h"
+#include "opt_pax.h"
 
 #include "rnd.h"
 #include "veriexec.h"
@@ -155,6 +156,9 @@ __KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.279 2006/10/08 04:28:44 thorpej Exp 
 #include <sys/fileassoc.h>
 #endif /* FILEASSOC */
 
+#if defined(PAX_MPROTECT) || defined(PAX_SEGVGUARD)
+#include <sys/pax.h>
+#endif /* PAX_MPROTECT || PAX_SEGVGUARD */
 #include <ufs/ufs/quota.h>
 
 #include <miscfs/genfs/genfs.h>
@@ -191,6 +195,17 @@ volatile int start_init_exec;		/* semaphore for start_init() */
 static void check_console(struct lwp *l);
 static void start_init(void *);
 void main(void);
+
+#if defined(__SSP__) || defined(__SSP_ALL__)
+long __stack_chk_guard[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+void __stack_chk_fail(void);
+
+void
+__stack_chk_fail(void)
+{
+	panic("stack overflow detected; terminated");
+}
+#endif
 
 /*
  * System startup; initialize the world, create process 0, mount root
@@ -311,6 +326,29 @@ main(void)
 	/* Configure the system hardware.  This will enable interrupts. */
 	configure();
 
+#if defined(__SSP__) || defined(__SSP_ALL__)
+	{
+#ifdef DIAGNOSTIC
+		printf("Initializing SSP:");
+#endif
+		/*
+		 * We initialize ssp here carefully:
+		 *	1. after we got some entropy
+		 *	2. without calling a function
+		 */
+		size_t i;
+		long guard[__arraycount(__stack_chk_guard)];
+
+		arc4randbytes(guard, sizeof(guard));
+		for (i = 0; i < __arraycount(guard); i++)
+			__stack_chk_guard[i] = guard[i];
+#ifdef DIAGNOSTIC
+		for (i = 0; i < __arraycount(guard); i++)
+			printf("%lx ", guard[i]);
+		printf("\n");
+#endif
+	}
+#endif
 	ubc_init();		/* must be after autoconfig */
 
 	/* Lock the kernel on behalf of proc0. */
@@ -344,12 +382,15 @@ main(void)
 #endif /* FILEASSOC */
 
 #if NVERIEXEC > 0
-	  /*
-	   * Initialise the fingerprint operations vectors before
-	   * fingerprints can be loaded.
-	   */
-	veriexec_init_fp_ops();
+	/*
+	 * Initialise the Veriexec subsystem.
+	 */
+	veriexec_init();
 #endif /* NVERIEXEC > 0 */
+
+#if defined(PAX_MPROTECT) || defined(PAX_SEGVGUARD)
+	pax_init();
+#endif /* PAX_MPROTECT || PAX_SEGVGUARD */
 
 	/* Attach pseudo-devices. */
 	for (pdev = pdevinit; pdev->pdev_attach != NULL; pdev++)

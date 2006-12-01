@@ -1,4 +1,4 @@
-/* $NetBSD: secmodel_example.c,v 1.5 2006/10/25 22:49:23 elad Exp $ */
+/* $NetBSD: secmodel_example.c,v 1.7 2006/11/22 12:12:51 elad Exp $ */
 
 /*
  * This file is placed in the public domain.
@@ -13,7 +13,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: secmodel_example.c,v 1.5 2006/10/25 22:49:23 elad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: secmodel_example.c,v 1.7 2006/11/22 12:12:51 elad Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -138,45 +138,6 @@ secmodel_example_system_cb(kauth_cred_t cred, kauth_action_t action,
 	req = (enum kauth_system_req)arg0;
 
         switch (action) {
-        case KAUTH_SYSTEM_RAWIO: {
-                u_int rw;
-
-                rw = (u_int)(u_long)arg1;
-
-                switch (req) {
-                case KAUTH_REQ_SYSTEM_RAWIO_MEMORY: {
-                        switch (rw) {
-                        case KAUTH_REQ_SYSTEM_RAWIO_READ:
-                        case KAUTH_REQ_SYSTEM_RAWIO_WRITE:
-                        case KAUTH_REQ_SYSTEM_RAWIO_RW:
-                        default:
-                                result = KAUTH_RESULT_DEFER;
-                                break;
-                        }
-
-                        break;
-                        }
-                case KAUTH_REQ_SYSTEM_RAWIO_DISK: {
-                        switch (rw) {
-                        case KAUTH_REQ_SYSTEM_RAWIO_READ:
-                        case KAUTH_REQ_SYSTEM_RAWIO_WRITE:
-                        case KAUTH_REQ_SYSTEM_RAWIO_RW:
-                        default:
-                        	result = KAUTH_RESULT_DEFER;
-                               break;
-                        }
-
-                        break;
-                        }
-
-
-                default:
-                        result = KAUTH_RESULT_DEFER;
-                        break;
-                }
-                break;
-                }
-        
         case KAUTH_SYSTEM_TIME:
                 switch (req) {
                 case KAUTH_REQ_SYSTEM_TIME_ADJTIME:
@@ -379,11 +340,19 @@ secmodel_example_machdep_cb(kauth_cred_t cred, kauth_action_t action,
         result = KAUTH_RESULT_DENY;
 
         switch (action) {
+	case KAUTH_MACHDEP_ALPHA:
+		switch ((u_long)arg0) {
+		case KAUTH_REQ_MACHDEP_ALPHA_UNMANAGEDMEM:
+		default:
+			result = KAUTH_RESULT_DEFER;
+			break;
+		}
         case KAUTH_MACHDEP_X86:
                 switch ((u_long)arg0) {
                 case KAUTH_REQ_MACHDEP_X86_IOPL:
                 case KAUTH_REQ_MACHDEP_X86_IOPERM:
                 case KAUTH_REQ_MACHDEP_X86_MTRR_SET:
+		case KAUTH_REQ_MACHDEP_X86_UNMANAGEDMEM:
                 default:
                         result = KAUTH_RESULT_DEFER;
                         break;
@@ -408,3 +377,44 @@ secmodel_example_machdep_cb(kauth_cred_t cred, kauth_action_t action,
         return (result);
 }
 
+/*
+ * kauth(9) listener
+ * 
+ * Security model: example
+ * Scope: Device
+ */
+int
+secmodel_example_device_cb(kauth_cred_t cred, kauth_action_t action,
+    void *cookie, void *arg0, void *arg1, void *arg2, void *arg3)
+{
+        int result;
+
+        result = KAUTH_RESULT_DENY;
+
+        switch (action) {
+        case KAUTH_DEVICE_TTY_OPEN:
+	case KAUTH_DEVICE_TTY_PRIVSET:
+		break;
+
+	case KAUTH_DEVICE_RAWIO_SPEC:
+		switch ((u_long)arg0) {
+		case KAUTH_REQ_DEVICE_RAWIO_SPEC_READ:
+		case KAUTH_REQ_DEVICE_RAWIO_SPEC_WRITE:
+		case KAUTH_REQ_DEVICE_RAWIO_SPEC_RW:
+			break;
+
+		default:
+			result = KAUTH_RESULT_DEFER;
+			break;
+		}
+
+		break;
+
+	case KAUTH_DEVICE_RAWIO_PASSTHRU:
+	default:
+		result = KAUTH_RESULT_DEFER;
+		break;
+	}
+
+        return (result);
+}

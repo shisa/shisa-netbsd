@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.own.mk,v 1.482 2006/10/18 23:31:50 bjh21 Exp $
+#	$NetBSD: bsd.own.mk,v 1.488 2006/11/26 13:59:49 drochner Exp $
 
 .if !defined(_BSD_OWN_MK_)
 _BSD_OWN_MK_=1
@@ -210,6 +210,7 @@ LEX=		${TOOLDIR}/bin/${_TOOL_PREFIX}lex
 LINT=		CC=${CC:Q} ${TOOLDIR}/bin/${MACHINE_GNU_PLATFORM}-lint
 LORDER=		NM=${NM:Q} MKTEMP=${TOOL_MKTEMP:Q} ${TOOLDIR}/bin/${_TOOL_PREFIX}lorder
 MKDEP=		CC=${CC:Q} ${TOOLDIR}/bin/${_TOOL_PREFIX}mkdep
+PAXCTL=		${TOOLDIR}/bin/${_TOOL_PREFIX}paxctl
 TSORT=		${TOOLDIR}/bin/${_TOOL_PREFIX}tsort -q
 YACC=		${TOOLDIR}/bin/${_TOOL_PREFIX}yacc
 
@@ -524,27 +525,29 @@ MACHINE_GNU_PLATFORM?=${MACHINE_GNU_ARCH}--netbsd
 
 TARGETS+=	all clean cleandir depend dependall includes \
 		install lint obj regress tags html installhtml cleanhtml
-.PHONY:		all clean cleandir depend dependall distclean includes \
+PHONY_NOTMAIN =	all clean cleandir depend dependall distclean includes \
 		install lint obj regress tags beforedepend afterdepend \
 		beforeinstall afterinstall realinstall realdepend realall \
 		html installhtml cleanhtml subdir-all subdir-install subdir-depend
+.PHONY:		${PHONY_NOTMAIN}
+.NOTMAIN:	${PHONY_NOTMAIN}
 
 .if ${NEED_OWN_INSTALL_TARGET} != "no"
 .if !target(install)
-install:	.NOTMAIN beforeinstall subdir-install realinstall afterinstall
-beforeinstall:	.NOTMAIN
-subdir-install:	.NOTMAIN beforeinstall
-realinstall:	.NOTMAIN beforeinstall
-afterinstall:	.NOTMAIN subdir-install realinstall
+install:	beforeinstall .WAIT subdir-install realinstall .WAIT afterinstall
+beforeinstall:
+subdir-install:
+realinstall:
+afterinstall:
 .endif
-all:		.NOTMAIN realall subdir-all
-subdir-all:	.NOTMAIN
-realall:	.NOTMAIN
-depend:		.NOTMAIN realdepend subdir-depend
-subdir-depend:	.NOTMAIN
-realdepend:	.NOTMAIN
-distclean:	.NOTMAIN cleandir
-cleandir:	.NOTMAIN clean
+all:		realall subdir-all
+subdir-all:
+realall:
+depend:		realdepend subdir-depend
+subdir-depend:
+realdepend:
+distclean:	cleandir
+cleandir:	clean
 
 dependall:	.NOTMAIN realdepend .MAKE
 	@cd ${.CURDIR}; ${MAKE} realall
@@ -598,7 +601,6 @@ MK${var}:=	yes
 	OBJ \
 	PAM PF PIC PICINSTALL PICLIB POSTFIX PROFILE \
 	SHARE SKEY STATICLIB \
-	UUCP \
 	YP
 MK${var}?=	yes
 .endfor

@@ -1,4 +1,4 @@
-/*	$NetBSD: gphyter.c,v 1.17 2006/10/12 01:31:25 christos Exp $	*/
+/*	$NetBSD: gphyter.c,v 1.19 2006/11/16 21:24:07 christos Exp $	*/
 
 /*-
  * Copyright (c) 1998, 1999, 2000, 2001 The NetBSD Foundation, Inc.
@@ -75,7 +75,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: gphyter.c,v 1.17 2006/10/12 01:31:25 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: gphyter.c,v 1.19 2006/11/16 21:24:07 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -118,7 +118,7 @@ static const struct mii_phydesc gphyters[] = {
 };
 
 static int
-gphytermatch(struct device *parent __unused, struct cfdata *match __unused,
+gphytermatch(struct device *parent, struct cfdata *match,
     void *aux)
 {
 	struct mii_attach_args *ma = aux;
@@ -130,7 +130,7 @@ gphytermatch(struct device *parent __unused, struct cfdata *match __unused,
 }
 
 static void
-gphyterattach(struct device *parent __unused, struct device *self, void *aux)
+gphyterattach(struct device *parent, struct device *self, void *aux)
 {
 	struct mii_softc *sc = (struct mii_softc *)self;
 	struct mii_attach_args *ma = aux;
@@ -147,7 +147,7 @@ gphyterattach(struct device *parent __unused, struct device *self, void *aux)
 	sc->mii_funcs = &gphyter_funcs;
 	sc->mii_pdata = mii;
 	sc->mii_flags = ma->mii_flags;
-	sc->mii_anegticks = 5;
+	sc->mii_anegticks = MII_ANEGTICKS;
 
 	PHY_RESET(sc);
 

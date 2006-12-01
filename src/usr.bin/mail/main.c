@@ -1,4 +1,4 @@
-/*	$NetBSD: main.c,v 1.23 2006/10/21 21:37:21 christos Exp $	*/
+/*	$NetBSD: main.c,v 1.25 2006/11/28 18:45:32 christos Exp $	*/
 
 /*
  * Copyright (c) 1980, 1993
@@ -39,13 +39,14 @@ __COPYRIGHT("@(#) Copyright (c) 1980, 1993\n\
 #if 0
 static char sccsid[] = "@(#)main.c	8.2 (Berkeley) 4/20/95";
 #else
-__RCSID("$NetBSD: main.c,v 1.23 2006/10/21 21:37:21 christos Exp $");
+__RCSID("$NetBSD: main.c,v 1.25 2006/11/28 18:45:32 christos Exp $");
 #endif
 #endif /* not lint */
 
 #define EXTERN
 #include "rcv.h"
 #undef EXTERN
+#include <assert.h>
 #include <util.h>
 
 #include "extern.h"
@@ -53,11 +54,13 @@ __RCSID("$NetBSD: main.c,v 1.23 2006/10/21 21:37:21 christos Exp $");
 #ifdef USE_EDITLINE
 #include "complete.h"
 #endif
+#include "format.h"
 #ifdef MIME_SUPPORT
 #include "mime.h"
 #endif
-
-int	main(int, char **);
+#ifdef THREAD_SUPPORT
+#include "thread.h"
+#endif
 
 /*
  * Mail -- a mail program
@@ -65,15 +68,80 @@ int	main(int, char **);
  * Startup -- interface with user.
  */
 
-jmp_buf	hdrjmp;
+static jmp_buf	hdrjmp;
 
+/*
+ * Interrupt printing of the headers.
+ */
+/*ARGSUSED*/
+static void
+hdrstop(int signo __unused)
+{
+
+	(void)fflush(stdout);
+	(void)fprintf(stderr, "\nInterrupt\n");
+	longjmp(hdrjmp, 1);
+}
+
+/*
+ * Compute what the screen size for printing headers should be.
+ * We use the following algorithm for the height:
+ *	If baud rate < 1200, use  9
+ *	If baud rate = 1200, use 14
+ *	If baud rate > 1200, use 24 or ws_row
+ * Width is either 80 or ws_col;
+ */
+PUBLIC void
+setscreensize(void)
+{
+	struct termios tbuf;
+	struct winsize ws;
+	speed_t ospeed;
+	char *cp;
+
+	if (ioctl(1, TIOCGWINSZ, &ws) < 0)
+		ws.ws_col = ws.ws_row = 0;
+	if (tcgetattr(1, &tbuf) < 0)
+		ospeed = 9600;
+	else
+		ospeed = cfgetospeed(&tbuf);
+	if (ospeed < 1200)
+		screenheight = 9;
+	else if (ospeed == 1200)
+		screenheight = 14;
+	else if (ws.ws_row != 0)
+		screenheight = ws.ws_row;
+	else
+		screenheight = 24;
+	if ((realscreenheight = ws.ws_row) == 0)
+		realscreenheight = 24;
+	if ((screenwidth = ws.ws_col) == 0)
+		screenwidth = 80;
+	/*
+	 * Possible overrides from the rcfile.
+	 */
+	if ((cp = value(ENAME_SCREENWIDTH)) != NULL) {
+		int width;
+		width = *cp ? atoi(cp) : 0;
+		if (width >= 0)
+			screenwidth = width;
+	}
+	if ((cp = value(ENAME_SCREENHEIGHT)) != NULL) {
+		int height;
+		height = *cp ? atoi(cp) : 0;
+		if (height >= 0) {
+			realscreenheight = height;
+			screenheight = height;
+		}
+	}
+}
 
 /*
  * Break up a white-space or comma delimited name list so that aliases
  * can get expanded.  Without this, the CC: or BCC: list is broken too
  * late for alias expansion to occur.
  */
-struct name *
+PUBLIC struct name *
 lexpand(char *str, int ntype)
 {
 	char *list;
@@ -98,19 +166,21 @@ lexpand(char *str, int ntype)
 	return np;
 }
 
-int
+PUBLIC int
 main(int argc, char *argv[])
 {
 	int i;
 	struct name *to, *cc, *bcc, *smopts;
 #ifdef MIME_SUPPORT
-	struct attachment *attach;
+	struct name *attach_optargs;
+	struct name *attach_end;
 #endif
 	char *subject;
 	const char *ef;
 	char nosrc = 0;
 	sig_t prevint;
 	const char *rc;
+	int volatile Hflag;
 
 	/*
 	 * Set up a reasonable environment.
@@ -119,7 +189,7 @@ main(int argc, char *argv[])
 	 */
 	(void)signal(SIGCHLD, sigchild);
 	if (isatty(0))
-		assign("interactive", "");
+		assign(ENAME_INTERACTIVE, "");
 	image = -1;
 	/*
 	 * Now, determine how we are being used.
@@ -134,12 +204,13 @@ main(int argc, char *argv[])
 	bcc = NULL;
 	smopts = NULL;
 	subject = NULL;
-	Bflag = 0;
+	Hflag = 0;
 #ifdef MIME_SUPPORT
-	attach = NULL;
-	while ((i = getopt(argc, argv, "~BEINT:a:b:c:dfins:u:v")) != -1)
+	attach_optargs = NULL;
+	attach_end = NULL;
+	while ((i = getopt(argc, argv, ":~EH:INT:a:b:c:dfins:u:v")) != -1)
 #else
-	while ((i = getopt(argc, argv, "~BEINT:b:c:dfins:u:v")) != -1)
+	while ((i = getopt(argc, argv, ":~EH:INT:b:c:dfins:u:v")) != -1)
 #endif
 	{
 		switch (i) {
@@ -156,9 +227,18 @@ main(int argc, char *argv[])
 			(void)close(i);
 			break;
 #ifdef MIME_SUPPORT
-		case 'a':
-			attach = mime_attach_files(attach, optarg, ATTACH_FILE_ONLY);
+		case 'a': {
+			struct name *np;
+			np = nalloc(optarg, 0);
+			if (attach_end == NULL)
+				attach_optargs = np;
+			else {
+				np->n_blink = attach_end;
+				attach_end->n_flink = np;
+			}
+			attach_end = np;
 			break;
+		}
 #endif
 		case 'u':
 			/*
@@ -172,7 +252,7 @@ main(int argc, char *argv[])
 			 * User wants to ignore interrupts.
 			 * Set the variable "ignore"
 			 */
-			assign("ignore", "");
+			assign(ENAME_IGNORE, "");
 			break;
 		case 'd':
 			debug++;
@@ -199,6 +279,12 @@ main(int argc, char *argv[])
 			else
 				ef = "&";
 			break;
+		case 'H':
+			/*
+			 * Print out the headers and quit.
+			 */
+			Hflag = get_Hflag(argv);
+			break;
 		case 'n':
 			/*
 			 * User doesn't want to source /usr/lib/Mail.rc
@@ -209,20 +295,20 @@ main(int argc, char *argv[])
 			/*
 			 * Avoid initial header printing.
 			 */
-			assign("noheader", "");
+			assign(ENAME_NOHEADER, "");
 			break;
 		case 'v':
 			/*
 			 * Send mailer verbose flag
 			 */
-			assign("verbose", "");
+			assign(ENAME_VERBOSE, "");
 			break;
 		case 'I':
 		case '~':
 			/*
 			 * We're interactive
 			 */
-			assign("interactive", "");
+			assign(ENAME_INTERACTIVE, "");
 			break;
 		case 'c':
 			/*
@@ -237,33 +323,47 @@ main(int argc, char *argv[])
 			bcc = cat(bcc, lexpand(optarg, GBCC));
 
 			break;
-		case 'B':
-			/*
-			 * Suppress the output of the "To:" line to allow
-			 * sendmail to apply the NoRecipientAction option.
-			 */
-			Bflag = 1;
-			break;
 		case 'E':
 			/*
 			 * Don't send empty files.
 			 */
-			assign("dontsendempty", "");
+			assign(ENAME_DONTSENDEMPTY, "");
 			break;
+		case ':':
+			/*
+			 * An optarg was expected but not found.
+			 */
+			if (optopt == 'H') {
+				Hflag = get_Hflag(NULL);
+				break;
+			}
+			(void)fprintf(stderr,
+			    "%s: option requires an argument -- %c\n",
+			    getprogname(), optopt);
+			
+			/* FALLTHROUGH */
 		case '?':
+			/*
+			 * An unknown option flag.  We need to do the
+			 * error message.
+			 */
+			if (optopt != '?')
+				(void)fprintf(stderr,
+				    "%s: unknown option -- %c\n", getprogname(),
+				    optopt);
 #ifdef MIME_SUPPORT
 			(void)fputs("\
 Usage: mail [-EiInv] [-s subject] [-a file] [-c cc-addr] [-b bcc-addr] to-addr ...\n\
             [- sendmail-options ...]\n\
-       mail [-EiInNv] -f [name]\n\
-       mail [-EiInNv] [-u user]\n",
+       mail [-EiInNv] [-H[colon-modifier]] -f [name]\n\
+       mail [-EiInNv] [-H[colon-modifier]] [-u user]\n",
 				stderr);
 #else /* MIME_SUPPORT */
 			(void)fputs("\
 Usage: mail [-EiInv] [-s subject] [-c cc-addr] [-b bcc-addr] to-addr ...\n\
             [- sendmail-options ...]\n\
-       mail [-EiInNv] -f [name]\n\
-       mail [-EiInNv] [-u user]\n",
+       mail [-EiInNv] [-H[colon-modifier]] -f [name]\n\
+       mail [-EiInNv] [-H[colon-modifier]] [-u user]\n",
 				stderr);
 #endif /* MIME_SUPPORT */
 
@@ -282,14 +382,17 @@ Usage: mail [-EiInv] [-s subject] [-c cc-addr] [-b bcc-addr] to-addr ...\n\
 	if (ef != NULL && to != NULL) {
 		errx(1, "Cannot give -f and people to send to.");
 	}
+	if (Hflag != 0 && to != NULL)
+		errx(EXIT_FAILURE, "Cannot give -H and people to send to.");
 #ifdef MIME_SUPPORT
-	if (attach != NULL && to == NULL)
-		errx(1, "Cannot give -a without people to send to.");
+	if (attach_optargs != NULL && to == NULL)
+		errx(EXIT_FAILURE, "Cannot give -a without people to send to.");
 #endif
-	tinit();
-	setscreensize();
+	tinit();	/* must be done before loading the rcfile */
 	input = stdin;
-	rcvmode = !to;
+	mailmode = Hflag ? mm_hdrsonly :
+	    to ? mm_sending : mm_receiving;
+	    
 	spreserve();
 	if (!nosrc)
 		load(_PATH_MASTER_RC);
@@ -300,95 +403,57 @@ Usage: mail [-EiInv] [-s subject] [-c cc-addr] [-b bcc-addr] to-addr ...\n\
 	if ((rc = getenv("MAILRC")) == 0)
 		rc = "~/.mailrc";
 	load(expand(rc));
+	setscreensize();	/* do this after loading the rcfile */
 
 #ifdef USE_EDITLINE
 	/* this is after loading the MAILRC so we can use value() */
 	init_editline();
 #endif
 
-	if (!rcvmode) {
-#ifdef MIME_SUPPORT
-		mime_attach_content(attach);
-		(void)mail(to, cc, bcc, smopts, subject, attach);
-#else
-		(void)mail(to, cc, bcc, smopts, subject);
-#endif
+	switch (mailmode) {
+	case mm_sending:
+		(void)mail(to, cc, bcc, smopts, subject,
+		    mime_attach_optargs(attach_optargs));
 		/*
 		 * why wait?
 		 */
 		exit(senderr);
+		break;	/* XXX - keep lint happy */
+
+	case mm_receiving:
+	case mm_hdrsonly:
+		/*
+		 * Ok, we are reading mail.
+		 * Decide whether we are editing a mailbox or reading
+		 * the system mailbox, and open up the right stuff.
+		 */
+		if (ef == NULL)
+			ef = "%";
+		if (setfile(ef) < 0)
+			exit(1);		/* error already reported */
+		if (setjmp(hdrjmp) == 0) {
+			if ((prevint = signal(SIGINT, SIG_IGN)) != SIG_IGN)
+				(void)signal(SIGINT, hdrstop);
+			if (value(ENAME_QUIET) == NULL)
+				(void)printf("Mail version %s.  Type ? for help.\n",
+				    version);
+			if (mailmode == mm_hdrsonly)
+				show_headers_and_exit(Hflag);	/* NORETURN */
+			announce();
+			(void)fflush(stdout);
+			(void)signal(SIGINT, prevint);
+		}
+		commands();
+		(void)signal(SIGHUP, SIG_IGN);
+		(void)signal(SIGINT, SIG_IGN);
+		(void)signal(SIGQUIT, SIG_IGN);
+		quit();
+		break;
+		
+	default:
+		assert(/*CONSTCOND*/0);
+		break;
 	}
-	/*
-	 * Ok, we are reading mail.
-	 * Decide whether we are editing a mailbox or reading
-	 * the system mailbox, and open up the right stuff.
-	 */
-	if (ef == NULL)
-		ef = "%";
-	if (setfile(ef) < 0)
-		exit(1);		/* error already reported */
-	if (setjmp(hdrjmp) == 0) {
-		if ((prevint = signal(SIGINT, SIG_IGN)) != SIG_IGN)
-			(void)signal(SIGINT, hdrstop);
-		if (value("quiet") == NULL)
-			(void)printf("Mail version %s.  Type ? for help.\n",
-				version);
-		announce();
-		(void)fflush(stdout);
-		(void)signal(SIGINT, prevint);
-	}
-	commands();
-	(void)signal(SIGHUP, SIG_IGN);
-	(void)signal(SIGINT, SIG_IGN);
-	(void)signal(SIGQUIT, SIG_IGN);
-	quit();
+
 	return 0;
-}
-
-/*
- * Interrupt printing of the headers.
- */
-void
-/*ARGSUSED*/
-hdrstop(int signo __unused)
-{
-
-	(void)fflush(stdout);
-	(void)fprintf(stderr, "\nInterrupt\n");
-	longjmp(hdrjmp, 1);
-}
-
-/*
- * Compute what the screen size for printing headers should be.
- * We use the following algorithm for the height:
- *	If baud rate < 1200, use  9
- *	If baud rate = 1200, use 14
- *	If baud rate > 1200, use 24 or ws_row
- * Width is either 80 or ws_col;
- */
-void
-setscreensize(void)
-{
-	struct termios tbuf;
-	struct winsize ws;
-	speed_t ospeed;
-
-	if (ioctl(1, TIOCGWINSZ, &ws) < 0)
-		ws.ws_col = ws.ws_row = 0;
-	if (tcgetattr(1, &tbuf) < 0)
-		ospeed = 9600;
-	else
-		ospeed = cfgetospeed(&tbuf);
-	if (ospeed < 1200)
-		screenheight = 9;
-	else if (ospeed == 1200)
-		screenheight = 14;
-	else if (ws.ws_row != 0)
-		screenheight = ws.ws_row;
-	else
-		screenheight = 24;
-	if ((realscreenheight = ws.ws_row) == 0)
-		realscreenheight = 24;
-	if ((screenwidth = ws.ws_col) == 0)
-		screenwidth = 80;
 }

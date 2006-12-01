@@ -1,4 +1,4 @@
-.\"	$NetBSD: tcpdump.8,v 1.12 2004/12/01 23:24:38 christos Exp $
+.\"	$NetBSD: tcpdump.8,v 1.14 2006/11/25 16:48:31 christos Exp $
 .\" @(#) Header: /tcpdump/master/tcpdump/tcpdump.1,v 1.148.2.6 2004/03/28 21:25:03 fenner Exp (LBL)
 .\"
 .\"
@@ -313,7 +313,7 @@ The ability to decrypt packets is only present if \fItcpdump\fP was compiled
 with cryptography enabled.
 .IP
 \fIsecret\fP is the ASCII text for ESP secret key. 
-If preceeded by 0x, then a hex value will be read.
+If preceded by 0x, then a hex value will be read.
 .IP
 The option assumes RFC2406 ESP, not RFC1827 ESP.
 The option is only for debugging purposes, and
@@ -542,6 +542,7 @@ its link level header, in hex and ASCII.
 .TP
 .B \-y
 Set the data link type to use while capturing packets to \fIdatalinktype\fP.
+The available data link types may be found using the \-L option.
 .IP "\fI expression\fP"
 .RS
 selects which packets will be dumped.

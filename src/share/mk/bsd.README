@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.README,v 1.186 2006/10/09 08:32:11 mrg Exp $
+#	$NetBSD: bsd.README,v 1.189 2006/11/12 02:44:51 christos Exp $
 #	@(#)bsd.README	8.2 (Berkeley) 4/2/94
 
 This is the README file for the new make "include" files for the BSD
@@ -274,9 +274,6 @@ MKUPDATE 	If not "no", 'make install' only installs targets that are
 		installed counterparts.
 		Default: no
 
-MKUUCP		If "no", don't build or install uucp(1).
-		Default: yes
-
 MKX11		If not "no", 'make build' also descends into src/x11
 		to cross build X11R6 and automatically enables creation
 		of X sets.
@@ -309,6 +306,11 @@ USE_SKEY	If "no", disables building S/key authentication
 		support into various system utilities/libraries that
 		support it.  If ${MKSKEY} is "no", USE_SKEY will
 		also be forced to "no".
+
+USE_SSP		If "yes", it turns of the gcc stack protection code
+		where stack overflows are detected and the program
+		aborts. This imposes some performance penalty. Defaults
+		to "no".
 
 USE_YP		If "no", disables building YP (NIS) support into
 		various system utilities/libraries that support it.
@@ -982,6 +984,11 @@ PROG_CXX	If defined, the name of the program to build.  Also
 		compiler rather than the C compiler.  PROG_CXX overrides
 		the value of PROG if PROG is also set.
 
+PROG_PAX	If defined then paxctl(1) is ran on binary after link
+		time, with the value of the variable as args to it.
+
+PROG_PAX.${PROG} Custom override for PROG_PAX.
+
 PROGNAME	The name that the above program will be installed as, if
 		different from ${PROG}.
 
@@ -1054,6 +1061,7 @@ DPADD		Additional dependencies for the program.  Usually used for
 		LIBSS?=		${DESTDIR}/usr/lib/libss.a
 		LIBSSH?=	${DESTDIR}/usr/lib/libssh.a
 		LIBSSL?=	${DESTDIR}/usr/lib/libssl.a
+		LIBSSP?=	${DESTDIR}/usr/lib/libssp.a
 		LIBSTDCXX?=	${DESTDIR}/usr/lib/libstdc++.a
 		LIBSUPCXX?=	${DESTDIR}/usr/lib/libsupc++.a
 		LIBTERMCAP?=	${DESTDIR}/usr/lib/libtermcap.a

@@ -1,4 +1,4 @@
-/*	$NetBSD: ipsec_output.c,v 1.15 2006/10/13 20:53:59 christos Exp $	*/
+/*	$NetBSD: ipsec_output.c,v 1.17 2006/11/24 19:47:00 christos Exp $	*/
 
 /*-
  * Copyright (c) 2002, 2003 Sam Leffler, Errno Consulting
@@ -29,7 +29,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ipsec_output.c,v 1.15 2006/10/13 20:53:59 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ipsec_output.c,v 1.17 2006/11/24 19:47:00 christos Exp $");
 
 /*
  * IPsec output processing.
@@ -349,7 +349,7 @@ int
 ipsec4_process_packet(
     struct mbuf *m,
     struct ipsecrequest *isr,
-    int flags __unused,
+    int flags,
     int tunalready
 )
 {
@@ -541,10 +541,10 @@ ipsec6_splithdr(struct mbuf *m)
 int
 ipsec6_output_trans(
     struct ipsec_output_state *state,
-    u_char *nexthdrp __unused,
-    struct mbuf *mprev __unused,
+    u_char *nexthdrp,
+    struct mbuf *mprev,
     struct secpolicy *sp,
-    int flags __unused,
+    int flags,
     int *tun
 )
 {
@@ -621,7 +621,7 @@ ipsec6_encapsulate(struct mbuf *m, struct secasvar *sav)
 
 
 	/*
-	 * grow the mbuf to accomodate the new IPv6 header.
+	 * grow the mbuf to accommodate the new IPv6 header.
 	 */
 	plen = m->m_pkthdr.len;
 	if (M_LEADINGSPACE(m->m_next) < sizeof(struct ip6_hdr)) {
@@ -676,7 +676,7 @@ int
 ipsec6_output_tunnel(
     struct ipsec_output_state *state,
     struct secpolicy *sp,
-    int flags __unused
+    int flags
 )
 {
 	struct ip6_hdr *ip6;

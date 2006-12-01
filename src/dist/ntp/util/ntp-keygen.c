@@ -1,4 +1,4 @@
-/*	$NetBSD: ntp-keygen.c,v 1.6 2006/06/11 19:34:22 kardel Exp $	*/
+/*	$NetBSD: ntp-keygen.c,v 1.8 2006/11/14 21:54:24 christos Exp $	*/
 
 /*
  * Program to generate cryptographic keys for NTP clients and servers
@@ -266,7 +266,7 @@ main(
 	if ((SSLeay() ^ OPENSSL_VERSION_NUMBER) & ~0xff0L) {
 		fprintf(stderr,
 		    "OpenSSL version mismatch. Built against %lx, you have %lx\n",
-		    OPENSSL_VERSION_NUMBER, SSLeay());
+		    (long)OPENSSL_VERSION_NUMBER, SSLeay());
 		return (-1);
 
 	} else {

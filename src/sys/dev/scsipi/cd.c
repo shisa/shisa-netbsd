@@ -1,4 +1,4 @@
-/*	$NetBSD: cd.c,v 1.256 2006/10/28 01:24:29 reinoud Exp $	*/
+/*	$NetBSD: cd.c,v 1.259 2006/11/25 12:03:38 scw Exp $	*/
 
 /*-
  * Copyright (c) 1998, 2001, 2003, 2004, 2005 The NetBSD Foundation, Inc.
@@ -57,7 +57,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: cd.c,v 1.256 2006/10/28 01:24:29 reinoud Exp $");
+__KERNEL_RCSID(0, "$NetBSD: cd.c,v 1.259 2006/11/25 12:03:38 scw Exp $");
 
 #include "rnd.h"
 
@@ -217,7 +217,7 @@ static const struct scsipi_periphsw cd_switch = {
  * A device suitable for this driver
  */
 static int
-cdmatch(struct device *parent __unused, struct cfdata *match __unused,
+cdmatch(struct device *parent, struct cfdata *match,
     void *aux)
 {
 	struct scsipibus_attach_args *sa = aux;
@@ -231,7 +231,7 @@ cdmatch(struct device *parent __unused, struct cfdata *match __unused,
 }
 
 static void
-cdattach(struct device *parent __unused, struct device *self, void *aux)
+cdattach(struct device *parent, struct device *self, void *aux)
 {
 	struct cd_softc *cd = device_private(self);
 	struct scsipibus_attach_args *sa = aux;
@@ -282,7 +282,7 @@ cdattach(struct device *parent __unused, struct device *self, void *aux)
 }
 
 static int
-cdactivate(struct device *self __unused, enum devact act)
+cdactivate(struct device *self, enum devact act)
 {
 	int rv = 0;
 
@@ -301,7 +301,7 @@ cdactivate(struct device *self __unused, enum devact act)
 }
 
 static int
-cddetach(struct device *self, int flags __unused)
+cddetach(struct device *self, int flags)
 {
 	struct cd_softc *cd = device_private(self);
 	int s, bmaj, cmaj, i, mn;
@@ -355,7 +355,7 @@ cddetach(struct device *self, int flags __unused)
  * open the device. Make sure the partition info is a up-to-date as can be.
  */
 static int
-cdopen(dev_t dev, int flag __unused, int fmt, struct lwp *l __unused)
+cdopen(dev_t dev, int flag, int fmt, struct lwp *l)
 {
 	struct cd_softc *cd;
 	struct scsipi_periph *periph;
@@ -517,7 +517,7 @@ bad4:
  * occurence of an open device
  */
 static int
-cdclose(dev_t dev, int flag __unused, int fmt, struct lwp *l __unused)
+cdclose(dev_t dev, int flag, int fmt, struct lwp *l)
 {
 	struct cd_softc *cd = cd_cd.cd_devs[CDUNIT(dev)];
 	struct scsipi_periph *periph = cd->sc_periph;
@@ -1084,13 +1084,13 @@ cdminphys(struct buf *bp)
 }
 
 static int
-cdread(dev_t dev, struct uio *uio, int ioflag __unused)
+cdread(dev_t dev, struct uio *uio, int ioflag)
 {
 	return (physio(cdstrategy, NULL, dev, B_READ, cdminphys, uio));
 }
 
 static int
-cdwrite(dev_t dev, struct uio *uio, int ioflag __unused)
+cdwrite(dev_t dev, struct uio *uio, int ioflag)
 {
 	return (physio(cdstrategy, NULL, dev, B_WRITE, cdminphys, uio));
 }
@@ -1191,6 +1191,7 @@ cdioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, struct lwp *l)
 	struct scsipi_periph *periph = cd->sc_periph;
 	int part = CDPART(dev);
 	int error = 0;
+	int s;
 #ifdef __HAVE_OLD_DISKLABEL
 	struct disklabel *newlabel = NULL;
 #endif
@@ -1230,6 +1231,8 @@ cdioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, struct lwp *l)
 		case CDIOCLOADUNLOAD:
 		case DVD_AUTH:
 		case DVD_READ_STRUCT:
+		case DIOCGSTRATEGY:
+		case DIOCSSTRATEGY:
 			if (part == RAW_PART)
 				break;
 		/* FALLTHROUGH */
@@ -1553,6 +1556,45 @@ bad:
 	case MMCGETTRACKINFO:
 		/* READ TOCf2, READ_CD_CAPACITY and READ_TRACKINFO commands */
 		return mmc_gettrackinfo(periph, (struct mmc_trackinfo *) addr);
+	case DIOCGSTRATEGY:
+	    {
+		struct disk_strategy *dks = (void *)addr;
+
+		s = splbio();
+		strlcpy(dks->dks_name, bufq_getstrategyname(cd->buf_queue),
+		    sizeof(dks->dks_name));
+		splx(s);
+		dks->dks_paramlen = 0;
+
+		return 0;
+	    }
+	case DIOCSSTRATEGY:
+	    {
+		struct disk_strategy *dks = (void *)addr;
+		struct bufq_state *new;
+		struct bufq_state *old;
+
+		if ((flag & FWRITE) == 0) {
+			return EBADF;
+		}
+		if (dks->dks_param != NULL) {
+			return EINVAL;
+		}
+		dks->dks_name[sizeof(dks->dks_name) - 1] = 0; /* ensure term */
+		error = bufq_alloc(&new, dks->dks_name,
+		    BUFQ_EXACT|BUFQ_SORT_RAWBLOCK);
+		if (error) {
+			return error;
+		}
+		s = splbio();
+		old = cd->buf_queue;
+		bufq_move(new, old);
+		cd->buf_queue = new;
+		splx(s);
+		bufq_free(old);
+
+		return 0;
+	    }
 	default:
 		if (part != RAW_PART)
 			return (ENOTTY);
@@ -1601,21 +1643,11 @@ cdgetdefaultlabel(struct cd_softc *cd, struct disklabel *lp)
 		lastsession = 0;
 
 	lp->d_partitions[0].p_offset = 0;
-#ifdef notyet /* have to fix bounds_check_with_label() first */
 	lp->d_partitions[0].p_size = lp->d_secperunit;
-#else
-	lp->d_partitions[0].p_size =
-	    lp->d_secperunit * (lp->d_secsize / DEV_BSIZE);
-#endif
 	lp->d_partitions[0].p_cdsession = lastsession;
 	lp->d_partitions[0].p_fstype = FS_ISO9660;
 	lp->d_partitions[RAW_PART].p_offset = 0;
-#ifdef notyet
 	lp->d_partitions[RAW_PART].p_size = lp->d_secperunit;
-#else
-	lp->d_partitions[RAW_PART].p_size =
-	    lp->d_secperunit * (lp->d_secsize / DEV_BSIZE);
-#endif
 	lp->d_partitions[RAW_PART].p_fstype = FS_ISO9660;
 	lp->d_npartitions = RAW_PART + 1;
 
@@ -1752,7 +1784,7 @@ read_cd_capacity(struct scsipi_periph *periph, u_int *blksize, u_long *size)
  * Find out from the device what it's capacity is
  */
 static u_long
-cd_size(struct cd_softc *cd, int flags __unused)
+cd_size(struct cd_softc *cd, int flags)
 {
 	u_int blksize;
 	u_long size;
@@ -1802,8 +1834,8 @@ cd_play(struct cd_softc *cd, int blkno, int nblks)
  * Get scsi driver to send a "start playing" command
  */
 static int
-cd_play_tracks(struct cd_softc *cd, int strack, int sindex __unused, int etrack,
-    int eindex __unused)
+cd_play_tracks(struct cd_softc *cd, int strack, int sindex, int etrack,
+    int eindex)
 {
 	struct cd_formatted_toc toc;
 	int error;
@@ -1969,11 +2001,12 @@ cd_get_parms(struct cd_softc *cd, int flags)
 	 */
 	if (cd_size(cd, flags) == 0)
 		return (ENXIO);
+	disk_blocksize(&cd->sc_dk, cd->params.blksize);
 	return (0);
 }
 
 static int
-cdsize(dev_t dev __unused)
+cdsize(dev_t dev)
 {
 
 	/* CD-ROMs are read-only. */
@@ -1981,8 +2014,8 @@ cdsize(dev_t dev __unused)
 }
 
 static int
-cddump(dev_t dev __unused, daddr_t blkno __unused, caddr_t va __unused,
-    size_t size __unused)
+cddump(dev_t dev, daddr_t blkno, caddr_t va,
+    size_t size)
 {
 
 	/* Not implemented. */

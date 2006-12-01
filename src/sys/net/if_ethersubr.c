@@ -1,4 +1,4 @@
-/*	$NetBSD: if_ethersubr.c,v 1.136 2006/09/07 02:40:33 dogcow Exp $	*/
+/*	$NetBSD: if_ethersubr.c,v 1.138 2006/11/24 01:04:30 rpaulo Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -61,7 +61,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_ethersubr.c,v 1.136 2006/09/07 02:40:33 dogcow Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_ethersubr.c,v 1.138 2006/11/24 01:04:30 rpaulo Exp $");
 
 #include "opt_inet.h"
 #include "opt_atalk.h"
@@ -698,22 +698,18 @@ ether_input(struct ifnet *ifp, struct mbuf *m)
 	 * process it locally.
 	 */
 	if (ifp->if_bridge) {
-		if(m->m_flags & M_PROTO1) {
-			m->m_flags &= ~M_PROTO1;
-		} else {
-			/* clear M_PROMISC, in case the packets comes from a vlan */
-			m->m_flags &= ~M_PROMISC;
-			m = bridge_input(ifp, m);
-			if (m == NULL)
-				return;
+		/* clear M_PROMISC, in case the packets comes from a vlan */
+		m->m_flags &= ~M_PROMISC;
+		m = bridge_input(ifp, m);
+		if (m == NULL)
+			return;
 
-			/*
-			 * Bridge has determined that the packet is for us.
-			 * Update our interface pointer -- we may have had
-			 * to "bridge" the packet locally.
-			 */
-			ifp = m->m_pkthdr.rcvif;
-		}
+		/*
+		 * Bridge has determined that the packet is for us.
+		 * Update our interface pointer -- we may have had
+		 * to "bridge" the packet locally.
+		 */
+		ifp = m->m_pkthdr.rcvif;
 	} else
 #endif /* NBRIDGE > 0 */
 	{
@@ -1230,6 +1226,45 @@ const uint8_t ether_ip6multicast_min[ETHER_ADDR_LEN] =
 const uint8_t ether_ip6multicast_max[ETHER_ADDR_LEN] =
     { 0x33, 0x33, 0xff, 0xff, 0xff, 0xff };
 #endif
+
+/*
+ * ether_aton implementation, not using a static buffer.
+ */
+int
+ether_nonstatic_aton(u_char *dest, char *str)
+{
+        int i;
+        char *cp = str;
+        u_char val[6];
+
+#define set_value                       \
+        if (*cp > '9' && *cp < 'a')     \
+                *cp -= 'A' - 10;        \
+        else if (*cp > '9')             \
+                *cp -= 'a' - 10;        \
+        else                            \
+                *cp -= '0'
+
+        for (i = 0; i < 6; i++, cp++) {
+                if (!isxdigit(*cp))
+                        return (1);
+                set_value;
+                val[i] = *cp++;
+                if (isxdigit(*cp)) {
+                        set_value;
+                        val[i] *= 16;
+                        val[i] += *cp++;
+                }
+                if (*cp == ':' || i == 5)
+                        continue;
+                else
+                        return 1;
+        }
+        memcpy(dest, val, 6);
+
+        return 0;
+}
+
 
 /*
  * Convert a sockaddr into an Ethernet address or range of Ethernet

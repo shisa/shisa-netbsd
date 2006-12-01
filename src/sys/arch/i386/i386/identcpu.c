@@ -1,4 +1,4 @@
-/*	$NetBSD: identcpu.c,v 1.47 2006/10/12 01:30:42 christos Exp $	*/
+/*	$NetBSD: identcpu.c,v 1.50 2006/11/16 01:32:38 christos Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2000, 2001 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: identcpu.c,v 1.47 2006/10/12 01:30:42 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: identcpu.c,v 1.50 2006/11/16 01:32:38 christos Exp $");
 
 #include "opt_cputype.h"
 #include "opt_enhanced_speedstep.h"
@@ -256,7 +256,8 @@ const struct cpu_cpuid_nameclass i386_cpuid_cpus[] = {
 				"Pentium III Xeon (Cascades)",
 				"Pentium III (Tualatin)", 0,
 				"Pentium M (Dothan)", 
-				"Pentium M (Yonah)", 0,
+				"Pentium M (Yonah)",
+				"Core 2 (Merom)",
 				"Pentium Pro, II or III"	/* Default */
 			},
 			NULL,
@@ -567,7 +568,7 @@ const struct cpu_cpuid_nameclass i386_cpuid_cpus[] = {
  * because some CPUs got the implementation wrong.
  */
 static void
-disable_tsc(struct cpu_info *ci __unused)
+disable_tsc(struct cpu_info *ci)
 {
 	if (cpu_feature & CPUID_TSC) {
 		cpu_feature &= ~CPUID_TSC;
@@ -637,7 +638,7 @@ cyrix6x86_cpu_setup(ci)
 }
 
 void
-winchip_cpu_setup(struct cpu_info *ci __unused)
+winchip_cpu_setup(struct cpu_info *ci)
 {
 #if defined(I586_CPU)
 	switch (CPUID2MODEL(ci->ci_signature)) { /* model */
@@ -1255,7 +1256,7 @@ transmeta_cpu_info(struct cpu_info *ci)
 }
 
 void
-transmeta_cpu_setup(struct cpu_info *ci __unused)
+transmeta_cpu_setup(struct cpu_info *ci)
 {
 	u_int nreg = 0, dummy;
 

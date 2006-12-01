@@ -1,8 +1,8 @@
 %{
-/*	$NetBSD: veriexecctl_conf.l,v 1.7 2006/01/05 20:16:20 elad Exp $	*/
+/*	$NetBSD: veriexecctl_conf.l,v 1.10 2006/11/29 14:28:30 elad Exp $	*/
 
 /*-
- * Copyright 2005 Elad Efrat <elad@bsd.org.il>
+ * Copyright 2005 Elad Efrat <elad@NetBSD.org>
  * Copyright 2005 Brett Lymn <blymn@netbsd.org> 
  *
  * All rights reserved.
@@ -42,20 +42,54 @@
 #include <unistd.h>
 #include <err.h>
 
+#include <prop/proplib.h>
+
 #include "veriexecctl_parse.h"
 #include "veriexecctl.h"
 
 u_int64_t entries;
 char *filename;
+
+static char *dequote(const char *s)
+{
+	size_t len;
+	const char *p;
+	char *buf, *q;
+
+	len = 0;
+	p = s;
+	while (*p) {
+		if (*p == '\\' && *(p+1))
+			++p;
+		++len;
+		++p;
+	}
+
+	buf = malloc(len + 1);
+	if (buf == NULL)
+		return NULL;
+
+	p = s;
+	q = buf;
+	while (*p) {
+		if (*p == '\\' && *(p+1))
+			++p;
+		*q++ = *p++;
+	}
+	*q++ = '\0';
+
+	return buf;
+}
 %}
 
 STRING		[0-9a-zA-Z]+
+PCHAR           (\\.|[^ \t])
 
 %%
 
 	/* path */
-\/[^ \t]+	{
-			if ((yylval.string = strdup(yytext)) == NULL)
+\/{PCHAR}+	{
+			if ((yylval.string = dequote(yytext)) == NULL)
 				err(1, "Cannot allocate string");
 			return PATH;
 		}

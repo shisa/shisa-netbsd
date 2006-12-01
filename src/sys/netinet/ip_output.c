@@ -1,4 +1,4 @@
-/*	$NetBSD: ip_output.c,v 1.165 2006/07/23 22:06:13 ad Exp $	*/
+/*	$NetBSD: ip_output.c,v 1.167 2006/11/25 18:41:36 yamt Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -98,7 +98,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ip_output.c,v 1.165 2006/07/23 22:06:13 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ip_output.c,v 1.167 2006/11/25 18:41:36 yamt Exp $");
 
 #include "opt_pfil_hooks.h"
 #include "opt_inet.h"
@@ -170,38 +170,6 @@ int	ip_do_loopback_cksum = 0;
 	(((csum_flags) & M_CSUM_TCPv4) != 0 && tcp_do_loopback_cksum) || \
 	(((csum_flags) & M_CSUM_IPv4) != 0 && ip_do_loopback_cksum)))
 
-struct ip_tso_output_args {
-	struct ifnet *ifp;
-	struct sockaddr *sa;
-	struct rtentry *rt;
-};
-
-static int ip_tso_output_callback(void *, struct mbuf *);
-static int ip_tso_output(struct ifnet *, struct mbuf *, struct sockaddr *,
-    struct rtentry *);
-
-static int
-ip_tso_output_callback(void *vp, struct mbuf *m)
-{
-	struct ip_tso_output_args *args = vp;
-	struct ifnet *ifp = args->ifp;
-
-	return (*ifp->if_output)(ifp, m, args->sa, args->rt);
-}
-
-static int
-ip_tso_output(struct ifnet *ifp, struct mbuf *m, struct sockaddr *sa,
-    struct rtentry *rt)
-{
-	struct ip_tso_output_args args;
-
-	args.ifp = ifp;
-	args.sa = sa;
-	args.rt = rt;
-
-	return tcp4_segment(m, ip_tso_output_callback, &args);
-}
-
 /*
  * IP output.  The packet in mbuf chain m contains a skeletal IP
  * header (with len, off, ttl, proto, tos, src, dst).
@@ -219,6 +187,7 @@ ip_output(struct mbuf *m0, ...)
 	struct route iproute;
 	struct sockaddr_in *dst;
 	struct in_ifaddr *ia;
+	struct ifaddr *xifa;
 	struct mbuf *opt;
 	struct route *ro;
 	int flags, sw_csum;
@@ -431,6 +400,11 @@ ip_output(struct mbuf *m0, ...)
 				error = EADDRNOTAVAIL;
 				goto bad;
 			}
+			xifa = &xia->ia_ifa;
+			if (xifa->ifa_getifa != NULL) {
+				xia = ifatoia((*xifa->ifa_getifa)(xifa,
+				    &ro->ro_dst));
+			}
 			ip->ip_src = xia->ia_addr.sin_addr;
 		}
 
@@ -487,8 +461,12 @@ ip_output(struct mbuf *m0, ...)
 	 * If source address not specified yet, use address
 	 * of outgoing interface.
 	 */
-	if (in_nullhost(ip->ip_src))
+	if (in_nullhost(ip->ip_src)) {
+		xifa = &ia->ia_ifa;
+		if (xifa->ifa_getifa != NULL)
+			ia = ifatoia((*xifa->ifa_getifa)(xifa, &ro->ro_dst));
 		ip->ip_src = ia->ia_addr.sin_addr;
+	}
 
 	/*
 	 * packets with Class-D address as source are not valid per

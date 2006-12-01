@@ -1,4 +1,4 @@
-/*	$NetBSD: suff.c,v 1.59 2006/10/27 21:00:19 dsl Exp $	*/
+/*	$NetBSD: suff.c,v 1.61 2006/11/17 22:07:39 dsl Exp $	*/
 
 /*
  * Copyright (c) 1988, 1989, 1990, 1993
@@ -69,14 +69,14 @@
  */
 
 #ifndef MAKE_NATIVE
-static char rcsid[] = "$NetBSD: suff.c,v 1.59 2006/10/27 21:00:19 dsl Exp $";
+static char rcsid[] = "$NetBSD: suff.c,v 1.61 2006/11/17 22:07:39 dsl Exp $";
 #else
 #include <sys/cdefs.h>
 #ifndef lint
 #if 0
 static char sccsid[] = "@(#)suff.c	8.4 (Berkeley) 3/21/94";
 #else
-__RCSID("$NetBSD: suff.c,v 1.59 2006/10/27 21:00:19 dsl Exp $");
+__RCSID("$NetBSD: suff.c,v 1.61 2006/11/17 22:07:39 dsl Exp $");
 #endif
 #endif /* not lint */
 #endif
@@ -1522,6 +1522,14 @@ SuffExpandChildren(LstNode cln, GNode *pgn)
     GNode	*gn;	    /* New source 8) */
     char	*cp;	    /* Expanded value */
 
+    if (!Lst_IsEmpty(cgn->order_pred) || !Lst_IsEmpty(cgn->order_succ))
+	/* It is all too hard to process the result of .ORDER */
+	return;
+
+    if (cgn->type & OP_WAIT)
+	/* Ignore these (& OP_PHONY ?) */
+	return;
+
     /*
      * First do variable expansion -- this takes precedence over
      * wildcard expansion. If the result contains wildcards, they'll be gotten
@@ -2589,13 +2597,13 @@ SuffPrintSuff(ClientData sp, ClientData dummy)
 	    flags &= ~flag;
 	    switch (flag) {
 		case SUFF_NULL:
-		    printf("NULL");
+		    fprintf(debug_file, "NULL");
 		    break;
 		case SUFF_INCLUDE:
-		    printf("INCLUDE");
+		    fprintf(debug_file, "INCLUDE");
 		    break;
 		case SUFF_LIBRARY:
-		    printf("LIBRARY");
+		    fprintf(debug_file, "LIBRARY");
 		    break;
 	    }
 	    fputc(flags ? '|' : ')', debug_file);

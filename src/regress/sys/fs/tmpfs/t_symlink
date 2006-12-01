@@ -1,8 +1,8 @@
 #!/bin/sh
 #
-# $NetBSD: t_symlink,v 1.4 2006/04/16 16:21:06 simonb Exp $
+# $NetBSD: t_symlink,v 1.6 2006/11/09 16:20:06 jmmv Exp $
 #
-# Copyright (c) 2005 The NetBSD Foundation, Inc.
+# Copyright (c) 2005, 2006 The NetBSD Foundation, Inc.
 # All rights reserved.
 #
 # This code is derived from software contributed to The NetBSD Foundation
@@ -71,6 +71,14 @@ test_run() {
 	touch d/foo || die
 	[ -f d/foo ] || die
 	[ -f e/foo ] || die
+
+	mkdir dir || die
+	echo 'ln -s non-existent dir/a' | kqueue_monitor 1 dir || die
+	test_name "Creating a symlink raises NOTE_WRITE on the parent" \
+	    "directory"
+	kqueue_check dir NOTE_WRITE || die
+	rm dir/a || die
+	rmdir dir || die
 
 	test_unmount
 }

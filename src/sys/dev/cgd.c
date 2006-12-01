@@ -1,4 +1,4 @@
-/* $NetBSD: cgd.c,v 1.39 2006/10/12 06:57:27 xtraeme Exp $ */
+/* $NetBSD: cgd.c,v 1.41 2006/11/25 21:13:23 christos Exp $ */
 
 /*-
  * Copyright (c) 2002 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: cgd.c,v 1.39 2006/10/12 06:57:27 xtraeme Exp $");
+__KERNEL_RCSID(0, "$NetBSD: cgd.c,v 1.41 2006/11/25 21:13:23 christos Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -399,7 +399,7 @@ cgdiodone(struct buf *nbp)
 
 /* XXX: we should probably put these into dksubr.c, mostly */
 static int
-cgdread(dev_t dev, struct uio *uio, int flags __unused)
+cgdread(dev_t dev, struct uio *uio, int flags)
 {
 	struct	cgd_softc *cs;
 	struct	dk_softc *dksc;
@@ -414,7 +414,7 @@ cgdread(dev_t dev, struct uio *uio, int flags __unused)
 
 /* XXX: we should probably put these into dksubr.c, mostly */
 static int
-cgdwrite(dev_t dev, struct uio *uio, int flags __unused)
+cgdwrite(dev_t dev, struct uio *uio, int flags)
 {
 	struct	cgd_softc *cs;
 	struct	dk_softc *dksc;
@@ -542,6 +542,12 @@ cgd_ioctl_set(struct cgd_softc *cs, void *data, struct lwp *l)
 	if (ret)
 		goto bail;
 
+	if (ci->ci_blocksize > 4096) {
+		printf("cgd: large blocksize %zu\n", ci->ci_blocksize);
+		ret = ENOMEM;
+		goto bail;
+	}
+
 	cs->sc_cdata.cf_blocksize = ci->ci_blocksize;
 	cs->sc_cdata.cf_mode = CGD_CIPHER_CBC_ENCBLKNO;
 	cs->sc_cdata.cf_priv = cs->sc_cfuncs->cf_init(ci->ci_keylen, inbuf,
@@ -580,7 +586,7 @@ bail:
 
 /* ARGSUSED */
 static int
-cgd_ioctl_clr(struct cgd_softc *cs, void *data __unused, struct lwp *l)
+cgd_ioctl_clr(struct cgd_softc *cs, void *data, struct lwp *l)
 {
 	int	s;
 

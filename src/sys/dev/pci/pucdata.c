@@ -1,4 +1,4 @@
-/*	$NetBSD: pucdata.c,v 1.47 2006/10/09 20:33:04 cube Exp $	*/
+/*	$NetBSD: pucdata.c,v 1.49 2006/11/13 20:11:10 bouyer Exp $	*/
 
 /*
  * Copyright (c) 1998, 1999 Christopher G. Demetriou.  All rights reserved.
@@ -36,7 +36,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: pucdata.c,v 1.47 2006/10/09 20:33:04 cube Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pucdata.c,v 1.49 2006/11/13 20:11:10 bouyer Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -1010,6 +1010,19 @@ const struct puc_device_description puc_devices[] = {
 	    },
 	},
 
+       /* NetMos 4S1P PCI NM9855 : 4S, 1P */
+       {   "NetMos NM9855 Quad UART and 1284 Printer port (unknown type)",
+	    {	0x9710,	0x9855,	0x1000,	0x0014	},
+	    {	0xffff,	0xffff,	0xffff,	0xffff	},
+	    {
+		{ PUC_PORT_TYPE_LPT, 0x10, 0x00, 0x00 },
+		{ PUC_PORT_TYPE_COM, 0x18, 0x00, COM_FREQ },
+		{ PUC_PORT_TYPE_COM, 0x1c, 0x00, COM_FREQ },
+		{ PUC_PORT_TYPE_COM, 0x20, 0x00, COM_FREQ },
+		{ PUC_PORT_TYPE_COM, 0x24, 0x00, COM_FREQ },
+	    },
+	},
+
 	/*
 	 * This is the Middle Digital, Inc. PCI-Weasel, which
 	 * uses a PCI interface implemented in FPGA.
@@ -1031,6 +1044,21 @@ const struct puc_device_description puc_devices[] = {
 		{ PUC_PORT_TYPE_COM, 0x14, 0x00, COM_FREQ },
 		{ PUC_PORT_TYPE_COM, 0x18, 0x00, COM_FREQ },
 		{ PUC_PORT_TYPE_COM, 0x1c, 0x00, COM_FREQ },
+	    },
+	},
+
+
+	/*
+	 * Perle PCI-RAS 4 Modem ports
+	 */
+	{   "Perle Systems PCI-RAS 4 modem ports",
+	    {	0x10b5, 0x9030, 0x155f, 0xf001	},
+	    {	0xffff, 0xffff, 0xffff, 0xffff	},
+	    {
+		{ PUC_PORT_TYPE_COM, 0x18, 0x00, COM_FREQ * 4 },
+		{ PUC_PORT_TYPE_COM, 0x18, 0x08, COM_FREQ * 4 },
+		{ PUC_PORT_TYPE_COM, 0x18, 0x10, COM_FREQ * 4 },
+		{ PUC_PORT_TYPE_COM, 0x18, 0x18, COM_FREQ * 4 },
 	    },
 	},
 

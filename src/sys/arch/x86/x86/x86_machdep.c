@@ -1,4 +1,4 @@
-/*	$NetBSD: x86_machdep.c,v 1.2 2006/10/30 00:41:26 elad Exp $	*/
+/*	$NetBSD: x86_machdep.c,v 1.4 2006/11/22 12:12:51 elad Exp $	*/
 
 /*-
  * Copyright (c) 2005 The NetBSD Foundation, Inc.
@@ -37,20 +37,21 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: x86_machdep.c,v 1.2 2006/10/30 00:41:26 elad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: x86_machdep.c,v 1.4 2006/11/22 12:12:51 elad Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/kcore.h>
 #include <sys/errno.h>
+#include <sys/kauth.h>
 
 #include <machine/bootinfo.h>
 #include <machine/vmparam.h>
 
 #include <uvm/uvm_extern.h>
 
-int check_pa_acc(paddr_t, vm_prot_t __unused);
+int check_pa_acc(paddr_t, vm_prot_t);
 
 /* --------------------------------------------------------------------- */
 
@@ -92,13 +93,14 @@ lookup_bootinfo(int type)
  * check_pa_acc: check if given pa is accessible.
  */
 int
-check_pa_acc(paddr_t pa, vm_prot_t prot __unused)
+check_pa_acc(paddr_t pa, vm_prot_t prot)
 {
 	extern phys_ram_seg_t mem_clusters[VM_PHYSSEG_MAX];
 	extern int mem_cluster_cnt;
 	int i;
 
-	if (securelevel <= 0) {
+	if (kauth_authorize_machdep(kauth_cred_get(), KAUTH_MACHDEP_X86,
+	    KAUTH_REQ_MACHDEP_X86_UNMANAGEDMEM, NULL, NULL, NULL) == 0) {
 		return 0;
 	}
 

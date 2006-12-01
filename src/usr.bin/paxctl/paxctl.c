@@ -1,4 +1,4 @@
-/* $NetBSD: paxctl.c,v 1.3 2006/09/27 20:01:50 elad Exp $ */
+/* $NetBSD: paxctl.c,v 1.10 2006/11/22 15:08:47 riz Exp $ */
 
 /*-
  * Copyright (c) 2006 Elad Efrat <elad@NetBSD.org>
@@ -29,12 +29,23 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#if HAVE_NBTOOL_CONFIG_H
+#include "nbtool_config.h"
+#endif
+
+#include <sys/cdefs.h>
+#ifndef lint
+#ifdef __RCSID
+__RCSID("$NetBSD: paxctl.c,v 1.10 2006/11/22 15:08:47 riz Exp $");
+#endif
+#endif /* not lint */
 
 #include <sys/types.h>
-#include <machine/elf_machdep.h>
-#define	ELFSIZE	ARCH_ELFSIZE
-#include <sys/exec_elf.h>
+#ifdef HAVE_NBTOOL_CONFIG_H
+#include "../../sys/sys/exec_elf.h"
+#else
 #include <elf.h>
+#endif
 #include <stdio.h>
 #include <err.h>
 #include <fcntl.h>
@@ -42,83 +53,123 @@
 #include <stdlib.h>
 #include <string.h>
 
-void usage(void);
-int pax_flag(char *);
-int pax_flags_sane(int);
-int pax_haveflags(int);
-void pax_printflags(int);
+static void usage(void) __attribute__((__noreturn__));
+static int pax_flag(const char *);
+static int pax_flags_sane(u_long);
+static int pax_haveflags(u_long);
+static void pax_printflags(u_long);
 
-struct paxflag {
+#ifndef PF_PAXMPROTECT
+#define PF_PAXMPROTECT		0x08000000
+#define PF_PAXNOMPROTECT	0x04000000
+#endif
+#ifndef PF_PAXGUARD
+#define PF_PAXGUARD		0x02000000
+#define PF_PAXNOGUARD		0x01000000
+#endif
+#ifndef __arraycount
+#define __arraycount(a) (sizeof(a) / sizeof(a[0]))
+#endif
+
+
+static const struct paxflag {
 	char mark;
-	char *name;
+	const char *name;
 	int bits;
 } flags[] = {
+	{ 'G', "Segvguard, explicit enable", PF_PAXGUARD },
+	{ 'g', "Segvguard, explicit disable", PF_PAXNOGUARD },
 	{ 'M', "mprotect(2) restrictions, explicit enable", PF_PAXMPROTECT },
 	{ 'm', "mprotect(2) restrictions, explicit disable", PF_PAXNOMPROTECT },
 };
 
-void
+static void
 usage(void)
 {
-	errx(1, "Usage: %s [ <-|+>m | <-|+>M ] <file>", getprogname());
+	(void)fprintf(stderr, "Usage: %s [ <-|+><G|g|M|m> ] <file>\n",
+#if HAVE_NBTOOL_CONFIG_H
+	    "paxctl"
+#else
+	    getprogname()
+#endif
+	);
+	exit(1);
 }
 
-int
-pax_flag(char *s)
+static int
+pax_flag(const char *s)
 {
-	int i;
+	size_t i;
 
-	if (*s == '\0' || !(*(s + 1) == '\0'))
-		return (-1);
+	if (s[0] == '\0' || s[1] != '\0')
+		return -1;
 
-	for (i = 0; i < sizeof(flags)/sizeof(flags[0]); i++)
+	for (i = 0; i < __arraycount(flags); i++)
 		if (*s == flags[i].mark)
-			return (flags[i].bits);
+			return flags[i].bits;
 
-	return (-1);
+	return -1;
 }
 
-int
-pax_flags_sane(int f)
+static int
+pax_flags_sane(u_long f)
 {
-	int i;
+	size_t i;
 
-	for (i = 0; i < sizeof(flags)/sizeof(flags[0]); i += 2)
-		if ((f & (flags[i].bits|flags[i+1].bits)) ==
-		    (flags[i].bits|flags[i+1].bits))
-		return (0);
+	for (i = 0; i < __arraycount(flags) - 1; i += 2) {
+		int g = flags[i].bits | flags[i+1].bits;
+		if ((f & g) == g)
+			return 0;
+	}
 
-	return (1);
+	return 1;
 }
 
-int
-pax_haveflags(int f)
+static int
+pax_haveflags(u_long f)
 {
-	int i;
+	size_t i;
 
-	for (i = 0; i < sizeof(flags)/sizeof(flags[0]); i++)
+	for (i = 0; i < __arraycount(flags); i++)
 		if (f & flags[i].bits)
 			return (1);
 
 	return (0);
 }
 
-void
-pax_printflags(int f)
+static void
+pax_printflags(u_long f)
 {
-	int i;
+	size_t i;
 
-	for (i = 0; i < sizeof(flags) / sizeof(flags[0]); i++) {
+	for (i = 0; i < __arraycount(flags); i++)
 		if (f & flags[i].bits)
-			printf("  %c: %s\n", flags[i].mark, flags[i].name);
-	}
+			(void)printf("  %c: %s\n",
+			    flags[i].mark, flags[i].name);
 }
 
 int
 main(int argc, char **argv)
 {
-	Elf_Ehdr eh;
-	Elf_Phdr ph;
+	union {
+	    Elf32_Ehdr h32;
+	    Elf64_Ehdr h64;
+	} e;
+	union {
+	    Elf32_Phdr h32;
+	    Elf64_Phdr h64;
+	} p;
+#define EH(field)	(size == 32 ? e.h32.field : e.h64.field)
+#define PH(field)	(size == 32 ? p.h32.field : p.h64.field)
+#define SPH(field, val)	do { \
+    if (size == 32) \
+	    p.h32.field val; \
+    else \
+	    p.h64.field val; \
+} while (/*CONSTCOND*/0)
+#define PHSIZE		(size == 32 ? sizeof(p.h32) : sizeof(p.h64))
+
+	int size;
 	char *opt = NULL;
 	int fd, i, add_flags = 0, del_flags = 0, list = 0, ok = 0, flagged = 0;
 
@@ -157,62 +208,73 @@ main(int argc, char **argv)
 	fd = open(opt, O_RDWR, 0);
 	if (fd == -1) {
 		if (!list || (fd = open(opt, O_RDONLY, 0))  == -1)
-			err(1, "Can't open `%s'", opt);
+			err(EXIT_FAILURE, "Can't open `%s'", opt);
 	}
 
-	if (read(fd, &eh, sizeof(eh)) != sizeof(eh))
-		err(1, "Can't read ELF header from `%s'", opt);
+	if (read(fd, &e, sizeof(e)) != sizeof(e))
+		err(EXIT_FAILURE, "Can't read ELF header from `%s'", opt);
 
-	if (memcmp(eh.e_ident, ELFMAG, SELFMAG) != 0)
-		errx(1, "Bad ELF magic from `%s' (maybe it's not an ELF?)",
-		    opt);
+	if (memcmp(e.h32.e_ident, ELFMAG, SELFMAG) != 0)
+		errx(EXIT_FAILURE,
+		    "Bad ELF magic from `%s' (maybe it's not an ELF?)", opt);
 
-	for (i = 0; i < eh.e_phnum; i++) {
-		if (pread(fd, &ph, sizeof(ph),
-			  eh.e_phoff + i * sizeof(ph)) != sizeof(ph))
-			err(1, "Can't read data from `%s'", opt);
+	if (e.h32.e_ehsize == sizeof(e.h32))
+		size = 32;
+	else if (e.h64.e_ehsize == sizeof(e.h64))
+		size = 64;
+	else
+		errx(EXIT_FAILURE,
+		    "Bad ELF size %d from `%s' (maybe it's not an ELF?)",
+		    (int)e.h32.e_ehsize, opt);
 
-		if (ph.p_type == PT_NOTE) {
-			ok = 1;
+	for (i = 0; i < EH(e_phnum); i++) {
+		if (pread(fd, &p, PHSIZE,
+		    (off_t)EH(e_phoff) + i * PHSIZE) != PHSIZE)
+			err(EXIT_FAILURE, "Can't read data from `%s'", opt);
 
-			if (list) {
-				if (!pax_haveflags(ph.p_flags))
-					break;
+		if (PH(p_type) != PT_NOTE)
+			continue;
 
-				if (!pax_flags_sane(ph.p_flags))
-					warnx("Flags don't make sense");
+		ok = 1;
 
-				(void)printf("PaX flags:\n");
-
-				pax_printflags(ph.p_flags);
-
-				flagged = 1;
-
+		if (list) {
+			if (!pax_haveflags((u_long)PH(p_flags)))
 				break;
-			}
 
-			ph.p_flags |= add_flags;
-			ph.p_flags &= ~del_flags;
+			if (!pax_flags_sane((u_long)PH(p_flags)))
+				warnx("Current flags %lx don't make sense",
+				    (u_long)PH(p_flags));
 
-			if (!pax_flags_sane(ph.p_flags))
-				errx(1, "New flags don't make sense");
+			(void)printf("PaX flags:\n");
 
-			if (pwrite(fd, &ph, sizeof(ph),
-				   eh.e_phoff + i * sizeof(ph)) != sizeof(ph))
-				err(1, "Can't modify flags on `%s'", opt);
+			pax_printflags((u_long)PH(p_flags));
+
+			flagged = 1;
 
 			break;
 		}
+
+		SPH(p_flags, |= add_flags);
+		SPH(p_flags, &= ~del_flags);
+
+		if (!pax_flags_sane((u_long)PH(p_flags)))
+			errx(EXIT_FAILURE, "New flags %lx don't make sense",
+			    (u_long)PH(p_flags));
+
+		if (pwrite(fd, &p, PHSIZE,
+		    (off_t)EH(e_phoff) + i * PHSIZE) != PHSIZE)
+			err(EXIT_FAILURE, "Can't modify flags on `%s'", opt);
+
+		break;
 	}
-
-	if (!ok)
-		errx(1, "Could not find an ELF PT_NOTE section in `%s'",
-		     opt);
-
-	if (list && !flagged)
-		(void)printf("No PaX flags.\n");
 
 	(void)close(fd);
 
-	return (0);
+	if (!ok)
+		errx(EXIT_FAILURE,
+		    "Could not find an ELF PT_NOTE section in `%s'", opt);
+
+	if (list && !flagged)
+		(void)printf("No PaX flags.\n");
+	return 0;
 }

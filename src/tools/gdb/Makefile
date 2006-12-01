@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.5 2006/07/21 11:23:02 lukem Exp $
+#	$NetBSD: Makefile,v 1.9 2006/11/25 16:06:04 skrll Exp $
 
 .include <bsd.own.mk>
 
@@ -16,10 +16,32 @@ INSTALL_TARGET=	install-gdb
 
 .include "${.CURDIR}/../Makefile.gnuhost"
 
-CCADDFLAGS=	-I${DESTDIR}/usr/include -L${DESTDIR}/lib -L${DESTDIR}/usr/lib -B${DESTDIR}/usr/lib/
+CCADDFLAGS=     ${CPPFLAG_ISYSTEM} ${DESTDIR}/usr/include -L${DESTDIR}/lib -L${DESTDIR}/usr/lib -B${DESTDIR}/usr/lib/
 
 NEWCONFIGDIR?=	${.CURDIR}/../..
 MKNATIVE?=	${.CURDIR}/mknative-gdb
+
+# Some configure tests require running a test program, which is not
+# possible when cross-building.  Provide configure with "cached"
+# values in the environment.
+MKNATIVE_CONFIGURE_PRESET= \
+	ac_cv_prog_cc_cross=yes \
+	ac_cv_func_fork_works=yes \
+	ac_cv_func_strcoll_works=yes \
+	bash_cv_func_ctype_nonascii=yes \
+	bash_cv_func_sigsetjmp=present \
+	bash_cv_func_strcoll_broken=no \
+	bash_cv_must_reinstall_sighandlers=no
+
+# Disable sim unless it's known to work (configure's default is to
+# enable sim if supported).
+CONFIGURE_ARGS_SIM=
+.if \
+    ${MACHINE_CPU} != "mips" && \
+    ${MACHINE_CPU} != "powerpc" && \
+    ${MACHINE_CPU} != "powerpc64"
+CONFIGURE_ARGS_SIM+= --disable-sim
+.endif
 
 native-gdb: .native/.configure_done
 	@echo 'Extracting GDB configury for a native toolchain.'
@@ -33,20 +55,22 @@ native-gdb: .native/.configure_done
 			CC_FOR_BUILD=${HOST_CC:Q} \
 			CC=${CC:Q}' '${CCADDFLAGS:Q} \
 			CXX=${CXX:Q}' '${CCADDFLAGS:Q} \
-			CPP=${CPP:Q}' '-I${DESTDIR}/usr/include \
+			CPP=${CPP:Q}' '-isystem' '${DESTDIR}/usr/include \
 			CFLAGS= CPPFLAGS= CXXFLAGS= LDFLAGS= \
 			MSGFMT=${TOOLDIR}/bin/${_TOOL_PREFIX}msgfmt \
 			XGETTEXT=${TOOLDIR}/bin/${_TOOL_PREFIX}xgettext \
 			LIBS=-lintl \
-			ac_cv_prog_cc_cross=yes \
-			ac_cv_func_strcoll_works=yes \
+			${MKNATIVE_CONFIGURE_PRESET} \
 			${HOST_SH} ${GNUHOSTDIST}/configure \
 			--prefix=/usr \
 			--with-separate-debug-dir=/usr/libdata/debug \
+			${CONFIGURE_ARGS_SIM} \
 			--build=`${GNUHOSTDIST}/config.guess` \
 			--host=${MACHINE_GNU_PLATFORM} \
 			--target=${MACHINE_GNU_PLATFORM}) && \
-		(cd ${.OBJDIR}/.native && ${MAKE} configure-host) && \
+		(cd ${.OBJDIR}/.native && \
+			/usr/bin/env ${MKNATIVE_CONFIGURE_PRESET} \
+				${MAKE} configure-host) && \
 		(cd ${.OBJDIR}/.native/bfd && ${MAKE} bfd.h bfdver.h) && \
 		(cd ${.OBJDIR}/.native/gdb && ${MAKE} init.c version.c)
 	@touch $@

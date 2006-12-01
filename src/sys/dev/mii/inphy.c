@@ -1,4 +1,4 @@
-/*	$NetBSD: inphy.c,v 1.41 2006/10/12 01:31:25 christos Exp $	*/
+/*	$NetBSD: inphy.c,v 1.43 2006/11/16 21:24:07 christos Exp $	*/
 
 /*-
  * Copyright (c) 1998, 1999, 2000 The NetBSD Foundation, Inc.
@@ -72,7 +72,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: inphy.c,v 1.41 2006/10/12 01:31:25 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: inphy.c,v 1.43 2006/11/16 21:24:07 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -124,7 +124,7 @@ static const struct mii_phydesc inphys[] = {
 };
 
 static int
-inphymatch(struct device *parent __unused, struct cfdata *match __unused,
+inphymatch(struct device *parent, struct cfdata *match,
     void *aux)
 {
 	struct mii_attach_args *ma = aux;
@@ -136,7 +136,7 @@ inphymatch(struct device *parent __unused, struct cfdata *match __unused,
 }
 
 static void
-inphyattach(struct device *parent __unused, struct device *self, void *aux)
+inphyattach(struct device *parent, struct device *self, void *aux)
 {
 	struct mii_softc *sc = device_private(self);
 	struct mii_attach_args *ma = aux;
@@ -152,7 +152,7 @@ inphyattach(struct device *parent __unused, struct device *self, void *aux)
 	sc->mii_funcs = &inphy_funcs;
 	sc->mii_pdata = mii;
 	sc->mii_flags = ma->mii_flags;
-	sc->mii_anegticks = 5;
+	sc->mii_anegticks = MII_ANEGTICKS;
 
 	PHY_RESET(sc);
 

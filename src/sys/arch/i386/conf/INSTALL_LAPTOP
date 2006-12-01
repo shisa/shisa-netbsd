@@ -1,4 +1,4 @@
-#	$NetBSD: INSTALL_LAPTOP,v 1.104 2006/10/21 14:10:33 bouyer Exp $
+#	$NetBSD: INSTALL_LAPTOP,v 1.110 2006/11/28 16:24:54 christos Exp $
 #
 #	INSTALL - Installation kernel.
 #
@@ -19,12 +19,13 @@ options 	MEMORY_DISK_IS_ROOT	# force root on memory disk
 options 	MEMORY_DISK_SERVER=0	# no userspace memory disk support
 options 	MEMORY_DISK_ROOT_SIZE=10000	# size of memory disk, in blocks
 
-makeoptions	COPTS="-Os"		# generates smaller code than -O2, -O1
+makeoptions	CPUFLAGS="-march=i486 -mtune=i486"	# i486 is densest code
+makeoptions	COPTS="-Os"
 
 maxusers	32		# estimated number of users
 
 # CPU support.  At least one is REQUIRED.
-options 	I386_CPU
+#options 	I386_CPU
 options 	I486_CPU
 options 	I586_CPU
 options 	I686_CPU
@@ -112,14 +113,14 @@ file-system 	NTFS		# Windows/NT Filesystem
 file-system 	CD9660		# ISO 9660 + Rock Ridge file system
 file-system 	MSDOSFS		# MS-DOS file system
 #file-system 	FDESC		# /dev/fd
-file-system 	KERNFS		# /kern
+#file-system 	KERNFS		# /kern
 #file-system 	NULLFS		# loopback file system
 #file-system 	PORTAL		# portal filesystem (still experimental)
 #file-system 	PROCFS		# /proc
 #file-system 	UMAPFS		# NULLFS + uid and gid remapping
 #file-system 	UNION		# union file system
 #file-system	PTYFS		# /dev/pts/N support
-#file-system	TMPFS		# experimental - Efficient memory file-system
+#file-system	TMPFS		# Efficient memory file-system
 
 # File system options
 #options 	QUOTA		# UFS quotas
@@ -452,6 +453,7 @@ ne*	at pcmcia? function ?		# NE2000-compatible Ethernet
 ray*	at pcmcia? function ?		# Raytheon Raylink (802.11)
 sm*	at pcmcia? function ?		# Megahertz Ethernet
 wi*	at pcmcia? function ?		# Lucent/Intersil WaveLan IEEE (802.11)
+options         WI_PCMCIA_SPECTRUM24T_FW=0
 xirc*	at pcmcia? function ?		# Xircom CreditCard Ethernet
 com*	at xirc?
 xi*	at xirc?

@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile.inc,v 1.154 2006/10/27 20:00:55 christos Exp $
+#	$NetBSD: Makefile.inc,v 1.157 2006/11/22 17:23:25 christos Exp $
 #	from: @(#)Makefile.inc	8.6 (Berkeley) 5/4/95
 
 # gen sources
@@ -36,6 +36,12 @@ SRCS+= 	_errno.c alarm.c alphasort.c arc4random.c assert.c basename.c clock.c \
 # indirect reference stubs, to be removed soon.
 SRCS+=	_err.c _errx.c \
 	_sysconf.c _verr.c _verrx.c _vwarn.c _vwarnx.c _warn.c _warnx.c
+
+# uses alloca
+COPTS.execvp.c = -Wno-stack-protector
+COPTS.execl.c = -Wno-stack-protector
+COPTS.execle.c = -Wno-stack-protector
+COPTS.execlp.c = -Wno-stack-protector
 
 # machine-dependent gen sources
 # m-d Makefile.inc must include sources for:
@@ -138,8 +144,7 @@ MLINKS+=sysctl.3 sysctlbyname.3 sysctl.3 sysctlgetmibinfo.3 \
 MLINKS+=syslog.3 closelog.3 syslog.3 openlog.3 syslog.3 setlogmask.3 \
 	syslog.3 vsyslog.3
 MLINKS+=syslog.3 closelog_r.3 syslog.3 openlog_r.3 syslog.3 setlogmask_r.3 \
-	syslog.3 syslog_r.3 syslog.3 vsyslog_r.3 syslog.3 syslog_ss.3 \
-	syslog.3 vsyslog_ss.3
+	syslog.3 syslog_r.3 syslog.3 vsyslog_r.3
 MLINKS+=ttyname.3 isatty.3 ttyname.3 ttyslot.3 ttyname.3 ttyname_r.3
 MLINKS+=unvis.3 strunvis.3
 MLINKS+=vis.3 svis.3 vis.3 strvis.3 vis.3 strvisx.3 vis.3 strsvis.3 \
