@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.665 2006/10/26 17:12:34 kleink Exp $
+# $NetBSD: mi,v 1.677 2006/11/25 10:27:22 tnozaki Exp $
 .						base-sys-root
 ./altroot					base-sys-root
 ./bin						base-sys-root
@@ -99,7 +99,7 @@
 ./etc/sliphome					base-slip-root
 ./etc/ssh					base-sys-root
 ./etc/systrace					base-util-root
-./etc/uucp					base-uucp-root
+./etc/uucp					base-obsolete		obsolete
 ./lib						base-sys-root
 ./lib/libdes.so					base-obsolete		obsolete
 ./lib/libdes.so.6				base-obsolete		obsolete
@@ -111,7 +111,11 @@
 ./libdata/firmware/ral/ral-rt2561		base-sys-root
 ./libdata/firmware/ral/ral-rt2561s		base-sys-root
 ./libdata/firmware/ral/ral-rt2661		base-sys-root
+./libdata/firmware/rum				base-sys-root
+./libdata/firmware/rum/rum-license		base-sys-root
+./libdata/firmware/rum/rum-rt2573		base-sys-root
 ./libexec					base-sys-root
+./libexec/lfs_cleanerd				base-sysutil-bin
 ./mnt						base-sys-root
 ./rescue					base-sys-root
 ./root						base-sys-root
@@ -468,6 +472,7 @@
 ./usr/bin/getent				base-util-bin
 ./usr/bin/getextattr				base-util-bin
 ./usr/bin/getopt				base-util-bin
+./usr/bin/gkermit				base-util-bin
 ./usr/bin/grep					base-util-bin
 ./usr/bin/groups				base-util-bin
 ./usr/bin/gunzip				base-util-bin
@@ -672,17 +677,17 @@
 ./usr/bin/usbhidctl				base-util-bin
 ./usr/bin/users					base-util-bin
 ./usr/bin/utoppya				base-util-bin
-./usr/bin/uucp					base-uucp-bin		uucp
+./usr/bin/uucp					base-obsolete		obsolete
 ./usr/bin/uudecode				base-util-bin
 ./usr/bin/uuencode				base-util-bin
 ./usr/bin/uuidgen				base-util-bin
-./usr/bin/uulog					base-uucp-bin		uucp
-./usr/bin/uuname				base-uucp-bin		uucp
-./usr/bin/uupick				base-uucp-bin		uucp
-./usr/bin/uusched				base-uucp-bin		uucp
-./usr/bin/uustat				base-uucp-bin		uucp
-./usr/bin/uuto					base-uucp-bin		uucp
-./usr/bin/uux					base-uucp-bin		uucp
+./usr/bin/uulog					base-obsolete		obsolete
+./usr/bin/uuname				base-obsolete		obsolete
+./usr/bin/uupick				base-obsolete		obsolete
+./usr/bin/uusched				base-obsolete		obsolete
+./usr/bin/uustat				base-obsolete		obsolete
+./usr/bin/uuto					base-obsolete		obsolete
+./usr/bin/uux					base-obsolete		obsolete
 ./usr/bin/vacation				base-mail-bin
 ./usr/bin/vi					base-util-bin
 ./usr/bin/view					base-util-bin
@@ -823,6 +828,7 @@
 ./usr/include/rpcsvc				base-c-usr
 ./usr/include/security				base-c-usr
 ./usr/include/ss				base-obsolete		obsolete
+./usr/include/ssp				base-c-usr
 ./usr/include/sys				base-c-usr
 ./usr/include/ufs				base-c-usr
 ./usr/include/ufs/ext2fs			base-c-usr
@@ -886,7 +892,7 @@
 ./usr/libdata/debug/usr/libexec/ching		base-sys-usr
 ./usr/libdata/debug/usr/libexec/lpr		base-sys-usr
 ./usr/libdata/debug/usr/libexec/postfix		base-sys-usr
-./usr/libdata/debug/usr/libexec/uucp		base-sys-usr
+./usr/libdata/debug/usr/libexec/uucp		base-obsolete		obsolete
 ./usr/libdata/debug/usr/sbin			base-sys-usr
 ./usr/libdata/firmware				base-sys-usr
 ./usr/libdata/lint				base-c-usr
@@ -909,7 +915,7 @@
 ./usr/libexec/kdc				base-obsolete		obsolete
 ./usr/libexec/kfd				base-obsolete		obsolete
 ./usr/libexec/kpasswdd				base-krb5-bin		kerberos
-./usr/libexec/lfs_cleanerd			base-sysutil-bin
+./usr/libexec/lfs_cleanerd			base-sysutil-bin	obsolete
 ./usr/libexec/locate.bigram			base-sysutil-bin
 ./usr/libexec/locate.code			base-sysutil-bin
 ./usr/libexec/locate.updatedb			base-sysutil-bin
@@ -953,7 +959,7 @@
 ./usr/libexec/postfix/virtual			base-postfix-bin	postfix
 ./usr/libexec/rexecd				base-netutil-bin
 ./usr/libexec/rlogind				base-netutil-bin
-./usr/libexec/rmail				base-uucp-bin
+./usr/libexec/rmail				base-obsolete		obsolete
 ./usr/libexec/rpc.rquotad			base-nfsserver-bin
 ./usr/libexec/rpc.rstatd			base-rpcserver-bin
 ./usr/libexec/rpc.rusersd			base-rpcserver-bin
@@ -973,13 +979,13 @@
 ./usr/libexec/telnetd				base-netutil-bin
 ./usr/libexec/tftpd				base-netutil-bin
 ./usr/libexec/utmp_update			base-sysutil-bin
-./usr/libexec/uucp				base-uucp-bin
+./usr/libexec/uucp				base-obsolete		obsolete
 ./usr/libexec/uucp/uuchk			base-obsolete		obsolete
-./usr/libexec/uucp/uucico			base-uucp-bin		uucp
-./usr/libexec/uucp/uuconv			base-uucp-bin		uucp
-./usr/libexec/uucp/uuxqt			base-uucp-bin		uucp
-./usr/libexec/uucpd				base-uucp-bin
-./usr/libexec/uugetty				base-uucp-bin
+./usr/libexec/uucp/uucico			base-obsolete		obsolete
+./usr/libexec/uucp/uuconv			base-obsolete		obsolete
+./usr/libexec/uucp/uuxqt			base-obsolete		obsolete
+./usr/libexec/uucpd				base-obsolete		obsolete
+./usr/libexec/uugetty				base-obsolete		obsolete
 ./usr/libexec/virecover				base-util-bin
 ./usr/lkm					base-sys-usr
 ./usr/mdec					base-sys-usr
@@ -1262,7 +1268,7 @@
 ./usr/sbin/userdel				base-sysutil-bin
 ./usr/sbin/userinfo				base-sysutil-bin
 ./usr/sbin/usermod				base-sysutil-bin
-./usr/sbin/uuchk				base-uucp-bin		uucp
+./usr/sbin/uuchk				base-obsolete		obsolete
 ./usr/sbin/veriexecgen				base-sysutil-bin
 ./usr/sbin/vipw					base-sysutil-bin
 ./usr/sbin/vnconfig				base-sysutil-bin
@@ -1351,8 +1357,8 @@
 ./usr/share/doc/smm/11.timedop			base-smm-share
 ./usr/share/doc/smm/12.timed			base-smm-share
 ./usr/share/doc/smm/13.amd			base-smm-share
-./usr/share/doc/smm/14.uucpimpl			base-smm-share
-./usr/share/doc/smm/15.uucpnet			base-smm-share
+./usr/share/doc/smm/14.uucpimpl			base-obsolete		obsolete
+./usr/share/doc/smm/15.uucpnet			base-obsolete		obsolete
 ./usr/share/doc/smm/16.security			base-smm-share
 ./usr/share/doc/smm/17.password			base-smm-share
 ./usr/share/doc/smm/18.net			base-smm-share
@@ -1532,6 +1538,7 @@
 ./usr/share/i18n/csmapper/CP/CP10081%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP1026%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP1131%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/CP1133%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP1250%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP1251%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP1252%UCS.mps	base-sysutil-share	nls
@@ -1584,7 +1591,10 @@
 ./usr/share/i18n/csmapper/CP/CP904%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP905%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP918%UCS.mps	base-sysutil-share	nls
-./usr/share/i18n/csmapper/CP/CP932EXT%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/CP932EXT%UCS.mps	base-obsolete		obsolete
+./usr/share/i18n/csmapper/CP/CP932UDA%UCS.mps		base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/CP932VDC@IBM%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/CP932VDC@NEC_IBM%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP936EXT%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP949EXT%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP950%UCS.mps	base-sysutil-share	nls
@@ -1599,6 +1609,7 @@
 ./usr/share/i18n/csmapper/CP/UCS%CP10081.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP1026.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP1131.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/UCS%CP1133.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP1250.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP1251.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP1252.mps	base-sysutil-share	nls
@@ -1651,7 +1662,10 @@
 ./usr/share/i18n/csmapper/CP/UCS%CP904.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP905.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP918.mps	base-sysutil-share	nls
-./usr/share/i18n/csmapper/CP/UCS%CP932EXT.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/UCS%CP932EXT.mps	base-obsolete		obsolete
+./usr/share/i18n/csmapper/CP/UCS%CP932UDA.mps		base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/UCS%CP932VDC@IBM.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/UCS%CP932VDC@NEC_IBM.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP936EXT.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP949EXT.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP950.mps	base-sysutil-share	nls
@@ -1685,6 +1699,7 @@
 ./usr/share/i18n/csmapper/EBCDIC/UCS%EBCDIC-PT.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/EBCDIC/UCS%EBCDIC-UK.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/GB			base-sysutil-share
+./usr/share/i18n/csmapper/GB/GB12345%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/GB/GB18030%UCS@BMP.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/GB/GB2312%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/GB/GB2312EXT%UCS.mps	base-sysutil-share	nls
@@ -1693,6 +1708,7 @@
 ./usr/share/i18n/csmapper/GB/GBKEXT%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/GB/GBKUDA%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/GB/ISO-IR-165EXT%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/GB/UCS%GB12345.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/GB/UCS%GB2312.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/GB/UCS%GB2312EXT.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/GB/UCS%GB2312UDA1.mps	base-sysutil-share	nls
@@ -1823,6 +1839,7 @@
 ./usr/share/i18n/csmapper/MISC/HP-ROMAN8%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/KOI8-R%UCS.mps	base-obsolete		obsolete
 ./usr/share/i18n/csmapper/MISC/KOI8-U%UCS.mps	base-obsolete		obsolete
+./usr/share/i18n/csmapper/MISC/MULELAO-1%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/NEXTSTEP%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/PTCP154%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/UCS%ATARIST.mps	base-sysutil-share	nls
@@ -1830,8 +1847,14 @@
 ./usr/share/i18n/csmapper/MISC/UCS%HP-ROMAN8.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/UCS%KOI8-R.mps	base-obsolete		obsolete
 ./usr/share/i18n/csmapper/MISC/UCS%KOI8-U.mps	base-obsolete		obsolete
+./usr/share/i18n/csmapper/MISC/UCS%MULELAO-1.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/UCS%NEXTSTEP.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/UCS%PTCP154.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/TCVN			base-sysutil-share
+./usr/share/i18n/csmapper/TCVN/TCVN5712-1%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/TCVN/VISCII%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/TCVN/UCS%TCVN5712-1.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/TCVN/UCS%VISCII.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/charset.pivot		base-sysutil-share	nls
 ./usr/share/i18n/csmapper/charset.pivot.pvdb	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/mapper.dir		base-sysutil-share	nls
@@ -1873,6 +1896,7 @@
 ./usr/share/i18n/esdb/CP/CP10081.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP1026.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP1131.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/CP/CP1133.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP1250.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP1251.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP1252.esdb		base-sysutil-share	nls
@@ -1898,6 +1922,10 @@
 ./usr/share/i18n/esdb/CP/CP424.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP437.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP500.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/CP/CP50220.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/CP/CP50221.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/CP/CP50222.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/CP/CP51932.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP737.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP775.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP850.esdb		base-sysutil-share	nls
@@ -1950,6 +1978,10 @@
 ./usr/share/i18n/esdb/EUC/EUC-JP.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/EUC/EUC-KR.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/EUC/EUC-TW.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/GB			base-sysutil-share
+./usr/share/i18n/esdb/GB/GB12345.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/GB/GB18030.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/GB/GBK.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/GEORGIAN					base-sysutil-share
 ./usr/share/i18n/esdb/GEORGIAN/GEORGIAN-ACADEMY-OldCapital.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/GEORGIAN/GEORGIAN-ACADEMY.esdb		base-sysutil-share	nls
@@ -1958,6 +1990,7 @@
 ./usr/share/i18n/esdb/ISO-2022			base-sysutil-share
 ./usr/share/i18n/esdb/ISO-2022/ISO-2022-CN-EXT.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/ISO-2022/ISO-2022-CN.esdb	base-sysutil-share	nls
+./usr/share/i18n/esdb/ISO-2022/ISO-2022-JP-1.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/ISO-2022/ISO-2022-JP-2.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/ISO-2022/ISO-2022-JP.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/ISO-2022/ISO-2022-KR.esdb	base-sysutil-share	nls
@@ -2017,16 +2050,26 @@
 ./usr/share/i18n/esdb/MISC			base-sysutil-share
 ./usr/share/i18n/esdb/MISC/ATARIST.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/Big5.esdb		base-obsolete		obsolete
+./usr/share/i18n/esdb/MISC/C99.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/CTEXT.esdb		base-sysutil-share	nls
-./usr/share/i18n/esdb/MISC/GB18030.esdb		base-sysutil-share	nls
-./usr/share/i18n/esdb/MISC/GBK.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/MISC/GB18030.esdb		base-obsolete		obsolete
+./usr/share/i18n/esdb/MISC/GBK.esdb		base-obsolete		obsolete
 ./usr/share/i18n/esdb/MISC/HP-ROMAN8.esdb	base-sysutil-share	nls
+./usr/share/i18n/esdb/MISC/HZ.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/MISC/HZ8.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/MISC/JAVA.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/JOHAB.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/KOI8-R.esdb		base-obsolete		obsolete
 ./usr/share/i18n/esdb/MISC/KOI8-U.esdb		base-obsolete		obsolete
+./usr/share/i18n/esdb/MISC/MULELAO-1.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/NEXTSTEP.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/PTCP154.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/Shift_JIS.esdb	base-sysutil-share	nls
+./usr/share/i18n/esdb/MISC/ZW.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/TCVN			base-sysutil-share
+./usr/share/i18n/esdb/TCVN/TCVN5712-1.esdb	base-sysutil-share	nls
+./usr/share/i18n/esdb/TCVN/VIQR.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/TCVN/VISCII.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/UTF			base-sysutil-share
 ./usr/share/i18n/esdb/UTF/UTF-16.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/UTF/UTF-16BE.esdb		base-sysutil-share	nls
@@ -3627,9 +3670,8 @@
 ./usr/share/zoneinfo/Europe/Gibraltar		base-sys-share		share
 ./usr/share/zoneinfo/Europe/Guernsey		base-sys-share		share
 ./usr/share/zoneinfo/Europe/Helsinki		base-sys-share		share
-./usr/share/zoneinfo/Europe/Istanbul		base-sys-share		share
-./usr/share/zoneinfo/Europe/Istanbul		base-sys-share		share
 ./usr/share/zoneinfo/Europe/Isle_of_Man		base-sys-share		share
+./usr/share/zoneinfo/Europe/Istanbul		base-sys-share		share
 ./usr/share/zoneinfo/Europe/Jersey		base-sys-share		share
 ./usr/share/zoneinfo/Europe/Kaliningrad		base-sys-share		share
 ./usr/share/zoneinfo/Europe/Kiev		base-sys-share		share
@@ -3915,8 +3957,8 @@
 ./var/spool/postfix				base-postfix-root
 ./var/spool/postfix/etc				base-postfix-root
 ./var/spool/sockets				base-sys-root
-./var/spool/uucp				base-uucp-root
-./var/spool/uucppublic				base-uucp-root
+./var/spool/uucp				base-obsolete		obsolete
+./var/spool/uucppublic				base-obsolete		obsolete
 ./var/tmp					base-sys-root
 ./var/tmp/vi.recover				base-util-root
 ./var/yp					base-nis-root

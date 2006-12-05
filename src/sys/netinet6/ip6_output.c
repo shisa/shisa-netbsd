@@ -1,4 +1,4 @@
-/*	$NetBSD: ip6_output.c,v 1.103 2006/10/12 01:32:39 christos Exp $	*/
+/*	$NetBSD: ip6_output.c,v 1.106 2006/11/25 18:41:36 yamt Exp $	*/
 /*	$KAME: ip6_output.c,v 1.172 2001/03/25 09:55:56 itojun Exp $	*/
 
 /*
@@ -62,7 +62,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ip6_output.c,v 1.103 2006/10/12 01:32:39 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ip6_output.c,v 1.106 2006/11/25 18:41:36 yamt Exp $");
 
 #include "opt_inet.h"
 #include "opt_inet6.h"
@@ -92,6 +92,7 @@ __KERNEL_RCSID(0, "$NetBSD: ip6_output.c,v 1.103 2006/10/12 01:32:39 christos Ex
 #include <netinet/ip6.h>
 #include <netinet/icmp6.h>
 #include <netinet/in_offload.h>
+#include <netinet6/in6_offload.h>
 #include <netinet6/ip6_var.h>
 #include <netinet6/in6_pcb.h>
 #include <netinet6/nd6.h>
@@ -177,7 +178,7 @@ ip6_output(
     struct route_in6 *ro,
     int flags,
     struct ip6_moptions *im6o,
-    struct socket *so __unused,
+    struct socket *so,
     struct ifnet **ifpp		/* XXX: just for statistics */
 )
 {
@@ -185,6 +186,7 @@ ip6_output(
 	struct ifnet *ifp, *origifp;
 	struct mbuf *m = m0;
 	int hlen, tlen, len, off;
+	boolean_t tso;
 	struct route_in6 ip6route;
 	struct rtentry *rt = NULL;
 	struct sockaddr_in6 *dst, src_sa, dst_sa;
@@ -1069,7 +1071,7 @@ skip_ipsec2:;
 	 *	error, as we cannot handle this conflicting request
 	 */
 	tlen = m->m_pkthdr.len;
-
+	tso = (m->m_pkthdr.csum_flags & M_CSUM_TSOv6) != 0;
 	if (opt && (opt->ip6po_flags & IP6PO_DONTFRAG))
 		dontfrag = 1;
 	else
@@ -1080,7 +1082,7 @@ skip_ipsec2:;
 		error = EMSGSIZE;
 		goto bad;
 	}
-	if (dontfrag && tlen > IN6_LINKMTU(ifp)) {	/* case 2-b */
+	if (dontfrag && (!tso && tlen > IN6_LINKMTU(ifp))) {	/* case 2-b */
 		/*
 		 * Even if the DONTFRAG option is specified, we cannot send the
 		 * packet when the data length is larger than the MTU of the
@@ -1105,7 +1107,8 @@ skip_ipsec2:;
 	/*
 	 * transmit packet without fragmentation
 	 */
-	if (dontfrag || (!alwaysfrag && tlen <= mtu)) {	/* case 1-a and 2-a */
+	if (dontfrag || (!alwaysfrag && (tlen <= mtu || tso))) {
+		/* case 1-a and 2-a */
 		struct in6_ifaddr *ia6;
 		int sw_csum;
 
@@ -1129,8 +1132,18 @@ skip_ipsec2:;
 			m->m_pkthdr.csum_flags &= ~(M_CSUM_UDPv6|M_CSUM_TCPv6);
 		}
 
-		error = nd6_output(ifp, origifp, m, dst, rt);
+		if (__predict_true(!tso ||
+		    (ifp->if_capenable & IFCAP_TSOv6) != 0)) {
+			error = nd6_output(ifp, origifp, m, dst, rt);
+		} else {
+			error = ip6_tso_output(ifp, origifp, m, dst, rt);
+		}
 		goto done;
+	}
+
+	if (tso) {
+		error = EINVAL; /* XXX */
+		goto bad;
 	}
 
 	/*
