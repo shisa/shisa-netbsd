@@ -261,6 +261,7 @@
 #define IFT_GIF		0xf0
 #define IFT_PVC		0xf1
 #define IFT_FAITH	0xf2
+#define IFT_MTUN	0xf3
 #define IFT_MIP		0xf4		/* Mobile IPv6 home interface */
 #define IFT_PFLOG	0xf5		/* Packet filter logging */
 #define IFT_PFSYNC	0xf6		/* Packet filter state syncing */

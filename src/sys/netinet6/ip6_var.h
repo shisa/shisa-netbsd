@@ -219,6 +219,7 @@ struct	ip6stat {
 
 	u_quad_t ip6s_forward_cachehit;
 	u_quad_t ip6s_forward_cachemiss;
+	u_quad_t ip6s_nomtun;		/* no match mtun found */
 };
 
 #ifdef _KERNEL
