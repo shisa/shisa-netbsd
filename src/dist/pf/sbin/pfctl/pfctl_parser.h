@@ -251,6 +251,14 @@ const struct icmptypeent *geticmptypebyname(char *, u_int8_t);
 const struct icmpcodeent *geticmpcodebynumber(u_int8_t, u_int8_t, u_int8_t);
 const struct icmpcodeent *geticmpcodebyname(u_long, char *, u_int8_t);
 
+struct mhtypeent{
+	const char *name;
+	u_int8_t type;
+};
+
+const struct mhtypeent *getmhtypebynumber(u_int8_t, u_int8_t);
+const struct mhtypeent *getmhtypebyname(char *, u_int8_t);
+
 struct pf_timeout {
 	const char	*name;
 	int		 timeout;

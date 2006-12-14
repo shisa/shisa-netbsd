@@ -42,6 +42,7 @@
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
 #include <netinet/icmp6.h>
+#include <netinet/ip6mh.h>
 #include <net/pfvar.h>
 #include <arpa/inet.h>
 
@@ -217,6 +218,17 @@ static const struct icmpcodeent icmp6_code[] = {
 	{ "redirrouter", ND_REDIRECT, ND_REDIRECT_ROUTER }
 };
 
+static const struct mhtypeent ip6mh_type[] = {
+	{ "bindingrefreshrequest",	IP6_MH_TYPE_BRR },
+	{ "hometestinit",		IP6_MH_TYPE_HOTI },
+	{ "careoftestinit",		IP6_MH_TYPE_COTI },
+	{ "hometest",			IP6_MH_TYPE_HOT },
+	{ "careoftest",			IP6_MH_TYPE_COT },
+	{ "bindingupdate",		IP6_MH_TYPE_BU },
+	{ "bindingacknowledgement",	IP6_MH_TYPE_BACK },
+	{ "bindingerror",		IP6_MH_TYPE_BERROR }
+};
+
 const struct pf_timeout pf_timeouts[] = {
 	{ "tcp.first",		PFTM_TCP_FIRST_PACKET },
 	{ "tcp.opening",	PFTM_TCP_OPENING },
@@ -324,6 +336,42 @@ geticmpcodebyname(u_long type, char *w, sa_family_t af)
 			if (type == icmp6_code[i].type &&
 			    !strcmp(w, icmp6_code[i].name))
 				return (&icmp6_code[i]);
+		}
+	}
+	return (NULL);
+}
+
+const struct mhtypeent *
+getmhtypebynumber(u_int8_t type, sa_family_t af)
+{
+	unsigned int	i;
+
+	if (af != AF_INET6) {
+		/* no IPv4 mobility support. */
+		return (NULL);
+	} else {
+		for (i=0; i < (sizeof (ip6mh_type) /
+		    sizeof(ip6mh_type[0])); i++) {
+			if (type == ip6mh_type[i].type)
+				 return (&ip6mh_type[i]);
+		}
+	}
+	return (NULL);
+}
+
+const struct mhtypeent *
+getmhtypebyname(char *w, sa_family_t af)
+{
+	unsigned int	i;
+
+	if (af != AF_INET6) {
+		/* no IPv4 mobility support. */
+		return (NULL);
+	} else {
+		for (i=0; i < (sizeof (ip6mh_type) /
+		    sizeof(ip6mh_type[0])); i++) {
+			if (!strcmp(w, ip6mh_type[i].name))
+				return (&ip6mh_type[i]);
 		}
 	}
 	return (NULL);
@@ -807,26 +855,39 @@ print_rule(struct pf_rule *r, const char *anchor_call, int verbose)
 		printf("/");
 		print_flags(r->flagset);
 	}
-	if (r->type) {
-		const struct icmptypeent	*it;
+	if (r->proto == IPPROTO_ICMP || r->proto == IPPROTO_IPV6_ICMP) {
+		if (r->type) {
+			const struct icmptypeent	*it;
 
-		it = geticmptypebynumber(r->type-1, r->af);
-		if (r->af != AF_INET6)
-			printf(" icmp-type");
-		else
-			printf(" icmp6-type");
-		if (it != NULL)
-			printf(" %s", it->name);
-		else
-			printf(" %u", r->type-1);
-		if (r->code) {
-			const struct icmpcodeent	*ic;
-
-			ic = geticmpcodebynumber(r->type-1, r->code-1, r->af);
-			if (ic != NULL)
-				printf(" code %s", ic->name);
+			it = geticmptypebynumber(r->type-1, r->af);
+			if (r->af != AF_INET6)
+				printf(" icmp-type");
 			else
-				printf(" code %u", r->code-1);
+				printf(" icmp6-type");
+			if (it != NULL)
+				printf(" %s", it->name);
+			else
+				printf(" %u", r->type-1);
+			if (r->code) {
+				const struct icmpcodeent	*ic;
+
+				ic = geticmpcodebynumber(r->type-1, r->code-1, r->af);
+				if (ic != NULL)
+					printf(" code %s", ic->name);
+				else
+					printf(" code %u", r->code-1);
+			}
+		}
+	} else if (r->proto == IPPROTO_MH) {
+		if (r->type) {
+			const struct mhtypeent	*it;
+
+			it = getmhtypebynumber(r->type-1, r->af);
+			printf(" ip6mh-type");
+			if (it != NULL)
+				printf(" %s", it->name);
+			else
+				printf(" %u", r->type-1);
 		}
 	}
 	if (r->tos)

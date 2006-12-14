@@ -931,6 +931,7 @@ struct pf_pdesc {
 		struct icmp		*icmp;
 #ifdef INET6
 		struct icmp6_hdr	*icmp6;
+		struct ip6_mh		*ip6mh;
 #endif /* INET6 */
 		void			*any;
 	} hdr;

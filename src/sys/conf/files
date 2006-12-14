@@ -182,6 +182,7 @@ defflag opt_pppoe.h		PPPOE_SERVER PPPOE_TERM_UNKNOWN_SESSIONS
 # networking options
 #
 defflag				GATEWAY
+defflag opt_mip6.h		MIP6
 defparam opt_nmbclusters.h	NMBCLUSTERS
 defparam			SB_MAX
 
@@ -1149,6 +1150,9 @@ defpseudo stf:		ifnet
 defpseudo tap { }:	ifnet, ether, arp, bpf_filter
 defpseudo carp:		ifnet, ether, arp, bpf_filter
 defpseudo etherip { }:	ifnet, ether, arp, bpf_filter
+defpseudo mip:		ifnet
+defpseudo nemo:		ifnet
+defpseudo mtun:		ifnet
 
 defpseudo sequencer
 defpseudo clockctl
@@ -1398,6 +1402,9 @@ file	net/if_hippisubr.c		hippi			needs-flag
 file	net/if_ieee1394subr.c		ieee1394
 file	net/if_loop.c			loop			needs-flag
 file	net/if_media.c
+file	net/if_mip.c			mip			needs-count
+file	net/if_mtun.c			mtun			needs-flag
+file	net/if_nemo.c			nemo			needs-count
 file	net/if_ppp.c			ppp			needs-flag
 file	net/if_stf.c			stf & inet & inet6	needs-flag
 file	net/if_sl.c			sl			needs-flag
@@ -1408,6 +1415,7 @@ file	net/if_tap.c			tap			needs-flag
 file	net/if_tun.c			tun			needs-flag
 file	net/if_vlan.c			vlan			needs-flag
 file	net/if_pppoe.c			pppoe			needs-flag
+file	net/mipsock.c			mip6
 file	net/pfil.c			pfil_hooks | ipfilter | pf
 file	net/ppp-deflate.c		ppp & ppp_deflate
 file	net/ppp_tty.c			ppp
@@ -1421,6 +1429,7 @@ file	net/zlib.c			(ppp & ppp_deflate) | ipsec | opencrypto | vnd_compression
 file	netinet/if_arp.c		arp | netatalk		needs-flag
 file	netinet/if_atm.c		atm
 file	netinet/in_gif.c		gif & inet
+file	netinet/in_mtun.c		mtun & inet
 file	netinet/ip_carp.c		carp & (inet | inet6)	needs-flag
 file	netinet/ip_ecn.c		ipsec | fast_ipsec | gif | stf
 file	netinet/ip_encap.c		inet | inet6
@@ -1428,6 +1437,7 @@ file	netinet/ip_etherip.c		etherip & inet
 file	netinet/ip_gre.c		inet & gre
 file	netinet6/ip6_etherip.c		etherip & inet6
 file	netinet6/in6_gif.c		gif & inet6
+file	netinet6/in6_mtun.c		mtun & inet6
 
 file	netisdn/i4b_ctl.c		isdnctl			needs-flag
 file	netisdn/i4b_isppp.c		ippp			needs-count

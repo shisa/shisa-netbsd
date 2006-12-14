@@ -118,6 +118,14 @@ struct node_icmp {
 	struct node_icmp	*tail;
 };
 
+struct node_mh {
+	u_int8_t		 code;
+	u_int8_t		 type;
+	u_int8_t		 proto;
+	struct node_mh		*next;
+	struct node_mh		*tail;
+};
+
 enum	{ PF_STATE_OPT_MAX, PF_STATE_OPT_NOSYNC, PF_STATE_OPT_SRCTRACK,
 	    PF_STATE_OPT_MAX_SRC_STATES, PF_STATE_OPT_MAX_SRC_CONN,
 	    PF_STATE_OPT_MAX_SRC_CONN_RATE, PF_STATE_OPT_MAX_SRC_NODES,
@@ -178,6 +186,7 @@ struct filter_opts {
 #define FOM_TOS		0x04
 #define FOM_KEEP	0x08
 #define FOM_SRCTRACK	0x10
+#define FOM_MH		0x20
 	struct node_uid		*uid;
 	struct node_gid		*gid;
 	struct {
@@ -187,6 +196,7 @@ struct filter_opts {
 		u_int16_t	 w2;
 	} flags;
 	struct node_icmp	*icmpspec;
+	struct node_mh		*mhspec;
 	u_int32_t		 tos;
 	u_int32_t		 prob;
 	struct {
@@ -276,7 +286,7 @@ void	expand_rule(struct pf_rule *, struct node_if *, struct node_host *,
 	    struct node_proto *, struct node_os*, struct node_host *,
 	    struct node_port *, struct node_host *, struct node_port *,
 	    struct node_uid *, struct node_gid *, struct node_icmp *,
-	    const char *);
+	    struct node_mh *, const char *);
 int	expand_altq(struct pf_altq *, struct node_if *, struct node_queue *,
 	    struct node_queue_bw bwspec, struct node_queue_opt *);
 int	expand_queue(struct pf_altq *, struct node_if *, struct node_queue *,
@@ -340,6 +350,7 @@ typedef struct {
 		struct node_if		*interface;
 		struct node_proto	*proto;
 		struct node_icmp	*icmp;
+		struct node_mh		*mh;
 		struct node_host	*host;
 		struct node_os		*os;
 		struct node_port	*port;
@@ -412,10 +423,11 @@ typedef struct {
 %token	STICKYADDRESS MAXSRCSTATES MAXSRCNODES SOURCETRACK GLOBAL RULE
 %token	MAXSRCCONN MAXSRCCONNRATE OVERLOAD FLUSH
 %token	TAGGED TAG IFBOUND GRBOUND FLOATING STATEPOLICY ROUTE
+%token	IP6MHTYPE HOMEADDRESS
 %token	<v.string>		STRING
 %token	<v.i>			PORTBINARY
 %type	<v.interface>		interface if_list if_item_not if_item
-%type	<v.number>		number icmptype icmp6type uid gid
+%type	<v.number>		number icmptype icmp6type ip6mhtype uid gid
 %type	<v.number>		tos not yesno natpass
 %type	<v.i>			no dir log af fragcache sourcetrack flush
 %type	<v.i>			unaryop statelock
@@ -427,11 +439,14 @@ typedef struct {
 %type	<v.icmp>		icmpspec
 %type	<v.icmp>		icmp_list icmp_item
 %type	<v.icmp>		icmp6_list icmp6_item
+%type	<v.mh>			mhspec
+%type	<v.mh>			ip6mh_list ip6mh_item
 %type	<v.fromto>		fromto
 %type	<v.peer>		ipportspec from to
 %type	<v.host>		ipspec xhost host dynaddr host_list
 %type	<v.host>		redir_host_list redirspec
 %type	<v.host>		route_host route_host_list routespec
+%type	<v.host>		homeaddress
 %type	<v.os>			os xos os_list
 %type	<v.port>		portspec port_list port_item
 %type	<v.uid>			uids uid_list uid_item
@@ -634,7 +649,7 @@ anchorrule	: ANCHOR string	dir interface af proto fromto filter_opts {
 
 			expand_rule(&r, $4, NULL, $6, $7.src_os,
 			    $7.src.host, $7.src.port, $7.dst.host, $7.dst.port,
-			    0, 0, 0, $2);
+			    0, 0, 0, 0, $2);
 			free($2);
 		}
 		| NATANCHOR string interface af proto fromto {
@@ -654,7 +669,7 @@ anchorrule	: ANCHOR string	dir interface af proto fromto filter_opts {
 
 			expand_rule(&r, $3, NULL, $5, $6.src_os,
 			    $6.src.host, $6.src.port, $6.dst.host, $6.dst.port,
-			    0, 0, 0, $2);
+			    0, 0, 0, 0, $2);
 			free($2);
 		}
 		| RDRANCHOR string interface af proto fromto {
@@ -695,7 +710,7 @@ anchorrule	: ANCHOR string	dir interface af proto fromto filter_opts {
 
 			expand_rule(&r, $3, NULL, $5, $6.src_os,
 			    $6.src.host, $6.src.port, $6.dst.host, $6.dst.port,
-			    0, 0, 0, $2);
+			    0, 0, 0, 0, $2);
 			free($2);
 		}
 		| BINATANCHOR string interface af proto fromto {
@@ -807,7 +822,7 @@ scrubrule	: scrubaction dir logquick interface af proto fromto scrub_opts
 
 			expand_rule(&r, $4, NULL, $6, $7.src_os,
 			    $7.src.host, $7.src.port, $7.dst.host, $7.dst.port,
-			    NULL, NULL, NULL, "");
+			    NULL, NULL, NULL, NULL, "");
 		}
 		;
 
@@ -949,7 +964,7 @@ antispoof	: ANTISPOOF logquick antispoof_ifspc af antispoof_opts {
 				if (h != NULL)
 					expand_rule(&r, j, NULL, NULL, NULL, h,
 					    NULL, NULL, NULL, NULL, NULL,
-					    NULL, "");
+					    NULL, NULL, "");
 
 				if ((i->ifa_flags & IFF_LOOPBACK) == 0) {
 					bzero(&r, sizeof(r));
@@ -968,7 +983,8 @@ antispoof	: ANTISPOOF logquick antispoof_ifspc af antispoof_opts {
 					if (h != NULL)
 						expand_rule(&r, NULL, NULL,
 						    NULL, NULL, h, NULL, NULL,
-						    NULL, NULL, NULL, NULL, "");
+						    NULL, NULL, NULL, NULL,
+						    NULL, "");
 				} else
 					free(hh);
 			}
@@ -1831,7 +1847,7 @@ pfrule		: action dir logquick interface route af proto fromto
 
 			expand_rule(&r, $4, $5.host, $7, $8.src_os,
 			    $8.src.host, $8.src.port, $8.dst.host, $8.dst.port,
-			    $9.uid, $9.gid, $9.icmpspec, "");
+			    $9.uid, $9.gid, $9.icmpspec, $9.mhspec, "");
 		}
 		;
 
@@ -1870,12 +1886,28 @@ filter_opt	: USER uids {
 			filter_opts.flags.w2 |= $1.w2;
 		}
 		| icmpspec {
+			if (filter_opts.marker & FOM_MH) {
+				yyerror("icmp-type and mh-type cannot be used at one time");
+				YYERROR;
+			}
 			if (filter_opts.marker & FOM_ICMP) {
 				yyerror("icmp-type cannot be redefined");
 				YYERROR;
 			}
 			filter_opts.marker |= FOM_ICMP;
 			filter_opts.icmpspec = $1;
+		}
+		| mhspec {
+			if (filter_opts.marker & FOM_ICMP) {
+				yyerror("icmp-type and mh-type cannot be used at one time");
+				YYERROR;
+			}
+			if (filter_opts.marker & FOM_MH) {
+				yyerror("mh-type cannot be redefined");
+				YYERROR;
+			}
+			filter_opts.marker |= FOM_MH;
+			filter_opts.mhspec = $1;
 		}
 		| tos {
 			if (filter_opts.marker & FOM_TOS) {
@@ -2827,6 +2859,54 @@ tos		: TOS STRING			{
 		}
 		;
 
+mhspec		: IP6MHTYPE ip6mh_item { $$ = $2; }
+		| IP6MHTYPE '{' ip6mh_list '}'	{ $$ = $3; }
+		;
+
+ip6mh_list	: ip6mh_item			{ $$ = $1; }
+		| ip6mh_list comma ip6mh_item	{
+			$1->tail->next = $3;
+			$1->tail = $3;
+			$$ = $1;
+		}
+		;
+
+ip6mh_item	: ip6mhtype		{
+			$$ = calloc(1, sizeof(struct node_mh));
+			if ($$ == NULL)
+				err(1, "ip6mh_item: calloc");
+			$$->type = $1;
+			$$->code = 0;
+			$$->proto = IPPROTO_MH;
+			$$->next = NULL;
+			$$->tail = $$;
+		}
+		;
+
+ip6mhtype	: STRING			{
+			const struct mhtypeent	*p;
+			u_long				 ulval;
+
+			if (atoul($1, &ulval) == 0) {
+				if (ulval > 255) {
+					yyerror("illegal ip6mh-type %lu", ulval);
+					free($1);
+					YYERROR;
+				}
+				$$ = ulval + 1;
+			} else {
+				if ((p = getmhtypebyname($1, AF_INET6)) ==
+				    NULL) {
+					yyerror("unknown ip6mh-type %s", $1);
+					free($1);
+					YYERROR;
+				}
+				$$ = p->type + 1;
+			}
+			free($1);
+		}
+		;
+
 sourcetrack	: SOURCETRACK		{ $$ = PF_SRCTRACK; }
 		| SOURCETRACK GLOBAL	{ $$ = PF_SRCTRACK_GLOBAL; }
 		| SOURCETRACK RULE	{ $$ = PF_SRCTRACK_RULE; }
@@ -3374,7 +3454,7 @@ natrule		: nataction interface af proto fromto tag tagged redirpool pool_opts
 
 			expand_rule(&r, $2, $8 == NULL ? NULL : $8->host, $4,
 			    $5.src_os, $5.src.host, $5.src.port, $5.dst.host,
-			    $5.dst.port, 0, 0, 0, "");
+			    $5.dst.port, 0, 0, 0, 0, "");
 			free($8);
 		}
 		;
@@ -3753,13 +3833,21 @@ filter_consistent(struct pf_rule *r)
 		problems++;
 	}
 	if (r->proto != IPPROTO_ICMP && r->proto != IPPROTO_ICMPV6 &&
-	    (r->type || r->code)) {
-		yyerror("icmp-type/code only applies to icmp");
+	    r->proto != IPPROTO_MH && (r->type || r->code)) {
+		yyerror("type/code only applies to icmp or mh");
 		problems++;
 	}
 	if (!r->af && (r->type || r->code)) {
-		yyerror("must indicate address family with icmp-type/code");
-		problems++;
+		if (r->proto == IPPROTO_ICMP || r->proto == IPPROTO_ICMPV6) {
+			yyerror("must indicate address family with "
+			    "icmp-type/code");
+			problems++;
+		}
+		if (r->proto == IPPROTO_MH) {
+			yyerror("must indicate address family with "
+			    "icmp-type/code");
+			problems++;
+		}
 	}
 	if (r->overload_tblname[0] &&
 	    r->max_src_conn == 0 && r->max_src_conn_rate.seconds == 0) {
@@ -3772,6 +3860,10 @@ filter_consistent(struct pf_rule *r)
 		yyerror("proto %s doesn't match address family %s",
 		    r->proto == IPPROTO_ICMP ? "icmp" : "icmp6",
 		    r->af == AF_INET ? "inet" : "inet6");
+		problems++;
+	}
+	if (r->proto == IPPROTO_MH && r->af == AF_INET) {
+		yyerror("proto ipv6-mh doesn't match address family inet");
 		problems++;
 	}
 	if (r->allow_opts && r->action != PF_PASS) {
@@ -4338,7 +4430,7 @@ expand_rule(struct pf_rule *r,
     struct node_host *src_hosts, struct node_port *src_ports,
     struct node_host *dst_hosts, struct node_port *dst_ports,
     struct node_uid *uids, struct node_gid *gids, struct node_icmp *icmp_types,
-    const char *anchor_call)
+    struct node_mh *mh_types, const char *anchor_call)
 {
 	sa_family_t		 af = r->af;
 	int			 added = 0, error = 0;
@@ -4371,6 +4463,7 @@ expand_rule(struct pf_rule *r,
 	LOOP_THROUGH(struct node_port, dst_port, dst_ports,
 	LOOP_THROUGH(struct node_uid, uid, uids,
 	LOOP_THROUGH(struct node_gid, gid, gids,
+	LOOP_THROUGH(struct node_mh, mh_type, mh_types,
 
 		r->af = af;
 		/* for link-local IPv6 address, interface must match up */
@@ -4438,8 +4531,14 @@ expand_rule(struct pf_rule *r,
 		r->gid.op = gid->op;
 		r->gid.gid[0] = gid->gid[0];
 		r->gid.gid[1] = gid->gid[1];
-		r->type = icmp_type->type;
-		r->code = icmp_type->code;
+		if (r->proto == icmp_type->proto) {
+		    r->type = icmp_type->type;
+		    r->code = icmp_type->code;
+		}
+		if (r->proto == mh_type->proto) {
+		    r->type = mh_type->type;
+		    r->code = mh_type->code;
+		}
 
 		if ((keep_state == PF_STATE_MODULATE ||
 		    keep_state == PF_STATE_SYNPROXY) &&
@@ -4495,7 +4594,7 @@ expand_rule(struct pf_rule *r,
 			added++;
 		}
 
-	))))))))));
+	)))))))))));
 
 	FREE_LIST(struct node_if, interfaces);
 	FREE_LIST(struct node_proto, protos);
@@ -4508,6 +4607,7 @@ expand_rule(struct pf_rule *r,
 	FREE_LIST(struct node_gid, gids);
 	FREE_LIST(struct node_icmp, icmp_types);
 	FREE_LIST(struct node_host, rpool_hosts);
+	FREE_LIST(struct node_mh, mh_types);
 
 	if (!added)
 		yyerror("rule expands to no valid combination");
@@ -4614,6 +4714,7 @@ lookup(char *s)
 		{ "in",			IN},
 		{ "inet",		INET},
 		{ "inet6",		INET6},
+		{ "ip6mh-type",		IP6MHTYPE},
 		{ "keep",		KEEP},
 		{ "label",		LABEL},
 		{ "limit",		LIMIT},

@@ -101,6 +101,7 @@
 #include <netinet6/in6_pcb.h>
 #endif
 #include <netinet/icmp6.h>
+#include <netinet/ip6mh.h>
 #include <netinet6/nd6.h>
 #endif /* INET6 */
 
@@ -182,6 +183,10 @@ int			 pf_test_udp(struct pf_rule **, struct pf_state **,
 			    void *, struct pf_pdesc *, struct pf_rule **,
 			    struct pf_ruleset **, struct ifqueue *);
 int			 pf_test_icmp(struct pf_rule **, struct pf_state **,
+			    int, struct pfi_kif *, struct mbuf *, int,
+			    void *, struct pf_pdesc *, struct pf_rule **,
+			    struct pf_ruleset **, struct ifqueue *);
+int			 pf_test_mh(struct pf_rule **, struct pf_state **,
 			    int, struct pfi_kif *, struct mbuf *, int,
 			    void *, struct pf_pdesc *, struct pf_rule **,
 			    struct pf_ruleset **, struct ifqueue *);
@@ -3720,6 +3725,171 @@ cleanup:
 	if (rewrite)
 		m_copyback(m, off, sizeof(struct icmp6_hdr),
 		    pd->hdr.icmp6);
+#endif /* INET6 */
+
+	return (PF_PASS);
+}
+
+int
+pf_test_mh(struct pf_rule **rm, struct pf_state **sm, int direction,
+    struct pfi_kif *kif, struct mbuf *m, int off, void *h,
+    struct pf_pdesc *pd, struct pf_rule **am, struct pf_ruleset **rsm,
+    struct ifqueue *ifq)
+{
+	struct pf_rule		*nr = NULL;
+	struct pf_addr		*saddr = pd->src, *daddr = pd->dst;
+	struct pf_rule		*r, *a = NULL;
+	struct pf_ruleset	*ruleset = NULL;
+	struct pf_src_node	*nsn = NULL;
+	u_short			 reason;
+	sa_family_t		 af = pd->af;
+	u_int8_t		 mhtype = 0;
+	struct pf_tag		*pftag = NULL;
+	int			 tag = -1;
+#ifdef INET6
+	int			 rewrite = 0;
+#endif /* INET6 */
+	int			 asd = 0;
+
+	if (pf_check_congestion(ifq)) {
+		REASON_SET(&reason, PFRES_CONGEST);
+		return (PF_DROP);
+	}
+
+	switch (pd->proto) {
+#ifdef INET
+	/* IPv4 MH is not defined. */
+#endif /* INET */
+#ifdef INET6
+	case IPPROTO_MH:
+		mhtype = pd->hdr.ip6mh->ip6mh_type;
+		break;
+#endif /* INET6 */
+	}
+
+	r = TAILQ_FIRST(pf_main_ruleset.rules[PF_RULESET_FILTER].active.ptr);
+
+	if (direction == PF_OUT) {
+		/* check outgoing packet for BINAT/NAT */
+		if ((nr = pf_get_translation(pd, m, off, PF_OUT, kif, &nsn,
+		    saddr, 0, daddr, 0, &pd->naddr, NULL)) != NULL) {
+			PF_ACPY(&pd->baddr, saddr, af);
+			switch (af) {
+#ifdef INET
+			case AF_INET:
+				/* IPv4 MH is not defined. */
+				break;
+#endif /* INET */
+#ifdef INET6
+			case AF_INET6:
+				pf_change_a6(saddr, &pd->hdr.ip6mh->ip6mh_cksum,
+				    &pd->naddr, 0);
+				rewrite++;
+				break;
+#endif /* INET6 */
+			}
+			if (nr->natpass)
+				r = NULL;
+			pd->nat_rule = nr;
+		}
+	} else {
+		/* check incoming packet for BINAT/RDR */
+		if ((nr = pf_get_translation(pd, m, off, PF_IN, kif, &nsn,
+		    saddr, 0, daddr, 0, &pd->naddr, NULL)) != NULL) {
+			PF_ACPY(&pd->baddr, daddr, af);
+			switch (af) {
+#ifdef INET
+			case AF_INET:
+				/* IPv4 MH is not defined. */
+				break;
+#endif /* INET */
+#ifdef INET6
+			case AF_INET6:
+				pf_change_a6(daddr, &pd->hdr.ip6mh->ip6mh_cksum,
+				    &pd->naddr, 0);
+				rewrite++;
+				break;
+#endif /* INET6 */
+			}
+			if (nr->natpass)
+				r = NULL;
+			pd->nat_rule = nr;
+		}
+	}
+
+	while (r != NULL) {
+		r->evaluations++;
+		if (r->kif != NULL &&
+		    (r->kif != kif && r->kif != kif->pfik_parent) == !r->ifnot)
+			r = r->skip[PF_SKIP_IFP].ptr;
+		else if (r->direction && r->direction != direction)
+			r = r->skip[PF_SKIP_DIR].ptr;
+		else if (r->af && r->af != af)
+			r = r->skip[PF_SKIP_AF].ptr;
+		else if (r->proto && r->proto != pd->proto)
+			r = r->skip[PF_SKIP_PROTO].ptr;
+		else if (PF_MISMATCHAW(&r->src.addr, saddr, af, r->src.neg))
+			r = r->skip[PF_SKIP_SRC_ADDR].ptr;
+		else if (PF_MISMATCHAW(&r->dst.addr, daddr, af, r->dst.neg))
+			r = r->skip[PF_SKIP_DST_ADDR].ptr;
+		else if (r->type && r->type != mhtype + 1)
+			r = TAILQ_NEXT(r, entries);
+		else if (r->tos && !(r->tos & pd->tos))
+			r = TAILQ_NEXT(r, entries);
+		else if (r->rule_flag & PFRULE_FRAGMENT)
+			r = TAILQ_NEXT(r, entries);
+		else if (r->prob && r->prob <= arc4random())
+			r = TAILQ_NEXT(r, entries);
+		else if (r->match_tag && !pf_match_tag(m, r, &pftag, &tag))
+			r = TAILQ_NEXT(r, entries);
+		else if (r->os_fingerprint != PF_OSFP_ANY)
+			r = TAILQ_NEXT(r, entries);
+		else {
+			if (r->tag)
+				tag = r->tag;
+			if (r->anchor == NULL) {
+				*rm = r;
+				*am = a;
+				*rsm = ruleset;
+				if ((*rm)->quick)
+					break;
+				r = TAILQ_NEXT(r, entries);
+			} else
+				pf_step_into_anchor(&asd, &ruleset,
+				    PF_RULESET_FILTER, &r, &a);
+		}
+		if (r == NULL)
+			pf_step_out_of_anchor(&asd, &ruleset,
+			    PF_RULESET_FILTER, &r, &a);
+	}
+	r = *rm;
+	a = *am;
+	ruleset = *rsm;
+
+	REASON_SET(&reason, PFRES_MATCH);
+
+	if (r->log) {
+#ifdef INET6
+		if (rewrite)
+			m_copyback(m, off, sizeof(struct ip6_mh),
+			    pd->hdr.ip6mh);
+#endif /* INET6 */
+		PFLOG_PACKET(kif, h, m, af, direction, reason, r, a, ruleset);
+	}
+
+	if (r->action != PF_PASS)
+		return (PF_DROP);
+
+	if (pf_tag_packet(m, pftag, tag)) {
+		REASON_SET(&reason, PFRES_MEMORY);
+		return (PF_DROP);
+	}
+
+#ifdef INET6
+	/* copy back packet headers if we performed IPv6 NAT operations */
+	if (rewrite)
+		m_copyback(m, off, sizeof(struct ip6_mh),
+		    pd->hdr.ip6mh);
 #endif /* INET6 */
 
 	return (PF_PASS);
