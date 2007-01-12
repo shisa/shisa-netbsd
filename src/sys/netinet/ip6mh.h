@@ -341,20 +341,34 @@ struct ip6_mh_opt_prefix {
 	struct in6_addr ip6mopfx_pfx;
 } __attribute__((__packed__));
 
+
 /* Multiple CoA Registrations (MIP6_MCOA) */
 struct ip6_mh_opt_bid {
 	u_int8_t ip6mobid_type;
 	u_int8_t ip6mobid_len;
 	u_int16_t ip6mobid_bid;
-	u_int16_t ip6mobid_reserved;
+	union {
+		u_int8_t __priority;
+		u_int8_t __status;
+	} __ip6mobid_statefield;
+	u_int8_t ip6mobid_flags;
 } __attribute__((__packed__));
+#define ip6mobid_priority __ip6mobid_statefield.__priority
+#define ip6mobid_status __ip6mobid_statefield.__status
 
-/* Binding Unique Identifier flag */
+/* Binding Unique Identifier Status Field (MIP6_MCOA) */
+#define IP6_MHOPT_BID_ACCEPT		0   /* BID Sub-option is accepted */
+#define IP6_MHOPT_BID_INCOMPLIANT	1280   /* BID Sub-option is not compliant */
+
+
+/* Binding Unique Identifier flag (MIP6_MCOA) */
 #if BYTE_ORDER == BIG_ENDIAN
-#define IP6OPTBID_STOP	0x8000	/* stop proxy NA */
+#define IP6OPTBID_COA	0x8000	/* stop proxy NA */
+#define IP6OPTBID_REMOVABLE	0x4000	/* Removable */
 #endif /* BIG_ENDIAN */
 #if BYTE_ORDER == LITTLE_ENDIAN
-#define IP6OPTBID_STOP	0x0080	/* stop proxy NA */
+#define IP6OPTBID_COA	0x0080	/* stop proxy NA */
+#define IP6OPTBID_REMOVABLE	0x0040	/* Removable */
 #endif /* LITTLE_ENDIAN */
 
 /* IPv4 Mobile Network Prefix Option */
