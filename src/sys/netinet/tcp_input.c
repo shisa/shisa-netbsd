@@ -158,6 +158,7 @@ __KERNEL_RCSID(0, "$NetBSD: tcp_input.c,v 1.255 2006/11/16 01:33:45 christos Exp
 #include "opt_ipsec.h"
 #include "opt_inet_csum.h"
 #include "opt_tcp_debug.h"
+#include "opt_mip6.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -178,6 +179,7 @@ __KERNEL_RCSID(0, "$NetBSD: tcp_input.c,v 1.255 2006/11/16 01:33:45 christos Exp
 #include <net/if.h>
 #include <net/route.h>
 #include <net/if_types.h>
+#include <net/pfvar.h>
 
 #include <netinet/in.h>
 #include <netinet/in_systm.h>
@@ -938,7 +940,11 @@ tcp_input_checksum(int af, struct mbuf *m, const struct tcphdr *th,
 			if (__predict_true((m->m_flags & M_LOOP) == 0 ||
 			    tcp_do_loopback_cksum)) {
 				TCP_CSUM_COUNTER_INCR(&tcp6_swcsum);
+#ifdef MIP6
+				if (ext_in6_cksum(m, IPPROTO_TCP, toff,
+#else
 				if (in6_cksum(m, IPPROTO_TCP, toff,
+#endif
 				    tlen + off) != 0)
 					goto badcsum;
 			}

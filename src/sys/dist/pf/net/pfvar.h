@@ -1647,5 +1647,7 @@ int	pf_osfp_match(struct pf_osfp_enlist *, pf_osfp_t);
 struct pf_os_fingerprint *
 	pf_osfp_validate(void);
 
+int ext_in6_cksum(struct mbuf *, u_int8_t, u_int32_t, u_int32_t);
+
 
 #endif /* _NET_PFVAR_H_ */

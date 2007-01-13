@@ -68,6 +68,7 @@ __KERNEL_RCSID(0, "$NetBSD: udp_usrreq.c,v 1.156 2006/11/14 12:05:55 rpaulo Exp 
 #include "opt_inet_csum.h"
 #include "opt_ipkdb.h"
 #include "opt_mbuftrace.h"
+#include "opt_mip6.h"
 
 #include <sys/param.h>
 #include <sys/malloc.h>
@@ -84,6 +85,7 @@ __KERNEL_RCSID(0, "$NetBSD: udp_usrreq.c,v 1.156 2006/11/14 12:05:55 rpaulo Exp 
 
 #include <net/if.h>
 #include <net/route.h>
+#include <net/pfvar.h>
 
 #include <netinet/in.h>
 #include <netinet/in_systm.h>
@@ -494,7 +496,11 @@ udp6_input_checksum(struct mbuf *m, const struct udphdr *uh, int off, int len)
 		 * on loopback interfaces.
 		 */
 		UDP_CSUM_COUNTER_INCR(&udp6_swcsum);
+#ifdef MIP6
+		if (ext_in6_cksum(m, IPPROTO_UDP, off, len) != 0) {
+#else
 		if (in6_cksum(m, IPPROTO_UDP, off, len) != 0) {
+#endif /* MIP6 */
 			udp6stat.udp6s_badsum++;
 			goto bad;
 		}

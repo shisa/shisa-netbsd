@@ -44,6 +44,8 @@
 #define NPFSYNC	0
 #endif
 
+#include "opt_mip6.h"
+
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/mbuf.h>
@@ -246,7 +248,6 @@ struct pf_state		*pf_find_state_recurse(struct pfi_kif *,
 int			 pf_src_connlimit(struct pf_state **);
 int			 pf_check_congestion(struct ifqueue *);
 
-int ext_in6_cksum(struct mbuf *, u_int8_t, u_int32_t, u_int32_t);
 #define ADDCARRY(x)  (x > 65535 ? x -= 65535 : x)
 #define REDUCE {l_util.l = sum; sum = l_util.s[0] + l_util.s[1]; ADDCARRY(sum);}
 
@@ -5987,7 +5988,11 @@ pf_check_proto_cksum(struct mbuf *m, int off, int len, u_int8_t p,
 	case AF_INET6:
 		if (m->m_len < sizeof(struct ip6_hdr))
 			return (1);
+#ifdef MIP6
 		sum = ext_in6_cksum(m, p, off, len);
+#else
+		sum = in6_cksum(m, p, off, len);
+#endif /* MIP6 */
 		break;
 #endif /* INET6 */
 	default:
@@ -6741,7 +6746,7 @@ pf_check_congestion(struct ifqueue *ifq)
 #endif
 }
 
-/* XXX */
+#ifdef MIP6
 int
 ext_in6_cksum(m, nxt, off, len)
 	struct mbuf *m;
@@ -6770,7 +6775,7 @@ ext_in6_cksum(m, nxt, off, len)
 		u_int16_t s[2];
 		u_int32_t l;
 	} l_util;
-#if 1
+#if 1 /* diff from org in6_cksum */
         int newoff, oldoff;
         int proto, nxt2;
 
@@ -6784,7 +6789,7 @@ ext_in6_cksum(m, nxt, off, len)
 	struct in6_addr dst;
 	//int hoa_presence = 0;
 	int rt2_presence = 0;
-#endif
+#endif 
 
 	/* sanity check */
 	if (m->m_pkthdr.len < off + len) {
@@ -6802,7 +6807,7 @@ ext_in6_cksum(m, nxt, off, len)
 	 * First create IP6 pseudo header and calculate a summary.
 	 */
 	ip6 = mtod(m, struct ip6_hdr *);
-#if 1
+#if 1 /* diff from org in6_cksum */
         oldoff = 0;
         proto = IPPROTO_IPV6;
         nxt2 = -1;
@@ -6888,7 +6893,7 @@ ext_in6_cksum(m, nxt, off, len)
 	sum += w[4]; sum += w[5]; sum += w[6]; sum += w[7];
 
 	/* IPv6 destination address */
-#if 1
+#if 1 /* diff from org in6_cksum */
 	if (rt2_presence)
 		in6 = dst;
 	else
@@ -7054,3 +7059,4 @@ ext_in6_cksum(m, nxt, off, len)
 	REDUCE;
 	return (~sum & 0xffff);
 }
+#endif /* MIP6 */
