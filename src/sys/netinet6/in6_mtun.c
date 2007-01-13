@@ -1,4 +1,4 @@
-/*	$Id: in6_mtun.c,v 1.1.2.1 2006/12/14 05:12:12 keiichi Exp $	*/
+/*	$Id: in6_mtun.c,v 1.1.2.2 2007/01/13 02:29:12 keiichi Exp $	*/
 /*	$NetBSD: in6_gif.c,v 1.44.4.1 2006/09/09 02:58:55 rpaulo Exp $	*/
 /*	$KAME: in6_gif.c,v 1.62 2001/07/29 04:27:25 itojun Exp $	*/
 
@@ -32,10 +32,11 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$Id: in6_mtun.c,v 1.1.2.1 2006/12/14 05:12:12 keiichi Exp $");
+__KERNEL_RCSID(0, "$Id: in6_mtun.c,v 1.1.2.2 2007/01/13 02:29:12 keiichi Exp $");
 
 #include "opt_inet.h"
 #include "opt_iso.h"
+#include "opt_mip6.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -63,7 +64,13 @@ __KERNEL_RCSID(0, "$Id: in6_mtun.c,v 1.1.2.1 2006/12/14 05:12:12 keiichi Exp $")
 #include <netinet6/ip6_var.h>
 #include <netinet6/in6_mtun.h>
 #include <netinet6/in6_var.h>
-#endif
+#ifdef MIP6
+#include <netinet6/scope6_var.h>
+#include "mip.h"
+#include <netinet6/mip6.h>
+#include <netinet6/mip6_var.h>
+#endif /* MIP6 */
+#endif /* INET6 */
 #include <netinet6/ip6protosw.h>
 #include <netinet/ip_ecn.h>
 
@@ -127,6 +134,9 @@ in6_mtun_output(ifp, family, m)
 #ifdef INET6
 	case AF_INET6:
 	    {
+#if defined (MIP6) && NMIP > 0
+		struct in6_addr innersrc, innerdst;
+#endif /* MIP6 && NMIP > 0 */
 		proto = IPPROTO_IPV6;
 		if (m->m_len < sizeof(*ip6)) {
 			m = m_pullup(m, sizeof(*ip6));
@@ -135,6 +145,14 @@ in6_mtun_output(ifp, family, m)
 		}
 		ip6 = mtod(m, struct ip6_hdr *);
 		itos = (ntohl(ip6->ip6_flow) >> 20) & 0xff;
+#if defined(MIP6) && NMIP > 0
+		/* send a hint to start the RR procedure to the tunnel destination node */
+		innersrc = ip6->ip6_src;
+		in6_setscope(&innersrc, ifp, NULL);
+		innerdst = ip6->ip6_dst;
+		in6_setscope(&innerdst, ifp, NULL);
+		mip6_notify_rr_hint(&innersrc, &innerdst);
+#endif /* MIP6 && NMIP > 0 */
 		break;
 	    }
 #endif
@@ -283,6 +301,9 @@ int in6_mtun_input(mp, offp, proto)
 	case IPPROTO_IPV6:
 	    {
 		struct ip6_hdr *ip6x;
+#if defined (MIP6) && NMIP > 0
+		struct in6_addr innersrc, innerdst;
+#endif /* MIP6 && NMIP > 0 */
 		af = AF_INET6;
 		if (m->m_len < sizeof(*ip6x)) {
 			m = m_pullup(m, sizeof(*ip6x));
@@ -294,6 +315,14 @@ int in6_mtun_input(mp, offp, proto)
 			ip6_ecn_egress(ECN_ALLOWED, &otos, &ip6x->ip6_flow);
 		else
 			ip6_ecn_egress(ECN_NOCARE, &otos, &ip6x->ip6_flow);
+#if defined(MIP6) && NMIP > 0
+		/* send a hint to start the RR procedure to the tunnel destination node */
+		innersrc = ip6x->ip6_src;
+		in6_setscope(&innersrc, mtunp, NULL);
+		innerdst = ip6x->ip6_dst;
+		in6_setscope(&innerdst, mtunp, NULL);
+		mip6_notify_rr_hint(&innerdst, &innersrc);
+#endif /* MIP6 && NMIP > 0 */
 		break;
 	    }
 #endif

@@ -5909,6 +5909,8 @@ int
 pf_check_proto_cksum(struct mbuf *m, int off, int len, u_int8_t p,
     sa_family_t af)
 {
+
+#if 0 /* XXX */
 #ifdef __OpenBSD__
 	u_int16_t flag_ok, flag_bad;
 #endif
@@ -6007,6 +6009,7 @@ pf_check_proto_cksum(struct mbuf *m, int off, int len, u_int8_t p,
 			break;
 #ifdef INET6
 		case IPPROTO_ICMPV6:
+		printf("pf: icmp6 checksum error\n");
 			icmp6stat.icp6s_checksum++;
 			break;
 #endif /* INET6 */
@@ -6016,6 +6019,8 @@ pf_check_proto_cksum(struct mbuf *m, int off, int len, u_int8_t p,
 #ifdef __OpenBSD__
 	m->m_pkthdr.csum |= flag_ok;
 #endif
+#endif /* 0 */
+
 	return (0);
 }
 
@@ -6556,6 +6561,39 @@ pf_test6(int dir, struct ifnet *ifp, struct mbuf **m0,
 			log = s->log;
 		} else if (s == NULL)
 			action = pf_test_icmp(&r, &s, dir, kif,
+			    m, off, h, &pd, &a, &ruleset, &ip6intrq);
+		break;
+	}
+
+	case IPPROTO_MH: {
+		struct ip6_mh	ih;
+
+		pd.hdr.ip6mh = &ih;
+		if (!pf_pull_hdr(m, off, &ih, sizeof(ih),
+		    &action, &reason, AF_INET6)) {
+			log = action != PF_PASS;
+			goto done;
+		}
+		if (dir == PF_IN && pf_check_proto_cksum(m, off,
+		    ntohs(h->ip6_plen) - (off - sizeof(struct ip6_hdr)),
+		    IPPROTO_MH, AF_INET6)) {
+			action = PF_DROP;
+			REASON_SET(&reason, PFRES_PROTCKSUM);
+			goto done;
+		}
+#ifdef NOTYET 
+		action = pf_test_state_icmp(&s, dir, kif,
+		    m, off, h, &pd, &reason);
+		if (action == PF_PASS) {
+#if NPFSYNC
+			pfsync_update_state(s);
+#endif /* NPFSYNC */
+			r = s->rule.ptr;
+			a = s->anchor.ptr;
+			log = s->log;
+		} else if (s == NULL)
+#endif /* NOTYET */
+			action = pf_test_mh(&r, &s, dir, kif,
 			    m, off, h, &pd, &a, &ruleset, &ip6intrq);
 		break;
 	}

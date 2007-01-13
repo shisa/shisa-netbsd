@@ -27,7 +27,7 @@ makeoptions	DEBUG="-g"
 
 options 	INCLUDE_CONFIG_FILE	# embed config file in kernel binary
 
-#ident 		"GENERIC-$Revision: 1.7.2.2 $"
+#ident 		"GENERIC-$Revision: 1.7.2.3 $"
 
 maxusers	32		# estimated number of users
 
@@ -232,7 +232,6 @@ options 	IPFILTER_LOOKUP	# ippool(8) support
 
 options		MIP6
 pseudo-device	mip	1
-pseudo-device	nemo	4
 pseudo-device	mtun
 
 # These options enable verbose messages for several subsystems.
@@ -530,8 +529,8 @@ wsmouse*	at pms? mux 0
 options 	KVM86			# required for vesabios
 vesabios*	at vesabiosbus?
 vesafb* 	at vesabios?
-options 	VESAFB_WIDTH=1400
-options 	VESAFB_HEIGHT=1050
+options 	VESAFB_WIDTH=1024
+options 	VESAFB_HEIGHT=768
 options 	VESAFB_DEPTH=8
 #options 	VESAFB_PM		# power management support
 wsdisplay*	at vesafb? console ?
