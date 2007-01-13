@@ -182,7 +182,7 @@ ip6_output(
     struct ifnet **ifpp		/* XXX: just for statistics */
 )
 {
-	struct ip6_hdr *ip6, *mhip6;
+	struct ip6_hdr *ip6 = NULL, *mhip6;
 	struct ifnet *ifp, *origifp;
 	struct mbuf *m = m0;
 	int hlen, tlen, len, off;

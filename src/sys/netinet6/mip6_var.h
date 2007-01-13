@@ -31,36 +31,37 @@
 #ifndef _NETINET6_MIP6_VAR_H_
 #define _NETINET6_MIP6_VAR_H_
 
-/* the binding update list entry used in the kernel */
+/* 
+ * The Binding Update List entry used in the kernel. 
+ * This entry is stored in in6_ifaddr (in6_var.h) 
+ */
 struct mip6_bul_internal {
 	LIST_ENTRY(mip6_bul_internal) mbul_entry;
-	struct in6_addr     mbul_peeraddr;   /* peer addr of this BUL */
-	struct in6_addr     mbul_hoa;        /* HoA */
-	struct in6_addr     mbul_coa;        /* CoA */
-	u_int16_t           mbul_flags;      /* Flags: Ack, LL, Key, Home */
+	struct in6_addr     mbul_peeraddr;   /* peer address of this BUL */
+	struct in6_addr     mbul_hoa;        /* home address */
+	struct in6_addr     mbul_coa;        /* care-of address */
+	u_int16_t           mbul_flags;      /* flags: Ack, LL, Key, Home */
 	struct mip_softc    *mbul_mip;       /* back pointer to mip */
+	const struct encaptab *mbul_encap;
+	u_int8_t            mbul_state;     /* internal state */
 #ifdef MIP6_MCOA
 	u_int16_t           mbul_bid;        /* Binding Unique Identifier */
 #endif /* MIP6_MCOA */
-	const struct encaptab *mbul_encap;
-	u_int8_t            mbul_state;     /* internal state */
 };
-/*LIST_HEAD(mip6_bul_list, mip6_bul_internal); defined in in6_var.h */
-
 #define MIP6_BUL_STATE_NOT_SUPPORTED 0x01
 #define MIP6_BUL_STATE_NEEDTUNNEL (MIP6_BUL_STATE_NOT_SUPPORTED)
 
 /* the binding cache entry used in the kernel */
 struct mip6_bc_internal {
 	LIST_ENTRY(mip6_bc_internal) mbc_entry;
-	struct in6_addr mbc_cnaddr;	/* my addr of this BC */
-	struct in6_addr mbc_hoa;	/* HoA */
-	struct in6_addr mbc_coa;	/* CoA */
-	struct ifaddr	*mbc_ifaddr;
-	u_int16_t       mbc_flags;      /* Flags: Ack, LL, Key, Home */
-	int 		mbc_hash_cache;
+	struct in6_addr mbc_cnaddr;	/* own address */
+	struct in6_addr mbc_hoa;	/* home address */
+	struct in6_addr mbc_coa;	/* care-of address */
+	struct ifaddr	*mbc_ifaddr;    /* pointer to ifaddr of own address */
+	u_int16_t       mbc_flags;      /* flags: Ack, LL, Key, Home */
+	int 		mbc_hash_cache; /* hash ID cache for performance optimization */
 #ifdef MIP6_MCOA
-	u_int16_t       mbc_bid;      /* Binding Unique Identifier */
+	u_int16_t       mbc_bid;        /* Binding Unique Identifier */
 #endif /* MIP6_MCOA */
 };
 LIST_HEAD(mip6_bc_list, mip6_bc_internal);
