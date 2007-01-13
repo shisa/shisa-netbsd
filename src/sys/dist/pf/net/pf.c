@@ -6783,11 +6783,14 @@ ext_in6_cksum(m, nxt, off, len)
 	int dstoptlen, optlen;
 	u_int8_t *opt;
 
+	struct m_tag *n;
+	struct ip6aux *ip6a = NULL;
+
 	struct ip6_rthdr *rthdr;
 
-	//struct in6_addr src;
+	struct in6_addr src;
 	struct in6_addr dst;
-	//int hoa_presence = 0;
+	int hoa_presence = 0;
 	int rt2_presence = 0;
 #endif 
 
@@ -6841,17 +6844,25 @@ ext_in6_cksum(m, nxt, off, len)
 			case IP6OPT_PAD1:
 				optlen = 1;
 				break;
-			case IP6OPT_PADN:
+			case IP6OPT_HOME_ADDRESS:
+				/* sanity check */
+				n = ip6_findaux(m);
+				if (n) {
+					ip6a = (struct ip6aux *) (n + 1);
+
+					if (ip6a->ip6a_flags & IP6A_SWAP) {
+						optlen = *(opt + 1) + 2;
+						break;
+					}
+				}
+
+				hoa_presence = 1;
+				bcopy(opt + 2, &src, sizeof(struct in6_addr));
+
 				optlen = *(opt + 1) + 2;
 				break;
-			case IP6OPT_HOME_ADDRESS:
-				break;
 			default:                /* unknown option */
-				optlen = ip6_unknown_opt(opt, m,
-						opt - mtod(m, u_int8_t *));
-				if (optlen == -1)
-					return (IPPROTO_DONE);
-				optlen += 2;
+				optlen = *(opt + 1) + 2;
 				break;
 			}
 		}
@@ -6877,6 +6888,11 @@ ext_in6_cksum(m, nxt, off, len)
                 goto again;
         }
 #endif
+#if 1 /* diff from org in6_cksum */
+	if (hoa_presence)
+		w = (u_int16_t *)&src;
+	else
+#endif
 	w = (u_int16_t *)&ip6->ip6_src;
 	uph.ph.ph_len = htonl(len);
 	uph.ph.ph_nxt = nxt;
@@ -6886,6 +6902,11 @@ ext_in6_cksum(m, nxt, off, len)
 	 * XXX: we'd like to avoid copying the address, but we can't due to
 	 * the possibly embedded scope zone ID.
 	 */
+#if 1 /* diff from org in6_cksum */
+	if (hoa_presence)
+		in6 = src;
+	else
+#endif
 	in6 = ip6->ip6_src;
 	in6_clearscope(&in6);
 	w = (u_int16_t *)&in6;
