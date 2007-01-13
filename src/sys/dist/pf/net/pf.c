@@ -5985,7 +5985,7 @@ pf_check_proto_cksum(struct mbuf *m, int off, int len, u_int8_t p,
 	case AF_INET6:
 		if (m->m_len < sizeof(struct ip6_hdr))
 			return (1);
-		sum = shisa_in6_cksum(m, p, off, len);
+		sum = ext_in6_cksum(m, p, off, len);
 		break;
 #endif /* INET6 */
 	default:
