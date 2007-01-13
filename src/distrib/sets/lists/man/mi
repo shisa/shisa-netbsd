@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.954 2006/11/25 17:43:47 elad Exp $
+# $NetBSD: mi,v 1.966 2007/01/07 19:59:55 pooka Exp $
 ./etc/mtree/set.man				man-sys-root
 ./usr/share/info/am-utils.info			man-amd-info		info
 ./usr/share/info/as.info			man-computil-info	bfd,info
@@ -581,6 +581,7 @@
 ./usr/share/man/cat4/aha.0			man-sys-catman		.cat
 ./usr/share/man/cat4/ahb.0			man-sys-catman		.cat
 ./usr/share/man/cat4/ahc.0			man-sys-catman		.cat
+./usr/share/man/cat4/ahcisata.0			man-sys-catman		.cat
 ./usr/share/man/cat4/ahd.0			man-sys-catman		.cat
 ./usr/share/man/cat4/ai.0			man-sys-catman		.cat
 ./usr/share/man/cat4/aic.0			man-sys-catman		.cat
@@ -720,6 +721,7 @@
 ./usr/share/man/cat4/bktr.0			man-sys-catman		.cat
 ./usr/share/man/cat4/bluetooth.0		man-sys-catman		.cat
 ./usr/share/man/cat4/bmtphy.0			man-sys-catman		.cat
+./usr/share/man/cat4/bnx.0			man-sys-catman		.cat
 ./usr/share/man/cat4/boca.0			man-sys-catman		.cat
 ./usr/share/man/cat4/bpf.0			man-sys-catman		.cat
 ./usr/share/man/cat4/brgphy.0			man-sys-catman		.cat
@@ -1060,6 +1062,7 @@
 ./usr/share/man/cat4/macppc/mesh.0		man-sys-catman		.cat
 ./usr/share/man/cat4/macppc/obio.0		man-sys-catman		.cat
 ./usr/share/man/cat4/macppc/pbms.0		man-sys-catman		.cat
+./usr/share/man/cat4/macppc/snapper.0		man-sys-catman		.cat
 ./usr/share/man/cat4/mainbus.0			man-sys-catman		.cat
 ./usr/share/man/cat4/makphy.0			man-sys-catman		.cat
 ./usr/share/man/cat4/mbe.0			man-sys-catman		.cat
@@ -1069,6 +1072,7 @@
 ./usr/share/man/cat4/mcd.0			man-sys-catman		.cat
 ./usr/share/man/cat4/md.0			man-sys-catman		.cat
 ./usr/share/man/cat4/mfb.0			man-sys-catman		.cat
+./usr/share/man/cat4/mfi.0			man-sys-catman		.cat
 ./usr/share/man/cat4/mhzc.0			man-sys-catman		.cat
 ./usr/share/man/cat4/midi.0			man-sys-catman		.cat
 ./usr/share/man/cat4/mii.0			man-sys-catman		.cat
@@ -1243,11 +1247,13 @@
 ./usr/share/man/cat4/sgimips/dpclock.0		man-sys-catman		.cat
 ./usr/share/man/cat4/sgimips/dsclock.0		man-sys-catman		.cat
 ./usr/share/man/cat4/sgimips/gio.0		man-sys-catman		.cat
+./usr/share/man/cat4/sgimips/giopci.0		man-sys-catman		.cat
 ./usr/share/man/cat4/sgimips/grtwo.0		man-sys-catman		.cat
 ./usr/share/man/cat4/sgimips/haltwo.0		man-sys-catman		.cat
 ./usr/share/man/cat4/sgimips/hpc.0		man-sys-catman		.cat
 ./usr/share/man/cat4/sgimips/imc.0		man-sys-catman		.cat
 ./usr/share/man/cat4/sgimips/intro.0		man-sys-catman		.cat
+./usr/share/man/cat4/sgimips/light.0		man-sys-catman		.cat
 ./usr/share/man/cat4/sgimips/mace.0		man-sys-catman		.cat
 ./usr/share/man/cat4/sgimips/mec.0		man-sys-catman		.cat
 ./usr/share/man/cat4/sgimips/newport.0		man-sys-catman		.cat
@@ -1389,6 +1395,7 @@
 ./usr/share/man/cat4/udsbr.0			man-sys-catman		.cat
 ./usr/share/man/cat4/uep.0			man-sys-catman		.cat
 ./usr/share/man/cat4/uftdi.0			man-sys-catman		.cat
+./usr/share/man/cat4/ug.0			man-sys-catman		.cat
 ./usr/share/man/cat4/ugen.0			man-sys-catman		.cat
 ./usr/share/man/cat4/ugensa.0			man-sys-catman		.cat
 ./usr/share/man/cat4/uha.0			man-sys-catman		.cat
@@ -1712,6 +1719,7 @@
 ./usr/share/man/cat7/signal.0			man-reference-catman	.cat
 ./usr/share/man/cat7/sticky.0			man-reference-catman	.cat
 ./usr/share/man/cat7/symlink.0			man-reference-catman	.cat
+./usr/share/man/cat7/sysctl.0			man-reference-catman	.cat
 ./usr/share/man/cat8/MAKEDEV.0			man-sysutil-catman	.cat
 ./usr/share/man/cat8/ac.0			man-sysutil-catman	.cat
 ./usr/share/man/cat8/accton.0			man-sysutil-catman	.cat
@@ -2061,6 +2069,7 @@
 ./usr/share/man/cat8/mount_overlay.0		man-miscfs-catman	.cat
 ./usr/share/man/cat8/mount_portal.0		man-miscfs-catman	.cat
 ./usr/share/man/cat8/mount_procfs.0		man-sysutil-catman	.cat
+./usr/share/man/cat8/mount_psshfs.0		man-sysutil-catman	puffs,.cat
 ./usr/share/man/cat8/mount_ptyfs.0		man-sysutil-catman	.cat
 ./usr/share/man/cat8/mount_smbfs.0		man-smbfs-catman	.cat
 ./usr/share/man/cat8/mount_sysvbfs.0		man-sysutil-catman	.cat
@@ -2129,6 +2138,7 @@
 ./usr/share/man/cat8/ntpq.0			man-ntp-catman		.cat
 ./usr/share/man/cat8/ntptime.0			man-ntp-catman		.cat
 ./usr/share/man/cat8/ntptrace.0			man-ntp-catman		.cat
+./usr/share/man/cat8/ntp-keygen.0		man-ntp-catman		.cat
 ./usr/share/man/cat8/ofctl.0			man-sysutil-catman	.cat
 ./usr/share/man/cat8/ofppc/MAKEDEV.0		man-obsolete		obsolete
 ./usr/share/man/cat8/ofppc/makedev.0		man-obsolete		obsolete
@@ -2285,8 +2295,10 @@
 ./usr/share/man/cat8/setkey.0			man-netutil-catman	.cat
 ./usr/share/man/cat8/setobjstat.0		man-sysutil-catman	.cat
 ./usr/share/man/cat8/sftp-server.0		man-secsh-catman	crypto,.cat
+./usr/share/man/cat8/sgimips/boot.0		man-sys-catman		.cat
 ./usr/share/man/cat8/sgimips/MAKEDEV.0		man-obsolete		obsolete
 ./usr/share/man/cat8/sgimips/makedev.0		man-obsolete		obsolete
+./usr/share/man/cat8/sgimips/sgivol.0		man-sys-catman		.cat
 ./usr/share/man/cat8/shark/MAKEDEV.0		man-obsolete		obsolete
 ./usr/share/man/cat8/shark/makedev.0		man-obsolete		obsolete
 ./usr/share/man/cat8/showmount.0		man-nfsclient-catman	.cat
@@ -2984,6 +2996,7 @@
 ./usr/share/man/man4/aha.4			man-sys-man		.man
 ./usr/share/man/man4/ahb.4			man-sys-man		.man
 ./usr/share/man/man4/ahc.4			man-sys-man		.man
+./usr/share/man/man4/ahcisata.4			man-sys-man		.man
 ./usr/share/man/man4/ahd.4			man-sys-man		.man
 ./usr/share/man/man4/ai.4			man-sys-man		.man
 ./usr/share/man/man4/aic.4			man-sys-man		.man
@@ -3123,6 +3136,7 @@
 ./usr/share/man/man4/bktr.4			man-sys-man		.man
 ./usr/share/man/man4/bluetooth.4		man-sys-man		.man
 ./usr/share/man/man4/bmtphy.4			man-sys-man		.man
+./usr/share/man/man4/bnx.4			man-sys-man		.man
 ./usr/share/man/man4/boca.4			man-sys-man		.man
 ./usr/share/man/man4/bpf.4			man-sys-man		.man
 ./usr/share/man/man4/brgphy.4			man-sys-man		.man
@@ -3463,6 +3477,7 @@
 ./usr/share/man/man4/macppc/mesh.4		man-sys-man		.man
 ./usr/share/man/man4/macppc/obio.4		man-sys-man		.man
 ./usr/share/man/man4/macppc/pbms.4		man-sys-man		.man
+./usr/share/man/man4/macppc/snapper.4		man-sys-man		.man
 ./usr/share/man/man4/mainbus.4			man-sys-man		.man
 ./usr/share/man/man4/makphy.4			man-sys-man		.man
 ./usr/share/man/man4/mbe.4			man-sys-man		.man
@@ -3472,6 +3487,7 @@
 ./usr/share/man/man4/mcd.4			man-sys-man		.man
 ./usr/share/man/man4/md.4			man-sys-man		.man
 ./usr/share/man/man4/mfb.4			man-sys-man		.man
+./usr/share/man/man4/mfi.4			man-sys-man		.man
 ./usr/share/man/man4/mhzc.4			man-sys-man		.man
 ./usr/share/man/man4/midi.4			man-sys-man		.man
 ./usr/share/man/man4/mii.4			man-sys-man		.man
@@ -3646,11 +3662,13 @@
 ./usr/share/man/man4/sgimips/dpclock.4		man-sys-man		.man
 ./usr/share/man/man4/sgimips/dsclock.4		man-sys-man		.man
 ./usr/share/man/man4/sgimips/gio.4		man-sys-man		.man
+./usr/share/man/man4/sgimips/giopci.4		man-sys-man		.man
 ./usr/share/man/man4/sgimips/grtwo.4		man-sys-man		.man
 ./usr/share/man/man4/sgimips/haltwo.4		man-sys-man		.man
 ./usr/share/man/man4/sgimips/hpc.4		man-sys-man		.man
 ./usr/share/man/man4/sgimips/imc.4		man-sys-man		.man
 ./usr/share/man/man4/sgimips/intro.4		man-sys-man		.man
+./usr/share/man/man4/sgimips/light.4		man-sys-man		.man
 ./usr/share/man/man4/sgimips/mace.4		man-sys-man		.man
 ./usr/share/man/man4/sgimips/mec.4		man-sys-man		.man
 ./usr/share/man/man4/sgimips/newport.4		man-sys-man		.man
@@ -3792,6 +3810,7 @@
 ./usr/share/man/man4/udsbr.4			man-sys-man		.man
 ./usr/share/man/man4/uep.4			man-sys-man		.man
 ./usr/share/man/man4/uftdi.4			man-sys-man		.man
+./usr/share/man/man4/ug.4			man-sys-man		.man
 ./usr/share/man/man4/ugen.4			man-sys-man		.man
 ./usr/share/man/man4/ugensa.4			man-sys-man		.man
 ./usr/share/man/man4/uha.4			man-sys-man		.man
@@ -4114,6 +4133,7 @@
 ./usr/share/man/man7/signal.7			man-reference-man	.man
 ./usr/share/man/man7/sticky.7			man-reference-man	.man
 ./usr/share/man/man7/symlink.7			man-reference-man	.man
+./usr/share/man/man7/sysctl.7			man-reference-man	.man
 ./usr/share/man/man8/MAKEDEV.8			man-sysutil-man		.man
 ./usr/share/man/man8/ac.8			man-sysutil-man		.man
 ./usr/share/man/man8/accton.8			man-sysutil-man		.man
@@ -4464,6 +4484,7 @@
 ./usr/share/man/man8/mount_overlay.8		man-miscfs-man		.man
 ./usr/share/man/man8/mount_portal.8		man-miscfs-man		.man
 ./usr/share/man/man8/mount_procfs.8		man-sysutil-man		.man
+./usr/share/man/man8/mount_psshfs.8		man-sysutil-man		puffs,.man
 ./usr/share/man/man8/mount_ptyfs.8		man-sysutil-man		.man
 ./usr/share/man/man8/mount_smbfs.8		man-smbfs-man		.man
 ./usr/share/man/man8/mount_sysvbfs.8		man-sysutil-man		.man
@@ -4532,6 +4553,7 @@
 ./usr/share/man/man8/ntpq.8			man-ntp-man		.man
 ./usr/share/man/man8/ntptime.8			man-ntp-man		.man
 ./usr/share/man/man8/ntptrace.8			man-ntp-man		.man
+./usr/share/man/man8/ntp-keygen.8		man-ntp-man		.man
 ./usr/share/man/man8/ofctl.8			man-sysutil-man		.man
 ./usr/share/man/man8/ofppc/MAKEDEV.8		man-obsolete		obsolete
 ./usr/share/man/man8/ofppc/makedev.8		man-obsolete		obsolete
@@ -4688,8 +4710,10 @@
 ./usr/share/man/man8/setkey.8			man-netutil-man		.man
 ./usr/share/man/man8/setobjstat.8		man-sysutil-man		.man
 ./usr/share/man/man8/sftp-server.8		man-secsh-man		crypto,.man
+./usr/share/man/man8/sgimips/boot.8		man-sys-man		.man
 ./usr/share/man/man8/sgimips/MAKEDEV.8		man-obsolete		obsolete
 ./usr/share/man/man8/sgimips/makedev.8		man-obsolete		obsolete
+./usr/share/man/man8/sgimips/sgivol.8		man-sys-man		.man
 ./usr/share/man/man8/shark/MAKEDEV.8		man-obsolete		obsolete
 ./usr/share/man/man8/shark/makedev.8		man-obsolete		obsolete
 ./usr/share/man/man8/showmount.8		man-nfsclient-man	.man

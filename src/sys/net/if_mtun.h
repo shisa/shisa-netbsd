@@ -1,4 +1,4 @@
-/*	$Id: if_mtun.h,v 1.1 2006/12/12 11:14:09 keiichi Exp $	*/
+/*	$Id: if_mtun.h,v 1.2 2007/01/13 03:58:18 keiichi Exp $	*/
 /*	$NetBSD: if_gif.h,v 1.13 2005/12/11 23:05:25 thorpej Exp $	*/
 /*	$KAME: if_gif.h,v 1.23 2001/07/27 09:21:42 itojun Exp $	*/
 
@@ -67,8 +67,6 @@ struct mtun_softc {
 #ifdef __HAVE_GENERIC_SOFT_INTERRUPTS
 	void	*mtun_si;		/* softintr handle */
 #endif
-	long	mtun_route_expire;
-	struct sockaddr *mtun_nexthop;	/* nexthop address */
 };
 #define MTUN_ROUTE_TTL	10
 

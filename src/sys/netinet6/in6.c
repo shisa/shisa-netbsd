@@ -1,4 +1,4 @@
-/*	$NetBSD: in6.c,v 1.119 2006/11/24 19:47:00 christos Exp $	*/
+/*	$NetBSD: in6.c,v 1.122 2007/01/04 19:07:04 elad Exp $	*/
 /*	$KAME: in6.c,v 1.198 2001/07/18 09:12:38 itojun Exp $	*/
 
 /*
@@ -62,7 +62,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: in6.c,v 1.119 2006/11/24 19:47:00 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: in6.c,v 1.122 2007/01/04 19:07:04 elad Exp $");
 
 #include "opt_inet.h"
 #include "opt_pfil_hooks.h"
@@ -118,6 +118,12 @@ MALLOC_DEFINE(M_IP6OPT, "ip6_options", "IPv6 options");
 
 /* enable backward compatibility code for obsoleted ioctls */
 #define COMPAT_IN6IFIOCTL
+
+#ifdef	IN6_DEBUG
+#define	IN6_DPRINTF(__fmt, ...)	printf(__fmt, __VA_ARGS__)
+#else
+#define	IN6_DPRINTF(__fmt, ...)	do { } while (/*CONSTCOND*/0) 
+#endif /* IN6_DEBUG */
 
 /*
  * Definitions of some constant IP6 addresses.
@@ -242,7 +248,7 @@ in6_ifaddloop(struct ifaddr *ifa)
 void
 in6_ifremloop(struct ifaddr *ifa)
 {
-	struct in6_ifaddr *ia;
+	struct in6_ifaddr *alt_ia = NULL, *ia;
 	struct rtentry *rt;
 	int ia_count = 0;
 
@@ -256,35 +262,60 @@ in6_ifremloop(struct ifaddr *ifa)
 	 */
 
 	/*
-	 * Delete the entry only if exact one ifa exists.  More than one ifa
-	 * can exist if we assign a same single address to multiple
-	 * (probably p2p) interfaces.
-	 * XXX: we should avoid such a configuration in IPv6...
+	 * Delete the entry only if exactly one ifaddr matches the
+	 * address, ifa->ifa_addr.
+	 *
+	 * If more than one ifaddr matches, replace the ifaddr in
+	 * the routing table, rt_ifa, with a different ifaddr than
+	 * the one we are purging, ifa.  It is important to do
+	 * this, or else the routing table can accumulate dangling
+	 * pointers rt->rt_ifa->ifa_ifp to destroyed interfaces,
+	 * which will lead to crashes, later.  (More than one ifaddr
+	 * can match if we assign the same address to multiple---probably
+	 * p2p---interfaces.)
+	 *
+	 * XXX An old comment at this place said, "we should avoid
+	 * XXX such a configuration [i.e., interfaces with the same
+	 * XXX addressed assigned --ed.] in IPv6...".  I do not
+	 * XXX agree, especially now that I have fixed the dangling
+	 * XXX ifp-pointers bug.
 	 */
 	for (ia = in6_ifaddr; ia; ia = ia->ia_next) {
-		if (IN6_ARE_ADDR_EQUAL(IFA_IN6(ifa), &ia->ia_addr.sin6_addr)) {
-			ia_count++;
-			if (ia_count > 1)
-				break;
-		}
+		if (!IN6_ARE_ADDR_EQUAL(IFA_IN6(ifa), &ia->ia_addr.sin6_addr))
+			continue;
+		if (ia->ia_ifp != ifa->ifa_ifp)
+			alt_ia = ia;
+		if (++ia_count > 1 && alt_ia != NULL)
+			break;
 	}
 
-	if (ia_count == 1) {
-		/*
-		 * Before deleting, check if a corresponding loopbacked host
-		 * route surely exists.  With this check, we can avoid to
-		 * delete an interface direct route whose destination is same
-		 * as the address being removed.  This can happen when removing
-		 * a subnet-router anycast address on an interface attahced
-		 * to a shared medium.
-		 */
-		rt = rtalloc1(ifa->ifa_addr, 0);
-		if (rt != NULL && (rt->rt_flags & RTF_HOST) != 0 &&
-		    (rt->rt_ifp->if_flags & IFF_LOOPBACK) != 0) {
-			rt->rt_refcnt--;
-			in6_ifloop_request(RTM_DELETE, ifa);
-		}
-	}
+	if (ia_count == 0)
+		return;
+
+	if ((rt = rtalloc1(ifa->ifa_addr, 0)) == NULL)
+		return;
+	rt->rt_refcnt--;
+
+	/*
+	 * Before deleting, check if a corresponding loopbacked
+	 * host route surely exists.  With this check, we can avoid
+	 * deleting an interface direct route whose destination is
+	 * the same as the address being removed.  This can happen
+	 * when removing a subnet-router anycast address on an
+	 * interface attached to a shared medium.
+	 */
+	if ((rt->rt_flags & RTF_HOST) == 0 ||
+	    (rt->rt_ifp->if_flags & IFF_LOOPBACK) == 0)
+		return;
+
+	/* If we cannot replace the route's ifaddr with the equivalent
+	 * ifaddr of another interface, I believe it is safest to
+	 * delete the route.
+	 */
+	if (ia_count == 1 || alt_ia == NULL)
+		in6_ifloop_request(RTM_DELETE, ifa);
+	else
+		rt_replace_ifa(rt, &alt_ia->ia_ifa);
 }
 
 int
@@ -304,7 +335,7 @@ in6_mask2len(mask, lim0)
 	}
 	y = 0;
 	if (p < lim) {
-		for (y = 0; y < 8; y++) {
+		for (y = 0; y < NBBY; y++) {
 			if ((*p & (0x80 >> y)) == 0)
 				break;
 		}
@@ -322,31 +353,21 @@ in6_mask2len(mask, lim0)
 				return -1;
 	}
 
-	return x * 8 + y;
+	return x * NBBY + y;
 }
 
 #define ifa2ia6(ifa)	((struct in6_ifaddr *)(ifa))
 #define ia62ifa(ia6)	(&((ia6)->ia_ifa))
 
-int
-in6_control(so, cmd, data, ifp, l)
-	struct	socket *so;
-	u_long cmd;
-	caddr_t	data;
-	struct ifnet *ifp;
-	struct lwp *l;
+static int
+in6_control1(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
+    struct lwp *l, int privileged)
 {
 	struct	in6_ifreq *ifr = (struct in6_ifreq *)data;
 	struct	in6_ifaddr *ia = NULL;
 	struct	in6_aliasreq *ifra = (struct in6_aliasreq *)data;
 	struct sockaddr_in6 *sa6;
-	int error, privileged;
-
-	privileged = 0;
-	if (l && !kauth_authorize_generic(l->l_cred,
-	    KAUTH_GENERIC_ISSUSER, &l->l_acflag))
-		privileged++;
-
+	int error;
 	switch (cmd) {
 	/*
 	 * XXX: Fix me, once we fix SIOCSIFADDR, SIOCIFDSTADDR, etc.
@@ -583,7 +604,7 @@ in6_control(so, cmd, data, ifp, l)
 			 * signed.
 			 */
 			maxexpire = ((time_t)~0) &
-			    ~((time_t)1 << ((sizeof(maxexpire) * 8) - 1));
+			    ~((time_t)1 << ((sizeof(maxexpire) * NBBY) - 1));
 			if (ia->ia6_lifetime.ia6t_vltime <
 			    maxexpire - ia->ia6_updatetime) {
 				retlt->ia6t_expire = ia->ia6_updatetime +
@@ -601,7 +622,7 @@ in6_control(so, cmd, data, ifp, l)
 			 * signed.
 			 */
 			maxexpire = ((time_t)~0) &
-			    ~((time_t)1 << ((sizeof(maxexpire) * 8) - 1));
+			    ~((time_t)1 << ((sizeof(maxexpire) * NBBY) - 1));
 			if (ia->ia6_lifetime.ia6t_pltime <
 			    maxexpire - ia->ia6_updatetime) {
 				retlt->ia6t_preferred = ia->ia6_updatetime +
@@ -782,18 +803,32 @@ in6_control(so, cmd, data, ifp, l)
 	return 0;
 }
 
+int
+in6_control(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
+    struct lwp *l)
+{
+	int error, privileged, s;
+
+	privileged = 0;
+	if (l && !kauth_authorize_generic(l->l_cred,
+	    KAUTH_GENERIC_ISSUSER, NULL))
+		privileged++;
+
+	s = splnet();
+	error = in6_control1(so , cmd, data, ifp, l, privileged);
+	splx(s);
+	return error;
+}
+
 /*
  * Update parameters of an IPv6 interface address.
  * If necessary, a new entry is created and linked into address chains.
  * This function is separated from in6_control().
  * XXX: should this be performed under splnet()?
  */
-int
-in6_update_ifa(ifp, ifra, ia, flags)
-	struct ifnet *ifp;
-	struct in6_aliasreq *ifra;
-	struct in6_ifaddr *ia;
-	int flags;
+static int
+in6_update_ifa1(struct ifnet *ifp, struct in6_aliasreq *ifra,
+    struct in6_ifaddr *ia, int flags)
 {
 	int error = 0, hostIsNew = 0, plen = -1;
 	struct in6_ifaddr *oia;
@@ -1132,8 +1167,7 @@ in6_update_ifa(ifp, ifra, ia, flags)
 		mltaddr.sin6_len = sizeof(struct sockaddr_in6);
 		mltaddr.sin6_family = AF_INET6;
 		mltaddr.sin6_addr = in6addr_linklocal_allnodes;
-		if ((error = in6_setscope(&mltaddr.sin6_addr, ifp, NULL)) !=
-		    0)
+		if ((error = in6_setscope(&mltaddr.sin6_addr, ifp, NULL)) != 0)
 			goto cleanup; /* XXX: should not fail */
 
 		/*
@@ -1149,6 +1183,16 @@ in6_update_ifa(ifp, ifra, ia, flags)
 			    MLTMASK_LEN)) {
 				RTFREE(rt);
 				rt = NULL;
+			} else if (rt->rt_ifp != ifp) {
+				IN6_DPRINTF("%s: rt_ifp %p -> %p (%s) "
+				    "network %04x:%04x::/32 = %04x:%04x::/32\n",
+				    __func__, rt->rt_ifp, ifp, ifp->if_xname,
+				    ntohs(mltaddr.sin6_addr.s6_addr16[0]),
+				    ntohs(mltaddr.sin6_addr.s6_addr16[1]),
+				    ((struct sockaddr_in6 *)rt_key(rt))->sin6_addr.s6_addr16[0],
+				    ((struct sockaddr_in6 *)rt_key(rt))->sin6_addr.s6_addr16[1]);
+				rt_replace_ifa(rt, &ia->ia_ifa);
+				rt->rt_ifp = ifp;
 			}
 		}
 		if (!rt) {
@@ -1193,19 +1237,17 @@ in6_update_ifa(ifp, ifra, ia, flags)
 			dad_delay = arc4random() %
 			    (MAX_RTR_SOLICITATION_DELAY * hz);
 		}
-		if (in6_nigroup(ifp, hostname, hostnamelen, &mltaddr) == 0) {
-			imm = in6_joingroup(ifp, &mltaddr.sin6_addr, &error,
-			    dad_delay); /* XXX jinmei */
-			if (!imm) {
-				nd6log((LOG_WARNING, "in6_update_ifa: "
-				    "addmulti failed for %s on %s (errno=%d)\n",
-				    ip6_sprintf(&mltaddr.sin6_addr),
-				    if_name(ifp), error));
-				/* XXX not very fatal, go on... */
-			} else {
-				LIST_INSERT_HEAD(&ia->ia6_memberships,
-				    imm, i6mm_chain);
-			}
+		if (in6_nigroup(ifp, hostname, hostnamelen, &mltaddr) != 0)
+			;
+		else if ((imm = in6_joingroup(ifp, &mltaddr.sin6_addr, &error,
+		          dad_delay)) == NULL) { /* XXX jinmei */
+			nd6log((LOG_WARNING, "in6_update_ifa: "
+			    "addmulti failed for %s on %s (errno=%d)\n",
+			    ip6_sprintf(&mltaddr.sin6_addr),
+			    if_name(ifp), error));
+			/* XXX not very fatal, go on... */
+		} else {
+			LIST_INSERT_HEAD(&ia->ia6_memberships, imm, i6mm_chain);
 		}
 
 
@@ -1214,8 +1256,7 @@ in6_update_ifa(ifp, ifra, ia, flags)
 		 * (ff01::1%ifN, and ff01::%ifN/32)
 		 */
 		mltaddr.sin6_addr = in6addr_nodelocal_allnodes;
-		if ((error = in6_setscope(&mltaddr.sin6_addr, ifp, NULL))
-		    != 0) 
+		if ((error = in6_setscope(&mltaddr.sin6_addr, ifp, NULL)) != 0) 
 			goto cleanup; /* XXX: should not fail */
 
 		/* XXX: again, do we really need the route? */
@@ -1224,9 +1265,19 @@ in6_update_ifa(ifp, ifra, ia, flags)
 			/* 32bit came from "mltmask" */
 			if (memcmp(&mltaddr.sin6_addr,
 			    &((struct sockaddr_in6 *)rt_key(rt))->sin6_addr,
-			    32 / 8)) {
+			    32 / NBBY)) {
 				RTFREE(rt);
 				rt = NULL;
+			} else if (rt->rt_ifp != ifp) {
+				IN6_DPRINTF("%s: rt_ifp %p -> %p (%s) "
+				    "network %04x:%04x::/32 = %04x:%04x::/32\n",
+				    __func__, rt->rt_ifp, ifp, ifp->if_xname,
+				    ntohs(mltaddr.sin6_addr.s6_addr16[0]),
+				    ntohs(mltaddr.sin6_addr.s6_addr16[1]),
+				    ((struct sockaddr_in6 *)rt_key(rt))->sin6_addr.s6_addr16[0],
+				    ((struct sockaddr_in6 *)rt_key(rt))->sin6_addr.s6_addr16[1]);
+				rt_replace_ifa(rt, &ia->ia_ifa);
+				rt->rt_ifp = ifp;
 			}
 		}
 		if (!rt) {
@@ -1314,6 +1365,18 @@ in6_update_ifa(ifp, ifra, ia, flags)
 	return error;
 }
 
+int
+in6_update_ifa(struct ifnet *ifp, struct in6_aliasreq *ifra,
+    struct in6_ifaddr *ia, int flags)
+{
+	int rc, s;
+
+	s = splnet();
+	rc = in6_update_ifa1(ifp, ifra, ia, flags);
+	splx(s);
+	return rc;
+}
+
 void
 in6_purgeaddr(ifa)
 	struct ifaddr *ifa;
@@ -1399,11 +1462,14 @@ in6_unlink_ifa(ia, ifp)
 		 * XXX away, don't save the multicast entries, delete them!
 		 */
 		if (oia->ia_ifa.ifa_ifp->if_output == if_nulloutput) {
-			struct in6_multi *in6m;
+			struct in6_multi *in6m, *next;
 
-			while ((in6m =
-			    LIST_FIRST(&oia->ia6_multiaddrs)) != NULL)
+			for (in6m = LIST_FIRST(&oia->ia6_multiaddrs);
+			       in6m != NULL;
+			       in6m = next) {
+				next = LIST_NEXT(in6m, in6m_entry);
 				in6_delmulti(in6m);
+			}
 		} else
 			in6_savemkludge(oia);
 	}
@@ -1523,7 +1589,7 @@ in6_lifaddr_ioctl(so, cmd, data, ifp, l)
 		return EOPNOTSUPP;
 #endif
 	}
-	if (sizeof(struct in6_addr) * 8 < iflr->prefixlen)
+	if (sizeof(struct in6_addr) * NBBY < iflr->prefixlen)
 		return EINVAL;
 
 	switch (cmd) {
@@ -1943,7 +2009,7 @@ struct in6_addr *src, *dst;
 			}
 			break;
 		} else
-			match += 8;
+			match += NBBY;
 	return match;
 }
 
@@ -1962,14 +2028,14 @@ in6_are_prefix_equal(p1, p2, len)
 		return 0;
 	}
 
-	bytelen = len / 8;
-	bitlen = len % 8;
+	bytelen = len / NBBY;
+	bitlen = len % NBBY;
 
 	if (bcmp(&p1->s6_addr, &p2->s6_addr, bytelen))
 		return 0;
 	if (bitlen != 0 &&
-	    p1->s6_addr[bytelen] >> (8 - bitlen) !=
-	    p2->s6_addr[bytelen] >> (8 - bitlen))
+	    p1->s6_addr[bytelen] >> (NBBY - bitlen) !=
+	    p2->s6_addr[bytelen] >> (NBBY - bitlen))
 		return 0;
 
 	return 1;
@@ -1980,7 +2046,7 @@ in6_prefixlen2mask(maskp, len)
 	struct in6_addr *maskp;
 	int len;
 {
-	static const u_char maskarray[8] = {0x80, 0xc0, 0xe0, 0xf0, 0xf8, 0xfc, 0xfe, 0xff};
+	static const u_char maskarray[NBBY] = {0x80, 0xc0, 0xe0, 0xf0, 0xf8, 0xfc, 0xfe, 0xff};
 	int bytelen, bitlen, i;
 
 	/* sanity check */
@@ -1991,8 +2057,8 @@ in6_prefixlen2mask(maskp, len)
 	}
 
 	bzero(maskp, sizeof(*maskp));
-	bytelen = len / 8;
-	bitlen = len % 8;
+	bytelen = len / NBBY;
+	bitlen = len % NBBY;
 	for (i = 0; i < bytelen; i++)
 		maskp->s6_addr[i] = 0xff;
 	if (bitlen)

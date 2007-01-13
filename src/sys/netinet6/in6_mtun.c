@@ -1,4 +1,4 @@
-/*	$Id: in6_mtun.c,v 1.1 2006/12/12 11:14:09 keiichi Exp $	*/
+/*	$Id: in6_mtun.c,v 1.2 2007/01/13 03:58:19 keiichi Exp $	*/
 /*	$NetBSD: in6_gif.c,v 1.44.4.1 2006/09/09 02:58:55 rpaulo Exp $	*/
 /*	$KAME: in6_gif.c,v 1.62 2001/07/29 04:27:25 itojun Exp $	*/
 
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$Id: in6_mtun.c,v 1.1 2006/12/12 11:14:09 keiichi Exp $");
+__KERNEL_RCSID(0, "$Id: in6_mtun.c,v 1.2 2007/01/13 03:58:19 keiichi Exp $");
 
 #include "opt_inet.h"
 #include "opt_iso.h"
@@ -184,34 +184,28 @@ in6_mtun_output(ifp, family, m)
 	ip6->ip6_flow &= ~ntohl(0xff00000);
 	ip6->ip6_flow |= htonl((u_int32_t)otos << 20);
 
-	if (sc->mtun_route_expire - time_second <= 0 ||
-	     dst->sin6_family != sin6_dst->sin6_family ||
-	     !IN6_ARE_ADDR_EQUAL(&dst->sin6_addr, &sin6_dst->sin6_addr)) {
-		/* cache route doesn't match */
+	if (dst->sin6_family != sin6_dst->sin6_family ||
+	    !IN6_ARE_ADDR_EQUAL(&dst->sin6_addr, &sin6_dst->sin6_addr))
+		rtcache_free((struct route *)&sc->mtun_ro6);
+	else
+		rtcache_check((struct route *)&sc->mtun_ro6);
+
+	if (sc->mtun_ro6.ro_rt == NULL) {
 		bzero(dst, sizeof(*dst));
 		dst->sin6_family = sin6_dst->sin6_family;
 		dst->sin6_len = sizeof(struct sockaddr_in6);
 		dst->sin6_addr = sin6_dst->sin6_addr;
-		if (sc->mtun_ro6.ro_rt) {
-			RTFREE(sc->mtun_ro6.ro_rt);
-			sc->mtun_ro6.ro_rt = NULL;
-		}
-	}
-
-	if (sc->mtun_ro6.ro_rt == NULL) {
-		rtalloc((struct route *)&sc->mtun_ro6);
+		rtcache_init((struct route *)&sc->mtun_ro6);
 		if (sc->mtun_ro6.ro_rt == NULL) {
 			m_freem(m);
 			return ENETUNREACH;
 		}
+	}
 
-		/* if it constitutes infinite encapsulation, punt. */
-		if (sc->mtun_ro.ro_rt->rt_ifp == ifp) {
-			m_freem(m);
-			return ENETUNREACH;	/* XXX */
-		}
-
-		sc->mtun_route_expire = time_second + MTUN_ROUTE_TTL;
+	/* If the route constitutes infinite encapsulation, punt. */
+	if (sc->mtun_ro.ro_rt->rt_ifp == ifp) {
+		m_freem(m);
+		return ENETUNREACH;	/* XXX */
 	}
 
 #ifdef IPV6_MINMTU
@@ -391,10 +385,7 @@ in6_mtun_detach(sc)
 	if (error == 0)
 		sc->encap_cookie6 = NULL;
 
-	if (sc->mtun_ro6.ro_rt) {
-		RTFREE(sc->mtun_ro6.ro_rt);
-		sc->mtun_ro6.ro_rt = NULL;
-	}
+	rtcache_free((struct route *)&sc->mtun_ro6);
 
 	return error;
 }
@@ -443,15 +434,12 @@ in6_mtun_ctlinput(cmd, sa, d)
 			continue;
 		if (sc->mtun_psrc->sa_family != AF_INET6)
 			continue;
-		if (!sc->mtun_ro6.ro_rt)
+		if (sc->mtun_ro6.ro_rt == NULL)
 			continue;
 
 		dst6 = (struct sockaddr_in6 *)&sc->mtun_ro6.ro_dst;
 		/* XXX scope */
-		if (IN6_ARE_ADDR_EQUAL(&ip6->ip6_dst, &dst6->sin6_addr)) {
-			/* flush route cache */
-			RTFREE(sc->mtun_ro6.ro_rt);
-			sc->mtun_ro6.ro_rt = NULL;
-		}
+		if (IN6_ARE_ADDR_EQUAL(&ip6->ip6_dst, &dst6->sin6_addr))
+			rtcache_free((struct route *)&sc->mtun_ro6);
 	}
 }

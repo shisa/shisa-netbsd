@@ -1,4 +1,4 @@
-/*	$Id: in_mtun.c,v 1.1 2006/12/12 11:14:09 keiichi Exp $	*/
+/*	$Id: in_mtun.c,v 1.2 2007/01/13 03:58:18 keiichi Exp $	*/
 /*	$NetBSD: in_gif.c,v 1.51 2006/11/23 04:07:07 rpaulo Exp $	*/
 /*	$KAME: in_gif.c,v 1.66 2001/07/29 04:46:09 itojun Exp $	*/
 
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$Id: in_mtun.c,v 1.1 2006/12/12 11:14:09 keiichi Exp $");
+__KERNEL_RCSID(0, "$Id: in_mtun.c,v 1.2 2007/01/13 03:58:18 keiichi Exp $");
 
 #include "opt_inet.h"
 #include "opt_iso.h"
@@ -180,34 +180,28 @@ in_mtun_output(struct ifnet *ifp, int family, struct mbuf *m)
 		return ENOBUFS;
 	bcopy(&iphdr, mtod(m, struct ip *), sizeof(struct ip));
 
-	if (sc->mtun_route_expire - time_second <= 0 ||
-	    dst->sin_family != sin_dst->sin_family ||
-	    !in_hosteq(dst->sin_addr, sin_dst->sin_addr)) {
-		/* cache route doesn't match */
+	if (dst->sin_family != sin_dst->sin_family ||
+	    !in_hosteq(dst->sin_addr, sin_dst->sin_addr))
+		rtcache_free(&sc->mtun_ro);
+	else
+		rtcache_check(&sc->mtun_ro);
+	if (sc->mtun_ro.ro_rt == NULL) {
 		bzero(dst, sizeof(*dst));
 		dst->sin_family = sin_dst->sin_family;
 		dst->sin_len = sizeof(struct sockaddr_in);
 		dst->sin_addr = sin_dst->sin_addr;
-		if (sc->mtun_ro.ro_rt) {
-			RTFREE(sc->mtun_ro.ro_rt);
-			sc->mtun_ro.ro_rt = NULL;
-		}
-	}
-
-	if (sc->mtun_ro.ro_rt == NULL) {
-		rtalloc(&sc->mtun_ro);
+		rtcache_init(&sc->mtun_ro);
 		if (sc->mtun_ro.ro_rt == NULL) {
 			m_freem(m);
 			return ENETUNREACH;
 		}
-
-		/* if it constitutes infinite encapsulation, punt. */
-		if (sc->mtun_ro.ro_rt->rt_ifp == ifp) {
-			m_freem(m);
-			return ENETUNREACH;	/*XXX*/
-		}
-
-		sc->mtun_route_expire = time_second + MTUN_ROUTE_TTL;
+	}
+	
+	/* If the route constitutes infinite encapsulation, punt. */
+	if (sc->mtun_ro.ro_rt->rt_ifp == ifp) {
+		rtcache_free(&sc->mtun_ro);
+		m_freem(m);
+		return ENETUNREACH;	/*XXX*/
 	}
 
 	error = ip_output(m, NULL, &sc->mtun_ro, 0, NULL, NULL);
@@ -387,10 +381,7 @@ in_mtun_detach(struct mtun_softc *sc)
 	if (error == 0)
 		sc->encap_cookie4 = NULL;
 
-	if (sc->mtun_ro.ro_rt) {
-		RTFREE(sc->mtun_ro.ro_rt);
-		sc->mtun_ro.ro_rt = NULL;
-	}
+	rtcache_free(&sc->mtun_ro);
 
 	return error;
 }
