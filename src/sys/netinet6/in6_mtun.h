@@ -1,4 +1,4 @@
-/*	$Id: in6_mtun.h,v 1.1 2006/12/12 11:14:09 keiichi Exp $	*/
+/*	$Id: in6_mtun.h,v 1.2 2007/01/13 18:54:45 keiichi Exp $	*/
 /*	$NetBSD: in6_gif.h,v 1.11 2005/12/10 23:39:56 elad Exp $	*/
 /*	$KAME: in6_gif.h,v 1.7 2001/07/26 06:53:16 jinmei Exp $	*/
 

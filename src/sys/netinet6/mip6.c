@@ -1,4 +1,4 @@
-/*	$Id: mip6.c,v 1.4 2007/01/13 11:18:16 ryuji Exp $	*/
+/*	$Id: mip6.c,v 1.5 2007/01/13 18:54:45 keiichi Exp $	*/
 
 /*
  * Copyright (C) 2004 WIDE Project.  All rights reserved.
@@ -943,6 +943,7 @@ mip6_bul_add(peeraddr, hoa, coa, hoa_ifindex, flags, state, bid)
 	 */
 	if ((mbul->mbul_flags & IP6_MH_BU_HOME) && 
 	    (mbul->mbul_flags & IP6_MH_BU_ROUTER) == 0) {
+#if 0 /* PF */
 		mbul->mbul_encap = encap_attach_func(AF_INET6, IPPROTO_IPV6,
 						     mip6_bul_encapcheck,
 						     (void *)&mip6_tunnel_protosw, mbul);
@@ -953,6 +954,7 @@ mip6_bul_add(peeraddr, hoa, coa, hoa_ifindex, flags, state, bid)
 			
 			return (error);
 		}
+#endif /* PF */
 #ifdef IPSEC
 		mip6_bul_update_ipsecdb(mbul);
 #endif
@@ -965,7 +967,10 @@ void
 mip6_bul_remove(mbul)
 	struct mip6_bul_internal *mbul;
 {
-	int s, error;
+	int s;
+#if 0 /* PF */
+	int error;
+#endif /* PF */
 
 #if defined(__NetBSD__) || defined(__OpenBSD__)
 	s = splsoftnet();
@@ -978,12 +983,14 @@ mip6_bul_remove(mbul)
 	/* Removing Tunnel encap */
 	if ((mbul->mbul_flags & IP6_MH_BU_HOME) && 
 	    (mbul->mbul_flags & IP6_MH_BU_ROUTER) == 0) {
+#if 0 /* PF */
 		error = encap_detach(mbul->mbul_encap);
 		mbul->mbul_encap = NULL;
 		if (error) {
 			mip6log((LOG_ERR, "mip6_bul_remove: "
 				 "tunnel deletione failed.\n"));
 		}
+#endif /* PF */
 #ifdef IPSEC
 		mip6_bul_update_ipsecdb(mbul);
 #endif

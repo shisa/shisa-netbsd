@@ -1,5 +1,5 @@
-/*	$NetBSD: pfctl_parser.c,v 1.6 2004/11/21 18:01:14 peter Exp $	*/
-/*	$OpenBSD: pfctl_parser.c,v 1.203.2.1 2004/11/13 23:52:14 brad Exp $ */
+/*	$NetBSD: pfctl_parser.c,v 1.9 2006/07/03 20:26:19 peter Exp $	*/
+/*	$OpenBSD: pfctl_parser.c,v 1.211 2004/12/07 10:33:41 dhartmei Exp $ */
 
 /*
  * Copyright (c) 2001 Daniel Hartmeier
@@ -35,12 +35,14 @@
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <sys/param.h>
 #include <net/if.h>
 #include <netinet/in.h>
 #include <netinet/in_systm.h>
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
 #include <netinet/icmp6.h>
+#include <netinet/ip6mh.h>
 #include <net/pfvar.h>
 #include <arpa/inet.h>
 
@@ -216,6 +218,17 @@ static const struct icmpcodeent icmp6_code[] = {
 	{ "redirrouter", ND_REDIRECT, ND_REDIRECT_ROUTER }
 };
 
+static const struct mhtypeent ip6mh_type[] = {
+	{ "bindingrefreshrequest",	IP6_MH_TYPE_BRR },
+	{ "hometestinit",		IP6_MH_TYPE_HOTI },
+	{ "careoftestinit",		IP6_MH_TYPE_COTI },
+	{ "hometest",			IP6_MH_TYPE_HOT },
+	{ "careoftest",			IP6_MH_TYPE_COT },
+	{ "bindingupdate",		IP6_MH_TYPE_BU },
+	{ "bindingacknowledgement",	IP6_MH_TYPE_BACK },
+	{ "bindingerror",		IP6_MH_TYPE_BERROR }
+};
+
 const struct pf_timeout pf_timeouts[] = {
 	{ "tcp.first",		PFTM_TCP_FIRST_PACKET },
 	{ "tcp.opening",	PFTM_TCP_OPENING },
@@ -323,6 +336,42 @@ geticmpcodebyname(u_long type, char *w, sa_family_t af)
 			if (type == icmp6_code[i].type &&
 			    !strcmp(w, icmp6_code[i].name))
 				return (&icmp6_code[i]);
+		}
+	}
+	return (NULL);
+}
+
+const struct mhtypeent *
+getmhtypebynumber(u_int8_t type, sa_family_t af)
+{
+	unsigned int	i;
+
+	if (af != AF_INET6) {
+		/* no IPv4 mobility support. */
+		return (NULL);
+	} else {
+		for (i=0; i < (sizeof (ip6mh_type) /
+		    sizeof(ip6mh_type[0])); i++) {
+			if (type == ip6mh_type[i].type)
+				 return (&ip6mh_type[i]);
+		}
+	}
+	return (NULL);
+}
+
+const struct mhtypeent *
+getmhtypebyname(char *w, sa_family_t af)
+{
+	unsigned int	i;
+
+	if (af != AF_INET6) {
+		/* no IPv4 mobility support. */
+		return (NULL);
+	} else {
+		for (i=0; i < (sizeof (ip6mh_type) /
+		    sizeof(ip6mh_type[0])); i++) {
+			if (!strcmp(w, ip6mh_type[i].name))
+				return (&ip6mh_type[i]);
 		}
 	}
 	return (NULL);
@@ -510,6 +559,7 @@ print_pool(struct pf_pool *pool, u_int16_t p1, u_int16_t p2,
 }
 
 const char	*pf_reasons[PFRES_MAX+1] = PFRES_NAMES;
+const char	*pf_lcounters[LCNT_MAX+1] = LCNT_NAMES;
 const char	*pf_fcounters[FCNT_MAX+1] = FCNT_NAMES;
 const char	*pf_scounters[FCNT_MAX+1] = FCNT_NAMES;
 
@@ -612,6 +662,18 @@ print_status(struct pf_status *s, int opts)
 		else
 			printf("%14s\n", "");
 	}
+	if (opts & PF_OPT_VERBOSE) {
+		printf("Limit Counters\n");
+		for (i = 0; i < LCNT_MAX; i++) {
+			printf("  %-25s %14lld ", pf_lcounters[i],
+				    (unsigned long long)s->lcounters[i]);
+			if (runtime > 0)
+				printf("%14.1f/s\n",
+				    (double)s->lcounters[i] / (double)runtime);
+			else
+				printf("%14s\n", "");
+		}
+	}
 }
 
 void
@@ -631,7 +693,9 @@ print_src_node(struct pf_src_node *sn, int opts)
 	printf(" -> ");
 	aw.v.a.addr = sn->raddr;
 	print_addr(&aw, sn->af, opts & PF_OPT_VERBOSE2);
-	printf(" (%d states)\n", sn->states);
+	printf(" ( states %u, connections %u, rate %u.%u/%us )\n", sn->states,
+	    sn->conn, sn->conn_rate.count / 1000,
+	    (sn->conn_rate.count % 1000) / 100, sn->conn_rate.seconds);
 	if (opts & PF_OPT_VERBOSE) {
 		sec = sn->creation % 60;
 		sn->creation /= 60;
@@ -668,11 +732,11 @@ print_src_node(struct pf_src_node *sn, int opts)
 void
 print_rule(struct pf_rule *r, const char *anchor_call, int verbose)
 {
-	static const char *actiontypes[] = { "pass", "block", "scrub", "nat",
-	    "no nat", "binat", "no binat", "rdr", "no rdr" };
+	static const char *actiontypes[] = { "pass", "block", "scrub",
+	    "no scrub", "nat", "no nat", "binat", "no binat", "rdr", "no rdr" };
 	static const char *anchortypes[] = { "anchor", "anchor", "anchor",
-	    "nat-anchor", "nat-anchor", "binat-anchor", "binat-anchor",
-	    "rdr-anchor", "rdr-anchor" };
+	    "anchor", "nat-anchor", "nat-anchor", "binat-anchor",
+	    "binat-anchor", "rdr-anchor", "rdr-anchor" };
 	int	i, opts;
 
 	if (verbose)
@@ -680,7 +744,8 @@ print_rule(struct pf_rule *r, const char *anchor_call, int verbose)
 	if (r->action > PF_NORDR)
 		printf("action(%d)", r->action);
 	else if (anchor_call[0])
-		printf("%s %s", anchortypes[r->action], anchor_call);
+		printf("%s \"%s\"", anchortypes[r->action],
+		    anchor_call);
 	else {
 		printf("%s", actiontypes[r->action]);
 		if (r->natpass)
@@ -790,26 +855,39 @@ print_rule(struct pf_rule *r, const char *anchor_call, int verbose)
 		printf("/");
 		print_flags(r->flagset);
 	}
-	if (r->type) {
-		const struct icmptypeent	*it;
+	if (r->proto == IPPROTO_ICMP || r->proto == IPPROTO_IPV6_ICMP) {
+		if (r->type) {
+			const struct icmptypeent	*it;
 
-		it = geticmptypebynumber(r->type-1, r->af);
-		if (r->af != AF_INET6)
-			printf(" icmp-type");
-		else
-			printf(" icmp6-type");
-		if (it != NULL)
-			printf(" %s", it->name);
-		else
-			printf(" %u", r->type-1);
-		if (r->code) {
-			const struct icmpcodeent	*ic;
-
-			ic = geticmpcodebynumber(r->type-1, r->code-1, r->af);
-			if (ic != NULL)
-				printf(" code %s", ic->name);
+			it = geticmptypebynumber(r->type-1, r->af);
+			if (r->af != AF_INET6)
+				printf(" icmp-type");
 			else
-				printf(" code %u", r->code-1);
+				printf(" icmp6-type");
+			if (it != NULL)
+				printf(" %s", it->name);
+			else
+				printf(" %u", r->type-1);
+			if (r->code) {
+				const struct icmpcodeent	*ic;
+
+				ic = geticmpcodebynumber(r->type-1, r->code-1, r->af);
+				if (ic != NULL)
+					printf(" code %s", ic->name);
+				else
+					printf(" code %u", r->code-1);
+			}
+		}
+	} else if (r->proto == IPPROTO_MH) {
+		if (r->type) {
+			const struct mhtypeent	*it;
+
+			it = getmhtypebynumber(r->type-1, r->af);
+			printf(" ip6mh-type");
+			if (it != NULL)
+				printf(" %s", it->name);
+			else
+				printf(" %u", r->type-1);
 		}
 	}
 	if (r->tos)
@@ -875,11 +953,34 @@ print_rule(struct pf_rule *r, const char *anchor_call, int verbose)
 			printf("max-src-states %u", r->max_src_states);
 			opts = 0;
 		}
+		if (r->max_src_conn) {
+			if (!opts)
+				printf(", ");
+			printf("max-src-conn %u", r->max_src_conn);
+			opts = 0;
+		}
+		if (r->max_src_conn_rate.limit) {
+			if (!opts)
+				printf(", ");
+			printf("max-src-conn-rate %u/%u",
+			    r->max_src_conn_rate.limit,
+			    r->max_src_conn_rate.seconds);
+			opts = 0;
+		}
 		if (r->max_src_nodes) {
 			if (!opts)
 				printf(", ");
 			printf("max-src-nodes %u", r->max_src_nodes);
 			opts = 0;
+		}
+		if (r->overload_tblname[0]) {
+			if (!opts)
+				printf(", ");
+			printf("overload <%s>", r->overload_tblname);
+			if (r->flush)
+				printf(" flush");
+			if (r->flush & PF_FLUSH_GLOBAL)
+				printf(" global");
 		}
 		if (r->rule_flag & PFRULE_IFBOUND) {
 			if (!opts)
@@ -900,12 +1001,12 @@ print_rule(struct pf_rule *r, const char *anchor_call, int verbose)
 				if (!opts)
 					printf(", ");
 				opts = 0;
-				for (j = 0; j < sizeof(pf_timeouts) /
-				    sizeof(pf_timeouts[0]); ++j)
+				for (j = 0; pf_timeouts[j].name; ++j)
 					if (pf_timeouts[j].timeout == i)
 						break;
-				printf("%s %u", j == PFTM_MAX ?  "inv.timeout" :
-				    pf_timeouts[j].name, r->timeout[i]);
+				printf("%s %u", pf_timeouts[j].name ?
+				    pf_timeouts[j].name : "inv.timeout",
+				    r->timeout[i]);
 			}
 		printf(")");
 	}
@@ -1269,7 +1370,7 @@ host(const char *s)
 	if ((p = strrchr(s, '/')) != NULL) {
 		mask = strtol(p+1, &q, 0);
 		if (!q || *q || mask > 128 || q == (p+1)) {
-			fprintf(stderr, "invalid netmask\n");
+			fprintf(stderr, "invalid netmask '%s'\n", p);
 			return (NULL);
 		}
 		if ((ps = malloc(strlen(s) - strlen(p) + 1)) == NULL)

@@ -1,4 +1,4 @@
-/*	$Id: in_mtun.h,v 1.1 2006/12/12 11:14:09 keiichi Exp $	*/
+/*	$Id: in_mtun.h,v 1.2 2007/01/13 18:54:45 keiichi Exp $	*/
 /*	$NetBSD: in_gif.h,v 1.14 2006/11/23 04:07:07 rpaulo Exp $	*/
 /*	$KAME: in_gif.h,v 1.6 2001/07/25 00:55:48 itojun Exp $	*/
 
@@ -44,4 +44,4 @@ int in_mtun_output(struct ifnet *, int, struct mbuf *);
 int in_mtun_attach(struct mtun_softc *);
 int in_mtun_detach(struct mtun_softc *);
 
-#endif /* !_NETINET_IN_GIF_H_ */
+#endif /* !_NETINET_IN_MTUN_H_ */
