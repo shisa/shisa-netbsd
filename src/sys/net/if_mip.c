@@ -417,10 +417,10 @@ mip_ioctl(ifp, cmd, data)
 				continue;
 
 			ia6 = (struct in6_ifaddr *)ifa;
-			if (LIST_EMPTY(MBUL_LIST(ia6)))
+			if (LIST_EMPTY(&ia6->ia6_mbul_list))
 				continue;
 			
-			for (mbul = LIST_FIRST(MBUL_LIST(ia6)); mbul;
+			for (mbul = LIST_FIRST(&ia6->ia6_mbul_list); mbul;
 			     mbul = nmbul) {
 				nmbul = LIST_NEXT(mbul, mbul_entry);
 				
