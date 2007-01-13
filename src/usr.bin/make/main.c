@@ -1,4 +1,4 @@
-/*	$NetBSD: main.c,v 1.137 2006/11/17 22:07:39 dsl Exp $	*/
+/*	$NetBSD: main.c,v 1.141 2007/01/01 21:29:01 dsl Exp $	*/
 
 /*
  * Copyright (c) 1988, 1989, 1990, 1993
@@ -69,7 +69,7 @@
  */
 
 #ifndef MAKE_NATIVE
-static char rcsid[] = "$NetBSD: main.c,v 1.137 2006/11/17 22:07:39 dsl Exp $";
+static char rcsid[] = "$NetBSD: main.c,v 1.141 2007/01/01 21:29:01 dsl Exp $";
 #else
 #include <sys/cdefs.h>
 #ifndef lint
@@ -81,7 +81,7 @@ __COPYRIGHT("@(#) Copyright (c) 1988, 1989, 1990, 1993\n\
 #if 0
 static char sccsid[] = "@(#)main.c	8.3 (Berkeley) 3/19/94";
 #else
-__RCSID("$NetBSD: main.c,v 1.137 2006/11/17 22:07:39 dsl Exp $");
+__RCSID("$NetBSD: main.c,v 1.141 2007/01/01 21:29:01 dsl Exp $");
 #endif
 #endif /* not lint */
 #endif
@@ -277,7 +277,7 @@ parse_debug_options(const char *argvalue)
 				snprintf(fname + len - 2, 20, "%d", getpid());
 			debug_file = fopen(fname, mode);
 			if (!debug_file) {
-				fprintf(stderr, "Cannot open debug file %s",
+				fprintf(stderr, "Cannot open debug file %s\n",
 				    fname);
 				usage();
 			}
@@ -978,7 +978,9 @@ main(int argc, char **argv)
 	} else if (ReadMakefile(UNCONST("makefile"), NULL) != 0)
 		(void)ReadMakefile(UNCONST("Makefile"), NULL);
 
-	(void)ReadMakefile(UNCONST(".depend"), NULL);
+	/* In particular suppress .depend for '-r -V .OBJDIR -f /dev/null' */
+	if (!noBuiltins || !printVars)
+		(void)ReadMakefile(UNCONST(".depend"), NULL);
 
 	Var_Append("MFLAGS", Var_Value(MAKEFLAGS, VAR_GLOBAL, &p1), VAR_GLOBAL);
 	if (p1)
@@ -1060,38 +1062,40 @@ main(int argc, char **argv)
 			if (p1)
 				free(p1);
 		}
-	}
-
-	/*
-	 * Have now read the entire graph and need to make a list of targets
-	 * to create. If none was given on the command line, we consult the
-	 * parsing module to find the main target(s) to create.
-	 */
-	if (Lst_IsEmpty(create))
-		targs = Parse_MainName();
-	else
-		targs = Targ_FindList(create, TARG_CREATE);
-
-	if (!compatMake && !printVars) {
+	} else {
 		/*
-		 * Initialize job module before traversing the graph, now that
-		 * any .BEGIN and .END targets have been read.  This is done
-		 * only if the -q flag wasn't given (to prevent the .BEGIN from
-		 * being executed should it exist).
+		 * Have now read the entire graph and need to make a list of
+		 * targets to create. If none was given on the command line,
+		 * we consult the parsing module to find the main target(s)
+		 * to create.
 		 */
-		if (!queryFlag) {
-			Job_Init();
-			jobsRunning = TRUE;
+		if (Lst_IsEmpty(create))
+			targs = Parse_MainName();
+		else
+			targs = Targ_FindList(create, TARG_CREATE);
+
+		if (!compatMake) {
+			/*
+			 * Initialize job module before traversing the graph
+			 * now that any .BEGIN and .END targets have been read.
+			 * This is done only if the -q flag wasn't given
+			 * (to prevent the .BEGIN from being executed should
+			 * it exist).
+			 */
+			if (!queryFlag) {
+				Job_Init();
+				jobsRunning = TRUE;
+			}
+
+			/* Traverse the graph, checking on all the targets */
+			outOfDate = Make_Run(targs);
+		} else {
+			/*
+			 * Compat_Init will take care of creating all the
+			 * targets as well as initializing the module.
+			 */
+			Compat_Run(targs);
 		}
-
-		/* Traverse the graph, checking on all the targets */
-		outOfDate = Make_Run(targs);
-	} else if (!printVars) {
-		/*
-		 * Compat_Init will take care of creating all the targets as
-		 * well as initializing the module.
-		 */
-		Compat_Run(targs);
 	}
 
 #ifdef CLEANUP
@@ -1133,13 +1137,13 @@ static int
 ReadMakefile(ClientData p, ClientData q __unused)
 {
 	char *fname = p;		/* makefile to read */
-	FILE *stream;
+	int fd;
 	size_t len = MAXPATHLEN;
 	char *name, *path = emalloc(len);
 	int setMAKEFILE;
 
 	if (!strcmp(fname, "-")) {
-		Parse_File("(stdin)", stdin);
+		Parse_File("(stdin)", dup(fileno(stdin)));
 		Var_Set("MAKEFILE", "", VAR_GLOBAL, 0);
 	} else {
 		setMAKEFILE = strcmp(fname, ".depend");
@@ -1151,7 +1155,8 @@ ReadMakefile(ClientData p, ClientData q __unused)
 				path = erealloc(path, len = 2 * plen);
 			
 			(void)snprintf(path, len, "%s/%s", curdir, fname);
-			if ((stream = fopen(path, "r")) != NULL) {
+			fd = open(path, O_RDONLY);
+			if (fd != -1) {
 				fname = path;
 				goto found;
 			}
@@ -1161,18 +1166,22 @@ ReadMakefile(ClientData p, ClientData q __unused)
 			if (len < plen)
 				path = erealloc(path, len = 2 * plen);
 			(void)snprintf(path, len, "%s/%s", objdir, fname);
-			if ((stream = fopen(path, "r")) != NULL) {
+			fd = open(path, O_RDONLY);
+			if (fd != -1) {
 				fname = path;
 				goto found;
 			}
-		} else if ((stream = fopen(fname, "r")) != NULL)
-			goto found;
+		} else {
+			fd = open(fname, O_RDONLY);
+			if (fd != -1)
+				goto found;
+		}
 		/* look in -I and system include directories. */
 		name = Dir_FindFile(fname, parseIncPath);
 		if (!name)
 			name = Dir_FindFile(fname,
 				Lst_IsEmpty(sysIncPath) ? defIncPath : sysIncPath);
-		if (!name || (stream = fopen(name, "r")) == NULL) {
+		if (!name || (fd = open(name, O_RDONLY)) == -1) {
 			if (name)
 				free(name);
 			free(path);
@@ -1187,8 +1196,7 @@ ReadMakefile(ClientData p, ClientData q __unused)
 found:
 		if (setMAKEFILE)
 			Var_Set("MAKEFILE", fname, VAR_GLOBAL, 0);
-		Parse_File(fname, stream);
-		(void)fclose(stream);
+		Parse_File(fname, fd);
 	}
 	free(path);
 	return(0);
@@ -1452,7 +1460,7 @@ Cmd_Exec(const char *cmd, const char **errnum)
 	 */
 	(void)close(fds[1]);
 
-	buf = Buf_Init(MAKE_BSIZE);
+	buf = Buf_Init(0);
 
 	do {
 	    char   result[BUFSIZ];
@@ -1470,7 +1478,7 @@ Cmd_Exec(const char *cmd, const char **errnum)
 	/*
 	 * Wait for the process to exit.
 	 */
-	while(((pid = wait(&status)) != cpid) && (pid >= 0))
+	while(((pid = waitpid(cpid, &status, 0)) != cpid) && (pid >= 0))
 	    continue;
 
 	res = (char *)Buf_GetAll(buf, &cc);

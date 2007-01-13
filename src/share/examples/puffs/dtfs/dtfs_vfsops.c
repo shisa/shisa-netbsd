@@ -1,4 +1,4 @@
-/*	$NetBSD: dtfs_vfsops.c,v 1.6 2006/11/18 12:41:06 pooka Exp $	*/
+/*	$NetBSD: dtfs_vfsops.c,v 1.9 2007/01/06 18:25:19 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006  Antti Kantee.  All Rights Reserved.
@@ -32,6 +32,7 @@
 #include <sys/resource.h>
 
 #include <err.h>
+#include <errno.h>
 #include <puffs.h>
 #include <string.h>
 #include <unistd.h>
@@ -40,18 +41,19 @@
 #include "dtfs.h"
 
 int
-dtfs_mount(struct puffs_usermount *pu, void **rootcookie)
+dtfs_domount(struct puffs_usermount *pu)
 {
+	struct statvfs sb;
 	struct dtfs_mount *dtm;
 	struct dtfs_file *dff;
 	struct puffs_node *pn;
+	struct vattr *va;
 
 	/* create mount-local thingie */
-	dtm = emalloc(sizeof(struct dtfs_mount));
+	dtm = pu->pu_privdata;
 	dtm->dtm_nextfileid = 2;
 	dtm->dtm_nfiles = 1;
 	dtm->dtm_fsizes = 0;
-	pu->pu_privdata = dtm;
 
 	/*
 	 * create root directory, do it "by hand" to avoid special-casing
@@ -59,16 +61,23 @@ dtfs_mount(struct puffs_usermount *pu, void **rootcookie)
 	 */
 	dff = dtfs_newdir();
 	dff->df_dotdot = NULL;
-	pn = puffs_newpnode(pu, dff, VDIR);
+	pn = puffs_pn_new(pu, dff);
 	if (!pn)
 		errx(1, "puffs_newpnode");
 
-	dtfs_baseattrs(&pn->pn_va, VDIR, dtm->dtm_nextfileid++);
+	va = &pn->pn_va;
+	dtfs_baseattrs(va, VDIR, dtm->dtm_nextfileid++);
 	/* not adddented, so compensate */
-	pn->pn_va.va_nlink = 2;
+	va->va_nlink = 2;
 
-	pu->pu_rootnode = pn;
-	*rootcookie = pn;
+	pu->pu_pn_root = pn;
+	puffs_setrootpath(pu, ".");
+
+	/* XXX: should call dtfs_fs_statvfs */
+	puffs_zerostatvfs(&sb);
+
+	if (puffs_start(pu, pn, &sb) == -1)
+		return errno;
 
 	return 0;
 }
@@ -97,13 +106,15 @@ dtfs_mount(struct puffs_usermount *pu, void **rootcookie)
 #define ROUND(a,b) (((a) + ((b)-1)) & ~((b)-1))
 #define NFILES 1024*1024
 int
-dtfs_statvfs(struct puffs_usermount *pu, struct statvfs *sbp, pid_t pid)
+dtfs_fs_statvfs(struct puffs_cc *pcc, struct statvfs *sbp, pid_t pid)
 {
+	struct puffs_usermount *pu;
 	struct rlimit rlim;
 	struct dtfs_mount *dtm;
 	off_t btot, bfree;
 	int pgsize;
 
+	pu = puffs_cc_getusermount(pcc);
 	dtm = pu->pu_privdata;
 	pgsize = getpagesize();
 	memset(sbp, 0, sizeof(struct statvfs));

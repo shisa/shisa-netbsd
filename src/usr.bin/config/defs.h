@@ -1,4 +1,4 @@
-/*	$NetBSD: defs.h,v 1.16 2006/09/27 19:05:46 christos Exp $	*/
+/*	$NetBSD: defs.h,v 1.18 2007/01/09 13:03:47 cube Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -98,7 +98,7 @@ extern const char *progname;
  * The next two lines define the current version of the config(1) binary,
  * and the minimum version of the configuration files it supports.
  */
-#define CONFIG_VERSION		20060904
+#define CONFIG_VERSION		20070109
 #define CONFIG_MINVERSION	0
 
 /*
@@ -409,6 +409,7 @@ struct	hashtab *fsopttab;	/* table of configured file systems */
 struct	hashtab *defopttab;	/* options that have been "defopt"'d */
 struct	hashtab *defflagtab;	/* options that have been "defflag"'d */
 struct	hashtab *defparamtab;	/* options that have been "defparam"'d */
+struct	hashtab *defoptlint;	/* lint values for options */
 struct	hashtab *deffstab;	/* defined file systems */
 struct	hashtab *optfiletab;	/* "defopt"'d option .h files */
 struct	hashtab *attrtab;	/* attributes (locators, etc.) */
@@ -473,6 +474,11 @@ const char *intern(const char *);
 typedef int (*ht_callback)(const char *, void *, void *);
 int	ht_enumerate(struct hashtab *, ht_callback, void *);
 
+/* lint.c */
+void	emit_instances(void);
+void	emit_options(void);
+void	emit_params(void);
+
 /* main.c */
 void	addoption(const char *, const char *);
 void	addfsoption(const char *);
@@ -529,6 +535,7 @@ int	include(const char *, int, int, int);
 
 /* sem.c, other than for yacc actions */
 void	initsem(void);
+int	onlist(struct nvlist *, void *);
 
 /* util.c */
 void	*ecalloc(size_t, size_t);

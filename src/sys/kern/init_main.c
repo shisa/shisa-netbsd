@@ -1,4 +1,4 @@
-/*	$NetBSD: init_main.c,v 1.283 2006/11/26 16:22:36 elad Exp $	*/
+/*	$NetBSD: init_main.c,v 1.286 2006/12/21 15:55:25 yamt Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1989, 1991, 1992, 1993
@@ -71,7 +71,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.283 2006/11/26 16:22:36 elad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.286 2006/12/21 15:55:25 yamt Exp $");
 
 #include "opt_ipsec.h"
 #include "opt_kcont.h"
@@ -81,7 +81,6 @@ __KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.283 2006/11/26 16:22:36 elad Exp $")
 #include "opt_posix.h"
 #include "opt_syscall_debug.h"
 #include "opt_sysv.h"
-#include "opt_fileassoc.h"
 #include "opt_pax.h"
 
 #include "rnd.h"
@@ -116,6 +115,7 @@ __KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.283 2006/11/26 16:22:36 elad Exp $")
 #include <sys/sysctl.h>
 #include <sys/event.h>
 #include <sys/mbuf.h>
+#include <sys/iostat.h>
 #ifdef FAST_IPSEC
 #include <netipsec/ipsec.h>
 #endif
@@ -151,10 +151,6 @@ __KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.283 2006/11/26 16:22:36 elad Exp $")
 #include <sys/syscall.h>
 #include <sys/sa.h>
 #include <sys/syscallargs.h>
-
-#ifdef FILEASSOC
-#include <sys/fileassoc.h>
-#endif /* FILEASSOC */
 
 #if defined(PAX_MPROTECT) || defined(PAX_SEGVGUARD)
 #include <sys/pax.h>
@@ -301,6 +297,9 @@ main(void)
 
 	rqinit();
 
+	/* Initialize I/O statistics. */
+	iostat_init();
+
 	/* Initialize the file systems. */
 #ifdef NVNODE_IMPLICIT
 	/*
@@ -376,10 +375,6 @@ main(void)
 
 	/* Initialize default security model. */
 	secmodel_start();
-
-#ifdef FILEASSOC
-	fileassoc_init();
-#endif /* FILEASSOC */
 
 #if NVERIEXEC > 0
 	/*
@@ -541,8 +536,8 @@ main(void)
 		panic("fork syncer");
 
 	/* Create the aiodone daemon kernel thread. */
-	if (kthread_create1(uvm_aiodone_daemon, NULL, &uvm.aiodoned_proc,
-	    "aiodoned"))
+	if (workqueue_create(&uvm.aiodone_queue, "aiodoned",
+	    uvm_aiodone_worker, NULL, PVM, IPL_BIO, 0))
 		panic("fork aiodoned");
 
 #if defined(MULTIPROCESSOR)

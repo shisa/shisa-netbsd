@@ -1,4 +1,4 @@
-/*	$NetBSD: puffs_subr.c,v 1.9 2006/11/18 08:18:24 pooka Exp $	*/
+/*	$NetBSD: puffs_subr.c,v 1.13 2006/12/30 01:29:03 pooka Exp $	*/
 
 /*
  * Copyright (c) 2005, 2006  Antti Kantee.  All Rights Reserved.
@@ -33,7 +33,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: puffs_subr.c,v 1.9 2006/11/18 08:18:24 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: puffs_subr.c,v 1.13 2006/12/30 01:29:03 pooka Exp $");
 
 #include <sys/param.h>
 #include <sys/conf.h>
@@ -52,6 +52,10 @@ __KERNEL_RCSID(0, "$NetBSD: puffs_subr.c,v 1.9 2006/11/18 08:18:24 pooka Exp $")
 
 POOL_INIT(puffs_pnpool, sizeof(struct puffs_node), 0, 0, 0, "puffspnpl",
     &pool_allocator_nointr);
+
+#ifdef DEBUG
+int puffsdebug;
+#endif
 
 
 static void puffs_gop_size(struct vnode *, off_t, off_t *, int);
@@ -198,6 +202,7 @@ int
 puffs_newnode(struct mount *mp, struct vnode *dvp, struct vnode **vpp,
 	void *cookie, struct componentname *cnp, enum vtype type, dev_t rdev)
 {
+	struct puffs_mount *pmp = MPTOPUFFSMP(mp);
 	struct vnode *vp;
 	int error;
 
@@ -214,6 +219,9 @@ puffs_newnode(struct mount *mp, struct vnode *dvp, struct vnode **vpp,
 	vp->v_type = type;
 	vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);
 	*vpp = vp;
+
+	if ((cnp->cn_flags & MAKEENTRY) && PUFFS_DOCACHE(pmp))
+		cache_enter(dvp, vp, cnp);
 
 	return 0;
 }
@@ -273,17 +281,17 @@ puffs_pnode2vnode(struct puffs_mount *pmp, void *cookie)
 }
 
 void
-puffs_makecn(struct puffs_cn *pcn, const struct componentname *cn)
+puffs_makecn(struct puffs_kcn *pkcn, const struct componentname *cn)
 {
 
-	pcn->pcn_nameiop = cn->cn_nameiop;
-	pcn->pcn_flags = cn->cn_flags;
-	pcn->pcn_pid = cn->cn_lwp->l_proc->p_pid;
-	puffs_credcvt(&pcn->pcn_cred, cn->cn_cred);
+	pkcn->pkcn_nameiop = cn->cn_nameiop;
+	pkcn->pkcn_flags = cn->cn_flags;
+	pkcn->pkcn_pid = cn->cn_lwp->l_proc->p_pid;
+	puffs_credcvt(&pkcn->pkcn_cred, cn->cn_cred);
 
-	(void)memcpy(&pcn->pcn_name, cn->cn_nameptr, cn->cn_namelen);
-	pcn->pcn_name[cn->cn_namelen] = '\0';
-	pcn->pcn_namelen = cn->cn_namelen;
+	(void)memcpy(&pkcn->pkcn_name, cn->cn_nameptr, cn->cn_namelen);
+	pkcn->pkcn_name[cn->cn_namelen] = '\0';
+	pkcn->pkcn_namelen = cn->cn_namelen;
 }
 
 /*
@@ -384,4 +392,39 @@ puffs_updatevpsize(struct vnode *vp)
 
 	if (va.va_size != VNOVAL)
 		vp->v_size = va.va_size;
+}
+
+/*
+ * We're dead, kaput, RIP, slightly more than merely pining for the
+ * fjords, belly-up, fallen, lifeless, finished, expired, gone to meet
+ * our maker, ceased to be, etcetc.  YASD.  It's a dead FS!
+ */
+void
+puffs_userdead(struct puffs_mount *pmp)
+{
+	struct puffs_park *park;
+
+	simple_lock(&pmp->pmp_lock);
+
+	/*
+	 * Mark filesystem status as dying so that operations don't
+	 * attempt to march to userspace any longer.
+	 */
+	pmp->pmp_status = PUFFSTAT_DYING;
+
+	/* and wakeup processes waiting for a reply from userspace */
+	TAILQ_FOREACH(park, &pmp->pmp_req_replywait, park_entries) {
+		park->park_preq->preq_rv = ENXIO;
+		TAILQ_REMOVE(&pmp->pmp_req_replywait, park, park_entries);
+		wakeup(park);
+	}
+
+	/* wakeup waiters for completion of vfs/vnode requests */
+	TAILQ_FOREACH(park, &pmp->pmp_req_touser, park_entries) {
+		park->park_preq->preq_rv = ENXIO;
+		TAILQ_REMOVE(&pmp->pmp_req_touser, park, park_entries);
+		wakeup(park);
+	}
+
+	simple_unlock(&pmp->pmp_lock);
 }

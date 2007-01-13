@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_lock.c,v 1.102 2006/11/01 10:17:58 yamt Exp $	*/
+/*	$NetBSD: kern_lock.c,v 1.104 2006/12/25 11:57:40 ad Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2000 The NetBSD Foundation, Inc.
@@ -76,7 +76,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_lock.c,v 1.102 2006/11/01 10:17:58 yamt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_lock.c,v 1.104 2006/12/25 11:57:40 ad Exp $");
 
 #include "opt_multiprocessor.h"
 #include "opt_lockdebug.h"
@@ -269,7 +269,7 @@ acquire(volatile struct lock **lkpp, int *s, int extflags,
 			    lkp->lk_wmesg, lkp->lk_timo, &lkp->lk_interlock);
 			LOCKSTAT_STOP_TIMER(slptime);
 			LOCKSTAT_EVENT_RA((void *)(uintptr_t)lkp,
-			    LB_LOCKMGR | LB_SLEEP, 1, slptime, ra);
+			    LB_LOCKMGR | LB_SLEEP1, 1, slptime, ra);
 			if (!drain) {
 				lkp->lk_waitcount--;
 				if (lkp->lk_waitcount == 0)
@@ -460,6 +460,8 @@ lockstatus(struct lock *lkp)
 			lock_type = LK_EXCLOTHER;
 	} else if (lkp->lk_sharecount != 0)
 		lock_type = LK_SHARED;
+	else if (lkp->lk_flags & (LK_WANT_EXCL | LK_WANT_UPGRADE))
+		lock_type = LK_EXCLOTHER;
 	INTERLOCK_RELEASE(lkp, lkp->lk_flags, s);
 	return (lock_type);
 }

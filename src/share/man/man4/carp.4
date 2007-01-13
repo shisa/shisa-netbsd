@@ -1,4 +1,4 @@
-.\"	$NetBSD: carp.4,v 1.2 2006/06/28 21:09:51 jdc Exp $
+.\"	$NetBSD: carp.4,v 1.4 2006/12/23 06:58:20 wiz Exp $
 .\"	$OpenBSD: carp.4,v 1.19 2005/08/09 09:52:12 jmc Exp $
 .\"
 .\" Copyright (c) 2003, Ryan McBride.  All rights reserved.
@@ -132,7 +132,7 @@ The setup for host B is identical, but it has a higher advskew:
 .Bd -literal -offset indent
 # ifconfig carp0 create
 # ifconfig carp0 vhid 1 advskew 100 pass mekmitasdigoat \e
-	192.168.1.1 netmask 255.255.255.0 
+	192.168.1.1 netmask 255.255.255.0
 # ifconfig carp1 create
 # ifconfig carp1 vhid 2 advskew 100 pass mekmitasdigoat \e
 	192.168.2.1 netmask 255.255.255.0
@@ -198,9 +198,9 @@ itself will always be balanced to the same virtual host.
 .Sh SEE ALSO
 .Xr netstat 1 ,
 .Xr sysctl 3 ,
-.Xr ifconfig 8 ,
 .Xr arp 4 ,
 .Xr arp 8 ,
+.Xr ifconfig 8 ,
 .Xr sysctl 8
 .Sh HISTORY
 The

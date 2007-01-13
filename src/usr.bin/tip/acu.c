@@ -1,4 +1,4 @@
-/*	$NetBSD: acu.c,v 1.13 2006/10/24 08:29:47 gson Exp $	*/
+/*	$NetBSD: acu.c,v 1.15 2006/12/14 17:09:43 christos Exp $	*/
 
 /*
  * Copyright (c) 1983, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)acu.c	8.1 (Berkeley) 6/6/93";
 #endif
-__RCSID("$NetBSD: acu.c,v 1.13 2006/10/24 08:29:47 gson Exp $");
+__RCSID("$NetBSD: acu.c,v 1.15 2006/12/14 17:09:43 christos Exp $");
 #endif /* not lint */
 
 #include "tip.h"
@@ -63,17 +63,15 @@ static acu_t   *acutype(char *);
  *   found in the file).
  */
 const char *
-connect(void)
+tip_connect(void)
 {
-	char * volatile cp = PN;
+	char * volatile cp;
 	char *phnum, string[256];
 	FILE *fd;
-	int tried = 0;
+	int volatile tried;
 
-#if __GNUC__		/* XXX pacify gcc */
-	(void)&cp;
-	(void)&tried;
-#endif
+	cp = PN;
+	tried = 0;
 
 	if (!DU) {		/* regular connect message */
 		if (CM != NULL)
@@ -84,12 +82,12 @@ connect(void)
 	 * @ =>'s use data base in PHONES environment variable
 	 *        otherwise, use /etc/phones
 	 */
-	signal(SIGINT, acuabort);
-	signal(SIGQUIT, acuabort);
+	(void)signal(SIGINT, acuabort);
+	(void)signal(SIGQUIT, acuabort);
 	if (setjmp(jmpbuf)) {
-		signal(SIGINT, SIG_IGN);
-		signal(SIGQUIT, SIG_IGN);
-		printf("\ncall aborted\n");
+		(void)signal(SIGINT, SIG_IGN);
+		(void)signal(SIGQUIT, SIG_IGN);
+		(void)printf("\ncall aborted\n");
 		if (acu != NULL) {
 			setboolean(value(VERBOSE), FALSE);
 			if (conflag)
@@ -117,14 +115,14 @@ connect(void)
 		}
 	} else {
 		if ((fd = fopen(PH, "r")) == NULL) {
-			printf("%s: ", PH);
+			(void)printf("%s: ", PH);
 			return ("can't open phone number file");
 		}
 		while (fgets(string, sizeof(string), fd) != NULL) {
 			for (cp = string; !any(*cp, " \t\n"); cp++)
 				;
 			if (*cp == '\n') {
-				fclose(fd);
+				(void)fclose(fd);
 				return ("unrecognizable host name");
 			}
 			*cp++ = '\0';
@@ -133,7 +131,7 @@ connect(void)
 			while (any(*cp, " \t"))
 				cp++;
 			if (*cp == '\n') {
-				fclose(fd);
+				(void)fclose(fd);
 				return ("missing phone number");
 			}
 			for (phnum = cp; *cp && *cp != ',' && *cp != '\n'; cp++)
@@ -142,14 +140,14 @@ connect(void)
 				*cp++ = '\0';
 
 			if ((conflag = (*acu->acu_dialer)(phnum, CU)) != 0) {
-				fclose(fd);
+				(void)fclose(fd);
 				if (CM != NULL)
 					xpwrite(FD, CM, strlen(CM));
 				return (NULL);
 			} else
 			tried++;
 		}
-		fclose(fd);
+		(void)fclose(fd);
 	}
 	if (!tried) {
 	}
@@ -167,7 +165,7 @@ disconnect(const char *reason)
 	}
 	if (reason == NULL) {
 		if (boolean(value(VERBOSE)))
-			printf("\r\ndisconnecting...");
+			(void)printf("\r\ndisconnecting...");
 	} else
 	(*acu->acu_disconnect)();
 }
@@ -176,7 +174,7 @@ static void
 acuabort(int s)
 {
 
-	signal(s, SIG_IGN);
+	(void)signal(s, SIG_IGN);
 	longjmp(jmpbuf, 1);
 }
 

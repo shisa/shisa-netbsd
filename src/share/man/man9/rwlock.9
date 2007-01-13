@@ -1,4 +1,4 @@
-.\"	$NetBSD: rwlock.9,v 1.2 2006/11/13 18:28:15 ad Exp $
+.\"	$NetBSD: rwlock.9,v 1.4 2006/12/23 06:51:41 wiz Exp $
 .\"
 .\" Copyright (c) 2006 The NetBSD Foundation, Inc.
 .\" All rights reserved.
@@ -92,10 +92,13 @@ RW locks are in one of three distinct states at any given time:
 The lock is not held.
 .It Dv Read locked
 The lock holders intend to read the protected object.
-Multiple callers may hold a RW lock with 'read intent' simultaneously.
+Multiple callers may hold a RW lock with
+.Dq read intent
+simultaneously.
 .It Dv Write locked
 The lock holder intends to update the protected object.
-Only one caller may hold a RW lock with 'write intent'.
+Only one caller may hold a RW lock with
+.Dq write intent .
 .El
 .Pp
 The
@@ -122,23 +125,24 @@ on RW lock operations.
 .It Fn rw_init "rw"
 .Pp
 Initialize a lock for use.
-No other operations can be performed on the lock until it has been initialized.
+No other operations can be performed on the lock until it has been
+initialized.
 .It Fn rw_destroy "rw"
 .Pp
 Release resources used by a lock.
 The lock may not be used after it has been destroyed.
 .It Fn rw_enter "rw" "op"
 .Pp
-If 
+If
 .Dv RW_READER
-is specified as the argument to 
+is specified as the argument to
 .Fa op ,
 acquire a read lock.
 If the lock is write held, the caller will block and not return until the
 hold is acquired.
 Callers must not recursively acquire read locks.
 .Pp
-If 
+If
 .Dv RW_WRITER
 is specified, acquire a write lock.
 If the lock is already held, the caller will block and not return until the
@@ -146,7 +150,7 @@ hold is acquired.
 .Pp
 RW locks and other types of locks must always be acquired in a
 consistent order with respect to each other.
-Otherwise, the potential for system deadlock exists. 
+Otherwise, the potential for system deadlock exists.
 .It Fn rw_exit "rw"
 .Pp
 Release a lock.
@@ -157,9 +161,9 @@ Try to acquire a lock, but do not block if the lock is already held.
 If the lock is acquired successfully, return non-zero.
 Otherwise, return zero.
 .Pp
-Valid arguments to 
+Valid arguments to
 .Fa op
-are 
+are
 .Dv RW_READ
 or
 .Dv RW_WRITE .
@@ -175,7 +179,7 @@ Downgrade a lock from a write hold to a read hold.
 .It Fn rw_read_held "rw"
 .It Fn rw_lock_held "rw"
 .Pp
-Test the lock's condition and return non-zero if the lock is held 
+Test the lock's condition and return non-zero if the lock is held
 (potentially by the current LWP) and matches the specified condition.
 Otherwise, return zero.
 .Pp
@@ -189,7 +193,7 @@ source tree where code implementing RW locks can be found.
 All pathnames are relative to
 .Pa /usr/src .
 .Pp
-The core of the RW lock implementation is in 
+The core of the RW lock implementation is in
 .Pa sys/kern/kern_rwlock.c .
 .Pp
 The header file
@@ -198,14 +202,18 @@ describes the public interface, and interfaces that machine-dependent
 code must provide to support RW locks.
 .Sh SEE ALSO
 .Xr condvar 9 ,
-.Xr mutex 9 .
-.Pp
-Jim Mauro and Richard McDougall,
-.Em Solaris Internals: Core Kernel Architecture ,
-Prentice Hall, 2001.
-ISBN 0-13-022496-0
+.Xr mutex 9
+.Rs
+.%A Jim Mauro
+.%A Richard McDougall
+.%T Solaris Internals: Core Kernel Architecture
+.%I Prentice Hall
+.%D 2001
+.%O ISBN 0-13-022496-0
+.Re
 .Sh HISTORY
 The RW lock primatives first appeared in
 .Nx 5.0 .
 They are modelled after the reader / writer lock primatives implemented in
-Sun Solaris, and have been extended for NetBSD.
+Sun Solaris, and have been extended for
+.Nx .

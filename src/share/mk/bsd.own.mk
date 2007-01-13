@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.own.mk,v 1.488 2006/11/26 13:59:49 drochner Exp $
+#	$NetBSD: bsd.own.mk,v 1.491 2006/12/29 15:52:20 pooka Exp $
 
 .if !defined(_BSD_OWN_MK_)
 _BSD_OWN_MK_=1
@@ -75,7 +75,11 @@ CPPFLAG_ISYSTEMXX=	-cxx-isystem
 .endif
 
 .if empty(.MAKEFLAGS:M-V*)
+.if defined(MAKEOBJDIRPREFIX) || defined(MAKEOBJDIR)
+PRINTOBJDIR=	${MAKE} -r -V .OBJDIR -f /dev/null xxx
+.else
 PRINTOBJDIR=	${MAKE} -V .OBJDIR
+.endif
 .else
 PRINTOBJDIR=	echo # prevent infinite recursion
 .endif
@@ -245,7 +249,7 @@ TOOL_MAKEFS=		${TOOLDIR}/bin/${_TOOL_PREFIX}makefs
 TOOL_MAKEINFO=		${TOOLDIR}/bin/${_TOOL_PREFIX}makeinfo
 TOOL_MAKEWHATIS=	${TOOLDIR}/bin/${_TOOL_PREFIX}makewhatis
 TOOL_MDSETIMAGE=	${TOOLDIR}/bin/${MACHINE_GNU_PLATFORM}-mdsetimage
-TOOL_DISKLABEL=		${TOOLDIR}/bin/${MACHINE_GNU_PLATFORM}-disklabel
+TOOL_DISKLABEL=		${TOOLDIR}/bin/nbdisklabel-${MAKEWRAPPERMACHINE}
 TOOL_FDISK=		${TOOLDIR}/bin/${MACHINE_GNU_PLATFORM}-fdisk
 TOOL_MENUC=		MENUDEF=${TOOLDIR}/share/misc ${TOOLDIR}/bin/${_TOOL_PREFIX}menuc
 TOOL_MIPSELF2ECOFF=	${TOOLDIR}/bin/${_TOOL_PREFIX}mips-elf2ecoff
@@ -610,7 +614,7 @@ MK${var}?=	yes
 #
 .for var in \
 	CRYPTO_IDEA CRYPTO_MDC2 CRYPTO_RC5 DEBUG DEBUGLIB \
-	MANZ OBJDIRS PRIVATELIB SOFTFLOAT UNPRIVED UPDATE X11
+	MANZ OBJDIRS PRIVATELIB PUFFS SOFTFLOAT UNPRIVED UPDATE X11
 MK${var}?=	no
 .endfor
 

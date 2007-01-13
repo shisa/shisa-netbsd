@@ -1,4 +1,4 @@
-/*	$NetBSD: tp_iso.c,v 1.24 2006/11/16 01:33:51 christos Exp $	*/
+/*	$NetBSD: tp_iso.c,v 1.27 2006/12/15 21:18:57 joerg Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -75,7 +75,7 @@ SOFTWARE.
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: tp_iso.c,v 1.24 2006/11/16 01:33:51 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: tp_iso.c,v 1.27 2006/12/15 21:18:57 joerg Exp $");
 
 #include "opt_iso.h"
 #ifdef ISO
@@ -340,7 +340,7 @@ tpclnp_mtu(void *v)
 		printf("tpclnp_mtu(tpcb %p)\n", tpcb);
 	}
 #endif
-	tpcb->tp_routep = &(isop->isop_route.ro_rt);
+	tpcb->tp_routep = &isop->isop_route.ro_rt;
 	if (tpcb->tp_netservice == ISO_CONS)
 		return 0;
 	else
@@ -467,8 +467,7 @@ tpclnp_output_dg(struct mbuf *m0, ...)
 	/*
 	 *	Free route allocated by clnp (if the route was indeed allocated)
 	 */
-	if (tmppcb.isop_route.ro_rt)
-		RTFREE(tmppcb.isop_route.ro_rt);
+	rtcache_free((struct route *)&tmppcb.isop_route);
 
 	return (err);
 }

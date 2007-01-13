@@ -1,4 +1,4 @@
-.\"     $NetBSD: intro.4,v 1.12 2006/07/20 13:23:29 rumble Exp $
+.\"     $NetBSD: intro.4,v 1.18 2006/12/24 00:47:24 rumble Exp $
 .\"
 .\" Copyright (c) 2003 The NetBSD Foundation, Inc.
 .\" All rights reserved.
@@ -31,12 +31,12 @@
 .\" ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 .\" POSSIBILITY OF SUCH DAMAGE.
 .\"
-.Dd July 20, 2006
+.Dd December 22, 2006
 .Dt INTRO 4 sgimips
 .Os
 .Sh NAME
 .Nm intro
-.Nd introduction to special files and hardware support
+.Nd introduction to sgimips special files and hardware support
 .Sh DESCRIPTION
 This section describes the special files, related driver functions,
 and networking support available in the system.
@@ -90,14 +90,14 @@ A list of the supported devices is given below.
 .Sh HARDWARE
 The following systems are supported:
 .Pp
-.Bl -tag -width XXXXXXXXXXXXXXXXXXX -offset indent -compact
+.Bl -tag -width XXXXXXXXXXXXXXXXXXXXX -offset indent -compact
 .It O2
 IP32
 .Pq Dq Moosehead
-.It Indy/Challenge-S
+.It Indy/Challenge S
 IP24
 .Pq Dq Guinness
-.It Indigo 2
+.It Indigo 2/Challenge M
 IP22
 .Pq Dq Fullhouse
 .It Indigo R4k
@@ -119,16 +119,16 @@ Not all supported devices are listed.
 .Bl -tag -width macepci -offset indent -compact
 .It crime
 found on the O2
-.It dsclock
-real-time clock
 .It dpclock
+real-time clock
+.It dsclock
 real-time clock
 .It gio
 PCI-like bus
 .It hpc
 High performance Peripheral Controller
 .It imc
-Indigo R4k/Indy/Challenge-S/Indigo2 bus arbitrator
+Indigo R4k/Indy/Challenge S/Indigo2 bus arbiter
 .It mace
 found on the O2
 .\" .It macepci
@@ -137,11 +137,13 @@ O2 MAC110 ethernet
 .It newport
 entry framebuffer on Indy and Indigo2
 .It pic
-Personal Iris 4D/3x and Indigo R3k bus arbitrator
-.It sbic
-WD33C93 SCSI interface
+Personal Iris 4D/3x and Indigo R3k bus arbiter
 .It sq
 SEEQ 8003/80C03 ethernet
+.It tl
+Set Engineering GIO 100baseTX Fast Ethernet
+.It tlp
+Phobos G130/G160 10/100 GIO Fast Ethernet
 .It wdsc
 WD33C93 SCSI interface
 .El
@@ -162,11 +164,18 @@ bus and associated device drivers.
 .Xr config 1 ,
 .Xr autoconf 4 ,
 .Xr crime 4 ,
+.Xr dpclock 4 ,
+.Xr dsclock 4 ,
 .Xr gio 4 ,
 .Xr hpc 4 ,
 .Xr imc 4 ,
 .Xr mace 4 ,
-.Xr pic 4
+.Xr mec 4 ,
+.Xr newport 4 ,
+.Xr pic 4 ,
+.Xr sq 4 ,
+.Xr tlp 4 ,
+.Xr wdsc 4
 .Sh HISTORY
 This
 .Tn sgimips

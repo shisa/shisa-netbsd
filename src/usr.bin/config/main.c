@@ -1,4 +1,4 @@
-/*	$NetBSD: main.c,v 1.18 2006/10/29 23:00:44 uwe Exp $	*/
+/*	$NetBSD: main.c,v 1.22 2007/01/09 13:03:47 cube Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -81,6 +81,7 @@ COPYRIGHT("@(#) Copyright (c) 1992, 1993\n\
 
 int	vflag;				/* verbose output */
 int	Pflag;				/* pack locators */
+int	Lflag;				/* lint config generation */
 
 int	yyparse(void);
 
@@ -146,7 +147,7 @@ main(int argc, char **argv)
 
 	pflag = 0;
 	xflag = 0;
-	while ((ch = getopt(argc, argv, "DPgpvb:s:x")) != -1) {
+	while ((ch = getopt(argc, argv, "DLPgpvb:s:x")) != -1) {
 		switch (ch) {
 
 #ifndef MAKE_BOOTSTRAP
@@ -154,6 +155,10 @@ main(int argc, char **argv)
 			yydebug = 1;
 			break;
 #endif
+
+		case 'L':
+			Lflag = 1;
+			break;
 
 		case 'P':
 			Pflag = 1;
@@ -213,9 +218,14 @@ main(int argc, char **argv)
 	}
 
 	if (xflag && (builddir != NULL || srcdir != NULL || Pflag || pflag ||
-	    vflag)) {
+	    vflag || Lflag)) {
 		(void)fprintf(stderr, "config: -x must be used alone\n");
 		exit(1);
+	}
+	if (Lflag && (builddir != NULL || Pflag || pflag)) {
+		(void)fprintf(stderr,
+		    "config: -L can only be used with -s and -v\n");
+		exit(EXIT_FAILURE);
 	}
 
 	if (xflag) {
@@ -272,6 +282,7 @@ main(int argc, char **argv)
 	deffstab = ht_new();
 	defopttab = ht_new();
 	defparamtab = ht_new();
+	defoptlint = ht_new();
 	defflagtab = ht_new();
 	optfiletab = ht_new();
 	obsopttab = ht_new();
@@ -300,6 +311,24 @@ main(int argc, char **argv)
 		(void)sprintf(p, "../compile/%s", last_component);
 	}
 	defbuilddir = (argc == 0) ? "." : p;
+
+	if (Lflag) {
+		char resolvedname[MAXPATHLEN];
+
+		if (realpath(conffile, resolvedname) == NULL)
+			err(EXIT_FAILURE, "realpath(%s)", conffile);
+
+		if (yyparse())
+			stop();
+
+		printf("include \"%s\"\n", resolvedname);
+
+		emit_params();
+		emit_options();
+		emit_instances();
+
+		exit(EXIT_SUCCESS);
+	}
 
 	removeit = 0;
 	if (is_elf(conffile)) {
@@ -599,7 +628,7 @@ deffilesystem(const char *fname, struct nvlist *fses, struct nvlist *deps)
 	 * Mark these options as ones to skip when creating the Makefile.
 	 */
 	for (nv = fses; nv != NULL; nv = nv->nv_next) {
-		if (ht_insert(defopttab, nv->nv_name, nv)) {
+		if (DEFINED_OPTION(nv->nv_name)) {
 			error("file system or option `%s' already defined",
 			    nv->nv_name);
 			return;
@@ -702,6 +731,19 @@ defopt(struct hashtab *ht, const char *fname, struct nvlist *opts,
 	 */
 	for (nv = opts; nv != NULL; nv = nextnv) {
 		nextnv = nv->nv_next;
+
+		if (*(nv->nv_name) == '\0') {
+			if (nextnv == NULL)
+				panic("invalid option chain");
+			/*
+			 * If an entry already exists, then we are about to
+			 * complain, so no worry.
+			 */
+			(void) ht_insert(defoptlint, nextnv->nv_name,
+			    nv);
+			nv = nextnv;
+			nextnv = nextnv->nv_next;
+		}
 
 		/* An option name can be declared at most once. */
 		if (DEFINED_OPTION(nv->nv_name)) {
@@ -1205,6 +1247,12 @@ setupdirs(void)
 	if ((builddir || strcmp(defbuilddir, ".") == 0) && !srcdir) {
 		error("source directory must be specified");
 		exit(1);
+	}
+
+	if (Lflag) {
+		if (srcdir == NULL)
+			srcdir = "../../..";
+		return;
 	}
 
 	if (srcdir == NULL)

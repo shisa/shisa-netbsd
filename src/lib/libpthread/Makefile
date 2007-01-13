@@ -1,6 +1,7 @@
-#	$NetBSD: Makefile,v 1.35 2005/12/13 22:07:20 christos Exp $
+#	$NetBSD: Makefile,v 1.37 2006/12/24 18:39:45 ad Exp $
 #
 
+PTHREAD_SA=1
 WARNS=	2
 
 # Define PT_FIXEDSTACKSIZE_LG to set a fixed stacksize
@@ -26,7 +27,11 @@ ARCHDIR=	${.CURDIR}/arch/${ARCHSUBDIR}
 .PATH:	${ARCHDIR}
 
 CPPFLAGS+=	-I${ARCHDIR} -I${.CURDIR} -I${.OBJDIR} -D_LIBC
-CPPFLAGS+=	-D__LIBPTHREAD_SOURCE__ -DPTHREAD_MLOCK_KLUDGE
+CPPFLAGS+=	-D__LIBPTHREAD_SOURCE__
+
+.if defined(PTHREAD_SA)
+CPPFLAGS+=	-DPTHREAD_SA -DPTHREAD_MLOCK_KLUDGE
+.endif
 
 # XXX: This crappy poke at libc's internals needs to be fixed.
 # We need to put this *after our own includes, so that our "assym.h"
@@ -70,7 +75,10 @@ SRCS+=	res_state.c
 SRCS+=	sched.c
 SRCS+=	sem.c
 # Architecture-dependent files
-SRCS+=	pthread_switch.S _context_u.S
+.if defined(PTHREAD_SA)
+SRCS+=	pthread_switch.S
+.endif
+SRCS+=	_context_u.S
 .if exists(${ARCHDIR}/pthread_md.c)
 SRCS+= pthread_md.c
 .endif

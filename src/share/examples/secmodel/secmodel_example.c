@@ -1,4 +1,4 @@
-/* $NetBSD: secmodel_example.c,v 1.7 2006/11/22 12:12:51 elad Exp $ */
+/* $NetBSD: secmodel_example.c,v 1.12 2007/01/05 13:23:22 elad Exp $ */
 
 /*
  * This file is placed in the public domain.
@@ -13,7 +13,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: secmodel_example.c,v 1.7 2006/11/22 12:12:51 elad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: secmodel_example.c,v 1.12 2007/01/05 13:23:22 elad Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -138,6 +138,18 @@ secmodel_example_system_cb(kauth_cred_t cred, kauth_action_t action,
 	req = (enum kauth_system_req)arg0;
 
         switch (action) {
+	case KAUTH_SYSTEM_MOUNT:
+		switch (req) {
+		case KAUTH_REQ_SYSTEM_MOUNT_GET:
+		case KAUTH_REQ_SYSTEM_MOUNT_NEW:
+		case KAUTH_REQ_SYSTEM_MOUNT_UNMOUNT:
+		case KAUTH_REQ_SYSTEM_MOUNT_UPDATE:
+		default:
+			result = KAUTH_RESULT_DEFER;
+			break;
+		}
+		break;
+
         case KAUTH_SYSTEM_TIME:
                 switch (req) {
                 case KAUTH_REQ_SYSTEM_TIME_ADJTIME:
@@ -211,6 +223,13 @@ secmodel_example_process_cb(kauth_cred_t cred, kauth_action_t action,
         result = KAUTH_RESULT_DENY;
 
         switch (action) {
+	case KAUTH_PROCESS_CANPROCFS:
+        case KAUTH_PROCESS_CANSEE:
+        case KAUTH_PROCESS_CANSIGNAL:
+	case KAUTH_PROCESS_CANSYSTRACE:
+	case KAUTH_PROCESS_CANPTRACE:
+        case KAUTH_PROCESS_CORENAME:
+		break;
         case KAUTH_PROCESS_RESOURCE:
                 switch((u_long)arg0) {
                 case KAUTH_REQ_PROCESS_RESOURCE_NICE:
@@ -222,9 +241,7 @@ secmodel_example_process_cb(kauth_cred_t cred, kauth_action_t action,
                 break;
 
         case KAUTH_PROCESS_SETID:
-        case KAUTH_PROCESS_CANSEE:
-        case KAUTH_PROCESS_CANSIGNAL:               
-        case KAUTH_PROCESS_CORENAME:
+	case KAUTH_PROCESS_STOPFLAG:
         default:
                 result = KAUTH_RESULT_DEFER;
                 break;
@@ -340,38 +357,17 @@ secmodel_example_machdep_cb(kauth_cred_t cred, kauth_action_t action,
         result = KAUTH_RESULT_DENY;
 
         switch (action) {
-	case KAUTH_MACHDEP_ALPHA:
-		switch ((u_long)arg0) {
-		case KAUTH_REQ_MACHDEP_ALPHA_UNMANAGEDMEM:
-		default:
-			result = KAUTH_RESULT_DEFER;
-			break;
-		}
-        case KAUTH_MACHDEP_X86:
-                switch ((u_long)arg0) {
-                case KAUTH_REQ_MACHDEP_X86_IOPL:
-                case KAUTH_REQ_MACHDEP_X86_IOPERM:
-                case KAUTH_REQ_MACHDEP_X86_MTRR_SET:
-		case KAUTH_REQ_MACHDEP_X86_UNMANAGEDMEM:
-                default:
-                        result = KAUTH_RESULT_DEFER;
-                        break;
-                }
-
-                break;
-
-        case KAUTH_MACHDEP_X86_64:
-                switch ((u_long)arg0) {
-                case KAUTH_REQ_MACHDPE_X86_64_MTRR_GET:
-                default:
-                        result = KAUTH_RESULT_DEFER;
-                        break;
-                }
-                break;
-
-        default:
-                result = KAUTH_RESULT_DEFER;
-                break;
+	case KAUTH_MACHDEP_IOPERM_GET:
+	case KAUTH_MACHDEP_IOPERM_SET:
+	case KAUTH_MACHDEP_IOPL:
+	case KAUTH_MACHDEP_LDT_GET:
+	case KAUTH_MACHDEP_LDT_SET:
+	case KAUTH_MACHDEP_MTRR_GET:
+	case KAUTH_MACHDEP_MTRR_SET:
+	case KAUTH_MACHDEP_UNMANAGEDMEM:
+	default:
+		result = KAUTH_RESULT_DEFER;
+		break;
         }
 
         return (result);

@@ -1,4 +1,4 @@
-/*	$NetBSD: pthread_run.c,v 1.18 2005/01/06 17:40:22 mycroft Exp $	*/
+/*	$NetBSD: pthread_run.c,v 1.21 2007/01/08 20:54:42 drochner Exp $	*/
 
 /*-
  * Copyright (c) 2001 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: pthread_run.c,v 1.18 2005/01/06 17:40:22 mycroft Exp $");
+__RCSID("$NetBSD: pthread_run.c,v 1.21 2007/01/08 20:54:42 drochner Exp $");
 
 #include <ucontext.h>
 #include <errno.h>
@@ -50,6 +50,8 @@ __RCSID("$NetBSD: pthread_run.c,v 1.18 2005/01/06 17:40:22 mycroft Exp $");
 #else
 #define SDPRINTF(x)
 #endif
+
+#ifdef PTHREAD_SA
 
 extern pthread_spin_t pthread__runqueue_lock;
 extern struct pthread_queue_t pthread__runqueue;
@@ -299,6 +301,19 @@ pthread__sched_bulk(pthread_t self, pthread_t qhead)
 	pthread_spinunlock(self, &pthread__runqueue_lock);
 }
 
+#else	/* PTHREAD_SA */
+
+void	pthread__sched_yield(void);
+
+__strong_alias(__libc_thr_yield,pthread__sched_yield)
+
+void
+pthread__sched_yield(void)
+{
+	sched_yield();
+}
+
+#endif	/* PTHREAD_SA */
 
 /*ARGSUSED*/
 int

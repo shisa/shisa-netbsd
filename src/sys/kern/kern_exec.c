@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_exec.c,v 1.232 2006/11/22 02:02:51 elad Exp $	*/
+/*	$NetBSD: kern_exec.c,v 1.234 2006/12/23 17:23:51 elad Exp $	*/
 
 /*-
  * Copyright (C) 1993, 1994, 1996 Christopher G. Demetriou
@@ -33,7 +33,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_exec.c,v 1.232 2006/11/22 02:02:51 elad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_exec.c,v 1.234 2006/12/23 17:23:51 elad Exp $");
 
 #include "opt_ktrace.h"
 #include "opt_syscall_debug.h"
@@ -224,8 +224,6 @@ static void link_es(struct execsw_entry **, const struct execsw *);
  * ON ENTRY:
  *	exec package with appropriate namei info
  *	lwp pointer of exec'ing lwp
- *      if verified exec enabled then flag indicating a direct exec or
- *        an indirect exec (i.e. for a shell script interpreter)
  *	NO SELF-LOCKED VNODES
  *
  * ON EXIT:
@@ -245,7 +243,7 @@ static void link_es(struct execsw_entry **, const struct execsw *);
  */
 int
 /*ARGSUSED*/
-check_exec(struct lwp *l, struct exec_package *epp, int flag)
+check_exec(struct lwp *l, struct exec_package *epp)
 {
 	int		error, i;
 	struct vnode	*vp;
@@ -288,14 +286,16 @@ check_exec(struct lwp *l, struct exec_package *epp, int flag)
 	VOP_UNLOCK(vp, 0);
 
 #if NVERIEXEC > 0
-        if ((error = veriexec_verify(l, vp, epp->ep_ndp->ni_dirp, flag,
+	if ((error = veriexec_verify(l, vp, ndp->ni_cnd.cn_pnbuf,
+	    epp->ep_flags & EXEC_INDIR ? VERIEXEC_INDIRECT : VERIEXEC_DIRECT,
 	    NULL)) != 0)
-                goto bad2;
+		goto bad2;
 #endif /* NVERIEXEC > 0 */
 
 #ifdef PAX_SEGVGUARD
-	if (pax_segvguard(l, vp, epp->ep_ndp->ni_dirp, FALSE))
-		return (EPERM);
+	error = pax_segvguard(l, vp, ndp->ni_cnd.cn_pnbuf, FALSE);
+	if (error)
+		goto bad2;
 #endif /* PAX_SEGVGUARD */
 
 	/* now we have the file, get the exec header */
@@ -494,11 +494,7 @@ execve1(struct lwp *l, const char *path, char * const *args,
 #endif
 
 	/* see if we can run it. */
-#if NVERIEXEC > 0
-        if ((error = check_exec(l, &pack, VERIEXEC_DIRECT)) != 0)
-#else
-        if ((error = check_exec(l, &pack, 0)) != 0)
-#endif /* NVERIEXEC > 0 */
+        if ((error = check_exec(l, &pack)) != 0)
 		goto freehdr;
 
 	/* XXX -- THE FOLLOWING SECTION NEEDS MAJOR CLEANUP */

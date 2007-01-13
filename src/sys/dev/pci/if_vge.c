@@ -1,4 +1,4 @@
-/* $NetBSD: if_vge.c,v 1.31 2006/11/26 16:11:51 tsutsui Exp $ */
+/* $NetBSD: if_vge.c,v 1.33 2006/12/01 11:30:55 tsutsui Exp $ */
 
 /*-
  * Copyright (c) 2004
@@ -35,7 +35,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_vge.c,v 1.31 2006/11/26 16:11:51 tsutsui Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_vge.c,v 1.33 2006/12/01 11:30:55 tsutsui Exp $");
 
 /*
  * VIA Networking Technologies VT612x PCI gigabit ethernet NIC driver.
@@ -295,7 +295,7 @@ struct vge_softc {
 static inline void vge_set_txaddr(struct vge_txfrag *, bus_addr_t);
 static inline void vge_set_rxaddr(struct vge_rxdesc *, bus_addr_t);
 
-static int vge_probe(struct device *, struct cfdata *, void *);
+static int vge_match(struct device *, struct cfdata *, void *);
 static void vge_attach(struct device *, struct device *, void *);
 
 static int vge_encap(struct vge_softc *, struct mbuf *, int);
@@ -336,7 +336,7 @@ static void vge_setmulti(struct vge_softc *);
 static void vge_reset(struct vge_softc *);
 
 CFATTACH_DECL(vge, sizeof(struct vge_softc),
-    vge_probe, vge_attach, NULL, NULL);
+    vge_match, vge_attach, NULL, NULL);
 
 static inline void
 vge_set_txaddr(struct vge_txfrag *f, bus_addr_t daddr)
@@ -811,8 +811,7 @@ vge_reset(struct vge_softc *sc)
  * IDs against our list and return a device name if we find a match.
  */
 static int
-vge_probe(struct device *parent, struct cfdata *match,
-    void *aux)
+vge_match(struct device *parent, struct cfdata *match, void *aux)
 {
 	struct pci_attach_args *pa = aux;
 
@@ -840,7 +839,7 @@ vge_allocmem(struct vge_softc *sc)
 	if (error) {
 		aprint_error("%s: could not allocate control data dma memory\n",
 		    sc->sc_dev.dv_xname);
-		return ENOMEM;
+		goto fail_1;
 	}
 
 	/* Map the memory to kernel VA space */
@@ -851,7 +850,7 @@ vge_allocmem(struct vge_softc *sc)
 	if (error) {
 		aprint_error("%s: could not map control data dma memory\n",
 		    sc->sc_dev.dv_xname);
-		return ENOMEM;
+		goto fail_2;
 	}
 	memset(sc->sc_control_data, 0, sizeof(struct vge_control_data));
 
@@ -865,7 +864,7 @@ vge_allocmem(struct vge_softc *sc)
 	if (error) {
 		aprint_error("%s: could not create control data dmamap\n",
 		    sc->sc_dev.dv_xname);
-		return ENOMEM;
+		goto fail_3;
 	}
 
 	/* Load the map for the control data. */
@@ -875,7 +874,7 @@ vge_allocmem(struct vge_softc *sc)
 	if (error) {
 		aprint_error("%s: could not load control data dma memory\n",
 		    sc->sc_dev.dv_xname);
-		return ENOMEM;
+		goto fail_4;
 	}
 
 	/* Create DMA maps for TX buffers */
@@ -887,7 +886,7 @@ vge_allocmem(struct vge_softc *sc)
 		if (error) {
 			aprint_error("%s: can't create DMA map for TX descs\n",
 			    sc->sc_dev.dv_xname);
-			return ENOMEM;
+			goto fail_5;
 		}
 	}
 
@@ -900,12 +899,35 @@ vge_allocmem(struct vge_softc *sc)
 		if (error) {
 			aprint_error("%s: can't create DMA map for RX descs\n",
 			    sc->sc_dev.dv_xname);
-			return ENOMEM;
+			goto fail_6;
 		}
 		sc->sc_rxsoft[i].rxs_mbuf = NULL;
 	}
 
 	return 0;
+
+ fail_6:
+	for (i = 0; i < VGE_NRXDESC; i++) {
+		if (sc->sc_rxsoft[i].rxs_dmamap != NULL)
+			bus_dmamap_destroy(sc->sc_dmat,
+			    sc->sc_rxsoft[i].rxs_dmamap);
+	}
+ fail_5:
+	for (i = 0; i < VGE_NTXDESC; i++) {
+		if (sc->sc_txsoft[i].txs_dmamap != NULL)
+			bus_dmamap_destroy(sc->sc_dmat,
+			    sc->sc_txsoft[i].txs_dmamap);
+	}
+	bus_dmamap_unload(sc->sc_dmat, sc->sc_cddmamap);
+ fail_4:
+	bus_dmamap_destroy(sc->sc_dmat, sc->sc_cddmamap);
+ fail_3:
+	bus_dmamem_unmap(sc->sc_dmat, (caddr_t)sc->sc_control_data,
+	    sizeof(struct vge_control_data));
+ fail_2:
+	bus_dmamem_free(sc->sc_dmat, &seg, nseg);
+ fail_1:
+	return ENOMEM;
 }
 
 /*
@@ -925,7 +947,7 @@ vge_attach(struct device *parent, struct device *self, void *aux)
 	uint16_t val;
 
 	aprint_normal(": VIA VT612X Gigabit Ethernet (rev. %#x)\n",
-		PCI_REVISION(pa->pa_class));
+	    PCI_REVISION(pa->pa_class));
 
 	/* Make sure bus-mastering is enabled */
         pci_conf_write(pc, pa->pa_tag, PCI_COMMAND_STATUS_REG,
@@ -987,7 +1009,7 @@ vge_attach(struct device *parent, struct device *self, void *aux)
 	 */
 	sc->sc_dmat = pa->pa_dmat;
 
-	if (vge_allocmem(sc))
+	if (vge_allocmem(sc) != 0)
 		return;
 
 	ifp = &sc->sc_ethercom.ec_if;
@@ -1246,8 +1268,9 @@ vge_rxeof(struct vge_softc *sc)
 		 * We don't want to drop the frame though: our VLAN
 		 * filtering is done in software.
 		 */
-		if (!(rxstat & VGE_RDSTS_RXOK) && !(rxstat & VGE_RDSTS_VIDM)
-		    && !(rxstat & VGE_RDSTS_CSUMERR)) {
+		if ((rxstat & VGE_RDSTS_RXOK) == 0 &&
+		    (rxstat & VGE_RDSTS_VIDM) == 0 &&
+		    (rxstat & VGE_RDSTS_CSUMERR) == 0) {
 			ifp->if_ierrors++;
 			/*
 			 * If this is part of a multi-fragment packet,
@@ -1357,7 +1380,6 @@ vge_rxeof(struct vge_softc *sc)
 		lim++;
 		if (lim == VGE_NRXDESC)
 			break;
-
 	}
 
 	sc->sc_rx_prodidx = idx;
@@ -1435,7 +1457,7 @@ vge_tick(void *xsc)
 
 	mii_tick(mii);
 	if (sc->sc_link) {
-		if (!(mii->mii_media_status & IFM_ACTIVE))
+		if ((mii->mii_media_status & IFM_ACTIVE) == 0)
 			sc->sc_link = 0;
 	} else {
 		if (mii->mii_media_status & IFM_ACTIVE &&
@@ -1465,7 +1487,7 @@ vge_intr(void *arg)
 
 	ifp = &sc->sc_ethercom.ec_if;
 
-	if (!(ifp->if_flags & IFF_UP)) {
+	if ((ifp->if_flags & IFF_UP) == 0) {
 		return claim;
 	}
 
@@ -2043,12 +2065,12 @@ vge_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 		if (ifp->if_flags & IFF_UP) {
 			if (ifp->if_flags & IFF_RUNNING &&
 			    ifp->if_flags & IFF_PROMISC &&
-			    !(sc->sc_if_flags & IFF_PROMISC)) {
+			    (sc->sc_if_flags & IFF_PROMISC) == 0) {
 				CSR_SETBIT_1(sc, VGE_RXCTL,
 				    VGE_RXCTL_RX_PROMISC);
 				vge_setmulti(sc);
 			} else if (ifp->if_flags & IFF_RUNNING &&
-			    !(ifp->if_flags & IFF_PROMISC) &&
+			    (ifp->if_flags & IFF_PROMISC) == 0 &&
 			    sc->sc_if_flags & IFF_PROMISC) {
 				CSR_CLRBIT_1(sc, VGE_RXCTL,
 				    VGE_RXCTL_RX_PROMISC);

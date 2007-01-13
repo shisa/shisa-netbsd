@@ -1,4 +1,4 @@
-/* 	$NetBSD: cdplay.c,v 1.34 2006/10/22 16:13:23 christos Exp $	*/
+/* 	$NetBSD: cdplay.c,v 1.37 2006/12/27 18:47:20 dogcow Exp $	*/
 
 /*
  * Copyright (c) 1999, 2000, 2001 Andrew Doran.
@@ -40,7 +40,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: cdplay.c,v 1.34 2006/10/22 16:13:23 christos Exp $");
+__RCSID("$NetBSD: cdplay.c,v 1.37 2006/12/27 18:47:20 dogcow Exp $");
 #endif /* not lint */
 
 #include <sys/types.h>
@@ -283,18 +283,20 @@ main(int argc, char **argv)
 
 	for (;;) {
 		line = NULL;
+		arg = NULL;
 		do {
 			if (((elline = el_gets(elptr, &scratch)) != NULL)
 			    && (scratch != 0)){
 				history(hist, &he, H_ENTER, elline);
 				line = strdup(elline);
-				arg = parse(line, &cmd);
-				if (line != NULL)
+				if (line != NULL) {
+					arg = parse(line, &cmd);
 					free(line);
+				}
 			} else {
 				cmd = CMD_QUIT;
 				warnx("\r\n");
-				arg = 0;
+				arg = NULL;
 				break;
 			}
 		} while (arg == NULL);
@@ -1043,7 +1045,10 @@ print_track(struct cd_toc_entry *e)
 	else
 		next = e[1].addr.lba;
 	len = next - block;
-	lba2msf(len, &m, &s, &f);
+	/* XXX: take into account the 150 frame start offset time */
+	/* XXX: this is a mis-use of lba2msf() because 'len' is a */
+	/* XXX: length in frames and not a LBA! */
+	lba2msf(len - 150, &m, &s, &f);
 
 	/* Print duration, block, length, type */
 	printf("%2d:%02d.%02d  %6d  %6d %8s\n", m, s, f, block, len,

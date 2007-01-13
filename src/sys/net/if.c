@@ -1,4 +1,4 @@
-/*	$NetBSD: if.c,v 1.178 2006/11/20 04:09:25 dyoung Exp $	*/
+/*	$NetBSD: if.c,v 1.180 2006/12/03 19:17:41 dyoung Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2000, 2001 The NetBSD Foundation, Inc.
@@ -97,7 +97,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if.c,v 1.178 2006/11/20 04:09:25 dyoung Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if.c,v 1.180 2006/12/03 19:17:41 dyoung Exp $");
 
 #include "opt_inet.h"
 
@@ -653,7 +653,7 @@ again:
 
 	if_free_sadl(ifp);
 
-	/* Walk the routing table looking for straglers. */
+	/* Walk the routing table looking for stragglers. */
 	for (i = 0; i <= AF_MAX; i++) {
 		if ((rnh = rt_tables[i]) != NULL)
 			(void) (*rnh->rnh_walktree)(rnh, if_rt_walktree, ifp);
@@ -755,8 +755,12 @@ if_rt_walktree(struct radix_node *rn, void *v)
 
 	if (rt->rt_ifp == ifp) {
 		/* Delete the entry. */
+		++rt->rt_refcnt;
 		error = rtrequest(RTM_DELETE, rt_key(rt), rt->rt_gateway,
 		    rt_mask(rt), rt->rt_flags, NULL);
+		KASSERT((rt->rt_flags & RTF_UP) == 0);
+		rt->rt_ifp = NULL;
+		RTFREE(rt);
 		if (error)
 			printf("%s: warning: unable to delete rtentry @ %p, "
 			    "error = %d\n", ifp->if_xname, rt, error);

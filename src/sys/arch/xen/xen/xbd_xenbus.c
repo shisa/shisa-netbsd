@@ -1,4 +1,4 @@
-/*      $NetBSD: xbd_xenbus.c,v 1.14 2006/07/07 17:59:21 yamt Exp $      */
+/*      $NetBSD: xbd_xenbus.c,v 1.16 2007/01/06 22:07:11 bouyer Exp $      */
 
 /*
  * Copyright (c) 2006 Manuel Bouyer.
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: xbd_xenbus.c,v 1.14 2006/07/07 17:59:21 yamt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: xbd_xenbus.c,v 1.16 2007/01/06 22:07:11 bouyer Exp $");
 
 #include "opt_xen.h"
 #include "rnd.h"
@@ -469,6 +469,8 @@ xbd_handler(void *arg)
 
 	DPRINTF(("xbd_handler(%s)\n", sc->sc_dev.dv_xname));
 
+	if (__predict_false(sc->sc_backend_status != BLKIF_STATE_CONNECTED))
+		return 0;
 again:
 	resp_prod = sc->sc_ring.sring->rsp_prod;
 	x86_lfence(); /* ensure we see replies up to resp_prod */
@@ -485,7 +487,7 @@ again:
 				    sc->sc_dev.dv_xname);
 				sc->sc_ring.rsp_cons = i;
 				xbdreq->req_nr_segments = seg + 1;
-				return 1;
+				goto done;
 			}
 			xengnt_revoke_access(
 			    xbdreq->req_gntref[seg]);
@@ -514,7 +516,6 @@ next:
 		    (bp->b_bcount - bp->b_resid),
 		    (bp->b_flags & B_READ));
 		biodone(bp);
-		dk_iodone(sc->sc_di, &sc->sc_dksc);
 		SLIST_INSERT_HEAD(&sc->sc_xbdreq_head, xbdreq, req_next);
 	}
 	x86_lfence();
@@ -522,6 +523,8 @@ next:
 	RING_FINAL_CHECK_FOR_RESPONSES(&sc->sc_ring, more_to_do);
 	if (more_to_do)
 		goto again;
+done:
+	dk_iodone(sc->sc_di, &sc->sc_dksc);
 	return 1;
 }
 

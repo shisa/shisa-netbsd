@@ -1,4 +1,4 @@
-/*	$NetBSD: rtl8169.c,v 1.72 2006/11/29 14:13:15 tsutsui Exp $	*/
+/*	$NetBSD: rtl8169.c,v 1.76 2006/12/26 13:45:43 tsutsui Exp $	*/
 
 /*
  * Copyright (c) 1997, 1998-2003
@@ -142,10 +142,6 @@
 
 #include <dev/mii/mii.h>
 #include <dev/mii/miivar.h>
-
-#include <dev/pci/pcireg.h>
-#include <dev/pci/pcivar.h>
-#include <dev/pci/pcidevs.h>
 
 #include <dev/ic/rtl81x9reg.h>
 #include <dev/ic/rtl81x9var.h>
@@ -758,16 +754,8 @@ re_attach(struct rtk_softc *sc)
 	ifp->if_mtu = ETHERMTU;
 	ifp->if_flags = IFF_BROADCAST | IFF_SIMPLEX | IFF_MULTICAST;
 	ifp->if_ioctl = re_ioctl;
-	sc->ethercom.ec_capabilities |= ETHERCAP_VLAN_MTU;
-
-	/*
-	 * This is a way to disable hw VLAN tagging by default
-	 * (RE_VLAN is undefined), as it is problematic. PR 32643
-	 */
-
-#ifdef RE_VLAN
-	sc->ethercom.ec_capabilities |= ETHERCAP_VLAN_HWTAGGING;
-#endif
+	sc->ethercom.ec_capabilities |=
+	    ETHERCAP_VLAN_MTU | ETHERCAP_VLAN_HWTAGGING;
 	ifp->if_start = re_start;
 	ifp->if_stop = re_stop;
 
@@ -1071,17 +1059,19 @@ re_newbuf(struct rtk_softc *sc, int idx, struct mbuf *m)
 	    BUS_DMASYNC_PREREAD);
 
 	d = &sc->re_ldata.re_rx_list[idx];
+#ifdef DIAGNOSTIC
 	RE_RXDESCSYNC(sc, idx, BUS_DMASYNC_POSTREAD|BUS_DMASYNC_POSTWRITE);
 	cmdstat = le32toh(d->re_cmdstat);
 	RE_RXDESCSYNC(sc, idx, BUS_DMASYNC_PREREAD);
 	if (cmdstat & RE_RDESC_STAT_OWN) {
-		aprint_error("%s: tried to map busy RX descriptor\n",
+		panic("%s: tried to map busy RX descriptor",
 		    sc->sc_dev.dv_xname);
-		goto out;
 	}
+#endif
 
 	rxs->rxs_mbuf = m;
 
+	d->re_vlanctl = 0;
 	cmdstat = map->dm_segs[0].ds_len;
 	if (idx == (RE_RX_DESC_CNT - 1))
 		cmdstat |= RE_RDESC_CMD_EOR;
@@ -1210,7 +1200,7 @@ re_rxeof(struct rtk_softc *sc)
 		if (sc->rtk_type == RTK_8169)
 			rxstat >>= 1;
 
-		if ((rxstat & RE_RDESC_STAT_RXERRSUM) != 0) {
+		if (__predict_false((rxstat & RE_RDESC_STAT_RXERRSUM) != 0)) {
 #ifdef RE_DEBUG
 			aprint_error("%s: RX error (rxstat = 0x%08x)",
 			    sc->sc_dev.dv_xname, rxstat);
@@ -1246,7 +1236,7 @@ re_rxeof(struct rtk_softc *sc)
 		 * reload the current one.
 		 */
 
-		if (re_newbuf(sc, i, NULL) != 0) {
+		if (__predict_false(re_newbuf(sc, i, NULL) != 0)) {
 			ifp->if_ierrors++;
 			if (sc->re_head != NULL) {
 				m_freem(sc->re_head);
@@ -1303,13 +1293,11 @@ re_rxeof(struct rtk_softc *sc)
 				m->m_pkthdr.csum_flags |= M_CSUM_TCP_UDP_BAD;
 		}
 
-#ifdef RE_VLAN
 		if (rxvlan & RE_RDESC_VLANCTL_TAG) {
 			VLAN_INPUT_TAG(ifp, m,
-			     be16toh(rxvlan & RE_RDESC_VLANCTL_DATA),
+			     bswap16(rxvlan & RE_RDESC_VLANCTL_DATA),
 			     continue);
 		}
-#endif
 #if NBPFILTER > 0
 		if (ifp->if_bpf)
 			bpf_mtap(ifp->if_bpf, m);
@@ -1533,9 +1521,7 @@ re_start(struct ifnet *ifp)
 	bus_dmamap_t		map;
 	struct re_txq		*txq;
 	struct re_desc		*d;
-#ifdef RE_VLAN
 	struct m_tag		*mtag;
-#endif
 	uint32_t		cmdstat, re_flags;
 	int			ofree, idx, error, nsegs, seg;
 	int			startdesc, curdesc, lastdesc;
@@ -1594,7 +1580,7 @@ re_start(struct ifnet *ifp)
 		error = bus_dmamap_load_mbuf(sc->sc_dmat, map, m,
 		    BUS_DMA_WRITE|BUS_DMA_NOWAIT);
 
-		if (error) {
+		if (__predict_false(error)) {
 			/* XXX try to defrag if EFBIG? */
 			aprint_error("%s: can't map mbuf (error %d)\n",
 			    sc->sc_dev.dv_xname, error);
@@ -1607,8 +1593,8 @@ re_start(struct ifnet *ifp)
 
 		nsegs = map->dm_nsegs;
 		pad = FALSE;
-		if (m->m_pkthdr.len <= RE_IP4CSUMTX_PADLEN &&
-		    (re_flags & RE_TDESC_CMD_IPCSUM) != 0) {
+		if (__predict_false(m->m_pkthdr.len <= RE_IP4CSUMTX_PADLEN &&
+		    (re_flags & RE_TDESC_CMD_IPCSUM) != 0)) {
 			pad = TRUE;
 			nsegs++;
 		}
@@ -1661,6 +1647,7 @@ re_start(struct ifnet *ifp)
 			}
 #endif
 
+			d->re_vlanctl = 0;
 			re_set_bufaddr(d, map->dm_segs[seg].ds_addr);
 			cmdstat = re_flags | map->dm_segs[seg].ds_len;
 			if (seg == 0)
@@ -1677,10 +1664,11 @@ re_start(struct ifnet *ifp)
 			RE_TXDESCSYNC(sc, curdesc,
 			    BUS_DMASYNC_PREREAD|BUS_DMASYNC_PREWRITE);
 		}
-		if (pad) {
+		if (__predict_false(pad)) {
 			bus_addr_t paddaddr;
 
 			d = &sc->re_ldata.re_tx_list[curdesc];
+			d->re_vlanctl = 0;
 			paddaddr = RE_TXPADDADDR(sc);
 			re_set_bufaddr(d, paddaddr);
 			cmdstat = re_flags |
@@ -1701,14 +1689,11 @@ re_start(struct ifnet *ifp)
 		 * appear in the first descriptor of a multi-descriptor
 		 * transmission attempt.
 		 */
-
-#ifdef RE_VLAN
 		if ((mtag = VLAN_OUTPUT_TAG(&sc->ethercom, m)) != NULL) {
 			sc->re_ldata.re_tx_list[startdesc].re_vlanctl =
-			    htole32(htons(VLAN_TAG_VALUE(mtag)) |
+			    htole32(bswap16(VLAN_TAG_VALUE(mtag)) |
 			    RE_TDESC_VLANCTL_TAG);
 		}
-#endif
 
 		/* Transfer ownership of packet to the chip. */
 
@@ -1811,9 +1796,7 @@ re_init(struct ifnet *ifp)
 
 	if (1)  {/* not for 8169S ? */
 		reg |=
-#ifdef RE_VLAN
 		    RTK_CPLUSCMD_VLANSTRIP |
-#endif
 		    (ifp->if_capenable &
 		    (IFCAP_CSUM_IPv4_Rx | IFCAP_CSUM_TCPv4_Rx |
 		     IFCAP_CSUM_UDPv4_Rx) ?

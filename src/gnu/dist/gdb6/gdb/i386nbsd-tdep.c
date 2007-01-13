@@ -37,6 +37,9 @@
 #include "i387-tdep.h"
 #include "nbsd-tdep.h"
 #include "solib-svr4.h"
+#include "elf-bfd.h"		/* for header hack */
+#include "trad-frame.h"		/* kernel frame support */
+#include "frame-unwind.h"	/* kernel frame support */
 
 /* From <machine/reg.h>.  */
 static int i386nbsd_r_reg_offset[] =
@@ -99,10 +102,9 @@ i386nbsd_aout_regset_from_core_section (struct gdbarch *gdbarch,
    In particular, the return address of a signal handler points to the
    following code sequence:
 
-	leal	0x10(%esp), %eax
-	pushl	%eax
-	pushl	%eax
-	movl	$0x127, %eax		# __sigreturn14
+	leal	0x8c(%esp), %eax
+	movl	%eax, 0x4(%esp)
+	movl	$0x134, %eax		# setcontext
 	int	$0x80
 
    Each instruction has a unique encoding, so we simply attempt to match
@@ -112,23 +114,20 @@ i386nbsd_aout_regset_from_core_section (struct gdbarch *gdbarch,
    signal trampoline.  If not, -1 is returned, otherwise the offset from the
    start of the return sequence is returned.  */
 #define RETCODE_INSN1		0x8d
-#define RETCODE_INSN2		0x50
-#define RETCODE_INSN3		0x50
-#define RETCODE_INSN4		0xb8
-#define RETCODE_INSN5		0xcd
+#define RETCODE_INSN2		0x89
+#define RETCODE_INSN3		0xb8
+#define RETCODE_INSN4		0xcd
 
-#define RETCODE_INSN2_OFF	4
-#define RETCODE_INSN3_OFF	5
-#define RETCODE_INSN4_OFF	6
-#define RETCODE_INSN5_OFF	11
+#define RETCODE_INSN2_OFF	7
+#define RETCODE_INSN3_OFF	11
+#define RETCODE_INSN4_OFF	16
 
 static const unsigned char sigtramp_retcode[] =
 {
-  RETCODE_INSN1, 0x44, 0x24, 0x10,
-  RETCODE_INSN2,
-  RETCODE_INSN3,
-  RETCODE_INSN4, 0x27, 0x01, 0x00, 0x00,
-  RETCODE_INSN5, 0x80,
+  RETCODE_INSN1, 0x84, 0x24, 0x8c, 0x00, 0x00, 0x00,
+  RETCODE_INSN2, 0x44, 0x24, 0x04,
+  RETCODE_INSN3, 0x34, 0x01, 0x00, 0x00,
+  RETCODE_INSN4, 0x80,
 };
 
 static LONGEST
@@ -149,23 +148,15 @@ i386nbsd_sigtramp_offset (struct frame_info *next_frame)
       break;
 
     case RETCODE_INSN2:
-      /* INSN2 and INSN3 are the same.  Read at the location of PC+1
-	 to determine if we're actually looking at INSN2 or INSN3.  */
-      if (!safe_frame_unwind_memory (next_frame, pc + 1, &insn, 1))
-	return -1;
+      off = RETCODE_INSN2_OFF;
+      break;
 
-      if (insn == RETCODE_INSN3)
-	off = RETCODE_INSN2_OFF;
-      else
-	off = RETCODE_INSN3_OFF;
+    case RETCODE_INSN3:
+      off = RETCODE_INSN3_OFF;
       break;
 
     case RETCODE_INSN4:
       off = RETCODE_INSN4_OFF;
-      break;
-
-    case RETCODE_INSN5:
-      off = RETCODE_INSN5_OFF;
       break;
 
     default:
@@ -197,25 +188,171 @@ i386nbsd_sigtramp_p (struct frame_info *next_frame)
 	  || i386nbsd_sigtramp_offset (next_frame) >= 0);
 }
 
-/* From <machine/signal.h>.  */
+/* From <sys/ucontext.h> and <machine/mcontext.h>. */
+#define MCOFF 36 /* mcontext in ucontext */
+#define _REG_GS         0
+#define _REG_FS         1
+#define _REG_ES         2
+#define _REG_DS         3
+#define _REG_EDI        4
+#define _REG_ESI        5
+#define _REG_EBP        6
+#define _REG_ESP        7
+#define _REG_EBX        8
+#define _REG_EDX        9
+#define _REG_ECX        10
+#define _REG_EAX        11
+#define _REG_TRAPNO     12
+#define _REG_ERR        13
+#define _REG_EIP        14
+#define _REG_CS         15
+#define _REG_EFL        16
+#define _REG_UESP       17
+#define _REG_SS         18
 int i386nbsd_sc_reg_offset[] =
+{
+  MCOFF + _REG_EAX * 4,		/* %eax */
+  MCOFF + _REG_ECX * 4,		/* %ecx */
+  MCOFF + _REG_EDX * 4,		/* %edx */
+  MCOFF + _REG_EBX * 4,		/* %ebx */
+  MCOFF + _REG_ESP * 4,		/* %esp */
+  MCOFF + _REG_EBP * 4,		/* %ebp */
+  MCOFF + _REG_ESI * 4,		/* %esi */
+  MCOFF + _REG_EDI * 4,		/* %edi */
+  MCOFF + _REG_EIP * 4,		/* %eip */
+  MCOFF + _REG_EFL * 4,		/* %eflags */
+  MCOFF + _REG_CS * 4,		/* %cs */
+  MCOFF + _REG_SS * 4,		/* %ss */
+  MCOFF + _REG_DS * 4,		/* %ds */
+  MCOFF + _REG_ES * 4,		/* %es */
+  MCOFF + _REG_FS * 4,		/* %fs */
+  MCOFF + _REG_GS * 4		/* %gs */
+};
+
+/* Kernel debugging support */
+
+/* From <machine/frame.h>.  Note that %esp and %ess are only saved in
+   a trap frame when entering the kernel from user space.  */
+static int i386nbsd_tf_reg_offset[] =
 {
   10 * 4,			/* %eax */
   9 * 4,			/* %ecx */
   8 * 4,			/* %edx */
   7 * 4,			/* %ebx */
-  14 * 4,			/* %esp */
+  -1,				/* %esp */
   6 * 4,			/* %ebp */
   5 * 4,			/* %esi */
   4 * 4,			/* %edi */
-  11 * 4,			/* %eip */
-  13 * 4,			/* %eflags */
-  12 * 4,			/* %cs */
-  15 * 4,			/* %ss */
+  13 * 4,			/* %eip */
+  15 * 4,			/* %eflags */
+  14 * 4,			/* %cs */
+  -1,				/* %ss */
   3 * 4,			/* %ds */
   2 * 4,			/* %es */
   1 * 4,			/* %fs */
   0 * 4				/* %gs */
+};
+
+static struct trad_frame_cache *
+i386nbsd_trapframe_cache(struct frame_info *next_frame, void **this_cache)
+{
+  struct trad_frame_cache *cache;
+  CORE_ADDR func, sp, addr;
+  ULONGEST cs;
+  char *name;
+  int i;
+
+  if (*this_cache)
+    return *this_cache;
+
+  cache = trad_frame_cache_zalloc (next_frame);
+  *this_cache = cache;
+
+  func = frame_func_unwind (next_frame);
+  sp = frame_unwind_register_unsigned (next_frame, I386_ESP_REGNUM);
+
+  find_pc_partial_function (func, &name, NULL, NULL);
+  if (name && strncmp (name, "Xintr", 5) == 0)
+    addr = sp + 8;		/* It's an interrupt frame.  */
+  else
+    addr = sp + 4;
+
+  for (i = 0; i < ARRAY_SIZE (i386nbsd_tf_reg_offset); i++)
+    if (i386nbsd_tf_reg_offset[i] != -1)
+      trad_frame_set_reg_addr (cache, i, addr + i386nbsd_tf_reg_offset[i]);
+
+  /* Read %cs from trap frame.  */
+  addr += i386nbsd_tf_reg_offset[I386_CS_REGNUM];
+  cs = read_memory_unsigned_integer (addr, 4); 
+  if ((cs & I386_SEL_RPL) == I386_SEL_UPL)
+    {
+      /* Trap from user space; terminate backtrace.  */
+      trad_frame_set_id (cache, null_frame_id);
+    }
+  else
+    {
+      /* Construct the frame ID using the function start.  */
+      trad_frame_set_id (cache, frame_id_build (sp + 8, func));
+    }
+
+  return cache;
+}
+
+static void
+i386nbsd_trapframe_this_id (struct frame_info *next_frame,
+			    void **this_cache, struct frame_id *this_id)
+{
+  struct trad_frame_cache *cache =
+    i386nbsd_trapframe_cache (next_frame, this_cache);
+  
+  trad_frame_get_id (cache, this_id);
+}
+
+static void
+i386nbsd_trapframe_prev_register (struct frame_info *next_frame,
+				  void **this_cache, int regnum,
+				  int *optimizedp, enum lval_type *lvalp,
+				  CORE_ADDR *addrp, int *realnump,
+				  gdb_byte *valuep)
+{
+  struct trad_frame_cache *cache =
+    i386nbsd_trapframe_cache (next_frame, this_cache);
+
+  trad_frame_get_register (cache, next_frame, regnum,
+			   optimizedp, lvalp, addrp, realnump, valuep);
+}
+
+static int
+i386nbsd_trapframe_sniffer (const struct frame_unwind *self,
+			    struct frame_info *next_frame,
+			    void **this_prologue_cache)
+{
+  ULONGEST cs;
+  char *name;
+
+  /* Check Current Privilege Level and bail out if we're not executing
+     in kernel space.  */
+  cs = frame_unwind_register_unsigned (next_frame, I386_CS_REGNUM);
+  if ((cs & I386_SEL_RPL) == I386_SEL_UPL)
+    return 0;
+
+
+  find_pc_partial_function (frame_pc_unwind (next_frame), &name, NULL, NULL);
+  return (name && (strcmp (name, "calltrap") == 0
+		   || strcmp (name, "syscall1") == 0
+		   || strncmp (name, "Xintr", 5) == 0
+		   || strncmp (name, "Xsoft", 5) == 0));
+}
+
+const struct frame_unwind i386nbsd_trapframe_unwind = {
+  /* FIXME: kettenis/20051219: This really is more like an interrupt
+     frame, but SIGTRAMP_FRAME would print <signal handler called>,
+     which really is not what we want here.  */
+  NORMAL_FRAME,
+  i386nbsd_trapframe_this_id,
+  i386nbsd_trapframe_prev_register,
+  NULL,
+  i386nbsd_trapframe_sniffer
 };
 
 static void 
@@ -243,6 +380,9 @@ i386nbsd_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
      original 4.3 BSD.  */
   tdep->sc_reg_offset = i386nbsd_sc_reg_offset;
   tdep->sc_num_regs = ARRAY_SIZE (i386nbsd_sc_reg_offset);
+
+  /* Unwind kernel trap frames correctly.  */
+  frame_unwind_prepend_unwinder (gdbarch, &i386nbsd_trapframe_unwind);
 }
 
 /* NetBSD a.out.  */
@@ -278,9 +418,24 @@ i386nbsdelf_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
   tdep->struct_return = pcc_struct_return;
 }
 
+static enum gdb_osabi
+i386nbsd_elf_osabi_sniffer (bfd *abfd)
+{
+  if (strcmp (bfd_get_target (abfd), "elf32-i386") != 0)
+    return GDB_OSABI_UNKNOWN;
+  /* disgusting hack since kernels don't have a PT_NOTE section */
+  if ((unsigned long)elf_elfheader (abfd)->e_entry != (unsigned long)0xc0100000)
+    return GDB_OSABI_UNKNOWN;
+
+  return GDB_OSABI_NETBSD_ELF;
+}
+
+
 void
 _initialize_i386nbsd_tdep (void)
 {
+  gdbarch_register_osabi_sniffer (bfd_arch_i386, bfd_target_elf_flavour,
+				  i386nbsd_elf_osabi_sniffer);
   gdbarch_register_osabi (bfd_arch_i386, 0, GDB_OSABI_NETBSD_AOUT,
 			  i386nbsdaout_init_abi);
   gdbarch_register_osabi (bfd_arch_i386, 0, GDB_OSABI_NETBSD_ELF,

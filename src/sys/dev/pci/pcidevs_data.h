@@ -1,10 +1,10 @@
-/*	$NetBSD: pcidevs_data.h,v 1.853 2006/11/26 06:07:48 tsutsui Exp $	*/
+/*	$NetBSD: pcidevs_data.h,v 1.859 2007/01/06 00:08:00 jmcneill Exp $	*/
 
 /*
  * THIS FILE AUTOMATICALLY GENERATED.  DO NOT EDIT.
  *
  * generated from:
- *	NetBSD: pcidevs,v 1.855 2006/11/26 06:06:20 tsutsui Exp
+ *	NetBSD: pcidevs,v 1.861 2007/01/06 00:07:46 jmcneill Exp
  */
 
 /*
@@ -5592,6 +5592,10 @@ static const struct pci_product pci_products[] = {
 	    "PERC 4e/Si",
 	},
 	{
+	    PCI_VENDOR_DELL, PCI_PRODUCT_DELL_PERC_5,
+	    "PERC 5",
+	},
+	{
 	    PCI_VENDOR_DELL, PCI_PRODUCT_DELL_PERC_3DI_2_SUB,
 	    "PERC 3/Di",
 	},
@@ -9352,6 +9356,14 @@ static const struct pci_product pci_products[] = {
 	    "nForce3 250 Serial ATA Controller",
 	},
 	{
+	    PCI_VENDOR_NVIDIA, PCI_PRODUCT_NVIDIA_XBOX_SMBUS,
+	    "Xbox nForce SMBus Controller",
+	},
+	{
+	    PCI_VENDOR_NVIDIA, PCI_PRODUCT_NVIDIA_XBOX_PCHB,
+	    "Xbox nForce Host-PCI bridge",
+	},
+	{
 	    PCI_VENDOR_NVIDIA, PCI_PRODUCT_NVIDIA_ALADDINTNT2,
 	    "Aladdin TNT2",
 	},
@@ -9481,7 +9493,7 @@ static const struct pci_product pci_products[] = {
 	},
 	{
 	    PCI_VENDOR_NVIDIA, PCI_PRODUCT_NVIDIA_NFORCE_LAN,
-	    "nForce Ethetnet",
+	    "nForce Ethernet",
 	},
 	{
 	    PCI_VENDOR_NVIDIA, PCI_PRODUCT_NVIDIA_NFORCE2_PCHB,
@@ -9626,6 +9638,10 @@ static const struct pci_product pci_products[] = {
 	{
 	    PCI_VENDOR_NVIDIA, PCI_PRODUCT_NVIDIA_GEFORCE_FX5800U,
 	    "GeForce FX 5800 Ultra",
+	},
+	{
+	    PCI_VENDOR_NVIDIA, PCI_PRODUCT_NVIDIA_XBOXFB,
+	    "Xbox Frame Buffer",
 	},
 	{
 	    PCI_VENDOR_NVIDIA, PCI_PRODUCT_NVIDIA_GEFORCE_FX5800,
@@ -10038,6 +10054,10 @@ static const struct pci_product pci_products[] = {
 	{
 	    PCI_VENDOR_PLX, PCI_PRODUCT_PLX_9030,
 	    "9030 Modem 4 port",
+	},
+	{
+	    PCI_VENDOR_PLX, PCI_PRODUCT_PLX_9050,
+	    "9030 Modem 4 port V92",
 	},
 	{
 	    PCI_VENDOR_PLX, PCI_PRODUCT_PLX_9054,
@@ -12548,6 +12568,10 @@ static const struct pci_product pci_products[] = {
 	    "CF32A CompactFlash Adapter",
 	},
 	{
+	    PCI_VENDOR_WORKBIT, PCI_PRODUCT_WORKBIT_NPATA32_CF32A_BUFFALO,
+	    "CF32A CF Adapter (BUFFALO)",
+	},
+	{
 	    PCI_VENDOR_WORKBIT, PCI_PRODUCT_WORKBIT_NPATA32_KME,
 	    "NPATA-32 IDE (KME)",
 	},
@@ -12604,4 +12628,4 @@ static const struct pci_product pci_products[] = {
 	    "Video Controller",
 	},
 };
-const int pci_nproducts = 2557;
+const int pci_nproducts = 2563;

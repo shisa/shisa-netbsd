@@ -1,4 +1,4 @@
-/*	$NetBSD: mount_nfs.c,v 1.53 2006/11/09 10:07:00 yamt Exp $	*/
+/*	$NetBSD: mount_nfs.c,v 1.57 2006/12/27 12:43:10 yamt Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993, 1994
@@ -42,7 +42,7 @@ __COPYRIGHT("@(#) Copyright (c) 1992, 1993, 1994\n\
 #if 0
 static char sccsid[] = "@(#)mount_nfs.c	8.11 (Berkeley) 5/4/95";
 #else
-__RCSID("$NetBSD: mount_nfs.c,v 1.53 2006/11/09 10:07:00 yamt Exp $");
+__RCSID("$NetBSD: mount_nfs.c,v 1.57 2006/12/27 12:43:10 yamt Exp $");
 #endif
 #endif /* not lint */
 
@@ -59,7 +59,6 @@ __RCSID("$NetBSD: mount_nfs.c,v 1.53 2006/11/09 10:07:00 yamt Exp $");
 #include <nfs/rpcv2.h>
 #include <nfs/nfsproto.h>
 #include <nfs/nfs.h>
-#include <nfs/nqnfs.h>
 #include <nfs/nfsmount.h>
 
 #include <arpa/inet.h>
@@ -84,7 +83,6 @@ __RCSID("$NetBSD: mount_nfs.c,v 1.53 2006/11/09 10:07:00 yamt Exp $");
 #define ALTF_CONN	0x00000002
 #define ALTF_DUMBTIMR	0x00000004
 #define ALTF_INTR	0x00000008
-#define ALTF_KERB	0x00000010
 #define ALTF_NFSV3	0x00000020
 #define ALTF_RDIRPLUS	0x00000040
 #define	ALTF_MNTUDP	0x00000080
@@ -154,8 +152,8 @@ struct nfs_args nfsdefargs = {
 	NFS_RETRANS,
 	NFS_MAXGRPS,
 	NFS_DEFRAHEAD,
-	NQ_DEFLEASE,
-	NQ_DEADTHRESH,
+	0,	/* Ignored; lease term */
+	NFS_DEFDEADTHRESH,
 	(char *)0,
 };
 
@@ -189,9 +187,8 @@ mount_nfs(int argc, char *argv[])
 	int c, retval;
 	struct nfs_args *nfsargsp;
 	struct nfs_args nfsargs;
-	struct nfsd_cargs ncd;
 	struct sockaddr_storage sa;
-	int mntflags, altflags, i, nfssvc_flag, num;
+	int mntflags, altflags, num;
 	char name[MAXPATHLEN], *p, *spec;
 	mntoptparse_t mp;
 	retrycnt = DEF_RETRY;
@@ -232,7 +229,11 @@ mount_nfs(int argc, char *argv[])
 			nfsargsp->flags &= ~NFSMNT_NOCONN;
 			break;
 		case 'D':
-			/* ignore */
+			num = strtol(optarg, &p, 10);
+			if (*p || num <= 0)
+				errx(1, "illegal -D value -- %s", optarg);
+			nfsargsp->deadthresh = num;
+			nfsargsp->flags |= NFSMNT_DEADTHRESH;
 			break;
 		case 'd':
 			nfsargsp->flags |= NFSMNT_DUMBTIMR;
@@ -467,31 +468,6 @@ retry:
 		return (0);
 	}
 		
-	if (nfsargsp->flags & NFSMNT_KERB) {
-		if ((opflags & ISBGRND) == 0) {
-			if ((i = fork()) != 0) {
-				if (i == -1)
-					err(1, "nqnfs 1");
-				exit(0);
-			}
-			(void) setsid();
-			(void) close(STDIN_FILENO);
-			(void) close(STDOUT_FILENO);
-			(void) close(STDERR_FILENO);
-			(void) chdir("/");
-		}
-		openlog("mount_nfs", LOG_PID, LOG_DAEMON);
-		nfssvc_flag = NFSSVC_MNTD;
-		ncd.ncd_dirp = name;
-		while (nfssvc(nfssvc_flag, (caddr_t)&ncd) < 0) {
-			if (errno != ENEEDAUTH) {
-				syslog(LOG_ERR, "nfssvc err %m");
-				continue;
-			}
-			nfssvc_flag =
-			    NFSSVC_MNTD | NFSSVC_GOTAUTH | NFSSVC_AUTHINFAIL;
-		}
-	}
 	exit(0);
 }
 
@@ -538,7 +514,7 @@ static void
 usage(void)
 {
 	(void)fprintf(stderr, "usage: mount_nfs %s\n%s\n%s\n%s\n%s\n",
-"[-23bcCdilpPqsTUX] [-a maxreadahead] [-D deadthresh]",
+"[-23bCcdilPpqsTUX] [-a maxreadahead] [-D deadthresh]",
 "\t[-g maxgroups] [-I readdirsize] [-L leaseterm]",
 "\t[-o options] [-R retrycnt] [-r readsize] [-t timeout]",
 "\t[-w writesize] [-x retrans]",

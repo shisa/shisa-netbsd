@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.34 2005/06/29 02:21:27 christos Exp $
+#	$NetBSD: Makefile,v 1.36 2006/12/16 12:59:16 bouyer Exp $
 #       @(#)Makefile	8.1 (Berkeley) 5/31/93
 
 # To install on versions prior to BSD 4.4 the following may have to be
@@ -35,13 +35,16 @@ SRCS=	ar_io.c ar_subs.c buf_subs.c file_subs.c ftree.c\
 .if defined(SMALLPROG)
 CPPFLAGS+=	-DSMALL -DNO_CPIO
 .else
-SRCS+=		getid.c spec.c misc.c stat_flags.c pack_dev.c cpio.c
+SRCS+=		getid.c spec.c misc.c pack_dev.c cpio.c
 CPPFLAGS+=	-I${NETBSDSRCDIR}/usr.sbin/mtree \
-		-I${NETBSDSRCDIR}/sbin/mknod \
-		-I${NETBSDSRCDIR}/bin/ls
+		-I${NETBSDSRCDIR}/sbin/mknod
 .PATH:		${NETBSDSRCDIR}/usr.sbin/mtree \
-		${NETBSDSRCDIR}/sbin/mknod \
-		${NETBSDSRCDIR}/bin/ls
+		${NETBSDSRCDIR}/sbin/mknod
+
+.if (${HOSTPROG:U} == "")
+DPADD+= ${LIBUTIL}
+LDADD+= -lutil
+.endif
 .endif
 
 MAN=	pax.1 tar.1 cpio.1

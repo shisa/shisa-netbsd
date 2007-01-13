@@ -1,4 +1,4 @@
-/*	$NetBSD: uniq.c,v 1.11 2003/08/07 11:16:56 agc Exp $	*/
+/*	$NetBSD: uniq.c,v 1.13 2007/01/06 02:18:24 christos Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993
@@ -42,7 +42,7 @@ __COPYRIGHT("@(#) Copyright (c) 1989, 1993\n\
 #if 0
 static char sccsid[] = "@(#)uniq.c	8.3 (Berkeley) 5/4/95";
 #endif
-__RCSID("$NetBSD: uniq.c,v 1.11 2003/08/07 11:16:56 agc Exp $");
+__RCSID("$NetBSD: uniq.c,v 1.13 2007/01/06 02:18:24 christos Exp $");
 #endif /* not lint */
 
 #include <err.h>
@@ -53,28 +53,25 @@ __RCSID("$NetBSD: uniq.c,v 1.11 2003/08/07 11:16:56 agc Exp $");
 #include <string.h>
 #include <unistd.h>
 
-#define	MAXLINELEN	(8 * 1024)
+static int cflag, dflag, uflag;
+static int numchars, numfields, repeats;
 
-int cflag, dflag, uflag;
-int numchars, numfields, repeats;
-
-FILE	*file __P((char *, char *));
-int	 main __P((int, char **));
-void	 show __P((FILE *, char *));
-char	*skip __P((char *));
-void	 obsolete __P((char *[]));
-void	 usage __P((void));
+static FILE *file(const char *, const char *);
+static void show(FILE *, const char *);
+static const char *skip(const char *);
+static void obsolete(char *[]);
+static void usage(void) __attribute__((__noreturn__));
 
 int
-main (argc, argv)
-	int argc;
-	char *argv[];
+main (int argc, char *argv[])
 {
-	char *t1, *t2;
+	const char *t1, *t2;
 	FILE *ifp, *ofp;
 	int ch;
 	char *prevline, *thisline, *p;
+	size_t prevlinesize, thislinesize, psize;
 
+	setprogname(argv[0]);
 	ifp = ofp = NULL;
 	obsolete(argv);
 	while ((ch = getopt(argc, argv, "-cdf:s:u")) != -1)
@@ -134,15 +131,27 @@ done:	argc -= optind;
 		usage();
 	}
 
-	prevline = malloc(MAXLINELEN);
-	thisline = malloc(MAXLINELEN);
-	if (prevline == NULL || thisline == NULL)
+	if ((p = fgetln(ifp, &psize)) == NULL)
+		return 0;
+	prevlinesize = psize;
+	if ((prevline = malloc(prevlinesize + 1)) == NULL)
+		err(1, "malloc");
+	(void)memcpy(prevline, p, prevlinesize);
+	prevline[prevlinesize] = '\0';
+
+	thislinesize = psize;
+	if ((thisline = malloc(thislinesize + 1)) == NULL)
 		err(1, "malloc");
 
-	if (fgets(prevline, MAXLINELEN, ifp) == NULL)
-		exit(0);
+	while ((p = fgetln(ifp, &psize)) != NULL) {
+		if (psize > thislinesize) {
+			if ((thisline = realloc(thisline, psize + 1)) == NULL)
+				err(1, "realloc");
+			thislinesize = psize;
+		}
+		(void)memcpy(thisline, p, psize);
+		thisline[psize] = '\0';
 
-	while (fgets(thisline, MAXLINELEN, ifp)) {
 		/* If requested get the chosen fields + character offsets. */
 		if (numfields || numchars) {
 			t1 = skip(thisline);
@@ -154,16 +163,24 @@ done:	argc -= optind;
 
 		/* If different, print; set previous to new value. */
 		if (strcmp(t1, t2)) {
+			char *t;
+			size_t ts;
+
 			show(ofp, prevline);
-			t1 = prevline;
+			t = prevline;
 			prevline = thisline;
-			thisline = t1;
+			thisline = t;
+			ts = prevlinesize;
+			prevlinesize = thislinesize;
+			thislinesize = ts;
 			repeats = 0;
 		} else
 			++repeats;
 	}
 	show(ofp, prevline);
-	exit(0);
+	free(prevline);
+	free(thisline);
+	return 0;
 }
 
 /*
@@ -171,10 +188,8 @@ done:	argc -= optind;
  *	Output a line depending on the flags and number of repetitions
  *	of the line.
  */
-void
-show(ofp, str)
-	FILE *ofp;
-	char *str;
+static void
+show(FILE *ofp, const char *str)
 {
 
 	if (cflag && *str)
@@ -183,9 +198,8 @@ show(ofp, str)
 		(void)fprintf(ofp, "%s", str);
 }
 
-char *
-skip(str)
-	char *str;
+static const char *
+skip(const char *str)
 {
 	int infield, nchars, nfields;
 
@@ -197,13 +211,13 @@ skip(str)
 			}
 		} else if (!infield)
 			infield = 1;
-	for (nchars = numchars; nchars-- && *str; ++str);
-	return(str);
+	for (nchars = numchars; nchars-- && *str; ++str)
+		continue;
+	return str;
 }
 
-FILE *
-file(name, mode)
-	char *name, *mode;
+static FILE *
+file(const char *name, const char *mode)
 {
 	FILE *fp;
 
@@ -212,9 +226,8 @@ file(name, mode)
 	return(fp);
 }
 
-void
-obsolete(argv)
-	char *argv[];
+static void
+obsolete(char *argv[])
 {
 	char *ap, *p, *start;
 
@@ -231,7 +244,7 @@ obsolete(argv)
 		 * Digit signifies an old-style option.  Malloc space for dash,
 		 * new option and argument.
 		 */
-		asprintf(&p, "-%c%s", ap[0] == '+' ? 's' : 'f', ap + 1);
+		(void)asprintf(&p, "-%c%s", ap[0] == '+' ? 's' : 'f', ap + 1);
 		if (!p)
 			err(1, "malloc");
 		start = p;
@@ -239,10 +252,10 @@ obsolete(argv)
 	}
 }
 
-void
-usage()
+static void
+usage(void)
 {
-	(void)fprintf(stderr,
-	    "usage: uniq [-c | -du] [-f fields] [-s chars] [input [output]]\n");
+	(void)fprintf(stderr, "Usage: %s [-c | -du] [-f fields] [-s chars] "
+	    "[input [output]]\n", getprogname());
 	exit(1);
 }

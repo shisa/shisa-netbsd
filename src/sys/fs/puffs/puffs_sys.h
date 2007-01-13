@@ -1,4 +1,4 @@
-/*	$NetBSD: puffs_sys.h,v 1.9 2006/11/18 08:18:24 pooka Exp $	*/
+/*	$NetBSD: puffs_sys.h,v 1.17 2007/01/02 15:51:22 pooka Exp $	*/
 
 /*
  * Copyright (c) 2005, 2006  Antti Kantee.  All Rights Reserved.
@@ -54,30 +54,25 @@ extern int (**puffs_fifoop_p)(void *);
 extern const struct vnodeopv_desc puffs_vnodeop_opv_desc;
 extern const struct vnodeopv_desc puffs_specop_opv_desc;
 extern const struct vnodeopv_desc puffs_fifoop_opv_desc;
+extern const struct vnodeopv_desc puffs_msgop_opv_desc;
 
 extern struct pool puffs_pnpool;
+
+#define PUFFS_NAMEPREFIX "puffs:"
 
 /*
  * While a request is going to userspace, park the caller within the
  * kernel.  This is the kernel counterpart of "struct puffs_req".
  */
 struct puffs_park {
-	struct puffs_req park_preq;	/* the relevant preq		*/
+	struct puffs_req	*park_preq;	/* req followed by buf	*/
+	size_t			park_copylen;	/* userspace copylength	*/
 
-	void		*park_kernbuf;	/* kernel buffer address	*/
-	size_t		park_buflen;	/* buffer length		*/
-	size_t		park_copylen;	/* length to copy to userspace  */
-
-	uint32_t 	park_flags;
+	size_t 			park_maxlen;	/* max size, only for "adj" */
+						/* ^ XXX: overloaded */
 
 	TAILQ_ENTRY(puffs_park) park_entries;
 };
-#define park_id		park_preq.preq_id
-#define park_opclass	park_preq.preq_opclass
-#define park_optype	park_preq.preq_optype
-#define park_cookie	park_preq.preq_cookie
-#define park_rv		park_preq.preq_rv
-
 
 #define PUFFS_SIZEOPREQ_UIO_IN 1
 #define PUFFS_SIZEOPREQ_UIO_OUT 2
@@ -101,7 +96,14 @@ struct puffs_sizepark {
 	TAILQ_ENTRY(puffs_sizepark) pkso_entries;
 };
 
+#ifdef DEBUG
+extern int puffsdebug; /* puffs_subr.c */
+#define DPRINTF(x) if (puffsdebug > 0) printf x
+#define DPRINTF_VERBOSE(x) if (puffsdebug > 1) printf x
+#else
 #define DPRINTF(x)
+#define DPRINTF_VERBOSE(x)
+#endif
 
 #define MPTOPUFFSMP(mp) ((struct puffs_mount *)((mp)->mnt_data))
 #define PMPTOMP(pmp) (pmp->pmp_mp)
@@ -111,11 +113,18 @@ struct puffs_sizepark {
 #define FPTOPMP(fp) (((struct puffs_instance *)fp->f_data)->pi_pmp)
 #define FPTOPI(fp) ((struct puffs_instance *)fp->f_data)
 
+#define EXISTSOP(pmp, op) \
+ (((pmp)->pmp_flags&PUFFS_KFLAG_ALLOPS) || ((pmp)->pmp_vnopmask[PUFFS_VN_##op]))
+
+#define PUFFS_DOCACHE(pmp)	(((pmp)->pmp_flags & PUFFS_KFLAG_NOCACHE) == 0)
+
 TAILQ_HEAD(puffs_wq, puffs_park);
 struct puffs_mount {
 	struct simplelock		pmp_lock;
 
 	struct puffs_args		pmp_args;
+#define pmp_flags pmp_args.pa_flags
+#define pmp_vnopmask pmp_args.pa_vnopmask
 
 	struct puffs_wq			pmp_req_touser;
 	size_t				pmp_req_touser_waiters;
@@ -133,13 +142,13 @@ struct puffs_mount {
 
 	unsigned int			pmp_nextreq;
 	uint8_t				pmp_status;
+	uint8_t				pmp_unmounting;
 };
-#define pmp_flags pmp_args.pa_flags
 
 #define PUFFSTAT_BEFOREINIT	0
 #define PUFFSTAT_MOUNTING	1
 #define PUFFSTAT_RUNNING	2
-#define PUFFSTAT_DYING		3
+#define PUFFSTAT_DYING		3 /* Do you want your possessions identified? */
 
 #define PNODE_INACTIVE	0x01
 #define PNODE_LOCKED	0x02
@@ -171,7 +180,7 @@ int	puffs_newnode(struct mount *, struct vnode *, struct vnode **,
 		      void *, struct componentname *, enum vtype, dev_t);
 void	puffs_putvnode(struct vnode *);
 struct vnode *puffs_pnode2vnode(struct puffs_mount *, void *);
-void	puffs_makecn(struct puffs_cn *, const struct componentname *);
+void	puffs_makecn(struct puffs_kcn *, const struct componentname *);
 void	puffs_credcvt(struct puffs_cred *, kauth_cred_t);
 pid_t	puffs_lwp2pid(struct lwp *);
 
@@ -187,6 +196,10 @@ void	puffs_nukebypmp(struct puffs_mount *);
 
 uint64_t	puffs_getreqid(struct puffs_mount *);
 void		puffs_userdead(struct puffs_mount *);
+
+/* get/put called by ioctl handler */
+int	puffs_getop(struct puffs_mount *, struct puffs_reqh_get *, int);
+int	puffs_putop(struct puffs_mount *, struct puffs_reqh_put *);
 
 extern int (**puffs_vnodeop_p)(void *);
 

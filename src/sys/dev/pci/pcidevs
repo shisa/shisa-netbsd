@@ -1,4 +1,4 @@
-$NetBSD: pcidevs,v 1.855 2006/11/26 06:06:20 tsutsui Exp $
+$NetBSD: pcidevs,v 1.861 2007/01/06 00:07:46 jmcneill Exp $
 
 /*
  * Copyright (c) 1995, 1996 Christopher G. Demetriou
@@ -1589,6 +1589,7 @@ product DELL PERC_3DI_3		0x000a	PERC 3/Di
 product DELL PERC_4DI		0x000e	PERC 4/Di
 product DELL PERC_4DI_2		0x000f	PERC 4/Di
 product DELL PERC_4ESI		0x0013	PERC 4e/Si
+product DELL PERC_5		0x0015	PERC 5
 product DELL PERC_3DI_2_SUB	0x00cf	PERC 3/Di
 product DELL PERC_3SI_2_SUB	0x00d0	PERC 3/Si
 product DELL PERC_3DI_SUB2	0x00d1	PERC 3/Di
@@ -2714,6 +2715,8 @@ product NVIDIA	NFORCE3_250_EHCI	0x00e8	nForce3 250 USB2 Host Controller
 product NVIDIA	NFORCE3_250_MCPT_AC	0x00ea	nForce3 250 MCP-T AC-97
 product NVIDIA	NFORCE3_250_PPB		0x00ed	nForce3 250 PCI-PCI bridge
 product NVIDIA	NFORCE3_250_SATA2	0x00ee	nForce3 250 Serial ATA Controller
+product NVIDIA	XBOX_SMBUS	0x01b4	Xbox nForce SMBus Controller
+product NVIDIA	XBOX_PCHB	0x02a5	Xbox nForce Host-PCI bridge
 product NVIDIA	ALADDINTNT2	0x00a0	Aladdin TNT2
 product NVIDIA	QUADRO4_280NVS2	0x00fd	Quadro4 280 NVS
 product NVIDIA	QUADROFX3400SLI	0x00fd	Quadro FX 3400 SLI
@@ -2746,7 +2749,7 @@ product NVIDIA	GEFORCE2_IGP	0x01a0	GeForce2 Integrated GPU
 product NVIDIA	NFORCE_MCP_AC	0x01b1	nForce MCP AC-97
 product NVIDIA	NFORCE_ATA100	0x01bc	nForce ATA100 IDE
 product NVIDIA	NFORCE_USB	0x01c2	nForce USB
-product NVIDIA	NFORCE_LAN	0x01c3	nForce Ethetnet
+product NVIDIA	NFORCE_LAN	0x01c3	nForce Ethernet
 product NVIDIA	NFORCE2_PCHB	0x01e0	nForce2 Host-PCI Bridge
 product NVIDIA	NFORCE2_PPB2	0x01e8	nForce2 PCI-PCI Bridge
 product NVIDIA	NFORCE2_MEM1	0x01eb	nForce2 Memory Controller
@@ -2783,6 +2786,7 @@ product NVIDIA	GF4_TI_4200_GO	0x0286	GeForce4 Ti 4200 Go AGP 8x
 product NVIDIA	QUADRO4_980_XGL	0x0288	Quadro4 980 XGL
 product NVIDIA	QUADRO4_780_XGL	0x0289	Quadro4 780 XGL
 product NVIDIA	GEFORCE_FX5800U	0x0301	GeForce FX 5800 Ultra
+product NVIDIA	XBOXFB		0x02a0	Xbox Frame Buffer
 product NVIDIA	GEFORCE_FX5800	0x0302	GeForce FX 5800
 product NVIDIA	QUADRO_FX_2000	0x0308	Quadro FX 2000
 product NVIDIA	QUADRO_FX_1000	0x0309	Quadro FX 1000
@@ -2906,6 +2910,7 @@ product PLANEX FNW_3800_TX	0xab07	FNW-3800-TX 10/100 Ethernet
 
 /* PLX Technology products */
 product PLX 9030	0x9030	9030 Modem 4 port
+product PLX 9050	0x9030	9030 Modem 4 port V92
 product PLX 9054	0x9054	9054 I/O Accelerator
 product PLX 9060ES	0x906e	9060ES PCI bus controller
 product PLX 9656	0x9656	9656 I/O Accelerator
@@ -3663,6 +3668,7 @@ product WORKBIT NJSC32UDE_LOGITEC	0xf012	NinjaSCSI-32UDE SCSI (LOGITEC)
 product WORKBIT NJSC32UDE_LOGITEC2	0xf013	NinjaSCSI-32UDE SCSI (LOGITEC2)
 product WORKBIT NJSC32UDE_BUFFALO	0xf015	NinjaSCSI-32UDE SCSI (BUFFALO)
 product WORKBIT NPATA32_CF32A		0xf021	CF32A CompactFlash Adapter
+product WORKBIT NPATA32_CF32A_BUFFALO	0xf024	CF32A CF Adapter (BUFFALO)
 product WORKBIT NPATA32_KME		0xf02c	NPATA-32 IDE (KME)
 
 /* Xircom products */

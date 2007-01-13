@@ -1,4 +1,4 @@
-/*	$NetBSD: targ.c,v 1.45 2006/11/17 22:07:39 dsl Exp $	*/
+/*	$NetBSD: targ.c,v 1.49 2006/12/21 20:05:37 dsl Exp $	*/
 
 /*
  * Copyright (c) 1988, 1989, 1990, 1993
@@ -69,14 +69,14 @@
  */
 
 #ifndef MAKE_NATIVE
-static char rcsid[] = "$NetBSD: targ.c,v 1.45 2006/11/17 22:07:39 dsl Exp $";
+static char rcsid[] = "$NetBSD: targ.c,v 1.49 2006/12/21 20:05:37 dsl Exp $";
 #else
 #include <sys/cdefs.h>
 #ifndef lint
 #if 0
 static char sccsid[] = "@(#)targ.c	8.2 (Berkeley) 3/19/94";
 #else
-__RCSID("$NetBSD: targ.c,v 1.45 2006/11/17 22:07:39 dsl Exp $");
+__RCSID("$NetBSD: targ.c,v 1.49 2006/12/21 20:05:37 dsl Exp $");
 #endif
 #endif /* not lint */
 #endif
@@ -248,6 +248,7 @@ Targ_NewGN(const char *name)
     gn->centurion =    	NULL;
     gn->made = 	    	UNMADE;
     gn->flags = 	0;
+    gn->checked = 0;
     gn->mtime = gn->cmtime = 0;
     gn->iParents =  	Lst_Init(FALSE);
     gn->cohorts =   	Lst_Init(FALSE);
@@ -294,8 +295,7 @@ TargFreeGN(ClientData gnp)
 	free(gn->uname);
     if (gn->path)
 	free(gn->path);
-    if (gn->fname)
-	free(gn->fname);
+    /* gn->fname points to name allocated when file was opened, don't free */
 
     Lst_Destroy(gn->iParents, NOFREE);
     Lst_Destroy(gn->cohorts, NOFREE);
@@ -509,7 +509,7 @@ Targ_SetMain(GNode *gn)
 }
 
 static int
-TargPrintName(ClientData gnp, ClientData pflags)
+TargPrintName(ClientData gnp, ClientData pflags __unused)
 {
     GNode *gn = (GNode *)gnp;
 
@@ -610,7 +610,6 @@ made_name(enum enum_made made)
     case UPTODATE:   return "up-to-date";
     case ERROR:      return "error when made";
     case ABORTED:    return "aborted";
-    case ENDCYCLE:   return "end cycle";
     default:         return "unknown enum_made value";
     }
 }
@@ -715,7 +714,7 @@ Targ_PrintNode(ClientData gnp, ClientData passp)
  *-----------------------------------------------------------------------
  */
 static int
-TargPrintOnlySrc(ClientData gnp, ClientData dummy)
+TargPrintOnlySrc(ClientData gnp, ClientData dummy __unused)
 {
     GNode   	  *gn = (GNode *)gnp;
     if (!OP_NOP(gn->type))

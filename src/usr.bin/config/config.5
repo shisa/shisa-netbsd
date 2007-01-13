@@ -1,6 +1,6 @@
-.\" $NetBSD: config.5,v 1.6 2006/11/24 19:47:00 christos Exp $
+.\" $NetBSD: config.5,v 1.10 2007/01/09 13:03:47 cube Exp $
 .\"
-.\"  Copyright (c) 2006 The NetBSD Foundation.
+.\"  Copyright (c) 2006, 2007 The NetBSD Foundation.
 .\"  All rights reserved.
 .\"
 .\"  This code is derived from software contributed to the NetBSD Foundation
@@ -30,7 +30,7 @@
 .\"  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 .\"  POSSIBILITY OF SUCH DAMAGE.
 .\"
-.Dd September 4, 2006
+.Dd January 9, 2007
 .Dt CONFIG 5
 .Os
 .Sh NAME
@@ -67,7 +67,9 @@ files spread all around the kernel source tree, the main one being
 .Pp
 Thus, the kernel configuration file contains two parts:
 the description of the compilation options, and the selection of those options.
-However, a few statements belong to any of the two sections.
+However, it begins with a small preamble that controls a couple of options of
+.Xr config 1 ,
+and a few statements belong to any of the two sections.
 .Pp
 The user controls the options selection part, which is located in a file
 commonly referenced as the
@@ -76,6 +78,10 @@ or simply the
 .Em kernel configuration file .
 The developer is responsible for describing the options in the relevant files
 from the kernel source tree.
+.Pp
+Statements are separated by new-line characters.
+However, new-line characters can appear in the middle of a given statement,
+with the value of a space character.
 .Ss OBJECTS AND NAMES
 .Xr config 1
 is a rather complicated piece of software that tries to comply with any
@@ -265,13 +271,30 @@ The
 .Ar path
 argument is either absolute or relative to the current defined prefix, which
 defaults to the top of ther kernel source tree.
-.It Ic package Ar path
-Simpler version of:
-.Bd -literal -offset indent
-prefix PATH
-include FILE
-prefix
-.Ed
+.El
+.Ss PREAMBLE
+In addition to
+.Ic include , cinclude ,
+and
+.Ic prefix ,
+the preamble may contain the following optional statements:
+.Bl -ohang
+.It Ic build Ar path
+Defines the build directory for the compilation of the kernel.
+It replaces the default of
+.Pa ../compile/\*[Lt]config-file\*[Gt]
+and is superseded by the
+.Fl b
+parameter of
+.Xr config 1 .
+.It Ic source Ar path
+Defines the directory in which the source of the kernel lives.
+It replaces the default of
+.Pa ../../../..
+and is superseded by the
+.Fl s
+parameter of
+.Xr config 1 .
 .El
 .Ss OPTIONS DESCRIPTION
 The user will not usually have to use descriptive statements, as they are meant
@@ -308,14 +331,23 @@ Several options can be combined in one header file, for convenience.
 The header file is created in the compilation directory, making them directly
 accessible by source files.
 .It Ic defparam Oo Ar file Oc Ar option Oo = Ar value Oc \
-    Oo Ar option Oo Ar ... Oc Oc Op : Ar dependencies
+    Oo := Ar lint-value Oc Oo Ar option Oo Ar ... Oc Oc Op : Ar dependencies
 Behaves like
 .Ic defflag ,
 except the defined option must have a value.
 Such options are not typed:
 they can have either a numeric or a string value.
-If a value is specified, it is treated as a default, and the option is
+If a
+.Ar value
+is specified, it is treated as a default, and the option is
 always defined in the corresponding header file.
+If a
+.Ar lint-value
+is specified,
+.Xr config 1
+will use it as a value when generating a lint configuration with
+.Fl L ,
+and ignore it in all other cases.
 .It Ic deffs Oo Ar file Oc Ar name Op Ar name Op Ar ...
 Defines a file-system name.
 It is no more than a regular option, as defined by
@@ -437,12 +469,28 @@ It is usually used for
 whose number can be specified by the user in the
 .Ic pseudo-device
 statement.
+Countable objects are devices and pseudo-devices.
+For the former, the count is the number of declared instances.
+For the latter, it is the number specified by the user, defaulting to 1.
 The
 .Ic needs-flag
 options requires that a flag indicating the selection of an attribute to
 be created, but the precise number isn't needed.
 This is useful for source files that only partly depend on the attribute,
 and thus need to add pre-processor statements for it.
+.Pp
+.Ic needs-count
+and
+.Ic needs-flag
+both produce a header file for each of the considered attributes.
+The name of that file is
+.Pa \*[Lt]attribute\*[Gt].h .
+It contains one pre-processor definition of
+.Dv NATTRIBUTE
+set to 0 if the attribute was not selected by the user, or to the number of
+instances of the device in the
+.Ic needs-count
+case, or to 1 in all the other cases.
 .Pp
 The
 .Ar rule
@@ -505,6 +553,13 @@ for each defined sub-architecture
 .It
 .Pa arch/${MACHINE}/conf/files.${MACHINE}
 .El
+.It Ic package Ar path
+Simpler version of:
+.Bd -literal -offset indent
+prefix PATH
+include FILE
+prefix
+.Ed
 .It Ic ident Ar string
 Defines the indentification string of the kernel.
 This statement is optional, and the name of the main configuration file will be

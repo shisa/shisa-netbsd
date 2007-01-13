@@ -1,4 +1,4 @@
-/* $NetBSD: veriexecgen.c,v 1.8 2006/10/30 20:22:54 christos Exp $ */
+/* $NetBSD: veriexecgen.c,v 1.13 2007/01/09 13:53:31 mjf Exp $ */
 
 /*-
  * Copyright (c) 2006 The NetBSD Foundation, Inc.
@@ -15,11 +15,7 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. All advertising materials mentioning features or use of this software
- *    must display the following acknowledgement:
- *        This product includes software developed by the NetBSD
- *        Foundation, Inc. and its contributors.
- * 4. Neither the name of The NetBSD Foundation nor the names of its
+ * 3. Neither the name of The NetBSD Foundation nor the names of its
  *    contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
@@ -35,6 +31,19 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+#if HAVE_NBTOOL_CONFIG_H
+#include "nbtool_config.h"
+#endif
+
+#include <sys/cdefs.h>
+
+#ifndef lint
+#ifdef __RCSID
+__RCSID("$NetBSD: veriexecgen.c,v 1.13 2007/01/09 13:53:31 mjf Exp $");
+#endif
+#endif /* not lint */
+
+#include <sys/types.h>
 
 #include <sys/param.h>
 #include <sys/types.h>
@@ -66,18 +75,35 @@
 			   "/lib", "/usr/lib", "/libexec", "/usr/libexec", \
 			   NULL }
 
+/* this struct defines a hash algorithm */
+typedef struct hash_t {
+	const char	*hashname;	/* algorithm name */
+	char		*(*filefunc)(const char *, char *); /* function */
+} hash_t;
+
+/* this struct encapsulates various diverse options and arguments */
+typedef struct veriexecgen_t {
+	int	 all_files;	/* scan also for non-executable files */
+	int	 append_output;	/* append output to existing sigs file */
+	char	*dbfile;	/* name of signatures database file */
+	int	 exit_on_error;	/* exit if we can't create a hash */
+	char	*prefix;	/* any prefix to be discarded on output */
+	int	 recursive_scan;/* perform scan for files recursively */
+	int	 scan_system_dirs;	/* just scan system directories */
+	int	 verbose;	/* verbosity level */
+} veriexecgen_t;
+
+/* this struct describes a directory entry to generate a hash for */
 struct fentry {
-	char filename[MAXPATHLEN];
-	char *hash_val;
-	int flags;
-	TAILQ_ENTRY(fentry) f;
+	char filename[MAXPATHLEN];	/* name of entry */
+	char *hash_val;			/* its associated hash value */
+	int flags;			/* any associated flags */
+	TAILQ_ENTRY(fentry) f;		/* its place in the queue */
 };
 TAILQ_HEAD(, fentry) fehead;
 
-struct hash {
-	const char     *hashname;
-	char           *(*filefunc) (const char *, char *);
-} hashes[] = {
+/* define the possible hash algorithms */
+static hash_t	 hashes[] = {
 	{ "MD5", MD5File },
 	{ "SHA1", SHA1File },
 	{ "SHA256", SHA256_File },
@@ -87,18 +113,34 @@ struct hash {
 	{ NULL, NULL },
 };
 
-int Aflag, aflag, Dflag, Fflag, rflag, Sflag, vflag;
+static int Fflag;
 
+static int	make_immutable;	/* set immutable flag on signatures file */
+
+/* warn about a problem - exit if exit_on_error is set */
+static void
+gripe(veriexecgen_t *vp, const char *fmt, const char *filename)
+{
+	warn(fmt, filename);
+	if (vp->exit_on_error) {
+		/* error out on problematic files */
+		exit(EXIT_FAILURE);
+	}
+}
+
+/* print usage message */
 static void
 usage(void)
 {
 	(void)fprintf(stderr,
-	    "usage: %s [-AaDrSv] [-d dir] [-o fingerprintdb]"
-	    " [-t algorithm]\n", getprogname());
+	    "usage:  %s [-AaDrSvW] [-d dir] [-o fingerprintdb] [-p prefix]\n"
+	    "\t\t    [-t algorithm]\n"
+	    "\t%s [-h]\n", getprogname(), getprogname());
 }
 
+/* tell people what we're doing - scan dirs, fingerprint etc */
 static void
-banner(struct hash *hash_type, char **search_path)
+banner(veriexecgen_t *vp, hash_t *hash_type, char **search_path)
 {
 	int j;
 
@@ -108,15 +150,16 @@ banner(struct hash *hash_type, char **search_path)
 		(void)printf("%s ", search_path[j]);
 
 	(void)printf("(%s) (%s) using %s\n",
-	    aflag ? "all files" : "executables only",
-	    rflag ? "recursive" : "non-recursive",
+	    vp->all_files ? "all files" : "executables only",
+	    vp->recursive_scan ? "recursive" : "non-recursive",
 	    hash_type->hashname);
 }
 
-static struct hash *
+/* find a hash algorithm, given its name */
+static hash_t *
 find_hash(char *hash_type)
 {
-	struct hash *hash;
+	hash_t *hash;
 
 	for (hash = hashes; hash->hashname != NULL; hash++)
 		if (strcasecmp(hash_type, hash->hashname) == 0)
@@ -124,12 +167,14 @@ find_hash(char *hash_type)
 	return NULL;
 }
 
+/* perform the hashing operation on `filename' */
 static char *
-do_hash(char *filename, struct hash * h)
+do_hash(char *filename, hash_t * h)
 {
 	return h->filefunc(filename, NULL);
 }
 
+/* return flags for `path' */
 static int
 figure_flags(char *path, mode_t mode)
 {
@@ -137,15 +182,13 @@ figure_flags(char *path, mode_t mode)
 	if (Fflag) {
 		/* Try to figure out right flag(s). */
 		return VERIEXEC_DIRECT;
-}
+	}
 #endif /* notyet */
 
-	if (!IS_EXEC(mode))
-		return VERIEXEC_FILE;
-	else
-		return 0;
+	return (IS_EXEC(mode)) ? 0 : VERIEXEC_FILE;
 }
 
+/* check to see that we don't have a duplicate entry */
 static int
 check_dup(char *filename)
 {
@@ -160,47 +203,58 @@ check_dup(char *filename)
 	return 0;
 }
 
+/* add a new entry to the list for `file' */
 static void
-add_new_entry(FTSENT *file, struct hash *hash)
+add_new_entry(veriexecgen_t *vp, FTSENT *file, hash_t *hash)
 {
 	struct fentry *e;
 	struct stat sb;
 
 	if (file->fts_info == FTS_SL) {
-		if (stat(file->fts_path, &sb) == -1)
-			err(1, "Cannot stat symlink");
+		/* we have a symbolic link */
+		if (stat(file->fts_path, &sb) == -1) {
+			gripe(vp, "Cannot stat symlink `%s'", file->fts_path);
+			return;
+		}
 	} else
 		sb = *file->fts_statp;
 
-	if (!aflag && !Dflag && !IS_EXEC(sb.st_mode))
+	if (!vp->all_files && !vp->scan_system_dirs && !IS_EXEC(sb.st_mode))
 		return;
 
 	e = ecalloc(1UL, sizeof(*e));
 
-	if (realpath(file->fts_accpath, e->filename) == NULL)
-		err(1, "Cannot find absolute path");
+	if (realpath(file->fts_accpath, e->filename) == NULL) {
+		gripe(vp, "Cannot find absolute path `%s'", file->fts_accpath);
+		return;
+	}
 	if (check_dup(e->filename)) {
 		free(e);
 		return;
 	}
-	if ((e->hash_val = do_hash(e->filename, hash)) == NULL)
-		errx(1, "Cannot calculate hash");
+	if ((e->hash_val = do_hash(e->filename, hash)) == NULL) {
+		gripe(vp, "Cannot calculate hash `%s'", e->filename);
+		return;
+	}
 	e->flags = figure_flags(e->filename, sb.st_mode);
 
 	TAILQ_INSERT_TAIL(&fehead, e, f);
 }
 
+/* walk through a directory */
 static void
-walk_dir(char **search_path, struct hash *hash)
+walk_dir(veriexecgen_t *vp, char **search_path, hash_t *hash)
 {
 	FTS *fh;
 	FTSENT *file;
 
-	if ((fh = fts_open(search_path, FTS_PHYSICAL, NULL)) == NULL)
-		err(1, "fts_open");
+	if ((fh = fts_open(search_path, FTS_PHYSICAL, NULL)) == NULL) {
+		gripe(vp, "fts_open `%s'", (const char *)search_path);
+		return;
+	}
 
 	while ((file = fts_read(fh)) != NULL) {
-		if (!rflag && file->fts_level > 1) {
+		if (!vp->recursive_scan && file->fts_level > 1) {
 			fts_set(fh, file, FTS_SKIP);
 			continue;
 		}
@@ -215,27 +269,28 @@ walk_dir(char **search_path, struct hash *hash)
 		}
 
 		if (file->fts_errno) {
-			errx(1, "%s: %s", file->fts_path,
-			    strerror(file->fts_errno));
+			if (vp->exit_on_error) {
+				errx(EXIT_FAILURE, "%s: %s", file->fts_path,
+				    strerror(file->fts_errno));
+			}
+		} else {
+			add_new_entry(vp, file, hash);
 		}
-
-		add_new_entry(file, hash);
 	}
 
 	fts_close(fh);
 }
 
+/* return a string representation of the flags */
 static char *
 flags2str(int flags)
 {
-	if (flags != 0)
-		return "FILE, INDIRECT";
-	else
-		return "";
+	return (flags == 0) ? "" : "FILE, INDIRECT";
 }
 
+/* store the list in the signatures file */
 static void
-store_entries(char *dbfile, struct hash *hash)
+store_entries(veriexecgen_t *vp, hash_t *hash)
 {
 	FILE *fp;
 	int move = 1;
@@ -243,73 +298,82 @@ store_entries(char *dbfile, struct hash *hash)
 	time_t ct;
 	struct stat sb;
 	struct fentry  *e;
+	int	prefixc;
 
-	if (stat(dbfile, &sb) != 0) {
+	if (stat(vp->dbfile, &sb) != 0) {
 		if (errno == ENOENT)
 			move = 0;
 		else
-			err(1, "could not stat %s", dbfile);
+			err(EXIT_FAILURE, "could not stat %s", vp->dbfile);
 	}
-	if (move && !Aflag) {
-		if (vflag)
+	if (move && !vp->append_output) {
+		if (vp->verbose)
 			(void)printf("\nBacking up existing fingerprint file "
-			    "to \"%s.old\"\n\n", dbfile);
+			    "to \"%s.old\"\n\n", vp->dbfile);
 
-		if (snprintf(old_dbfile, MAXPATHLEN, "%s.old", dbfile) <
-		    strlen(dbfile) + 4) {
-			err(1, "%s", old_dbfile);
+		if (snprintf(old_dbfile, MAXPATHLEN, "%s.old", vp->dbfile) <
+		    strlen(vp->dbfile) + 4) {
+			err(EXIT_FAILURE, "%s", old_dbfile);
 		}
-		if (rename(dbfile, old_dbfile) == -1)
-			err(1, "could not rename file");
+		if (rename(vp->dbfile, old_dbfile) == -1)
+			err(EXIT_FAILURE, "could not rename file");
 	}
 
-	fp = efopen(dbfile, Aflag ? "a" : "w+");
+	prefixc = (vp->prefix == NULL) ? -1 : strlen(vp->prefix);
+
+	fp = efopen(vp->dbfile, vp->append_output ? "a" : "w+");
 
 	time(&ct);
 	(void)fprintf(fp, "# Generated by %s, %.24s\n",
 		getlogin(), ctime(&ct));
 
 	TAILQ_FOREACH(e, &fehead, f) {
-		if (vflag)
+		if (vp->verbose)
 			(void)printf("Adding %s.\n", e->filename);
 
-		(void)fprintf(fp, "%s %s %s %s\n", e->filename,
+
+		(void)fprintf(fp, "%s %s %s %s\n",
+			(prefixc < 0) ? e->filename : &e->filename[prefixc],
 			hash->hashname, e->hash_val, flags2str(e->flags));
 	}
 
 	(void)fclose(fp);
 
-	if (!vflag)
-		return;
-
-	(void)printf("\n\n"
-	   "#############################################################\n"
-	   "  PLEASE VERIFY CONTENTS OF %s AND FINE-TUNE THE\n"
-	   "  FLAGS WHERE APPROPRIATE AFTER READING veriexecctl(8)\n"
-	   "#############################################################\n",
-	   dbfile);
+	if (vp->verbose) {
+		(void)printf("\n\n"
+"#############################################################\n"
+"  PLEASE VERIFY CONTENTS OF %s AND FINE-TUNE THE\n"
+"  FLAGS WHERE APPROPRIATE AFTER READING veriexecctl(8)\n"
+"#############################################################\n",
+			vp->dbfile);
+	}
 }
 
 int
 main(int argc, char **argv)
 {
 	int ch, total = 0;
-	char *dbfile = NULL;
 	char **search_path = NULL;
-	struct hash *hash = NULL;
+	hash_t *hash = NULL;
+	veriexecgen_t	v;
 
-	Aflag = aflag = Dflag = Fflag = rflag = Sflag = vflag = 0;
+	(void) memset(&v, 0x0, sizeof(v));
+	make_immutable = 0;
+	Fflag = 0;
 
-	while ((ch = getopt(argc, argv, "AaDd:ho:rSt:v")) != -1) {
+	/* error out if we have a dangling symlink or other fs problem */
+	v.exit_on_error = 1;
+
+	while ((ch = getopt(argc, argv, "AaDd:ho:p:rSt:vW")) != -1) {
 		switch (ch) {
 		case 'A':
-			Aflag = 1;
+			v.append_output = 1;
 			break;
 		case 'a':
-			aflag = 1;
+			v.all_files = 1;
 			break;
 		case 'D':
-			Dflag = 1;
+			v.scan_system_dirs = 1;
 			break;
 		case 'd':
 			search_path = erealloc(search_path, sizeof(char *) *
@@ -324,59 +388,69 @@ main(int argc, char **argv)
 #endif /* notyet */
 		case 'h':
 			usage();
-			return 0;
+			return EXIT_SUCCESS;
 		case 'o':
-			dbfile = optarg;
+			v.dbfile = optarg;
+			break;
+		case 'p':
+			v.prefix = optarg;
 			break;
 		case 'r':
-			rflag = 1;
+			v.recursive_scan = 1;
 			break;
 		case 'S':
-			Sflag = 1;
+			make_immutable = 1;
 			break;
 		case 't':
-			hash = find_hash(optarg);
+			if ((hash = find_hash(optarg)) == NULL) {
+				errx(EXIT_FAILURE,
+					"No such hash algorithm (%s)",
+					optarg);
+			}
 			break;
 		case 'v':
-			vflag = 1;
+			v.verbose = 1;
+			break;
+		case 'W':
+			v.exit_on_error = 0;
 			break;
 		default:
 			usage();
-			return 1;
+			return EXIT_FAILURE;
 		}
 	}
 
-	if (dbfile == NULL)
-		dbfile = DEFAULT_DBFILE;
+	if (v.dbfile == NULL)
+		v.dbfile = DEFAULT_DBFILE;
 
 	if (hash == NULL) {
 		if ((hash = find_hash(DEFAULT_HASH)) == NULL)
-			errx(1, "No hash algorithm");
+			errx(EXIT_FAILURE, "No hash algorithm");
 	}
 
 	TAILQ_INIT(&fehead);
 
 	if (search_path == NULL)
-		Dflag = 1;
+		v.scan_system_dirs = 1;
 
-	if (Dflag) {
+	if (v.scan_system_dirs) {
 		char *sys_paths[] = DEFAULT_SYSPATHS;
 
-		if (vflag)
-			banner(hash, sys_paths);
-		walk_dir(sys_paths, hash);
+		if (v.verbose)
+			banner(&v, hash, sys_paths);
+		walk_dir(&v, sys_paths, hash);
 	}
 
 	if (search_path != NULL) {
-		if (vflag)
-			banner(hash, search_path);
-		walk_dir(search_path, hash);
+		if (v.verbose)
+			banner(&v, hash, search_path);
+		walk_dir(&v, search_path, hash);
 	}
 
-	store_entries(dbfile, hash);
+	store_entries(&v, hash);
 
-	if (Sflag && chflags(dbfile, SF_IMMUTABLE) != 0)
-		err(1, "Can't set immutable flag");
+	if (make_immutable && chflags(v.dbfile, SF_IMMUTABLE) != 0)
+		err(EXIT_FAILURE, "Can't set immutable flag");
 
-	return 0;
+	return EXIT_SUCCESS;
 }

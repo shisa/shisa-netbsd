@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.677 2006/11/25 10:27:22 tnozaki Exp $
+# $NetBSD: mi,v 1.682 2007/01/09 12:33:21 kleink Exp $
 .						base-sys-root
 ./altroot					base-sys-root
 ./bin						base-sys-root
@@ -1119,6 +1119,7 @@
 ./usr/sbin/mopd					base-bootserver-bin
 ./usr/sbin/mopprobe				base-bootserver-bin
 ./usr/sbin/moptrace				base-bootserver-bin
+./usr/sbin/mount_psshfs				base-miscfs-bin		puffs
 ./usr/sbin/mountd				base-nfsserver-bin
 ./usr/sbin/moused				base-sysutil-bin
 ./usr/sbin/mrinfo				base-router-bin
@@ -1563,9 +1564,11 @@
 ./usr/share/i18n/csmapper/CP/CP850%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP851%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP852%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/CP853%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP855%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP856%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP857%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/CP858%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP860%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP861%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP862%UCS.mps	base-sysutil-share	nls
@@ -1590,6 +1593,8 @@
 ./usr/share/i18n/csmapper/CP/CP932VDC@IBM%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP932VDC@NEC_IBM%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP936EXT%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/CP942EXT%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/CP942VDC@IBM%UCS.mps	base-obsolete	obsolete
 ./usr/share/i18n/csmapper/CP/CP949EXT%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP950%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP037.mps	base-sysutil-share	nls
@@ -1634,9 +1639,11 @@
 ./usr/share/i18n/csmapper/CP/UCS%CP850.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP851.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP852.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/UCS%CP853.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP855.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP856.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP857.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/UCS%CP858.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP860.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP861.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP862.mps	base-sysutil-share	nls
@@ -1661,6 +1668,8 @@
 ./usr/share/i18n/csmapper/CP/UCS%CP932VDC@IBM.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP932VDC@NEC_IBM.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP936EXT.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/UCS%CP942EXT.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/UCS%CP942VDC@IBM.mps	base-obsolete	obsolete
 ./usr/share/i18n/csmapper/CP/UCS%CP949EXT.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP950.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/EBCDIC		base-sysutil-share
@@ -1778,6 +1787,7 @@
 ./usr/share/i18n/csmapper/ISO646/ISO646-YU%UCS.646	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/JIS			base-sysutil-share
 ./usr/share/i18n/csmapper/JIS/JISX0201-KANA%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/JIS/JISX0208@1978%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/JIS/JISX0208@1990%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/JIS/JISX0208@MS%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/JIS/JISX0208UDC%UCS.mps	base-sysutil-share	nls
@@ -1787,6 +1797,7 @@
 ./usr/share/i18n/csmapper/JIS/JISX0212UDC%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/JIS/JISX0212VDC@IBM%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/JIS/UCS%JISX0201-KANA.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/JIS/UCS%JISX0208@1978.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/JIS/UCS%JISX0208@1990.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/JIS/UCS%JISX0208@MS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/JIS/UCS%JISX0208UDC.mps	base-sysutil-share	nls
@@ -1836,6 +1847,7 @@
 ./usr/share/i18n/csmapper/MISC/MULELAO-1%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/NEXTSTEP%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/PTCP154%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/MISC/TDS565%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/UCS%ATARIST.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/UCS%Big5.mps	base-obsolete		obsolete
 ./usr/share/i18n/csmapper/MISC/UCS%HP-ROMAN8.mps	base-sysutil-share	nls
@@ -1844,6 +1856,7 @@
 ./usr/share/i18n/csmapper/MISC/UCS%MULELAO-1.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/UCS%NEXTSTEP.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/UCS%PTCP154.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/MISC/UCS%TDS565.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/TCVN			base-sysutil-share
 ./usr/share/i18n/csmapper/TCVN/TCVN5712-1%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/TCVN/VISCII%UCS.mps	base-sysutil-share	nls
@@ -1925,9 +1938,11 @@
 ./usr/share/i18n/esdb/CP/CP850.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP851.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP852.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/CP/CP853.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP855.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP856.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP857.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/CP/CP858.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP860.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP861.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP862.esdb		base-sysutil-share	nls
@@ -1949,6 +1964,10 @@
 ./usr/share/i18n/esdb/CP/CP918.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP932.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP936.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/CP/CP942.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/CP/CP942C.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/CP/CP943.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/CP/CP943C.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP949.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP950.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/EBCDIC			base-sysutil-share
@@ -2059,6 +2078,7 @@
 ./usr/share/i18n/esdb/MISC/NEXTSTEP.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/PTCP154.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/Shift_JIS.esdb	base-sysutil-share	nls
+./usr/share/i18n/esdb/MISC/TDS565.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/ZW.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/TCVN			base-sysutil-share
 ./usr/share/i18n/esdb/TCVN/TCVN5712-1.esdb	base-sysutil-share	nls
@@ -3245,6 +3265,7 @@
 ./usr/share/zoneinfo/Africa/Accra		base-sys-share		share
 ./usr/share/zoneinfo/Africa/Addis_Ababa		base-sys-share		share
 ./usr/share/zoneinfo/Africa/Algiers		base-sys-share		share
+./usr/share/zoneinfo/Africa/Asmara		base-sys-share		share
 ./usr/share/zoneinfo/Africa/Asmera		base-sys-share		share
 ./usr/share/zoneinfo/Africa/Bamako		base-sys-share		share
 ./usr/share/zoneinfo/Africa/Bangui		base-sys-share		share
@@ -3555,6 +3576,7 @@
 ./usr/share/zoneinfo/Atlantic/Bermuda		base-sys-share		share
 ./usr/share/zoneinfo/Atlantic/Canary		base-sys-share		share
 ./usr/share/zoneinfo/Atlantic/Cape_Verde	base-sys-share		share
+./usr/share/zoneinfo/Atlantic/Faroe		base-sys-share		share
 ./usr/share/zoneinfo/Atlantic/Faeroe		base-sys-share		share
 ./usr/share/zoneinfo/Atlantic/Jan_Mayen		base-sys-share		share
 ./usr/share/zoneinfo/Atlantic/Madeira		base-sys-share		share
@@ -3570,6 +3592,7 @@
 ./usr/share/zoneinfo/Australia/Canberra		base-sys-share		share
 ./usr/share/zoneinfo/Australia/Currie		base-sys-share		share
 ./usr/share/zoneinfo/Australia/Darwin		base-sys-share		share
+./usr/share/zoneinfo/Australia/Eucla		base-sys-share		share
 ./usr/share/zoneinfo/Australia/Hobart		base-sys-share		share
 ./usr/share/zoneinfo/Australia/LHI		base-sys-share		share
 ./usr/share/zoneinfo/Australia/Lindeman		base-sys-share		share

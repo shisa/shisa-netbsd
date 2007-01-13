@@ -1,4 +1,4 @@
-/*	$NetBSD: nfs_node.c,v 1.87 2006/11/09 09:53:57 yamt Exp $	*/
+/*	$NetBSD: nfs_node.c,v 1.89 2006/12/28 00:39:03 yamt Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993
@@ -35,7 +35,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: nfs_node.c,v 1.87 2006/11/09 09:53:57 yamt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: nfs_node.c,v 1.89 2006/12/28 00:39:03 yamt Exp $");
 
 #include "opt_nfs.h"
 
@@ -57,7 +57,6 @@ __KERNEL_RCSID(0, "$NetBSD: nfs_node.c,v 1.87 2006/11/09 09:53:57 yamt Exp $");
 #include <nfs/nfs.h>
 #include <nfs/nfsnode.h>
 #include <nfs/nfsmount.h>
-#include <nfs/nqnfs.h>
 #include <nfs/nfs_var.h>
 
 struct nfsnodehashhead *nfsnodehashtbl;
@@ -231,7 +230,6 @@ nfs_inactive(v)
 	struct sillyrename *sp;
 	struct lwp *l = ap->a_l;
 	struct vnode *vp = ap->a_vp;
-	struct nfsmount *nmp = VFSTONFS(vp->v_mount);
 	boolean_t removed;
 
 	np = VTONFS(vp);
@@ -245,12 +243,7 @@ nfs_inactive(v)
 	if (sp != NULL)
 		nfs_vinvalbuf(vp, 0, sp->s_cred, l, 1);
 	removed = (np->n_flag & NREMOVED) != 0;
-	np->n_flag &= (NMODIFIED | NFLUSHINPROG | NFLUSHWANT | NQNFSEVICTED |
-		NQNFSNONCACHE | NQNFSWRITE | NEOFVALID);
-
-	if ((nmp->nm_flag & NFSMNT_NQNFS) && CIRCLEQ_NEXT(np, n_timer) != 0) {
-		CIRCLEQ_REMOVE(&nmp->nm_timerhead, np, n_timer);
-	}
+	np->n_flag &= (NMODIFIED | NFLUSHINPROG | NFLUSHWANT | NEOFVALID);
 
 	if (vp->v_type == VDIR && np->n_dircache)
 		nfs_invaldircache(vp,

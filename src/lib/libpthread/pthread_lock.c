@@ -1,4 +1,4 @@
-/*	$NetBSD: pthread_lock.c,v 1.14 2005/03/17 17:23:21 jwise Exp $	*/
+/*	$NetBSD: pthread_lock.c,v 1.16 2006/12/24 18:39:46 ad Exp $	*/
 
 /*-
  * Copyright (c) 2001 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: pthread_lock.c,v 1.14 2005/03/17 17:23:21 jwise Exp $");
+__RCSID("$NetBSD: pthread_lock.c,v 1.16 2006/12/24 18:39:46 ad Exp $");
 
 #include <sys/types.h>
 #include <sys/lock.h>
@@ -55,10 +55,7 @@ __RCSID("$NetBSD: pthread_lock.c,v 1.14 2005/03/17 17:23:21 jwise Exp $");
 #define SDPRINTF(x)
 #endif
 
-/* How many times to try before checking whether we've been continued. */
-#define NSPINS 1000	/* no point in actually spinning until MP works */
-
-static int nspins = NSPINS;
+extern int pthread__nspins;
 
 RAS_DECL(pthread__lock);
 
@@ -160,7 +157,7 @@ pthread_spinlock(pthread_t thread, pthread_spin_t *lock)
 {
 	int count, ret;
 
-	count = nspins;
+	count = pthread__nspins;
 	SDPRINTF(("(pthread_spinlock %p) incrementing spinlock %p (count %d)\n",
 		thread, lock, thread->pt_spinlocks));
 #ifdef PTHREAD_SPIN_DEBUG
@@ -170,7 +167,7 @@ pthread_spinlock(pthread_t thread, pthread_spin_t *lock)
 
 	do {
 		while (((ret = pthread__simple_lock_try(lock)) == 0) && --count)
-			;
+			/* XXX For at least x86, issue 'pause' instruction */;
 
 		if (ret == 1)
 			break;
@@ -190,13 +187,18 @@ pthread_spinlock(pthread_t thread, pthread_spin_t *lock)
 		 * (in case (a), we should let the code finish and 
 		 * we will bail out in pthread_spinunlock()).
 		 */
+#ifdef PTHREAD_SA
 		if (thread->pt_next != NULL) {
 			PTHREADD_ADD(PTHREADD_SPINPREEMPT);
 			pthread__assert(thread->pt_blockgen == thread->pt_unblockgen);
 			pthread__switch(thread, thread->pt_next);
 		}
+#else
+		/* XXXLWP far from ideal */
+		sched_yield();
+#endif
 		/* try again */
-		count = nspins;
+		count = pthread__nspins;
 	SDPRINTF(("(pthread_spinlock %p) incrementing spinlock from %d\n",
 		thread, thread->pt_spinlocks));
 		++thread->pt_spinlocks;
@@ -217,7 +219,8 @@ pthread_spintrylock(pthread_t thread, pthread_spin_t *lock)
 	++thread->pt_spinlocks;
 
 	ret = pthread__simple_lock_try(lock);
-	
+
+#ifdef PTHREAD_SA
 	if (ret == 0) {
 	SDPRINTF(("(pthread_spintrylock %p) decrementing spinlock from %d\n",
 		thread, thread->pt_spinlocks));
@@ -229,6 +232,7 @@ pthread_spintrylock(pthread_t thread, pthread_spin_t *lock)
 			pthread__switch(thread, thread->pt_next);
 		}
 	}
+#endif
 
 	return ret;
 }
@@ -247,6 +251,7 @@ pthread_spinunlock(pthread_t thread, pthread_spin_t *lock)
 #endif
 	PTHREADD_ADD(PTHREADD_SPINUNLOCKS);
 
+#ifdef PTHREAD_SA
 	/*
 	 * If we were preempted while holding a spinlock, the
 	 * scheduler will notice this and continue us. To be good
@@ -260,6 +265,7 @@ pthread_spinunlock(pthread_t thread, pthread_spin_t *lock)
 		/* pthread__assert(thread->pt_blockgen == thread->pt_unblockgen); */
 		pthread__switch(thread, thread->pt_next);
 	}
+#endif
 }
 
 

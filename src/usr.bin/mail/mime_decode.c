@@ -1,4 +1,4 @@
-/*	$NetBSD: mime_decode.c,v 1.5 2006/11/28 18:46:04 christos Exp $	*/
+/*	$NetBSD: mime_decode.c,v 1.8 2007/01/03 00:24:36 christos Exp $	*/
 
 /*-
  * Copyright (c) 2006 The NetBSD Foundation, Inc.
@@ -41,7 +41,7 @@
 
 #include <sys/cdefs.h>
 #ifndef __lint__
-__RCSID("$NetBSD: mime_decode.c,v 1.5 2006/11/28 18:46:04 christos Exp $");
+__RCSID("$NetBSD: mime_decode.c,v 1.8 2007/01/03 00:24:36 christos Exp $");
 #endif /* not __lint__ */
 
 #include <assert.h>
@@ -108,7 +108,7 @@ show_one_mime_info(FILE *fp, struct mime_info *mip)
 	(void)fprintf(fp, "** mi_ignore_body: %d\n", mip->mi_ignore_body);
 	(void)fprintf(fp, "** mi_partnum: %d\n", mip->mi_partnum);
 	(void)fprintf(fp, "** mi_partstr: %s\n", mip->mi_partstr);
-	(void)fprintf(fp, "** mi_msgstr: %d\n", mip->mi_msgstr);
+	(void)fprintf(fp, "** mi_msgstr: %s\n", mip->mi_msgstr);
 
 	(void)fflush(fp);
 	    
@@ -136,7 +136,7 @@ PUBLIC FILE *
 pipe_end(struct mime_info *mip)
 {
 	FILE *fp;
-	fp = last_registered_file(mip->mi_detachdir ? 0 : 1);	/* get last registered pipe */
+	fp = last_registered_file(0);	/* get last registered file or pipe */
 	if (fp == NULL)
 		fp = mip->mi_fo;
 	return fp;
@@ -730,14 +730,15 @@ mime_sendmessage(struct message *mp, FILE *obuf, struct ignoretab *igntab,
 		    sendmessage(mp, obuf, igntab, prefix, NULL) : 0;
 	/*
 	 * The prefix has two meanigs which we handle here:
-	 * 1) If obuf == NULL, then we are detaching to the 'prefix' director.
+	 * 1) If obuf == NULL, then we are detaching to the 'prefix' directory.
 	 * 2) If obuf != NULL, then the prefix is prepended to each line.
 	 */
 	detachdir = NULL;
 	detachall_flag = igntab == detachall;
 	if (obuf == NULL) {
 		assert(prefix != NULL);		/* coding error! */
-		obuf = stdout;
+		if ((obuf = last_registered_file(0)) == NULL)
+			obuf = stdout;
 		detachdir = prefix;
 		prefix = NULL;
 		igntab = ignoreall;	/* always ignore the headers */
@@ -768,6 +769,7 @@ mime_sendmessage(struct message *mp, FILE *obuf, struct ignoretab *igntab,
 	error = 0;
 	for (/* EMPTY */; mip; mip = mip->mi_flink) {
 		mip->mi_fo = obuf;
+		mip->mi_head_end = obuf;
 		mip->mi_detachdir = detachdir;
 		mip->mi_detachall = detachall_flag;
 		error |= sendmessage(mip->mp, pipe_end(mip), igntab, NULL, mip);
@@ -919,7 +921,7 @@ get_display_mode(struct mime_info *mip, mime_codec_t dec)
 		{ "audio",	 audio_subtype_tbl,		DM_IGNORE },
 		{ "video",	 video_subtype_tbl,		DM_IGNORE },
 		{ "application", application_subtype_tbl,	APPLICATION_OCTET_STREAM },
-		{ "NULL",	 NULL,				DM_UNKNOWN }, /* default */
+		{ NULL,		 NULL,				DM_UNKNOWN }, /* default */
 	};
 	const struct mime_type_s *mtp;
 	const struct mime_subtype_s *stp;

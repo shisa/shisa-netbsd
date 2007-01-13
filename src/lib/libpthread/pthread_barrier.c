@@ -1,4 +1,4 @@
-/*	$NetBSD: pthread_barrier.c,v 1.6 2003/03/08 08:03:35 lukem Exp $	*/
+/*	$NetBSD: pthread_barrier.c,v 1.8 2006/12/24 18:39:46 ad Exp $	*/
 
 /*-
  * Copyright (c) 2001, 2003 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: pthread_barrier.c,v 1.6 2003/03/08 08:03:35 lukem Exp $");
+__RCSID("$NetBSD: pthread_barrier.c,v 1.8 2006/12/24 18:39:46 ad Exp $");
 
 #include <errno.h>
 #include <sys/cdefs.h>
@@ -164,6 +164,7 @@ pthread_barrier_wait(pthread_barrier_t *barrier)
 	 * but instead is responsible for waking everyone else up.
 	 */
 	if (barrier->ptb_curcount + 1 == barrier->ptb_initcount) {
+#ifdef PTHREAD_SA
 		struct pthread_queue_t blockedq;
 
 		SDPRINTF(("(barrier wait %p) Satisfied %p\n",
@@ -177,7 +178,14 @@ pthread_barrier_wait(pthread_barrier_t *barrier)
 		pthread__sched_sleepers(self, &blockedq);
 
 		pthread_spinunlock(self, &barrier->ptb_lock);
+#else
+		SDPRINTF(("(barrier wait %p) Satisfied %p\n",
+		    self, barrier));
 
+		barrier->ptb_generation++;
+		pthread__unpark_all(self, &barrier->ptb_lock, barrier,
+		    &barrier->ptb_waiters);
+#endif
 		return PTHREAD_BARRIER_SERIAL_THREAD;
 	}
 
@@ -187,22 +195,27 @@ pthread_barrier_wait(pthread_barrier_t *barrier)
 		SDPRINTF(("(barrier wait %p) Waiting on %p\n",
 		    self, barrier));
 
+#ifdef PTHREAD_SA
 		pthread_spinlock(self, &self->pt_statelock);
 
 		self->pt_state = PT_STATE_BLOCKED_QUEUE;
 		self->pt_sleepobj = barrier;
 		self->pt_sleepq = &barrier->ptb_waiters;
 		self->pt_sleeplock = &barrier->ptb_lock;
-		
+
 		pthread_spinunlock(self, &self->pt_statelock);
 
 		PTQ_INSERT_TAIL(&barrier->ptb_waiters, self, pt_sleep);
 
 		pthread__block(self, &barrier->ptb_lock);
-		SDPRINTF(("(barrier wait %p) Woke up on %p\n",
-		    self, barrier));
 		/* Spinlock is unlocked on return */
 		pthread_spinlock(self, &barrier->ptb_lock);
+#else	/* PTHREAD_SA */
+		(void)pthread__park(self, &barrier->ptb_lock, barrier,
+		    &barrier->ptb_waiters, NULL, 1, 0);
+#endif	/* PTHREAD_SA */
+		SDPRINTF(("(barrier wait %p) Woke up on %p\n",
+		    self, barrier));
 	}
 	pthread_spinunlock(self, &barrier->ptb_lock);
 

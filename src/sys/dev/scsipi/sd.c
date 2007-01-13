@@ -1,4 +1,4 @@
-/*	$NetBSD: sd.c,v 1.256 2006/11/26 05:01:09 itohy Exp $	*/
+/*	$NetBSD: sd.c,v 1.258 2006/11/30 17:59:35 christos Exp $	*/
 
 /*-
  * Copyright (c) 1998, 2003, 2004 The NetBSD Foundation, Inc.
@@ -54,7 +54,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: sd.c,v 1.256 2006/11/26 05:01:09 itohy Exp $");
+__KERNEL_RCSID(0, "$NetBSD: sd.c,v 1.258 2006/11/30 17:59:35 christos Exp $");
 
 #include "opt_scsi.h"
 #include "rnd.h"
@@ -227,6 +227,7 @@ sdattach(struct device *parent, struct device *self, void *aux)
 	SC_DEBUG(periph, SCSIPI_DB2, ("sdattach: "));
 
 	sd->type = (sa->sa_inqbuf.type & SID_TYPE);
+	strncpy(sd->name, sa->sa_inqbuf.product, sizeof(sd->name));
 	if (sd->type == T_SIMPLE_DIRECT)
 		periph->periph_quirks |= PQUIRK_ONLYBIG | PQUIRK_NOBIGMODESENSE;
 
@@ -1280,7 +1281,7 @@ sdgetdefaultlabel(struct sd_softc *sd, struct disklabel *lp)
 	 * We could probe the mode pages to figure out what kind of disc it is.
 	 * Is this worthwhile?
 	 */
-	strncpy(lp->d_typename, "mydisk", 16);
+	strncpy(lp->d_typename, sd->name, 16);
 	strncpy(lp->d_packname, "fictitious", 16);
 	lp->d_secperunit = sd->params.disksize;
 	lp->d_rpm = sd->params.rot_rate;
@@ -1886,12 +1887,9 @@ sd_get_parms_page4(struct sd_softc *sd, struct disk_parms *dp, int flags)
 {
 	struct sd_mode_sense_data scsipi_sense;
 	int error;
-	int big, poffset, byte2;
+	int big, byte2;
+	size_t poffset;
 	union scsi_disk_pages *pages;
-#if 0
-	int i;
-	u_int8_t *p;
-#endif
 
 	byte2 = SMS_DBD;
 again:
@@ -1917,10 +1915,23 @@ again:
 		poffset += scsipi_sense.header.small.blk_desc_len;
 	}
 
+	if (poffset > sizeof(scsipi_sense) - sizeof(pages->rigid_geometry))
+		return ERESTART;
+
 	pages = (void *)((u_long)&scsipi_sense + poffset);
 #if 0
-printf("page 4 sense:"); for (i = sizeof(scsipi_sense), p = (void *)&scsipi_sense; i; i--, p++) printf(" %02x", *p); printf("\n");
-printf("page 4 pg_code=%d sense=%p/%p\n", pages->rigid_geometry.pg_code, &scsipi_sense, pages);
+	{
+		size_t i;
+		u_int8_t *p;
+
+		printf("page 4 sense:");
+		for (i = sizeof(scsipi_sense), p = (void *)&scsipi_sense; i;
+		    i--, p++)
+			printf(" %02x", *p);
+		printf("\n");
+		printf("page 4 pg_code=%d sense=%p/%p\n",
+		    pages->rigid_geometry.pg_code, &scsipi_sense, pages);
+	}
 #endif
 
 	if ((pages->rigid_geometry.pg_code & PGCODE_MASK) != 4)
@@ -1961,12 +1972,9 @@ sd_get_parms_page5(struct sd_softc *sd, struct disk_parms *dp, int flags)
 {
 	struct sd_mode_sense_data scsipi_sense;
 	int error;
-	int big, poffset, byte2;
+	int big, byte2;
+	size_t poffset;
 	union scsi_disk_pages *pages;
-#if 0
-	int i;
-	u_int8_t *p;
-#endif
 
 	byte2 = SMS_DBD;
 again:
@@ -1992,10 +2000,23 @@ again:
 		poffset += scsipi_sense.header.small.blk_desc_len;
 	}
 
+	if (poffset > sizeof(scsipi_sense) - sizeof(pages->flex_geometry))
+		return ERESTART;
+
 	pages = (void *)((u_long)&scsipi_sense + poffset);
 #if 0
-printf("page 5 sense:"); for (i = sizeof(scsipi_sense), p = (void *)&scsipi_sense; i; i--, p++) printf(" %02x", *p); printf("\n");
-printf("page 5 pg_code=%d sense=%p/%p\n", pages->flex_geometry.pg_code, &scsipi_sense, pages);
+	{
+		size_t i;
+		u_int8_t *p;
+
+		printf("page 5 sense:");
+		for (i = sizeof(scsipi_sense), p = (void *)&scsipi_sense; i;
+		    i--, p++)
+			printf(" %02x", *p);
+		printf("\n");
+		printf("page 5 pg_code=%d sense=%p/%p\n",
+		    pages->flex_geometry.pg_code, &scsipi_sense, pages);
+	}
 #endif
 
 	if ((pages->flex_geometry.pg_code & PGCODE_MASK) != 5)

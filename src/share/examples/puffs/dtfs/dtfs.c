@@ -1,4 +1,4 @@
-/*	$NetBSD: dtfs.c,v 1.7 2006/11/18 12:41:06 pooka Exp $	*/
+/*	$NetBSD: dtfs.c,v 1.13 2007/01/06 18:25:19 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006  Antti Kantee.  All Rights Reserved.
@@ -37,9 +37,12 @@
 #include <sys/types.h>
 
 #include <err.h>
+#include <mntopts.h>
 #include <puffs.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "dtfs.h"
 
@@ -49,53 +52,89 @@
 #define FSNAME "dt"
 #endif
 
+static void usage(void);
+
+static void
+usage()
+{
+
+	errx(1, "usage: %s [-bs] [-o mntopt] [-o puffsopt] mountpath",
+	    getprogname());
+}
+
 int
 main(int argc, char *argv[])
 {
+	extern char *optarg;
+	extern int optind;
+	struct dtfs_mount dtm;
 	struct puffs_usermount *pu;
-	struct puffs_vfsops pvfs;
-	struct puffs_vnops pvn;
-	uint32_t flags = 0;
+	struct puffs_ops *pops;
+	mntoptparse_t mp;
+	int pflags, lflags, mntflags;
+	int ch;
 
 	setprogname(argv[0]);
 
-	if (argc < 2)
-		errx(1, "usage: %s mountpath\n", getprogname());
+	pflags = lflags = mntflags = 0;
+	while ((ch = getopt(argc, argv, "bo:s")) != -1) {
+		switch (ch) {
+		case 'b': /* build paths, for debugging the feature */
+			pflags |= PUFFS_FLAG_BUILDPATH;
+			break;
+		case 'o':
+			mp = getmntopts(optarg, puffsmopts, &mntflags, &pflags);
+			if (mp == NULL)
+				err(1, "getmntopts");
+			freemntopts(mp);
+			break;
+		case 's': /* stay on top */
+			lflags |= PUFFSLOOP_NODAEMON;
+			break;
+		default:
+			usage();
+			/*NOTREACHED*/
+		}
+	}
+	argc -= optind;
+	argv += optind;
 
-	if (argc == 3 && *argv[2] == 'd') /* nice */
-		flags |= PUFFSFLAG_OPDUMP;
+	if (argc != 1)
+		usage();
 
-	memset(&pvfs, 0, sizeof(struct puffs_vfsops));
-	memset(&pvn, 0, sizeof(struct puffs_vnops));
+	PUFFSOP_INIT(pops);
 
-	pvfs.puffs_mount = dtfs_mount;
-	pvfs.puffs_unmount = puffs_vfsnop_unmount;
-	pvfs.puffs_sync = puffs_vfsnop_sync;
-	pvfs.puffs_statvfs = dtfs_statvfs;
+	PUFFSOP_SET(pops, dtfs, fs, statvfs);
+	PUFFSOP_SETFSNOP(pops, unmount);
+	PUFFSOP_SETFSNOP(pops, sync);
 
-	pvn.puffs_lookup = dtfs_lookup;
-	pvn.puffs_getattr = dtfs_getattr;
-	pvn.puffs_setattr = dtfs_setattr;
-	pvn.puffs_create = dtfs_create;
-	pvn.puffs_remove = dtfs_remove;
-	pvn.puffs_readdir = dtfs_readdir;
-	pvn.puffs_mkdir = dtfs_mkdir;
-	pvn.puffs_rmdir = dtfs_rmdir;
-	pvn.puffs_rename = dtfs_rename;
-	pvn.puffs_read = dtfs_read;
-	pvn.puffs_write = dtfs_write;
-	pvn.puffs_link = dtfs_link;
-	pvn.puffs_symlink = dtfs_symlink;
-	pvn.puffs_readlink = dtfs_readlink;
-	pvn.puffs_reclaim = dtfs_reclaim;
-	pvn.puffs_inactive = dtfs_inactive;
-	pvn.puffs_mknod = dtfs_mknod;
+	PUFFSOP_SET(pops, dtfs, node, lookup);
+	PUFFSOP_SET(pops, dtfs, node, getattr);
+	PUFFSOP_SET(pops, dtfs, node, setattr);
+	PUFFSOP_SET(pops, dtfs, node, create);
+	PUFFSOP_SET(pops, dtfs, node, remove);
+	PUFFSOP_SET(pops, dtfs, node, readdir);
+	PUFFSOP_SET(pops, dtfs, node, mkdir);
+	PUFFSOP_SET(pops, dtfs, node, rmdir);
+	PUFFSOP_SET(pops, dtfs, node, rename);
+	PUFFSOP_SET(pops, dtfs, node, read);
+	PUFFSOP_SET(pops, dtfs, node, write);
+	PUFFSOP_SET(pops, dtfs, node, link);
+	PUFFSOP_SET(pops, dtfs, node, symlink);
+	PUFFSOP_SET(pops, dtfs, node, readlink);
+	PUFFSOP_SET(pops, dtfs, node, mknod);
+	PUFFSOP_SET(pops, dtfs, node, inactive);
+	PUFFSOP_SET(pops, dtfs, node, reclaim);
 
-	if ((pu = puffs_mount(&pvfs, &pvn, argv[1], 0, FSNAME, flags, 0))
+	if ((pu = puffs_mount(pops, argv[0], mntflags, FSNAME, &dtm, pflags, 0))
 	    == NULL)
 		err(1, "mount");
 
-	if (puffs_mainloop(pu) == -1)
+	/* init & call puffs_start() */
+	if (dtfs_domount(pu) != 0)
+		errx(1, "dtfs_domount failed");
+
+	if (puffs_mainloop(pu, lflags) == -1)
 		err(1, "mainloop");
 
 	return 0;

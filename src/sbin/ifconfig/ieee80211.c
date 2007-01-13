@@ -1,4 +1,4 @@
-/*	$NetBSD: ieee80211.c,v 1.7 2006/08/26 18:14:28 christos Exp $	*/
+/*	$NetBSD: ieee80211.c,v 1.10 2007/01/09 09:25:56 dyoung Exp $	*/
 
 /*
  * Copyright (c) 1983, 1993
@@ -31,7 +31,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: ieee80211.c,v 1.7 2006/08/26 18:14:28 christos Exp $");
+__RCSID("$NetBSD: ieee80211.c,v 1.10 2007/01/09 09:25:56 dyoung Exp $");
 #endif /* not lint */
 
 #include <sys/param.h> 
@@ -116,7 +116,7 @@ setifnwid(const char *val, int d)
 	estrlcpy(ifr.ifr_name, name, sizeof(ifr.ifr_name));
 	ifr.ifr_data = (void *)&nwid;
 	if (ioctl(s, SIOCS80211NWID, &ifr) == -1)
-		warn("SIOCS80211NWID");
+		err(EXIT_FAILURE, "SIOCS80211NWID");
 }
 
 void
@@ -131,7 +131,7 @@ setifbssid(const char *val, int d)
 	} else {
 		ea = ether_aton(val);
 		if (ea == NULL) {
-			warnx("malformed BSSID: %s", val);
+			errx(EXIT_FAILURE, "malformed BSSID: %s", val);
 			return;
 		}
 		memcpy(&bssid.i_bssid, ea->ether_addr_octet,
@@ -139,7 +139,30 @@ setifbssid(const char *val, int d)
 	}
 	estrlcpy(bssid.i_name, name, sizeof(bssid.i_name));
 	if (ioctl(s, SIOCS80211BSSID, &bssid) == -1)
-		warn("SIOCS80211BSSID");
+		err(EXIT_FAILURE, "SIOCS80211BSSID");
+}
+
+void
+setiffrag(const char *val, int d)
+{
+	struct ieee80211req ireq;
+	int thr;
+
+	if (d != 0)
+		thr = IEEE80211_FRAG_MAX;
+	else {
+		thr = atoi(val);
+		if (thr < IEEE80211_FRAG_MIN || thr > IEEE80211_FRAG_MAX) {
+			errx(EXIT_FAILURE, "invalid fragmentation threshold: %s", val);
+			return;
+		}
+	}
+
+	(void)strncpy(ireq.i_name, name, sizeof(ireq.i_name));
+	ireq.i_type = IEEE80211_IOC_FRAGTHRESHOLD;
+	ireq.i_val = thr;
+	if (ioctl(s, SIOCS80211, &ireq) == -1)
+		err(EXIT_FAILURE, "IEEE80211_IOC_FRAGTHRESHOLD");
 }
 
 void
@@ -153,15 +176,14 @@ setifchan(const char *val, int d)
 	else {
 		chan = atoi(val);
 		if (chan < 0 || chan > 0xffff) {
-			warnx("invalid channel: %s", val);
-			return;
+			errx(EXIT_FAILURE, "invalid channel: %s", val);
 		}
 	}
 
 	estrlcpy(channel.i_name, name, sizeof(channel.i_name));
 	channel.i_channel = (u_int16_t) chan;
 	if (ioctl(s, SIOCS80211CHANNEL, &channel) == -1)
-		warn("SIOCS80211CHANNEL");
+		err(EXIT_FAILURE, "SIOCS80211CHANNEL");
 }
 
 void
@@ -205,8 +227,7 @@ setifnwkey(const char *val, int d)
 					return;
 			}
 			if (*val != '\0') {
-				warnx("SIOCS80211NWKEY: too many keys.");
-				return;
+				errx(EXIT_FAILURE, "SIOCS80211NWKEY: too many keys.");
 			}
 		} else {
 			val = get_string(val, NULL, keybuf[0],
@@ -220,7 +241,7 @@ setifnwkey(const char *val, int d)
 		nwkey.i_key[i].i_keylen = 0;
 	estrlcpy(nwkey.i_name, name, sizeof(nwkey.i_name));
 	if (ioctl(s, SIOCS80211NWKEY, &nwkey) == -1)
-		warn("SIOCS80211NWKEY");
+		err(EXIT_FAILURE, "SIOCS80211NWKEY");
 }
 
 void
@@ -230,13 +251,12 @@ setifpowersave(const char *val, int d)
 
 	estrlcpy(power.i_name, name, sizeof(power.i_name));
 	if (ioctl(s, SIOCG80211POWER, &power) == -1) {
-		warn("SIOCG80211POWER");
-		return;
+		err(EXIT_FAILURE, "SIOCG80211POWER");
 	}
 
 	power.i_enabled = d;
 	if (ioctl(s, SIOCS80211POWER, &power) == -1)
-		warn("SIOCS80211POWER");
+		err(EXIT_FAILURE, "SIOCS80211POWER");
 }
 
 void
@@ -246,13 +266,12 @@ setifpowersavesleep(const char *val, int d)
 
 	estrlcpy(power.i_name, name, sizeof(power.i_name));
 	if (ioctl(s, SIOCG80211POWER, &power) == -1) {
-		warn("SIOCG80211POWER");
-		return;
+		err(EXIT_FAILURE, "SIOCG80211POWER");
 	}
 
 	power.i_maxsleep = atoi(val);
 	if (ioctl(s, SIOCS80211POWER, &power) == -1)
-		warn("SIOCS80211POWER");
+		err(EXIT_FAILURE, "SIOCS80211POWER");
 }
 
 void
@@ -285,7 +304,7 @@ ieee80211_statistics(void)
 	STAT_PRINT(is_rx_ctl, "rx discard ctrl frames");
 	STAT_PRINT(is_rx_beacon, "rx beacon frames");
 	STAT_PRINT(is_rx_rstoobig, "rx rate set truncated");
-	STAT_PRINT(is_rx_elem_missing, "rx required element missin");
+	STAT_PRINT(is_rx_elem_missing, "rx required element missing");
 	STAT_PRINT(is_rx_elem_toobig, "rx element too big");
 	STAT_PRINT(is_rx_elem_toosmall, "rx element too small");
 	STAT_PRINT(is_rx_elem_unknown, "rx element unknown");
@@ -327,6 +346,8 @@ ieee80211_statistics(void)
 	STAT_PRINT(is_tx_badcipher, "tx failed 'cuz key type");
 	STAT_PRINT(is_tx_nodefkey, "tx failed 'cuz no defkey");
 	STAT_PRINT(is_tx_noheadroom, "tx failed 'cuz no space");
+	STAT_PRINT(is_tx_fragframes, "tx frames fragmented");
+	STAT_PRINT(is_tx_frags, "tx fragments created");
 
 	STAT_PRINT(is_scan_active, "active scans started");
 	STAT_PRINT(is_scan_passive, "passive scans started");
@@ -352,6 +373,12 @@ ieee80211_statistics(void)
 	STAT_PRINT(is_ps_unassoc, "ps-poll for unassoc. sta");
 	STAT_PRINT(is_ps_badaid, "ps-poll w/ incorrect aid");
 	STAT_PRINT(is_ps_qempty, "ps-poll w/ nothing to send");
+	STAT_PRINT(is_ff_badhdr, "fast frame rx'd w/ bad hdr");
+	STAT_PRINT(is_ff_tooshort, "fast frame rx decap error");
+	STAT_PRINT(is_ff_split, "fast frame rx split error");
+	STAT_PRINT(is_ff_decap, "fast frames decap'd");
+	STAT_PRINT(is_ff_encap, "fast frames encap'd for tx");
+	STAT_PRINT(is_rx_badbintval, "rx frame w/ bogus bintval");
 }
 
 void
@@ -376,8 +403,7 @@ ieee80211_status(void)
 	if (ioctl(s, SIOCG80211NWID, &ifr) == -1)
 		return;
 	if (nwid.i_len > IEEE80211_NWID_LEN) {
-		warnx("SIOCG80211NWID: wrong length of nwid (%d)", nwid.i_len);
-		return;
+		errx(EXIT_FAILURE, "SIOCG80211NWID: wrong length of nwid (%d)", nwid.i_len);
 	}
 	printf("\tssid ");
 	print_string(nwid.i_nwid, nwid.i_len);
@@ -400,6 +426,15 @@ ieee80211_status(void)
 				printf(" -apbridge");
 		}
         }
+
+	estrlcpy(ireq.i_name, name, sizeof(ireq.i_name));
+	ireq.i_type = IEEE80211_IOC_FRAGTHRESHOLD;
+	if (ioctl(s, SIOCG80211, &ireq) == -1)
+		;
+	else if (ireq.i_val < IEEE80211_FRAG_MAX)
+		printf(" frag %d", ireq.i_val);
+	else if (vflag)
+		printf(" -frag");
 
 	memset(&nwkey, 0, sizeof(nwkey));
 	estrlcpy(nwkey.i_name, name, sizeof(nwkey.i_name));

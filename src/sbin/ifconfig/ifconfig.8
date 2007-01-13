@@ -1,4 +1,4 @@
-.\"	$NetBSD: ifconfig.8,v 1.87 2006/11/23 19:43:52 yamt Exp $
+.\"	$NetBSD: ifconfig.8,v 1.90 2007/01/09 09:19:02 dyoung Exp $
 .\"
 .\" Copyright (c) 1983, 1991, 1993
 .\"	The Regents of the University of California.  All rights reserved.
@@ -29,7 +29,7 @@
 .\"
 .\"     @(#)ifconfig.8	8.4 (Berkeley) 6/1/94
 .\"
-.Dd November 24, 2006
+.Dd January 9, 2007
 .Dt IFCONFIG 8
 .Os
 .Sh NAME
@@ -189,7 +189,7 @@ The default broadcast address is the address with a host part of all 1's.
 If the driver is a
 .Xr carp 4
 pseudo-device, attach it to
-.Ar iface.
+.Ar iface .
 If not specified, the kernel will attempt to select an interface with
 a subnet matching that of the carp interface.
 .It Cm debug
@@ -347,6 +347,10 @@ Valid states are
 .Ar backup ,
 and
 .Ar master .
+.It Cm frag Ar threshold
+.Pq IEEE 802.11 devices only
+Configure the fragmentation threshold for IEEE 802.11-based wireless
+network interfaces.
 .It Cm ssid Ar id
 .Pq IEEE 802.11 devices only
 Configure the Service Set Identifier (a.k.a. the network name)
@@ -524,7 +528,6 @@ of this is to enable SLIP compression, or to select the connector type
 for some ethernet cards.
 Refer to the man page for the specific driver
 for more information.
-.ne 1i
 .It Fl link[0-2]
 Disable special processing at the link level with the specified interface.
 .It Cm up
@@ -780,9 +783,9 @@ tried to alter an interface's configuration.
 .Sh SEE ALSO
 .Xr netstat 1 ,
 .Xr agr 4 ,
+.Xr carp 4 ,
 .Xr ifmedia 4 ,
 .Xr netintro 4 ,
-.Xr carp 4 ,
 .Xr vlan 4 ,
 .Xr ifconfig.if 5 ,
 .\" .Xr eon 5 ,

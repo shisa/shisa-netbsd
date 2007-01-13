@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_lwp.c,v 1.49 2006/11/03 19:46:03 ad Exp $	*/
+/*	$NetBSD: kern_lwp.c,v 1.51 2006/12/23 08:39:47 ad Exp $	*/
 
 /*-
  * Copyright (c) 2001 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_lwp.c,v 1.49 2006/11/03 19:46:03 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_lwp.c,v 1.51 2006/12/23 08:39:47 ad Exp $");
 
 #include "opt_multiprocessor.h"
 
@@ -596,13 +596,8 @@ lwp_exit(struct lwp *l)
 	LIST_REMOVE(l, l_list);
 	proclist_unlock_write(s);
 
-	/*
-	 * Release our cached credentials, and collate accounting flags.
-	 */
+	/* Release our cached credentials. */
 	kauth_cred_free(l->l_cred);
-	simple_lock(&p->p_lock);
-	p->p_acflag |= l->l_acflag;
-	simple_unlock(&p->p_lock);
 
 	/* Free MD LWP resources */
 #ifndef __NO_CPU_LWP_FREE
@@ -760,12 +755,14 @@ lwp_update_creds(struct lwp *l)
 	p = l->l_proc;
 	oc = l->l_cred;
 
+	KERNEL_PROC_LOCK(l);
 	simple_lock(&p->p_lock);
 	kauth_cred_hold(p->p_cred);
 	l->l_cred = p->p_cred;
 	simple_unlock(&p->p_lock);
 	if (oc != NULL)
 		kauth_cred_free(oc);
+	KERNEL_PROC_UNLOCK(l);
 }
 
 /*
