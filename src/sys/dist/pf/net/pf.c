@@ -5911,7 +5911,6 @@ pf_check_proto_cksum(struct mbuf *m, int off, int len, u_int8_t p,
     sa_family_t af)
 {
 
-#if 0 /* XXX */
 #ifdef __OpenBSD__
 	u_int16_t flag_ok, flag_bad;
 #endif
@@ -6024,7 +6023,6 @@ pf_check_proto_cksum(struct mbuf *m, int off, int len, u_int8_t p,
 #ifdef __OpenBSD__
 	m->m_pkthdr.csum |= flag_ok;
 #endif
-#endif /* 0 */
 
 	return (0);
 }
