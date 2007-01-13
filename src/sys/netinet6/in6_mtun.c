@@ -1,4 +1,4 @@
-/*	$Id: in6_mtun.c,v 1.1.2.2 2007/01/13 02:29:12 keiichi Exp $	*/
+/*	$Id: in6_mtun.c,v 1.1.2.3 2007/01/13 15:05:43 keiichi Exp $	*/
 /*	$NetBSD: in6_gif.c,v 1.44.4.1 2006/09/09 02:58:55 rpaulo Exp $	*/
 /*	$KAME: in6_gif.c,v 1.62 2001/07/29 04:27:25 itojun Exp $	*/
 
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$Id: in6_mtun.c,v 1.1.2.2 2007/01/13 02:29:12 keiichi Exp $");
+__KERNEL_RCSID(0, "$Id: in6_mtun.c,v 1.1.2.3 2007/01/13 15:05:43 keiichi Exp $");
 
 #include "opt_inet.h"
 #include "opt_iso.h"
@@ -106,6 +106,7 @@ in6_mtun_output(ifp, family, m)
 	struct ip6_hdr *ip6;
 	int proto, error;
 	u_int8_t itos, otos;
+	struct ip6_pktopts pktopt;
 
 	if (sin6_src == NULL || sin6_dst == NULL ||
 	    sin6_src->sin6_family != AF_INET6 ||
@@ -232,16 +233,39 @@ in6_mtun_output(ifp, family, m)
 		sc->mtun_route_expire = time_second + MTUN_ROUTE_TTL;
 	}
 
+	/* 
+	 * if mtun has a nexthop address in the mtun_softc, point the
+	 * route entry of the nexthop address and pass it to
+	 * ip6_output
+	 */
+	bzero(&pktopt, sizeof(pktopt));
+	pktopt.ip6po_hlim = -1;	/* -1 means default hop limit */
+	if (sc->mtun_nexthop) {
+		pktopt.ip6po_nexthop =
+		    (struct sockaddr *)malloc(sizeof(struct sockaddr_in6),
+		    M_TEMP, M_NOWAIT); 
+
+		if (pktopt.ip6po_nexthop == NULL) {
+			m_freem(m);
+			return ENOMEM;
+		}
+
+		bzero(pktopt.ip6po_nexthop, sizeof(struct sockaddr_in6));
+		bcopy(sc->mtun_nexthop, pktopt.ip6po_nexthop,
+		    sizeof(struct sockaddr_in6));
+		satosin6(pktopt.ip6po_nexthop)->sin6_scope_id = 0; /* XXX */
+	} 
+
 #ifdef IPV6_MINMTU
 	/*
 	 * force fragmentation to minimum MTU, to avoid path MTU discovery.
 	 * it is too painful to ask for resend of inner packet, to achieve
 	 * path MTU discovery for encapsulated packets.
 	 */
-	error = ip6_output(m, 0, &sc->mtun_ro6, IPV6_MINMTU,
+	error = ip6_output(m, &pktopt, &sc->mtun_ro6, IPV6_MINMTU,
 		    (struct ip6_moptions *)NULL, (struct socket *)NULL, NULL);
 #else
-	error = ip6_output(m, 0, &sc->mtun_ro6, 0,
+	error = ip6_output(m, &pktopt, &sc->mtun_ro6, 0,
 		    (struct ip6_moptions *)NULL, (struct socket *)NULL, NULL);
 #endif
 

@@ -1,4 +1,4 @@
-/*	$Id: if_mtun.c,v 1.1.2.1 2006/12/14 05:12:11 keiichi Exp $	*/
+/*	$Id: if_mtun.c,v 1.1.2.2 2007/01/13 15:05:43 keiichi Exp $	*/
 /*	$NetBSD: if_gif.c,v 1.64 2006/11/23 04:07:07 rpaulo Exp $	*/
 /*	$KAME: if_gif.c,v 1.76 2001/08/20 02:01:02 kjc Exp $	*/
 
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$Id: if_mtun.c,v 1.1.2.1 2006/12/14 05:12:11 keiichi Exp $");
+__KERNEL_RCSID(0, "$Id: if_mtun.c,v 1.1.2.2 2007/01/13 15:05:43 keiichi Exp $");
 
 #include "opt_inet.h"
 #include "opt_iso.h"
@@ -77,6 +77,7 @@ __KERNEL_RCSID(0, "$Id: if_mtun.c,v 1.1.2.1 2006/12/14 05:12:11 keiichi Exp $");
 #include <netinet6/ip6_var.h>
 #include <netinet6/in6_mtun.h>
 #include <netinet6/ip6protosw.h>
+#include <netinet6/scope6_var.h>
 #endif /* INET6 */
 
 #ifdef ISO
@@ -686,6 +687,93 @@ mtun_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 
 	case SIOCSIFFLAGS:
 		/* if_ioctl() takes care of it */
+		break;
+
+	case SIOCSIFPHYNEXTHOP: 
+#ifdef INET6
+	case SIOCSIFPHYNEXTHOP_IN6: {
+#endif /* INET6 */
+		struct sockaddr *nh = NULL;
+		int nhlen = 0;
+
+		switch (ifr->ifr_addr.sa_family) {
+#ifdef INET
+		case AF_INET:	/* IP supports Multicast */
+			error = EAFNOSUPPORT;
+			break;
+#endif /* INET */
+#ifdef INET6
+		case AF_INET6:	/* IP6 supports Multicast */
+			nh = (struct sockaddr *)
+				&(((struct in6_ifreq *)data)->ifr_addr);
+			nhlen = sizeof(((struct in6_ifreq *)data)->ifr_addr);
+			break;
+#endif /* INET6 */
+		default:  /* Other protocols doesn't support Multicast */
+			error = EAFNOSUPPORT;
+			break;
+		}
+
+		if (error)
+			return error;
+
+		/* if pointer is null, allocate memory */
+		if (sc->mtun_nexthop == NULL) {
+			sc->mtun_nexthop = (struct sockaddr *)malloc(nhlen, M_IFADDR, M_WAITOK);
+			if (sc->mtun_nexthop == NULL)
+				return ENOMEM;
+
+			bzero(sc->mtun_nexthop, nhlen);
+		}
+		/* set request address into mtun_nexthop */
+		bcopy(nh, sc->mtun_nexthop, nhlen);
+		sa6_embedscope(satosin6(sc->mtun_nexthop), ip6_use_defzone);
+		break;
+	}
+	case SIOCGIFPHYNEXTHOP: 
+#ifdef INET6
+	case SIOCGIFPHYNEXTHOP_IN6: {
+#endif /* INET6 */
+		if (sc->mtun_nexthop == NULL) {
+			error = EADDRNOTAVAIL;
+			goto bad;
+		}
+		src = sc->mtun_nexthop;
+		switch (cmd) {
+#ifdef INET
+		case SIOCGIFPHYNEXTHOP:
+			dst = &ifr->ifr_addr;
+			size = sizeof(ifr->ifr_addr);
+			break;
+#endif /* INET */
+#ifdef INET6
+		case SIOCGIFPHYNEXTHOP_IN6:
+			dst = (struct sockaddr *)
+				&(((struct in6_ifreq *)data)->ifr_addr);
+			size = sizeof(((struct in6_ifreq *)data)->ifr_addr);
+			break;
+#endif /* INET6 */
+		default:
+			error = EADDRNOTAVAIL;
+			goto bad;
+		}
+		if (src->sa_len > size)
+			return EINVAL;
+		bcopy((caddr_t)src, (caddr_t)dst, src->sa_len);
+#ifdef INET6
+		if (dst->sa_family == AF_INET6) {
+			error = sa6_recoverscope((struct sockaddr_in6 *)dst);
+			if (error != 0)
+				goto bad;
+		}
+#endif
+		break;
+	}
+	case SIOCDIFPHYNEXTHOP: 
+		/* if pointer is not null, free the memory */
+		if (sc->mtun_nexthop) 
+			free(sc->mtun_nexthop, M_IFADDR);
+		sc->mtun_nexthop = NULL;
 		break;
 
 	default:

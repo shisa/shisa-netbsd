@@ -1,4 +1,4 @@
-/*	$Id: if_mtun.h,v 1.1.2.1 2006/12/14 05:12:12 keiichi Exp $	*/
+/*	$Id: if_mtun.h,v 1.1.2.2 2007/01/13 15:05:43 keiichi Exp $	*/
 /*	$NetBSD: if_gif.h,v 1.13 2005/12/11 23:05:25 thorpej Exp $	*/
 /*	$KAME: if_gif.h,v 1.23 2001/07/27 09:21:42 itojun Exp $	*/
 
@@ -89,5 +89,11 @@ int	mtun_output(struct ifnet *, struct mbuf *,
 int	mtun_ioctl(struct ifnet *, u_long, caddr_t);
 int	mtun_set_tunnel(struct ifnet *, struct sockaddr *, struct sockaddr *);
 void	mtun_delete_tunnel(struct ifnet *);
+
+#define	SIOCSIFPHYNEXTHOP _IOW('i', 78, struct ifreq) /* set gif addres */
+#define	SIOCDIFPHYNEXTHOP _IOW('i', 79, struct ifreq) /* delete gif addres */
+#define	SIOCGIFPHYNEXTHOP _IOW('i', 80, struct ifreq) /* get gif addres */
+#define	SIOCSIFPHYNEXTHOP_IN6 _IOW('i', 140, struct in6_ifreq) /* set gif addres */
+#define	SIOCGIFPHYNEXTHOP_IN6 _IOWR('i', 141, struct in6_ifreq) /* get gif nexthop addres */
 
 #endif /* !_NET_IF_MTUN_H_ */
