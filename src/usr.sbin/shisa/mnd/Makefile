@@ -26,7 +26,7 @@
 
 .include <bsd.own.mk>
 
-SRCS	= mnd.c rr.c mh.c callout.c fsm.c binding.c network.c  common.c fdlist.c command.c util.c hal.c config.c cfparse.y cftoken.l
+SRCS	= mnd.c rr.c callout.c mh.c fsm.c binding.c network.c  common.c fdlist.c command.c nemo_var.c util.c hal.c config.c cfparse.y cftoken.l
 PROG	= mnd
 MAN	= mnd.8
 CPPFLAGS+= -Wall -Werror -DMIP_MN
