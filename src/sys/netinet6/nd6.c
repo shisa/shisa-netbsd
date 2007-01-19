@@ -1934,7 +1934,7 @@ nd6_output(ifp, origifp, m0, dst, rt0)
 	struct sockaddr_in6 *gw6 = NULL;
 	struct llinfo_nd6 *ln = NULL;
 	int error = 0;
-#if 0 /* PF */
+#ifndef MIP_USE_PF
 #if defined(MIP6) && NMIP > 0
 	int presence;
 	struct ip6_hdr *ip6;
@@ -1992,7 +1992,7 @@ nd6_output(ifp, origifp, m0, dst, rt0)
 		}
 	}
 #endif /* MIP6 && NMIP > 0 */
-#endif /* PF */
+#endif /* !MIP_USE_PF */
 
 	if (IN6_IS_ADDR_MULTICAST(&dst->sin6_addr))
 		goto sendpkt;
