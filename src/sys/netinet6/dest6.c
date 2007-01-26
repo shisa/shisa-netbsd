@@ -58,6 +58,7 @@ __KERNEL_RCSID(0, "$NetBSD: dest6.c,v 1.15 2006/11/16 01:33:45 christos Exp $");
 #ifdef MIP6
 #include <net/mipsock.h>
 #include <netinet/ip6mh.h>
+#include <netinet6/mip6.h>
 #include <netinet6/mip6_var.h>
 
 static int dest6_swap_hao(struct ip6_hdr *, struct ip6aux *,
@@ -88,7 +89,6 @@ dest6_input(struct mbuf **mp, int *offp, int proto)
 
 	ip6 = mtod(m, struct ip6_hdr *);
 #endif /* MIP6 */
-
 	/* validation of the length of the header */
 	IP6_EXTHDR_GET(dstopts, struct ip6_dest *, m, off, sizeof(*dstopts));
 	if (dstopts == NULL)
@@ -120,6 +120,10 @@ dest6_input(struct mbuf **mp, int *offp, int proto)
 #ifdef MIP6
 		case IP6OPT_HOME_ADDRESS:
 			/* HAO must appear only once */
+			if ((mip6_nodetype &
+			     (MIP6_NODETYPE_HOME_AGENT |
+			      MIP6_NODETYPE_CORRESPONDENT_NODE)) == 0)
+				goto nomip;
 			n = ip6_addaux(m);
 			if (!n) {
 				/* not enough core */
@@ -153,8 +157,8 @@ dest6_input(struct mbuf **mp, int *offp, int proto)
 
 			/* check whether this HAO is 'verified'. */
 			if (
-			    (bce = mip6_bce_get(&home, &ip6->ip6_dst, &ip6->ip6_src, 0))
-			    && IN6_ARE_ADDR_EQUAL(&bce->mbc_coa, &ip6->ip6_src)) {
+				(bce = mip6_bce_get(&home, &ip6->ip6_dst, &ip6->ip6_src, 0))
+				&& IN6_ARE_ADDR_EQUAL(&bce->mbc_coa, &ip6->ip6_src)) {
 				/*
 				 * we have a corresponding binding
 				 * cache entry for the home address
@@ -168,10 +172,15 @@ dest6_input(struct mbuf **mp, int *offp, int proto)
 			 * beleive this HAO is a correct one.
 			 */
 			break;
+		nomip:
 #endif /* MIP6 */
 		default:		/* unknown option */
 			optlen = ip6_unknown_opt(opt, m,
-			    opt - mtod(m, u_int8_t *));
+			    opt - mtod(m, u_int8_t *)
+#ifdef __APPLE__
+						 ,0
+#endif					 
+				);
 			if (optlen == -1)
 				return (IPPROTO_DONE);
 			optlen += 2;
@@ -184,7 +193,6 @@ dest6_input(struct mbuf **mp, int *offp, int proto)
 	if (verified && dest6_swap_hao(ip6, ip6a, haopt) < 0)
 		goto bad;
 #endif /* MIP6 */
-
 	*offp = off;
 	return (dstopts->ip6d_nxt);
 
@@ -195,8 +203,10 @@ dest6_input(struct mbuf **mp, int *offp, int proto)
 
 #ifdef MIP6
 static int
-dest6_swap_hao(struct ip6_hdr *ip6, struct ip6aux *ip6a,
-    struct ip6_opt_home_address *haopt)
+dest6_swap_hao(ip6, ip6a, haopt)
+	struct ip6_hdr *ip6;
+	struct ip6aux *ip6a;
+	struct ip6_opt_home_address *haopt;
 {
 
 	if ((ip6a->ip6a_flags & (IP6A_HASEEN | IP6A_SWAP)) != IP6A_HASEEN)
@@ -220,9 +230,11 @@ dest6_swap_hao(struct ip6_hdr *ip6, struct ip6aux *ip6a,
 	return (0);
 }
 
-
 static int
-dest6_nextopt(struct mbuf *m, int off, struct ip6_opt *ip6o)
+dest6_nextopt(m, off, ip6o)
+	struct mbuf *m;
+	int off;
+	struct ip6_opt *ip6o;
 {
 	u_int8_t type;
 
@@ -250,7 +262,9 @@ dest6_nextopt(struct mbuf *m, int off, struct ip6_opt *ip6o)
 }
 
 int
-dest6_mip6_hao(struct mbuf *m, int mhoff, int nxt)
+dest6_mip6_hao(m, mhoff, nxt)
+	struct mbuf *m;
+	int mhoff, nxt;
 {
 	struct ip6_hdr *ip6;
 	struct ip6aux *ip6a;
@@ -265,11 +279,11 @@ dest6_mip6_hao(struct mbuf *m, int mhoff, int nxt)
 	if ((nxt == IPPROTO_HOPOPTS) || (nxt == IPPROTO_DSTOPTS)) {
 		return (0);
 	}
+
 	n = ip6_findaux(m);
 	if (!n)
 		return (0);
 	ip6a = (struct ip6aux *) (n + 1);
-
 	if ((ip6a->ip6a_flags & (IP6A_HASEEN | IP6A_SWAP)) != IP6A_HASEEN)
 		return (0);
 
@@ -277,25 +291,20 @@ dest6_mip6_hao(struct mbuf *m, int mhoff, int nxt)
 	/* find home address */
 	off = 0;
 	proto = IPPROTO_IPV6;
-	while (1) {
-		int nh;
-		newoff = ip6_nexthdr(m, off, proto, &nh);
+	while (proto != IPPROTO_DSTOPTS) {
+		int nxth;
+		newoff = ip6_nexthdr(m, off, proto, &nxth);
 		if (newoff < 0 || newoff < off)
-			return (0);     /* XXX */
+			return (0);	/* XXX */
 		off = newoff;
-		proto = nh;
-		if (proto == IPPROTO_DSTOPTS)
-			break;
+		proto = nxth;
 	}
 	ip6o.ip6o_type = IP6OPT_PADN;
 	ip6o.ip6o_len = 0;
-	while (1) {
-		newoff = dest6_nextopt(m, off, &ip6o);
-		if (newoff < 0)
-			return (0);     /* XXX */
-		off = newoff;
-		if (ip6o.ip6o_type == IP6OPT_HOME_ADDRESS)
-			break;
+	while (ip6o.ip6o_type != IP6OPT_HOME_ADDRESS) {
+		off = dest6_nextopt(m, off, &ip6o);
+		if (off < 0)
+			return (0);	/* XXX */
 	}
 	m_copydata(m, off, sizeof(struct ip6_opt_home_address),
 	    (caddr_t)&haopt);
@@ -332,12 +341,12 @@ dest6_mip6_hao(struct mbuf *m, int mhoff, int nxt)
 		if (error)
 			return (error);
 		m_copyback(m, off, sizeof(struct ip6_opt_home_address),
-		    (caddr_t)&haopt);           /* XXX */
+		    (caddr_t)&haopt);		/* XXX */
 		return (0);
 	}
 
 	/* reject */
-/*     mip6stat.mip6s_unverifiedhao++;*/
+/*	mip6stat.mip6s_unverifiedhao++;*/
 
 	/* notify to send a binding error by the mobility socket. */
 	(void)mip6_notify_be_hint(&ip6->ip6_src, &ip6->ip6_dst, &home,
@@ -347,8 +356,11 @@ dest6_mip6_hao(struct mbuf *m, int mhoff, int nxt)
 }
 
 static void
-mip6_notify_be_hint(struct in6_addr *src, struct in6_addr *coa,
-    struct in6_addr *hoa, u_int8_t status)
+mip6_notify_be_hint(src, coa, hoa, status)
+	struct in6_addr *src;
+	struct in6_addr *coa;
+	struct in6_addr *hoa;
+	u_int8_t status;
 {
 	struct sockaddr_in6 src_sin6, coa_sin6, hoa_sin6;
 
