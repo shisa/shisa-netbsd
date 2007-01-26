@@ -1,4 +1,4 @@
-/* $Id: mipsock.c,v 1.5 2007/01/14 05:23:18 momose Exp $ */
+/* $Id: mipsock.c,v 1.6 2007/01/26 10:07:16 keiichi Exp $ */
 
 /*
  * Copyright (C) 2004 WIDE Project.
@@ -47,6 +47,9 @@
 #include <sys/protosw.h>
 #include <sys/syslog.h>
 #include <sys/proc.h>
+#if defined(__NetBSD__) && __NetBSD_Version__ >= 400000000
+#include <sys/kauth.h>
+#endif /* __NetBSD__ && __NetBSD_Version__ >= 400000000 */
 
 #include <net/if.h>
 #include <net/mipsock.h>
@@ -69,7 +72,9 @@
 #define thread proc
 #endif /* __APPLE__ */
 
+#if defined(__NetBSD__) && __NetBSD_Version__ >= 400000000
 DOMAIN_DEFINE(mipdomain);	/* foward declare and add to link set */
+#endif /* __NetBSD__ && __NetBSD_Version__ >= 400000000 */
 
 static struct	sockaddr mips_dst = { .sa_len = 2, .sa_family = PF_MOBILITY, };
 static struct	sockaddr mips_src = { .sa_len = 2, .sa_family = PF_MOBILITY, };
@@ -298,8 +303,25 @@ static struct pr_usrreqs mip_usrreqs = {
 #if defined(__NetBSD__) || defined(__OpenBSD__)
 /*ARGSUSED*/
 int
-mips_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
-    struct mbuf *control, struct lwp *l)
+#ifdef __NetBSD__
+mips_usrreq(so, req, m, nam, control, p)
+#else
+mips_usrreq(so, req, m, nam, control)
+#endif
+	struct socket *so;
+	int req;
+	struct mbuf *m;
+	struct mbuf *nam;
+	struct mbuf *control;
+#ifdef __NetBSD__
+#if __NetBSD_Version__ >= 400000000
+	struct lwp *p;
+#else
+	struct proc *p;
+#endif /* __NetBSD_Version__ >= 400000000 */
+#else
+#define p curproc
+#endif /* __NetBSD__ */
 {
 	int error = 0;
 	struct rawcb *rp = sotorawcb(so);
@@ -323,7 +345,7 @@ mips_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
 	 * and send "safe" commands to the routing socket.
 	 */
 	if (req == PRU_ATTACH) {
-		if (l == 0)
+		if (p == 0)
 			error = EACCES;
 		else
 			error = raw_attach(so, (int)(long)nam);
@@ -331,7 +353,7 @@ mips_usrreq(struct socket *so, int req, struct mbuf *m, struct mbuf *nam,
 #ifdef __OpenBSD__
 		error = raw_usrreq(so, req, m, nam, control);
 #else
-		error = raw_usrreq(so, req, m, nam, control, l);
+		error = raw_usrreq(so, req, m, nam, control, p);
 #endif
 
 	rp = sotorawcb(so);
@@ -383,8 +405,37 @@ mips_output(m, va_alist)
 	struct sockaddr_storage hoa, coa, cnaddr;
 	u_int16_t bid = 0;
 
+#define senderr(e) do { error = e; goto flush;} while (/*CONSTCOND*/ 0)
 	miph = mtod(m, struct mip_msghdr *);
+
+	/*
+	 * Perform permission checking, only privileged sockets
+	 * may perform operations other than RTM_GET
+	 */
+	if (
+#if defined(__APPLE__)
+		(so->so_state & SS_PRIV == 0) && (error = EPERM)
+#elif defined(__FreeBSD__)
+		(error = suser(curthread)) != 0
+#elif defined(__NetBSD__)
+#if __NetBSD_Version__ >= 400000000
+		/* XXX is KAUTH_NETWORK_ROUTE correct? */
+		(kauth_authorize_network(curlwp->l_cred, KAUTH_NETWORK_ROUTE,
+		    0, miph, NULL, NULL) != 0) && (error = EACCES)
+#else
+		(suser(curproc->p_ucred, &curproc->p_acflag) != 0)
+		&& (error = EACCES)
+#endif /* __NetBSD_Version >= 400000000 */
+#endif         
+		) {
+		senderr(error);
+	}
+
+#ifndef __APPLE__
 	miph->miph_pid = curproc->p_pid;
+#else
+	miph->miph_pid = proc_selfpid();
+#endif /* !__APPLE__ */
 
 	switch (miph->miph_type) {
 	case MIPM_BC_ADD:
@@ -531,8 +582,24 @@ mips_output(m, va_alist)
 	default:
 		return (0);
 	}
-	
+
+ flush:
+	if (miph) {
+		if (error)
+			miph->miph_errno = error;
+/*
+		else
+			miph->miph_flags |= RTF_DONE;
+*/
+	}
+
+#ifdef __APPLE__
+	socket_unlock(so, 0);
+#endif /* __APPLE__ */
 	raw_input(m, &mips_proto, &mips_src, &mips_dst);
+#ifdef __APPLE__
+	socket_lock(so, 0);
+#endif /* __APPLE__ */
 	return (error);
 }
 
@@ -707,7 +774,12 @@ struct domain mipdomain = {
 	.dom_family = PF_MOBILITY,
 	.dom_name = "mip",
 	.dom_protosw = mipsw,
+#ifdef __APPLE__
+	0, 0, 0, 0, 0, 0, 0, 0,
+	{0, 0}
+#else
 	.dom_protoswNPROTOSW = &mipsw[sizeof(mipsw)/sizeof(mipsw[0])],
+#endif /* __APPLE__ */
 };
 
 #if defined(__FreeBSD__) || defined(__APPLE__)
