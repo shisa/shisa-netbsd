@@ -43,7 +43,7 @@ struct mip6_bul_internal {
 	u_int16_t           mbul_flags;      /* flags: Ack, LL, Key, Home */
 	struct mip_softc    *mbul_mip;       /* back pointer to mip */
 	const struct encaptab *mbul_encap;
-	u_int8_t            mbul_state;     /* internal state */
+	u_int8_t            mbul_state;      /* internal state */
 #ifdef MIP6_MCOA
 	u_int16_t           mbul_bid;        /* Binding Unique Identifier */
 #endif /* MIP6_MCOA */
@@ -199,7 +199,11 @@ void mip6_md_scan(u_int16_t);
 /* used by one or more kind of nodetypes. */
 struct in6_ifaddr *mip6_ifa_ifwithin6addr(const struct in6_addr *);
 int mip6_encapsulate(struct mbuf **, struct in6_addr *, struct in6_addr *);
-int mip6_tunnel_input(struct mbuf **, int *, int proto);
+#ifdef __APPLE__
+int mip6_tunnel_input(struct mbuf **, int *);
+#else
+int mip6_tunnel_input(struct mbuf **, int *, int);
+#endif /* __APPLE__ */
 void mip6_notify_rr_hint(struct in6_addr *, struct in6_addr *);
 
 /* a sysctl entry. */

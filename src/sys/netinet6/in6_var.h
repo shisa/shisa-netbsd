@@ -94,6 +94,16 @@ struct in6_ifextra {
 	struct scope6_id *scope6_id;
 };
 
+LIST_HEAD(mip6_bul_list, mip6_bul_internal); /* XXX */
+
+/*
+ * If changing size of the struct in6_ifaddr is not allowed for binary
+ * compatibilty or somthing  such as darwin, undef 'IFA_MBUL_LIST'
+ * the binding update list entry is held as a grobal vaue.
+ */
+#define IFA_MBUL_LIST
+/*#undef IFA_MBUL_LIST*/
+
 struct	in6_ifaddr {
 	struct	ifaddr ia_ifa;		/* protocol-independent info */
 #define	ia_ifp		ia_ifa.ifa_ifp
@@ -120,9 +130,18 @@ struct	in6_ifaddr {
 	/* multicast addresses joined from the kernel */
 	LIST_HEAD(, in6_multi_mship) ia6_memberships;
 
+#ifdef IFA_MBUL_LIST
 	/* binding update entreis for this address */
-	LIST_HEAD(, mip6_bul_internal) ia6_mbul_list;
+	struct mip6_bul_list ia6_mbul_list;
+#endif /* IFA_MBUL_LIST */
 };
+
+#ifdef IFA_MBUL_LIST
+#define MBUL_LIST(ia6)  (&ia6->ia6_mbul_list)
+#else
+extern struct mip6_bul_list mbul_list;
+#define MBUL_LIST(ia6)  (&mbul_list)
+#endif
 
 /* control structure to manage address selection policy */
 struct in6_addrpolicy {

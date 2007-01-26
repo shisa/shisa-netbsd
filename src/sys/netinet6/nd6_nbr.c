@@ -90,6 +90,7 @@ __KERNEL_RCSID(0, "$NetBSD: nd6_nbr.c,v 1.68 2006/12/15 21:18:56 joerg Exp $");
 #define SDL(s) ((struct sockaddr_dl *)s)
 
 struct dadq;
+struct dadq *nd6_dad_find __P((struct ifaddr *));
 static void nd6_dad_starttimer __P((struct dadq *, int));
 static void nd6_dad_stoptimer __P((struct dadq *));
 static void nd6_dad_timer __P((struct ifaddr *));
