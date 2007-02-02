@@ -32,7 +32,7 @@
 #if 0
 static char sccsid[] = "@(#)cksum.c	5.2 (Berkeley) 5/11/93";
 #else
-__RCSID("$NetBSD: cksum.c,v 1.5 2005/02/06 04:56:27 perry Exp $");
+__RCSID("$NetBSD: cksum.c,v 1.6 2007/01/25 23:25:20 cbiere Exp $");
 #endif
 #endif /* not lint */
 
@@ -51,11 +51,11 @@ __RCSID("$NetBSD: cksum.c,v 1.5 2005/02/06 04:56:27 perry Exp $");
  * worry about carries except at the end.
  */
 int
-in_cksum(u_short *addr, int len)
+in_cksum(const void *data, int len)
 {
+	const u_char *addr = data;
 	int nleft = len;
-	u_short *w = addr;
-	u_short answer;
+	uint16_t answer;
 	int sum = 0;
 
 	/*
@@ -65,13 +65,17 @@ in_cksum(u_short *addr, int len)
 	 *  16 bits.
 	 */
 	while( nleft > 1 )  {
-		sum += *w++;
+		uint16_t w;
+
+		memcpy(&w, addr, sizeof(w));
+		sum += w;
+		addr += 2;
 		nleft -= 2;
 	}
 
 	/* mop up an odd byte, if necessary */
 	if( nleft == 1 )
-		sum += (*(u_char *)w) << 8;
+		sum += *addr << 8;
 
 	/*
 	 * add back carry outs from top 16 bits to low 16 bits

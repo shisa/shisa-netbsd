@@ -1,4 +1,4 @@
-/*	$NetBSD: specialreg.h,v 1.12 2007/01/01 20:56:59 ad Exp $	*/
+/*	$NetBSD: specialreg.h,v 1.14 2007/01/16 15:43:44 christos Exp $	*/
 
 /*-
  * Copyright (c) 1991 The Regents of the University of California.
@@ -169,9 +169,13 @@
 
 #define CPUID2_FLAGS "\20\1SSE3\4MONITOR\5DS-CPL\6VMX\10EST\11TM2\13CID\17xTPR"
 
-#define CPUID2FAMILY(cpuid)	(((cpuid) >> 8) & 15)
-#define CPUID2MODEL(cpuid)	(((cpuid) >> 4) & 15)
-#define CPUID2STEPPING(cpuid)	((cpuid) & 15)
+#define CPUID2FAMILY(cpuid)	(((cpuid) >> 8) & 0xf)
+#define CPUID2MODEL(cpuid)	(((cpuid) >> 4) & 0xf)
+#define CPUID2STEPPING(cpuid)	((cpuid) & 0xf)
+
+/* Extended family and model are defined on amd64 processors */
+#define CPUID2EXTFAMILY(cpuid)	(((cpuid) >> 20) & 0xff)
+#define CPUID2EXTMODEL(cpuid)	(((cpuid) >> 16) & 0xf)
 
 #define CPUID(code, eax, ebx, ecx, edx)                         \
 	__asm("cpuid"                                           \
@@ -294,8 +298,6 @@
  * AMD K8 (Opteron) MSRs.
  */
 #define	MSR_SYSCFG	0xc0000010
-#define	MSR_HRCR	0x00000015
-#define		HWCR_FFDIS		0x00000040
 
 #define MSR_EFER	0xc0000080		/* Extended feature enable */
 #define 	EFER_SCE		0x00000001	/* SYSCALL extension */
@@ -315,6 +317,9 @@
 /*
  * These require a 'passcode' for access.  See cpufunc.h.
  */
+#define	MSR_HWCR	0xc0010015
+#define		HWCR_FFDIS		0x00000040
+
 #define	MSR_NB_CFG	0xc001001f
 #define		NB_CFG_DISIOREQLOCK	0x0000000000000004ULL
 #define		NB_CFG_DISDATMSK	0x0000001000000000ULL

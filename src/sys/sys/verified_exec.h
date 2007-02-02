@@ -1,4 +1,4 @@
-/*	$NetBSD: verified_exec.h,v 1.51 2007/01/09 12:49:37 elad Exp $	*/
+/*	$NetBSD: verified_exec.h,v 1.53 2007/01/11 16:24:48 elad Exp $	*/
 
 /*-
  * Copyright (c) 2005, 2006 Elad Efrat <elad@NetBSD.org>
@@ -83,7 +83,6 @@ typedef void (*veriexec_fpop_final_t)(u_char *, void *);
 #if defined(_KERNEL) && !defined(HAVE_NBTOOL_CONFIG_H)
 MALLOC_DECLARE(M_VERIEXEC);
 
-extern int veriexec_verbose;
 extern int veriexec_strict;
 
 /* Readable values for veriexec_report(). */
@@ -111,8 +110,8 @@ int veriexec_page_verify(struct veriexec_file_entry *, struct vm_page *,
     size_t, struct lwp *);
 #endif /* notyet */
 boolean_t veriexec_lookup(struct vnode *);
-int veriexec_file_delete(struct vnode *);
-int veriexec_table_delete(struct mount *);
+int veriexec_file_delete(struct lwp *, struct vnode *);
+int veriexec_table_delete(struct lwp *, struct mount *);
 int veriexec_convert(struct vnode *, prop_dictionary_t);
 void veriexec_report(const u_char *, const u_char *, struct lwp *, int);
 void veriexec_purge(struct vnode *);

@@ -1,4 +1,4 @@
-/*	$NetBSD: globals.h,v 1.9 2003/08/07 11:25:46 agc Exp $	*/
+/*	$NetBSD: globals.h,v 1.11 2007/01/25 23:25:20 cbiere Exp $	*/
 
 /*-
  * Copyright (c) 1985 The Regents of the University of California.
@@ -45,7 +45,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <syslog.h>
 #include <syslog.h>
 #include <unistd.h>
 
@@ -127,7 +126,7 @@ extern struct hosttbl hosttbl[NHOSTS+1];
 struct netinfo {
 	struct	netinfo *next;
 	struct	in_addr net;
-	u_long	mask;
+	in_addr_t mask;
 	struct	in_addr my_addr;
 	struct	sockaddr_in dest_addr;	/* broadcast addr or point-point */
 	long	status;

@@ -1,4 +1,4 @@
-/* $NetBSD: secmodel_bsd44_suser.c,v 1.30 2007/01/09 12:57:56 elad Exp $ */
+/* $NetBSD: secmodel_bsd44_suser.c,v 1.33 2007/01/20 16:47:38 elad Exp $ */
 /*-
  * Copyright (c) 2006 Elad Efrat <elad@NetBSD.org>
  * All rights reserved.
@@ -38,7 +38,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: secmodel_bsd44_suser.c,v 1.30 2007/01/09 12:57:56 elad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: secmodel_bsd44_suser.c,v 1.33 2007/01/20 16:47:38 elad Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -279,24 +279,22 @@ proc_uidmatch(kauth_cred_t cred, kauth_cred_t target)
 {
 	int r = 0;
 
-	/*
-	 * suid proc of ours or proc not ours
-	 */
 	if (kauth_cred_getuid(cred) != kauth_cred_getuid(target) ||
-	    kauth_cred_getuid(cred) != kauth_cred_getsvuid(target))
+	    kauth_cred_getuid(cred) != kauth_cred_getsvuid(target)) {
+		/*
+		 * suid proc of ours or proc not ours
+		 */
 		r = EPERM;
-
-	/*
-	 * sgid proc has sgid back to us temporarily
-	 */
-	else if (kauth_cred_getgid(target) != kauth_cred_getsvgid(target))
+	} else if (kauth_cred_getgid(target) != kauth_cred_getsvgid(target)) {
+		/*
+		 * sgid proc has sgid back to us temporarily
+		 */
 		r = EPERM;
-
-	/*
-	 * our rgid must be in target's group list (ie,
-	 * sub-processes started by a sgid process)
-	 */
-	else {
+	} else {
+		/*
+		 * our rgid must be in target's group list (ie,
+		 * sub-processes started by a sgid process)
+		 */
 		int ismember = 0;
 
 		if (kauth_cred_ismember_gid(cred,
@@ -487,55 +485,49 @@ secmodel_bsd44_suser_process_cb(kauth_cred_t cred, kauth_action_t action,
 
 		break;
 
-	case KAUTH_PROCESS_RESOURCE:
-		switch ((u_long)arg1) {
-		case KAUTH_REQ_PROCESS_RESOURCE_NICE:
-			if (isroot) {
-				result = KAUTH_RESULT_ALLOW;
-				break;
-			}
-
-			if (kauth_cred_geteuid(cred) !=
-			    kauth_cred_geteuid(p->p_cred) &&
-			    kauth_cred_getuid(cred) !=
-			    kauth_cred_geteuid(p->p_cred)) {
-				result = KAUTH_RESULT_DENY;
-				break;
-			}
-
-			if ((u_long)arg2 >= p->p_nice)
-				result = KAUTH_RESULT_ALLOW;
-
-			break;
-
-		case KAUTH_REQ_PROCESS_RESOURCE_RLIMIT: {
-			struct rlimit *new_rlimit;
-			u_long which;
-
-			if (isroot) {
-				result = KAUTH_RESULT_ALLOW;
-				break;
-			}
-
-			if (proc_uidmatch(cred, p->p_cred) != 0) {
-				result = KAUTH_RESULT_DENY;
-				break;
-			}
-
-			new_rlimit = arg2;
-			which = (u_long)arg3;
-
-			if (new_rlimit->rlim_max <=
-			    p->p_rlimit[which].rlim_max)
-				result = KAUTH_RESULT_ALLOW;
-			break;
-			}
-
-		default:
-			result = KAUTH_RESULT_DEFER;
+	case KAUTH_PROCESS_NICE:
+		if (isroot) {
+			result = KAUTH_RESULT_ALLOW;
 			break;
 		}
+
+		if (kauth_cred_geteuid(cred) !=
+		    kauth_cred_geteuid(p->p_cred) &&
+		    kauth_cred_getuid(cred) !=
+		    kauth_cred_geteuid(p->p_cred)) {
+			result = KAUTH_RESULT_DENY;
+			break;
+		}
+
+		if ((u_long)arg1 >= p->p_nice)
+			result = KAUTH_RESULT_ALLOW;
+
 		break;
+
+	case KAUTH_PROCESS_RLIMIT: {
+		struct rlimit *new_rlimit;
+		u_long which;
+
+		if (isroot) {
+			result = KAUTH_RESULT_ALLOW;
+			break;
+		}
+
+		if ((p != curlwp->l_proc) &&
+		    (proc_uidmatch(cred, p->p_cred) != 0)) {
+			result = KAUTH_RESULT_DENY;
+			break;
+		}
+
+		new_rlimit = arg1;
+		which = (u_long)arg2;
+
+		if (new_rlimit->rlim_max <=
+		    p->p_rlimit[which].rlim_max)
+			result = KAUTH_RESULT_ALLOW;
+
+		break;
+		}
 
 	case KAUTH_PROCESS_SETID:
 		if (isroot)

@@ -1,4 +1,4 @@
-/*	$NetBSD: pthread.c,v 1.52 2006/12/24 18:39:45 ad Exp $	*/
+/*	$NetBSD: pthread.c,v 1.57 2007/01/20 20:02:36 ad Exp $	*/
 
 /*-
  * Copyright (c) 2001, 2002, 2003, 2006 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: pthread.c,v 1.52 2006/12/24 18:39:45 ad Exp $");
+__RCSID("$NetBSD: pthread.c,v 1.57 2007/01/20 20:02:36 ad Exp $");
 
 #include <err.h>
 #include <errno.h>
@@ -191,7 +191,7 @@ pthread_init(void)
 		pthread__nspins = PTHREAD__NSPINS;
 	else
 		pthread__nspins = 1;
-	i = _lwp_unpark_all(NULL, 0);
+	i = _lwp_unpark_all(NULL, 0, NULL);
 	if (i < pthread__unpark_max)
 		pthread__unpark_max = i;
 #endif
@@ -382,7 +382,7 @@ pthread_create(pthread_t *thread, const pthread_attr_t *attr,
 	pthread_t self, newthread;
 	pthread_attr_t nattr;
 	struct pthread_attr_private *p;
-	char *name;
+	char * volatile name;
 	int ret;
 #ifndef PTHREAD_SA
 	int flag;
@@ -456,8 +456,15 @@ pthread_create(pthread_t *thread, const pthread_attr_t *attr,
 	makecontext(newthread->pt_uc, pthread__create_tramp, 2,
 	    startfunc, arg);
 
+	/* 5. Add to list of all threads. */
+	pthread_spinlock(self, &pthread__allqueue_lock);
+	PTQ_INSERT_HEAD(&pthread__allqueue, newthread, pt_allq);
+	nthreads++;
+	pthread_spinunlock(self, &pthread__allqueue_lock);
+
 #ifndef PTHREAD_SA
-	/* 4a. Create the new LWP. */
+	/* 5a. Create the new LWP. */
+	newthread->pt_sleeponq = 0;
 	flag = 0;
 	if ((newthread->pt_flags & PT_FLAG_SUSPENDED) != 0)
 		flag |= LWP_SUSPENDED;
@@ -467,18 +474,17 @@ pthread_create(pthread_t *thread, const pthread_attr_t *attr,
 	if (ret != 0) {
 		SDPRINTF(("(pthread_create %p) _lwp_create: %s\n",
 		    strerror(errno)));
-		/* XXXLWP what else? */
 		free(name);
+		pthread_spinlock(self, &pthread__allqueue_lock);
+		PTQ_REMOVE(&pthread__allqueue, newthread, pt_allq);
+		nthreads--;
+		pthread_spinunlock(self, &pthread__allqueue_lock);
+		pthread_spinlock(self, &pthread__deadqueue_lock);
+		PTQ_INSERT_HEAD(&pthread__deadqueue, newthread, pt_allq);
+		pthread_spinunlock(self, &pthread__deadqueue_lock);
 		return ret;
 	}
-	newthread->pt_sleeponq = 0;
 #endif
-
-	/* 5. Add to list of all threads. */
-	pthread_spinlock(self, &pthread__allqueue_lock);
-	PTQ_INSERT_HEAD(&pthread__allqueue, newthread, pt_allq);
-	nthreads++;
-	pthread_spinunlock(self, &pthread__allqueue_lock);
 
 #ifdef PTHREAD_SA
 	SDPRINTF(("(pthread_create %p) new thread %p (name pointer %p).\n",
@@ -712,6 +718,7 @@ pthread_exit(void *retval)
 		pthread_spinunlock(self, &pthread__allqueue_lock);
 #else
 		pthread_spinunlock(self, &pthread__deadqueue_lock);
+		/* XXXLWP race against stack being reclaimed. */
 		_lwp_exit();
 #endif
 	} else {
@@ -851,6 +858,7 @@ pthread_join(pthread_t thread, void **valptr)
 		}
 		thread->pt_state = PT_STATE_DEAD;
 		pthread_spinunlock(self, &thread->pt_join_lock);
+		(void)_lwp_detach(thread->pt_lid);
 		break;
 	default:
 		pthread_spinunlock(self, &thread->pt_join_lock);
@@ -1376,7 +1384,7 @@ pthread__park(pthread_t self, pthread_spin_t *lock,
 	rv = 0;
 	do {
 		pthread_spinunlock(self, lock);
-		if (_lwp_park((const void *)abstime, NULL) != 0) {
+		if (_lwp_park(abstime, NULL, obj) != 0) {
 			switch (rv = errno) {
 			case EINTR:
 				/* Check for cancellation. */
@@ -1429,7 +1437,7 @@ pthread__unpark(pthread_t self, pthread_spin_t *lock, void *obj,
 		target->pt_sleepobj = NULL;
 		target->pt_sleeponq = 0;
 		pthread_spinunlock(self, lock);
-		rv = _lwp_unpark(target->pt_lid);
+		rv = _lwp_unpark(target->pt_lid, obj);
 
 		if (rv != 0 && errno != EALREADY && errno != EINTR) {
 			SDPRINTF(("(pthread__unpark %p) syscall rv=%d\n",
@@ -1498,7 +1506,7 @@ pthread__unpark_all(pthread_t self, pthread_spin_t *lock, void *obj,
 		case 0:
 			return;
 		case 1:
-			rv = _lwp_unpark(waiters[0]);
+			rv = _lwp_unpark(waiters[0], obj);
 			if (rv != 0 && errno != EALREADY && errno != EINTR) {
 				OOPS("_lwp_unpark failed");
 				SDPRINTF(("(pthread__unpark_all %p) "
@@ -1506,7 +1514,7 @@ pthread__unpark_all(pthread_t self, pthread_spin_t *lock, void *obj,
 			}
 			return;
 		default:
-			rv = _lwp_unpark_all(waiters, n);
+			rv = _lwp_unpark_all(waiters, n, obj);
 			if (rv != 0 && errno != EINTR) {
 				OOPS("_lwp_unpark_all failed");
 				SDPRINTF(("(pthread__unpark_all %p) "

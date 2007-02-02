@@ -1,4 +1,4 @@
-.\"	$NetBSD: main,v 1.322 2007/01/06 03:34:26 ober Exp $
+.\"	$NetBSD: main,v 1.325 2007/01/23 10:35:01 njoly Exp $
 .\"
 .\" Copyright (c) 1999-2005 The NetBSD Foundation, Inc.
 .\" All rights reserved.
@@ -1191,6 +1191,7 @@ If you're one of them, and would like to mentioned, tell us!)
 .It Ta Mason Loring Bliss Ta Mt mason@NetBSD.org
 .It Ta Charles Blundell Ta Mt cb@NetBSD.org
 .It Ta Rafal Boni Ta Mt rafal@NetBSD.org
+.It Ta Stephen Borrill Ta Mt sborrill@NetBSD.org
 .It Ta Sean Boudreau Ta Mt seanb@NetBSD.org
 .It Ta Manuel Bouyer Ta Mt bouyer@NetBSD.org
 .It Ta John Brezak Ta Mt brezak@NetBSD.org
@@ -1220,6 +1221,7 @@ If you're one of them, and would like to mentioned, tell us!)
 .It Ta John Darrow Ta Mt jdarrow@NetBSD.org
 .It Ta Jed Davis Ta Mt jld@NetBSD.org
 .It Ta Matt DeBergalis Ta Mt deberg@NetBSD.org
+.It Ta Arnaud Degroote Ta Mt degroote@NetBSD.org
 .It Ta Rob Deker Ta Mt deker@NetBSD.org
 .It Ta Chris G. Demetriou Ta Mt cgd@NetBSD.org
 .It Ta Tracy Di Marco White Ta Mt gendalia@NetBSD.org
@@ -1290,6 +1292,7 @@ If you're one of them, and would like to mentioned, tell us!)
 .It Ta Soren Jacobsen Ta Mt snj@NetBSD.org
 .It Ta Lonhyn T. Jasinskyj Ta Mt lonhyn@NetBSD.org
 .It Ta Darrin Jewell Ta Mt dbj@NetBSD.org
+.It Ta Nicolas Joly Ta Mt njoly@NetBSD.org
 .It Ta Chris Jones Ta Mt cjones@NetBSD.org
 .It Ta S\(/oren J\(/orvang Ta Mt soren@NetBSD.org
 .It Ta Takahiro Kambe Ta Mt taca@NetBSD.org

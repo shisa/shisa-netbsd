@@ -1,4 +1,4 @@
-/*	$NetBSD: timed-extern.h,v 1.5 2005/04/19 03:40:00 christos Exp $	*/
+/*	$NetBSD: timed-extern.h,v 1.8 2007/01/26 16:12:41 christos Exp $	*/
 
 /*-
  * Copyright (c) 1993 The Regents of the University of California.
@@ -59,7 +59,7 @@ int	 election(struct netinfo *);
 void	 get_goodgroup(int);
 int	 good_host_name(char *);
 void	 ignoreack(void);
-int	 in_cksum(u_short *, int);
+int	 in_cksum(const void *, int);
 void	 lookformaster(struct netinfo *);
 void	 makeslave(struct netinfo *);
 void	 master(void);
@@ -79,6 +79,10 @@ void	 slaveack(void);
 void	 spreadtime(void);
 void	 suppress(struct sockaddr_in *, char *, struct netinfo *);
 void	 synch(long);
-void	 traceoff(char *);
+void	 traceoff(const char *);
 void	 traceon(void);
 void	 xmit(int, u_short, struct sockaddr_in *);
+void	 set_tsp_name(struct tsp *, const char *);
+void	 get_tsp_name(const struct tsp *, char *, size_t);
+void	 update_time(struct timeval *, const struct tsp *);
+int	 sendtsp(int , struct tsp *, struct sockaddr_in *);

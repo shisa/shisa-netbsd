@@ -1,4 +1,4 @@
-/*	$NetBSD: pnode.c,v 1.1 2006/12/29 15:28:11 pooka Exp $	*/
+/*	$NetBSD: pnode.c,v 1.3 2007/01/15 00:39:02 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006 Antti Kantee.  All Rights Reserved.
@@ -30,7 +30,7 @@
 
 #include <sys/cdefs.h>
 #if !defined(lint)
-__RCSID("$NetBSD: pnode.c,v 1.1 2006/12/29 15:28:11 pooka Exp $");
+__RCSID("$NetBSD: pnode.c,v 1.3 2007/01/15 00:39:02 pooka Exp $");
 #endif /* !lint */
 
 #include <sys/types.h>
@@ -57,8 +57,8 @@ puffs_pn_new(struct puffs_usermount *pu, void *privdata)
 	if (pn == NULL)
 		return NULL;
 
-	pn->pn_mnt = pu;
 	pn->pn_data = privdata;
+	pn->pn_mnt = pu;
 	puffs_vattr_null(&pn->pn_va);
 
 	LIST_INSERT_HEAD(&pu->pu_pnodelst, pn, pn_entries);
@@ -69,15 +69,32 @@ puffs_pn_new(struct puffs_usermount *pu, void *privdata)
 void
 puffs_pn_put(struct puffs_node *pn)
 {
+	struct puffs_usermount *pu = pn->pn_mnt;
 
+	/* XXX: why's this here? */
 	if (pn == NULL)
 		return;
 
-	if (pn->pn_path) {
-		free(pn->pn_path);
-		pn->pn_path = (void *)0xdeadc0de;
-	}
-
+	pu->pu_pathfree(pu, &pn->pn_po);
 	LIST_REMOVE(pn, pn_entries);
 	free(pn);
+}
+
+/* walk list, rv can be used either to halt or to return a value */
+void *
+puffs_pn_nodewalk(struct puffs_usermount *pu, puffs_nodewalk_fn fn, void *arg)
+{
+	struct puffs_node *pn_cur, *pn_next;
+	void *rv;
+
+	pn_cur = LIST_FIRST(&pu->pu_pnodelst);
+	while (pn_cur) {
+		pn_next = LIST_NEXT(pn_cur, pn_entries);
+		rv = fn(pu, pn_cur, arg);
+		if (rv)
+			return rv;
+		pn_cur = pn_next;
+	}
+
+	return NULL;
 }

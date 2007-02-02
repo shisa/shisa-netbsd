@@ -1,4 +1,4 @@
-/*	$NetBSD: ctrace.c,v 1.15 2005/02/18 22:16:27 dsl Exp $	*/
+/*	$NetBSD: ctrace.c,v 1.18 2007/01/22 21:14:53 jdc Exp $	*/
 
 /*-
  * Copyright (c) 1992, 1993
@@ -34,7 +34,7 @@
 #if 0
 static char sccsid[] = "@(#)ctrace.c	8.2 (Berkeley) 10/5/93";
 #else
-__RCSID("$NetBSD: ctrace.c,v 1.15 2005/02/18 22:16:27 dsl Exp $");
+__RCSID("$NetBSD: ctrace.c,v 1.18 2007/01/22 21:14:53 jdc Exp $");
 #endif
 #endif				/* not lint */
 
@@ -45,7 +45,6 @@ __RCSID("$NetBSD: ctrace.c,v 1.15 2005/02/18 22:16:27 dsl Exp $");
 
 #include <sys/time.h>
 #include <string.h>
-#include <stdlib.h>
 
 #include "curses.h"
 #include "curses_private.h"
@@ -54,28 +53,48 @@ __RCSID("$NetBSD: ctrace.c,v 1.15 2005/02/18 22:16:27 dsl Exp $");
 #define	TFILE	"__curses.out"
 #endif
 
-static FILE *tracefp;		/* Curses debugging file descriptor. */
+static FILE *tracefp = NULL;		/* Curses debugging file descriptor. */
+
+static int tracemask;	/* Areas of trace output we want. */
+
+static int init_done = 0;
 
 void
-__CTRACE(const char *fmt,...)
+__CTRACE_init()
+{
+	char *tf, *tm;
+
+	tm = getenv("CURSES_TRACE_MASK");
+	if (tm == NULL)
+		tracemask = __CTRACE_ALL;
+	else {
+		tracemask = (int) strtol(tm, NULL, 0);
+	}
+	if (tracemask < 0)
+		tracemask = (0 - tracemask) ^ __CTRACE_ALL;
+	if (tracemask == 0)
+		return;
+	tf = getenv("CURSES_TRACE_FILE");
+	if (tf == NULL || strcmp( tf, "<none>"))
+		tracefp = fopen(tf ? tf : TFILE, "w");
+	init_done = 1;
+	__CTRACE(__CTRACE_ALL, "Trace mask: 0x%08x\n", tracemask);
+}
+
+void
+__CTRACE(int area, const char *fmt,...)
 {
 	struct timeval tv;
         static int seencr = 1;
 	va_list ap;
 
-	if (tracefp == (void *)~0)
-		return;
-	if (tracefp == NULL) {
-		char *tf = getenv("CURSES_TRACE_FILE");
-		if (!tf || strcmp( tf, "<none>"))
-			tracefp = fopen(tf ? tf : TFILE, "w");
-	}
-	if (tracefp == NULL) {
-		tracefp = (void *)~0;
+	if (!init_done)
+		__CTRACE_init();
+	if (tracefp == NULL || !(tracemask & area)) {
 		return;
 	}
 	gettimeofday(&tv, NULL);
-        if (seencr) {
+        if (seencr && (tracemask & __CTRACE_TSTAMP)) {
                 gettimeofday(&tv, NULL);
                 (void) fprintf(tracefp, "%lu.%06lu: ", tv.tv_sec, tv.tv_usec);
         }

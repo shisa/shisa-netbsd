@@ -1,4 +1,4 @@
-/*	$NetBSD: dtfs_vfsops.c,v 1.9 2007/01/06 18:25:19 pooka Exp $	*/
+/*	$NetBSD: dtfs_vfsops.c,v 1.11 2007/01/26 23:02:05 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006  Antti Kantee.  All Rights Reserved.
@@ -71,7 +71,6 @@ dtfs_domount(struct puffs_usermount *pu)
 	va->va_nlink = 2;
 
 	pu->pu_pn_root = pn;
-	puffs_setrootpath(pu, ".");
 
 	/* XXX: should call dtfs_fs_statvfs */
 	puffs_zerostatvfs(&sb);
@@ -142,3 +141,12 @@ dtfs_fs_statvfs(struct puffs_cc *pcc, struct statvfs *sbp, pid_t pid)
 	return 0;
 }
 #undef ROUND 
+
+void
+dtfs_fs_suspend(struct puffs_cc *pcc, int status)
+{
+
+	printf("suspend status %d\n", status);
+	if (status == 1)
+		sleep(3);
+}

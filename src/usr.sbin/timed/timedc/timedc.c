@@ -1,4 +1,4 @@
-/*	$NetBSD: timedc.c,v 1.14 2006/06/15 19:32:55 christos Exp $	*/
+/*	$NetBSD: timedc.c,v 1.19 2007/01/28 13:51:29 cbiere Exp $	*/
 
 /*-
  * Copyright (c) 1985, 1993 The Regents of the University of California.
@@ -40,7 +40,7 @@ __COPYRIGHT(
 #if 0
 static char sccsid[] = "@(#)timedc.c	8.1 (Berkeley) 6/6/93";
 #else
-__RCSID("$NetBSD: timedc.c,v 1.14 2006/06/15 19:32:55 christos Exp $");
+__RCSID("$NetBSD: timedc.c,v 1.19 2007/01/28 13:51:29 cbiere Exp $");
 #endif
 #endif /* not lint */
 
@@ -52,6 +52,9 @@ __RCSID("$NetBSD: timedc.c,v 1.14 2006/06/15 19:32:55 christos Exp $");
 #include <string.h>
 #include <syslog.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <pwd.h>
+#include <err.h>
 
 int trace = 0;
 FILE *fd = 0;
@@ -62,39 +65,36 @@ char	*margv[MAX_MARGV];
 char	cmdline[200];
 jmp_buf	toplevel;
 static struct cmd *getcmd(char *);
+static int drop_privileges(void);
 
 int
 main(int argc, char *argv[])
 {
 	struct cmd *c;
 
+	fcntl(3, F_CLOSEM);
 	openlog("timedc", 0, LOG_AUTH);
 
 	/*
 	 * security dictates!
 	 */
-	if (priv_resources() < 0) {
-		fprintf(stderr, "Could not get privileged resources\n");
-		exit(1);
-	}
-	(void) setuid(getuid());
+	if (priv_resources() < 0)
+		errx(EXIT_FAILURE, "Could not get privileged resources");
+	if (drop_privileges() < 0)
+		errx(EXIT_FAILURE, "Could not drop privileges");
 
 	if (--argc > 0) {
 		c = getcmd(*++argv);
 		if (c == (struct cmd *)-1) {
 			printf("?Ambiguous command\n");
-			exit(1);
+			exit(EXIT_FAILURE);
 		}
 		if (c == 0) {
 			printf("?Invalid command\n");
-			exit(1);
-		}
-		if (c->c_priv && getuid()) {
-			printf("?Privileged command\n");
-			exit(1);
+			exit(EXIT_FAILURE);
 		}
 		(*c->c_handler)(argc, argv);
-		exit(0);
+		exit(EXIT_SUCCESS);
 	}
 
 	fromatty = isatty(fileno(stdin));
@@ -125,10 +125,6 @@ main(int argc, char *argv[])
 			printf("?Invalid command\n");
 			continue;
 		}
-		if (c->c_priv && getuid()) {
-			printf("?Privileged command\n");
-			continue;
-		}
 		(*c->c_handler)(margc, margv);
 	}
 	return 0;
@@ -137,8 +133,9 @@ main(int argc, char *argv[])
 void
 intr(int signo)
 {
+	(void) signo;
 	if (!fromatty)
-		exit(0);
+		exit(EXIT_SUCCESS);
 	longjmp(toplevel, 1);
 }
 
@@ -146,7 +143,8 @@ intr(int signo)
 static struct cmd *
 getcmd(char *name)
 {
-	char *p, *q;
+	const char *p;
+	char *q;
 	struct cmd *c, *found;
 	int nmatches, longest;
 	extern struct cmd cmdtab[];
@@ -260,4 +258,33 @@ help(int argc, char *argv[])
 			printf("%-*s\t%s\n", (int)HELPINDENT,
 				c->c_name, c->c_help);
 	}
+}
+
+static int
+drop_privileges(void)
+{
+	static const char user[] = "_timedc";
+	const struct passwd *pw;
+	uid_t uid;
+	gid_t gid;
+
+	if ((pw = getpwnam(user)) == NULL) {
+		warnx("getpwnam(\"%s\") failed", user);
+		return -1;
+	}
+	uid = pw->pw_uid;
+	gid = pw->pw_gid;
+	if (setgroups(1, &gid)) {
+		warn("setgroups");
+		return -1;
+	}
+	if (setgid(gid)) {
+		warn("setgid");
+		return -1;
+	}
+	if (setuid(uid)) {
+		warn("setuid");
+		return -1;
+	}
+	return 0;
 }

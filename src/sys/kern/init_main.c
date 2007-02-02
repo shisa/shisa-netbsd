@@ -1,4 +1,4 @@
-/*	$NetBSD: init_main.c,v 1.286 2006/12/21 15:55:25 yamt Exp $	*/
+/*	$NetBSD: init_main.c,v 1.291 2007/01/27 22:54:58 elad Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1989, 1991, 1992, 1993
@@ -71,7 +71,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.286 2006/12/21 15:55:25 yamt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.291 2007/01/27 22:54:58 elad Exp $");
 
 #include "opt_ipsec.h"
 #include "opt_kcont.h"
@@ -102,6 +102,7 @@ __KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.286 2006/12/21 15:55:25 yamt Exp $")
 #include <sys/signalvar.h>
 #include <sys/systm.h>
 #include <sys/vnode.h>
+#include <sys/fstrans.h>
 #include <sys/tty.h>
 #include <sys/conf.h>
 #include <sys/disklabel.h>
@@ -203,6 +204,14 @@ __stack_chk_fail(void)
 }
 #endif
 
+void __secmodel_none(void);
+__weak_alias(secmodel_start, __secmodel_none);
+void
+__secmodel_none(void)
+{
+	return;
+}
+
 /*
  * System startup; initialize the world, create process 0, mount root
  * filesystem, and fork to create init and pagedaemon.  Most of the
@@ -252,6 +261,17 @@ main(void)
 
 	/* Initialize callouts. */
 	callout_startup();
+
+	/*
+	 * Initialize the kernel authorization subsystem and start the
+	 * default security model, if any. We need to do this early
+	 * enough so that subsystems relying on any of the aforementioned
+	 * can work properly. Since the security model may dictate the
+	 * credential inheritance policy, it is needed at least before
+	 * any process is created, specifically proc0.
+	 */
+	kauth_init();
+	secmodel_start();
 
 	/* Initialize the buffer cache */
 	bufinit();
@@ -313,14 +333,13 @@ main(void)
 #endif
 	vfsinit();
 
+	/* Initialize fstrans. */
+	fstrans_init();
 
 #ifdef __HAVE_TIMECOUNTER
 	inittimecounter();
 	ntp_init();
 #endif /* __HAVE_TIMECOUNTER */
-
-	/* Initialize kauth. */
-	kauth_init();
 
 	/* Configure the system hardware.  This will enable interrupts. */
 	configure();
@@ -372,9 +391,6 @@ main(void)
 	/* Initialize posix semaphores */
 	ksem_init();
 #endif
-
-	/* Initialize default security model. */
-	secmodel_start();
 
 #if NVERIEXEC > 0
 	/*

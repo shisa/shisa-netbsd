@@ -1,4 +1,4 @@
-/*	$NetBSD: eval.c,v 1.7 2006/05/13 21:48:00 christos Exp $	*/
+/*	$NetBSD: eval.c,v 1.10 2007/01/28 22:30:12 cbiere Exp $	*/
 
 /*
  * Expansion - quoting, separation, substitution, globbing
@@ -6,7 +6,7 @@
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: eval.c,v 1.7 2006/05/13 21:48:00 christos Exp $");
+__RCSID("$NetBSD: eval.c,v 1.10 2007/01/28 22:30:12 cbiere Exp $");
 #endif
 
 
@@ -605,6 +605,21 @@ expand(cp, wp, f)
 			if (!quote)
 				switch (c) {
 				  case '[':
+					{
+						const char *p = sp;
+						bool_t special = FALSE;
+						while (*p != EOS) {
+							if (p[0] == CHAR &&
+								p[1] == ']') {
+								special = TRUE;
+								break;
+							}
+								
+							p += 2;
+						}
+						if (!special)
+							break;
+					}
 				  case NOT:
 				  case '-':
 				  case ']':
@@ -1118,9 +1133,6 @@ globit(xs, xpp, sp, wp, check)
 			goto Nodir;
 		while ((d = readdir(dirp)) != NULL) {
 			name = d->d_name;
-			if (name[0] == '.' &&
-			    (name[1] == 0 || (name[1] == '.' && name[2] == 0)))
-				continue; /* always ignore . and .. */
 			if ((*name == '.' && *sp != '.')
 			    || !gmatch(name, sp, TRUE))
 				continue;
@@ -1302,11 +1314,19 @@ homedir(name)
 		return NULL;
 #else /* OS2 */
 		struct passwd *pw;
+		size_t n;
 
 		pw = getpwnam(name);
 		if (pw == NULL)
 			return NULL;
-		ap->val.s = str_save(pw->pw_dir, APERM);
+		n = strlen(pw->pw_dir);
+		if (n > 0 && '/' != pw->pw_dir[n - 1]) {
+			ap->val.s = str_nsave(pw->pw_dir, n + 1, APERM);
+			ap->val.s[n] = '/';
+			ap->val.s[n + 1] = '\0';
+		} else {
+			ap->val.s = str_save(pw->pw_dir, APERM);
+		}
 		ap->flag |= DEFINED|ISSET|ALLOC;
 #endif /* OS2 */
 	}

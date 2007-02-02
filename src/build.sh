@@ -1,5 +1,5 @@
 #! /usr/bin/env sh
-#	$NetBSD: build.sh,v 1.155 2006/12/16 02:59:33 ober Exp $
+#	$NetBSD: build.sh,v 1.160 2007/01/29 00:08:13 matt Exp $
 #
 # Copyright (c) 2001-2005 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -148,7 +148,7 @@ set_HOST_SH()
 
 initdefaults()
 {
-	cd "$(dirname $0)"
+	[ -d usr.bin/make ] || cd "$(dirname $0)"
 	[ -d usr.bin/make ] ||
 	    bomb "build.sh must be run from the top source level"
 	[ -f share/mk/bsd.own.mk ] ||
@@ -239,6 +239,40 @@ initdefaults()
 
 getarch()
 {
+	# Translate some MACHINE name aliases (known only to build.sh)
+	# into proper MACHINE and MACHINE_ARCH names.  Save the alias
+	# name in makewrappermachine.
+	#
+	case "${MACHINE}" in
+
+	evbarm-e[bl])
+		makewrappermachine=${MACHINE}
+		# MACHINE_ARCH is "arm" or "armeb", not "armel"
+		MACHINE_ARCH=arm${MACHINE##*-}
+		MACHINE_ARCH=${MACHINE_ARCH%el}
+		MACHINE=${MACHINE%-e[bl]}
+		;;
+
+	evbmips-e[bl]|sbmips-e[bl])
+		makewrappermachine=${MACHINE}
+		MACHINE_ARCH=mips${MACHINE##*-}
+		MACHINE=${MACHINE%-e[bl]}
+		;;
+
+	evbmips64-e[bl]|sbmips64-e[bl])
+		makewrappermachine=${MACHINE}
+		MACHINE_ARCH=mips64${MACHINE##*-}
+		MACHINE=${MACHINE%64-e[bl]}
+		;;
+
+	evbsh3-e[bl])
+		makewrappermachine=${MACHINE}
+		MACHINE_ARCH=sh3${MACHINE##*-}
+		MACHINE=${MACHINE%-e[bl]}
+		;;
+
+	esac
+
 	# Translate a MACHINE into a default MACHINE_ARCH.
 	#
 	case "${MACHINE}" in
@@ -259,18 +293,6 @@ getarch()
 		MACHINE_ARCH=m68k
 		;;
 
-	evbmips-e[bl]|sbmips-e[bl])
-		MACHINE_ARCH=mips${MACHINE##*-}
-		makewrappermachine=${MACHINE}
-		MACHINE=${MACHINE%-e[bl]}
-		;;
-
-	evbmips64-e[bl]|sbmips64-e[bl])
-		MACHINE_ARCH=mips64${MACHINE##*-}
-		makewrappermachine=${MACHINE}
-		MACHINE=${MACHINE%64-e[bl]}
-		;;
-
 	evbmips|sbmips)		# no default MACHINE_ARCH
 		;;
 
@@ -286,14 +308,14 @@ getarch()
 		MACHINE_ARCH=ns32k
 		;;
 
-	amigappc|bebox|evbppc|ibmnws|macppc|mvmeppc|ofppc|pmppc|prep|sandpoint)
-		MACHINE_ARCH=powerpc
+	evbppc64|macppc64)
+		makewrappermachine=${MACHINE}
+		MACHINE=${MACHINE%64}
+		MACHINE_ARCH=powerpc64
 		;;
 
-	evbsh3-e[bl])
-		MACHINE_ARCH=sh3${MACHINE##*-}
-		makewrappermachine=${MACHINE}
-		MACHINE=${MACHINE%-e[bl]}
+	amigappc|bebox|evbppc|ibmnws|macppc|mvmeppc|ofppc|pmppc|prep|sandpoint)
+		MACHINE_ARCH=powerpc
 		;;
 
 	evbsh3)			# no default MACHINE_ARCH
@@ -396,7 +418,7 @@ validatearch()
 raw_getmakevar()
 {
 	[ -x "${make}" ] || bomb "raw_getmakevar $1: ${make} is not executable"
-	"${make}" -m ${TOP}/share/mk -s -f- _x_ <<EOF
+	"${make}" -m ${TOP}/share/mk -s -f- _x_ <<EOF || bomb "raw_getmakevar $1: ${make} failed"
 _x_:
 	echo \${$1}
 .include <bsd.prog.mk>
@@ -968,7 +990,7 @@ createmakewrapper()
 	eval cat <<EOF ${makewrapout}
 #! ${HOST_SH}
 # Set proper variables to allow easy "make" building of a NetBSD subtree.
-# Generated from:  \$NetBSD: build.sh,v 1.155 2006/12/16 02:59:33 ober Exp $
+# Generated from:  \$NetBSD: build.sh,v 1.160 2007/01/29 00:08:13 matt Exp $
 # with these arguments: ${_args}
 #
 EOF
@@ -1064,6 +1086,8 @@ buildkernel()
 		    bomb "Failed to make cleandir in ${kernelbuildpath}"
 		${runcmd} cd "${TOP}"
 	fi
+	[ -x "${TOOLDIR}/bin/${toolprefix}config" ] \
+	|| bomb "${TOOLDIR}/bin/${toolprefix}config does not exist. You need to \"$0 tools\" first."
 	${runcmd} "${TOOLDIR}/bin/${toolprefix}config" -b "${kernelbuildpath}" \
 		-s "${TOP}/sys" "${kernelconfpath}" ||
 	    bomb "${toolprefix}config failed for ${kernelconf}"

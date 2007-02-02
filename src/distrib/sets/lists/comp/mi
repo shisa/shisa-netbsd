@@ -1,4 +1,4 @@
-#	$NetBSD: mi,v 1.988 2007/01/07 15:37:51 elad Exp $
+#	$NetBSD: mi,v 1.995 2007/01/30 19:40:09 elad Exp $
 ./etc/mtree/set.comp				comp-sys-root
 ./usr/bin/addr2line				comp-debug-bin		bfd
 ./usr/bin/ar					comp-util-bin		bfd
@@ -1294,11 +1294,13 @@
 ./usr/include/net/if_ieee80211.h		comp-obsolete		obsolete
 ./usr/include/net/if_llc.h			comp-c-include
 ./usr/include/net/if_media.h			comp-c-include
+./usr/include/net/if_pflog.h			comp-c-include
 ./usr/include/net/if_ppp.h			comp-c-include
 ./usr/include/net/if_pppoe.h			comp-c-include
 ./usr/include/net/if_pppvar.h			comp-c-include		obsolete
 ./usr/include/net/if_slvar.h			comp-c-include		obsolete
 ./usr/include/net/if_sppp.h			comp-c-include
+./usr/include/net/if_srt.h			comp-c-include
 ./usr/include/net/if_stf.h			comp-c-include
 ./usr/include/net/if_stripvar.h			comp-c-include		obsolete
 ./usr/include/net/if_tap.h			comp-c-include
@@ -2514,7 +2516,7 @@
 ./usr/libdata/debug/usr/bin/patch.debug		comp-util-debug		debug
 ./usr/libdata/debug/usr/bin/pathchk.debug	comp-util-debug		debug
 ./usr/libdata/debug/usr/bin/pawd.debug		comp-amd-debug		debug
-./usr/libdata/debug/usr/bin/paxctl.debug	comp-util-debug		debug
+./usr/libdata/debug/usr/bin/paxctl.debug	comp-obsolete		obsolete
 ./usr/libdata/debug/usr/bin/pfbtops.debug	comp-groff-debug	debug
 ./usr/libdata/debug/usr/bin/pic.debug		comp-groff-debug	debug
 ./usr/libdata/debug/usr/bin/pkill.debug		comp-util-debug		debug
@@ -2888,6 +2890,7 @@
 ./usr/libdata/debug/usr/sbin/ntptime.debug	comp-ntp-debug		debug
 ./usr/libdata/debug/usr/sbin/omshell.debug	comp-dhcpd-debug	debug
 ./usr/libdata/debug/usr/sbin/pac.debug		comp-sysutil-debug	debug
+./usr/libdata/debug/usr/sbin/paxctl.debug	comp-sysutil-debug	debug
 ./usr/libdata/debug/usr/sbin/pcictl.debug	comp-sysutil-debug	debug
 ./usr/libdata/debug/usr/sbin/pkg_add.debug	comp-pkgutil-debug	debug
 ./usr/libdata/debug/usr/sbin/pkg_admin.debug	comp-pkgutil-debug	debug
@@ -5620,6 +5623,12 @@
 ./usr/share/man/cat3/pthread_testcancel.0	comp-c-catman		.cat
 ./usr/share/man/cat3/ptsname.0			comp-c-catman		.cat
 ./usr/share/man/cat3/puffs.0			comp-c-catman		.cat
+./usr/share/man/cat3/puffs_cc.0			comp-c-catman		.cat
+./usr/share/man/cat3/puffs_flush.0		comp-c-catman		.cat
+./usr/share/man/cat3/puffs_node.0		comp-c-catman		.cat
+./usr/share/man/cat3/puffs_path.0		comp-c-catman		.cat
+./usr/share/man/cat3/puffs_req.0		comp-c-catman		.cat
+./usr/share/man/cat3/puffs_suspend.0		comp-c-catman		.cat
 ./usr/share/man/cat3/putc.0			comp-c-catman		.cat
 ./usr/share/man/cat3/putc_unlocked.0		comp-c-catman		.cat
 ./usr/share/man/cat3/putchar.0			comp-c-catman		.cat
@@ -6437,6 +6446,7 @@
 ./usr/share/man/cat9/VFS_START.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/VFS_STATFS.0		comp-obsolete		obsolete
 ./usr/share/man/cat9/VFS_STATVFS.0		comp-sys-catman		.cat
+./usr/share/man/cat9/VFS_SUSPENDCTL.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/VFS_SYNC.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/VFS_UNMOUNT.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/VFS_VGET.0			comp-sys-catman		.cat
@@ -6788,6 +6798,13 @@
 ./usr/share/man/cat9/fownsignal.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/free.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/fsetown.0			comp-sys-catman		.cat
+./usr/share/man/cat9/fstrans.0			comp-sys-catman		.cat
+./usr/share/man/cat9/fstrans_done.0		comp-sys-catman		.cat
+./usr/share/man/cat9/fstrans_getstate.0		comp-sys-catman		.cat
+./usr/share/man/cat9/fstrans_is_owner.0		comp-sys-catman		.cat
+./usr/share/man/cat9/fstrans_setstate.0		comp-sys-catman		.cat
+./usr/share/man/cat9/fstrans_start.0		comp-sys-catman		.cat
+./usr/share/man/cat9/fstrans_start_nowait.0	comp-sys-catman		.cat
 ./usr/share/man/cat9/fubyte.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/fuibyte.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/fuiword.0			comp-sys-catman		.cat
@@ -7358,15 +7375,17 @@
 ./usr/share/man/cat9/vfs_mountedon.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/vfs_mountroot.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/vfs_reinit.0		comp-sys-catman		.cat
+./usr/share/man/cat9/vfs_resume.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/vfs_rootmountalloc.0	comp-sys-catman		.cat
 ./usr/share/man/cat9/vfs_setpublicfs.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/vfs_showexport.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/vfs_shutdown.0		comp-sys-catman		.cat
+./usr/share/man/cat9/vfs_suspend.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/vfs_sysctl.0		comp-obsolete		obsolete
 ./usr/share/man/cat9/vfs_unbusy.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/vfs_unmountall.0		comp-sys-catman		.cat
-./usr/share/man/cat9/vfs_write_resume.0		comp-sys-catman		.cat
-./usr/share/man/cat9/vfs_write_suspend.0	comp-sys-catman		.cat
+./usr/share/man/cat9/vfs_write_resume.0		comp-sys-catman		obsolete
+./usr/share/man/cat9/vfs_write_suspend.0	comp-sys-catman		obsolete
 ./usr/share/man/cat9/vfsops.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/vfssubr.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/vget.0			comp-sys-catman		.cat
@@ -9884,6 +9903,12 @@
 ./usr/share/man/man3/pthread_testcancel.3	comp-c-man		.man
 ./usr/share/man/man3/ptsname.3			comp-c-man		.man
 ./usr/share/man/man3/puffs.3			comp-c-man		.man
+./usr/share/man/man3/puffs_cc.3			comp-c-man		.man
+./usr/share/man/man3/puffs_flush.3		comp-c-man		.man
+./usr/share/man/man3/puffs_node.3		comp-c-man		.man
+./usr/share/man/man3/puffs_path.3		comp-c-man		.man
+./usr/share/man/man3/puffs_req.3		comp-c-man		.man
+./usr/share/man/man3/puffs_suspend.3		comp-c-man		.man
 ./usr/share/man/man3/putc.3			comp-c-man		.man
 ./usr/share/man/man3/putc_unlocked.3		comp-c-man		.man
 ./usr/share/man/man3/putchar.3			comp-c-man		.man
@@ -10696,6 +10721,7 @@
 ./usr/share/man/man9/VFS_START.9		comp-sys-man		.man
 ./usr/share/man/man9/VFS_STATFS.9		comp-obsolete		obsolete
 ./usr/share/man/man9/VFS_STATVFS.9		comp-sys-man		.man
+./usr/share/man/man9/VFS_SUSPENDCTL.9		comp-sys-man		.man
 ./usr/share/man/man9/VFS_SYNC.9			comp-sys-man		.man
 ./usr/share/man/man9/VFS_UNMOUNT.9		comp-sys-man		.man
 ./usr/share/man/man9/VFS_VGET.9			comp-sys-man		.man
@@ -11047,6 +11073,13 @@
 ./usr/share/man/man9/fownsignal.9		comp-sys-man		.man
 ./usr/share/man/man9/free.9			comp-sys-man		.man
 ./usr/share/man/man9/fsetown.9			comp-sys-man		.man
+./usr/share/man/man9/fstrans.9			comp-sys-man		.man
+./usr/share/man/man9/fstrans_done.9		comp-sys-man		.man
+./usr/share/man/man9/fstrans_getstate.9		comp-sys-man		.man
+./usr/share/man/man9/fstrans_is_owner.9		comp-sys-man		.man
+./usr/share/man/man9/fstrans_setstate.9		comp-sys-man		.man
+./usr/share/man/man9/fstrans_start.9		comp-sys-man		.man
+./usr/share/man/man9/fstrans_start_nowait.9	comp-sys-man		.man
 ./usr/share/man/man9/fubyte.9			comp-sys-man		.man
 ./usr/share/man/man9/fuibyte.9			comp-sys-man		.man
 ./usr/share/man/man9/fuiword.9			comp-sys-man		.man
@@ -11617,15 +11650,17 @@
 ./usr/share/man/man9/vfs_mountedon.9		comp-sys-man		.man
 ./usr/share/man/man9/vfs_mountroot.9		comp-sys-man		.man
 ./usr/share/man/man9/vfs_reinit.9		comp-sys-man		.man
+./usr/share/man/man9/vfs_resume.9		comp-sys-man		.man
 ./usr/share/man/man9/vfs_rootmountalloc.9	comp-sys-man		.man
 ./usr/share/man/man9/vfs_setpublicfs.9		comp-sys-man		.man
 ./usr/share/man/man9/vfs_showexport.9		comp-sys-man		.man
 ./usr/share/man/man9/vfs_shutdown.9		comp-sys-man		.man
+./usr/share/man/man9/vfs_suspend.9		comp-sys-man		.man
 ./usr/share/man/man9/vfs_sysctl.9		comp-obsolete		obsolete
 ./usr/share/man/man9/vfs_unbusy.9		comp-sys-man		.man
 ./usr/share/man/man9/vfs_unmountall.9		comp-sys-man		.man
-./usr/share/man/man9/vfs_write_resume.9		comp-sys-man		.man
-./usr/share/man/man9/vfs_write_suspend.9	comp-sys-man		.man
+./usr/share/man/man9/vfs_write_resume.9		comp-sys-man		obsolete
+./usr/share/man/man9/vfs_write_suspend.9	comp-sys-man		obsolete
 ./usr/share/man/man9/vfsops.9			comp-sys-man		.man
 ./usr/share/man/man9/vfssubr.9			comp-sys-man		.man
 ./usr/share/man/man9/vget.9			comp-sys-man		.man
