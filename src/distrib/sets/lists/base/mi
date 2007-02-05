@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.682 2007/01/09 12:33:21 kleink Exp $
+# $NetBSD: mi,v 1.685 2007/01/30 19:40:08 elad Exp $
 .						base-sys-root
 ./altroot					base-sys-root
 ./bin						base-sys-root
@@ -574,7 +574,7 @@
 ./usr/bin/patch					base-util-bin
 ./usr/bin/pathchk				base-util-bin
 ./usr/bin/pawd					base-amd-bin
-./usr/bin/paxctl				base-util-bin
+./usr/bin/paxctl				base-obsolete		obsolete
 ./usr/bin/pgrep					base-util-bin
 ./usr/bin/pkill					base-util-bin
 ./usr/bin/pmap					base-util-bin
@@ -1160,6 +1160,7 @@
 ./usr/sbin/ntptrace				base-ntp-bin
 ./usr/sbin/omshell				base-dhcpd-bin
 ./usr/sbin/pac					base-sysutil-bin
+./usr/sbin/paxctl				base-sysutil-bin
 ./usr/sbin/pcictl				base-sysutil-bin
 ./usr/sbin/pfspamdb				base-obsolete		obsolete
 ./usr/sbin/pim6dd				base-obsolete		obsolete
@@ -1238,6 +1239,7 @@
 ./usr/sbin/spamdb				base-obsolete		obsolete
 ./usr/sbin/spawn				base-obsolete		obsolete
 ./usr/sbin/spray				base-rpcutil-bin
+./usr/sbin/srtconfig				base-netutil-bin
 ./usr/sbin/sshd					base-secsh-bin		crypto
 ./usr/sbin/statmsg				base-obsolete		obsolete
 ./usr/sbin/stdethers				base-nis-bin		yp
@@ -1317,7 +1319,6 @@
 ./usr/share/doc/html/bind9			base-htmldoc-share
 ./usr/share/doc/html/bind9/arm			base-htmldoc-share
 ./usr/share/doc/html/bzip2			base-htmldoc-share
-./usr/share/doc/html/ntp			base-obsolete		obsolete
 ./usr/share/doc/html/ntp/hints			base-obsolete		obsolete
 ./usr/share/doc/html/postfix			base-htmldoc-share
 ./usr/share/doc/psd				base-psd-share

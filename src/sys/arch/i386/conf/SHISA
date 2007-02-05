@@ -27,7 +27,7 @@ makeoptions	DEBUG="-g"
 
 options 	INCLUDE_CONFIG_FILE	# embed config file in kernel binary
 
-#ident 		"GENERIC-$Revision: 1.10 $"
+#ident 		"GENERIC-$Revision: 1.11 $"
 
 maxusers	32		# estimated number of users
 

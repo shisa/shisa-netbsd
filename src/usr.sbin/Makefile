@@ -1,9 +1,9 @@
-#	$NetBSD: Makefile,v 1.222 2006/12/29 15:52:20 pooka Exp $
+#	$NetBSD: Makefile,v 1.225 2007/01/30 19:40:07 elad Exp $
 #	from: @(#)Makefile	5.20 (Berkeley) 6/12/93
 
 .include <bsd.own.mk>
 
-SUBDIR=	ac accton altq amd apm apmd arp bad144 bind bootp \
+SUBDIR=	ac accton acpitools altq amd apm apmd arp bad144 bind bootp \
 	btconfig btdevctl bthcid catman \
 	chown chroot chrtbl cnwctl cron dev_mkdb \
 	dhcp diskpart dumpfs dumplfs edquota eeprom \
@@ -13,13 +13,14 @@ SUBDIR=	ac accton altq amd apm apmd arp bad144 bind bootp \
 	kgmon lastlogin link lmcconfig lockstat lpr mailwrapper makefs \
 	map-mbone mdconfig memswitch mlxctl mopd mountd moused \
 	mrinfo mrouted mscdlabel mtrace \
-	mtree ndbootd ndiscvt netgroup_mkdb nfsd ntp ofctl pcictl pkg_install \
+	mtree ndbootd ndiscvt netgroup_mkdb nfsd ntp ofctl paxctl pcictl \
+	pkg_install \
 	pppd pstat pwd_mkdb postinstall powerd quot quotacheck quotaon \
 	rarpd rbootd rdate \
 	repquota rmt rpc.bootparamd rpc.lockd rpc.pcnfsd \
  	rpc.statd rpcbind rwhod sa screenblank sdpd services_mkdb sesd \
 	shisa sliplogin sntp \
-	spray sti sunlabel sup syslogd tadpolectl tcpdchk \
+	spray srtconfig sti sunlabel sup syslogd tadpolectl tcpdchk \
 	tcpdmatch tcpdump timed tpctl traceroute trpt unlink \
 	usbdevs user videomode vipw veriexecgen vnconfig wiconfig wlanctl wpa \
 	wsconscfg wsfontload wsmoused wsmuxctl zdump zic
