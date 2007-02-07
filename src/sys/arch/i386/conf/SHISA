@@ -1,4 +1,4 @@
-# $NetBSD: GENERIC,v 1.798 2006/11/28 16:15:36 christos Exp $
+# $NetBSD: GENERIC,v 1.806 2007/01/24 19:46:26 tls Exp $
 #
 # SHISA standard configuration file based on GENERIC
 #
@@ -27,7 +27,7 @@ makeoptions	DEBUG="-g"
 
 options 	INCLUDE_CONFIG_FILE	# embed config file in kernel binary
 
-#ident 		"GENERIC-$Revision: 1.11 $"
+#ident 		"GENERIC-$Revision: 1.12 $"
 
 maxusers	32		# estimated number of users
 
@@ -145,7 +145,7 @@ options 	COMPAT_16	# NetBSD 1.6
 options 	COMPAT_20	# NetBSD 2.0
 options 	COMPAT_30	# NetBSD 3.0
 options 	COMPAT_43	# 4.3BSD, 386BSD, and BSDI
-options 	COMPAT_386BSD_MBRPART # recognize old partition ID
+#options 	COMPAT_386BSD_MBRPART # recognize old partition ID
 #options 	TCP_COMPAT_42	# 4.2BSD TCP/IP bug compat. Not recommended.
 
 options 	COMPAT_OSSAUDIO	# OSS (Voxware) audio driver compatibility
@@ -618,9 +618,8 @@ iic*	at piixpm?			# SMBus on PIIX4
 #nsclpcsio*	at isa?
 #gpio*		at nsclpcsio?
 
-# VIA VT82C686A hardware monitor
-#viapm*	at pci? dev ? function ?
-#viaenv* at viapm?
+# VIA VT82C686A/VT8231 Hardware Monitor and Power Management Timer
+#viaenv*	at pci? dev ? function ?
 
 
 # I2O devices
@@ -1388,6 +1387,8 @@ pseudo-device	bridge			# simple inter-network bridging
 #options 	BRIDGE_IPF		# bridge uses IP/IPv6 pfil hooks too
 pseudo-device	pf			# PF packet filter
 pseudo-device	pflog			# PF log if
+# srt is EXPERIMENTAL
+#pseudo-device	srt			# source-address-based routing
 
 # miscellaneous pseudo-devices
 pseudo-device	pty			# pseudo-terminals
