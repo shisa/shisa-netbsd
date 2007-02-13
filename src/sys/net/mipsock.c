@@ -1,4 +1,4 @@
-/* $Id: mipsock.c,v 1.6 2007/01/26 10:07:16 keiichi Exp $ */
+/* $Id: mipsock.c,v 1.7 2007/02/13 02:53:43 keiichi Exp $ */
 
 /*
  * Copyright (C) 2004 WIDE Project.
@@ -392,7 +392,7 @@ mips_output(m, va_alist)
 #endif
 #endif
 {
-	int error = 0;
+	int len, error = 0;
 	struct mip_msghdr *miph = NULL;
 	struct mipm_bc_info *mipc = NULL;
 	struct mipm_nodetype_info *mipmni = NULL;
@@ -406,6 +406,16 @@ mips_output(m, va_alist)
 	u_int16_t bid = 0;
 
 #define senderr(e) do { error = e; goto flush;} while (/*CONSTCOND*/ 0)
+	if (m == 0 || ((m->m_len < sizeof(int32_t)) &&
+	    (m = m_pullup(m, sizeof(int32_t))) == 0))
+		return (ENOBUFS);
+	if ((m->m_flags & M_PKTHDR) == 0)
+		panic("mips_output");
+	len = m->m_pkthdr.len;
+	if (len < sizeof(struct mip_msghdr) ||
+	    len != mtod(m, struct mip_msghdr *)->miph_msglen) {
+		senderr(EINVAL);
+	}
 	miph = mtod(m, struct mip_msghdr *);
 
 	/*
