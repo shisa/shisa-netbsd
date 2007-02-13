@@ -1295,7 +1295,7 @@
 ./usr/include/net/if_llc.h			comp-c-include
 ./usr/include/net/if_media.h			comp-c-include
 ./usr/include/net/if_mip.h			comp-c-include
-./usr/include/net/if_nemo.h			comp-c-include
+./usr/include/net/if_mtun.h			comp-c-include
 ./usr/include/net/if_pflog.h			comp-c-include
 ./usr/include/net/if_ppp.h			comp-c-include
 ./usr/include/net/if_pppoe.h			comp-c-include

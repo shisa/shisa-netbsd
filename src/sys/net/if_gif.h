@@ -41,7 +41,6 @@
 
 #if defined(_KERNEL) && !defined(_LKM)
 #include "opt_inet.h"
-#include "opt_mip6.h"
 #endif
 
 #include <netinet/in.h>
@@ -65,11 +64,6 @@ struct gif_softc {
 	LIST_ENTRY(gif_softc) gif_list;	/* list of all gifs */
 #ifdef __HAVE_GENERIC_SOFT_INTERRUPTS
 	void	*gif_si;		/* softintr handle */
-#endif
-	long	gif_route_expire;
-#ifdef MIP6
-	/* XXX: must be located as nemo_nexthop of nemo_softc{} */
-	struct sockaddr *gif_nexthop;	/* nexthop address */
 #endif
 };
 #define GIF_ROUTE_TTL	10
