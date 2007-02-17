@@ -70,7 +70,7 @@ __KERNEL_RCSID(0, "$NetBSD: in6_gif.c,v 1.47 2006/12/15 21:18:54 joerg Exp $");
 #include <net/if_gif.h>
 
 #ifdef MIP6
-#include <net/if_nemo.h>
+#include <net/if_mtun.h>
 #endif /* MIP6 */
 
 #include <net/net_osdep.h>
@@ -197,21 +197,13 @@ in6_gif_output(ifp, family, m)
 	ip6->ip6_flow &= ~ntohl(0xff00000);
 	ip6->ip6_flow |= htonl((u_int32_t)otos << 20);
 
-	/*
-	 * compare address family just for safety.  other validity checks
-	 * are made in in6_selectsrc() called from ip6_output().
-	 */
 	if (dst->sin6_family != sin6_dst->sin6_family ||
-	    sc->gif_route_expire - time_second <= 0) {
-		/*
-		 * If the cached route is not valid or has expired,
-		 * clear the stale cache and let ip6_output make a new cached
-		 * route.
-		 */
-		rtcache_free((struct route *)&sc->gif_ro6.ro_rt);
-	}
+	    !IN6_ARE_ADDR_EQUAL(&dst->sin6_addr, &sin6_dst->sin6_addr))
+		rtcache_free((struct route *)&sc->gif_ro6);
+	else
+		rtcache_check((struct route *)&sc->gif_ro6);
 
-#ifdef MIP6
+#if 0/*def MIP6*/
 	/* 
 	 * if gif has a nexthop address in the gif_softc, point the
 	 * route entry of the nexthop address and pass it to
@@ -254,12 +246,14 @@ in6_gif_output(ifp, family, m)
 #endif
 
 
+#if 0
 	/*
 	 * if a (new) cached route has been created in ip6_output(), extend
 	 * the expiration time.
 	 */
 	if (sc->gif_ro6.ro_rt && time_second >= sc->gif_route_expire)
 		sc->gif_route_expire = time_second + GIF_ROUTE_TTL;
+#endif
 
 	return (error);
 }
