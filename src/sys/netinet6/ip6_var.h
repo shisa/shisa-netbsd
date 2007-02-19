@@ -123,6 +123,8 @@ struct	ip6po_rhinfo {
 };
 #define ip6po_rthdr	ip6po_rhinfo.ip6po_rhi_rthdr
 #define ip6po_route	ip6po_rhinfo.ip6po_rhi_route
+#define ip6po_rthdr2	ip6po_rhinfo2.ip6po_rhi_rthdr
+#define ip6po_route2	ip6po_rhinfo2.ip6po_rhi_route
 
 /* Nexthop related info */
 struct	ip6po_nhinfo {
@@ -140,6 +142,8 @@ struct	ip6_pktopts {
 	struct	ip6_hbh *ip6po_hbh; /* Hop-by-Hop options header */
 	struct	ip6_dest *ip6po_dest1; /* Destination options header(1st part) */
 	struct	ip6po_rhinfo ip6po_rhinfo; /* Routing header related info. */
+	struct  ip6po_rhinfo ip6po_rhinfo2; /* Routing header type 2 RFC3775 */
+	struct  ip6_dest *ip6po_hoa; /* Home address option RFC3775 */
 	struct	ip6_dest *ip6po_dest2; /* Destination options header(2nd part) */
 	int	ip6po_tclass;	/* traffic class */
 	int	ip6po_minmtu;  /* fragment vs PMTU discovery policy */
@@ -152,6 +156,8 @@ struct	ip6_pktopts {
 #define IP6PO_MINMTU	0x02	/* use minimum MTU (IPV6_USE_MIN_MTU) */
 #endif
 #define IP6PO_DONTFRAG	0x04	/* disable fragmentation (IPV6_DONTFRAG) */
+#define IP6PO_USECOA	0x08	/* use care of address */
+#define IP6PO_NOTUSEBCE	0x10	/* Don't use binding cache */
 };
 
 struct	ip6stat {
@@ -222,7 +228,18 @@ struct	ip6stat {
  * XXX do not make it a kitchen sink!
  */
 struct ip6aux {
-	/* ip6.ip6_dst */
+	u_int32_t ip6a_flags;
+#define IP6A_SWAP		0x01	/* swapped home/care-of on packet */
+#define IP6A_HASEEN		0x02	/* HA was present */
+
+#define IP6A_ROUTEOPTIMIZED	0x10	/* route optimized packet */
+#define IP6A_NOTUSEBC		0x20	/* do not requrie to lookup BC */
+#define IP6A_TEMP_PROXYND_DEL	0x40	/* Marking for resuming proxy nd entry after sending sepcial BA */
+
+	/* ip6.ip6_src */
+	struct in6_addr ip6a_coa;       /* care of address of the peer */
+
+       /* ip6.ip6_dst */
 	struct in6_ifaddr *ip6a_dstia6;	/* my ifaddr that matches ip6_dst */
 };
 
@@ -338,6 +355,11 @@ int	rip6_usrreq __P((struct socket *,
 
 int	dest6_input __P((struct mbuf **, int *, int));
 int	none_input __P((struct mbuf **, int *, int));
+
+#ifdef MIP6
+int	dest6_mip6_hao __P((struct mbuf *, int, int));
+int	mip6_input __P((struct mbuf **, int *, int));
+#endif
 
 struct 	in6_addr *in6_selectsrc __P((struct sockaddr_in6 *,
 	struct ip6_pktopts *, struct ip6_moptions *, struct route_in6 *,
