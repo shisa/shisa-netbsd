@@ -35,7 +35,6 @@ __KERNEL_RCSID(0, "$NetBSD: in6_gif.c,v 1.47 2006/12/15 21:18:54 joerg Exp $");
 
 #include "opt_inet.h"
 #include "opt_iso.h"
-#include "opt_mip6.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -69,10 +68,6 @@ __KERNEL_RCSID(0, "$NetBSD: in6_gif.c,v 1.47 2006/12/15 21:18:54 joerg Exp $");
 
 #include <net/if_gif.h>
 
-#ifdef MIP6
-#include <net/if_mtun.h>
-#endif /* MIP6 */
-
 #include <net/net_osdep.h>
 
 static int gif_validate6 __P((const struct ip6_hdr *, struct gif_softc *,
@@ -103,15 +98,6 @@ in6_gif_output(ifp, family, m)
 	struct ip6_hdr *ip6;
 	int proto, error;
 	u_int8_t itos, otos;
-#ifdef MIP6
-	struct ip6_pktopts pktopt;
-#endif
-	struct ip6_pktopts *p;
-
-#ifdef MIP6
-	bzero(&pktopt, sizeof(pktopt));
-	pktopt.ip6po_hlim = -1;   /* -1 means default hop limit */
-#endif /* MIP6 */
 
 	if (sin6_src == NULL || sin6_dst == NULL ||
 	    sin6_src->sin6_family != AF_INET6 ||
@@ -203,34 +189,23 @@ in6_gif_output(ifp, family, m)
 	else
 		rtcache_check((struct route *)&sc->gif_ro6);
 
-#if 0/*def MIP6*/
-	/* 
-	 * if gif has a nexthop address in the gif_softc, point the
-	 * route entry of the nexthop address and pass it to
-	 * ip6_output
-	 */
-	if (sc->gif_nexthop) {
-		pktopt.ip6po_nexthop =
-		    (struct sockaddr *)malloc(sizeof(struct sockaddr_in6),
-		    M_TEMP, M_NOWAIT); 
-
-		if (pktopt.ip6po_nexthop == NULL) {
+	if (sc->gif_ro6.ro_rt == NULL) {
+		bzero(dst, sizeof(*dst));
+		dst->sin6_family = sin6_dst->sin6_family;
+		dst->sin6_len = sizeof(struct sockaddr_in6);
+		dst->sin6_addr = sin6_dst->sin6_addr;
+		rtcache_init((struct route *)&sc->gif_ro6);
+		if (sc->gif_ro6.ro_rt == NULL) {
 			m_freem(m);
-			return ENOMEM;
+			return ENETUNREACH;
 		}
+	}
 
-		bzero(pktopt.ip6po_nexthop, sizeof(struct sockaddr_in6));
-		bcopy(sc->gif_nexthop, pktopt.ip6po_nexthop,
-		    sizeof(struct sockaddr_in6));
-		satosin6(pktopt.ip6po_nexthop)->sin6_scope_id = 0; /* XXX */
-	} 
-#endif /* MIP6 */
-
-#ifndef MIP6
-	p = NULL;
-#else
-	p = (pktopt.ip6po_nexthop) ? &pktopt : NULL;
-#endif
+	/* If the route constitutes infinite encapsulation, punt. */
+	if (sc->gif_ro.ro_rt->rt_ifp == ifp) {
+		m_freem(m);
+		return ENETUNREACH;	/* XXX */
+	}
 
 #ifdef IPV6_MINMTU
 	/*
@@ -238,21 +213,11 @@ in6_gif_output(ifp, family, m)
 	 * it is too painful to ask for resend of inner packet, to achieve
 	 * path MTU discovery for encapsulated packets.
 	 */
-	error = ip6_output(m, p, &sc->gif_ro6, IPV6_MINMTU,
+	error = ip6_output(m, 0, &sc->gif_ro6, IPV6_MINMTU,
 		    (struct ip6_moptions *)NULL, (struct socket *)NULL, NULL);
 #else
-	error = ip6_output(m, p, &sc->gif_ro6, 0,
+	error = ip6_output(m, 0, &sc->gif_ro6, 0,
 		    (struct ip6_moptions *)NULL, (struct socket *)NULL, NULL);
-#endif
-
-
-#if 0
-	/*
-	 * if a (new) cached route has been created in ip6_output(), extend
-	 * the expiration time.
-	 */
-	if (sc->gif_ro6.ro_rt && time_second >= sc->gif_route_expire)
-		sc->gif_route_expire = time_second + GIF_ROUTE_TTL;
 #endif
 
 	return (error);
