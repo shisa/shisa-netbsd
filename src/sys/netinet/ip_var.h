@@ -153,7 +153,6 @@ struct	ipstat {
 	u_quad_t ips_toolong;		/* ip length > max ip packet size */
 	u_quad_t ips_nogif;		/* no match gif found */
 	u_quad_t ips_badaddr;		/* invalid address on header */
-	u_quad_t ips_nomtun;		/* no match mtun found */
 };
 
 #define	IPFLOW_HASHBITS			6 /* should not be a multiple of 8 */
