@@ -1,4 +1,4 @@
-/*	$NetBSD: psshfs.h,v 1.3 2007/01/15 00:42:21 pooka Exp $	*/
+/*	$NetBSD: psshfs.h,v 1.6 2007/02/27 13:28:39 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006  Antti Kantee.  All Rights Reserved.
@@ -47,7 +47,10 @@
  * Refresh directories every n seconds as indicated by the following macro.
  * Note that local changes will still be visible immediately.
  */
-#define PSSHFS_REFRESHIVAL 10
+#define PSSHFS_REFRESHIVAL 30
+
+/* warm getattr cache in readdir */
+#define SUPERREADDIR
 
 PUFFSOP_PROTOS(psshfs);
 
@@ -69,6 +72,7 @@ struct psshfs_dir {
 
 	char *entryname;
 	struct vattr va;
+	time_t attrread;
 };
 
 struct psshfs_node {
@@ -78,11 +82,13 @@ struct psshfs_node {
 	size_t denttot;
 	size_t dentnext;
 	time_t dentread;
-	int hasvattr;
-
 	int childcount;
+	int reclaimed;
+
+	time_t attrread;
 };
 
+struct psshfs_ctx;
 /*
  * XXX: urgh
  *
@@ -100,8 +106,16 @@ struct psshfs_node {
 #define PSB_IN 1
 struct psbuf {
 	struct psreq {
-		struct puffs_cc *pcc;
 		uint32_t reqid;
+
+		/* either ... */
+		struct puffs_cc *pcc;
+
+		/* ... or */
+		void (*func)(struct psshfs_ctx *, struct psbuf *, void *);
+		void *arg;
+		/* no union, we'd need a "which" flag */
+
 		TAILQ_ENTRY(psbuf) entries;
 	} psr;
 
@@ -151,7 +165,10 @@ int		psbuf_write(struct psshfs_ctx *, struct psbuf *);
 
 void		pssh_outbuf_enqueue(struct psshfs_ctx *, struct psbuf *,
 				    struct puffs_cc *, uint32_t);
-void		psshreq_put(struct psshfs_ctx *, struct psbuf *);
+void		pssh_outbuf_enqueue_nocc(struct psshfs_ctx *, struct psbuf *,
+				    void (*f)(struct psshfs_ctx *,
+					      struct psbuf *, void *),
+				    void *, uint32_t);
 struct psbuf	*psshreq_get(struct psshfs_ctx *, uint32_t);
 
 
@@ -171,13 +188,13 @@ int	psbuf_get_str(struct psbuf *, char **, uint32_t *);
 int	psbuf_get_vattr(struct psbuf *, struct vattr *);
 
 int	psbuf_expect_status(struct psbuf *);
-int	psbuf_expect_handle(struct psbuf *, char **, size_t *);
+int	psbuf_expect_handle(struct psbuf *, char **, uint32_t *);
 int	psbuf_expect_name(struct psbuf *, uint32_t *);
 int	psbuf_expect_attrs(struct psbuf *, struct vattr *);
 
-int	psbuf_do_data(struct psbuf *, uint8_t *, size_t *);
+int	psbuf_do_data(struct psbuf *, uint8_t *, uint32_t *);
 
-int	psbuf_req_data(struct psbuf *, int, uint32_t, const void *, size_t);
+int	psbuf_req_data(struct psbuf *, int, uint32_t, const void *, uint32_t);
 int	psbuf_req_str(struct psbuf *, int, uint32_t, const char *);
 
 
@@ -191,5 +208,6 @@ struct puffs_node *allocnode(struct puffs_usermount *, struct puffs_node *,
 			    const char *, const struct vattr *);
 struct psshfs_dir *direnter(struct puffs_node *, const char *);
 void nukenode(struct puffs_node *, const char *, int);
+void doreclaim(struct puffs_node *);
 
 #endif /* PSSHFS_H_ */

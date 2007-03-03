@@ -1,4 +1,4 @@
-/*	$NetBSD: vfs_syscalls.c,v 1.297 2007/01/19 14:49:10 hannken Exp $	*/
+/*	$NetBSD: vfs_syscalls.c,v 1.302 2007/02/18 20:36:36 pooka Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: vfs_syscalls.c,v 1.297 2007/01/19 14:49:10 hannken Exp $");
+__KERNEL_RCSID(0, "$NetBSD: vfs_syscalls.c,v 1.302 2007/02/18 20:36:36 pooka Exp $");
 
 #include "opt_compat_netbsd.h"
 #include "opt_compat_43.h"
@@ -61,7 +61,6 @@ __KERNEL_RCSID(0, "$NetBSD: vfs_syscalls.c,v 1.297 2007/01/19 14:49:10 hannken E
 #include <sys/kmem.h>
 #include <sys/dirent.h>
 #include <sys/sysctl.h>
-#include <sys/sa.h>
 #include <sys/syscallargs.h>
 #ifdef KTRACE
 #include <sys/ktrace.h>
@@ -370,8 +369,8 @@ mount_domount(struct lwp *l, struct vnode *vp, const char *fstype,
 		simple_lock(&mountlist_slock);
 		CIRCLEQ_INSERT_TAIL(&mountlist, mp, mnt_list);
 		simple_unlock(&mountlist_slock);
-		checkdirs(vp);
 		VOP_UNLOCK(vp, 0);
+		checkdirs(vp);
 		if ((mp->mnt_flag & (MNT_RDONLY | MNT_ASYNC)) == 0)
 			error = vfs_allocate_syncvnode(mp);
 		vfs_unbusy(mp);
@@ -494,7 +493,7 @@ checkdirs(struct vnode *olddp)
 		return;
 	if (VFS_ROOT(olddp->v_mountedhere, &newdp))
 		panic("mount: lost mount");
-	proclist_lock_read();
+	rw_enter(&proclist_lock, RW_READER);
 	PROCLIST_FOREACH(p, &allproc) {
 		cwdi = p->p_cwdi;
 		if (!cwdi)
@@ -510,7 +509,7 @@ checkdirs(struct vnode *olddp)
 			cwdi->cwdi_rdir = newdp;
 		}
 	}
-	proclist_unlock_read();
+	rw_exit(&proclist_lock);
 	if (rootvnode == olddp) {
 		vrele(rootvnode);
 		VREF(newdp);
@@ -573,10 +572,10 @@ sys_unmount(struct lwp *l, void *v, register_t *retval)
 	 * XXX Freeze syncer.  Must do this before locking the
 	 * mount point.  See dounmount() for details.
 	 */
-	lockmgr(&syncer_lock, LK_EXCLUSIVE, NULL);
+	mutex_enter(&syncer_mutex);
 
 	if (vfs_busy(mp, 0, 0)) {
-		lockmgr(&syncer_lock, LK_RELEASE, NULL);
+		mutex_exit(&syncer_mutex);
 		return (EBUSY);
 	}
 
@@ -612,15 +611,15 @@ dounmount(struct mount *mp, int flags, struct lwp *l)
 	 * per-mountpoint basis, so the softdep code would become a maze
 	 * of vfs_busy() calls.
 	 *
-	 * The caller of dounmount() must acquire syncer_lock because
-	 * the syncer itself acquires locks in syncer_lock -> vfs_busy
+	 * The caller of dounmount() must acquire syncer_mutex because
+	 * the syncer itself acquires locks in syncer_mutex -> vfs_busy
 	 * order, and we must preserve that order to avoid deadlock.
 	 *
 	 * So, if the file system did not use the syncer, now is
-	 * the time to release the syncer_lock.
+	 * the time to release the syncer_mutex.
 	 */
 	if (used_syncer == 0)
-		lockmgr(&syncer_lock, LK_RELEASE, NULL);
+		mutex_exit(&syncer_mutex);
 
 	mp->mnt_iflag |= IMNT_UNMOUNT;
 	mp->mnt_unmounter = l;
@@ -653,7 +652,7 @@ dounmount(struct mount *mp, int flags, struct lwp *l)
 		lockmgr(&mp->mnt_lock, LK_RELEASE | LK_INTERLOCK | LK_REENABLE,
 		    &mountlist_slock);
 		if (used_syncer)
-			lockmgr(&syncer_lock, LK_RELEASE, NULL);
+			mutex_exit(&syncer_mutex);
 		simple_lock(&mp->mnt_slock);
 		while (mp->mnt_wcnt > 0) {
 			wakeup(mp);
@@ -675,7 +674,7 @@ dounmount(struct mount *mp, int flags, struct lwp *l)
 		vrele(coveredvp);
 	mount_finispecific(mp);
 	if (used_syncer)
-		lockmgr(&syncer_lock, LK_RELEASE, NULL);
+		mutex_exit(&syncer_mutex);
 	simple_lock(&mp->mnt_slock);
 	while (mp->mnt_wcnt > 0) {
 		wakeup(mp);
@@ -999,15 +998,15 @@ sys_fchdir(struct lwp *l, void *v, register_t *retval)
 	while (!error && (mp = vp->v_mountedhere) != NULL) {
 		if (vfs_busy(mp, 0, 0))
 			continue;
+
+		vput(vp);
 		error = VFS_ROOT(mp, &tdp);
 		vfs_unbusy(mp);
 		if (error)
 			break;
-		vput(vp);
 		vp = tdp;
 	}
 	if (error) {
-		vput(vp);
 		goto out;
 	}
 	VOP_UNLOCK(vp, 0);
@@ -1758,13 +1757,14 @@ sys_mknod(struct lwp *l, void *v, register_t *retval)
 	struct vnode *vp;
 	struct mount *mp;
 	struct vattr vattr;
-	int error;
-	int whiteout = 0;
+	int error, optype;
 	struct nameidata nd;
 
 	if ((error = kauth_authorize_system(l->l_cred, KAUTH_SYSTEM_MKNOD,
 	    0, NULL, NULL, NULL)) != 0)
 		return (error);
+
+	optype = VOP_MKNOD_DESCOFFSET;
 restart:
 	NDINIT(&nd, CREATE, LOCKPARENT, UIO_USERSPACE, SCARG(uap, path), l);
 	if ((error = namei(&nd)) != 0)
@@ -1777,7 +1777,6 @@ restart:
 		vattr.va_mode =
 		    (SCARG(uap, mode) & ALLPERMS) &~ p->p_cwdi->cwdi_cmask;
 		vattr.va_rdev = SCARG(uap, dev);
-		whiteout = 0;
 
 		switch (SCARG(uap, mode) & S_IFMT) {
 		case S_IFMT:	/* used by badsect to flag bad sectors */
@@ -1790,7 +1789,12 @@ restart:
 			vattr.va_type = VBLK;
 			break;
 		case S_IFWHT:
-			whiteout = 1;
+			optype = VOP_WHITEOUT_DESCOFFSET;
+			break;
+		case S_IFREG:
+			vattr.va_type = VREG;
+			vattr.va_rdev = VNOVAL;
+			optype = VOP_CREATE_DESCOFFSET;
 			break;
 		default:
 			error = EINVAL;
@@ -1812,16 +1816,27 @@ restart:
 	}
 	if (!error) {
 		VOP_LEASE(nd.ni_dvp, l, l->l_cred, LEASE_WRITE);
-		if (whiteout) {
+		switch (optype) {
+		case VOP_WHITEOUT_DESCOFFSET:
 			error = VOP_WHITEOUT(nd.ni_dvp, &nd.ni_cnd, CREATE);
 			if (error)
 				VOP_ABORTOP(nd.ni_dvp, &nd.ni_cnd);
 			vput(nd.ni_dvp);
-		} else {
+			break;
+
+		case VOP_MKNOD_DESCOFFSET:
 			error = VOP_MKNOD(nd.ni_dvp, &nd.ni_vp,
 						&nd.ni_cnd, &vattr);
 			if (error == 0)
 				vput(nd.ni_vp);
+			break;
+
+		case VOP_CREATE_DESCOFFSET:
+			error = VOP_CREATE(nd.ni_dvp, &nd.ni_vp,
+						&nd.ni_cnd, &vattr);
+			if (error == 0)
+				vput(nd.ni_vp);
+			break;
 		}
 	} else {
 		VOP_ABORTOP(nd.ni_dvp, &nd.ni_cnd);
@@ -2061,7 +2076,7 @@ sys_unlink(struct lwp *l, void *v, register_t *retval)
 	int error;
 	struct nameidata nd;
 #if NVERIEXEC > 0
-	pathname_t pathbuf;
+	pathname_t pathbuf = NULL;
 #endif /* NVERIEXEC > 0 */
 
 restart:
@@ -3422,7 +3437,7 @@ rename_files(const char *from, const char *to, struct lwp *l, int retain)
 
 #if NVERIEXEC > 0
 	if (!error) {
-		pathname_t frompath, topath;
+		pathname_t frompath = NULL, topath = NULL;
 
 		error = pathname_get(fromnd.ni_dirp, fromnd.ni_segflg,
 		    &frompath);

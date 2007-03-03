@@ -1,4 +1,4 @@
-/*	$NetBSD: viaenv.c,v 1.18 2007/01/20 18:44:26 xtraeme Exp $	*/
+/*	$NetBSD: viaenv.c,v 1.20 2007/02/18 23:32:52 xtraeme Exp $	*/
 
 /*
  * Copyright (c) 2000 Johan Danielsson
@@ -38,7 +38,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: viaenv.c,v 1.18 2007/01/20 18:44:26 xtraeme Exp $");
+__KERNEL_RCSID(0, "$NetBSD: viaenv.c,v 1.20 2007/02/18 23:32:52 xtraeme Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -76,7 +76,6 @@ struct viaenv_softc {
 	envsys_tre_data_t sc_data[VIANUMSENSORS];
 	envsys_basic_info_t sc_info[VIANUMSENSORS];
 
-	struct simplelock sc_slock;
 	struct timeval sc_lastread;
 
 	struct sysmon_envsys sc_sysmon;
@@ -86,7 +85,7 @@ static const struct envsys_range viaenv_ranges[] = {
 	{ 0, 2,		ENVSYS_STEMP },
 	{ 3, 4,		ENVSYS_SFANRPM },
 	{ 1, 0,		ENVSYS_SVOLTS_AC },	/* none */
-	{ 5, 11,	ENVSYS_SVOLTS_DC },
+	{ 5, 9,		ENVSYS_SVOLTS_DC },
 	{ 1, 0,		ENVSYS_SOHMS },		/* none */
 	{ 1, 0,		ENVSYS_SWATTS },	/* none */
 	{ 1, 0,		ENVSYS_SAMPS },		/* none */
@@ -426,12 +425,8 @@ viaenv_gtredata(struct sysmon_envsys *sme, envsys_tre_data_t *tred)
 {
 	struct viaenv_softc *sc = sme->sme_cookie;
 
-	simple_lock(&sc->sc_slock);
-
 	viaenv_refresh_sensor_data(sc);
 	*tred = sc->sc_data[tred->sensor];
-
-	simple_unlock(&sc->sc_slock);
 
 	return 0;
 }

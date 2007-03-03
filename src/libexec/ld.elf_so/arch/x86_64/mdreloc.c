@@ -1,4 +1,4 @@
-/*	$NetBSD: mdreloc.c,v 1.27 2006/05/20 23:38:27 dan Exp $	*/
+/*	$NetBSD: mdreloc.c,v 1.29 2007/02/23 01:17:11 matt Exp $	*/
 
 /*
  * Copyright (c) 2001 Wasabi Systems, Inc.
@@ -68,7 +68,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: mdreloc.c,v 1.27 2006/05/20 23:38:27 dan Exp $");
+__RCSID("$NetBSD: mdreloc.c,v 1.29 2007/02/23 01:17:11 matt Exp $");
 #endif /* not lint */
 
 #include <sys/types.h>
@@ -131,12 +131,12 @@ int
 _rtld_relocate_nonplt_objects(const Obj_Entry *obj)
 {
 	const Elf_Rela *rela;
+	const Elf_Sym *def = NULL;
+	const Obj_Entry *defobj =NULL;
 
 	for (rela = obj->rela; rela < obj->relalim; rela++) {
 		Elf64_Addr *where64;
 		Elf32_Addr *where32;
-		const Elf_Sym *def;
-		const Obj_Entry *defobj;
 		Elf64_Addr tmp64;
 		Elf32_Addr tmp32;
 		unsigned long	 symnum;
@@ -169,7 +169,6 @@ _rtld_relocate_nonplt_objects(const Obj_Entry *obj)
 			def = _rtld_find_symdef(symnum, obj, &defobj, false);
 			if (def == NULL)
 				return -1;
-
 			tmp64 = (Elf64_Addr)(defobj->relocbase + def->st_value +
 			    rela->r_addend);
 
@@ -197,7 +196,6 @@ _rtld_relocate_nonplt_objects(const Obj_Entry *obj)
 			def = _rtld_find_symdef(symnum, obj, &defobj, false);
 			if (def == NULL)
 				return -1;
-
 			tmp64 = (Elf64_Addr)(defobj->relocbase + def->st_value);
 
 			if (*where64 != tmp64)

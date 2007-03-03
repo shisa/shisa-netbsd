@@ -1,4 +1,4 @@
-/*	$NetBSD: rtl8169.c,v 1.77 2007/01/29 12:11:42 tsutsui Exp $	*/
+/*	$NetBSD: rtl8169.c,v 1.82 2007/02/21 22:59:59 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1997, 1998-2003
@@ -592,14 +592,27 @@ re_attach(struct rtk_softc *sc)
 		uint32_t hwrev;
 
 		/* Revision of 8169/8169S/8110s in bits 30..26, 23 */
-		hwrev = CSR_READ_4(sc, RTK_TXCFG) & 0x7c800000;
-		if (hwrev == (0x1 << 28)) {
+		hwrev = CSR_READ_4(sc, RTK_TXCFG) & RTK_TXCFG_HWREV;
+		/* These rev numbers are taken from Realtek's driver */
+		if (       hwrev == RTK_HWREV_8100E_SPIN2) {
+			sc->sc_rev = 15;
+		} else if (hwrev == RTK_HWREV_8100E) {
+			sc->sc_rev = 14;
+		} else if (hwrev == RTK_HWREV_8101E) {
+			sc->sc_rev = 13;
+		} else if (hwrev == RTK_HWREV_8168_SPIN2) {
+			sc->sc_rev = 12;
+		} else if (hwrev == RTK_HWREV_8168_SPIN1) {
+			sc->sc_rev = 11;
+		} else if (hwrev == RTK_HWREV_8169_8110SC) {
+			sc->sc_rev = 5;
+		} else if (hwrev == RTK_HWREV_8169_8110SB) {
 			sc->sc_rev = 4;
-		} else if (hwrev == (0x1 << 26)) {
+		} else if (hwrev == RTK_HWREV_8169S) {
 			sc->sc_rev = 3;
-		} else if (hwrev == (0x1 << 23)) {
+		} else if (hwrev == RTK_HWREV_8110S) {
 			sc->sc_rev = 2;
-		} else
+		} else /* RTK_HWREV_8169 */
 			sc->sc_rev = 1;
 
 		/* Set RX length mask */
@@ -1332,7 +1345,7 @@ re_txeof(struct rtk_softc *sc)
 
 	sc->re_ldata.re_txq_considx = idx;
 
-	if (sc->re_ldata.re_txq_free > 0)
+	if (sc->re_ldata.re_txq_free > RE_NTXDESC_RSVD)
 		ifp->if_flags &= ~IFF_OACTIVE;
 
 	/*
@@ -1504,7 +1517,7 @@ re_start(struct ifnet *ifp)
 	uint32_t		cmdstat, re_flags;
 	int			ofree, idx, error, nsegs, seg;
 	int			startdesc, curdesc, lastdesc;
-	boolean_t		pad;
+	bool			pad;
 
 	sc = ifp->if_softc;
 	ofree = sc->re_ldata.re_txq_free;
@@ -1767,7 +1780,7 @@ re_init(struct ifnet *ifp)
 	 */
 
 	/*
-	 * XXX: For 8169 and 8196S revs below 2, set bit 14.
+	 * XXX: For 8169 and 8169S revs below 2, set bit 14.
 	 * For 8169S/8110S rev 2 and above, do not set bit 14.
 	 */
 	if (sc->rtk_type == RTK_8169 && sc->sc_rev == 1)
@@ -1917,7 +1930,7 @@ re_init(struct ifnet *ifp)
 	if (sc->re_testmode)
 		return 0;
 
-	CSR_WRITE_1(sc, RTK_CFG1, RTK_CFG1_DRVLOAD | RTK_CFG1_FULLDUPLEX);
+	CSR_WRITE_1(sc, RTK_CFG1, RTK_CFG1_DRVLOAD);
 
 	ifp->if_flags |= IFF_RUNNING;
 	ifp->if_flags &= ~IFF_OACTIVE;

@@ -1,4 +1,4 @@
-/* $NetBSD: radeonfb.c,v 1.9 2007/01/03 19:47:17 macallan Exp $ */
+/* $NetBSD: radeonfb.c,v 1.11 2007/02/09 21:55:27 ad Exp $ */
 
 /*-
  * Copyright (c) 2006 Itronix Inc.
@@ -70,7 +70,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: radeonfb.c,v 1.9 2007/01/03 19:47:17 macallan Exp $");
+__KERNEL_RCSID(0, "$NetBSD: radeonfb.c,v 1.11 2007/02/09 21:55:27 ad Exp $");
 
 #define RADEONFB_DEFAULT_DEPTH 32
 

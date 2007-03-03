@@ -1,4 +1,4 @@
-/* $NetBSD: radeonfbvar.h,v 1.3 2007/01/03 19:47:17 macallan Exp $ */
+/* $NetBSD: radeonfbvar.h,v 1.5 2007/02/09 21:55:27 ad Exp $ */
 
 /*-
  * Copyright (c) 2006 Itronix Inc.

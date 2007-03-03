@@ -1,4 +1,4 @@
-/*	$NetBSD: regfree.c,v 1.13 2003/08/07 16:43:21 agc Exp $	*/
+/*	$NetBSD: regfree.c,v 1.15 2007/02/09 23:44:18 junyoung Exp $	*/
 
 /*-
  * Copyright (c) 1992, 1993, 1994
@@ -76,7 +76,7 @@
 #if 0
 static char sccsid[] = "@(#)regfree.c	8.3 (Berkeley) 3/20/94";
 #else
-__RCSID("$NetBSD: regfree.c,v 1.13 2003/08/07 16:43:21 agc Exp $");
+__RCSID("$NetBSD: regfree.c,v 1.15 2007/02/09 23:44:18 junyoung Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
@@ -84,9 +84,9 @@ __RCSID("$NetBSD: regfree.c,v 1.13 2003/08/07 16:43:21 agc Exp $");
 #include <sys/types.h>
 
 #include <assert.h>
-#include <regex.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <regex.h>
 
 #ifdef __weak_alias
 __weak_alias(regfree,_regfree)
@@ -100,8 +100,8 @@ __weak_alias(regfree,_regfree)
  = extern void regfree(regex_t *);
  */
 void
-regfree(preg)
-regex_t *preg;
+regfree(
+    regex_t *preg)
 {
 	struct re_guts *g;
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: pkill.c,v 1.17 2006/02/25 01:13:55 wiz Exp $	*/
+/*	$NetBSD: pkill.c,v 1.20 2007/02/17 22:49:57 pavel Exp $	*/
 
 /*-
  * Copyright (c) 2002 The NetBSD Foundation, Inc.
@@ -38,7 +38,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: pkill.c,v 1.17 2006/02/25 01:13:55 wiz Exp $");
+__RCSID("$NetBSD: pkill.c,v 1.20 2007/02/17 22:49:57 pavel Exp $");
 #endif /* !lint */
 
 #include <sys/types.h>

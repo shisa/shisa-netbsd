@@ -1,4 +1,4 @@
-/*	$NetBSD: ip_output.c,v 1.176 2007/01/29 06:00:11 dyoung Exp $	*/
+/*	$NetBSD: ip_output.c,v 1.178 2007/02/17 22:34:11 dyoung Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -98,7 +98,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ip_output.c,v 1.176 2007/01/29 06:00:11 dyoung Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ip_output.c,v 1.178 2007/02/17 22:34:11 dyoung Exp $");
 
 #include "opt_pfil_hooks.h"
 #include "opt_inet.h"
@@ -298,13 +298,12 @@ ip_output(struct mbuf *m0, ...)
 	 * The address family should also be checked in case of sharing the
 	 * cache with IPv6.
 	 */
-	if (dst->sin_family != AF_INET ||
-	    !in_hosteq(dst->sin_addr, ip->ip_dst))
+	if (dst->sin_family != AF_INET || !in_hosteq(dst->sin_addr, ip->ip_dst))
 		rtcache_free(ro);
 	else
 		rtcache_check(ro);
 	if (ro->ro_rt == NULL) {
-		bzero(dst, sizeof(*dst));
+		memset(dst, 0, sizeof(*dst));
 		dst->sin_family = AF_INET;
 		dst->sin_len = sizeof(*dst);
 		dst->sin_addr = ip->ip_dst;
@@ -401,7 +400,7 @@ ip_output(struct mbuf *m0, ...)
 			xifa = &xia->ia_ifa;
 			if (xifa->ifa_getifa != NULL) {
 				xia = ifatoia((*xifa->ifa_getifa)(xifa,
-				    &ro->ro_dst));
+				    rtcache_getdst(ro)));
 			}
 			ip->ip_src = xia->ia_addr.sin_addr;
 		}
@@ -462,7 +461,7 @@ ip_output(struct mbuf *m0, ...)
 	if (in_nullhost(ip->ip_src)) {
 		xifa = &ia->ia_ifa;
 		if (xifa->ifa_getifa != NULL)
-			ia = ifatoia((*xifa->ifa_getifa)(xifa, &ro->ro_dst));
+			ia = ifatoia((*xifa->ifa_getifa)(xifa, rtcache_getdst(ro)));
 		ip->ip_src = ia->ia_addr.sin_addr;
 	}
 

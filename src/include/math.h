@@ -1,4 +1,4 @@
-/*	$NetBSD: math.h,v 1.44 2006/03/25 16:41:11 xtraeme Exp $	*/
+/*	$NetBSD: math.h,v 1.46 2007/02/22 22:08:19 drochner Exp $	*/
 
 /*
  * ====================================================
@@ -331,7 +331,7 @@ long long int	llroundf(float);
 float	fmodf(float, float);
 float	remainderf(float, float);
 
-/* 7.2.11 manipulation */
+/* 7.12.11 manipulation */
 
 float	copysignf(float, float);
 double	nan(const char *);
@@ -339,6 +339,15 @@ float	nanf(const char *);
 long double	nanl(const char *);
 float	nextafterf(float, float);
 
+/* 7.12.14 comparision */
+
+#define isunordered(x, y)	(isnan(x) || isnan(y))
+#define isgreater(x, y)		(!isunordered((x), (y)) && (x) > (y))
+#define isgreaterequal(x, y)	(!isunordered((x), (y)) && (x) >= (y))
+#define isless(x, y)		(!isunordered((x), (y)) && (x) < (y))
+#define islessequal(x, y)	(!isunordered((x), (y)) && (x) <= (y))
+#define islessgreater(x, y)	(!isunordered((x), (y)) && \
+				 ((x) > (y) || (y) > (x)))
 
 #endif /* !_ANSI_SOURCE && ... */
 
@@ -381,9 +390,6 @@ double	scalbn(double, int);
 /*
  * BSD math library entry points
  */
-#ifndef __MATH_PRIVATE__
-double	cabs(/* struct complex { double r; double i; } */);
-#endif
 double	drem(double, double);
 
 #endif /* _NETBSD_SOURCE */
@@ -423,9 +429,6 @@ float	significandf(float);
 /*
  * float versions of BSD math library entry points
  */
-#ifndef __MATH_PRIVATE__
-float	cabsf(/* struct complex { float r; float i; } */);
-#endif
 float	dremf(float, float);
 #endif /* _NETBSD_SOURCE */
 

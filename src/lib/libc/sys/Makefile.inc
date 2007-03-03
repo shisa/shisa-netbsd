@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile.inc,v 1.171 2007/01/16 07:07:45 ad Exp $
+#	$NetBSD: Makefile.inc,v 1.173 2007/02/10 10:38:25 ad Exp $
 #	@(#)Makefile.inc	8.3 (Berkeley) 10/24/94
 
 # sys sources
@@ -115,6 +115,8 @@ CLEANFILES+=	${ASM} ${WEAKASM} ${NOERR} ${PSEUDONOERR}
 ASMDEPS=	${.CURDIR}/sys/Makefile.inc ${ARCHDIR}/SYS.h \
 		${DESTDIR}/usr/include/sys/syscall.h
 
+_LINTASM=	${ASM:Nsa_*.S} ${WEAKASM:Nsa_*.S}
+
 ${ASM}: ${ASMDEPS}
 	${_MKTARGET_CREATE}
 	printf '#include "SYS.h"\nRSYSCALL(${.PREFIX})\n' >${.TARGET}
@@ -137,7 +139,7 @@ LintSysNormal.c: ${.CURDIR}/sys/makelintstub \
     ${DESTDIR}/usr/include/sys/syscall.h
 	${_MKTARGET_CREATE}
 	CPP=${CPP:Q} ${HOST_SH} ${.CURDIR}/sys/makelintstub -o ${.TARGET} \
-	    -s ${DESTDIR}/usr/include/sys/syscall.h ${ASM} ${WEAKASM}
+	    -s ${DESTDIR}/usr/include/sys/syscall.h ${_LINTASM}
 
 LintSysNoerr.c: ${.CURDIR}/sys/makelintstub \
     ${DESTDIR}/usr/include/sys/syscall.h
@@ -162,8 +164,9 @@ MAN+=	accept.2 access.2 acct.2 adjtime.2 bind.2 brk.2 chdir.2 \
 	getsockopt.2 gettimeofday.2 getuid.2 intro.2 ioctl.2 issetugid.2 \
 	kill.2 kqueue.2 ktrace.2 \
 	lfs_bmapv.2 lfs_markv.2 lfs_segclean.2 lfs_segwait.2 \
-	link.2 listen.2 lseek.2 _lwp_create.2 _lwp_exit.2 _lwp_self.2 \
-	_lwp_suspend.2 _lwp_wakeup.2 _lwp_wait.2 _lwp_getprivate.2 \
+	link.2 listen.2 lseek.2 _lwp_create.2 _lwp_detach.2 _lwp_exit.2 \
+	_lwp_self.2 _lwp_suspend.2 _lwp_wakeup.2 _lwp_wait.2 _lwp_kill.2 \
+	_lwp_getprivate.2 _lwp_park.2 _lwp_unpark.2 _lwp_unpark_all.2 \
 	mkdir.2 mkfifo.2 mknod.2 \
 	madvise.2 mincore.2 minherit.2 mlock.2 mlockall.2 mmap.2 mount.2 \
 	mprotect.2 msgctl.2 msgget.2 msgrcv.2 msgsnd.2 msync.2 \
@@ -171,7 +174,6 @@ MAN+=	accept.2 access.2 acct.2 adjtime.2 bind.2 brk.2 chdir.2 \
 	pmc_control.2 poll.2 posix_fadvise.2 profil.2 ptrace.2 quotactl.2 \
 	rasctl.2 read.2 readlink.2 \
 	reboot.2 recv.2 rename.2 revoke.2 rmdir.2 \
-	sa_register.2 sa_stacks.2 sa_enable.2 sa_setconcurrency.2 sa_yield.2 \
 	select.2 semctl.2 \
 	semget.2 semop.2 send.2 setgroups.2 setpgid.2 setregid.2 \
 	setreuid.2 setsid.2 setuid.2 shmat.2 shmctl.2 shmget.2 \

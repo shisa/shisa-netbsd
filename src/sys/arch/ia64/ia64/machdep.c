@@ -1,4 +1,4 @@
-/*	$NetBSD: machdep.c,v 1.3 2006/09/06 12:54:31 cherry Exp $	*/
+/*	$NetBSD: machdep.c,v 1.5 2007/02/28 04:21:51 thorpej Exp $	*/
 
 /*-
  * Copyright (c) 2003,2004 Marcel Moolenaar
@@ -100,8 +100,6 @@
 #include <sys/reboot.h>
 #include <sys/exec.h>
 #include <sys/proc.h>
-#include <sys/sa.h>
-#include <sys/savar.h>
 #include <sys/msgbuf.h>
 #include <sys/ksyms.h>
 
@@ -288,13 +286,13 @@ cpu_startup()
 	 * limits the number of processes exec'ing at any time.
 	 */
 	exec_map = uvm_km_suballoc(kernel_map, &minaddr, &maxaddr,
-				   16 * NCARGS, VM_MAP_PAGEABLE, FALSE, NULL);
+				   16 * NCARGS, VM_MAP_PAGEABLE, false, NULL);
 
 	/*
 	 * Allocate a submap for physio
 	 */
 	phys_map = uvm_km_suballoc(kernel_map, &minaddr, &maxaddr,
-				   VM_PHYS_SIZE, 0, FALSE, NULL);
+				   VM_PHYS_SIZE, 0, false, NULL);
 
 	/*
 	 * No need to allocate an mbuf cluster submap.  Mbuf clusters
@@ -873,12 +871,6 @@ setregs(l, pack, stack)
 
 void
 sendsig(const ksiginfo_t *ksi, const sigset_t *mask)
-{
-	return;
-}
- 
-void 
-cpu_upcall(struct lwp *l, int type, int nevents, int ninterrupted, void *sas, void *ap, void *sp, sa_upcall_t upcall)
 {
 	return;
 }

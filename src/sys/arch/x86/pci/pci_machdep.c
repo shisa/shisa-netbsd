@@ -1,4 +1,4 @@
-/*	$NetBSD: pci_machdep.c,v 1.19 2007/01/05 17:53:54 jmcneill Exp $	*/
+/*	$NetBSD: pci_machdep.c,v 1.22 2007/02/22 04:58:26 matt Exp $	*/
 
 /*-
  * Copyright (c) 1997, 1998 The NetBSD Foundation, Inc.
@@ -80,7 +80,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: pci_machdep.c,v 1.19 2007/01/05 17:53:54 jmcneill Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pci_machdep.c,v 1.22 2007/02/22 04:58:26 matt Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -188,6 +188,7 @@ struct {
  * of these functions.
  */
 struct x86_bus_dma_tag pci_bus_dma_tag = {
+	0,				/* tag_needs_free */
 #if defined(_LP64) || defined(PAE)
 	PCI32_DMA_BOUNCE_THRESHOLD,	/* bounce_thresh */
 	ISA_DMA_BOUNCE_THRESHOLD,	/* bounce_alloclo */
@@ -205,20 +206,19 @@ struct x86_bus_dma_tag pci_bus_dma_tag = {
 	_bus_dmamap_load_uio,
 	_bus_dmamap_load_raw,
 	_bus_dmamap_unload,
-#if defined(_LP64) || defined(PAE)
 	_bus_dmamap_sync,
-#else
-	NULL,
-#endif
 	_bus_dmamem_alloc,
 	_bus_dmamem_free,
 	_bus_dmamem_map,
 	_bus_dmamem_unmap,
 	_bus_dmamem_mmap,
+	_bus_dmatag_subregion,
+	_bus_dmatag_destroy,
 };
 
 #ifdef _LP64
 struct x86_bus_dma_tag pci_bus_dma64_tag = {
+	0,				/* tag_needs_free */
 	0,
 	0,
 	0,
@@ -236,6 +236,8 @@ struct x86_bus_dma_tag pci_bus_dma64_tag = {
 	_bus_dmamem_map,
 	_bus_dmamem_unmap,
 	_bus_dmamem_mmap,
+	_bus_dmatag_subregion,
+	_bus_dmatag_destroy,
 };
 #endif
 
@@ -374,6 +376,15 @@ pci_conf_read( pci_chipset_tag_t pc, pcitag_t tag,
 	pcireg_t data;
 	int s;
 
+#if defined(__i386__) && defined(XBOX)
+	if (arch_i386_is_xbox) {
+		int bus, dev, fn;
+		pci_decompose_tag(pc, tag, &bus, &dev, &fn);
+		if (bus == 0 && dev == 0 && (fn == 1 || fn == 2))
+			return (pcireg_t)-1;
+	}
+#endif
+
 #ifndef PCI_CONF_MODE
 	switch (pci_mode) {
 	case 1:
@@ -416,6 +427,15 @@ pci_conf_write(pci_chipset_tag_t pc, pcitag_t tag, int reg,
     pcireg_t data)
 {
 	int s;
+
+#if defined(__i386__) && defined(XBOX)
+	if (arch_i386_is_xbox) {
+		int bus, dev, fn;
+		pci_decompose_tag(pc, tag, &bus, &dev, &fn);
+		if (bus == 0 && dev == 0 && (fn == 1 || fn == 2))
+			return;
+	}
+#endif
 
 #ifndef PCI_CONF_MODE
 	switch (pci_mode) {

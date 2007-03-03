@@ -1,4 +1,4 @@
-/*	$NetBSD: nfs_syscalls.c,v 1.104 2007/01/17 12:40:36 yamt Exp $	*/
+/*	$NetBSD: nfs_syscalls.c,v 1.106 2007/02/22 06:14:28 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993
@@ -35,7 +35,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: nfs_syscalls.c,v 1.104 2007/01/17 12:40:36 yamt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: nfs_syscalls.c,v 1.106 2007/02/22 06:14:28 thorpej Exp $");
 
 #include "fs_nfs.h"
 #include "opt_nfs.h"
@@ -66,8 +66,6 @@ __KERNEL_RCSID(0, "$NetBSD: nfs_syscalls.c,v 1.104 2007/01/17 12:40:36 yamt Exp 
 #include <sys/filedesc.h>
 #include <sys/kthread.h>
 #include <sys/kauth.h>
-
-#include <sys/sa.h>
 #include <sys/syscallargs.h>
 
 #include <netinet/in.h>
@@ -702,13 +700,13 @@ nfssvc_nfsd(nsd, argp, l)
 				}
 				if (error) {
 					nfsstats.srv_errs++;
-					nfsrv_updatecache(nd, FALSE, mreq);
+					nfsrv_updatecache(nd, false, mreq);
 					if (nd->nd_nam2)
 						m_freem(nd->nd_nam2);
 					break;
 				}
 				nfsstats.srvrpccnt[nd->nd_procnum]++;
-				nfsrv_updatecache(nd, TRUE, mreq);
+				nfsrv_updatecache(nd, true, mreq);
 				nd->nd_mrep = (struct mbuf *)0;
 			case RC_REPLY:
 				m = mreq;
@@ -792,7 +790,7 @@ done:
 	free((caddr_t)nfsd, M_NFSD);
 	nsd->nsd_nfsd = (struct nfsd *)0;
 	if (--nfs_numnfsd == 0)
-		nfsrv_init(TRUE);	/* Reinitialize everything */
+		nfsrv_init(true);	/* Reinitialize everything */
 	return (error);
 }
 
@@ -1030,7 +1028,7 @@ nfssvc_iod(l)
 	 * Just loop around doing our stuff until SIGKILL
 	 */
 	for (;;) {
-		while (/*CONSTCOND*/ TRUE) {
+		while (/*CONSTCOND*/ true) {
 			simple_lock(&myiod->nid_slock);
 			nmp = myiod->nid_mount;
 			if (nmp) {
@@ -1057,7 +1055,7 @@ nfssvc_iod(l)
 			nmp->nm_bufqlen--;
 			if (nmp->nm_bufqwant &&
 			    nmp->nm_bufqlen < 2 * nfs_numasync) {
-				nmp->nm_bufqwant = FALSE;
+				nmp->nm_bufqwant = false;
 				wakeup(&nmp->nm_bufq);
 			}
 			simple_unlock(&nmp->nm_slock);

@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.971 2007/01/30 19:40:09 elad Exp $
+# $NetBSD: mi,v 1.977 2007/02/26 22:35:04 apb Exp $
 ./etc/mtree/set.man				man-sys-root
 ./usr/share/info/am-utils.info			man-amd-info		info
 ./usr/share/info/as.info			man-computil-info	bfd,info
@@ -736,6 +736,7 @@
 ./usr/share/man/cat4/btkbd.0			man-sys-catman		.cat
 ./usr/share/man/cat4/btms.0			man-sys-catman		.cat
 ./usr/share/man/cat4/btsco.0			man-sys-catman		.cat
+./usr/share/man/cat4/btuart.0			man-sys-catman		.cat
 ./usr/share/man/cat4/ca.0			man-obsolete		obsolete
 ./usr/share/man/cat4/cac.0			man-sys-catman		.cat
 ./usr/share/man/cat4/cardbus.0			man-sys-catman		.cat
@@ -925,6 +926,7 @@
 ./usr/share/man/cat4/i386/apm.0			man-sys-catman		.cat
 ./usr/share/man/cat4/i386/autoconf.0		man-sys-catman		.cat
 ./usr/share/man/cat4/i386/busmouse.0		man-obsolete		obsolete
+./usr/share/man/cat4/i386/cmos.0		man-sys-catman		.cat
 ./usr/share/man/cat4/i386/com.0			man-obsolete		obsolete
 ./usr/share/man/cat4/i386/cons.0		man-sys-catman		.cat
 ./usr/share/man/cat4/i386/console.0		man-sys-catman		.cat
@@ -1722,6 +1724,7 @@
 ./usr/share/man/cat7/symlink.0			man-reference-catman	.cat
 ./usr/share/man/cat7/sysctl.0			man-reference-catman	.cat
 ./usr/share/man/cat8/MAKEDEV.0			man-sysutil-catman	.cat
+./usr/share/man/cat8/MAKEDEV.local.0		man-sysutil-catman	.cat
 ./usr/share/man/cat8/ac.0			man-sysutil-catman	.cat
 ./usr/share/man/cat8/accton.0			man-sysutil-catman	.cat
 ./usr/share/man/cat8/acorn26/MAKEDEV.0		man-obsolete		obsolete
@@ -1798,6 +1801,7 @@
 ./usr/share/man/cat8/btcontrol.0		man-obsolete		obsolete
 ./usr/share/man/cat8/btdevctl.0			man-sysutil-catman	.cat
 ./usr/share/man/cat8/bthcid.0			man-sysutil-catman	.cat
+./usr/share/man/cat8/btuartd.0			man-sysutil-catman	.cat
 ./usr/share/man/cat8/catman.0			man-man-catman		.cat
 ./usr/share/man/cat8/cats/MAKEDEV.0		man-obsolete		obsolete
 ./usr/share/man/cat8/cats/makedev.0		man-obsolete		obsolete
@@ -2026,6 +2030,7 @@
 ./usr/share/man/cat8/mailwrapper.0		man-mailwrapper-catman	.cat
 ./usr/share/man/cat8/makedbm.0			man-nis-catman		yp,.cat
 ./usr/share/man/cat8/makedev.0			man-sysutil-catman	.cat
+./usr/share/man/cat8/makedev.local.0		man-sysutil-catman	.cat
 ./usr/share/man/cat8/makefs.0			man-sysutil-catman	.cat
 ./usr/share/man/cat8/makekey.0			man-crypto-catman	.cat
 ./usr/share/man/cat8/makemap.0			man-obsolete		obsolete
@@ -3149,6 +3154,7 @@
 ./usr/share/man/man4/btkbd.4			man-sys-man		.man
 ./usr/share/man/man4/btms.4			man-sys-man		.man
 ./usr/share/man/man4/btsco.4			man-sys-man		.man
+./usr/share/man/man4/btuart.4			man-sys-man		.man
 ./usr/share/man/man4/ca.4			man-obsolete		obsolete
 ./usr/share/man/man4/cac.4			man-sys-man		.man
 ./usr/share/man/man4/cardbus.4			man-sys-man		.man
@@ -3338,6 +3344,7 @@
 ./usr/share/man/man4/i386/apm.4			man-sys-man		.man
 ./usr/share/man/man4/i386/autoconf.4		man-sys-man		.man
 ./usr/share/man/man4/i386/busmouse.4		man-obsolete		obsolete
+./usr/share/man/man4/i386/cmos.4		man-sys-man		.man
 ./usr/share/man/man4/i386/com.4			man-obsolete		obsolete
 ./usr/share/man/man4/i386/cons.4		man-sys-man		.man
 ./usr/share/man/man4/i386/console.4		man-sys-man		.man
@@ -4134,6 +4141,7 @@
 ./usr/share/man/man7/symlink.7			man-reference-man	.man
 ./usr/share/man/man7/sysctl.7			man-reference-man	.man
 ./usr/share/man/man8/MAKEDEV.8			man-sysutil-man		.man
+./usr/share/man/man8/MAKEDEV.local.8		man-sysutil-man		.man
 ./usr/share/man/man8/ac.8			man-sysutil-man		.man
 ./usr/share/man/man8/accton.8			man-sysutil-man		.man
 ./usr/share/man/man8/acorn26/MAKEDEV.8		man-obsolete		obsolete
@@ -4210,6 +4218,7 @@
 ./usr/share/man/man8/btcontrol.8		man-obsolete		obsolete
 ./usr/share/man/man8/btdevctl.8			man-sysutil-man		.man
 ./usr/share/man/man8/bthcid.8			man-sysutil-man		.man
+./usr/share/man/man8/btuartd.8			man-sysutil-man		.man
 ./usr/share/man/man8/catman.8			man-man-man		.man
 ./usr/share/man/man8/cats/MAKEDEV.8		man-obsolete		obsolete
 ./usr/share/man/man8/cats/makedev.8		man-obsolete		obsolete
@@ -4439,6 +4448,7 @@
 ./usr/share/man/man8/mailwrapper.8		man-mailwrapper-man	.man
 ./usr/share/man/man8/makedbm.8			man-nis-man		yp,.man
 ./usr/share/man/man8/makedev.8			man-sysutil-man		.man
+./usr/share/man/man8/makedev.local.8		man-sysutil-man		.man
 ./usr/share/man/man8/makefs.8			man-sysutil-man		.man
 ./usr/share/man/man8/makekey.8			man-crypto-man		.man
 ./usr/share/man/man8/makemap.8			man-obsolete		obsolete

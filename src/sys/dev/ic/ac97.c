@@ -1,4 +1,4 @@
-/*      $NetBSD: ac97.c,v 1.84 2006/09/02 17:02:57 christos Exp $ */
+/*      $NetBSD: ac97.c,v 1.86 2007/02/21 22:59:59 thorpej Exp $ */
 /*	$OpenBSD: ac97.c,v 1.8 2000/07/19 09:01:35 csapuntz Exp $	*/
 
 /*
@@ -63,7 +63,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ac97.c,v 1.84 2006/09/02 17:02:57 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ac97.c,v 1.86 2007/02/21 22:59:59 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -380,8 +380,8 @@ static const struct ac97_source_info modem_source_info[] = {
 		MODEM_SOURCE_INFO_SIZE : AUDIO_SOURCE_INFO_SIZE)
 
 /*
- * Check out http://developer.intel.com/pc-supp/platform/ac97/ for
- * information on AC-97
+ * Check out http://www.intel.com/support/motherboards/desktop/sb/cs-025406.htm for
+ * AC'97 Component Specification
  */
 
 struct ac97_softc {
@@ -1561,7 +1561,7 @@ ac97_mixer_set_port(struct ac97_codec_if *codec_if, mixer_ctrl_t *cp)
 	uint16_t mask;
 	uint16_t val, newval;
 	int error;
-	boolean_t spdif;
+	bool spdif;
 
 	as = (struct ac97_softc *)codec_if;
 	if (cp->dev < 0 || cp->dev >= as->num_source_info)

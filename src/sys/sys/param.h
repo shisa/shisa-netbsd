@@ -1,4 +1,4 @@
-/*	$NetBSD: param.h,v 1.250 2007/01/20 18:59:01 christos Exp $	*/
+/*	$NetBSD: param.h,v 1.255 2007/02/26 12:43:47 yamt Exp $	*/
 
 /*-
  * Copyright (c) 1982, 1986, 1989, 1993
@@ -63,7 +63,7 @@
  *	2.99.9		(299000900)
  */
 
-#define	__NetBSD_Version__	499000900	/* NetBSD 4.99.9 */
+#define	__NetBSD_Version__	499001300	/* NetBSD 4.99.13 */
 
 #define __NetBSD_Prereq__(M,m,p) (((((M) * 100000000) + \
     (m) * 1000000) + (p) * 100) <= __NetBSD_Version__)
@@ -209,8 +209,6 @@
 #define	PCATCH		0x100	/* OR'd with pri for tsleep to check signals */
 #define	PNORELOCK	0x200	/* OR'd with pri for cond_wait() to not relock
 				   the interlock */
-#define PNOEXITERR     	0x400   /* OR'd with pri for tsleep to not exit
-				   with an error code when LWPs are exiting */
 #define	NBPW	sizeof(int)	/* number of bytes per word (integer) */
 
 #define	CMASK	022		/* default file mask: S_IWGRP|S_IWOTH */
@@ -339,5 +337,14 @@
 	    ((ms +0u) * hz) / 1000u)
 #endif
 #endif /* _KERNEL */
+
+/*
+ * Minimum alignment of "struct lwp" needed by the architecture.
+ * This counts when packing a lock byte into a word alongside a
+ * pointer to an LWP.
+ */
+#ifndef MIN_LWP_ALIGNMENT
+#define	MIN_LWP_ALIGNMENT	32
+#endif
 
 #endif /* !_SYS_PARAM_H_ */

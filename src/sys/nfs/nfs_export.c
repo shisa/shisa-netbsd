@@ -1,4 +1,4 @@
-/*	$NetBSD: nfs_export.c,v 1.24 2007/01/04 20:24:08 elad Exp $	*/
+/*	$NetBSD: nfs_export.c,v 1.26 2007/02/05 16:03:53 chs Exp $	*/
 
 /*-
  * Copyright (c) 1997, 1998, 2004, 2005 The NetBSD Foundation, Inc.
@@ -82,7 +82,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: nfs_export.c,v 1.24 2007/01/04 20:24:08 elad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: nfs_export.c,v 1.26 2007/02/05 16:03:53 chs Exp $");
 
 #include "opt_compat_netbsd.h"
 #include "opt_inet.h"
@@ -244,21 +244,22 @@ mountd_set_exports_list(const struct mountd_exports_list *mel, struct lwp *l)
 		}
 	}
 	if (error != 0) {
-		error = EOPNOTSUPP;
-		goto out_locked;
+		vput(vp);
+		return EOPNOTSUPP;
 	}
 
 	/* Mark the file system busy. */
 	error = vfs_busy(mp, LK_NOWAIT, NULL);
+	vput(vp);
 	if (error != 0)
-		goto out_locked;
+		return error;
 
 	netexport_wrlock();
 	ne = netexport_lookup(mp);
 	if (ne == NULL) {
 		error = init_exports(mp, &ne);
 		if (error != 0) {
-			goto out_locked2;
+			goto out;
 		}
 	}
 
@@ -291,12 +292,9 @@ mountd_set_exports_list(const struct mountd_exports_list *mel, struct lwp *l)
 	}
 #endif
 
-out_locked2:
+out:
 	netexport_wrunlock();
 	vfs_unbusy(mp);
-
-out_locked:
-	vput(vp);
 	return error;
 }
 

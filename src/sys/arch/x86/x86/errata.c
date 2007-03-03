@@ -1,4 +1,4 @@
-/*	$NetBSD: errata.c,v 1.5 2007/01/11 17:24:30 ad Exp $	*/
+/*	$NetBSD: errata.c,v 1.7 2007/02/21 22:59:55 thorpej Exp $	*/
 
 /*-
  * Copyright (c) 2007 The NetBSD Foundation, Inc.
@@ -52,7 +52,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: errata.c,v 1.5 2007/01/11 17:24:30 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: errata.c,v 1.7 2007/02/21 22:59:55 thorpej Exp $");
 
 #include "opt_multiprocessor.h"
 #ifdef i386
@@ -76,7 +76,7 @@ typedef struct errata {
 	u_short		e_reported;
 	u_int		e_data1;
 	const uint8_t	*e_set;
-	boolean_t	(*e_act)(struct cpu_info *, struct errata *);
+	bool		(*e_act)(struct cpu_info *, struct errata *);
 	uint64_t	e_data2;
 } errata_t;
 
@@ -136,8 +136,8 @@ static const uint8_t x86_errata_set8[] = {
 	SH_D0, SH_D0, SH_D0, SH_E4, SH_E4, SH_E5, OINK
 };
 
-static boolean_t x86_errata_setmsr(struct cpu_info *, errata_t *);
-static boolean_t x86_errata_testmsr(struct cpu_info *, errata_t *);
+static bool x86_errata_setmsr(struct cpu_info *, errata_t *);
+static bool x86_errata_testmsr(struct cpu_info *, errata_t *);
 
 static errata_t errata[] = {
 	/*
@@ -230,6 +230,7 @@ static errata_t errata[] = {
 		107, FALSE, MSR_BU_CFG, x86_errata_set2,
 		x86_errata_testmsr, BU_CFG_THRL2IDXCMPDIS
 	},
+#if 0
 	/*
 	 * 122: TLB Flush Filter May Cause Coherency Problem in
 	 * Multiprocessor Systems
@@ -238,10 +239,11 @@ static errata_t errata[] = {
 		122, FALSE, MSR_HWCR, x86_errata_set4,
 		x86_errata_setmsr, HWCR_FFDIS
 	},
+#endif
 #endif	/* MULTIPROCESSOR */
 };
 
-static boolean_t 
+static bool 
 x86_errata_testmsr(struct cpu_info *ci, errata_t *e)
 {
 	uint64_t val;
@@ -256,7 +258,7 @@ x86_errata_testmsr(struct cpu_info *ci, errata_t *e)
 	return TRUE;
 }
 
-static boolean_t 
+static bool 
 x86_errata_setmsr(struct cpu_info *ci, errata_t *e)
 {
 	uint64_t val;

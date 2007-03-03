@@ -1,4 +1,4 @@
-/*	$NetBSD: intr.c,v 1.26 2007/01/24 13:08:13 hubertf Exp $	*/
+/*	$NetBSD: intr.c,v 1.28 2007/02/21 22:59:55 thorpej Exp $	*/
 
 /*
  * Copyright 2002 (c) Wasabi Systems, Inc.
@@ -104,7 +104,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: intr.c,v 1.26 2007/01/24 13:08:13 hubertf Exp $");
+__KERNEL_RCSID(0, "$NetBSD: intr.c,v 1.28 2007/02/21 22:59:55 thorpej Exp $");
 
 #include "opt_multiprocessor.h"
 #include "opt_acpi.h"
@@ -540,11 +540,11 @@ intr_biglock_wrapper(void *vp)
 	struct intrhand *ih = vp;
 	int ret;
 
-	KERNEL_LOCK(LK_EXCLUSIVE|LK_CANRECURSE);
+	KERNEL_LOCK(1, NULL);
 
 	ret = (*ih->ih_realfun)(ih->ih_realarg);
 
-	KERNEL_UNLOCK();
+	KERNEL_UNLOCK_ONE(NULL);
 
 	return ret;
 }
@@ -576,7 +576,7 @@ intr_establish(int legacy_irq, struct pic *pic, int pin, int type, int level,
 	struct intrsource *source;
 	struct intrstub *stubp;
 #ifdef MULTIPROCESSOR
-	boolean_t mpsafe = level >= IPL_SCHED;
+	bool mpsafe = level >= IPL_SCHED;
 #endif /* MULTIPROCESSOR */
 
 #ifdef DIAGNOSTIC
@@ -907,13 +907,13 @@ cpu_intr_init(struct cpu_info *ci)
 void
 x86_softintlock(void)
 {
-	KERNEL_LOCK(LK_EXCLUSIVE|LK_CANRECURSE);
+	KERNEL_LOCK(1, NULL);
 }
 
 void
 x86_softintunlock(void)
 {
-	KERNEL_UNLOCK();
+	KERNEL_UNLOCK_ONE(NULL);
 }
 #endif
 

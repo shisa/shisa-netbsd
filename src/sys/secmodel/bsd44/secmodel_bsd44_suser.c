@@ -1,4 +1,4 @@
-/* $NetBSD: secmodel_bsd44_suser.c,v 1.33 2007/01/20 16:47:38 elad Exp $ */
+/* $NetBSD: secmodel_bsd44_suser.c,v 1.37 2007/02/21 23:00:09 thorpej Exp $ */
 /*-
  * Copyright (c) 2006 Elad Efrat <elad@NetBSD.org>
  * All rights reserved.
@@ -38,13 +38,14 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: secmodel_bsd44_suser.c,v 1.33 2007/01/20 16:47:38 elad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: secmodel_bsd44_suser.c,v 1.37 2007/02/21 23:00:09 thorpej Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/kauth.h>
 
 #include <sys/acct.h>
+#include <sys/mutex.h>
 #include <sys/ktrace.h>
 #include <sys/mount.h>
 #include <sys/socketvar.h>
@@ -105,7 +106,7 @@ secmodel_bsd44_suser_generic_cb(kauth_cred_t cred, kauth_action_t action,
     void *cookie, void *arg0, void *arg1,
     void *arg2, void *arg3)
 {
-	boolean_t isroot;
+	bool isroot;
 	int result;
 
 	isroot = (kauth_cred_geteuid(cred) == 0);
@@ -145,7 +146,7 @@ secmodel_bsd44_suser_system_cb(kauth_cred_t cred, kauth_action_t action,
     void *cookie, void *arg0, void *arg1,
     void *arg2, void *arg3)
 {
-	boolean_t isroot;
+	bool isroot;
 	int result;
 	enum kauth_system_req req;
 
@@ -318,7 +319,7 @@ secmodel_bsd44_suser_process_cb(kauth_cred_t cred, kauth_action_t action,
     void *cookie, void *arg0, void *arg1, void *arg2, void *arg3)
 {
 	struct proc *p;
-	boolean_t isroot;
+	bool isroot;
 	int result;
 
 	isroot = (kauth_cred_geteuid(cred) == 0);
@@ -350,7 +351,7 @@ secmodel_bsd44_suser_process_cb(kauth_cred_t cred, kauth_action_t action,
 			break;
 		}
 
-		if ((p->p_traceflag & KTRFAC_ROOT) || (p->p_flag & P_SUGID)) {
+		if ((p->p_traceflag & KTRFAC_ROOT) || (p->p_flag & PK_SUGID)) {
 			result = KAUTH_RESULT_DENY;
 			break;
 		}
@@ -386,7 +387,7 @@ secmodel_bsd44_suser_process_cb(kauth_cred_t cred, kauth_action_t action,
 		case PFSmem:
 			if (kauth_cred_getuid(cred) !=
 			    kauth_cred_getuid(p->p_cred) ||
-			    ISSET(p->p_flag, P_SUGID)) {
+			    ISSET(p->p_flag, PK_SUGID)) {
 				result = KAUTH_RESULT_DENY;
 				break;
 			}
@@ -429,7 +430,7 @@ secmodel_bsd44_suser_process_cb(kauth_cred_t cred, kauth_action_t action,
 
 			if (kauth_cred_getuid(cred) !=
 			    kauth_cred_getuid(p->p_cred) ||
-			    ISSET(p->p_flag, P_SUGID)) {
+			    ISSET(p->p_flag, PK_SUGID)) {
 				result = KAUTH_RESULT_DENY;
 				break;
 			}
@@ -464,7 +465,7 @@ secmodel_bsd44_suser_process_cb(kauth_cred_t cred, kauth_action_t action,
 		}
 
 		if (kauth_cred_getuid(cred) != kauth_cred_getuid(p->p_cred) ||
-		    ISSET(p->p_flag, P_SUGID)) {
+		    ISSET(p->p_flag, PK_SUGID)) {
 			result = KAUTH_RESULT_DENY;
 			break;
 		}
@@ -566,7 +567,7 @@ secmodel_bsd44_suser_network_cb(kauth_cred_t cred, kauth_action_t action,
     void *cookie, void *arg0, void *arg1, void *arg2,
     void *arg3)
 {
-	boolean_t isroot;
+	bool isroot;
 	int result;
 	enum kauth_network_req req;
 
@@ -647,7 +648,7 @@ secmodel_bsd44_suser_network_cb(kauth_cred_t cred, kauth_action_t action,
 	case KAUTH_NETWORK_SOCKET:
 		switch (req) {
 		case KAUTH_REQ_NETWORK_SOCKET_OPEN:
-			if ((u_long)arg1 == PF_ROUTE)
+			if ((u_long)arg1 == PF_ROUTE || (u_long)arg1 == PF_BLUETOOTH)
 				result = KAUTH_RESULT_ALLOW;
 			else if ((u_long)arg2 == SOCK_RAW) {
 				if (isroot)
@@ -701,7 +702,7 @@ secmodel_bsd44_suser_machdep_cb(kauth_cred_t cred, kauth_action_t action,
     void *cookie, void *arg0, void *arg1, void *arg2,
     void *arg3)
 {
-        boolean_t isroot;
+        bool isroot;
         int result;
 
         isroot = (kauth_cred_geteuid(cred) == 0);
@@ -744,7 +745,7 @@ secmodel_bsd44_suser_device_cb(kauth_cred_t cred, kauth_action_t action,
     void *arg3)
 {
 	struct tty *tty;
-        boolean_t isroot;
+        bool isroot;
         int result;
 
         isroot = (kauth_cred_geteuid(cred) == 0);
