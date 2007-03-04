@@ -1,4 +1,4 @@
-/*	$NetBSD: tcp_input.c,v 1.259 2006/12/15 21:18:54 joerg Exp $	*/
+/*	$NetBSD: tcp_input.c,v 1.261 2007/02/22 06:17:51 thorpej Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -152,7 +152,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: tcp_input.c,v 1.259 2006/12/15 21:18:54 joerg Exp $");
+__KERNEL_RCSID(0, "$NetBSD: tcp_input.c,v 1.261 2007/02/22 06:17:51 thorpej Exp $");
 
 #include "opt_inet.h"
 #include "opt_ipsec.h"
@@ -1224,7 +1224,7 @@ findpcb:
 #ifdef INET6
 		else if (in6p &&
 		    (in6p->in6p_socket->so_options & SO_ACCEPTCONN) == 0 &&
-		    ipsec4_in_reject_so(m, in6p->in6p_socket)) {
+		    ipsec6_in_reject_so(m, in6p->in6p_socket)) {
 			ipsecstat.in_polvio++;
 			goto drop;
 		}
@@ -1532,7 +1532,7 @@ findpcb:
 				}
 #endif
 
-#ifdef IPSEC
+#if defined(IPSEC) || defined(FAST_IPSEC)
 				switch (af) {
 #ifdef INET
 				case AF_INET:
@@ -1551,9 +1551,9 @@ findpcb:
 						goto dropwithreset;
 					}
 					break;
-#endif
+#endif /*INET6*/
 				}
-#endif
+#endif /*IPSEC*/
 
 				/*
 				 * LISTEN socket received a SYN
@@ -1983,7 +1983,7 @@ after_listen:
 	}
 
 	todrop = tp->rcv_nxt - th->th_seq;
-	dupseg = FALSE;
+	dupseg = false;
 	if (todrop > 0) {
 		if (tiflags & TH_SYN) {
 			tiflags &= ~TH_SYN;
@@ -2012,7 +2012,7 @@ after_listen:
 			 */
 			tp->t_flags |= TF_ACKNOW;
 			todrop = tlen;
-			dupseg = TRUE;
+			dupseg = true;
 			tcpstat.tcps_rcvdupbyte += todrop;
 			tcpstat.tcps_rcvduppack++;
 		} else if ((tiflags & TH_RST) &&
@@ -2767,9 +2767,15 @@ tcp_signature_getsav(struct mbuf *m, struct tcphdr *th)
 #ifdef FAST_IPSEC
 	/* Extract the destination from the IP header in the mbuf. */
 	bzero(&dst, sizeof(union sockaddr_union));
-	dst.sa.sa_len = sizeof(struct sockaddr_in);
-	dst.sa.sa_family = AF_INET;
-	dst.sin.sin_addr = ip->ip_dst;
+	if (ip !=NULL) {
+		dst.sa.sa_len = sizeof(struct sockaddr_in);
+		dst.sa.sa_family = AF_INET;
+		dst.sin.sin_addr = ip->ip_dst;
+	} else {
+		dst.sa.sa_len = sizeof(struct sockaddr_in6);
+		dst.sa.sa_family = AF_INET6;
+		dst.sin6.sin6_addr = ip6->ip6_dst;
+	}
 
 	/*
 	 * Look up an SADB entry which matches the address of the peer.

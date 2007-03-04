@@ -1,4 +1,4 @@
-/*	$Id: if_mtun.h,v 1.4 2007/02/21 04:57:19 keiichi Exp $	*/
+/*	$Id: if_mtun.h,v 1.5 2007/03/04 15:55:20 keiichi Exp $	*/
 /*	$NetBSD: if_gif.h,v 1.13 2005/12/11 23:05:25 thorpej Exp $	*/
 /*	$KAME: if_gif.h,v 1.23 2001/07/27 09:21:42 itojun Exp $	*/
 
@@ -85,7 +85,7 @@ struct mtun_softc {
 void	mtunattach0(struct mtun_softc *);
 void	mtun_input(struct mbuf *, int, struct ifnet *);
 int	mtun_output(struct ifnet *, struct mbuf *,
-		   struct sockaddr *, struct rtentry *);
+		   const struct sockaddr *, struct rtentry *);
 int	mtun_ioctl(struct ifnet *, u_long, caddr_t);
 int	mtun_set_tunnel(struct ifnet *, struct sockaddr *, struct sockaddr *);
 void	mtun_delete_tunnel(struct ifnet *);

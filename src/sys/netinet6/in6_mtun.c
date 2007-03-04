@@ -1,4 +1,4 @@
-/*	$Id: in6_mtun.c,v 1.3 2007/01/13 18:54:45 keiichi Exp $	*/
+/*	$Id: in6_mtun.c,v 1.4 2007/03/04 15:55:20 keiichi Exp $	*/
 /*	$NetBSD: in6_gif.c,v 1.44.4.1 2006/09/09 02:58:55 rpaulo Exp $	*/
 /*	$KAME: in6_gif.c,v 1.62 2001/07/29 04:27:25 itojun Exp $	*/
 
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$Id: in6_mtun.c,v 1.3 2007/01/13 18:54:45 keiichi Exp $");
+__KERNEL_RCSID(0, "$Id: in6_mtun.c,v 1.4 2007/03/04 15:55:20 keiichi Exp $");
 
 #include "opt_inet.h"
 #include "opt_iso.h"
@@ -455,7 +455,7 @@ in6_mtun_detach(sc)
 void
 in6_mtun_ctlinput(cmd, sa, d)
 	int cmd;
-	struct sockaddr *sa;
+	const struct sockaddr *sa;
 	void *d;
 {
 	struct mtun_softc *sc;

@@ -187,7 +187,7 @@ int
 mip_output(ifp, m, dst, rt)
      struct ifnet *ifp;
      struct mbuf *m;
-     struct sockaddr *dst;
+     const struct sockaddr *dst;
      struct rtentry *rt;
 {
 	struct mip6_bul_internal *mbul;

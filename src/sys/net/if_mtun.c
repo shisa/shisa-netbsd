@@ -1,4 +1,4 @@
-/*	$Id: if_mtun.c,v 1.2 2007/01/13 18:54:44 keiichi Exp $	*/
+/*	$Id: if_mtun.c,v 1.3 2007/03/04 15:55:20 keiichi Exp $	*/
 /*	$NetBSD: if_gif.c,v 1.64 2006/11/23 04:07:07 rpaulo Exp $	*/
 /*	$KAME: if_gif.c,v 1.76 2001/08/20 02:01:02 kjc Exp $	*/
 
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$Id: if_mtun.c,v 1.2 2007/01/13 18:54:44 keiichi Exp $");
+__KERNEL_RCSID(0, "$Id: if_mtun.c,v 1.3 2007/03/04 15:55:20 keiichi Exp $");
 
 #include "opt_inet.h"
 #include "opt_iso.h"
@@ -198,7 +198,7 @@ mtun_clone_destroy(struct ifnet *ifp)
 }
 
 int
-mtun_output(struct ifnet *ifp, struct mbuf *m, struct sockaddr *dst,
+mtun_output(struct ifnet *ifp, struct mbuf *m, const struct sockaddr *dst,
     struct rtentry *rt)
 {
 	struct mtun_softc *sc = (struct mtun_softc*)ifp;

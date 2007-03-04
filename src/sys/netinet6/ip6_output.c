@@ -1,4 +1,4 @@
-/*	$NetBSD: ip6_output.c,v 1.113 2007/01/29 06:13:58 dyoung Exp $	*/
+/*	$NetBSD: ip6_output.c,v 1.116 2007/02/21 23:00:08 thorpej Exp $	*/
 /*	$KAME: ip6_output.c,v 1.172 2001/03/25 09:55:56 itojun Exp $	*/
 
 /*
@@ -62,7 +62,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ip6_output.c,v 1.113 2007/01/29 06:13:58 dyoung Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ip6_output.c,v 1.116 2007/02/21 23:00:08 thorpej Exp $");
 
 #include "opt_inet.h"
 #include "opt_inet6.h"
@@ -114,6 +114,13 @@ __KERNEL_RCSID(0, "$NetBSD: ip6_output.c,v 1.113 2007/01/29 06:13:58 dyoung Exp 
 #endif /* NMIP > 0*/
 #endif /* MIP6 */
 
+#ifdef FAST_IPSEC
+#include <netipsec/ipsec.h>
+#include <netipsec/ipsec6.h>
+#include <netipsec/key.h>
+#include <netipsec/xform.h>
+#endif
+
 #include <net/net_osdep.h>
 
 #ifdef PFIL_HOOKS
@@ -146,8 +153,8 @@ static int ip6_insertfraghdr __P((struct mbuf *, struct mbuf *, int,
 	struct ip6_frag **));
 static int ip6_insert_jumboopt __P((struct ip6_exthdrs *, u_int32_t));
 static int ip6_splithdr __P((struct mbuf *, struct ip6_exthdrs *));
-static int ip6_getpmtu __P((struct route_in6 *, struct route_in6 *,
-	struct ifnet *, struct in6_addr *, u_long *, int *));
+static int ip6_getpmtu(struct route_in6 *, struct route_in6 *, struct ifnet *,
+    const struct in6_addr *, u_long *, int *);
 static int copypktopts __P((struct ip6_pktopts *, struct ip6_pktopts *, int));
 
 #ifdef RFC2292
@@ -186,7 +193,7 @@ ip6_output(
 	struct ifnet *ifp, *origifp;
 	struct mbuf *m = m0;
 	int hlen, tlen, len, off;
-	boolean_t tso;
+	bool tso;
 	struct route_in6 ip6route;
 	struct rtentry *rt = NULL;
 	struct sockaddr_in6 *dst, src_sa, dst_sa;
@@ -213,6 +220,10 @@ ip6_output(
 	struct mip6_bul_internal *mbul = NULL;
 #endif /* NMIP > 0 */
 #endif /* MIP6 */
+#ifdef FAST_IPSEC
+	struct secpolicy *sp = NULL;
+	int s;
+#endif
 
 #ifdef  DIAGNOSTIC
 	if ((m->m_flags & M_PKTHDR) == 0)
@@ -396,12 +407,6 @@ ip6_output(
   skippolicycheck:;
 #endif /* IPSEC */
 
-	if (needipsec &&
-	    (m->m_pkthdr.csum_flags & (M_CSUM_UDPv6|M_CSUM_TCPv6)) != 0) {
-		in6_delayed_cksum(m);
-		m->m_pkthdr.csum_flags &= ~(M_CSUM_UDPv6|M_CSUM_TCPv6);
-	}
-
 	/*
 	 * Calculate the total length of the extension header chain.
 	 * Keep the length of the unfragmentable part for fragmentation.
@@ -419,6 +424,35 @@ ip6_output(
 	unfragpartlen = optlen + sizeof(struct ip6_hdr);
 	/* NOTE: we don't add AH/ESP length here. do that later. */
 	if (exthdrs.ip6e_dest2) optlen += exthdrs.ip6e_dest2->m_len;
+
+#ifdef FAST_IPSEC
+	/* Check the security policy (SP) for the packet */
+    
+	/* XXX For moment, we doesn't support packet with extented action */
+	if (optlen !=0)
+		goto freehdrs;
+
+	sp = ipsec6_check_policy(m,so,flags,&needipsec,&error);
+	if (error != 0) {
+		/*
+		 * Hack: -EINVAL is used to signal that a packet
+		 * should be silently discarded.  This is typically
+		 * because we asked key management for an SA and
+		 * it was delayed (e.g. kicked up to IKE).
+		 */
+	if (error == -EINVAL) 
+		error = 0;
+	goto freehdrs;
+    }
+#endif /* FAST_IPSEC */
+
+
+	if (needipsec &&
+	    (m->m_pkthdr.csum_flags & (M_CSUM_UDPv6|M_CSUM_TCPv6)) != 0) {
+		in6_delayed_cksum(m);
+		m->m_pkthdr.csum_flags &= ~(M_CSUM_UDPv6|M_CSUM_TCPv6);
+	}
+
 
 	/*
 	 * If we need IPsec, or there is at least one extension header,
@@ -569,6 +603,7 @@ ip6_output(
 		    &needipsectun);
 		m = state.m;
 		if (error) {
+			rh = mtod(exthdrs.ip6e_rthdr, struct ip6_rthdr *);
 			/* mbuf is already reclaimed in ipsec6_output_trans. */
 			m = NULL;
 			switch (error) {
@@ -803,6 +838,25 @@ skip_ipsec2:;
 		exthdrs.ip6e_ip6 = m;
 	}
 #endif /* IPSEC */
+#ifdef FAST_IPSEC
+	if (needipsec) {
+		s = splsoftnet();
+		error = ipsec6_process_packet(m,sp->req);
+
+		/*
+		 * Preserve KAME behaviour: ENOENT can be returned
+		 * when an SA acquire is in progress.  Don't propagate
+		 * this to user-level; it confuses applications.
+		 * XXX this will go away when the SADB is redone.
+		 */
+		if (error == ENOENT)
+			error = 0;
+		splx(s);
+		goto done;
+    }
+#endif /* FAST_IPSEC */    
+
+
 
 	/* adjust pointer */
 	ip6 = mtod(m, struct ip6_hdr *);
@@ -811,8 +865,8 @@ skip_ipsec2:;
 	dst_sa.sin6_family = AF_INET6;
 	dst_sa.sin6_len = sizeof(dst_sa);
 	dst_sa.sin6_addr = ip6->ip6_dst;
-	if ((error = in6_selectroute(&dst_sa, opt, im6o, ro, &ifp, &rt, 0))
-	    != 0) {
+	if ((error = in6_selectroute(&dst_sa, opt, im6o, (struct route *)ro,
+	    &ifp, &rt, 0)) != 0) {
 		switch (error) {
 		case EHOSTUNREACH:
 			ip6stat.ip6s_noroute++;
@@ -1097,8 +1151,8 @@ skip_ipsec2:;
 		mtu32 = (u_int32_t)mtu;
 		bzero(&ip6cp, sizeof(ip6cp));
 		ip6cp.ip6c_cmdarg = (void *)&mtu32;
-		pfctlinput2(PRC_MSGSIZE, (struct sockaddr *)&ro_pmtu->ro_dst,
-		    (void *)&ip6cp);
+		pfctlinput2(PRC_MSGSIZE,
+		    rtcache_getdst((struct route *)ro_pmtu), &ip6cp);
 
 		error = EMSGSIZE;
 		goto bad;
@@ -1193,8 +1247,8 @@ skip_ipsec2:;
 		mtu32 = (u_int32_t)mtu;
 		bzero(&ip6cp, sizeof(ip6cp));
 		ip6cp.ip6c_cmdarg = (void *)&mtu32;
-		pfctlinput2(PRC_MSGSIZE, (struct sockaddr *)&ro_pmtu->ro_dst,
-		    (void *)&ip6cp);
+		pfctlinput2(PRC_MSGSIZE,
+		    rtcache_getdst((struct route *)ro_pmtu), &ip6cp);
 #endif
 
 		len = (mtu - hlen - sizeof(struct ip6_frag)) & ~7;
@@ -1346,6 +1400,11 @@ done:
 	if (sp != NULL)
 		key_freesp(sp);
 #endif /* IPSEC */
+#ifdef FAST_IPSEC
+	if (sp != NULL)
+		KEY_FREESP(&sp);
+#endif /* FAST_IPSEC */
+
 
 	return (error);
 
@@ -1567,26 +1626,23 @@ ip6_insertfraghdr(m0, m, hlen, frghdrp)
 }
 
 static int
-ip6_getpmtu(ro_pmtu, ro, ifp, dst, mtup, alwaysfragp)
-	struct route_in6 *ro_pmtu, *ro;
-	struct ifnet *ifp;
-	struct in6_addr *dst;
-	u_long *mtup;
-	int *alwaysfragp;
+ip6_getpmtu(struct route_in6 *ro_pmtu, struct route_in6 *ro, struct ifnet *ifp,
+    const struct in6_addr *dst, u_long *mtup, int *alwaysfragp)
 {
 	u_int32_t mtu = 0;
 	int alwaysfrag = 0;
 	int error = 0;
+	const struct sockaddr_in6 *cdst;
 
 	if (ro_pmtu != ro) {
 		/* The first hop and the final destination may differ. */
-		struct sockaddr_in6 *sa6_dst =
-		    (struct sockaddr_in6 *)&ro_pmtu->ro_dst;
-		if (!IN6_ARE_ADDR_EQUAL(&sa6_dst->sin6_addr, dst))
+		cdst = (const struct sockaddr_in6 *)rtcache_getdst((struct route *)ro_pmtu);
+		if (!IN6_ARE_ADDR_EQUAL(&cdst->sin6_addr, dst))
 			rtcache_free((struct route *)ro_pmtu);
 		else
 			rtcache_check((struct route *)ro_pmtu);
 		if (ro_pmtu->ro_rt == NULL) {
+			struct sockaddr_in6 *sa6_dst = &ro_pmtu->ro_dst;
 			memset(sa6_dst, 0, sizeof(*sa6_dst)); /* for safety */
 			sa6_dst->sin6_family = AF_INET6;
 			sa6_dst->sin6_len = sizeof(struct sockaddr_in6);
@@ -1642,11 +1698,8 @@ ip6_getpmtu(ro_pmtu, ro, ifp, dst, mtup, alwaysfragp)
  * IP6 socket option processing.
  */
 int
-ip6_ctloutput(op, so, level, optname, mp)
-	int op;
-	struct socket *so;
-	int level, optname;
-	struct mbuf **mp;
+ip6_ctloutput(int op, struct socket *so, int level, int optname,
+    struct mbuf **mp)
 {
 	int privileged, optdatalen, uproto;
 	void *optdata;
@@ -2027,7 +2080,8 @@ do { 						\
 				}
 				break;
 
-#ifdef IPSEC
+
+#if defined(IPSEC) || defined(FAST_IPSEC)
 			case IPV6_IPSEC_POLICY:
 			{
 				caddr_t req = NULL;
@@ -2233,7 +2287,7 @@ do { 						\
 				    in6p->in6p_moptions, mp);
 				break;
 
-#ifdef IPSEC
+#if defined(IPSEC) || defined(FAST_IPSEC)
 			case IPV6_IPSEC_POLICY:
 			    {
 				caddr_t req = NULL;
@@ -3520,7 +3574,7 @@ void
 ip6_mloopback(ifp, m, dst)
 	struct ifnet *ifp;
 	struct mbuf *m;
-	struct sockaddr_in6 *dst;
+	const struct sockaddr_in6 *dst;
 {
 	struct mbuf *copym;
 	struct ip6_hdr *ip6;
@@ -3556,7 +3610,7 @@ ip6_mloopback(ifp, m, dst)
 	in6_clearscope(&ip6->ip6_src);
 	in6_clearscope(&ip6->ip6_dst);
 
-	(void)looutput(ifp, copym, (struct sockaddr *)dst, NULL);
+	(void)looutput(ifp, copym, (const struct sockaddr *)dst, NULL);
 }
 
 /*

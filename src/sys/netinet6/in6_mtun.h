@@ -1,4 +1,4 @@
-/*	$Id: in6_mtun.h,v 1.2 2007/01/13 18:54:45 keiichi Exp $	*/
+/*	$Id: in6_mtun.h,v 1.3 2007/03/04 15:55:20 keiichi Exp $	*/
 /*	$NetBSD: in6_gif.h,v 1.11 2005/12/10 23:39:56 elad Exp $	*/
 /*	$KAME: in6_gif.h,v 1.7 2001/07/26 06:53:16 jinmei Exp $	*/
 
@@ -43,6 +43,6 @@ int in6_mtun_input(struct mbuf **, int *, int);
 int in6_mtun_output(struct ifnet *, int, struct mbuf *);
 int in6_mtun_attach(struct mtun_softc *);
 int in6_mtun_detach(struct mtun_softc *);
-void in6_mtun_ctlinput(int, struct sockaddr *, void *);
+void in6_mtun_ctlinput(int, const struct sockaddr *, void *);
 
 #endif /* !_NETINET6_IN6_MTUN_H_ */
