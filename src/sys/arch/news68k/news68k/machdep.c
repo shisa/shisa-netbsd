@@ -1,4 +1,4 @@
-/*	$NetBSD: machdep.c,v 1.63 2006/10/21 05:54:32 mrg Exp $	*/
+/*	$NetBSD: machdep.c,v 1.65 2007/02/28 04:21:54 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1990, 1993
@@ -77,7 +77,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.63 2006/10/21 05:54:32 mrg Exp $");
+__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.65 2007/02/28 04:21:54 thorpej Exp $");
 
 #include "opt_ddb.h"
 #include "opt_compat_netbsd.h"
@@ -274,19 +274,19 @@ cpu_startup(void)
 	 * limits the number of processes exec'ing at any time.
 	 */
 	exec_map = uvm_km_suballoc(kernel_map, &minaddr, &maxaddr,
-	    16 * NCARGS, VM_MAP_PAGEABLE, FALSE, NULL);
+	    16 * NCARGS, VM_MAP_PAGEABLE, false, NULL);
 
 	/*
 	 * Allocate a submap for physio
 	 */
 	phys_map = uvm_km_suballoc(kernel_map, &minaddr, &maxaddr,
-	    VM_PHYS_SIZE, 0, FALSE, NULL);
+	    VM_PHYS_SIZE, 0, false, NULL);
 
 	/*
 	 * Finally, allocate mbuf cluster submap.
 	 */
 	mb_map = uvm_km_suballoc(kernel_map, &minaddr, &maxaddr,
-	    nmbclusters * mclbytes, VM_MAP_INTRSAFE, FALSE, NULL);
+	    nmbclusters * mclbytes, VM_MAP_INTRSAFE, false, NULL);
 
 #ifdef DEBUG
 	pmapdebug = opmapdebug;
@@ -999,65 +999,8 @@ news1200_init(void)
  * XXX should do better handling XXX
  */
 
-void intrhand_lev2(void);
 void intrhand_lev3(void);
 void intrhand_lev4(void);
-
-void (*sir_routines[NSIR])(void *);
-void *sir_args[NSIR];
-u_char ssir;
-u_int next_sir;
-
-void
-intrhand_lev2(void)
-{
-	int s;
-	u_int bit;
-	u_char sintr;
-
-	/* disable level 2 interrupt */
-	*ctrl_int2 = 0;
-
-	s = splhigh();
-	sintr = ssir;
-	ssir = 0;
-	splx(s);
-
-	intrcnt[2]++;
-	uvmexp.intrs++;
-
-	for (bit = 0; bit < next_sir; bit++) {
-		if (sintr & (1 << bit)) {
-			uvmexp.softs++;
-			if (sir_routines[bit])
-				sir_routines[bit](sir_args[bit]);
-		}
-	}
-}
-/*
- * Allocation routines for software interrupts.
- */
-u_char
-allocate_sir(void (*proc)(void *), void *arg)
-{
-	int bit;
-
-	if (next_sir >= NSIR)
-		panic("allocate_sir: none left");
-	bit = next_sir++;
-	sir_routines[bit] = proc;
-	sir_args[bit] = arg;
-	return 1 << bit;
-}
-
-void
-init_sir(void)
-{
-
-	sir_routines[SIR_NET]   = (void (*)(void *))netintr;
-	sir_routines[SIR_CLOCK] = softclock;
-	next_sir = NEXT_SIR;
-}
 
 void
 intrhand_lev3(void)

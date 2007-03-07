@@ -1,4 +1,4 @@
-/*	$NetBSD: init.c,v 1.83 2007/01/20 13:25:28 isaki Exp $	*/
+/*	$NetBSD: init.c,v 1.89 2007/03/01 07:18:07 apb Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -42,7 +42,7 @@ __COPYRIGHT("@(#) Copyright (c) 1991, 1993\n"
 #if 0
 static char sccsid[] = "@(#)init.c	8.2 (Berkeley) 4/28/95";
 #else
-__RCSID("$NetBSD: init.c,v 1.83 2007/01/20 13:25:28 isaki Exp $");
+__RCSID("$NetBSD: init.c,v 1.89 2007/03/01 07:18:07 apb Exp $");
 #endif
 #endif /* not lint */
 
@@ -211,21 +211,24 @@ state_t requested_transition = single_user;
 
 #ifdef MFS_DEV_IF_NO_CONSOLE
 
-#define NINODE 1024
+#define NINODE 1280
 #define FSSIZE ((8192		/* boot area */				\
 	+ 2 * 8192		/* two copies of superblock */		\
 	+ 4096			/* cylinder group info */		\
 	+ NINODE * (128 + 18)	/* inode and directory entry */		\
-	+ mfile[0].len		/* size of MAKEDEV file */		\
+	+ mfile[0].len		/* size of MAKEDEV* files */		\
+	+ mfile[1].len							\
+	+ mfile[2].len							\
 	+ 2 * 4096) / 512)	/* some slack */
 
 struct mappedfile {
-	const char *path;
-	char	*buf;
-	int	len;
+	const char *path;	/* filename */
+	char	*buf;		/* contents of file, or target of symlink */
+	size_t	len;		/* 0: no such file; -1: symlink; else size */
 } mfile[] = {
 	{ "/dev/MAKEDEV",	NULL,	0 },
-	{ "/dev/MAKEDEV.local",	NULL,	0 }
+	{ "/dev/MAKEDEV.local",	NULL,	0 },
+	{ "/dev/MAKEDEV.subr",	NULL,	0 }
 };
 
 static int mfs_dev(void);
@@ -340,7 +343,7 @@ main(int argc, char **argv)
 
 #if !defined(LETS_GET_SMALL) && defined(CHROOT)
 	/* Create "init.root" sysctl node. */
-	createsysctlnode();
+	(void)createsysctlnode();
 #endif /* !LETS_GET_SMALL && CHROOT*/
 
 	/*
@@ -597,8 +600,8 @@ setctty(const char *name)
 {
 	int fd;
 
-	(void) revoke(name);
-	nanosleep(&dtrtime, NULL);	/* leave DTR low for a bit */
+	(void)revoke(name);
+	(void)nanosleep(&dtrtime, NULL);	/* leave DTR low for a bit */
 	if ((fd = open(name, O_RDWR)) == -1) {
 		stall("can't open %s: %m", name);
 		_exit(1);
@@ -682,7 +685,7 @@ single_user(void)
 				warning("single-user login failed");
 			}
 		}
-		endttyent();
+		(void)endttyent();
 		endpwent();
 #endif /* SECURE */
 
@@ -717,7 +720,7 @@ single_user(void)
 		 */
 		argv[0] = "-sh";
 		argv[1] = 0;
-		setenv("PATH", INIT_PATH, 1);
+		(void)setenv("PATH", INIT_PATH, 1);
 #ifdef ALTSHELL
 		if (altshell[0])
 			argv[0] = altshell;
@@ -756,7 +759,7 @@ single_user(void)
 		}
 		if (wpid == pid && WIFSTOPPED(status)) {
 			warning("shell stopped, restarting");
-			kill(pid, SIGCONT);
+			(void)kill(pid, SIGCONT);
 			wpid = -1;
 		}
 	} while (wpid != pid && !requested_transition);
@@ -1071,7 +1074,7 @@ new_session(session_t *sprev, int session_index, struct ttyent *typ)
 	sp = malloc(sizeof (session_t));
 	if (sp == NULL)
 		return NULL;
-	memset(sp, 0, sizeof *sp);
+	(void)memset(sp, 0, sizeof *sp);
 
 	sp->se_flags = SE_PRESENT;
 	sp->se_index = session_index;
@@ -1188,7 +1191,7 @@ read_ttys(void)
 			return (state_func_t)single_user;
 	}
 
-	do_setttyent();
+	(void)do_setttyent();
 
 	/*
 	 * Allocate a session entry for each active port.
@@ -1197,7 +1200,7 @@ read_ttys(void)
 	while ((typ = getttyent()) != NULL)
 		if ((snext = new_session(sp, ++session_index, typ)) != NULL)
 			sp = snext;
-	endttyent();
+	(void)endttyent();
 
 	return (state_func_t)multi_user;
 }
@@ -1221,8 +1224,8 @@ start_window_system(session_t *sp)
 	if (pid)
 		return;
 
-	sigemptyset(&mask);
-	sigprocmask(SIG_SETMASK, &mask, NULL);
+	(void)sigemptyset(&mask);
+	(void)sigprocmask(SIG_SETMASK, &mask, NULL);
 
 	if (setsid() < 0)
 		emergency("setsid failed (window): %m");
@@ -1323,6 +1326,7 @@ make_utmpx(const char *name, const char *line, int type, pid_t pid,
 
 	if (pututxline(&ut) == NULL)
 		warning("can't add utmpx record for `%s': %m", ut.ut_line);
+	endutxent();
 }
 
 static char
@@ -1364,6 +1368,7 @@ utmpx_set_runlevel(char old, char new)
 	ut.ut_exit.e_termination = new;
 	if (pututxline(&ut) == NULL)
 		warning("can't add utmpx record for `runlevel': %m");
+	endutxent();
 }
 #endif /* SUPPORT_UTMPX */
 
@@ -1493,7 +1498,7 @@ clean_ttys(void)
 	for (sp = sessions; sp; sp = sp->se_next)
 		sp->se_flags &= ~SE_PRESENT;
 
-	do_setttyent();
+	(void)do_setttyent();
 
 	devlen = sizeof(_PATH_DEV) - 1;
 	while ((typ = getttyent()) != NULL) {
@@ -1529,10 +1534,10 @@ clean_ttys(void)
 			continue;
 		}
 
-		new_session(sprev, session_index, typ);
+		(void)new_session(sprev, session_index, typ);
 	}
 
-	endttyent();
+	(void)endttyent();
 
 	for (sp = sessions; sp; sp = sp->se_next)
 		if ((sp->se_flags & SE_PRESENT) == 0) {
@@ -1598,7 +1603,7 @@ death(void)
 			return (state_func_t)single_user;
 
 		clang = 0;
-		alarm(DEATH_WATCH);
+		(void)alarm(DEATH_WATCH);
 		do
 			if ((pid = waitpid(-1, &status, 0)) != -1)
 				collect_child(pid, status);
@@ -1621,29 +1626,30 @@ mapfile(struct mappedfile *mf)
 {
 	int fd;
 	struct stat st;
+	size_t len;
 
 	if (lstat(mf->path, &st) == -1)
 		return;
 
+	len = (size_t)st.st_size;
 	if ((st.st_mode & S_IFMT) == S_IFLNK) {
-		mf->buf = malloc(st.st_size + 1);
+		mf->buf = malloc(len + 1);
 		if (mf->buf == NULL)
 			return;
-		mf->buf[st.st_size] = 0;
-		if (readlink(mf->path, mf->buf, st.st_size) != st.st_size)
+		mf->buf[len] = 0;
+		if (readlink(mf->path, mf->buf, len) != len)
 			return;
-		mf->len = -1;
+		mf->len = (size_t)-1;
 		return;
 	}
 
 	if ((fd = open(mf->path, O_RDONLY)) == -1)
 		return;
-	mf->buf = mmap(0, (size_t)st.st_size, PROT_READ,
-			MAP_FILE|MAP_SHARED, fd, (off_t)0);
+	mf->buf = mmap(0, len, PROT_READ, MAP_FILE|MAP_SHARED, fd, (off_t)0);
 	(void)close(fd);
 	if (mf->buf == MAP_FAILED)
 		return;
-	mf->len = st.st_size;
+	mf->len = len;
 }
 
 static void
@@ -1651,8 +1657,8 @@ writefile(struct mappedfile *mf)
 {
 	int fd;
 
-	if (mf->len == -1) {
-		symlink(mf->buf, mf->path);
+	if (mf->len == (size_t)-1) {
+		(void)symlink(mf->buf, mf->path);
 		free(mf->buf);
 		return;
 	}
@@ -1673,6 +1679,7 @@ mfs_dev(void)
 	/*
 	 * We cannot print errors so we bail out silently...
 	 */
+	int i;
 	pid_t pid;
 	int status;
 	dev_t dev;
@@ -1686,16 +1693,14 @@ mfs_dev(void)
 	if (access(_PATH_CONSOLE, F_OK) != -1)
 		return(0);
 
-	/* Grab the contents of MAKEDEV */
-	mapfile(&mfile[0]);
-
-	/* Grab the contents of MAKEDEV.local */
-	mapfile(&mfile[1]);
+	/* Grab the contents of MAKEDEV* files */
+	for (i = 0; i < __arraycount(mfile); i++)
+		mapfile(&mfile[i]);
 
 	/* Mount an mfs over /dev so we can create devices */
 	switch ((pid = fork())) {
 	case 0:
-		asprintf(&fs_size, "%d", FSSIZE);
+		(void)asprintf(&fs_size, "%zu", FSSIZE);
 		if (fs_size == NULL)
 			return(-1);
 		(void)execl(INIT_MOUNT_MFS, "mount_mfs",
@@ -1730,18 +1735,16 @@ mfs_dev(void)
 
 	(void)freopen(_PATH_CONSOLE, "a", stderr);
 
-	warnx("Creating mfs /dev (%d blocks, %d inodes)", FSSIZE, NINODE);
+	warnx("Creating mfs /dev (%zu blocks, %d inodes)", FSSIZE, NINODE);
 
-	/* Create a MAKEDEV script in the mfs /dev */
-	writefile(&mfile[0]);
-
-	/* Create a MAKEDEV.local script in the mfs /dev */
-	writefile(&mfile[1]);
+	/* Create MAKEDEV* files in the mfs /dev */
+	for (i = 0; i < __arraycount(mfile); i++)
+		writefile(&mfile[i]);
 
 	/* Run the makedev script to create devices */
 	switch ((pid = fork())) {
 	case 0:
-		dup2(2, 1);	/* Give the script stdout */
+		(void)dup2(2, 1);	/* Give the script stdout */
 		if (chdir("/dev") == 0)
 			(void)execl(INIT_BSHELL, "sh",
 			    mfile[0].len ? "./MAKEDEV" : "/etc/MAKEDEV",
@@ -1769,12 +1772,12 @@ mfs_dev(void)
 int
 do_setttyent(void)
 {
-	endttyent();
+	(void)endttyent();
 #ifdef CHROOT
 	if (did_multiuser_chroot) {
 		char path[PATH_MAX];
 
-		snprintf(path, sizeof(path), "%s/%s", rootdir, _PATH_TTYS);
+		(void)snprintf(path, sizeof(path), "%s/%s", rootdir, _PATH_TTYS);
 
 		return setttyentpath(path);
 	} else
@@ -1799,11 +1802,11 @@ createsysctlnode()
 	len = sizeof(struct sysctlnode);
 	mib[0] = CTL_CREATE;
 
-	memset(&node, 0, len);
+	(void)memset(&node, 0, len);
 	node.sysctl_flags = SYSCTL_VERSION | CTLFLAG_READWRITE |
 	    CTLFLAG_PRIVATE | CTLTYPE_NODE;
 	node.sysctl_num = CTL_CREATE;
-	snprintf(node.sysctl_name, SYSCTL_NAMELEN, "init");
+	(void)snprintf(node.sysctl_name, SYSCTL_NAMELEN, "init");
 	if (sysctl(&mib[0], 1, &node, &len, &node, len) == -1) {
 		warning("could not create init node: %m");
 		return (-1);
@@ -1817,13 +1820,13 @@ createsysctlnode()
 	mib[0] = node.sysctl_num;
 	mib[1] = CTL_CREATE;
 
-	memset(&node, 0, len);
+	(void)memset(&node, 0, len);
 	node.sysctl_flags = SYSCTL_VERSION | CTLFLAG_READWRITE |
 	    CTLTYPE_STRING | CTLFLAG_OWNDATA;
 	node.sysctl_size = _POSIX_PATH_MAX;
 	node.sysctl_data = __UNCONST("/");
 	node.sysctl_num = CTL_CREATE;
-	snprintf(node.sysctl_name, SYSCTL_NAMELEN, "root");
+	(void)snprintf(node.sysctl_name, SYSCTL_NAMELEN, "root");
 	if (sysctl(&mib[0], 2, NULL, NULL, &node, len) == -1) {
 		warning("could not create init.root node: %m");
 		return (-1);
@@ -1848,7 +1851,7 @@ shouldchroot()
 		if (errno == ENOENT) {
 			/* Destroy whatever is left, recreate from scratch. */
 			if (sysctlnametomib("init", &mib, &cnt) != -1) {
-				memset(&node, 0, sizeof(node));
+				(void)memset(&node, 0, sizeof(node));
 				node.sysctl_flags = SYSCTL_VERSION;
 				node.sysctl_num = mib;
 				mib = CTL_DESTROY;
@@ -1857,7 +1860,7 @@ shouldchroot()
 				    sizeof(node));
 			}
 
-			createsysctlnode();
+			(void)createsysctlnode();
 		}
 
 		/* We certainly won't chroot. */

@@ -1,4 +1,4 @@
-/*	$NetBSD: puffs_vnops.c,v 1.43 2007/01/29 15:42:50 hannken Exp $	*/
+/*	$NetBSD: puffs_vnops.c,v 1.52 2007/02/20 19:45:37 pooka Exp $	*/
 
 /*
  * Copyright (c) 2005, 2006  Antti Kantee.  All Rights Reserved.
@@ -33,7 +33,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: puffs_vnops.c,v 1.43 2007/01/29 15:42:50 hannken Exp $");
+__KERNEL_RCSID(0, "$NetBSD: puffs_vnops.c,v 1.52 2007/02/20 19:45:37 pooka Exp $");
 
 #include <sys/param.h>
 #include <sys/fstrans.h>
@@ -41,6 +41,7 @@ __KERNEL_RCSID(0, "$NetBSD: puffs_vnops.c,v 1.43 2007/01/29 15:42:50 hannken Exp
 #include <sys/mount.h>
 #include <sys/namei.h>
 #include <sys/vnode.h>
+#include <uvm/uvm.h>
 
 #include <fs/puffs/puffs_msgif.h>
 #include <fs/puffs/puffs_sys.h>
@@ -109,9 +110,9 @@ const struct vnodeopv_entry_desc puffs_vnodeop_entries[] = {
 	{ &vop_lookup_desc, puffs_lookup },		/* REAL lookup */
 	{ &vop_create_desc, puffs_checkop },		/* create */
         { &vop_mknod_desc, puffs_checkop },		/* mknod */
-        { &vop_open_desc, puffs_checkop },		/* open */
+        { &vop_open_desc, puffs_open },			/* REAL open */
         { &vop_close_desc, puffs_checkop },		/* close */
-        { &vop_access_desc, puffs_checkop },		/* access */
+        { &vop_access_desc, puffs_access },		/* REAL access */
         { &vop_getattr_desc, puffs_checkop },		/* getattr */
         { &vop_setattr_desc, puffs_checkop },		/* setattr */
         { &vop_read_desc, puffs_checkop },		/* read */
@@ -129,7 +130,7 @@ const struct vnodeopv_entry_desc puffs_vnodeop_entries[] = {
         { &vop_readdir_desc, puffs_checkop },		/* readdir */
         { &vop_readlink_desc, puffs_checkop },		/* readlink */
         { &vop_getpages_desc, puffs_checkop },		/* getpages */
-        { &vop_putpages_desc, puffs_checkop },		/* putpages */
+        { &vop_putpages_desc, genfs_putpages },		/* REAL putpages */
         { &vop_pathconf_desc, puffs_checkop },		/* pathconf */
         { &vop_advlock_desc, puffs_checkop },		/* advlock */
         { &vop_strategy_desc, puffs_strategy },		/* REAL strategy */
@@ -298,7 +299,6 @@ const struct vnodeopv_entry_desc puffs_msgop_entries[] = {
         { &vop_pathconf_desc, puffs_pathconf },		/* pathconf */
         { &vop_advlock_desc, puffs_advlock },		/* advlock */
         { &vop_getpages_desc, genfs_getpages },		/* getpages */
-        { &vop_putpages_desc, genfs_putpages },		/* putpages */
 	{ NULL, NULL }
 };
 const struct vnodeopv_desc puffs_msgop_opv_desc =
@@ -380,20 +380,13 @@ puffs_checkop(void *v)
 			CHECKOP_NOTSUPP(PATHCONF);
 			CHECKOP_NOTSUPP(ADVLOCK);
 
-			CHECKOP_SUCCESS(OPEN);
-			CHECKOP_SUCCESS(CLOSE);
 			CHECKOP_SUCCESS(ACCESS);
+			CHECKOP_SUCCESS(CLOSE);
 			CHECKOP_SUCCESS(SEEK);
 
-		/* XXXfixme: read w/o write && cache == bad bad bad */
 		case VOP_GETPAGES_DESCOFFSET:
 			if (!EXISTSOP(pmp, READ))
 				return genfs_eopnotsupp(v);
-			break;
-
-		case VOP_PUTPAGES_DESCOFFSET:
-			if (!EXISTSOP(pmp, WRITE))
-				return genfs_null_putpages(v);
 			break;
 
 		default:
@@ -484,6 +477,8 @@ puffs_lookup(void *v)
 				    && PUFFS_DOCACHE(pmp))
 					cache_enter(dvp, NULL, cnp);
 			}
+		} else if (error < 0) {
+			error = EINVAL;
 		}
 		goto errout;
 	}
@@ -519,6 +514,7 @@ puffs_lookup(void *v)
 	if (cnp->cn_flags & ISDOTDOT)
 		vn_lock(dvp, LK_EXCLUSIVE | LK_RETRY);
 	
+	DPRINTF(("puffs_lookup: returning %d %p\n", error, *ap->a_vpp));
 	return error;
 }
 
@@ -535,6 +531,8 @@ puffs_create(void *v)
 	int error;
 
 	PUFFS_VNREQ(create);
+	DPRINTF(("puffs_create: dvp %p, cnp: %s\n",
+	    ap->a_dvp, ap->a_cnp->cn_nameptr));
 
 	puffs_makecn(&create_arg.pvnr_cn, ap->a_cnp);
 	create_arg.pvnr_va = *ap->a_vap;
@@ -547,11 +545,14 @@ puffs_create(void *v)
 
 	error = puffs_newnode(ap->a_dvp->v_mount, ap->a_dvp, ap->a_vpp,
 	    create_arg.pvnr_newnode, ap->a_cnp, ap->a_vap->va_type, 0);
+	/* XXX: in case of error, need to uncommit userspace transaction */
 
  out:
 	if (error || (ap->a_cnp->cn_flags & SAVESTART) == 0)
 		PNBUF_PUT(ap->a_cnp->cn_pnbuf);
 	vput(ap->a_dvp);
+
+	DPRINTF(("puffs_create: return %d\n", error));
 	return error;
 }
 
@@ -598,15 +599,34 @@ puffs_open(void *v)
 		kauth_cred_t a_cred;
 		struct lwp *a_l;
 	} */ *ap = v;
+	struct vnode *vp = ap->a_vp;
+	struct puffs_mount *pmp = MPTOPUFFSMP(vp->v_mount);
+	int mode = ap->a_mode;
+	int rv;
 
 	PUFFS_VNREQ(open);
+	DPRINTF(("puffs_open: vp %p, mode 0x%x\n", vp, mode));
 
-	open_arg.pvnr_mode = ap->a_mode;
+	if (vp->v_type == VREG && mode & FWRITE && !EXISTSOP(pmp, WRITE)) {
+		rv = EROFS;
+		goto out;
+	}
+
+	if (!EXISTSOP(pmp, OPEN)) {
+		rv = 0;
+		goto out;
+	}
+
+	open_arg.pvnr_mode = mode;
 	puffs_credcvt(&open_arg.pvnr_cred, ap->a_cred);
 	open_arg.pvnr_pid = puffs_lwp2pid(ap->a_l);
 
-	return puffs_vntouser(MPTOPUFFSMP(ap->a_vp->v_mount), PUFFS_VN_OPEN,
-	    &open_arg, sizeof(open_arg), VPTOPNC(ap->a_vp), ap->a_vp, NULL);
+	rv = puffs_vntouser(MPTOPUFFSMP(vp->v_mount), PUFFS_VN_OPEN,
+	    &open_arg, sizeof(open_arg), VPTOPNC(vp), vp, NULL);
+
+ out:
+	DPRINTF(("puffs_open: returning %d\n", rv));
+	return rv;
 }
 
 int
@@ -640,15 +660,24 @@ puffs_access(void *v)
 		kauth_cred_t a_cred;
 		struct lwp *a_l;
 	} */ *ap = v;
+	struct vnode *vp = ap->a_vp;
+	struct puffs_mount *pmp = MPTOPUFFSMP(vp->v_mount);
+	int mode = ap->a_mode;
 
 	PUFFS_VNREQ(access);
+
+	if (vp->v_type == VREG && mode & VWRITE && !EXISTSOP(pmp, WRITE))
+		return EROFS;
+
+	if (!EXISTSOP(pmp, ACCESS))
+		return 0;
 
 	access_arg.pvnr_mode = ap->a_mode;
 	access_arg.pvnr_pid = puffs_lwp2pid(ap->a_l);
 	puffs_credcvt(&access_arg.pvnr_cred, ap->a_cred);
 
-	return puffs_vntouser(MPTOPUFFSMP(ap->a_vp->v_mount), PUFFS_VN_ACCESS,
-	    &access_arg, sizeof(access_arg), VPTOPNC(ap->a_vp), ap->a_vp, NULL);
+	return puffs_vntouser(MPTOPUFFSMP(vp->v_mount), PUFFS_VN_ACCESS,
+	    &access_arg, sizeof(access_arg), VPTOPNC(vp), vp, NULL);
 }
 
 int
@@ -1188,12 +1217,14 @@ puffs_readlink(void *v)
 		struct uio *a_uio;
 		kauth_cred_t a_cred;
 	} */ *ap = v;
+	size_t linklen;
 	int error;
 
 	PUFFS_VNREQ(readlink);
 
 	puffs_credcvt(&readlink_arg.pvnr_cred, ap->a_cred);
-	readlink_arg.pvnr_linklen = sizeof(readlink_arg.pvnr_link);
+	linklen = sizeof(readlink_arg.pvnr_link);
+	readlink_arg.pvnr_linklen = linklen;
 
 	error = puffs_vntouser(MPTOPUFFSMP(ap->a_vp->v_mount),
 	    PUFFS_VN_READLINK, &readlink_arg, sizeof(readlink_arg),
@@ -1201,7 +1232,10 @@ puffs_readlink(void *v)
 	if (error)
 		return error;
 
-	readlink_arg.pvnr_link[readlink_arg.pvnr_linklen] = '\0';
+	/* bad bad user file server */
+	if (readlink_arg.pvnr_linklen > linklen)
+		return EINVAL;
+
 	return uiomove(&readlink_arg.pvnr_link, readlink_arg.pvnr_linklen,
 	    ap->a_uio);
 }
@@ -1379,11 +1413,10 @@ puffs_write(void *v)
 	off_t oldoff, newoff, origoff;
 	vsize_t bytelen;
 	int error, uflags;
-	int async, ubcflags;
+	int ubcflags;
 
 	vp = ap->a_vp;
 	uio = ap->a_uio;
-	async = vp->v_mount->mnt_flag & MNT_ASYNC;
 	error = uflags = 0;
 	write_argp = NULL;
 	pmp = MPTOPUFFSMP(ap->a_vp->v_mount);
@@ -1436,11 +1469,20 @@ puffs_write(void *v)
 			if (error)
 				break;
 
-			/* ok, I really need to admit: why's this? */
-			if (!async && oldoff >> 16 != uio->uio_offset >> 16) {
+			/*
+			 * If we're writing large files, flush to file server
+			 * every 64k.  Otherwise we can very easily exhaust
+			 * kernel and user memory, as the file server cannot
+			 * really keep up with our writing speed.
+			 *
+			 * Note: this does *NOT* honor MNT_ASYNC, because
+			 * that gives userland too much say in the kernel.
+			 */
+			if (oldoff >> 16 != uio->uio_offset >> 16) {
 				simple_lock(&vp->v_interlock);
 				error = VOP_PUTPAGES(vp, oldoff & ~0xffff,
-				    uio->uio_offset & ~0xffff, PGO_CLEANIT);
+				    uio->uio_offset & ~0xffff,
+				    PGO_CLEANIT | PGO_SYNCIO);
 				if (error)
 					break;
 			}
@@ -1717,9 +1759,9 @@ puffs_strategy(void *v)
 	}
 
 #ifdef DIAGNOSTIC
-	if (bp->b_resid > pmp->pmp_req_maxsize - PUFFS_REQSTRUCT_MAX)
-		panic("puffs_strategy: wildly inappropriate buf resid %d",
-		    bp->b_resid);
+	if (bp->b_bcount > pmp->pmp_req_maxsize - PUFFS_REQSTRUCT_MAX)
+		panic("puffs_strategy: wildly inappropriate buf bcount %d",
+		    bp->b_bcount);
 #endif
 
 	/*
@@ -1739,6 +1781,16 @@ puffs_strategy(void *v)
 		simple_unlock(&vp->v_interlock);
 	}
 
+	if (bp->b_flags & B_ASYNC)
+		dowritefaf = 1;
+
+#ifdef DIAGNOSTIC
+	if (dowritefaf)
+		KASSERT((bp->b_flags & B_READ) == 0);
+	if (curproc == uvm.pagedaemon_proc)
+		KASSERT(dowritefaf);
+#endif
+
 	if (bp->b_flags & B_READ) {
 		argsize = sizeof(struct puffs_vnreq_read);
 		read_argp = malloc(argsize, M_PUFFS, M_NOWAIT | M_ZERO);
@@ -1747,7 +1799,7 @@ puffs_strategy(void *v)
 			goto out;
 		}
 
-		tomove = PUFFS_TOMOVE(bp->b_resid, pmp);
+		tomove = PUFFS_TOMOVE(bp->b_bcount, pmp);
 
 		read_argp->pvnr_ioflag = 0;
 		read_argp->pvnr_resid = tomove;
@@ -1769,7 +1821,7 @@ puffs_strategy(void *v)
 		moved = tomove - read_argp->pvnr_resid;
 
 		(void)memcpy(bp->b_data, read_argp->pvnr_data, moved);
-		bp->b_resid -= moved;
+		bp->b_resid = bp->b_bcount - moved;
 	} else {
 		argsize = sizeof(struct puffs_vnreq_write) + bp->b_bcount;
 		write_argp = malloc(argsize, M_PUFFS, M_NOWAIT | M_ZERO);
@@ -1778,7 +1830,7 @@ puffs_strategy(void *v)
 			goto out;
 		}
 
-		tomove = PUFFS_TOMOVE(bp->b_resid, pmp);
+		tomove = PUFFS_TOMOVE(bp->b_bcount, pmp);
 
 		write_argp->pvnr_ioflag = 0;
 		write_argp->pvnr_resid = tomove;
@@ -1794,7 +1846,7 @@ puffs_strategy(void *v)
 			 */
 			puffs_vntouser_faf(MPTOPUFFSMP(vp->v_mount),
 			    PUFFS_VN_WRITE, write_argp, argsize, VPTOPNC(vp));
-			bp->b_resid -= tomove;
+			bp->b_resid = bp->b_bcount - tomove;
 		} else {
 			error = puffs_vntouser(MPTOPUFFSMP(vp->v_mount),
 			    PUFFS_VN_WRITE, write_argp, argsize, VPTOPNC(vp),
@@ -1808,7 +1860,7 @@ puffs_strategy(void *v)
 				goto out;
 			}
 
-			bp->b_resid -= moved;
+			bp->b_resid = bp->b_bcount - moved;
 			if (write_argp->pvnr_resid != 0)
 				error = EIO;
 		}

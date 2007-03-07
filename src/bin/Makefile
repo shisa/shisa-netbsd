@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.19 2002/06/17 16:29:07 christos Exp $
+#	$NetBSD: Makefile,v 1.21 2007/02/08 03:57:53 tls Exp $
 #	@(#)Makefile	8.1 (Berkeley) 5/31/93
 
 SUBDIR=	cat chio chmod cp csh date dd df domainname echo ed expr hostname \

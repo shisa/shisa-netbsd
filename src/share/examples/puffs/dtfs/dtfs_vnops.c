@@ -1,4 +1,4 @@
-/*	$NetBSD: dtfs_vnops.c,v 1.13 2007/01/28 10:47:36 pooka Exp $	*/
+/*	$NetBSD: dtfs_vnops.c,v 1.15 2007/02/27 22:03:45 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006  Antti Kantee.  All Rights Reserved.
@@ -50,7 +50,7 @@ dtfs_node_lookup(struct puffs_cc *pcc, void *opc, void **newnode,
 	struct dtfs_dirent *dfd;
 
 	/* parent dir? */
-	if (pcn->pcn_flags & PUFFS_ISDOTDOT) {
+	if (PCNISDOTDOT(pcn)) {
 		*newnode = df->df_dotdot;
 		*newtype = df->df_dotdot->pn_va.va_type;
 		assert(*newtype == VDIR);
@@ -182,8 +182,6 @@ dtfs_node_rmdir(struct puffs_cc *pcc, void *opc, void *targ,
 	return 0;
 }
 
-#include <err.h>
-
 int
 dtfs_node_readdir(struct puffs_cc *pcc, void *opc,
 	struct dirent *dent, const struct puffs_cred *pcr, off_t *readoff,
@@ -301,14 +299,14 @@ dtfs_node_symlink(struct puffs_cc *pcc, void *opc, void **newnode,
 
 int
 dtfs_node_readlink(struct puffs_cc *pcc, void *opc,
-	const struct puffs_cred *cred, char *link, size_t *linklen)
+	const struct puffs_cred *cred, char *linkname, size_t *linklen)
 {
 	struct dtfs_file *df = DTFS_CTOF(opc);
 	struct puffs_node *pn = opc;
 
 	assert(pn->pn_va.va_type == VLNK);
-	strlcpy(link, df->df_linktarget, *linklen);
-	*linklen = strlen(link);
+	strlcpy(linkname, df->df_linktarget, *linklen);
+	*linklen = strlen(linkname);
 
 	return 0;
 }

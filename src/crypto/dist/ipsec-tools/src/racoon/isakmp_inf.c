@@ -1,4 +1,4 @@
-/*	$NetBSD: isakmp_inf.c,v 1.14 2006/12/09 05:52:57 manu Exp $	*/
+/*	$NetBSD: isakmp_inf.c,v 1.18 2007/02/20 16:32:28 vanhu Exp $	*/
 
 /* Id: isakmp_inf.c,v 1.44 2006/05/06 20:45:52 manubsd Exp */
 
@@ -462,6 +462,7 @@ isakmp_info_recv_d(iph1, delete, msgid, encrypted)
 	int tlen, num_spi;
 	vchar_t *pbuf;
 	int protected = 0;
+	struct ph1handle *del_ph1;
 	struct ph2handle *iph2;
 	union {
 		u_int32_t spi32;
@@ -514,12 +515,21 @@ isakmp_info_recv_d(iph1, delete, msgid, encrypted)
 				delete->spi_size, delete->proto_id);
 			return 0;
 		}
-		EVT_PUSH(iph1->local, iph1->remote,
-			EVTT_PEERPH1_NOPROP, NULL);
-		if (iph1->scr)
-			SCHED_KILL(iph1->scr);
 
-		purge_remote(iph1);
+		del_ph1=getph1byindex((isakmp_index *)(delete + 1));
+		if(del_ph1 != NULL){
+
+			EVT_PUSH(del_ph1->local, del_ph1->remote,
+					 EVTT_PEERPH1_NOPROP, NULL);
+			if (del_ph1->scr)
+				SCHED_KILL(del_ph1->scr);
+
+			/*
+			 * Do not delete IPsec SAs when receiving an IKE delete notification.
+			 * Just delete the IKE SA.
+			 */
+			isakmp_ph1expire(del_ph1);
+		}
 		break;
 
 	case IPSECDOI_PROTO_IPSEC_AH:
@@ -736,7 +746,6 @@ isakmp_info_send_nx(isakmp, remote, local, type, data)
 		error = -1;
 		goto end;
 	}
-	printf("%s: iph1->local = %p\n", __func__, iph1->local);
 
 	tlen = sizeof(*n) + spisiz;
 	if (data)
@@ -1147,8 +1156,10 @@ purge_ipsec_spi(dst0, proto, spi, n)
 	vchar_t *buf = NULL;
 	struct sadb_msg *msg, *next, *end;
 	struct sadb_sa *sa;
+	struct sadb_lifetime *lt;
 	struct sockaddr *src, *dst;
 	struct ph2handle *iph2;
+	u_int64_t created;
 	size_t i;
 	caddr_t mhp[SADB_EXT_MAX + 1];
 
@@ -1187,6 +1198,11 @@ purge_ipsec_spi(dst0, proto, spi, n)
 		}
 		src = PFKEY_ADDR_SADDR(mhp[SADB_EXT_ADDRESS_SRC]);
 		dst = PFKEY_ADDR_SADDR(mhp[SADB_EXT_ADDRESS_DST]);
+		lt = (struct sadb_lifetime*)mhp[SADB_EXT_LIFETIME_HARD];
+		if(lt != NULL)
+			created = lt->sadb_lifetime_addtime;
+		else
+			created = 0;
 
 		if (sa->sadb_sa_state != SADB_SASTATE_MATURE
 		 && sa->sadb_sa_state != SADB_SASTATE_DYING) {
@@ -1222,7 +1238,7 @@ purge_ipsec_spi(dst0, proto, spi, n)
 			 */
 			iph2 = getph2bysaidx(src, dst, proto, spi[i]);
 			if(iph2 != NULL){
-				delete_spd(iph2);
+				delete_spd(iph2, created);
 				unbindph12(iph2);
 				remph2(iph2);
 				delph2(iph2);
@@ -1433,7 +1449,7 @@ info_recv_initialcontact(iph1)
 		proto_id = pfkey2ipsecdoi_proto(msg->sadb_msg_satype);
 		iph2 = getph2bysaidx(src, dst, proto_id, sa->sadb_sa_spi);
 		if (iph2) {
-			delete_spd(iph2);
+			delete_spd(iph2, 0);
 			unbindph12(iph2);
 			remph2(iph2);
 			delph2(iph2);

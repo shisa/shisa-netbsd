@@ -1,4 +1,4 @@
-/*	$NetBSD: node.c,v 1.5 2007/01/15 00:42:21 pooka Exp $	*/
+/*	$NetBSD: node.c,v 1.9 2007/02/27 13:28:39 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006  Antti Kantee.  All Rights Reserved.
@@ -30,7 +30,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: node.c,v 1.5 2007/01/15 00:42:21 pooka Exp $");
+__RCSID("$NetBSD: node.c,v 1.9 2007/02/27 13:28:39 pooka Exp $");
 #endif /* !lint */
 
 #include <assert.h>
@@ -49,12 +49,15 @@ psshfs_node_lookup(struct puffs_cc *pcc, void *opc, void **newnode,
         struct puffs_usermount *pu = puffs_cc_getusermount(pcc);
 	struct psshfs_ctx *pctx = pu->pu_privdata;
 	struct puffs_node *pn_dir = opc;
-	struct psshfs_node *psn_dir = pn_dir->pn_data;
+	struct psshfs_node *psn, *psn_dir = pn_dir->pn_data;
 	struct puffs_node *pn;
 	struct psshfs_dir *pd;
 	int rv;
 
-	if (pcn->pcn_flags & PUFFS_ISDOTDOT) {
+	if (PCNISDOTDOT(pcn)) {
+		psn = psn_dir->parent->pn_data;
+		psn->reclaimed = 0;
+
 		*newnode = psn_dir->parent;
 		*newtype = VDIR;
 		return 0;
@@ -67,13 +70,17 @@ psshfs_node_lookup(struct puffs_cc *pcc, void *opc, void **newnode,
 	}
 
 	pd = lookup(psn_dir->dir, psn_dir->dentnext, pcn->pcn_name);
-	if (!pd)
+	if (!pd) {
 		return ENOENT;
+	}
 
 	if (pd->entry)
 		pn = pd->entry;
 	else
 		pn = makenode(pu, pn_dir, pd, &pd->va);
+
+	psn = pn->pn_data;
+	psn->reclaimed = 0;
 
 	*newnode = pn;
 	*newsize = pn->pn_va.va_size;
@@ -93,8 +100,7 @@ psshfs_node_getattr(struct puffs_cc *pcc, void *opc, struct vattr *vap,
 
 	rv = 0;
 
-	/* XXX: expire by time */
-	if (!psn->hasvattr) {
+	if ((time(NULL) - psn->attrread) >= PSSHFS_REFRESHIVAL) {
 		psbuf_req_str(pb, SSH_FXP_LSTAT, reqid, PNPATH(pn));
 		pssh_outbuf_enqueue(pctx, pb, pcc, reqid);
 		puffs_cc_yield(pcc);
@@ -103,11 +109,24 @@ psshfs_node_getattr(struct puffs_cc *pcc, void *opc, struct vattr *vap,
 		if (rv)
 			goto out;
 
+#if 0
+		/*
+		 * check if the file was modified from below us
+		 *
+		 * XXX: what's the right place(s) to do this?
+		 * XXX2: resolution only per second, since sftp doesn't
+		 *       support nanoseconds
+		 */
+		if (psn->attrread)
+			if (pn->pn_va.va_mtime.tv_sec != va.va_mtime.tv_sec)
+				puffs_inval_pagecache_node(pu, opc);
+#endif
+
 		puffs_setvattr(&pn->pn_va, &va);
+		psn->attrread = time(NULL);
 	}
 
 	memcpy(vap, &pn->pn_va, sizeof(struct vattr));
-	psn->hasvattr = 1;
 
  out:
 	PSSHFSRETURN(rv);
@@ -161,7 +180,7 @@ psshfs_node_create(struct puffs_cc *pcc, void *opc, void **newnode,
 	struct puffs_node *pn = opc;
 	struct puffs_node *pn_new;
 	char *fhand = NULL;
-	size_t fhandlen;
+	uint32_t fhandlen;
 
 	pn_new = allocnode(pu, pn, pcn->pcn_name, va);
 	if (!pn) {
@@ -234,9 +253,8 @@ psshfs_node_read(struct puffs_cc *pcc, void *opc, uint8_t *buf,
 	PSSHFSAUTOVAR(pcc);
 	struct puffs_node *pn = opc;
 	char *fhand = NULL;
-	size_t fhandlen;
 	struct vattr va;
-	uint32_t readlen;
+	uint32_t readlen, fhandlen;
 
 	if (pn->pn_va.va_type == VDIR) {
 		rv = EISDIR;
@@ -292,9 +310,8 @@ psshfs_node_write(struct puffs_cc *pcc, void *opc, uint8_t *buf,
 	PSSHFSAUTOVAR(pcc);
 	struct puffs_node *pn = opc;
 	char *fhand = NULL;
-	size_t fhandlen;
 	struct vattr va, kludgeva1, kludgeva2;
-	uint32_t writelen, oflags;
+	uint32_t writelen, oflags, fhandlen;
 
 	if (pn->pn_va.va_type == VDIR) {
 		rv = EISDIR;
@@ -407,7 +424,7 @@ psshfs_node_readlink(struct puffs_cc *pcc, void *opc,
 		rv = EPROTO;
 		goto out;
 	}
-	rv = psbuf_get_str(pb, &linktmp, linklen);
+	rv = psbuf_get_str(pb, &linktmp, (uint32_t *)linklen);
 	if (rv)
 		rv = 0;
 	else {
@@ -441,7 +458,7 @@ psshfs_node_remove(struct puffs_cc *pcc, void *opc, void *targ,
 	rv = psbuf_expect_status(pb);
 
 	if (rv == 0)
-		nukenode(pn_targ, pcn->pcn_name, 1);
+		nukenode(pn_targ, pcn->pcn_name, 0);
 
  out:
 	PSSHFSRETURN(rv);
@@ -492,7 +509,7 @@ psshfs_node_rmdir(struct puffs_cc *pcc, void *opc, void *targ,
 
 	rv = psbuf_expect_status(pb);
 	if (rv == 0)
-		nukenode(pn_targ, pcn->pcn_name, 1);
+		nukenode(pn_targ, pcn->pcn_name, 0);
 
 	PSSHFSRETURN(rv);
 }
@@ -587,4 +604,41 @@ psshfs_node_rename(struct puffs_cc *pcc, void *opc, void *src,
 
  out:
 	PSSHFSRETURN(rv);
+}
+
+/*
+ * So this file system happened to be written in such a way that
+ * lookup for ".." is hard if we lose the in-memory node.  We'd
+ * need to recreate the entire directory structure from the root
+ * node up to the ".." node we're looking up.
+ *
+ * And since our entire fs structure is purely fictional (i.e. it's
+ * only in-memory, not fetchable from the server), the easiest way
+ * to deal with it is to not allow nodes with children to be
+ * reclaimed.
+ *
+ * If a node with children is being attempted to be reclaimed, we
+ * just mark it "reclaimed" but leave it as is until all its children
+ * have been reclaimed.  If a lookup for that node is done meanwhile,
+ * it will be found by lookup() and we just remove the "reclaimed"
+ * bit.
+ */
+int
+psshfs_node_reclaim(struct puffs_cc *pcc, void *opc, pid_t pid)
+{
+	struct puffs_usermount *pu = puffs_cc_getusermount(pcc);
+	struct puffs_node *pn = opc, *pn_next;
+	struct psshfs_node *psn = pn->pn_data;
+
+	psn->reclaimed = 1;
+	for (; pn != pu->pu_pn_root; pn = pn_next) {
+		psn = pn->pn_data;
+		if (psn->reclaimed == 0 || psn->childcount != 0)
+			break;
+
+		pn_next = psn->parent;
+		doreclaim(pn);
+	}
+
+	return 0;
 }

@@ -1,4 +1,4 @@
-/*	$NetBSD: ip6_forward.c,v 1.53 2007/01/26 19:20:15 dyoung Exp $	*/
+/*	$NetBSD: ip6_forward.c,v 1.55 2007/02/17 22:34:13 dyoung Exp $	*/
 /*	$KAME: ip6_forward.c,v 1.109 2002/09/11 08:10:17 sakane Exp $	*/
 
 /*
@@ -31,10 +31,11 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ip6_forward.c,v 1.53 2007/01/26 19:20:15 dyoung Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ip6_forward.c,v 1.55 2007/02/17 22:34:13 dyoung Exp $");
 
 #include "opt_ipsec.h"
 #include "opt_pfil_hooks.h"
+#include "opt_mip6.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -60,10 +61,23 @@ __KERNEL_RCSID(0, "$NetBSD: ip6_forward.c,v 1.53 2007/01/26 19:20:15 dyoung Exp 
 #include <netinet/icmp6.h>
 #include <netinet6/nd6.h>
 
+#ifdef MIP6
+#include <netinet/ip6mh.h>
+#include <netinet6/mip6.h>
+#include <netinet6/mip6_var.h>
+#endif /* MIP6 */
+
 #ifdef IPSEC
 #include <netinet6/ipsec.h>
 #include <netkey/key.h>
 #endif /* IPSEC */
+
+#ifdef FAST_IPSEC
+#include <netipsec/ipsec.h>
+#include <netipsec/ipsec6.h>
+#include <netipsec/key.h>
+#include <netipsec/xform.h>
+#endif /* FAST_IPSEC */
 
 #ifdef PFIL_HOOKS
 #include <net/pfil.h>
@@ -107,8 +121,35 @@ ip6_forward(m, srcrt)
 	struct secpolicy *sp = NULL;
 	int ipsecrt = 0;
 #endif
+#ifdef MIP6
+	struct mip6_bc_internal *bce;
+#endif /* MIP6 */
+#ifdef FAST_IPSEC
+    struct secpolicy *sp = NULL;
+    int needipsec = 0;
+    int s;
+#endif
 
 #ifdef IPSEC
+#if defined(MIP6) && NMIP > 0
+	{
+		/*
+		 * XXX skip IPsec policy integrity check if the next
+		 * hop is me.  This is dirty but we need this trick
+		 * when we use an IPsec tunnel mode policy for
+		 * protocol 'any' between a home agent and a mobile
+		 * node.
+		 */
+		struct in6_ifaddr *ia;
+
+		for (ia = in6_ifaddr; ia; ia = ia->ia_next) {
+			if ((ia->ia6_flags & IN6_IFF_NOTREADY) == 0 &&
+			    IN6_ARE_ADDR_EQUAL(&ia->ia_addr.sin6_addr,
+			    &ip6->ip6_dst))
+				goto skip_ipsec6_in_reject;
+		}
+	}
+#endif /* MIP6 && NMIP > 0 */
 	/*
 	 * Check AH/ESP integrity.
 	 */
@@ -121,6 +162,9 @@ ip6_forward(m, srcrt)
 		m_freem(m);
 		return;
 	}
+#if defined(MIP6) && NMIP > 0
+ skip_ipsec6_in_reject:
+#endif /* MIP6 && NMIP > 0 */
 #endif /* IPSEC */
 
 	/*
@@ -332,6 +376,78 @@ ip6_forward(m, srcrt)
     }
     skip_ipsec:
 #endif /* IPSEC */
+#ifdef FAST_IPSEC
+	/* Check the security policy (SP) for the packet */
+
+	sp = ipsec6_check_policy(m,NULL,0,&needipsec,&error);
+	if (error != 0) {
+		/*
+		 * Hack: -EINVAL is used to signal that a packet
+		 * should be silently discarded.  This is typically
+		 * because we asked key management for an SA and
+		 * it was delayed (e.g. kicked up to IKE).
+		 */
+	if (error == -EINVAL)
+		error = 0;
+	goto freecopy;
+	}
+#endif /* FAST_IPSEC */
+
+
+
+#ifdef MIP6
+	/* This codes are only for Home Agent */
+	if (!MIP6_IS_HA) 
+		goto bc_check_done;
+	/*
+	 * intercept and tunnel packets for home addresses
+	 * which we are acting as a home agent for.
+	 */
+
+	/* XXX need some policy to determine bid for MCOA */
+	if ((bce = mip6_bce_get(&ip6->ip6_dst, NULL, NULL, 0)) &&
+	    (bce->mbc_flags & IP6_MH_BU_HOME)){
+		if (IN6_IS_ADDR_LINKLOCAL(&bce->mbc_hoa)
+		    || IN6_IS_ADDR_SITELOCAL(&bce->mbc_hoa)) {
+			ip6stat.ip6s_cantforward++;
+			if (mcopy) {
+				icmp6_error(mcopy, ICMP6_DST_UNREACH,
+				    ICMP6_DST_UNREACH_ADDR, 0);
+			}
+			m_freem(m);
+			return;
+		}
+       
+		if (m->m_pkthdr.len > IPV6_MMTU) {
+			u_long mtu = IPV6_MMTU;
+			/* XXX in6_ifstat_inc(rt->rt_ifp, ifs6_in_toobig); */
+			if (mcopy) {
+				icmp6_error(mcopy,
+				    ICMP6_PACKET_TOO_BIG, 0, mtu);
+			}
+			m_freem(m);
+			return;
+		}
+
+		/*
+		 * if we have a binding cache entry for the
+		 * ip6_dst, we are acting as a home agent for
+		 * that node.  before sending a packet as a
+		 * tunneled packet, we must make sure that
+		 * encaptab is ready.  if dad is enabled and
+		 * not completed yet, encaptab will be NULL.
+		 */
+		if (mip6_encapsulate(&m, IFA_IN6(bce->mbc_ifaddr), 
+		    &bce->mbc_coa) != 0) {
+			ip6stat.ip6s_cantforward++;
+		}
+		if (mcopy)
+			m_freem(mcopy);
+		return;
+	bc_check_done:
+		;
+	}
+#endif /* MIP6 */
 
 	dst = &ip6_forward_rt.ro_dst;
 	if (!srcrt) {
@@ -429,6 +545,21 @@ ip6_forward(m, srcrt)
 		m_freem(m);
 		return;
 	}
+#ifdef FAST_IPSEC
+    /*
+     * If we need to encapsulate the packet, do it here
+     * ipsec6_proces_packet will send the packet using ip6_output 
+     */
+	if (needipsec) {
+		s = splsoftnet();
+		error = ipsec6_process_packet(m,sp->req);
+		splx(s);
+		if (mcopy)
+			goto freecopy;
+    }
+#endif   
+
+
 
 	/*
 	 * Destination scope check: if a packet is going to break the scope
@@ -506,7 +637,9 @@ ip6_forward(m, srcrt)
 #endif
 	    (rt->rt_flags & (RTF_DYNAMIC|RTF_MODIFIED)) == 0) {
 		if ((rt->rt_ifp->if_flags & IFF_POINTOPOINT) &&
-		    nd6_is_addr_neighbor((struct sockaddr_in6 *)&ip6_forward_rt.ro_dst, rt->rt_ifp)) {
+		    nd6_is_addr_neighbor(
+		        satocsin6(rtcache_getdst((struct route *)&ip6_forward_rt)),
+			rt->rt_ifp)) {
 			/*
 			 * If the incoming interface is equal to the outgoing
 			 * one, the link attached to the interface is
@@ -527,6 +660,12 @@ ip6_forward(m, srcrt)
 			m_freem(m);
 			return;
 		}
+#ifdef MIP6
+		/* if the node is HA, redirect must not be sent.
+		   XXX this logic must be re-considerred.
+		   (e.g. lookup BCE or check state or something...) */
+		if (!MIP6_IS_HA) 
+#endif /* defined(MIP6) */
 		type = ND_REDIRECT;
 	}
 

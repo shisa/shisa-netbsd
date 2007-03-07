@@ -1,4 +1,4 @@
-/*	$NetBSD: in6.c,v 1.122 2007/01/04 19:07:04 elad Exp $	*/
+/*	$NetBSD: in6.c,v 1.124 2007/02/22 08:43:43 dyoung Exp $	*/
 /*	$KAME: in6.c,v 1.198 2001/07/18 09:12:38 itojun Exp $	*/
 
 /*
@@ -62,10 +62,11 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: in6.c,v 1.122 2007/01/04 19:07:04 elad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: in6.c,v 1.124 2007/02/22 08:43:43 dyoung Exp $");
 
 #include "opt_inet.h"
 #include "opt_pfil_hooks.h"
+#include "opt_mip6.h"
 
 #include <sys/param.h>
 #include <sys/ioctl.h>
@@ -97,6 +98,15 @@ __KERNEL_RCSID(0, "$NetBSD: in6.c,v 1.122 2007/01/04 19:07:04 elad Exp $");
 #include <netinet6/ip6_mroute.h>
 #include <netinet6/in6_ifattach.h>
 #include <netinet6/scope6_var.h>
+
+#ifdef MIP6
+#include "mip.h"
+#include <netinet6/mip6.h>
+#include <netinet6/mip6_var.h>
+#if NMIP > 0
+#include <net/if_mip.h>
+#endif /* NMIP > 0 */
+#endif /* MIP6 */
 
 #include <net/net_osdep.h>
 
@@ -646,7 +656,9 @@ in6_control1(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
 		/* reject read-only flags */
 		if ((ifra->ifra_flags & IN6_IFF_DUPLICATED) != 0 ||
 		    (ifra->ifra_flags & IN6_IFF_DETACHED) != 0 ||
+#if !(defined(MIP6) && NMIP > 0)
 		    (ifra->ifra_flags & IN6_IFF_NODAD) != 0 ||
+#endif /* MIP6 && NMIP > 0 */
 		    (ifra->ifra_flags & IN6_IFF_AUTOCONF) != 0) {
 			return EINVAL;
 		}
@@ -682,6 +694,10 @@ in6_control1(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
 		    NULL);
 		if (pr0.ndpr_plen == 128) {
 			break;	/* we don't need to install a host route. */
+#if defined(MIP6) && NMIP > 0
+		} else if ((ia->ia6_flags & IN6_IFF_HOME) && (ifp->if_type == IFT_MIP)) {
+			break;  /* we don't need to install an interface route for home address */
+#endif /* MIP6 && NMIP > 0 */
 		}
 		pr0.ndpr_prefix = ifra->ifra_addr;
 		/* apply the mask for safety. */
@@ -960,6 +976,9 @@ in6_update_ifa1(struct ifnet *ifp, struct in6_aliasreq *ifra,
 			return ENOBUFS;
 		bzero((caddr_t)ia, sizeof(*ia));
 		LIST_INIT(&ia->ia6_memberships);
+#if defined(MIP6) && NMIP > 0
+		LIST_INIT(&ia->ia6_mbul_list);
+#endif /* MIP6 && NMIP > 0 */
 		/* Initialize the address and masks, and put time stamp */
 		ia->ia_ifa.ifa_addr = (struct sockaddr *)&ia->ia_addr;
 		ia->ia_addr.sin6_family = AF_INET6;
@@ -988,8 +1007,7 @@ in6_update_ifa1(struct ifnet *ifp, struct in6_aliasreq *ifra,
 		/* gain a refcnt for the link from in6_ifaddr */
 		IFAREF(&ia->ia_ifa);
 
-		TAILQ_INSERT_TAIL(&ifp->if_addrlist, &ia->ia_ifa,
-				  ifa_list);
+		TAILQ_INSERT_TAIL(&ifp->if_addrlist, &ia->ia_ifa, ifa_list);
 		/* gain another refcnt for the link from if_addrlist */
 		IFAREF(&ia->ia_ifa);
 	}
@@ -1074,7 +1092,11 @@ in6_update_ifa1(struct ifnet *ifp, struct in6_aliasreq *ifra,
 	 * source address.
 	 */
 	ia->ia6_flags &= ~IN6_IFF_DUPLICATED;	/* safety */
-	if (hostIsNew && in6if_do_dad(ifp)) 
+	if (hostIsNew && in6if_do_dad(ifp)
+#if defined(MIP6) && NMIP > 0
+	    && !(ia->ia6_flags & IN6_IFF_HOME) /* XXX XXX XXX */
+#endif /* MIP6 && NMIP > 0 */
+		)
 		ia->ia6_flags |= IN6_IFF_TENTATIVE;
 
 	/*
@@ -1394,6 +1416,15 @@ in6_purgeaddr(ifa)
 		LIST_REMOVE(imm, i6mm_chain);
 		in6_leavegroup(imm);
 	}
+
+#if defined(MIP6) && NMIP > 0
+	{
+		struct mip6_bul_internal *mbul;
+		while ((mbul = LIST_FIRST(&ia->ia6_mbul_list)) != NULL) {
+			mip6_bul_remove(mbul);
+		}
+	}
+#endif /* MIP6 && NMIP > 0 */
 
 	in6_unlink_ifa(ia, ifp);
 }
@@ -1818,9 +1849,7 @@ in6_ifinit(ifp, ia, sin6, newhost)
  * Find an IPv6 interface link-local address specific to an interface.
  */
 struct in6_ifaddr *
-in6ifa_ifpforlinklocal(ifp, ignoreflags)
-	struct ifnet *ifp;
-	int ignoreflags;
+in6ifa_ifpforlinklocal(const struct ifnet *ifp, const int ignoreflags)
 {
 	struct ifaddr *ifa;
 
@@ -1845,9 +1874,7 @@ in6ifa_ifpforlinklocal(ifp, ignoreflags)
  * find the internet address corresponding to a given interface and address.
  */
 struct in6_ifaddr *
-in6ifa_ifpwithaddr(ifp, addr)
-	struct ifnet *ifp;
-	struct in6_addr *addr;
+in6ifa_ifpwithaddr(const struct ifnet *ifp, const struct in6_addr *addr)
 {
 	struct ifaddr *ifa;
 
@@ -2192,8 +2219,7 @@ in6_setmaxmtu()
 	unsigned long maxmtu = 0;
 	struct ifnet *ifp;
 
-	for (ifp = TAILQ_FIRST(&ifnet); ifp; ifp = TAILQ_NEXT(ifp, if_list))
-	{
+	TAILQ_FOREACH(ifp, &ifnet, if_list) {
 		/* this function can be called during ifnet initialization */
 		if (!ifp->if_afdata[AF_INET6])
 			continue;

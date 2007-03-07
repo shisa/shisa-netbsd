@@ -1,7 +1,7 @@
-/*	$NetBSD: pthread.c,v 1.57 2007/01/20 20:02:36 ad Exp $	*/
+/*	$NetBSD: pthread.c,v 1.62 2007/02/21 22:31:38 ad Exp $	*/
 
 /*-
- * Copyright (c) 2001, 2002, 2003, 2006 The NetBSD Foundation, Inc.
+ * Copyright (c) 2001, 2002, 2003, 2006, 2007 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
  * This code is derived from software contributed to The NetBSD Foundation
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: pthread.c,v 1.57 2007/01/20 20:02:36 ad Exp $");
+__RCSID("$NetBSD: pthread.c,v 1.62 2007/02/21 22:31:38 ad Exp $");
 
 #include <err.h>
 #include <errno.h>
@@ -191,7 +191,9 @@ pthread_init(void)
 		pthread__nspins = PTHREAD__NSPINS;
 	else
 		pthread__nspins = 1;
-	i = _lwp_unpark_all(NULL, 0, NULL);
+	i = (int)_lwp_unpark_all(NULL, 0, NULL);
+	if (i == -1)
+		err(1, "_lwp_unpark_all");
 	if (i < pthread__unpark_max)
 		pthread__unpark_max = i;
 #endif
@@ -416,12 +418,18 @@ pthread_create(pthread_t *thread, const pthread_attr_t *attr,
 	self = pthread__self();
 
 	pthread_spinlock(self, &pthread__deadqueue_lock);
-	if (!PTQ_EMPTY(&pthread__deadqueue)) {
-		newthread = PTQ_FIRST(&pthread__deadqueue);
-		PTQ_REMOVE(&pthread__deadqueue, newthread, pt_allq);
-		pthread_spinunlock(self, &pthread__deadqueue_lock);
-	} else {
-		pthread_spinunlock(self, &pthread__deadqueue_lock);
+	newthread = PTQ_FIRST(&pthread__deadqueue);
+	if (newthread != NULL) {
+#ifndef PTHREAD_SA
+		if ((newthread->pt_flags & PT_FLAG_DETACHED) != 0 &&
+		    (_lwp_kill(newthread->pt_lid, 0) == 0 || errno != ESRCH))
+			newthread = NULL;
+		else
+#endif
+			PTQ_REMOVE(&pthread__deadqueue, newthread, pt_allq);
+	}
+	pthread_spinunlock(self, &pthread__deadqueue_lock);
+	if (newthread == NULL) {
 		/* Set up a stack and allocate space for a pthread_st. */
 		ret = pthread__stackalloc(&newthread);
 		if (ret != 0) {
@@ -710,7 +718,7 @@ pthread_exit(void *retval)
 
 		/* Yeah, yeah, doing work while we're dead is tacky. */
 		pthread_spinlock(self, &pthread__deadqueue_lock);
-		PTQ_INSERT_HEAD(&pthread__deadqueue, self, pt_allq);
+		PTQ_INSERT_TAIL(&pthread__deadqueue, self, pt_allq);
 
 #ifdef PTHREAD_SA
 		pthread__block(self, &pthread__deadqueue_lock);
@@ -718,7 +726,6 @@ pthread_exit(void *retval)
 		pthread_spinunlock(self, &pthread__allqueue_lock);
 #else
 		pthread_spinunlock(self, &pthread__deadqueue_lock);
-		/* XXXLWP race against stack being reclaimed. */
 		_lwp_exit();
 #endif
 	} else {
@@ -936,6 +943,7 @@ pthread_detach(pthread_t thread)
 
 	return 0;
 #else
+	thread->pt_flags |= PT_FLAG_DETACHED;
 	return _lwp_detach(thread->pt_lid);
 #endif
 }
@@ -1352,7 +1360,7 @@ pthread__errorfunc(const char *file, int line, const char *function,
  */
 
 #define	OOPS(msg)			\
-    pthread__errorfunc(__FILE__, __LINE__, __FUNCTION__, msg)
+    pthread__errorfunc(__FILE__, __LINE__, __func__, msg)
 
 int
 pthread__park(pthread_t self, pthread_spin_t *lock,

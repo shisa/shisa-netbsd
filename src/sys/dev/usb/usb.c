@@ -1,4 +1,4 @@
-/*	$NetBSD: usb.c,v 1.93 2006/12/05 17:35:35 christos Exp $	*/
+/*	$NetBSD: usb.c,v 1.95 2007/02/26 13:38:09 drochner Exp $	*/
 
 /*
  * Copyright (c) 1998, 2002 The NetBSD Foundation, Inc.
@@ -44,7 +44,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: usb.c,v 1.93 2006/12/05 17:35:35 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: usb.c,v 1.95 2007/02/26 13:38:09 drochner Exp $");
 
 #include "opt_compat_netbsd.h"
 
@@ -175,7 +175,6 @@ USB_ATTACH(usb)
 
 	DPRINTF(("usbd_attach\n"));
 
-	usbd_init();
 	sc->sc_bus = aux;
 	sc->sc_bus->usbctl = sc;
 	sc->sc_port.power = USB_MAX_POWER;
@@ -864,8 +863,11 @@ usb_add_event(int type, struct usb_event *uep)
 	SIMPLEQ_INSERT_TAIL(&usb_events, ueq, next);
 	wakeup(&usb_events);
 	selnotify(&usb_selevent, 0);
-	if (usb_async_proc != NULL)
+	if (usb_async_proc != NULL) {
+		mutex_enter(&proclist_mutex);
 		psignal(usb_async_proc, SIGIO);
+		mutex_exit(&proclist_mutex);
+	}
 	splx(s);
 }
 
@@ -934,8 +936,6 @@ usb_detach(device_ptr_t self, int flags)
 			       USBDEVNAME(sc->sc_dev));
 		DPRINTF(("usb_detach: event thread dead\n"));
 	}
-
-	usbd_finish();
 
 #ifdef USB_USE_SOFTINTR
 #ifdef __HAVE_GENERIC_SOFT_INTERRUPTS

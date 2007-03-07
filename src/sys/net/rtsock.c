@@ -1,4 +1,4 @@
-/*	$NetBSD: rtsock.c,v 1.91 2006/11/13 19:16:01 dyoung Exp $	*/
+/*	$NetBSD: rtsock.c,v 1.92 2007/02/18 22:46:32 matt Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -61,9 +61,10 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: rtsock.c,v 1.91 2006/11/13 19:16:01 dyoung Exp $");
+__KERNEL_RCSID(0, "$NetBSD: rtsock.c,v 1.92 2007/02/18 22:46:32 matt Exp $");
 
 #include "opt_inet.h"
+#include "opt_mip6.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -785,6 +786,40 @@ rt_ifmsg(struct ifnet *ifp)
 #endif
 }
 
+#ifdef MIP6
+/*
+ * This routine is called to generate a message from the routing
+ * socket indicating that the status of a address has changed.
+ */
+void
+rt_addrinfomsg(struct ifaddr *ifa)
+{
+	struct ifnet *ifp = ifa->ifa_ifp;
+	struct ifa_msghdr ifam;
+	struct mbuf *m;
+	struct rt_addrinfo info;
+	struct sockaddr *sa;
+
+	if (route_cb.any_count == 0)
+		return;
+
+	bzero((caddr_t)&info, sizeof(info));
+
+	ifaaddr = sa = ifa->ifa_addr;
+	bzero((caddr_t)&ifam, sizeof(ifam));
+	ifam.ifam_index = ifp->if_index;
+	ifam.ifam_metric = ifa->ifa_metric;
+	ifam.ifam_flags = ifa->ifa_flags;
+	m = rt_msg1(RTM_ADDRINFO, &info, (caddr_t)&ifam, sizeof(ifam));
+	if (m == NULL)
+		return;
+	mtod(m, struct ifa_msghdr *)->ifam_addrs = info.rti_addrs;
+
+	route_proto.sp_protocol = sa ? sa->sa_family : 0;
+	raw_input(m, &route_proto, &route_src, &route_dst);
+}
+#endif /* MIP6 */
+
 /*
  * This is called to generate messages from the routing socket
  * indicating a network interface has had addresses associated with it.
@@ -1184,12 +1219,17 @@ again:
  */
 
 const struct protosw routesw[] = {
-{
-	SOCK_RAW,	&routedomain,	0,		PR_ATOMIC|PR_ADDR,
-	raw_input,	route_output,	raw_ctlinput,	0,
-	route_usrreq,
-	raw_init,	0,		0,		0,
-} };
+	{
+		.pr_type = SOCK_RAW,
+		.pr_domain = &routedomain,
+		.pr_flags = PR_ATOMIC|PR_ADDR,
+		.pr_input = raw_input,
+		.pr_output = route_output,
+		.pr_ctlinput = raw_ctlinput,
+		.pr_usrreq = route_usrreq,
+		.pr_init = raw_init,
+	},
+};
 
 struct domain routedomain = {
 	.dom_family = PF_ROUTE,

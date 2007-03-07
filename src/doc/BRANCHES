@@ -1,4 +1,4 @@
-#	$NetBSD: BRANCHES,v 1.152 2006/12/30 22:08:06 yamt Exp $
+#	$NetBSD: BRANCHES,v 1.156 2007/02/27 14:50:40 ad Exp $
 #
 # This file contains a list of branches that exist in the NetBSD CVS
 # tree and their current state.
@@ -284,27 +284,28 @@ Notes:
 
 Branch:		newlock
 Description:	New locking primitives, based on Solaris's
-Status:		Dormant
+Status:		Terminated
 Start Date:	March 9, 2002
-End Date:
+End Date:	Febuary 12, 2007
 Base Tag:	newlock-base
 Maintainer:	Jason R. Thorpe <thorpej@NetBSD.org>
 Scope:		Kernel
 Notes:		The goal is to replace the existing lockmgr() and
 		simple_lock() based locking mechanisms with the
 		primitives found in Solaris: mutexes and rwlocks.
+		Superseeded by the newlock2 branch.
 
 Branch:		newlock2
 Description:	New locking primitives, based on Solaris's
-Status:		Active
+Status:		Terminated
 Start Date:	September 9, 2006
-End Date:
+End Date:	Febuary 12, 2007
 Base Tag:	newlock2-base
 Maintainer:	Andrew Doran <ad@NetBSD.org>
 Scope:		Kernel
 Notes:		As per the newlock branch, however given the amount of time
 		the original branch has lain dormant, a new one has been
-		created. Goals:
+		created.  Goals:
 		- Implement new locking primitives on most-used ports.
 		- Minor locking improvements.
 		- Remove spinlockmgr().
@@ -381,6 +382,24 @@ Notes:		Kernels built from this branch are not expected
 		Ports known to compile on this branch:
 			alpha
 			i386
+
+Branch:		yamt-idlelwp
+Description:	idle lwp, and some changes depending on it.
+
+		1. separate context switching and thread scheduling.
+		   (cf. gmcgarry_ctxsw)
+		2. implement idle lwp.
+		3. clean up related MD/MI interfaces.
+		4. implement interrupt LWPs.
+		5. make scheduler(s) modular.
+
+Status:		Active
+Start Date:	Fri Feb 17 2007
+End Date:	
+Base Tag:	yamt-idlelwp-base
+Maintainer:	YAMAMOTO Takashi <yamt@NetBSD.org>
+Scope:		src/sys  (src/common is tagged but not branched)
+Notes:		
 
 Branch:		yamt-lazymbuf
 Description:	implement and evaluate lazy mapping of mbuf external data pages
@@ -1096,6 +1115,39 @@ Scope:		kernel
 Notes:		Results in consolidation of Alchemy (mips/dev/alchemy/aucom.c)
 		com support, and also removes a nasty hack from Atheros com.
 
+Branch:		ad-audiomp
+Description:	Add MP locking to the audio drivers
+Status:		Active
+Start Date:	28 Febuary 2006
+End Date:
+Base Tag:	ad-audiomp-base
+Maintainer:	Andrew Doran <ad@NetBSD.org>
+Scope:		kernel
+Notes:		Making the audio drivers MP safe is necessary before efforts
+		can be made to make the VM system MP safe. About 1/2 of the
+		drivers are converted, the remaining 1/2 need more changes.
+
+		As of import this is snapshot of work in progress and so
+		may not compile; in particular the midi changes are very
+		much "in progress". The audio component has been tested
+		and verified to work with emuxki and auvia. There may
+		be a locking issue in the ac97 code at boot.
+
+		The are two locks per device instance, an ISR lock and
+		a character device lock. The ISR lock replaces calls to
+		splaudio()/splx(), and will be held across calls to device
+		methods which were called at splaudio() before (e.g.
+		trigger_output). The character device lock is held across
+		calls to nearly all of the methods, excluding some only
+		used for initializtion, e.g. get_locks. This needs to be
+		documented at merge time.
+
+		To test on a multi way x86 system, search for "mpsafe" in
+		x86/x86/intr.c and change IPL_SCHED to IPL_AUDIO. Run a job
+		that will acquire the ISR lock (depends on the hardware, but
+		"while true; do mixerctl -a > /dev/null; done" may suffice).
+		Play audio, run lockstat and verify that that there is
+		contention on the ISR lock.
 
 ########################################################################
 # Other:

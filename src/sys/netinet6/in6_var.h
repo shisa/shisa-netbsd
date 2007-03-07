@@ -1,4 +1,4 @@
-/*	$NetBSD: in6_var.h,v 1.48 2006/12/02 18:59:17 dyoung Exp $	*/
+/*	$NetBSD: in6_var.h,v 1.49 2007/02/17 22:34:13 dyoung Exp $	*/
 /*	$KAME: in6_var.h,v 1.81 2002/06/08 11:16:51 itojun Exp $	*/
 
 /*
@@ -94,6 +94,16 @@ struct in6_ifextra {
 	struct scope6_id *scope6_id;
 };
 
+LIST_HEAD(mip6_bul_list, mip6_bul_internal); /* XXX */
+
+/*
+ * If changing size of the struct in6_ifaddr is not allowed for binary
+ * compatibilty or somthing  such as darwin, undef 'IFA_MBUL_LIST'
+ * the binding update list entry is held as a grobal vaue.
+ */
+#define IFA_MBUL_LIST
+/*#undef IFA_MBUL_LIST*/
+
 struct	in6_ifaddr {
 	struct	ifaddr ia_ifa;		/* protocol-independent info */
 #define	ia_ifp		ia_ifa.ifa_ifp
@@ -119,7 +129,19 @@ struct	in6_ifaddr {
 
 	/* multicast addresses joined from the kernel */
 	LIST_HEAD(, in6_multi_mship) ia6_memberships;
+
+#ifdef IFA_MBUL_LIST
+	/* binding update entreis for this address */
+	struct mip6_bul_list ia6_mbul_list;
+#endif /* IFA_MBUL_LIST */
 };
+
+#ifdef IFA_MBUL_LIST
+#define MBUL_LIST(ia6)  (&ia6->ia6_mbul_list)
+#else
+extern struct mip6_bul_list mbul_list;
+#define MBUL_LIST(ia6)  (&mbul_list)
+#endif
 
 /* control structure to manage address selection policy */
 struct in6_addrpolicy {
@@ -454,9 +476,22 @@ struct	in6_rrenumreq {
 					 */
 #define IN6_IFF_AUTOCONF	0x40	/* autoconfigurable address. */
 #define IN6_IFF_TEMPORARY	0x80	/* temporary (anonymous) address. */
+#define IN6_IFF_HOME		0x100	/* MIP6:home address */
+#define IN6_IFF_DEREGISTERING	0x200	/* MIP6:deregistering address */
+#define IN6_IFF_PSEUDOIFA	0x400	/* MIP6:mark as a pseudo ifa for DAD */
 
 /* do not input/output */
 #define IN6_IFF_NOTREADY (IN6_IFF_TENTATIVE|IN6_IFF_DUPLICATED)
+
+/* flags which cannot be changed by hand */
+#ifndef MIP6
+#define IN6_IFF_READONLY (IN6_IFF_DUPLICATED|IN6_IFF_DETACHED|\
+    IN6_IFF_NODAD|IN6_IFF_AUTOCONF|IN6_IFF_TEMPORARY)
+#else
+/* Mobile IPv6 userland program requires to assign an address with NODAD. */
+#define IN6_IFF_READONLY (IN6_IFF_DUPLICATED|IN6_IFF_DETACHED|\
+    IN6_IFF_AUTOCONF|IN6_IFF_TEMPORARY)
+#endif /* !MIP6 */
 
 #ifdef _KERNEL
 #define IN6_ARE_SCOPE_CMP(a,b) ((a)-(b))
@@ -641,8 +676,9 @@ void	in6_ifremloop(struct ifaddr *);
 void	in6_ifaddloop(struct ifaddr *);
 void	in6_createmkludge(struct ifnet *);
 void	in6_purgemkludge(struct ifnet *);
-struct in6_ifaddr *in6ifa_ifpforlinklocal(struct ifnet *, int);
-struct in6_ifaddr *in6ifa_ifpwithaddr(struct ifnet *, struct in6_addr *);
+struct in6_ifaddr *in6ifa_ifpforlinklocal(const struct ifnet *, int);
+struct in6_ifaddr *in6ifa_ifpwithaddr(const struct ifnet *,
+    const struct in6_addr *);
 char	*ip6_sprintf(const struct in6_addr *);
 int	in6_matchlen(struct in6_addr *, struct in6_addr *);
 int	in6_are_prefix_equal(struct in6_addr *, struct in6_addr *, int);

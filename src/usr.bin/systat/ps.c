@@ -1,4 +1,4 @@
-/*      $NetBSD: ps.c,v 1.28 2006/02/13 16:01:58 kleink Exp $  */
+/*      $NetBSD: ps.c,v 1.30 2007/02/17 22:49:57 pavel Exp $  */
 
 /*-
  * Copyright (c) 1999
@@ -45,7 +45,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: ps.c,v 1.28 2006/02/13 16:01:58 kleink Exp $");
+__RCSID("$NetBSD: ps.c,v 1.30 2007/02/17 22:49:57 pavel Exp $");
 #endif /* not lint */
 
 #include <sys/param.h>
@@ -204,7 +204,7 @@ state2str(struct kinfo_proc2 *kp)
 		*cp++ = 'X';
 	if (flag & P_WEXIT &&
 	    /* XXX - I don't like this */
-	    (kp->p_stat == LSZOMB || kp->p_stat == LSDEAD) == 0)
+	    (kp->p_stat != LSZOMB))
 		*cp++ = 'E';
 	if (flag & P_PPWAIT)
 		*cp++ = 'V';

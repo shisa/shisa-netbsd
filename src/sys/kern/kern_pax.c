@@ -1,4 +1,4 @@
-/* $NetBSD: kern_pax.c,v 1.12 2007/01/09 12:49:36 elad Exp $ */
+/* $NetBSD: kern_pax.c,v 1.15 2007/02/22 06:34:43 thorpej Exp $ */
 
 /*-
  * Copyright (c) 2006 Elad Efrat <elad@NetBSD.org>
@@ -274,14 +274,14 @@ pax_segvguard_cb(void *v)
  */
 int
 pax_segvguard(struct lwp *l, struct vnode *vp, const char *name,
-    boolean_t crashed)
+    bool crashed)
 {
 	struct pax_segvguard_entry *p;
 	struct pax_segvguard_uid_entry *up;
 	struct timeval tv;
 	uid_t uid;
 	void *t;
-	boolean_t have_uid;
+	bool have_uid;
 
 	if (!pax_segvguard_enabled)
 		return (0);
@@ -309,10 +309,7 @@ pax_segvguard(struct lwp *l, struct vnode *vp, const char *name,
 	 */
 	if (p == NULL) {
 		p = malloc(sizeof(*p), M_TEMP, M_WAITOK);
-		if (fileassoc_add(vp, segvguard_id, p) != 0) {
-			fileassoc_table_add(vp->v_mount, 16);
-			fileassoc_add(vp, segvguard_id, p);
-		}
+		fileassoc_add(vp, segvguard_id, p);
 		LIST_INIT(&p->segv_uids);
 
 		/*
@@ -336,10 +333,10 @@ pax_segvguard(struct lwp *l, struct vnode *vp, const char *name,
 	 * See if it's a culprit we're familiar with.
 	 */
 	uid = kauth_cred_getuid(l->l_cred);
-	have_uid = FALSE;
+	have_uid = false;
 	LIST_FOREACH(up, &p->segv_uids, sue_list) {
 		if (up->sue_uid == uid) {
-			have_uid = TRUE;
+			have_uid = true;
 			break;
 		}
 	}

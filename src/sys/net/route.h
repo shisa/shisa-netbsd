@@ -1,4 +1,4 @@
-/*	$NetBSD: route.h,v 1.50 2007/01/05 16:40:08 joerg Exp $	*/
+/*	$NetBSD: route.h,v 1.51 2007/02/17 22:34:10 dyoung Exp $	*/
 
 /*
  * Copyright (c) 1980, 1986, 1993
@@ -194,6 +194,7 @@ struct rt_msghdr {
 #define RTM_IFINFO	0xf	/* iface/link going up/down etc. */
 #define	RTM_IFANNOUNCE	0x10	/* iface arrival/departure */
 #define	RTM_IEEE80211	0x11	/* IEEE80211 wireless event */
+#define	RTM_ADDRINFO	0x12	/* address status change notification */
 
 #define RTV_MTU		0x1	/* init or lock _mtu */
 #define RTV_HOPCOUNT	0x2	/* init or lock _hopcount */
@@ -281,6 +282,7 @@ void	 route_init(void);
 int	 route_output(struct mbuf *, ...);
 int	 route_usrreq(struct socket *,
 	    int, struct mbuf *, struct mbuf *, struct mbuf *, struct lwp *);
+void	 rt_addrinfomsg(struct ifaddr *);
 void	 rt_ifannouncemsg(struct ifnet *, int);
 void	 rt_ieee80211msg(struct ifnet *, int, void *, size_t);
 void	 rt_ifmsg(struct ifnet *);
@@ -342,6 +344,22 @@ void	rtcache_copy(struct route *, const struct route *, size_t);
 
 void	rtcache_update(struct route *);
 void	rtcache_free(struct route *);
+
+static inline const struct sockaddr *
+rtcache_getdst(const struct route *ro)
+{
+	return &ro->ro_dst;
+}
+
+static inline void
+rtcache_setdst(struct route *ro, struct sockaddr *sa)
+{
+#if 0
+	KASSERT(ro->ro_sa != sa);
+	rtcache_free(ro);
+	ro->ro_sa = sa;
+#endif
+}
 
 static inline void
 rtcache_check(struct route *ro)

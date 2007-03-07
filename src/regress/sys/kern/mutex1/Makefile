@@ -1,11 +1,13 @@
-#	$NetBSD: Makefile,v 1.1 2007/01/17 20:56:49 ad Exp $
+#	$NetBSD: Makefile,v 1.3 2007/02/24 15:25:23 yamt Exp $
 
 KMOD=   mutex1_test
 
-.PATH:	../lkmcommon
+NOMAN=
+
+.PATH:	${.CURDIR}/../lkmcommon
 
 SRCS=	lkminit_test.c test_mutex1.c
-CPPFLAGS+=-DLKMENTRY=test_mutex1_lkmentry
+CPPFLAGS+=-DLKMENTRY=mutex1_test_lkmentry
 
 .include <bsd.kmod.mk>
 .include <bsd.subdir.mk>

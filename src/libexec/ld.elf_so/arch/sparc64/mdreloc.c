@@ -1,4 +1,4 @@
-/*	$NetBSD: mdreloc.c,v 1.39 2006/05/10 21:53:15 mrg Exp $	*/
+/*	$NetBSD: mdreloc.c,v 1.41 2007/02/23 01:17:11 matt Exp $	*/
 
 /*-
  * Copyright (c) 2000 Eduardo Horvath.
@@ -39,7 +39,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: mdreloc.c,v 1.39 2006/05/10 21:53:15 mrg Exp $");
+__RCSID("$NetBSD: mdreloc.c,v 1.41 2007/02/23 01:17:11 matt Exp $");
 #endif /* not lint */
 
 #include <errno.h>
@@ -307,13 +307,13 @@ int
 _rtld_relocate_nonplt_objects(const Obj_Entry *obj)
 {
 	const Elf_Rela *rela;
+	const Elf_Sym *def = NULL;
+	const Obj_Entry *defobj = NULL;
 
 	for (rela = obj->rela; rela < obj->relalim; rela++) {
 		Elf_Addr *where;
 		Elf_Word type;
 		Elf_Addr value = 0, mask;
-		const Elf_Sym *def = NULL;
-		const Obj_Entry *defobj = NULL;
 		unsigned long	 symnum;
 
 		where = (Elf_Addr *) (obj->relocbase + rela->r_offset);
@@ -353,9 +353,10 @@ _rtld_relocate_nonplt_objects(const Obj_Entry *obj)
 		if (RELOC_RESOLVE_SYMBOL(type)) {
 
 			/* Find the symbol */
-			def = _rtld_find_symdef(symnum, obj, &defobj, false);
+			def = _rtld_find_symdef(symnum, obj, &defobj,
+			    false);
 			if (def == NULL)
-				return (-1);
+				return -1;
 
 			/* Add in the symbol's absolute address */
 			value += (Elf_Addr)(defobj->relocbase + def->st_value);

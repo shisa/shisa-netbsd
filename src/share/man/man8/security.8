@@ -1,4 +1,4 @@
-.\" $NetBSD: security.8,v 1.12 2007/01/23 22:24:30 wiz Exp $
+.\" $NetBSD: security.8,v 1.15 2007/02/08 00:38:27 elad Exp $
 .\"
 .\" Copyright (c) 2006 Elad Efrat <elad@NetBSD.org>
 .\" All rights reserved.
@@ -25,7 +25,7 @@
 .\" (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 .\" THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 .\"
-.Dd December 26, 2006
+.Dd February 4, 2007
 .Dt SECURITY 8
 .Os
 .Sh NAME
@@ -38,6 +38,20 @@ security features
 supports a variety of security features.
 Below is a brief description of them with some quick usage examples
 that will help you get started.
+.Pp
+Contents:
+.Bl -hyphen -compact
+.It
+Veriexec (file integrity)
+.It
+Exploit mitigation
+.It
+Per-user
+.Pa /tmp
+directory
+.It
+Information filtering
+.El
 .Sh VERIEXEC
 .Em Veriexec
 is an in-kernel, real-time, file-system independent, file integrity
@@ -152,9 +166,25 @@ veriexec_strict=1 # IDS mode
 .Ed
 .Sh EXPLOIT MITIGATION
 .Nx
-incorporates some exploit mitigation features, mainly from the
-.Em PaX
-project.
+incorporates some exploit mitigation features.
+The purpose of exploit mitigation features is to interfere with the way exploits
+work, in order to prevent them from succeeding.
+Due to that, some features may have other impact on the system, so be sure to
+fully understand the implications of each feature.
+.Pp
+.Nx
+provides the following exploit mitigation features:
+.Bl -hyphen -compact
+.It
+PaX MPROTECT
+.Xr ( mprotect 2
+restrictions)
+.It
+PaX SegvGuard
+.It
+.Xr gcc 1
+stack-smashing protection (SSP)
+.El
 .Ss PaX MPROTECT
 .Em PaX MPROTECT
 implements memory protection restrictions, meant to complement non-executable
@@ -167,7 +197,7 @@ call.
 While it can be enabled globally,
 .Nx
 provides a tool,
-.Xr paxctl 1 ,
+.Xr paxctl 8 ,
 to enable
 .Em PaX MPROTECT
 on a per-program basis.
@@ -287,6 +317,34 @@ Use of
 is especially encouraged on platforms without per-page execute bit granularity
 such as
 .Em i386 .
+.Sh PER-USER TEMPORARY STORAGE
+It is possible to configure per-user temporary storage to avoid potential
+security issues (race conditions, etc.) in programs that do not make secure
+usage of
+.Pa /tmp .
+.Pp
+To enable per-user temporary storage, add the following line to
+.Xr rc.conf 5 :
+.Bd -literal -offset indent
+per_user_tmp=YES
+.Ed
+.Pp
+If
+.Pa /tmp
+is a mount point, you will also need to update its
+.Xr fstab 5
+entry to use
+.Dq /private/tmp
+(or whatever directory you want, if you override the default using the
+.Dq per_user_tmp_dir
+.Xr rc.conf 5
+keyword) instead of
+.Dq /tmp .
+.Pp
+Following that, run:
+.Bd -literal -offset indent
+# /etc/rc.d/perusertmp start
+.Ed
 .Sh INFORMATION FILTERING
 .Nx
 provides administrators the ability to restrict information passed from
@@ -304,9 +362,9 @@ Information filtering is enabled as follows:
 # sysctl -w security.curtain=1
 .Ed
 .Sh SEE ALSO
-.Xr paxctl 1 ,
 .Xr sysctl 3 ,
 .Xr options 4 ,
+.Xr paxctl 8 ,
 .Xr sysctl 8 ,
 .Xr veriexecctl 8 ,
 .Xr veriexecgen 8

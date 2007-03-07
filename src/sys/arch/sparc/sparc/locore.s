@@ -1,4 +1,4 @@
-/*	$NetBSD: locore.s,v 1.227 2006/06/28 20:55:45 martin Exp $	*/
+/*	$NetBSD: locore.s,v 1.229 2007/02/26 06:06:32 mrg Exp $	*/
 
 /*
  * Copyright (c) 1996 Paul Kranenburg
@@ -4929,8 +4929,6 @@ ENTRY(cpu_exit)
 #endif
 	wr	%g0, PSR_S|PSR_ET, %psr	! and then enable traps
 	 nop
-	call	lwp_exit2		! lwp_exit2(l)
-	 mov	%g2, %o0
 
 	/*
 	 * Now fall through to `the last switch'.  %l6 was set to
@@ -5005,11 +5003,9 @@ idle_switch:
 	/* FALLTHROUGH*/
 
 idle:
-#if defined(MULTIPROCESSOR) || defined(LOCKDEBUG)
 	! unlock scheduler lock
 	call	_C_LABEL(sched_unlock_idle)
 	 nop
-#endif
 
 idle_enter:
 #if defined(MULTIPROCESSOR)
@@ -5024,7 +5020,7 @@ idle_enter:
 
 	! Check uvm.page_idle_zero
 	sethi	%hi(_C_LABEL(uvm) + UVM_PAGE_IDLE_ZERO), %o3
-	ld	[%o3 + %lo(_C_LABEL(uvm) + UVM_PAGE_IDLE_ZERO)], %o3
+	ldub	[%o3 + %lo(_C_LABEL(uvm) + UVM_PAGE_IDLE_ZERO)], %o3
 	tst	%o3
 	bz	ispin2
 	 nop
@@ -5054,11 +5050,9 @@ idle_leave:
 	! just wrote to %psr; observe psr delay before doing a `save'
 	! or loading sched_whichqs.
 	nop; nop
-#if defined(MULTIPROCESSOR) || defined(LOCKDEBUG)
 	/* Before we leave the idle loop, detain the scheduler lock */
 	call	_C_LABEL(sched_lock_idle)
 	 nop
-#endif
 	b	Lsw_scan
 	 ld	[%l2 + %lo(_C_LABEL(sched_whichqs))], %o3
 
@@ -5307,10 +5301,8 @@ Lsw_load:
 					!  sched_unlock_idle() below)
 
 	sethi	%hi(_WANT_RESCHED), %o0		! want_resched = 0;
-#if defined(MULTIPROCESSOR) || defined(LOCKDEBUG)
 	/* Done with the run queues; release the scheduler lock */
 	call	_C_LABEL(sched_unlock_idle)
-#endif
 	st	%g0, [%o0 + %lo(_WANT_RESCHED)]! delay slot
 
 	/*

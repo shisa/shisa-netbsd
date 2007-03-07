@@ -1,4 +1,4 @@
-#	$NetBSD: special,v 1.108 2006/12/14 02:28:30 reed Exp $
+#	$NetBSD: special,v 1.110 2007/02/20 16:56:10 kiyohara Exp $
 #	@(#)special	8.2 (Berkeley) 1/23/94
 #
 # This file may be overwritten on upgrades.
@@ -29,6 +29,7 @@
 ./etc/apm			type=dir  mode=0755 optional
 ./etc/bluetooth			type=dir  mode=0755
 ./etc/bluetooth/btdevctl.conf	type=file mode=0644
+./etc/bluetooth/btuartd.conf	type=file mode=0644
 ./etc/bluetooth/hosts		type=file mode=0644
 ./etc/bluetooth/protocols	type=file mode=0644
 ./etc/bootparams		type=file mode=0644 optional
@@ -222,6 +223,7 @@
 ./etc/rc.d/nfslocking		type=file mode=0555
 ./etc/rc.d/ntpd			type=file mode=0555
 ./etc/rc.d/ntpdate		type=file mode=0555
+./etc/rc.d/perusertmp		type=file mode=0555
 ./etc/rc.d/pf			type=file mode=0555
 ./etc/rc.d/pf_boot		type=file mode=0555
 ./etc/rc.d/pflogd		type=file mode=0555
@@ -310,6 +312,9 @@
 ./etc/racoon			type=dir  mode=0755 optional
 ./etc/racoon/racoon.conf	type=file mode=0644 optional
 ./etc/racoon/psk.txt		type=file mode=0600 optional tags=nodiff
+
+./private			type=dir mode=0755 optional
+./private/tmp			type=dir mode=0111 optional ignore
 
 ./root				type=dir  mode=0755
 ./root/.cshrc			type=file mode=0644

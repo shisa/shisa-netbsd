@@ -1,11 +1,11 @@
-/* $NetBSD: sched.h,v 1.28 2006/05/14 21:38:18 elad Exp $ */
+/* $NetBSD: sched.h,v 1.33 2007/02/27 15:07:28 yamt Exp $ */
 
 /*-
- * Copyright (c) 1999, 2000, 2001, 2002 The NetBSD Foundation, Inc.
+ * Copyright (c) 1999, 2000, 2001, 2002, 2007 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
  * This code is derived from software contributed to The NetBSD Foundation
- * by Ross Harvey, Jason R. Thorpe, and Nathan J. Williams.
+ * by Ross Harvey, Jason R. Thorpe, Nathan J. Williams, and Andrew Doran.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -97,15 +97,21 @@ struct sched_param {
 
 #if defined(_NETBSD_SOURCE)
 
-#include <sys/time.h>
-
 /*
- * Sleep queues.
+ * CPU states.
+ * XXX Not really scheduler state, but no other good place to put
+ * it right now, and it really is per-CPU.
  */
-struct slpque {
-	struct lwp *sq_head;
-	struct lwp **sq_tailp;
-};
+#define	CP_USER		0
+#define	CP_NICE		1
+#define	CP_SYS		2
+#define	CP_INTR		3
+#define	CP_IDLE		4
+#define	CPUSTATES	5
+
+#if defined(_KERNEL)
+
+#include <sys/time.h>
 
 /*
  * Run queues.
@@ -123,18 +129,6 @@ struct prochd {
 };
 
 /*
- * CPU states.
- * XXX Not really scheduler state, but no other good place to put
- * it right now, and it really is per-CPU.
- */
-#define	CP_USER		0
-#define	CP_NICE		1
-#define	CP_SYS		2
-#define	CP_INTR		3
-#define	CP_IDLE		4
-#define	CPUSTATES	5
-
-/*
  * Per-CPU scheduler state.
  */
 struct schedstate_percpu {
@@ -142,7 +136,7 @@ struct schedstate_percpu {
 	volatile int spc_flags;	/* flags; see below */
 	u_int spc_schedticks;		/* ticks for schedclock() */
 	uint64_t spc_cp_time[CPUSTATES]; /* CPU state statistics */
-	u_char spc_curpriority;		/* usrpri of curproc */
+	pri_t spc_curpriority;		/* usrpri of curproc */
 	int spc_rrticks;		/* ticks until roundrobin() */
 	int spc_pscnt;			/* prof/stat counter */
 	int spc_psdiv;			/* prof/stat divisor */
@@ -153,6 +147,8 @@ struct schedstate_percpu {
 #define	SPCF_SHOULDYIELD	0x0002	/* process should yield the CPU */
 
 #define	SPCF_SWITCHCLEAR	(SPCF_SEENRR|SPCF_SHOULDYIELD)
+
+#endif /* defined(_KERNEL) */
 
 /*
  * Flags passed to the Linux-compatible __clone(2) system call.
@@ -190,45 +186,11 @@ struct proc;
 struct cpu_info;
 
 void schedclock(struct lwp *);
-void sched_wakeup(volatile const void *);
 void roundrobin(struct cpu_info *);
+pri_t sched_kpri(struct lwp *);
 
 void scheduler_fork_hook(struct proc *, struct proc *);
 void scheduler_wait_hook(struct proc *, struct proc *);
-
-#if defined(MULTIPROCESSOR) || defined(LOCKDEBUG)
-#include <sys/lock.h>
-
-extern struct simplelock sched_lock;
-
-#define	SCHED_ASSERT_LOCKED()	simple_lock_assert_locked(&sched_lock, "sched_lock")
-#define	SCHED_ASSERT_UNLOCKED()	simple_lock_assert_unlocked(&sched_lock, "sched_lock")
-
-
-#define	SCHED_LOCK(s)							\
-do {									\
-	s = splsched();							\
-	simple_lock(&sched_lock);					\
-} while (/* CONSTCOND */ 0)
-
-#define	SCHED_UNLOCK(s)							\
-do {									\
-	simple_unlock(&sched_lock);					\
-	splx(s);							\
-} while (/* CONSTCOND */ 0)
-
-void	sched_lock_idle(void);
-void	sched_unlock_idle(void);
-
-#else /* ! MULTIPROCESSOR || LOCKDEBUG */
-
-#define	SCHED_ASSERT_LOCKED()		/* nothing */
-#define	SCHED_ASSERT_UNLOCKED()		/* nothing */
-
-#define	SCHED_LOCK(s)			s = splsched()
-#define	SCHED_UNLOCK(s)			splx(s)
-
-#endif /* MULTIPROCESSOR || LOCKDEBUG */
 
 #endif	/* _KERNEL */
 #endif	/* _SYS_SCHED_H_ */

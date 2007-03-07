@@ -1,4 +1,4 @@
-/*	$NetBSD: vm_machdep.c,v 1.67 2006/09/19 01:54:56 mrg Exp $ */
+/*	$NetBSD: vm_machdep.c,v 1.69 2007/02/17 22:31:39 pavel Exp $ */
 
 /*
  * Copyright (c) 1996-2002 Eduardo Horvath.  All rights reserved.
@@ -50,7 +50,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: vm_machdep.c,v 1.67 2006/09/19 01:54:56 mrg Exp $");
+__KERNEL_RCSID(0, "$NetBSD: vm_machdep.c,v 1.69 2007/02/17 22:31:39 pavel Exp $");
 
 #include "opt_coredump.h"
 
@@ -240,8 +240,8 @@ cpu_lwp_fork(l1, l2, stack, stacksize, func, arg)
 	} else
 		l2->l_md.md_fpstate = NULL;
 
-	if (l1->l_proc->p_flag & P_32)
-		l2->l_proc->p_flag |= P_32;
+	if (l1->l_proc->p_flag & PK_32)
+		l2->l_proc->p_flag |= PK_32;
 
 	/*
 	 * Setup (kernel) stack frame that will by-pass the child
@@ -342,14 +342,13 @@ cpu_lwp_free(l, proc)
 	struct lwp *l;
 	int proc;
 {
-	register struct fpstate64 *fs;
 #ifdef MULTIPROCESSOR
 	struct cpu_info *ci;
 	int found;
 
 	found = 0;
 #endif
-	if ((fs = l->l_md.md_fpstate) != NULL) {
+	if (l->l_md.md_fpstate != NULL) {
 		if (l == fplwp) {
 			clearfpstate();
 			fplwp = NULL;
@@ -357,7 +356,6 @@ cpu_lwp_free(l, proc)
 			found = 1;
 #endif
 		}
-		free((void *)fs, M_SUBPROC);
 #ifdef MULTIPROCESSOR
 		if (found)
 			return;
@@ -376,6 +374,15 @@ cpu_lwp_free(l, proc)
 		}
 	}
 #endif
+}
+
+void
+cpu_lwp_free2(struct lwp *l)
+{
+	struct fpstate64 *fs;
+
+	if ((fs = l->l_md.md_fpstate) != NULL)
+		free(fs, M_SUBPROC);
 }
 
 #ifdef COREDUMP

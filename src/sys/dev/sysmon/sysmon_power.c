@@ -1,4 +1,4 @@
-/*	$NetBSD: sysmon_power.c,v 1.14 2006/11/16 01:33:26 christos Exp $	*/
+/*	$NetBSD: sysmon_power.c,v 1.16 2007/02/19 06:08:37 ad Exp $	*/
 
 /*
  * Copyright (c) 2003 Wasabi Systems, Inc.
@@ -44,7 +44,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: sysmon_power.c,v 1.14 2006/11/16 01:33:26 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: sysmon_power.c,v 1.16 2007/02/19 06:08:37 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/reboot.h>

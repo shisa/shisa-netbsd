@@ -1,4 +1,4 @@
-/*	$NetBSD: pmap.c,v 1.169 2006/12/18 00:40:26 simonb Exp $	*/
+/*	$NetBSD: pmap.c,v 1.171 2007/02/28 04:21:53 thorpej Exp $	*/
 
 /*-
  * Copyright (c) 1998, 2001 The NetBSD Foundation, Inc.
@@ -74,7 +74,7 @@
 
 #include <sys/cdefs.h>
 
-__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.169 2006/12/18 00:40:26 simonb Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.171 2007/02/28 04:21:53 thorpej Exp $");
 
 /*
  *	Manages physical address maps.
@@ -213,10 +213,10 @@ struct pool pmap_pv_pool;
 #endif
 int		pmap_pv_lowat = PMAP_PV_LOWAT;
 
-boolean_t	pmap_initialized = FALSE;
+bool		pmap_initialized = false;
 
 #define PAGE_IS_MANAGED(pa)	\
-	(pmap_initialized == TRUE && vm_physseg_find(atop(pa), NULL) != -1)
+	(pmap_initialized == true && vm_physseg_find(atop(pa), NULL) != -1)
 
 #define PMAP_IS_ACTIVE(pm)						\
 	((pm) == pmap_kernel() || 					\
@@ -435,7 +435,7 @@ pmap_steal_memory(vsize_t size, vaddr_t *vstartp, vaddr_t *vendp)
 	npgs = atop(size);
 
 	for (bank = 0; bank < vm_nphysseg; bank++) {
-		if (uvm.page_init_done == TRUE)
+		if (uvm.page_init_done == true)
 			panic("pmap_steal_memory: called _after_ bootstrap");
 
 		if (vm_physmem[bank].avail_start != vm_physmem[bank].start ||
@@ -518,7 +518,7 @@ pmap_init(void)
 	/*
 	 * Now it is safe to enable pv entry recording.
 	 */
-	pmap_initialized = TRUE;
+	pmap_initialized = true;
 
 #ifdef MIPS3
 	if (MIPS_HAS_R4K_MMU) {
@@ -1120,7 +1120,7 @@ pmap_enter(pmap_t pmap, vaddr_t va, paddr_t pa, vm_prot_t prot, int flags)
 	u_int npte;
 	struct vm_page *pg, *mem;
 	unsigned asid;
-	boolean_t wired = (flags & PMAP_WIRED) != 0;
+	bool wired = (flags & PMAP_WIRED) != 0;
 
 #ifdef DEBUG
 	if (pmapdebug & (PDB_FOLLOW|PDB_ENTER))
@@ -1352,7 +1352,7 @@ pmap_kenter_pa(vaddr_t va, paddr_t pa, vm_prot_t prot)
 {
 	pt_entry_t *pte;
 	u_int npte;
-	boolean_t managed = PAGE_IS_MANAGED(pa);
+	bool managed = PAGE_IS_MANAGED(pa);
 
 #ifdef DEBUG
 	if (pmapdebug & (PDB_FOLLOW|PDB_ENTER))
@@ -1483,7 +1483,7 @@ pmap_unwire(pmap_t pmap, vaddr_t va)
  *		Extract the physical page address associated
  *		with the given map/virtual_address pair.
  */
-boolean_t
+bool
 pmap_extract(pmap_t pmap, vaddr_t va, paddr_t *pap)
 {
 	paddr_t pa;
@@ -1510,7 +1510,7 @@ pmap_extract(pmap_t pmap, vaddr_t va, paddr_t *pap)
 			if (pmapdebug & PDB_FOLLOW)
 				printf("not in segmap\n");
 #endif
-			return FALSE;
+			return false;
 		}
 		pte += (va >> PGSHIFT) & (NPTEPG - 1);
 	}
@@ -1519,7 +1519,7 @@ pmap_extract(pmap_t pmap, vaddr_t va, paddr_t *pap)
 		if (pmapdebug & PDB_FOLLOW)
 			printf("PTE not valid\n");
 #endif
-		return FALSE;
+		return false;
 	}
 	pa = mips_tlbpfn_to_paddr(pte->pt_entry) | (va & PGOFSET);
 done:
@@ -1530,7 +1530,7 @@ done:
 	if (pmapdebug & PDB_FOLLOW)
 		printf("pa 0x%lx\n", (u_long)pa);
 #endif
-	return TRUE;
+	return true;
 }
 
 /*
@@ -1689,11 +1689,11 @@ pmap_copy_page(paddr_t src, paddr_t dst)
  *
  *	Clear the reference bit on the specified physical page.
  */
-boolean_t
+bool
 pmap_clear_reference(struct vm_page *pg)
 {
 	int *attrp;
-	boolean_t rv;
+	bool rv;
 
 #ifdef DEBUG
 	if (pmapdebug & PDB_FOLLOW)
@@ -1712,7 +1712,7 @@ pmap_clear_reference(struct vm_page *pg)
  *	Return whether or not the specified physical page is referenced
  *	by any physical maps.
  */
-boolean_t
+bool
 pmap_is_referenced(struct vm_page *pg)
 {
 
@@ -1722,7 +1722,7 @@ pmap_is_referenced(struct vm_page *pg)
 /*
  *	Clear the modify bits on the specified physical page.
  */
-boolean_t
+bool
 pmap_clear_modify(struct vm_page *pg)
 {
 	struct pmap *pmap;
@@ -1731,7 +1731,7 @@ pmap_clear_modify(struct vm_page *pg)
 	int *attrp;
 	vaddr_t va;
 	unsigned asid;
-	boolean_t rv;
+	bool rv;
 
 #ifdef DEBUG
 	if (pmapdebug & PDB_FOLLOW)
@@ -1745,7 +1745,7 @@ pmap_clear_modify(struct vm_page *pg)
 	}
 	pv = pg->mdpage.pvh_list;
 	if (pv->pv_pmap == NULL) {
-		return TRUE;
+		return true;
 	}
 
 	/*
@@ -1781,7 +1781,7 @@ pmap_clear_modify(struct vm_page *pg)
 			MIPS_TBIS(va | asid);
 		}
 	}
-	return TRUE;
+	return true;
 }
 
 /*
@@ -1790,7 +1790,7 @@ pmap_clear_modify(struct vm_page *pg)
  *	Return whether or not the specified physical page is modified
  *	by any physical maps.
  */
-boolean_t
+bool
 pmap_is_modified(struct vm_page *pg)
 {
 

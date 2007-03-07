@@ -1,4 +1,4 @@
-/*	$NetBSD: nd6.c,v 1.109 2006/11/24 19:47:00 christos Exp $	*/
+/*	$NetBSD: nd6.c,v 1.110 2007/02/17 22:34:14 dyoung Exp $	*/
 /*	$KAME: nd6.c,v 1.279 2002/06/08 11:16:51 itojun Exp $	*/
 
 /*
@@ -31,9 +31,10 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: nd6.c,v 1.109 2006/11/24 19:47:00 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: nd6.c,v 1.110 2007/02/17 22:34:14 dyoung Exp $");
 
 #include "opt_ipsec.h"
+#include "opt_mip6.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -66,6 +67,17 @@ __KERNEL_RCSID(0, "$NetBSD: nd6.c,v 1.109 2006/11/24 19:47:00 christos Exp $");
 #include <netinet6/nd6.h>
 #include <netinet/icmp6.h>
 
+#ifdef MIP6
+#include "mip.h"
+#include <netinet6/mip6.h>
+#include <netinet6/mip6_var.h>
+#if NMIP > 0
+#include <net/mipsock.h>
+#include <net/if_mip.h>
+#include <netinet/ip6mh.h>
+#endif /* NMIP > 0 */
+#endif /* MIP6 */
+
 #ifdef IPSEC
 #include <netinet6/ipsec.h>
 #endif
@@ -75,7 +87,7 @@ __KERNEL_RCSID(0, "$NetBSD: nd6.c,v 1.109 2006/11/24 19:47:00 christos Exp $");
 #define ND6_SLOWTIMER_INTERVAL (60 * 60) /* 1 hour */
 #define ND6_RECALC_REACHTM_INTERVAL (60 * 120) /* 2 hours */
 
-#define SIN6(s) ((struct sockaddr_in6 *)s)
+#define SIN6(s) ((const struct sockaddr_in6 *)s)
 #define SDL(s) ((struct sockaddr_dl *)s)
 
 /* timer values */
@@ -770,7 +782,13 @@ nd6_purge(ifp)
 	if (nd6_defifindex == ifp->if_index)
 		nd6_setdefaultiface(0);
 
-	if (!ip6_forwarding && ip6_accept_rtadv) { /* XXX: too restrictive? */
+
+#if defined(MIP6) && NMIP > 0
+	if (MIP6_IS_MR || (!ip6_forwarding && ip6_accept_rtadv)) /* XXX: too restrictive? */
+#else
+	if (!ip6_forwarding && ip6_accept_rtadv) /* XXX: too restrictive? */
+#endif /* MIP6 && NMIP > 0 */
+	{
 		/* refresh default router list */
 		defrouter_select();
 	}
@@ -800,7 +818,7 @@ nd6_purge(ifp)
 
 struct rtentry *
 nd6_lookup(addr6, create, ifp)
-	struct in6_addr *addr6;
+	const struct in6_addr *addr6;
 	int create;
 	struct ifnet *ifp;
 {
@@ -904,11 +922,10 @@ nd6_lookup(addr6, create, ifp)
  * XXX: should take care of the destination of a p2p link?
  */
 int
-nd6_is_addr_neighbor(addr, ifp)
-	struct sockaddr_in6 *addr;
-	struct ifnet *ifp;
+nd6_is_addr_neighbor(const struct sockaddr_in6 *addr, struct ifnet *ifp)
 {
 	struct nd_prefix *pr;
+	struct ifaddr *dstaddr;
 
 	/*
 	 * A link-local address is always a neighbor.
@@ -948,6 +965,14 @@ nd6_is_addr_neighbor(addr, ifp)
 		    &addr->sin6_addr, &pr->ndpr_mask))
 			return (1);
 	}
+
+	/*
+	 * If the address is assigned on the node of the other side of
+	 * a p2p interface, the address should be a neighbor.
+	 */
+	dstaddr = ifa_ifwithdstaddr((const struct sockaddr *)addr);
+	if ((dstaddr != NULL) && (dstaddr->ifa_ifp == ifp))
+		return (1);
 
 	/*
 	 * If the default router list is empty, all addresses are regarded
@@ -1163,7 +1188,7 @@ nd6_rtrequest(int req, struct rtentry *rt, struct rt_addrinfo *info)
 
 	if (req == RTM_RESOLVE &&
 	    (nd6_need_cache(ifp) == 0 || /* stf case */
-	     !nd6_is_addr_neighbor((struct sockaddr_in6 *)rt_key(rt), ifp))) {
+	     !nd6_is_addr_neighbor(satocsin6(rt_key(rt)), ifp))) {
 		/*
 		 * FreeBSD and BSD/OS often make a cloned host route based
 		 * on a less-specific route (e.g. the default route).
@@ -1855,8 +1880,14 @@ fail:
 	 * for those are not autoconfigured hosts, we explicitly avoid such
 	 * cases for safety.
 	 */
+#if defined(MIP6) && NMIP > 0
+	if (do_update && ln->ln_router && 
+	    ((!ip6_forwarding && ip6_accept_rtadv) || MIP6_IS_MR))
+		defrouter_select();
+#else
 	if (do_update && ln->ln_router && !ip6_forwarding && ip6_accept_rtadv)
 		defrouter_select();
+#endif /* MIP6 && NMIP > 0 */
 
 	return rt;
 }
@@ -1901,6 +1932,65 @@ nd6_output(ifp, origifp, m0, dst, rt0)
 	struct sockaddr_in6 *gw6 = NULL;
 	struct llinfo_nd6 *ln = NULL;
 	int error = 0;
+#ifndef MIP_USE_PF
+#if defined(MIP6) && NMIP > 0
+	int presence;
+	struct ip6_hdr *ip6;
+	struct in6_ifaddr *src_ia6;
+	struct sockaddr_in6 sin6_src;
+	struct in6_addr in6_src, in6_dst;
+	struct mip6_bul_internal *bul, *cnbul;
+#endif /* MIP6 && NMIP > 0 */
+
+#if defined(MIP6) && NMIP > 0
+	ip6 = mtod(m0, struct ip6_hdr *);
+
+	bzero(&sin6_src, sizeof(struct sockaddr_in6));
+	sin6_src.sin6_len = sizeof(struct sockaddr_in6);
+	sin6_src.sin6_family = AF_INET6;
+	sin6_src.sin6_addr = ip6->ip6_src;
+
+	src_ia6 = (struct in6_ifaddr *)ifa_ifwithaddr(
+	    (struct sockaddr *)&sin6_src);
+
+	if (src_ia6 && ((src_ia6->ia6_flags & IN6_IFF_DEREGISTERING) == 0)) {
+		/* 
+		 * if R flag is set, skip kernel tunnel. 
+		 * packets are tunneled by gif 
+		 */
+		bul = mip6_bul_get_home_agent(&ip6->ip6_src);
+		if ((bul != NULL) && (bul->mbul_mip != NULL) && 
+		    (bul->mbul_flags & IP6_MH_BU_ROUTER) == 0) {
+			if (ip6->ip6_nxt == IPPROTO_MH)
+				goto dontstartrr;
+
+			if (mip6_get_ip6hdrinfo(m, &in6_src, 
+			    &in6_dst, NULL, NULL, 1 /* logical */, &presence)) {
+				mip6log((LOG_ERR, "nd6_output: "
+				    "failed to get logical source and "
+				    "destination addresses.\n"));
+				senderr(EIO); /* XXX ? */
+			}
+			if (IN6_IS_ADDR_MULTICAST(&in6_dst))
+				goto dontstartrr;
+			if (IN6_IS_ADDR_LINKLOCAL(&in6_dst))
+				goto dontstartrr;
+			cnbul = mip6_bul_get(&in6_src, &in6_dst, 0);
+			if (cnbul != NULL)
+				goto dontstartrr;
+
+			/* send a hint to start RR to this node. */
+			mip6_notify_rr_hint(&in6_src, &in6_dst);
+
+		dontstartrr:
+			/* send this packet via bi-directional tunnel. */
+			return ((*bul->mbul_mip->mip_if.if_output)(
+			    (struct ifnet *)bul->mbul_mip, m,
+			    (struct sockaddr *)dst, rt));
+		}
+	}
+#endif /* MIP6 && NMIP > 0 */
+#endif /* !MIP_USE_PF */
 
 	if (IN6_IS_ADDR_MULTICAST(&dst->sin6_addr))
 		goto sendpkt;
@@ -2121,55 +2211,51 @@ nd6_need_cache(ifp)
 }
 
 int
-nd6_storelladdr(ifp, rt, m, dst, desten)
-	struct ifnet *ifp;
-	struct rtentry *rt;
-	struct mbuf *m;
-	struct sockaddr *dst;
-	u_char *desten;
+nd6_storelladdr(const struct ifnet *ifp, const struct rtentry *rt,
+    struct mbuf *m, const struct sockaddr *dst, u_char *lldst,
+    size_t dstsize)
 {
-	struct sockaddr_dl *sdl;
+	const struct sockaddr_dl *sdl;
 
 	if (m->m_flags & M_MCAST) {
 		switch (ifp->if_type) {
 		case IFT_ETHER:
 		case IFT_FDDI:
-			ETHER_MAP_IPV6_MULTICAST(&SIN6(dst)->sin6_addr,
-						 desten);
-			return (1);
+			ETHER_MAP_IPV6_MULTICAST(&SIN6(dst)->sin6_addr, lldst);
+			return 1;
 		case IFT_IEEE1394:
-			bcopy(ifp->if_broadcastaddr, desten, ifp->if_addrlen);
-			return (1);
+			bcopy(ifp->if_broadcastaddr, lldst, ifp->if_addrlen);
+			return 1;
 		case IFT_ARCNET:
-			*desten = 0;
-			return (1);
+			*lldst = 0;
+			return 1;
 		default:
 			m_freem(m);
-			return (0);
+			return 0;
 		}
 	}
 
 	if (rt == NULL) {
 		/* this could happen, if we could not allocate memory */
 		m_freem(m);
-		return (0);
+		return 0;
 	}
 	if (rt->rt_gateway->sa_family != AF_LINK) {
-		printf("nd6_storelladdr: something odd happens\n");
+		printf("%s: something odd happens\n", __func__);
 		m_freem(m);
-		return (0);
+		return 0;
 	}
 	sdl = SDL(rt->rt_gateway);
-	if (sdl->sdl_alen == 0) {
+	if (sdl->sdl_alen == 0 || sdl->sdl_alen > dstsize) {
 		/* this should be impossible, but we bark here for debugging */
-		printf("nd6_storelladdr: sdl_alen == 0, dst=%s, if=%s\n",
+		printf("%s: sdl_alen == 0, dst=%s, if=%s\n", __func__,
 		    ip6_sprintf(&SIN6(dst)->sin6_addr), if_name(ifp));
 		m_freem(m);
-		return (0);
+		return 0;
 	}
 
-	bcopy(LLADDR(sdl), desten, sdl->sdl_alen);
-	return (1);
+	memcpy(lldst, CLLADDR(sdl), MIN(dstsize, sdl->sdl_alen));
+	return 1;
 }
 
 static void 

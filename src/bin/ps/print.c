@@ -1,7 +1,7 @@
-/*	$NetBSD: print.c,v 1.96 2006/10/29 22:32:53 christos Exp $	*/
+/*	$NetBSD: print.c,v 1.99 2007/02/17 22:49:57 pavel Exp $	*/
 
 /*
- * Copyright (c) 2000 The NetBSD Foundation, Inc.
+ * Copyright (c) 2000, 2007 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
  * This code is derived from software contributed to The NetBSD Foundation
@@ -70,7 +70,7 @@
 #if 0
 static char sccsid[] = "@(#)print.c	8.6 (Berkeley) 4/16/94";
 #else
-__RCSID("$NetBSD: print.c,v 1.96 2006/10/29 22:32:53 christos Exp $");
+__RCSID("$NetBSD: print.c,v 1.99 2007/02/17 22:49:57 pavel Exp $");
 #endif
 #endif /* not lint */
 
@@ -512,7 +512,6 @@ state(void *arg, VARENT *ve, int mode)
 		break;
 
 	case LSZOMB:
-	case LSDEAD:
 		*cp = 'Z';
 		is_zombie = 1;
 		break;

@@ -1,4 +1,4 @@
-/*	$NetBSD: vm_machdep.c,v 1.112 2006/08/31 16:49:21 matt Exp $	*/
+/*	$NetBSD: vm_machdep.c,v 1.114 2007/02/28 04:21:54 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -80,7 +80,7 @@
 #include "opt_coredump.h"
 
 #include <sys/cdefs.h>			/* RCS ID & Copyright macro defns */
-__KERNEL_RCSID(0, "$NetBSD: vm_machdep.c,v 1.112 2006/08/31 16:49:21 matt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: vm_machdep.c,v 1.114 2007/02/28 04:21:54 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -91,8 +91,6 @@ __KERNEL_RCSID(0, "$NetBSD: vm_machdep.c,v 1.112 2006/08/31 16:49:21 matt Exp $"
 #include <sys/user.h>
 #include <sys/core.h>
 #include <sys/exec.h>
-#include <sys/sa.h>
-#include <sys/savar.h>
 
 #include <uvm/uvm_extern.h>
 
@@ -233,6 +231,13 @@ cpu_lwp_free(struct lwp *l, int proc)
 		fpcurlwp = NULL;
 }
 
+void
+cpu_lwp_free2(struct lwp *l)
+{
+
+	(void)l;
+}
+
 /*
  * cpu_exit is called as the last action during exit.
  *
@@ -315,7 +320,7 @@ vmapbuf(struct buf *bp, vsize_t len)
 	bp->b_data = (caddr_t)(kva + off);
 	upmap = vm_map_pmap(&bp->b_proc->p_vmspace->vm_map);
 	do {
-		if (pmap_extract(upmap, uva, &pa) == FALSE)
+		if (pmap_extract(upmap, uva, &pa) == false)
 			panic("vmapbuf: null page frame");
 		pmap_enter(vm_map_pmap(phys_map), kva, pa,
 		    VM_PROT_READ | VM_PROT_WRITE, PMAP_WIRED);

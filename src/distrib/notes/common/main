@@ -1,4 +1,4 @@
-.\"	$NetBSD: main,v 1.325 2007/01/23 10:35:01 njoly Exp $
+.\"	$NetBSD: main,v 1.328 2007/02/27 09:06:17 tron Exp $
 .\"
 .\" Copyright (c) 1999-2005 The NetBSD Foundation, Inc.
 .\" All rights reserved.
@@ -1155,19 +1155,13 @@ If you're one of them, and would like to mentioned, tell us!)
 .It Em "The NetBSD \*V Release Engineering team:"
 .It Ta Ta
 .It Ta Grant Beattie Ta Mt grant@NetBSD.org
-.It Ta Erik Berls Ta Mt cyber@NetBSD.org
+.It Ta H\(oavard Eidnes Ta Mt he@NetBSD.org
 .It Ta James Chacon Ta Mt jmc@NetBSD.org
 .It Ta Julian Coleman Ta Mt jdc@NetBSD.org
-.It Ta H\(oavard Eidnes Ta Mt he@NetBSD.org
-.It Ta Jun-ichiro itojun Hagino Ta Mt itojun@NetBSD.org
-.It Ta Geert Hendrickx Ta Mt ghen@NetBSD.org
-.It Ta Soren Jacobsen Ta Mt snj@NetBSD.org
-.It Ta SAITOH Masanobu Ta Mt msaitoh@NetBSD.org
-.It Ta Luke Mewburn Ta Mt lukem@NetBSD.org
-.It Ta Jeff Rizzo Ta Mt riz@NetBSD.org
-.It Ta Matthias Scheler Ta Mt tron@NetBSD.org
-.It Ta Curt Sampson Ta Mt cjs@NetBSD.org
 .It Ta Jim Wise Ta Mt jwise@NetBSD.org
+.It Ta Geert Hendrickx Ta Mt ghen@NetBSD.org
+.It Ta Jeff Rizzo Ta Mt riz@NetBSD.org
+.It Ta Soren Jacobsen Ta Mt snj@NetBSD.org
 .It Ta Ta
 .
 .br_ne 2i
@@ -1231,7 +1225,6 @@ If you're one of them, and would like to mentioned, tell us!)
 .It Ta Emmanuel Dreyfus Ta Mt manu@NetBSD.org
 .It Ta Matthias Drochner Ta Mt drochner@NetBSD.org
 .It Ta Jun Ebihara Ta Mt jun@NetBSD.org
-.It Ta Elad Efrat Ta Mt elad@NetBSD.org
 .It Ta H\(oavard Eidnes Ta Mt he@NetBSD.org
 .It Ta Stoned Elipot Ta Mt seb@NetBSD.org
 .It Ta Michael van Elst Ta Mt mlelstv@NetBSD.org
@@ -1369,6 +1362,7 @@ If you're one of them, and would like to mentioned, tell us!)
 .It Ta Dante Profeta Ta Mt dante@NetBSD.org
 .It Ta Chris Provenzano Ta Mt proven@NetBSD.org
 .It Ta Niels Provos Ta Mt provos@NetBSD.org
+.It Ta Mindaugas Rasiukevicius Ta Mt rmind@NetBSD.org
 .It Ta Michael Rauch Ta Mt mrauch@NetBSD.org
 .It Ta Marc Recht Ta Mt recht@NetBSD.org
 .It Ta Darren Reed Ta Mt darrenr@NetBSD.org

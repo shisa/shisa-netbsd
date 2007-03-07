@@ -1,4 +1,4 @@
-/*	$NetBSD: in.h,v 1.77 2006/11/13 05:13:41 dyoung Exp $	*/
+/*	$NetBSD: in.h,v 1.78 2007/02/17 22:34:11 dyoung Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1990, 1993
@@ -103,6 +103,7 @@ typedef __sa_family_t	sa_family_t;
 #define	IPPROTO_IPCOMP		108		/* IP Payload Comp. Protocol */
 #define	IPPROTO_VRRP		112		/* VRRP RFC 2338 */
 #define	IPPROTO_CARP		112		/* Common Address Resolution Protocol */
+#define IPPROTO_MH		135		/* Mobility Header RFC3775 */
 #define	IPPROTO_RAW		255		/* raw IP packet */
 #define	IPPROTO_MAX		256
 
@@ -550,6 +551,7 @@ void	in_socktrim(struct sockaddr_in *);
 #define	in_nullhost(x)	((x).s_addr == INADDR_ANY)
 
 #define	satosin(sa)	((struct sockaddr_in *)(sa))
+#define	satocsin(sa)	((const struct sockaddr_in *)(sa))
 #define	sintosa(sin)	((struct sockaddr *)(sin))
 #define	ifatoia(ifa)	((struct in_ifaddr *)(ifa))
 #endif /* _KERNEL */

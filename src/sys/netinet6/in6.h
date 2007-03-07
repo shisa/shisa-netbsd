@@ -1,4 +1,4 @@
-/*	$NetBSD: in6.h,v 1.57 2006/10/31 00:29:30 cbiere Exp $	*/
+/*	$NetBSD: in6.h,v 1.59 2007/02/17 22:34:13 dyoung Exp $	*/
 /*	$KAME: in6.h,v 1.83 2001/03/29 02:55:07 jinmei Exp $	*/
 
 /*
@@ -287,6 +287,7 @@ extern const struct in6_addr in6addr_linklocal_allrouters;
 #define IPV6_ADDR_SCOPE_GLOBAL		0x0e
 #else
 #define __IPV6_ADDR_SCOPE_NODELOCAL	0x01
+#define __IPV6_ADDR_SCOPE_INTFACELOCAL	0x01
 #define __IPV6_ADDR_SCOPE_LINKLOCAL	0x02
 #define __IPV6_ADDR_SCOPE_SITELOCAL	0x05
 #define __IPV6_ADDR_SCOPE_ORGLOCAL	0x08	/* just used in this file */
@@ -414,7 +415,7 @@ struct route_in6 {
 #define IPV6_2292HOPLIMIT	20 /* bool; hop limit */
 #define IPV6_2292NEXTHOP	21 /* bool; next hop addr */
 #define IPV6_2292HOPOPTS	22 /* bool; hop-by-hop option */
-#define IPV6_2292DSTOPTS	23 /* bool; destinaion option */
+#define IPV6_2292DSTOPTS	23 /* bool; destination option */
 #define IPV6_2292RTHDR		24 /* bool; routing header */
 #define IPV6_2292PKTOPTIONS	25 /* buf/cmsghdr; set/get IPv6 options */
 #endif
@@ -462,6 +463,7 @@ struct route_in6 {
 #define IPV6_RTHDR_LOOSE     0 /* this hop need not be a neighbor. XXX old spec */
 #define IPV6_RTHDR_STRICT    1 /* this hop must be a neighbor. XXX old spec */
 #define IPV6_RTHDR_TYPE_0    0 /* IPv6 routing header type 0 */
+#define IPV6_RTHDR_TYPE_2    2 /* IPv6 routing header type 2 for Mobile IPv6 */
 
 /*
  * Defaults and limits for options
@@ -717,6 +719,7 @@ extern void addrsel_policy_init __P((void));
 extern	u_char	ip6_protox[];
 
 #define	satosin6(sa)	((struct sockaddr_in6 *)(sa))
+#define	satocsin6(sa)	((const struct sockaddr_in6 *)(sa))
 #define	sin6tosa(sin6)	((struct sockaddr *)(sin6))
 #define	ifatoia6(ifa)	((struct in6_ifaddr *)(ifa))
 #endif /* _KERNEL */

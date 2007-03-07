@@ -1,4 +1,4 @@
-/*	$NetBSD: ffs_snapshot.c,v 1.40 2007/01/19 14:49:12 hannken Exp $	*/
+/*	$NetBSD: ffs_snapshot.c,v 1.42 2007/02/16 17:24:00 hannken Exp $	*/
 
 /*
  * Copyright 2000 Marshall Kirk McKusick. All Rights Reserved.
@@ -38,7 +38,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ffs_snapshot.c,v 1.40 2007/01/19 14:49:12 hannken Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ffs_snapshot.c,v 1.42 2007/02/16 17:24:00 hannken Exp $");
 
 #if defined(_KERNEL_OPT)
 #include "opt_ffs.h"
@@ -390,31 +390,18 @@ loop:
 			MNT_ILOCK(mp);
 			continue;
 		}
-#ifndef NEWVNGATE
-		if (vn_lock(xvp, LK_EXCLUSIVE | LK_INTERLOCK) != 0) {
-			MNT_ILOCK(mp);
-			goto loop;
-		}
-#else /* NEWVNGATE */
 		VI_UNLOCK(xvp);
-#endif /* NEWVNGATE */
 #ifdef DEBUG
 		if (snapdebug)
 			vprint("ffs_snapshot: busy vnode", xvp);
 #endif
 		if (VOP_GETATTR(xvp, &vat, l->l_cred, l) == 0 &&
 		    vat.va_nlink > 0) {
-#ifndef NEWVNGATE
-			VOP_UNLOCK(xvp, 0);
-#endif /* NEWVNGATE */
 			MNT_ILOCK(mp);
 			continue;
 		}
 		xp = VTOI(xvp);
 		if (ffs_checkfreefile(copy_fs, vp, xp->i_number)) {
-#ifndef NEWVNGATE
-			VOP_UNLOCK(xvp, 0);
-#endif /* NEWVNGATE */
 			MNT_ILOCK(mp);
 			continue;
 		}
@@ -444,9 +431,6 @@ loop:
 		if (!error)
 			error = ffs_freefile(copy_fs, vp, xp->i_number,
 			    xp->i_mode);
-#ifndef NEWVNGATE
-		VOP_UNLOCK(xvp, 0);
-#endif /* NEWVNGATE */
 		if (error) {
 			free(copy_fs->fs_csp, M_UFSMNT);
 			goto out1;
@@ -1928,7 +1912,7 @@ retry:
 		if (blkno != 0)
 			continue;
 #ifdef DIAGNOSTIC
-		if (curlwp->l_flag & L_COWINPROGRESS)
+		if (curlwp->l_pflag & LP_UFSCOW)
 			printf("ffs_copyonwrite: recursive call\n");
 #endif
 		/*
@@ -2097,7 +2081,7 @@ writevnblk(struct vnode *vp, caddr_t data, ufs2_daddr_t lbn)
 }
 
 /*
- * Set/reset lwp's L_COWINPROGRESS flag.
+ * Set/reset lwp's LP_UFSCOW flag.
  * May be called recursive.
  */
 static inline int
@@ -2105,11 +2089,11 @@ cow_enter(void)
 {
 	struct lwp *l = curlwp;
 
-	if (l->l_flag & L_COWINPROGRESS) {
+	if (l->l_pflag & LP_UFSCOW) {
 		return 0;
 	} else {
-		l->l_flag |= L_COWINPROGRESS;
-		return L_COWINPROGRESS;
+		l->l_pflag |= LP_UFSCOW;
+		return LP_UFSCOW;
 	}
 }
 
@@ -2118,7 +2102,7 @@ cow_leave(int flag)
 {
 	struct lwp *l = curlwp;
 
-	l->l_flag &= ~flag;
+	l->l_pflag &= ~flag;
 }
 
 /*

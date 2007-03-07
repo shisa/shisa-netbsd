@@ -1,4 +1,4 @@
-/*	$NetBSD: puffs.c,v 1.28 2007/01/26 23:00:33 pooka Exp $	*/
+/*	$NetBSD: puffs.c,v 1.32 2007/02/18 17:38:10 pooka Exp $	*/
 
 /*
  * Copyright (c) 2005, 2006  Antti Kantee.  All Rights Reserved.
@@ -34,7 +34,7 @@
 
 #include <sys/cdefs.h>
 #if !defined(lint)
-__RCSID("$NetBSD: puffs.c,v 1.28 2007/01/26 23:00:33 pooka Exp $");
+__RCSID("$NetBSD: puffs.c,v 1.32 2007/02/18 17:38:10 pooka Exp $");
 #endif /* !lint */
 
 #include <sys/param.h>
@@ -232,13 +232,21 @@ _puffs_mount(int develv, struct puffs_ops *pops, const char *dir, int mntflags,
 	/* defaults for some user-settable translation functions */
 	pu->pu_cmap = NULL; /* identity translation */
 
-	pu->pu_pathbuild = puffs_path_buildpath;
-	pu->pu_pathfree = puffs_path_freepath;
-	pu->pu_pathcmp = puffs_path_cmppath;
+	pu->pu_pathbuild = puffs_stdpath_buildpath;
+	pu->pu_pathfree = puffs_stdpath_freepath;
+	pu->pu_pathcmp = puffs_stdpath_cmppath;
 	pu->pu_pathtransform = NULL;
 	pu->pu_namemod = NULL;
 
 	pu->pu_state = PUFFS_STATE_MOUNTING;
+
+#if 1
+	/* XXXkludgehere */
+	/* kauth doesn't provide this service any longer */
+	if (geteuid() != 0)
+		mntflags |= MNT_NOSUID | MNT_NODEV;
+#endif
+
 	if (mount(MOUNT_PUFFS, dir, mntflags, &pargs) == -1)
 		goto failfree;
 	pu->pu_maxreqlen = pargs.pa_maxreqlen;
@@ -369,6 +377,7 @@ puffs_dopreq(struct puffs_usermount *pu, struct puffs_req *preq,
 int
 puffs_docc(struct puffs_cc *pcc, struct puffs_putreq *ppr)
 {
+	struct puffs_usermount *pu = pcc->pcc_pu;
 	int rv;
 
 	assert((pcc->pcc_flags & PCC_DONE) == 0);
@@ -382,6 +391,9 @@ puffs_docc(struct puffs_cc *pcc, struct puffs_putreq *ppr)
 	/* check if we need to store this reply */
 	switch (rv) {
 	case PUFFCALL_ANSWER:
+		if (pu->pu_flags & PUFFS_FLAG_OPDUMP)
+			puffsdump_rv(pcc->pcc_preq);
+
 		puffs_req_putcc(ppr, pcc);
 		break;
 	case PUFFCALL_IGNORE:
@@ -479,14 +491,10 @@ puffs_calldispatcher(struct puffs_cc *pcc)
 
 			pcn.pcn_pkcnp = &auxt->pvnr_cn;
 			if (buildpath) {
-				if (pcn.pcn_flags & PUFFS_ISDOTDOT) {
-					buildpath = 0;
-				} else {
-					error = puffs_path_pcnbuild(pu, &pcn,
-					    preq->preq_cookie);
-					if (error)
-						break;
-				}
+				error = puffs_path_pcnbuild(pu, &pcn,
+				    preq->preq_cookie);
+				if (error)
+					break;
 			}
 
 			/* lookup *must* be present */
@@ -503,7 +511,6 @@ puffs_calldispatcher(struct puffs_cc *pcc)
 					/*
 					 * did we get a new node or a
 					 * recycled node?
-					 * XXX: mapping assumption
 					 */
 					pn = PU_CMAP(pu, auxt->pvnr_newnode);
 					if (pn->pn_po.po_path == NULL)
