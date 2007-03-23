@@ -25,8 +25,6 @@ SRCS+=	ip6opt.c rthdr.c vars6.c
 .endif
 SRCS+=	if_indextoname.c if_nameindex.c if_nametoindex.c
 
-CPPFLAGS+=	-DMIP6
-
 LPREFIX=_nsyy
 YPREFIX=_nsyy
 YHEADER=1
