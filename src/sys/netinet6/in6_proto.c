@@ -67,7 +67,6 @@ __KERNEL_RCSID(0, "$NetBSD: in6_proto.c,v 1.73 2007/02/27 22:19:05 degroote Exp 
 #include "opt_inet.h"
 #include "opt_ipsec.h"
 #include "opt_iso.h"
-#include "opt_mip6.h"
 
 #include <sys/param.h>
 #include <sys/socket.h>
@@ -133,9 +132,9 @@ __KERNEL_RCSID(0, "$NetBSD: in6_proto.c,v 1.73 2007/02/27 22:19:05 degroote Exp 
 #include <netinet6/ip6_etherip.h>
 #endif
 
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 #include <netinet6/mip6_var.h>
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 
 #include <netinet6/ip6protosw.h>
 
@@ -221,13 +220,13 @@ const struct ip6protosw inet6sw[] = {
   .pr_flags = PR_ATOMIC|PR_ADDR,
   .pr_input = frag6_input,
 },
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 { SOCK_RAW,	&inet6domain,	IPPROTO_MH,	PR_ATOMIC|PR_ADDR|PR_LASTHDR,
   mip6_input,	0,		0,		rip6_ctloutput,
   rip6_usrreq,
   0,		0,		0,		0,
 },
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 #ifdef IPSEC
 { .pr_type = SOCK_RAW,
   .pr_domain = &inet6domain,
@@ -356,7 +355,7 @@ const struct ip6protosw inet6sw[] = {
 },
 };
 
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 /* To receive tunneled packet on mobile node or home agent */
 struct ip6protosw mip6_tunnel_protosw =
 { SOCK_RAW,	&inet6domain,	IPPROTO_IPV6,	PR_ATOMIC|PR_ADDR,
@@ -364,7 +363,7 @@ struct ip6protosw mip6_tunnel_protosw =
   rip6_usrreq,
   0,		0,		0,		0,
 };
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 
 struct domain inet6domain = {
 	.dom_family = AF_INET6, .dom_name = "internet6",

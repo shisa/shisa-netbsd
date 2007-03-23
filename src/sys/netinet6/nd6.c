@@ -34,7 +34,6 @@
 __KERNEL_RCSID(0, "$NetBSD: nd6.c,v 1.110 2007/02/17 22:34:14 dyoung Exp $");
 
 #include "opt_ipsec.h"
-#include "opt_mip6.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -67,7 +66,7 @@ __KERNEL_RCSID(0, "$NetBSD: nd6.c,v 1.110 2007/02/17 22:34:14 dyoung Exp $");
 #include <netinet6/nd6.h>
 #include <netinet/icmp6.h>
 
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 #include "mip.h"
 #include <netinet6/mip6.h>
 #include <netinet6/mip6_var.h>
@@ -76,7 +75,7 @@ __KERNEL_RCSID(0, "$NetBSD: nd6.c,v 1.110 2007/02/17 22:34:14 dyoung Exp $");
 #include <net/if_mip.h>
 #include <netinet/ip6mh.h>
 #endif /* NMIP > 0 */
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 
 #ifdef IPSEC
 #include <netinet6/ipsec.h>
@@ -783,11 +782,11 @@ nd6_purge(ifp)
 		nd6_setdefaultiface(0);
 
 
-#if defined(MIP6) && NMIP > 0
+#if defined(MOBILE_IPV6) && NMIP > 0
 	if (MIP6_IS_MR || (!ip6_forwarding && ip6_accept_rtadv)) /* XXX: too restrictive? */
 #else
 	if (!ip6_forwarding && ip6_accept_rtadv) /* XXX: too restrictive? */
-#endif /* MIP6 && NMIP > 0 */
+#endif /* MOBILE_IPV6 && NMIP > 0 */
 	{
 		/* refresh default router list */
 		defrouter_select();
@@ -1880,14 +1879,14 @@ fail:
 	 * for those are not autoconfigured hosts, we explicitly avoid such
 	 * cases for safety.
 	 */
-#if defined(MIP6) && NMIP > 0
+#if defined(MOBILE_IPV6) && NMIP > 0
 	if (do_update && ln->ln_router && 
 	    ((!ip6_forwarding && ip6_accept_rtadv) || MIP6_IS_MR))
 		defrouter_select();
 #else
 	if (do_update && ln->ln_router && !ip6_forwarding && ip6_accept_rtadv)
 		defrouter_select();
-#endif /* MIP6 && NMIP > 0 */
+#endif /* MOBILE_IPV6 && NMIP > 0 */
 
 	return rt;
 }
@@ -1933,16 +1932,16 @@ nd6_output(ifp, origifp, m0, dst, rt0)
 	struct llinfo_nd6 *ln = NULL;
 	int error = 0;
 #ifndef MIP_USE_PF
-#if defined(MIP6) && NMIP > 0
+#if defined(MOBILE_IPV6) && NMIP > 0
 	int presence;
 	struct ip6_hdr *ip6;
 	struct in6_ifaddr *src_ia6;
 	struct sockaddr_in6 sin6_src;
 	struct in6_addr in6_src, in6_dst;
 	struct mip6_bul_internal *bul, *cnbul;
-#endif /* MIP6 && NMIP > 0 */
+#endif /* MOBILE_IPV6 && NMIP > 0 */
 
-#if defined(MIP6) && NMIP > 0
+#if defined(MOBILE_IPV6) && NMIP > 0
 	ip6 = mtod(m0, struct ip6_hdr *);
 
 	bzero(&sin6_src, sizeof(struct sockaddr_in6));
@@ -1989,7 +1988,7 @@ nd6_output(ifp, origifp, m0, dst, rt0)
 			    (struct sockaddr *)dst, rt));
 		}
 	}
-#endif /* MIP6 && NMIP > 0 */
+#endif /* MOBILE_IPV6 && NMIP > 0 */
 #endif /* !MIP_USE_PF */
 
 	if (IN6_IS_ADDR_MULTICAST(&dst->sin6_addr))

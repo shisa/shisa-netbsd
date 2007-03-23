@@ -36,7 +36,6 @@
 #endif
 #ifdef __NetBSD__
 #include "opt_inet.h"
-#include "opt_mip6.h"
 #endif
 
 #include <sys/param.h>

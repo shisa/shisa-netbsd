@@ -93,12 +93,12 @@ u_int16_t key_portfromsaddr __P((struct sockaddr *));
 #define KEY_PORTFROMSADDR(saddr) key_portfromsaddr((struct sockaddr *)(saddr))
 #endif
 
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 void key_mip6_update_mobile_node_ipsecdb(struct sockaddr_in6 *,
     struct sockaddr_in6 *, struct sockaddr_in6 *, struct sockaddr_in6 *);
 void key_mip6_update_home_agent_ipsecdb(struct sockaddr_in6 *,
     struct sockaddr_in6 *, struct sockaddr_in6 *, struct sockaddr_in6 *);
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 
 #endif /* defined(_KERNEL) */
 #endif /* !_NETKEY_KEY_H_ */

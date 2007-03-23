@@ -105,14 +105,14 @@ __KERNEL_RCSID(0, "$NetBSD: key.c,v 1.152 2007/02/17 22:34:17 dyoung Exp $");
 #include <sys/rnd.h>
 #endif
 
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 #include <netinet6/mip6.h>
 #include <netinet6/mip6_var.h>
 #include "mip.h"
 #if NMIP > 0
 #include <netinet/ip6mh.h>
 #endif /* NMIP > 0*/
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 
 #include <net/net_osdep.h>
 
@@ -484,10 +484,10 @@ static void key_sp_dead __P((struct secpolicy *));
 static void key_sp_unlink __P((struct secpolicy *));
 static struct mbuf *key_alloc_mbuf __P((int));
 struct callout key_timehandler_ch;
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 static struct mbuf *key_setmigrate(struct secpolicy *, struct sockaddr *,
     struct sockaddr *, struct ipsecrequest *, u_int32_t, u_int32_t);
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 
 /* %%% IPsec policy management */
 /*
@@ -1806,9 +1806,9 @@ key_spdadd(so, m, mhp)
 		 * port spec is not permitted for tunnel mode
 		 */
 		if (isr->saidx.mode == IPSEC_MODE_TUNNEL && src0 && dst0
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 		    && (src0->sadb_address_proto != IPPROTO_MH)
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 			) {
 			sa = (struct sockaddr *)(src0 + 1);
 			switch (sa->sa_family) {
@@ -8512,7 +8512,7 @@ SYSCTL_SETUP(sysctl_net_key_setup, "sysctl net.key subtree setup")
 		       CTL_NET, PF_KEY, KEYCTL_DUMPSP, CTL_EOL);
 }
 
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 #if NMIP > 0
 void
 key_mip6_update_mobile_node_ipsecdb(haddr, ocoa, ncoa, haaddr)
@@ -8939,4 +8939,4 @@ key_setmigrate(sp, oldsrc, olddst, isr, seq, pid)
 	m_freem(result);
 	return (NULL);
 }
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */

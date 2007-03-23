@@ -33,8 +33,6 @@
 #include <sys/cdefs.h>
 __KERNEL_RCSID(0, "$NetBSD: dest6.c,v 1.15 2006/11/16 01:33:45 christos Exp $");
 
-#include "opt_mip6.h"
-
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/malloc.h>
@@ -55,7 +53,7 @@ __KERNEL_RCSID(0, "$NetBSD: dest6.c,v 1.15 2006/11/16 01:33:45 christos Exp $");
 #include <netinet6/ip6_var.h>
 #include <netinet/icmp6.h>
 
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 #include <net/mipsock.h>
 #include <netinet/ip6mh.h>
 #include <netinet6/mip6.h>
@@ -66,7 +64,7 @@ static int dest6_swap_hao(struct ip6_hdr *, struct ip6aux *,
 static int dest6_nextopt(struct mbuf *, int, struct ip6_opt *);
 static void mip6_notify_be_hint(struct in6_addr *, struct in6_addr *,
     struct in6_addr *, u_int8_t);
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 
 /*
  * Destination options header processing.
@@ -78,7 +76,7 @@ dest6_input(struct mbuf **mp, int *offp, int proto)
 	int off = *offp, dstoptlen, optlen;
 	struct ip6_dest *dstopts;
 	u_int8_t *opt;
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 	struct m_tag *n;
 	struct in6_addr home;
 	struct ip6aux *ip6a = NULL;
@@ -88,7 +86,7 @@ dest6_input(struct mbuf **mp, int *offp, int proto)
 	int verified = 0;
 
 	ip6 = mtod(m, struct ip6_hdr *);
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 	/* validation of the length of the header */
 	IP6_EXTHDR_GET(dstopts, struct ip6_dest *, m, off, sizeof(*dstopts));
 	if (dstopts == NULL)
@@ -117,7 +115,7 @@ dest6_input(struct mbuf **mp, int *offp, int proto)
 		case IP6OPT_PADN:
 			optlen = *(opt + 1) + 2;
 			break;
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 		case IP6OPT_HOME_ADDRESS:
 			/* HAO must appear only once */
 			if ((mip6_nodetype &
@@ -173,7 +171,7 @@ dest6_input(struct mbuf **mp, int *offp, int proto)
 			 */
 			break;
 		nomip:
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 		default:		/* unknown option */
 			optlen = ip6_unknown_opt(opt, m,
 			    opt - mtod(m, u_int8_t *)
@@ -188,11 +186,11 @@ dest6_input(struct mbuf **mp, int *offp, int proto)
 		}
 	}
 
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 	/* if haopt is non-NULL, we are sure we have seen fresh HA option */
 	if (verified && dest6_swap_hao(ip6, ip6a, haopt) < 0)
 		goto bad;
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 	*offp = off;
 	return (dstopts->ip6d_nxt);
 
@@ -201,7 +199,7 @@ dest6_input(struct mbuf **mp, int *offp, int proto)
 	return (IPPROTO_DONE);
 }
 
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 static int
 dest6_swap_hao(ip6, ip6a, haopt)
 	struct ip6_hdr *ip6;
@@ -384,4 +382,4 @@ mip6_notify_be_hint(src, coa, hoa, status)
 	    (struct sockaddr *)&coa_sin6,
 	    (struct sockaddr *)&hoa_sin6, status);
 }
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */

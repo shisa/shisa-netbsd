@@ -358,10 +358,10 @@ int	rip6_usrreq(struct socket *,
 int	dest6_input(struct mbuf **, int *, int);
 int	none_input(struct mbuf **, int *, int);
 
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 int	dest6_mip6_hao __P((struct mbuf *, int, int));
 int	mip6_input __P((struct mbuf **, int *, int));
-#endif
+#endif /* MOBILE_IPV6 */
 
 struct route;
 

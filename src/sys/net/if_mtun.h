@@ -1,4 +1,4 @@
-/*	$Id: if_mtun.h,v 1.5 2007/03/04 15:55:20 keiichi Exp $	*/
+/*	$Id: if_mtun.h,v 1.6 2007/03/23 09:34:28 keiichi Exp $	*/
 /*	$NetBSD: if_gif.h,v 1.13 2005/12/11 23:05:25 thorpej Exp $	*/
 /*	$KAME: if_gif.h,v 1.23 2001/07/27 09:21:42 itojun Exp $	*/
 
@@ -42,7 +42,6 @@
 
 #if defined(_KERNEL) && !defined(_LKM)
 #include "opt_inet.h"
-#include "opt_mip6.h"
 #endif
 
 #include <netinet/in.h>

@@ -33,8 +33,6 @@
 #include <sys/cdefs.h>
 __KERNEL_RCSID(0, "$NetBSD: nd6_rtr.c,v 1.62 2006/11/20 04:34:16 dyoung Exp $");
 
-#include "opt_mip6.h"
-
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/malloc.h>
@@ -62,12 +60,12 @@ __KERNEL_RCSID(0, "$NetBSD: nd6_rtr.c,v 1.62 2006/11/20 04:34:16 dyoung Exp $");
 #include <netinet/icmp6.h>
 #include <netinet6/scope6_var.h>
 
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 #include "mip.h"
 #include <netinet6/mip6.h>
 #include <netinet6/mip6_var.h>
 #include <net/mipsock.h>
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 
 #include <net/net_osdep.h>
 
@@ -142,13 +140,13 @@ nd6_rs_input(m, off, icmp6len)
 	union nd_opts ndopts;
 
 	/* If I'm not a router, ignore it. */
-#if defined(MIP6) && NMIP > 0
+#if defined(MOBILE_IPV6) && NMIP > 0
 	if ((ip6_accept_rtadv != 0 || !ip6_forwarding) && !MIP6_IS_MR)
 		goto freeit;
 #else
 	if (ip6_accept_rtadv != 0 || !ip6_forwarding)
 		goto freeit;
-#endif /* MIP6 && NMIP > 0 */
+#endif /* MOBILE_IPV6 && NMIP > 0 */
 
 	/* Sanity checks */
 	if (ip6->ip6_hlim != 255) {
@@ -362,11 +360,11 @@ nd6_ra_input(m, off, icmp6len)
 		}
 	}
 
-#if defined(MIP6) && NMIP > 0
+#if defined(MOBILE_IPV6) && NMIP > 0
 	if (MIP6_IS_MN) {
 		mip6_probe_routers();
 	}
-#endif /* MIP6 && NMIP > 0 */
+#endif /* MOBILE_IPV6 && NMIP > 0 */
 
 	/*
 	 * MTU
@@ -531,13 +529,13 @@ defrtrlist_del(dr)
 	 * Flush all the routing table entries that use the router
 	 * as a next hop.
 	 */
-#if defined(MIP6) && NMIP > 0
+#if defined(MOBILE_IPV6) && NMIP > 0
        if ((!ip6_forwarding && ip6_accept_rtadv) && !MIP6_IS_MR) /* XXX: better condition? */
 		rt6_flush(&dr->rtaddr, dr->ifp);
 #else
 	if (!ip6_forwarding && ip6_accept_rtadv) /* XXX: better condition? */
 		rt6_flush(&dr->rtaddr, dr->ifp);
-#endif /* MIP6 && NMIP > 0 */
+#endif /* MOBILE_IPV6 && NMIP > 0 */
 
 	if (dr->installed) {
 		deldr = dr;
@@ -666,11 +664,11 @@ defrouter_select()
 	 * if the node is not an autoconfigured host, we explicitly exclude
 	 * such cases here for safety.
 	 */
-#if defined(MIP6) && NMIP > 0
+#if defined(MOBILE_IPV6) && NMIP > 0
 	if ((ip6_forwarding || !ip6_accept_rtadv) && !MIP6_IS_MR) 
 #else
 	if (ip6_forwarding || !ip6_accept_rtadv) 
-#endif /* MIP6 && NMIP > 0 */
+#endif /* MOBILE_IPV6 && NMIP > 0 */
        {
 		nd6log((LOG_WARNING,
 		    "defrouter_select: called unexpectedly (forwarding=%d, "
@@ -1282,7 +1280,7 @@ prelist_update(new, dr, m, mcast)
 		ifa6->ia6_lifetime = lt6_tmp;
 		ifa6->ia6_updatetime = time_second;
 	}
-#if defined(MIP6) && NMIP > 0
+#if defined(MOBILE_IPV6) && NMIP > 0
 	/* 
 	 * if the received prefix is equal to a home prefix, should
 	 * not create a new address from the prefix. The home agent
@@ -1295,7 +1293,7 @@ prelist_update(new, dr, m, mcast)
 		    (struct sockaddr *)&new->ndpr_prefix, new->ndpr_plen);
 		goto end;
 	}
-#endif /* MIP6 && NMIP > 0 */
+#endif /* MOBILE_IPV6 && NMIP > 0 */
 	if (ia6_match == NULL && new->ndpr_vltime) {
 		int ifidlen;
 
@@ -1466,14 +1464,14 @@ pfxlist_onlink_check()
 			if (pr->ndpr_raf_onlink == 0)
 				continue;
 
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 			/*
 			 * we aren't interested in prefixes without the A bit
 			 * set.
 			 */
 			if (pr->ndpr_raf_auto == 0)
 				continue;
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 
 			if ((pr->ndpr_stateflags & NDPRF_DETACHED) == 0 &&
 			    find_pfxlist_reachable_router(pr) == NULL)
@@ -1546,14 +1544,14 @@ pfxlist_onlink_check()
 	 */
 	for (ifa = in6_ifaddr; ifa; ifa = ifa->ia_next) {
 		if (!(ifa->ia6_flags & IN6_IFF_AUTOCONF)
-#if defined(MIP6) && NMIP > 0
+#if defined(MOBILE_IPV6) && NMIP > 0
 			   /*
 			    * check onlink status if we have a home address
 			    * even when we don't have autoconfigured
 			    * addresses.
 			    */
 		    && !((ifa->ia6_flags & IN6_IFF_HOME) && (ifa->ia_ifp->if_type != IFT_MIP)) 
-#endif /* MIP6 && NMIP > 0 */
+#endif /* MOBILE_IPV6 && NMIP > 0 */
 			)
 			continue;
 
@@ -1572,10 +1570,10 @@ pfxlist_onlink_check()
 	if (ifa) {
 		for (ifa = in6_ifaddr; ifa; ifa = ifa->ia_next) {
 			if (!(ifa->ia6_flags & IN6_IFF_AUTOCONF)
-#if defined(MIP6) && NMIP > 0
+#if defined(MOBILE_IPV6) && NMIP > 0
 				   /* see the comment above. */
 			    && !((ifa->ia6_flags & IN6_IFF_HOME) && (ifa->ia_ifp->if_type != IFT_MIP)) 
-#endif /* MIP6 && NMIP > 0 */
+#endif /* MOBILE_IPV6 && NMIP > 0 */
 				)
 				continue;
 
@@ -1586,18 +1584,18 @@ pfxlist_onlink_check()
 				if (ifa->ia6_flags & IN6_IFF_DETACHED) {
 					ifa->ia6_flags &= ~IN6_IFF_DETACHED;
 					ifa->ia6_flags |= IN6_IFF_TENTATIVE;
-#if defined(MIP6) && NMIP > 0
+#if defined(MOBILE_IPV6) && NMIP > 0
 					rt_addrinfomsg((struct ifaddr *)ifa);
-#endif /* MIP6 && NMIP > 0 */
+#endif /* MOBILE_IPV6 && NMIP > 0 */
 					nd6_dad_start((struct ifaddr *)ifa,
 					    0);
 				}
 			} else {
 				if ((ifa->ia6_flags & IN6_IFF_DETACHED) == 0) {
 					ifa->ia6_flags |= IN6_IFF_DETACHED;
-#if defined(MIP6) && NMIP > 0
+#if defined(MOBILE_IPV6) && NMIP > 0
 					rt_addrinfomsg((struct ifaddr *)ifa);
-#endif /* MIP6 && NMIP > 0 */
+#endif /* MOBILE_IPV6 && NMIP > 0 */
 				}
 			}
 		}
@@ -1610,9 +1608,9 @@ pfxlist_onlink_check()
 			if (ifa->ia6_flags & IN6_IFF_DETACHED) {
 				ifa->ia6_flags &= ~IN6_IFF_DETACHED;
 				ifa->ia6_flags |= IN6_IFF_TENTATIVE;
-#if defined(MIP6) && NMIP > 0
+#if defined(MOBILE_IPV6) && NMIP > 0
                                 rt_addrinfomsg((struct ifaddr *)ifa);
-#endif /* MIP6 && NMIP > 0 */
+#endif /* MOBILE_IPV6 && NMIP > 0 */
 				/* Do we need a delay in this case? */
 				nd6_dad_start((struct ifaddr *)ifa, 0);
 			}
@@ -1631,12 +1629,12 @@ nd6_prefix_onlink(pr)
 	u_long rtflags;
 	int error = 0;
 	struct rtentry *rt = NULL;
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 	struct nd_ifinfo *ndi = ND_IFINFO(ifp);
 
 	if ((ndi->flags & ND6_IFF_DONT_SET_IFROUTE) != 0)
 		return (0);
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 
 	/* sanity check */
 	if ((pr->ndpr_stateflags & NDPRF_ONLINK) != 0) {

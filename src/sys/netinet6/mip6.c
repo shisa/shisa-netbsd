@@ -1,4 +1,4 @@
-/*	$Id: mip6.c,v 1.7 2007/01/26 13:07:00 keiichi Exp $	*/
+/*	$Id: mip6.c,v 1.8 2007/03/23 09:34:29 keiichi Exp $	*/
 
 /*
  * Copyright (C) 2004 WIDE Project.  All rights reserved.
@@ -37,7 +37,6 @@
 #ifdef __NetBSD__
 #include "opt_ipsec.h"
 #include "opt_inet.h"
-#include "opt_mip6.h"
 #endif
 
 #include <sys/param.h>

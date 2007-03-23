@@ -33,8 +33,6 @@
 #include <sys/cdefs.h>
 __KERNEL_RCSID(0, "$NetBSD: route6.c,v 1.16 2006/11/16 01:33:46 christos Exp $");
 
-#include "opt_mip6.h"
-
 #include <sys/param.h>
 #include <sys/mbuf.h>
 #include <sys/socket.h>
@@ -49,7 +47,7 @@ __KERNEL_RCSID(0, "$NetBSD: route6.c,v 1.16 2006/11/16 01:33:46 christos Exp $")
 #include <netinet6/ip6_var.h>
 #include <netinet6/scope6_var.h>
 
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 #include "mip.h"
 #include <netinet/ip6mh.h>
 #include <netinet6/mip6_var.h>
@@ -59,10 +57,10 @@ __KERNEL_RCSID(0, "$NetBSD: route6.c,v 1.16 2006/11/16 01:33:46 christos Exp $")
 
 static int ip6_rthdr0 __P((struct mbuf *, struct ip6_hdr *,
     struct ip6_rthdr0 *));
-#if defined(MIP6) && NMIP > 0
+#if defined(MOBILE_IPV6) && NMIP > 0
 static int ip6_rthdr2 __P((struct mbuf *, struct ip6_hdr *,
     struct ip6_rthdr2 *));
-#endif /* defined(MIP6) && NMIP > 0 */
+#endif /* defined(MOBILE_IPV6) && NMIP > 0 */
 
 int
 route6_input(struct mbuf **mp, int *offp, int proto)
@@ -98,7 +96,7 @@ route6_input(struct mbuf **mp, int *offp, int proto)
 		if (ip6_rthdr0(m, ip6, (struct ip6_rthdr0 *)rh))
 			return (IPPROTO_DONE);
 		break;
-#if defined(MIP6) && NMIP > 0
+#if defined(MOBILE_IPV6) && NMIP > 0
 	case IPV6_RTHDR_TYPE_2:
 		rhlen = (rh->ip6r_len + 1) << 3;
 		IP6_EXTHDR_GET(rh, struct ip6_rthdr *, m, off, rhlen);
@@ -109,7 +107,7 @@ route6_input(struct mbuf **mp, int *offp, int proto)
 		if (ip6_rthdr2(m, ip6, (struct ip6_rthdr2 *)rh)) 
 			return(IPPROTO_DONE);
 		break;
-#endif /* defined(MIP6) && NMIP > 0 */
+#endif /* defined(MOBILE_IPV6) && NMIP > 0 */
 	default:
 		/* unknown routing type */
 		if (rh->ip6r_segleft == 0) {
@@ -228,7 +226,7 @@ ip6_rthdr0(m, ip6, rh0)
 	return (-1);
 }
 
-#if defined(MIP6) && NMIP > 0
+#if defined(MOBILE_IPV6) && NMIP > 0
 /* Type2 routing header processing */
 static int
 ip6_rthdr2(struct mbuf *m, struct ip6_hdr *ip6, struct ip6_rthdr2 *rh2)
@@ -349,4 +347,4 @@ ip6_rthdr2(struct mbuf *m, struct ip6_hdr *ip6, struct ip6_rthdr2 *rh2)
 	return (-1);
 
 }
-#endif /* defined(MIP6) && NMIP > 0 */
+#endif /* defined(MOBILE_IPV6) && NMIP > 0 */

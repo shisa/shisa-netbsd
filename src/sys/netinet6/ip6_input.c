@@ -68,7 +68,6 @@ __KERNEL_RCSID(0, "$NetBSD: ip6_input.c,v 1.96 2007/02/22 08:39:27 dyoung Exp $"
 #include "opt_inet6.h"
 #include "opt_ipsec.h"
 #include "opt_pfil_hooks.h"
-#include "opt_mip6.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -510,19 +509,19 @@ ip6_input(struct mbuf *m)
 	    IN6_ARE_ADDR_EQUAL(&ip6->ip6_dst,
 	    &rt6_key(ip6_forward_rt.ro_rt)->sin6_addr) &&
 #endif
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 	    ((ip6_forward_rt.ro_rt->rt_flags & RTF_ANNOUNCE) ||
 	    ip6_forward_rt.ro_rt->rt_ifp->if_type == IFT_LOOP)
 #else
 	    ip6_forward_rt.ro_rt->rt_ifp->if_type == IFT_LOOP
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 	    ) {
 		struct in6_ifaddr *ia6 =
 			(struct in6_ifaddr *)ip6_forward_rt.ro_rt->rt_ifa;
 		if (ia6->ia6_flags & IN6_IFF_ANYCAST)
 			m->m_flags |= M_ANYCAST6;
 
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 		/* check unicast NS */
 		if ((ip6_forward_rt.ro_rt->rt_flags & RTF_ANNOUNCE) != 0) {
 			/* This route shows proxy nd. thus the packet was
@@ -543,7 +542,7 @@ ip6_input(struct mbuf *m)
 			if (icp->icmp6_type != ND_NEIGHBOR_SOLICIT)
 				goto mip6_forwarding;
 		}
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 		/*
 		 * record address information into m_tag.
 		 */
@@ -569,9 +568,9 @@ ip6_input(struct mbuf *m)
 		}
 	}
 
-#ifdef MIP6
+#ifdef MOBILE_IPV6
  mip6_forwarding:
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 
 	/*
 	 * FAITH (Firewall Aided Internet Translator)
@@ -846,10 +845,10 @@ ip6_input(struct mbuf *m)
 #endif /* FAST_IPSEC */
 
 
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 		if (dest6_mip6_hao(m, off, nxt) < 0)
 			goto bad;
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 		nxt = (*inet6sw[ip6_protox[nxt]].pr_input)(&m, &off, nxt);
 	}
 	return;

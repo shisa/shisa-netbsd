@@ -64,7 +64,6 @@
 __KERNEL_RCSID(0, "$NetBSD: rtsock.c,v 1.92 2007/02/18 22:46:32 matt Exp $");
 
 #include "opt_inet.h"
-#include "opt_mip6.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -786,7 +785,7 @@ rt_ifmsg(struct ifnet *ifp)
 #endif
 }
 
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 /*
  * This routine is called to generate a message from the routing
  * socket indicating that the status of a address has changed.
@@ -818,7 +817,7 @@ rt_addrinfomsg(struct ifaddr *ifa)
 	route_proto.sp_protocol = sa ? sa->sa_family : 0;
 	raw_input(m, &route_proto, &route_src, &route_dst);
 }
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 
 /*
  * This is called to generate messages from the routing socket

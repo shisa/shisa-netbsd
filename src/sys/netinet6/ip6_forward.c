@@ -35,7 +35,6 @@ __KERNEL_RCSID(0, "$NetBSD: ip6_forward.c,v 1.55 2007/02/17 22:34:13 dyoung Exp 
 
 #include "opt_ipsec.h"
 #include "opt_pfil_hooks.h"
-#include "opt_mip6.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -61,11 +60,11 @@ __KERNEL_RCSID(0, "$NetBSD: ip6_forward.c,v 1.55 2007/02/17 22:34:13 dyoung Exp 
 #include <netinet/icmp6.h>
 #include <netinet6/nd6.h>
 
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 #include <netinet/ip6mh.h>
 #include <netinet6/mip6.h>
 #include <netinet6/mip6_var.h>
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 
 #ifdef IPSEC
 #include <netinet6/ipsec.h>
@@ -121,9 +120,9 @@ ip6_forward(m, srcrt)
 	struct secpolicy *sp = NULL;
 	int ipsecrt = 0;
 #endif
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 	struct mip6_bc_internal *bce;
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 #ifdef FAST_IPSEC
     struct secpolicy *sp = NULL;
     int needipsec = 0;
@@ -131,7 +130,7 @@ ip6_forward(m, srcrt)
 #endif
 
 #ifdef IPSEC
-#if defined(MIP6) && NMIP > 0
+#if defined(MOBILE_IPV6) && NMIP > 0
 	{
 		/*
 		 * XXX skip IPsec policy integrity check if the next
@@ -149,7 +148,7 @@ ip6_forward(m, srcrt)
 				goto skip_ipsec6_in_reject;
 		}
 	}
-#endif /* MIP6 && NMIP > 0 */
+#endif /* MOBILE_IPV6 && NMIP > 0 */
 	/*
 	 * Check AH/ESP integrity.
 	 */
@@ -162,9 +161,9 @@ ip6_forward(m, srcrt)
 		m_freem(m);
 		return;
 	}
-#if defined(MIP6) && NMIP > 0
+#if defined(MOBILE_IPV6) && NMIP > 0
  skip_ipsec6_in_reject:
-#endif /* MIP6 && NMIP > 0 */
+#endif /* MOBILE_IPV6 && NMIP > 0 */
 #endif /* IPSEC */
 
 	/*
@@ -393,7 +392,7 @@ ip6_forward(m, srcrt)
 	}
 #endif /* FAST_IPSEC */
 
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 	/* This codes are only for Home Agent */
 	if (!MIP6_IS_HA) 
 		goto bc_check_done;
@@ -445,7 +444,7 @@ ip6_forward(m, srcrt)
 	bc_check_done:
 		;
 	}
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 
 	dst = &ip6_forward_rt.ro_dst;
 	if (!srcrt) {
@@ -658,12 +657,12 @@ ip6_forward(m, srcrt)
 			m_freem(m);
 			return;
 		}
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 		/* if the node is HA, redirect must not be sent.
 		   XXX this logic must be re-considerred.
 		   (e.g. lookup BCE or check state or something...) */
 		if (!MIP6_IS_HA) 
-#endif /* defined(MIP6) */
+#endif /* defined(MOBILE_IPV6) */
 		type = ND_REDIRECT;
 	}
 
