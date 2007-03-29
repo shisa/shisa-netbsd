@@ -40,7 +40,6 @@ __KERNEL_RCSID(0, "$NetBSD: key.c,v 1.152 2007/02/17 22:34:17 dyoung Exp $");
 #include "opt_inet.h"
 #include "opt_ipsec.h"
 #include "fs_kernfs.h"
-#include "opt_mip6.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
