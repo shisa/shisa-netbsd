@@ -1,4 +1,4 @@
-#	$NetBSD: BRANCHES,v 1.156 2007/02/27 14:50:40 ad Exp $
+#	$NetBSD: BRANCHES,v 1.170 2007/03/29 10:54:14 skrll Exp $
 #
 # This file contains a list of branches that exist in the NetBSD CVS
 # tree and their current state.
@@ -208,6 +208,40 @@ Notes:
 # Individual developers' branches (Active/Dormant):
 ########################################################################
 
+Branch:		ad-audiomp
+Description:	Add MP locking to the audio drivers
+Status:		Active
+Start Date:	28 Febuary 2007
+End Date:
+Base Tag:	ad-audiomp-base
+Maintainer:	Andrew Doran <ad@NetBSD.org>
+Scope:		kernel
+Notes:		Making the audio drivers MP safe is necessary before efforts
+		can be made to make the VM system MP safe. About 1/2 of the
+		drivers are converted, the remaining 1/2 need more changes.
+
+		As of import this is snapshot of work in progress and so
+		may not compile; in particular the midi changes are very
+		much "in progress". The audio component has been tested
+		and verified to work with emuxki and auvia. There may
+		be a locking issue in the ac97 code at boot.
+
+		The are two locks per device instance, an ISR lock and
+		a character device lock. The ISR lock replaces calls to
+		splaudio()/splx(), and will be held across calls to device
+		methods which were called at splaudio() before (e.g.
+		trigger_output). The character device lock is held across
+		calls to nearly all of the methods, excluding some only
+		used for initializtion, e.g. get_locks. This needs to be
+		documented at merge time.
+
+		To test on a multi way x86 system, search for "mpsafe" in
+		x86/x86/intr.c and change IPL_SCHED to IPL_AUDIO. Run a job
+		that will acquire the ISR lock (depends on the hardware, but
+		"while true; do mixerctl -a > /dev/null; done" may suffice).
+		Play audio, run lockstat and verify that that there is
+		contention on the ISR lock.
+
 Branch:		bjh21-hydra
 Description:	Simtec Hydra support and ARM SMP in general
 Status:		Dormant
@@ -383,6 +417,55 @@ Notes:		Kernels built from this branch are not expected
 			alpha
 			i386
 
+Branch:		vmlocking
+Description:	Make memory allocators and trap handling MP safe
+Status:		Active
+Start Date:	13 March 2007
+End Date:
+Base Tag:	vmlocking-base
+Maintainer:	Andrew Doran <ad@NetBSD.org>
+Scope:		kernel
+Notes:
+		- Replace all simplelocks with mutexes
+		- Remove spinlockmgr
+		- Make memory allocators MP safe
+		- Make trap handling MP safe: push kernel lock acquire
+		  back into pager ops.
+
+		Only i386 is currently update.  Most per architecture
+		changes need to be made in the pmap module.  LFS is not
+		currently stable due interaction between the pagedaemon (?)
+		and the HOLDRELE() in lfs_segment.c.  It may trash your
+		filesystem..
+
+		Most of the locks replaced are now sleep/adaptive locks or
+		spin locks at IPL_VM.  Assuming audio interrupt handlers
+		are made MP safe there are far fewer potential deadlocks
+		against the kernel lock.
+
+		v_interlock becomes an adaptive mutex so now acquring
+		it can potentially block, similarly for other locks
+		that were before simplelocks.  This needs to be audited
+		carefully.
+
+		Use vnodes in general needs to be audited, as vnodes can
+		now be inspected without the kernel lock held.
+
+		Acquiring locks in the pmap module can now block, meaning
+		that the current pmap, cpu or lazy pmap status can change
+		out from underneath the requestor.  This also needs to be
+		audited.
+
+		Currently, i386 has the necessary modifications, and has
+		trap handling and a few calls to allocators out from under
+		the kernel lock.  There are still problems that need to be
+		debugged.
+
+		Need to check that whenever a lock is initialized, it is
+		also destroyed.
+
+		Lots of testing required.
+
 Branch:		yamt-idlelwp
 Description:	idle lwp, and some changes depending on it.
 
@@ -396,10 +479,51 @@ Description:	idle lwp, and some changes depending on it.
 Status:		Active
 Start Date:	Fri Feb 17 2007
 End Date:	
-Base Tag:	yamt-idlelwp-base
+Base Tag:	yamt-idlelwp-base4
 Maintainer:	YAMAMOTO Takashi <yamt@NetBSD.org>
 Scope:		src/sys  (src/common is tagged but not branched)
 Notes:		
+		Status of ports (minimal goals):
+		  alpha			[ Done,
+					  UP tested, MP not tested ]
+		  i386			[ Done, tested ]
+		  amd64			[ Done, tested ]
+		  mips			[ WIP ]
+		  sparc			[ Not yet ]
+		  sparc64		[ Not yet ]
+		  arm			[ Done.
+					  SA1 tested. ]
+		  macppc/powerpc	[ Not yet ]
+		  hppa			[ WIP ]
+		  sh3			[ Done, tested ]
+
+		How to adapt a port?
+
+		- unify cpu_switch, cpu_exit, cpu_switchto into
+		  a single cpu_switchto.  see cpu_switchto.9.
+
+		- implement cpu_idle.  see cpu_idle.9.
+
+		- add a flag argument to cpu_need_resched.
+		  handle RESCHED_IMMED flag, which means "cause a preemption
+		  as soon as possible."  eg. in the case of MULTIPROCESSOR,
+		  send an IPI to the target cpu.
+
+		- "curlwp == NULL" is not a valid check for idle state anymore.
+		  use "(curlwp->l_flag & LW_IDLE) != 0" instead.  curlwp is
+		  almost always non-NULL, with exceptions like early on boot.
+
+		- remove idle pcbs.
+
+		- (if MULTIPROCESSOR) tweak processor trampoline code.
+
+		- (if MULTIPROCESSOR) call mi_cpu_attach when attaching
+		  secondary processors.
+
+		- (if schedhz!=0) call schedclock regardless of the value of
+		  curlwp.
+
+		- of course, update MD users of scheduler/switching API.
 
 Branch:		yamt-lazymbuf
 Description:	implement and evaluate lazy mapping of mbuf external data pages
@@ -413,10 +537,43 @@ Description:	implement and evaluate lazy mapping of mbuf external data pages
 Status:		Active
 Start Date:	Wed Jul  6 2005
 End Date:	
-Base Tag:	yamt-lazymbuf-base3
+Base Tag:	yamt-lazymbuf-base4
 Maintainer:	YAMAMOTO Takashi <yamt@NetBSD.org>
 Scope:		src/sys  (src/common is tagged but not branched)
 Notes:		
+
+Branch:		reinoud-bufcleanup
+Description:	implement and evaluate struct buf usage cleanup strategies.
+		Ideas currently in mind (preference for b):
+		a)
+			1. use of bio_ops per buffer.
+			2. allow chaining/overloading of functions in bio_ops
+			   and provide some private context.
+			3. extend the bio_ops with commenly used functionality
+			   like pending action counting, custom context passing,
+			   last minute processing of buffer data, buffer cache
+			   etc.
+			4. investigate the use of the kcont()
+			   continuation-passing framework for async io
+			   completion notification for bufs
+			...
+		b)
+			1. all sequencing use of B_CALL replaced by
+			   device-threads, if possible generic code around BUFQ
+			2. possibly use kcont() for async IO finished signalling
+			3. counter of pending and queued actions requestable
+			   by IOCTL interface?
+			4. implement `last minute buffer fixup' calls and maybe
+			   even finished I/O calls as vnode operations
+			...
+Status:		Active
+Start Date:	Thu Mar 15 2007
+End Date:
+Base Tag:	reinoud-bufcleanup-base
+Maintainer:	Reinoud Zandijk <reinoud@NetBSD.org>
+Scope:		src/sys and src/common
+Notes:		Used as expiriment sandbox and if successful hopefully one day
+		to be intergrated.
 
 
 ########################################################################
@@ -616,6 +773,16 @@ Scope:		basesrc, syssrc, sharesrc
 Notes:		Citrus Project is developing dynamically-loadable, codeset-
 		independent locale subsystem.  Part of the implementation
 		(LC_CTYPE) called XPG4DL is now integrated to -current.
+
+Branch:		mjf-ufs-trans
+Description:	filesystem transactions for ufs
+Status:		Active
+Start Date:	12 March 2007
+End Date:
+Base Tag:	mjf-ufs-trans-base
+Maintainer:	Matt Fleming <mjf@NetBSD.org>
+Scope:		kernel
+Notes:
 
 Branch:		mrg-vm-swap
 Description:	dynamic swap allocation, swap-to-files support
@@ -1114,40 +1281,6 @@ Maintainer:	Garrett D'Amore <gdamore@NetBSD.org>
 Scope:		kernel
 Notes:		Results in consolidation of Alchemy (mips/dev/alchemy/aucom.c)
 		com support, and also removes a nasty hack from Atheros com.
-
-Branch:		ad-audiomp
-Description:	Add MP locking to the audio drivers
-Status:		Active
-Start Date:	28 Febuary 2006
-End Date:
-Base Tag:	ad-audiomp-base
-Maintainer:	Andrew Doran <ad@NetBSD.org>
-Scope:		kernel
-Notes:		Making the audio drivers MP safe is necessary before efforts
-		can be made to make the VM system MP safe. About 1/2 of the
-		drivers are converted, the remaining 1/2 need more changes.
-
-		As of import this is snapshot of work in progress and so
-		may not compile; in particular the midi changes are very
-		much "in progress". The audio component has been tested
-		and verified to work with emuxki and auvia. There may
-		be a locking issue in the ac97 code at boot.
-
-		The are two locks per device instance, an ISR lock and
-		a character device lock. The ISR lock replaces calls to
-		splaudio()/splx(), and will be held across calls to device
-		methods which were called at splaudio() before (e.g.
-		trigger_output). The character device lock is held across
-		calls to nearly all of the methods, excluding some only
-		used for initializtion, e.g. get_locks. This needs to be
-		documented at merge time.
-
-		To test on a multi way x86 system, search for "mpsafe" in
-		x86/x86/intr.c and change IPL_SCHED to IPL_AUDIO. Run a job
-		that will acquire the ISR lock (depends on the hardware, but
-		"while true; do mixerctl -a > /dev/null; done" may suffice).
-		Play audio, run lockstat and verify that that there is
-		contention on the ISR lock.
 
 ########################################################################
 # Other:

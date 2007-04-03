@@ -1,4 +1,4 @@
-#	$NetBSD: mi,v 1.1013 2007/02/28 16:23:22 xtraeme Exp $
+#	$NetBSD: mi,v 1.1018 2007/03/22 17:41:30 pooka Exp $
 ./etc/mtree/set.comp				comp-sys-root
 ./usr/bin/addr2line				comp-debug-bin		bfd
 ./usr/bin/ar					comp-util-bin		bfd
@@ -535,6 +535,10 @@
 ./usr/include/fnmatch.h				comp-c-include
 ./usr/include/form.h				comp-c-include
 ./usr/include/frame.h				comp-obsolete		obsolete
+./usr/include/fs/hfs/hfs.h			comp-c-inlcude
+./usr/include/fs/hfs/libhfs.h			comp-c-inlcude
+./usr/include/fs/hfsp/hfsp.h			comp-obsolete		obsolete
+./usr/include/fs/hfsp/libhfsp.h			comp-obsolete		obsolete
 ./usr/include/fs/puffs/puffs_msgif.h		comp-c-include
 ./usr/include/fs/sysvbfs/bfs.h			comp-c-include
 ./usr/include/fs/udf/ecma167-udf.h		comp-c-include
@@ -1866,6 +1870,7 @@
 ./usr/include/sys/signal.h			comp-c-include
 ./usr/include/sys/signalvar.h			comp-c-include
 ./usr/include/sys/sigtypes.h			comp-c-include
+./usr/include/sys/simplelock.h			comp-c-include
 ./usr/include/sys/sleepq.h			comp-c-include
 ./usr/include/sys/socket.h			comp-c-include
 ./usr/include/sys/socketvar.h			comp-c-include
@@ -2241,6 +2246,7 @@
 ./usr/libdata/debug/bin/test.debug		comp-util-debug		debug
 ./usr/libdata/debug/libexec/lfs_cleanerd.debug	comp-sysutil-debug	debug
 ./usr/libdata/debug/sbin/amrctl.debug		comp-sysutil-debug	debug
+./usr/libdata/debug/sbin/apmlabel.debug		comp-sysutil-debug	debug
 ./usr/libdata/debug/sbin/atactl.debug		comp-sysutil-debug	debug
 ./usr/libdata/debug/sbin/badsect.debug		comp-sysutil-debug	debug
 ./usr/libdata/debug/sbin/brconfig.debug		comp-netutil-debug	debug
@@ -2250,6 +2256,7 @@
 ./usr/libdata/debug/sbin/dhclient.debug		comp-dhclient-debug	debug
 ./usr/libdata/debug/sbin/disklabel.debug	comp-sysutil-debug	debug
 ./usr/libdata/debug/sbin/dkctl.debug		comp-sysutil-debug	debug
+./usr/libdata/debug/sbin/dkscan_bsdlabel.debug	comp-sysutil-debug	debug
 ./usr/libdata/debug/sbin/dmesg.debug		comp-sysutil-debug	debug
 ./usr/libdata/debug/sbin/drvctl.debug		comp-sysutil-debug	debug
 ./usr/libdata/debug/sbin/dump.debug		comp-sysutil-debug	debug
@@ -2277,6 +2284,7 @@
 ./usr/libdata/debug/sbin/mount_fdesc.debug	comp-miscfs-debug	debug
 ./usr/libdata/debug/sbin/mount_ffs.debug	comp-sysutil-debug	debug
 ./usr/libdata/debug/sbin/mount_filecore.debug	comp-filecorefs-debug	debug
+./usr/libdata/debug/sbin/mount_hfs.debug	comp-hfs-debug		debug
 ./usr/libdata/debug/sbin/mount_kernfs.debug	comp-sysutil-debug	debug
 ./usr/libdata/debug/sbin/mount_lfs.debug	comp-sysutil-debug	debug
 ./usr/libdata/debug/sbin/mount_msdos.debug	comp-sysutil-debug	debug
@@ -2793,6 +2801,7 @@
 ./usr/libdata/debug/usr/sbin/btcontrol.debug	comp-obsolete		obsolete
 ./usr/libdata/debug/usr/sbin/btdevctl.debug	comp-sysutil-debug	debug
 ./usr/libdata/debug/usr/sbin/bthcid.debug	comp-sysutil-debug	debug
+./usr/libdata/debug/usr/sbin/btuartd.debug	comp-sysutil-debug	debug
 ./usr/libdata/debug/usr/sbin/catman.debug	comp-man-debug		debug
 ./usr/libdata/debug/usr/sbin/chat.debug		comp-ppp-debug		debug
 ./usr/libdata/debug/usr/sbin/chown.debug	comp-sysutil-debug	debug
@@ -5643,6 +5652,7 @@
 ./usr/share/man/cat3/ptsname.0			comp-c-catman		.cat
 ./usr/share/man/cat3/puffs.0			comp-c-catman		.cat
 ./usr/share/man/cat3/puffs_cc.0			comp-c-catman		.cat
+./usr/share/man/cat3/puffs_cred.0		comp-c-catman		.cat
 ./usr/share/man/cat3/puffs_flush.0		comp-c-catman		.cat
 ./usr/share/man/cat3/puffs_node.0		comp-c-catman		.cat
 ./usr/share/man/cat3/puffs_path.0		comp-c-catman		.cat
@@ -9969,6 +9979,7 @@
 ./usr/share/man/man3/ptsname.3			comp-c-man		.man
 ./usr/share/man/man3/puffs.3			comp-c-man		.man
 ./usr/share/man/man3/puffs_cc.3			comp-c-man		.man
+./usr/share/man/man3/puffs_cred.3		comp-c-man		.man
 ./usr/share/man/man3/puffs_flush.3		comp-c-man		.man
 ./usr/share/man/man3/puffs_node.3		comp-c-man		.man
 ./usr/share/man/man3/puffs_path.3		comp-c-man		.man

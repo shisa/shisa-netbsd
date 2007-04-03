@@ -1,4 +1,4 @@
-#	$NetBSD: NetBSD.dist,v 1.332 2007/01/20 16:50:29 kardel Exp $
+#	$NetBSD: NetBSD.dist,v 1.337 2007/03/14 15:49:25 tnozaki Exp $
 #	@(#)4.4BSD.dist	8.1 (Berkeley) 6/13/93
 
 # Do not customize this file as it may be overwritten on upgrades.
@@ -499,6 +499,7 @@
 ./usr/share/i18n/csmapper/ISO-8859
 ./usr/share/i18n/csmapper/ISO646
 ./usr/share/i18n/csmapper/JIS
+./usr/share/i18n/csmapper/KAZAKH
 ./usr/share/i18n/csmapper/KOI
 ./usr/share/i18n/csmapper/KS
 ./usr/share/i18n/csmapper/MISC
@@ -515,6 +516,7 @@
 ./usr/share/i18n/esdb/ISO-2022
 ./usr/share/i18n/esdb/ISO-8859
 ./usr/share/i18n/esdb/ISO646
+./usr/share/i18n/esdb/KAZAKH
 ./usr/share/i18n/esdb/KOI
 ./usr/share/i18n/esdb/MISC
 ./usr/share/i18n/esdb/TCVN
@@ -641,6 +643,8 @@
 ./usr/share/locale/nl_NL.ISO8859-15
 ./usr/share/locale/nn
 ./usr/share/locale/nn/LC_MESSAGES
+./usr/share/locale/nn_NO.ISO8859-1
+./usr/share/locale/nn_NO.ISO8859-15
 ./usr/share/locale/no
 ./usr/share/locale/no/LC_MESSAGES
 ./usr/share/locale/no@nynorsk
@@ -683,6 +687,7 @@
 ./usr/share/locale/sv_SE.ISO8859-15
 ./usr/share/locale/tr
 ./usr/share/locale/tr/LC_MESSAGES
+./usr/share/locale/tr_TR.ISO8859-9
 ./usr/share/locale/uk
 ./usr/share/locale/uk/LC_MESSAGES
 ./usr/share/locale/uk_UA.CP1251
@@ -692,6 +697,7 @@
 ./usr/share/locale/zh_CN.GB18030
 ./usr/share/locale/zh_CN.eucCN
 ./usr/share/locale/zh_CN/LC_MESSAGES
+./usr/share/locale/zh_HK.Big5-HKSCS
 ./usr/share/locale/zh_TW
 ./usr/share/locale/zh_TW.Big5
 ./usr/share/locale/zh_TW.eucTW
@@ -727,6 +733,7 @@
 ./usr/share/man/cat4/pc532
 ./usr/share/man/cat4/pmax
 ./usr/share/man/cat4/pmppc
+./usr/share/man/cat4/prep
 ./usr/share/man/cat4/sgimips
 ./usr/share/man/cat4/sparc
 ./usr/share/man/cat4/sparc64
@@ -834,6 +841,7 @@
 ./usr/share/man/man4/pc532
 ./usr/share/man/man4/pmax
 ./usr/share/man/man4/pmppc
+./usr/share/man/man4/prep
 ./usr/share/man/man4/sgimips
 ./usr/share/man/man4/sparc
 ./usr/share/man/man4/sparc64
@@ -941,6 +949,7 @@
 ./usr/share/man/html4/pc532
 ./usr/share/man/html4/pmax
 ./usr/share/man/html4/pmppc
+./usr/share/man/html4/prep
 ./usr/share/man/html4/sgimips
 ./usr/share/man/html4/sparc
 ./usr/share/man/html4/sparc64

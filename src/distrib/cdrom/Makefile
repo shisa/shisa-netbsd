@@ -1,4 +1,4 @@
-# $NetBSD: Makefile,v 1.30 2007/02/20 18:09:05 mrg Exp $
+# $NetBSD: Makefile,v 1.34 2007/03/08 13:51:37 bouyer Exp $
 #
 # Consult "*.conf" for the configuration variables; this Makefile is typically
 # not edited for basic configuration changes.
@@ -79,8 +79,11 @@ VAX_IBOOT?=	${TOOL_INSTALLBOOT} -m vax -o sunsum,append
 MACPPC_IBOOTDIR!= cd ${.CURDIR}/macppc_installboot && ${PRINTOBJDIR}
 MACPPC_MKBOOTHFSDIR!= cd ${.CURDIR}/macppc_mkboothfs && ${PRINTOBJDIR}
 .endif
+.if !empty(ALL_PORTS:Msgimips)
+SGIMIPS_SGIVOL?=	${TOOLDIR}/bin/nbsgivol
+.endif
 
-RSYNC_SITE?=	rsync://rsync.NetBSD.org/NetBSD/${RELEASENAME}/
+RSYNC_SITE?=	rsync://rsync.NetBSD.org/NetBSD/${RELEASENAME}
 RSYNC_ARGS?=	-va --delete
 RSYNC_EXCLUDE+=	--exclude=/* --exclude=Split --exclude=cdrom
 
@@ -215,13 +218,25 @@ BASE_PORTS.${image}:=	${bports:O:u}
 # i386
 
 .if !empty(ports:Mi386)
+.if empty(INTFILES.i386:Mbootxx_cd9660)
+# non-emulation boot
+MKISOFS_ARGS.${image}+=	-b ${BOOTFILE.i386} -c boot.catalog -no-emul-boot
+.else
+#2.88MB emulation boot
 MKISOFS_ARGS.${image}+=	-b ${BOOTFILE.i386} -c boot.catalog
+.endif
 .endif
 
 # amd64
 
 .if !empty(ports:Mamd64)
+.if empty(INTFILES.amd64:Mbootxx_cd9660)
+# non-emulation boot
+MKISOFS_ARGS.${image}+=	-b ${BOOTFILE.amd64} -c boot.catalog -no-emul-boot
+.else
+#2.88MB emulation boot
 MKISOFS_ARGS.${image}+= -b ${BOOTFILE.amd64} -c boot.catalog
+.endif
 .endif
         
 # Mac (mac68k, macppc)
@@ -365,13 +380,8 @@ ${file:C/^.*://}: .PHONY
 .if !empty(BASE_PORTS.${image}:Mmacppc)
 size-${image}: all-macppc_mkboothfs all-macppc_installboot
 .endif
-.if !empty(BASE_PORTS.${image}:Msgimips) && defined(EXTFILES.sgimips)
-SGIVOLHDR.size= ( fgrep SGI_BOOT_BLOCK_SIZE_VOLHDR \
-		${EXTFILEDIR}/sgimips.bootblock.h | \
-		 sed -e 's/[^0-9]*//' )
-.else
-SGIVOLHDR.size= echo 0
-.endif
+
+SGIVOLHDR.size= 4096
 
 size-${image}: stage-${image} extfileprep fileprep-${image}
 .if !empty(BASE_PORTS.${image}:Mmacppc)
@@ -392,9 +402,9 @@ size-${image}: stage-${image} extfileprep fileprep-${image}
 	if [ "${BASE_PORTS.${image}:Mvax}" != "" ]; then \
 		size=$$(($$size + $$(($$((`ls -l ${BOOTFILE.vax} | awk '{print $$5}'` + 511)) / 512 * 512)))); \
 	fi && \
-	if [ "${BASE_PORTS.${image}:Msgimips}" != "" && \
+	if [ "${BASE_PORTS.${image}:Msgimips}" != "" -a \
 	    "${EXTFILES.sgimips}" != "" ]; then \
-		size=$$(($$size + ${SGIVOLHDR.size:sh} * 512)); \
+		size=$$(($$size + ${SGIVOLHDR.size} * 512)); \
 	fi && \
 	size=$$(($$(($$size + 16383)) / 16384 * 16384 + 32768)) && \
 	sizek=$$(($$size / 1024)) && \
@@ -430,14 +440,15 @@ ${IMAGEDIR}/${image}.iso: size-${image}
 .endif
 .if !empty(BASE_PORTS.${image}:Msgimips) && defined(EXTFILES.sgimips)
 	@echo "Prepending SGI volume header"
-	cp $@ $@.tmp
-	dd if=/dev/zero bs=512 count=${SGIVOLHDR.size:sh} >> $@
-	${TOOLDIR}/bin/nbsgivol -f -i $@
-	${TOOLDIR}/bin/nbsgivol -f -w aoutboot ${STAGEDIR}/${image}/aoutboot $@
-	${TOOLDIR}/bin/nbsgivol -f -w ip2xboot ${STAGEDIR}/${image}/ip2xboot $@
-	${TOOLDIR}/bin/nbsgivol -f -w ip3xboot ${STAGEDIR}/${image}/ip3xboot $@
-	dd if=$@.tmp of=$@ bs=512 seek=${SGIVOLHDR.size:sh}
-	rm -f $@.tmp
+	mv $@ $@.raw
+	dd if=/dev/zero of=$@.tmp bs=512 count=${SGIVOLHDR.size}
+	dd if=$@.raw of=$@.tmp bs=512 seek=${SGIVOLHDR.size}
+	${SGIMIPS_SGIVOL} -f -i -h ${SGIVOLHDR.size} $@.tmp
+	${SGIMIPS_SGIVOL} -f -w aoutboot ${STAGEDIR}/${image}/aoutboot $@.tmp
+	${SGIMIPS_SGIVOL} -f -w ip2xboot ${STAGEDIR}/${image}/ip2xboot $@.tmp
+	${SGIMIPS_SGIVOL} -f -w ip3xboot ${STAGEDIR}/${image}/ip3xboot $@.tmp
+	mv $@.tmp $@
+	rm -f $@.raw $@.tmp
 .endif
 	@echo Rounding up to 32k boundary and padding 32k....
 	@size=`ls -l $@ | awk '{print $$5}'` && \

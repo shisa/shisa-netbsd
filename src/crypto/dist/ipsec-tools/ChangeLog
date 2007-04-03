@@ -1,3 +1,34 @@
+2007-03-26  Yvan Vanhullebus  <vanhu@netasq.com>
+	* src/racoon/isakmp_inf.c: Store the DPD main scheduler in ph1
+	  handler, to be able to cancel it when removing the handler, and
+	  some minor cleanups in DPD code.
+
+2007-03-23  Yvan Vanhullebus  <vanhu@netasq.com>
+	* src/racoon/{oakley.c|racoon.conf.5}: give more details about
+	  what is checked when using certificates to authenticate. Patch
+	  by Cyrus Rahman.
+	* src/racoon/handler.c: expire zombie handlers in getph2byid(), to
+	  avoid situations where we'll never negociate a phase2
+	  again. Would be better to find out why do we have such zombies !!
+	* src/racoon/{ipsec_doi.c|security.c}: fixed a segfault when using
+	  security labels between a 32bit and a 64bit host. Patch by
+	  Joy Latten.
+
+2007-03-22  Yvan Vanhullebus  <vanhu@netasq.com>
+	* src/racoon/{ipsec_doi.c|cfparse.y}: fixed subnet check to
+	  generate IPV4_ADDRESS when needed in sockaddr2id().
+
+2007-03-21  Yvan Vanhullebus  <vanhu@netasq.com>
+	* src/racoon/schedule.h: checks if arg is NULL in SCHED_KILL.
+	* src/racoon/{handler.c|isakmp.c|isakmp_inf.c|pfkey.c}: NULL sched
+	  check is now done in SCHED_KILL.
+
+2007-03-15  Yvan Vanhullebus  <vanhu@netasq.com>
+	* src/racoon/isakmp.c: Consider a negociation timeout when
+	  retry_counter is <=0 instead of < 0.
+	* src/racoon/grabmyaddr.c: enable monitoring of ipv6 addresse
+	  changes on linux. Patch by Yves-Alexis Perez.
+
 2007-02-27  Matthew Grooms  <mgrooms@shrew.net>
 	* src/racoon/ipsec_doi.c: add logic to match ip address ids to
 	  ip subnet ids when appropriate. reported by Yvan.

@@ -1,4 +1,4 @@
-/*	$NetBSD: ipsec_doi.c,v 1.27 2007/02/28 05:36:45 mgrooms Exp $	*/
+/*	$NetBSD: ipsec_doi.c,v 1.29 2007/03/23 15:43:19 vanhu Exp $	*/
 
 /* Id: ipsec_doi.c,v 1.55 2006/08/17 09:20:41 vanhu Exp */
 
@@ -3123,9 +3123,13 @@ setph2proposal0(iph2, pp, pr)
 				iph2->sainfo->pfs_group);
 
 #ifdef HAVE_SECCTX
-		if (*pp->sctx.ctx_str) 
+		if (*pp->sctx.ctx_str) {
+			struct security_ctx secctx;
+			secctx = pp->sctx;
+			secctx.ctx_strlen = htons(pp->sctx.ctx_strlen);
 			x = isakmp_set_attr_v(x, IPSECDOI_ATTR_SECCTX,
-					     (caddr_t)&pp->sctx, truectxlen);
+					     (caddr_t)&secctx, truectxlen);
+		}
 #endif
 		/* update length of this transform. */
 		trns = (struct isakmp_pl_t *)(p->v + trnsoff);
@@ -4107,7 +4111,7 @@ ipsecdoi_sockaddr2id(saddr, prefixlen, ul_proto)
 	switch (saddr->sa_family) {
 	case AF_INET:
 		len1 = sizeof(struct in_addr);
-		if (prefixlen == ~0) {
+		if (prefixlen == (sizeof(struct in_addr) << 3)) {
 			type = IPSECDOI_ID_IPV4_ADDR;
 			len2 = 0;
 		} else {
@@ -4120,7 +4124,7 @@ ipsecdoi_sockaddr2id(saddr, prefixlen, ul_proto)
 #ifdef INET6
 	case AF_INET6:
 		len1 = sizeof(struct in6_addr);
-		if (prefixlen == ~0) {
+		if (prefixlen == (sizeof(struct in6_addr) << 3)) {
 			type = IPSECDOI_ID_IPV6_ADDR;
 			len2 = 0;
 		} else {
@@ -4770,6 +4774,7 @@ ipsecdoi_t2satrns(t, pp, pr, tr)
 		{
 			int len = ntohs(d->lorv);
 			memcpy(&pp->sctx, d + 1, len);
+			pp->sctx.ctx_strlen = ntohs(pp->sctx.ctx_strlen);
 			break;
 		}
 #endif /* HAVE_SECCTX */
