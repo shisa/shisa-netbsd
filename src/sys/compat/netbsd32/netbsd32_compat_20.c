@@ -1,4 +1,4 @@
-/*	$NetBSD: netbsd32_compat_20.c,v 1.7 2007/02/09 21:55:22 ad Exp $	*/
+/*	$NetBSD: netbsd32_compat_20.c,v 1.10 2007/03/18 21:38:33 dsl Exp $	*/
 
 /*
  * Copyright (c) 1998, 2001 Matthew R. Green
@@ -29,7 +29,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: netbsd32_compat_20.c,v 1.7 2007/02/09 21:55:22 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: netbsd32_compat_20.c,v 1.10 2007/03/18 21:38:33 dsl Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -97,11 +97,11 @@ compat_20_netbsd32_getfsstat(l, v, retval)
 	struct mount *mp, *nmp;
 	struct statvfs *sp;
 	struct netbsd32_statfs sb32;
-	caddr_t sfsp;
+	void *sfsp;
 	long count, maxcount, error;
 
 	maxcount = SCARG(uap, bufsize) / sizeof(struct netbsd32_statfs);
-	sfsp = (caddr_t)NETBSD32PTR64(SCARG(uap, buf));
+	sfsp = SCARG_P32(uap, buf);
 	simple_lock(&mountlist_slock);
 	count = 0;
 	for (mp = mountlist.cqh_first; mp != (void *)&mountlist; mp = nmp) {
@@ -133,7 +133,7 @@ compat_20_netbsd32_getfsstat(l, v, retval)
 				vfs_unbusy(mp);
 				return (error);
 			}
-			sfsp += sizeof(sb32);
+			sfsp = (char *)sfsp + sizeof(sb32);
 		}
 		count++;
 		simple_lock(&mountlist_slock);
@@ -164,8 +164,7 @@ compat_20_netbsd32_statfs(l, v, retval)
 	int error;
 	struct nameidata nd;
 
-	NDINIT(&nd, LOOKUP, FOLLOW, UIO_USERSPACE,
-	    (char *)NETBSD32PTR64(SCARG(uap, path)), l);
+	NDINIT(&nd, LOOKUP, FOLLOW, UIO_USERSPACE, SCARG_P32(uap, path), l);
 	if ((error = namei(&nd)) != 0)
 		return (error);
 	mp = nd.ni_vp->v_mount;
@@ -175,8 +174,7 @@ compat_20_netbsd32_statfs(l, v, retval)
 		return (error);
 	sp->f_flag = mp->mnt_flag & MNT_VISFLAGMASK;
 	compat_20_netbsd32_from_statvfs(sp, &s32);
-	return (copyout(&s32, (caddr_t)NETBSD32PTR64(SCARG(uap, buf)),
-	    sizeof(s32)));
+	return copyout(&s32, SCARG_P32(uap, buf), sizeof(s32));
 }
 
 int
@@ -205,8 +203,7 @@ compat_20_netbsd32_fstatfs(l, v, retval)
 		goto out;
 	sp->f_flag = mp->mnt_flag & MNT_VISFLAGMASK;
 	compat_20_netbsd32_from_statvfs(sp, &s32);
-	error = copyout(&s32, (caddr_t)NETBSD32PTR64(SCARG(uap, buf)),
-	    sizeof(s32));
+	error = copyout(&s32, SCARG_P32(uap, buf), sizeof(s32));
  out:
 	FILE_UNUSE(fp, l);
 	return (error);

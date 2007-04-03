@@ -1,4 +1,4 @@
-/*	$NetBSD: pmap.c,v 1.160 2007/02/22 05:14:05 thorpej Exp $	*/
+/*	$NetBSD: pmap.c,v 1.162 2007/03/12 18:18:24 ad Exp $	*/
 
 /*
  * Copyright 2003 Wasabi Systems, Inc.
@@ -212,7 +212,7 @@
 #include <machine/param.h>
 #include <arm/arm32/katelib.h>
 
-__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.160 2007/02/22 05:14:05 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.162 2007/03/12 18:18:24 ad Exp $");
 
 #ifdef PMAP_DEBUG
 
@@ -307,7 +307,7 @@ static paddr_t pmap_kernel_l2ptp_phys;
 static pt_entry_t *csrc_pte, *cdst_pte;
 static vaddr_t csrcp, cdstp;
 char *memhook;
-extern caddr_t msgbufaddr;
+extern void *msgbufaddr;
 
 /*
  * Flag to indicate if pmap_init() has done its thing
@@ -3999,7 +3999,7 @@ pmap_bootstrap(pd_entry_t *kernel_l1pt, vaddr_t vstart, vaddr_t vend)
 	 * Initialize the pmap pool and cache
 	 */
 	pool_init(&pmap_pmap_pool, sizeof(struct pmap), 0, 0, 0, "pmappl",
-	    &pool_allocator_nointr);
+	    &pool_allocator_nointr, IPL_NONE);
 	pool_cache_init(&pmap_pmap_cache, &pmap_pmap_pool,
 	    pmap_pmap_ctor, NULL, NULL);
 	LIST_INIT(&pmap_pmaps);
@@ -4009,13 +4009,13 @@ pmap_bootstrap(pd_entry_t *kernel_l1pt, vaddr_t vstart, vaddr_t vend)
 	 * Initialize the pv pool.
 	 */
 	pool_init(&pmap_pv_pool, sizeof(struct pv_entry), 0, 0, 0, "pvepl",
-	    &pmap_bootstrap_pv_allocator);
+	    &pmap_bootstrap_pv_allocator, IPL_NONE);
 
 	/*
 	 * Initialize the L2 dtable pool and cache.
 	 */
 	pool_init(&pmap_l2dtable_pool, sizeof(struct l2_dtable), 0, 0, 0,
-	    "l2dtblpl", NULL);
+	    "l2dtblpl", NULL, IPL_NONE);
 	pool_cache_init(&pmap_l2dtable_cache, &pmap_l2dtable_pool,
 	    pmap_l2dtable_ctor, NULL, NULL);
 
@@ -4023,7 +4023,7 @@ pmap_bootstrap(pd_entry_t *kernel_l1pt, vaddr_t vstart, vaddr_t vend)
 	 * Initialise the L2 descriptor table pool and cache
 	 */
 	pool_init(&pmap_l2ptp_pool, L2_TABLE_SIZE_REAL, 0, L2_TABLE_SIZE_REAL,
-	    0, "l2ptppl", NULL);
+	    0, "l2ptppl", NULL, IPL_NONE);
 	pool_cache_init(&pmap_l2ptp_cache, &pmap_l2ptp_pool,
 	    pmap_l2ptp_ctor, NULL, NULL);
 

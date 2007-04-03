@@ -1,4 +1,4 @@
-/*      $NetBSD: subr.c,v 1.10 2007/02/27 14:17:14 pooka Exp $        */
+/*      $NetBSD: subr.c,v 1.12 2007/03/22 13:11:00 pooka Exp $        */
         
 /*      
  * Copyright (c) 2006  Antti Kantee.  All Rights Reserved.
@@ -30,7 +30,7 @@
         
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: subr.c,v 1.10 2007/02/27 14:17:14 pooka Exp $");
+__RCSID("$NetBSD: subr.c,v 1.12 2007/03/22 13:11:00 pooka Exp $");
 #endif /* !lint */
 
 #include <assert.h>
@@ -166,6 +166,49 @@ readdir_getattr(struct psshfs_ctx *pctx, struct psshfs_node *psn,
 #endif
 
 int
+getpathattr(struct puffs_cc *pcc, const char *path, struct vattr *vap)
+{
+	PSSHFSAUTOVAR(pcc);
+
+	psbuf_req_str(pb, SSH_FXP_LSTAT, reqid, path);
+	pssh_outbuf_enqueue(pctx, pb, pcc, reqid);
+	puffs_cc_yield(pcc);
+
+	rv = psbuf_expect_attrs(pb, vap);
+
+	PSSHFSRETURN(rv);
+}
+
+int
+getnodeattr(struct puffs_cc *pcc, struct puffs_node *pn)
+{
+	struct puffs_usermount *pu = puffs_cc_getusermount(pcc);
+	struct psshfs_node *psn = pn->pn_data;
+	struct vattr va;
+	int rv;
+
+	if ((time(NULL) - psn->attrread) >= PSSHFS_REFRESHIVAL) {
+		rv = getpathattr(pcc, PNPATH(pn), &va);
+		if (rv)
+			return rv;
+
+		/*
+		 * Check if the file was modified from below us.  If
+		 * so, invalidate page cache.  This is the only sensible
+		 * place we can do this in.
+		 */
+		if (psn->attrread)
+			if (pn->pn_va.va_mtime.tv_sec != va.va_mtime.tv_sec)
+				puffs_inval_pagecache_node(pu, pn);
+
+		puffs_setvattr(&pn->pn_va, &va);
+		psn->attrread = time(NULL);
+	}
+
+	return 0;
+}
+
+int
 sftp_readdir(struct puffs_cc *pcc, struct psshfs_ctx *pctx,
 	struct puffs_node *pn)
 {
@@ -284,16 +327,14 @@ sftp_readdir(struct puffs_cc *pcc, struct psshfs_ctx *pctx,
 	reqid = NEXTREQ(pctx);
 	psbuf_recycle(pb, PSB_OUT);
 	psbuf_req_data(pb, SSH_FXP_CLOSE, reqid, dhand, dhandlen);
-	pssh_outbuf_enqueue(pctx, pb, pcc, reqid);
 
-	puffs_cc_yield(pcc);
-
-	/* EDONTCARE for the response */
+	pssh_outbuf_enqueue_nocc(pctx, pb, NULL, NULL, reqid);
+	free(dhand);
+	return rv;
 
  wayout:
 	free(dhand);
-	psbuf_destroy(pb);
-	return rv;
+	PSSHFSRETURN(rv);
 }
 
 struct puffs_node *
@@ -380,9 +421,15 @@ doreclaim(struct puffs_node *pn)
 	psn_parent = psn->parent->pn_data;
 	psn_parent->childcount--;
 
+	/*
+	 * Null out entry from directory.  Do not treat a missing entry
+	 * as an invariant error, since the node might be removed from
+	 * under us, and we might do a readdir before the reclaim resulting
+	 * in no directory entry in the parent directory.
+	 */
 	dent = lookup_by_entry(psn_parent->dir, psn_parent->dentnext, pn);
-	assert(dent);
-	dent->entry = NULL;
+	if (dent)
+		dent->entry = NULL;
 
 	if (pn->pn_va.va_type == VDIR)
 		freedircache(psn->dir, psn->dentnext);

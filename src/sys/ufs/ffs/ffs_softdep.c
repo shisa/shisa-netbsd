@@ -1,4 +1,4 @@
-/*	$NetBSD: ffs_softdep.c,v 1.85 2007/02/22 06:10:48 thorpej Exp $	*/
+/*	$NetBSD: ffs_softdep.c,v 1.87 2007/03/12 18:18:37 ad Exp $	*/
 
 /*
  * Copyright 1998 Marshall Kirk McKusick. All Rights Reserved.
@@ -33,7 +33,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ffs_softdep.c,v 1.85 2007/02/22 06:10:48 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ffs_softdep.c,v 1.87 2007/03/12 18:18:37 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/buf.h>
@@ -63,7 +63,7 @@ __KERNEL_RCSID(0, "$NetBSD: ffs_softdep.c,v 1.85 2007/02/22 06:10:48 thorpej Exp
 #include <uvm/uvm.h>
 
 static POOL_INIT(sdpcpool, sizeof(struct buf), 0, 0, 0, "sdpcpool",
-    &pool_allocator_nointr);
+    &pool_allocator_nointr, IPL_NONE);
 u_int softdep_lockedbufs;
 
 extern struct simplelock bqueue_slock; /* XXX */
@@ -358,7 +358,7 @@ sema_get(semap, interlock)
 	if (semap->value++ > 0) {
 		if (interlock != NULL)
 			s = FREE_LOCK_INTERLOCKED(interlock);
-		tsleep((caddr_t)semap, semap->prio, semap->name, semap->timo);
+		tsleep((void *)semap, semap->prio, semap->name, semap->timo);
 		if (interlock != NULL) {
 			ACQUIRE_LOCK_INTERLOCKED(interlock, s);
 			FREE_LOCK(interlock);
@@ -390,33 +390,33 @@ sema_release(semap)
  */
 
 static POOL_INIT(pagedep_pool, sizeof(struct pagedep), 0, 0, 0, "pagedeppl",
-    &pool_allocator_nointr);
+    &pool_allocator_nointr, IPL_NONE);
 static POOL_INIT(inodedep_pool, sizeof(struct inodedep), 0, 0, 0, "inodedeppl",
-    &pool_allocator_nointr);
+    &pool_allocator_nointr, IPL_NONE);
 static POOL_INIT(newblk_pool, sizeof(struct newblk), 0, 0, 0, "newblkpl",
-    &pool_allocator_nointr);
+    &pool_allocator_nointr, IPL_NONE);
 static POOL_INIT(bmsafemap_pool, sizeof(struct bmsafemap), 0, 0, 0,
-    "bmsafemappl", &pool_allocator_nointr);
+    "bmsafemappl", &pool_allocator_nointr, IPL_NONE);
 static POOL_INIT(allocdirect_pool, sizeof(struct allocdirect), 0, 0, 0,
-    "allocdirectpl", &pool_allocator_nointr);
+    "allocdirectpl", &pool_allocator_nointr, IPL_NONE);
 static POOL_INIT(indirdep_pool, sizeof(struct indirdep), 0, 0, 0, "indirdeppl",
-    &pool_allocator_nointr);
+    &pool_allocator_nointr, IPL_NONE);
 static POOL_INIT(allocindir_pool, sizeof(struct allocindir), 0, 0, 0,
-    "allocindirpl", &pool_allocator_nointr);
+    "allocindirpl", &pool_allocator_nointr, IPL_NONE);
 static POOL_INIT(freefrag_pool, sizeof(struct freefrag), 0, 0, 0,
-    "freefragpl", &pool_allocator_nointr);
+    "freefragpl", &pool_allocator_nointr, IPL_NONE);
 static POOL_INIT(freeblks_pool, sizeof(struct freeblks), 0, 0, 0,
-    "freeblkspl", &pool_allocator_nointr);
+    "freeblkspl", &pool_allocator_nointr, IPL_NONE);
 static POOL_INIT(freefile_pool, sizeof(struct freefile), 0, 0, 0,
-    "freefilepl", &pool_allocator_nointr);
+    "freefilepl", &pool_allocator_nointr, IPL_NONE);
 static POOL_INIT(diradd_pool, sizeof(struct diradd), 0, 0, 0, "diraddpl",
-    &pool_allocator_nointr);
+    &pool_allocator_nointr, IPL_NONE);
 static POOL_INIT(mkdir_pool, sizeof(struct mkdir), 0, 0, 0, "mkdirpl",
-    &pool_allocator_nointr);
+    &pool_allocator_nointr, IPL_NONE);
 static POOL_INIT(dirrem_pool, sizeof(struct dirrem), 0, 0, 0, "dirrempl",
-    &pool_allocator_nointr);
+    &pool_allocator_nointr, IPL_NONE);
 static POOL_INIT(newdirblk_pool, sizeof (struct newdirblk), 0, 0, 0,
-    "newdirblkpl", &pool_allocator_nointr);
+    "newdirblkpl", &pool_allocator_nointr, IPL_NONE);
 
 static inline void
 softdep_free(struct worklist *item, int type)
@@ -2805,9 +2805,9 @@ softdep_setup_directory_add(bp, dp, diroffset, newinum, newdirbp, isnewblk)
 void
 softdep_change_directoryentry_offset(dp, base, oldloc, newloc, entrysize)
 	struct inode *dp;	/* inode for directory */
-	caddr_t base;		/* address of dp->i_offset */
-	caddr_t oldloc;		/* address of old directory location */
-	caddr_t newloc;		/* address of new directory location */
+	void *base;		/* address of dp->i_offset */
+	void *oldloc;		/* address of old directory location */
+	void *newloc;		/* address of new directory location */
 	int entrysize;		/* size of directory entry */
 {
 	int offset, oldoffset, newoffset;
@@ -2820,8 +2820,8 @@ softdep_change_directoryentry_offset(dp, base, oldloc, newloc, entrysize)
 	offset = blkoff(dp->i_fs, dp->i_offset);
 	if (pagedep_lookup(dp, lbn, 0, &pagedep) == 0)
 		goto done;
-	oldoffset = offset + (oldloc - base);
-	newoffset = offset + (newloc - base);
+	oldoffset = offset + ((char *)oldloc - (char *)base);
+	newoffset = offset + ((char *)newloc - (char *)base);
 	for (dap = LIST_FIRST(&pagedep->pd_diraddhd[DIRADDHASH(oldoffset)]);
 	     dap; dap = LIST_NEXT(dap, da_pdlist)) {
 		if (dap->da_offset != oldoffset)
@@ -3552,7 +3552,7 @@ initiate_write_inodeblock_ufs1(inodedep, bp)
 		inodedep->id_savedino1 = inodedep_allocdino(inodedep, bp,
 		    sizeof(struct ufs1_dinode));
 		*inodedep->id_savedino1 = *dp;
-		bzero((caddr_t)dp, sizeof(struct ufs1_dinode));
+		bzero((void *)dp, sizeof(struct ufs1_dinode));
 		return;
 	}
 	dp->di_size = ufs_rw64(dp->di_size, needswap);
@@ -3692,7 +3692,7 @@ initiate_write_inodeblock_ufs2(inodedep, bp)
 		inodedep->id_savedino2 = inodedep_allocdino(inodedep, bp,
 		    sizeof(struct ufs2_dinode));
 		*inodedep->id_savedino2 = *dp;
-		bzero((caddr_t)dp, sizeof(struct ufs2_dinode));
+		bzero((void *)dp, sizeof(struct ufs2_dinode));
 		return;
 	}
 	dp->di_size = ufs_rw64(dp->di_size, needswap);
@@ -5417,7 +5417,7 @@ request_cleanup(resource, islocked)
 		callout_reset(&pause_timer_ch,
 		    tickdelay > 2 ? tickdelay : 2, pause_timer, NULL);
 	s = FREE_LOCK_INTERLOCKED(&lk);
-	(void) tsleep((caddr_t)&proc_waiting, PPAUSE, "softupdate", 0);
+	(void) tsleep((void *)&proc_waiting, PPAUSE, "softupdate", 0);
 	ACQUIRE_LOCK_INTERLOCKED(&lk, s);
 	if (--proc_waiting)
 		callout_reset(&pause_timer_ch,
@@ -5727,7 +5727,7 @@ drain_output(vp, islocked)
 
 		vp->v_flag |= VBWAIT;
 		s = FREE_LOCK_INTERLOCKED(&lk);
-		ltsleep((caddr_t)&vp->v_numoutput, PRIBIO + 1, "drainvp", 0,
+		ltsleep((void *)&vp->v_numoutput, PRIBIO + 1, "drainvp", 0,
 			&global_v_numoutput_slock);
 		ACQUIRE_LOCK_INTERLOCKED(&lk, s);
 	}

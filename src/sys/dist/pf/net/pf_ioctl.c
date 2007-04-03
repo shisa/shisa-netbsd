@@ -1,4 +1,4 @@
-/*	$NetBSD: pf_ioctl.c,v 1.28 2006/11/16 01:33:34 christos Exp $	*/
+/*	$NetBSD: pf_ioctl.c,v 1.30 2007/03/12 18:18:31 ad Exp $	*/
 /*	$OpenBSD: pf_ioctl.c,v 1.139 2005/03/03 07:13:39 dhartmei Exp $ */
 
 /*
@@ -116,7 +116,7 @@ void			 pf_anchor_remove(struct pf_rule *);
 
 void			 pf_mv_pool(struct pf_palist *, struct pf_palist *);
 void			 pf_empty_pool(struct pf_palist *);
-int			 pfioctl(dev_t, u_long, caddr_t, int, struct lwp *);
+int			 pfioctl(dev_t, u_long, void *, int, struct lwp *);
 #ifdef ALTQ
 int			 pf_begin_altq(u_int32_t *);
 int			 pf_rollback_altq(u_int32_t);
@@ -176,6 +176,18 @@ pfattach(int num)
 {
 	u_int32_t *timeout = pf_default_rule.timeout;
 
+#ifdef __NetBSD__
+	pool_init(&pf_rule_pl, sizeof(struct pf_rule), 0, 0, 0, "pfrulepl",
+	    &pool_allocator_nointr, IPL_NONE);
+	pool_init(&pf_src_tree_pl, sizeof(struct pf_src_node), 0, 0, 0,
+	    "pfsrctrpl", NULL, IPL_SOFTNET);
+	pool_init(&pf_state_pl, sizeof(struct pf_state), 0, 0, 0, "pfstatepl",
+	    NULL, IPL_SOFTNET);
+	pool_init(&pf_altq_pl, sizeof(struct pf_altq), 0, 0, 0, "pfaltqpl",
+	    &pool_allocator_nointr, IPL_NONE);
+	pool_init(&pf_pooladdr_pl, sizeof(struct pf_pooladdr), 0, 0, 0,
+	    "pfpooladdrpl", &pool_allocator_nointr, IPL_NONE);
+#else
 	pool_init(&pf_rule_pl, sizeof(struct pf_rule), 0, 0, 0, "pfrulepl",
 	    &pool_allocator_nointr);
 	pool_init(&pf_src_tree_pl, sizeof(struct pf_src_node), 0, 0, 0,
@@ -186,6 +198,8 @@ pfattach(int num)
 	    &pool_allocator_nointr);
 	pool_init(&pf_pooladdr_pl, sizeof(struct pf_pooladdr), 0, 0, 0,
 	    "pfpooladdrpl", &pool_allocator_nointr);
+#endif
+
 	pfr_initialize();
 	pfi_initialize();
 	pf_osfp_initialize();
@@ -1138,7 +1152,7 @@ pf_commit_rules(u_int32_t ticket, int rs_num, char *anchor)
 }
 
 int
-pfioctl(dev_t dev, u_long cmd, caddr_t addr, int flags, struct lwp *l)
+pfioctl(dev_t dev, u_long cmd, void *addr, int flags, struct lwp *l)
 {
 	struct pf_pooladdr	*pa = NULL;
 	struct pf_pool		*pool = NULL;

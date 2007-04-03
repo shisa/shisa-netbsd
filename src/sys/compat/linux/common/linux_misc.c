@@ -1,4 +1,4 @@
-/*	$NetBSD: linux_misc.c,v 1.166 2007/02/09 21:55:19 ad Exp $	*/
+/*	$NetBSD: linux_misc.c,v 1.169 2007/03/23 04:16:13 mrg Exp $	*/
 
 /*-
  * Copyright (c) 1995, 1998, 1999 The NetBSD Foundation, Inc.
@@ -64,7 +64,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: linux_misc.c,v 1.166 2007/02/09 21:55:19 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: linux_misc.c,v 1.169 2007/03/23 04:16:13 mrg Exp $");
 
 #if defined(_KERNEL_OPT)
 #include "opt_ptrace.h"
@@ -177,10 +177,8 @@ const int linux_fstypes_cnt = sizeof(linux_fstypes) / sizeof(linux_fstypes[0]);
 # endif
 
 /* Local linux_misc.c functions: */
-# ifndef __amd64__
 static void bsd_to_linux_statfs __P((const struct statvfs *,
     struct linux_statfs *));
-# endif
 static void linux_to_bsd_mmap_args __P((struct sys_mmap_args *,
     const struct linux_sys_mmap_args *));
 static int linux_mmap __P((struct lwp *, struct linux_sys_mmap_args *,
@@ -231,7 +229,7 @@ linux_sys_wait4(l, v, retval)
 	struct proc *p = l->l_proc;
 	struct sys_wait4_args w4a;
 	int error, *status, tstat, options, linux_options;
-	caddr_t sg;
+	void *sg;
 
 	if (SCARG(uap, status) != NULL) {
 		sg = stackgap_init(p, 0);
@@ -302,7 +300,7 @@ linux_sys_brk(l, v, retval)
 
 	SCARG(&oba, nsize) = nbrk;
 
-	if ((caddr_t) nbrk > vm->vm_daddr && sys_obreak(l, &oba, retval) == 0)
+	if ((void *) nbrk > vm->vm_daddr && sys_obreak(l, &oba, retval) == 0)
 		ed->s->p_break = (char*)nbrk;
 	else
 		nbrk = ed->s->p_break;
@@ -312,7 +310,6 @@ linux_sys_brk(l, v, retval)
 	return 0;
 }
 
-# ifndef __amd64__
 /*
  * Convert NetBSD statvfs structure to Linux statfs structure.
  * Linux doesn't have f_flag, and we can't set f_frsize due
@@ -381,7 +378,7 @@ linux_sys_statfs(l, v, retval)
 	struct statvfs *btmp, *bsp;
 	struct linux_statfs ltmp;
 	struct sys_statvfs1_args bsa;
-	caddr_t sg;
+	void *sg;
 	int error;
 
 	sg = stackgap_init(p, 0);
@@ -422,7 +419,7 @@ linux_sys_fstatfs(l, v, retval)
 	struct statvfs *btmp, *bsp;
 	struct linux_statfs ltmp;
 	struct sys_fstatvfs1_args bsa;
-	caddr_t sg;
+	void *sg;
 	int error;
 
 	sg = stackgap_init(p, 0);
@@ -446,7 +443,6 @@ out:
 	STATVFSBUF_PUT(btmp);
 	return error;
 }
-# endif /* !__amd64__ */
 
 /*
  * uname(). Just copy the info from the various strings stored in the
@@ -466,11 +462,7 @@ linux_sys_uname(struct lwp *l, void *v, register_t *retval)
 	strncpy(luts.l_nodename, hostname, sizeof(luts.l_nodename));
 	strncpy(luts.l_release, linux_release, sizeof(luts.l_release));
 	strncpy(luts.l_version, linux_version, sizeof(luts.l_version));
-# ifdef LINUX_UNAME_ARCH
-	strncpy(luts.l_machine, LINUX_UNAME_ARCH, sizeof(luts.l_machine));
-# else
-	strncpy(luts.l_machine, machine, sizeof(luts.l_machine));
-# endif
+	strncpy(luts.l_machine, linux_machine, sizeof(luts.l_machine));
 	strncpy(luts.l_domainname, domainname, sizeof(luts.l_domainname));
 
 	return copyout(&luts, SCARG(uap, up), sizeof(luts));
@@ -676,7 +668,7 @@ linux_sys_msync(l, v, retval)
 	register_t *retval;
 {
 	struct linux_sys_msync_args /* {
-		syscallarg(caddr_t) addr;
+		syscallarg(void *) addr;
 		syscallarg(int) len;
 		syscallarg(int) fl;
 	} */ *uap = v;
@@ -827,9 +819,9 @@ linux_sys_getdents(l, v, retval)
 	} */ *uap = v;
 	struct dirent *bdp;
 	struct vnode *vp;
-	caddr_t	inp, tbuf;		/* BSD-format */
+	char *inp, *tbuf;		/* BSD-format */
 	int len, reclen;		/* BSD-format */
-	caddr_t outp;			/* Linux-format */
+	char *outp;			/* Linux-format */
 	int resid, linux_reclen = 0;	/* Linux-format */
 	struct file *fp;
 	struct uio auio;
@@ -893,7 +885,7 @@ again:
 		goto out;
 
 	inp = tbuf;
-	outp = (caddr_t)SCARG(uap, dent);
+	outp = (void *)SCARG(uap, dent);
 	resid = nbytes;
 	if ((len = buflen - auio.uio_resid) == 0)
 		goto eof;
@@ -939,7 +931,7 @@ again:
 			idb.d_reclen = (u_short)linux_reclen;
 		}
 		strcpy(idb.d_name, bdp->d_name);
-		if ((error = copyout((caddr_t)&idb, outp, linux_reclen)))
+		if ((error = copyout((void *)&idb, outp, linux_reclen)))
 			goto out;
 		/* advance past this real entry */
 		inp += reclen;
@@ -955,7 +947,7 @@ again:
 	}
 
 	/* if we squished out the whole block, try again */
-	if (outp == (caddr_t)SCARG(uap, dent))
+	if (outp == (void *)SCARG(uap, dent))
 		goto again;
 	fp->f_offset = off;	/* update the vnode offset */
 
@@ -1014,7 +1006,7 @@ linux_select1(l, retval, nfds, readfds, writefds, exceptfds, timeout)
 	struct sys_select_args bsa;
 	struct proc *p = l->l_proc;
 	struct timeval tv0, tv1, utv, *tvp;
-	caddr_t sg;
+	void *sg;
 	int error;
 
 	SCARG(&bsa, nd) = nfds;
@@ -1233,7 +1225,7 @@ linux_sys_getgroups16(l, v, retval)
 		syscallarg(linux_gid_t *) gidset;
 	} */ *uap = v;
 	struct proc *p = l->l_proc;
-	caddr_t sg;
+	void *sg;
 	int n, error, i;
 	struct sys_getgroups_args bsa;
 	gid_t *bset, *kbset;
@@ -1290,7 +1282,7 @@ linux_sys_setgroups16(l, v, retval)
 		syscallarg(linux_gid_t *) gidset;
 	} */ *uap = v;
 	struct proc *p = l->l_proc;
-	caddr_t sg;
+	void *sg;
 	int n;
 	int error, i;
 	struct sys_setgroups_args bsa;
@@ -1451,17 +1443,17 @@ linux_sys_ptrace(l, v, retval)
 
 			SCARG(&pta, req) = *ptr;
 			SCARG(&pta, pid) = SCARG(uap, pid);
-			SCARG(&pta, addr) = (caddr_t)SCARG(uap, addr);
+			SCARG(&pta, addr) = (void *)SCARG(uap, addr);
 			SCARG(&pta, data) = SCARG(uap, data);
 
 			/*
 			 * Linux ptrace(PTRACE_CONT, pid, 0, 0) means actually
 			 * to continue where the process left off previously.
-			 * The same thing is achieved by addr == (caddr_t) 1
+			 * The same thing is achieved by addr == (void *) 1
 			 * on NetBSD, so rewrite 'addr' appropriately.
 			 */
 			if (request == LINUX_PTRACE_CONT && SCARG(uap, addr)==0)
-				SCARG(&pta, addr) = (caddr_t) 1;
+				SCARG(&pta, addr) = (void *) 1;
 
 			error = sys_ptrace(l, &pta, retval);
 			if (error)
@@ -1470,7 +1462,7 @@ linux_sys_ptrace(l, v, retval)
 			case LINUX_PTRACE_PEEKTEXT:
 			case LINUX_PTRACE_PEEKDATA:
 				error = copyout (retval,
-				    (caddr_t)SCARG(uap, data), 
+				    (void *)SCARG(uap, data), 
 				    sizeof *retval);
 				*retval = SCARG(uap, data);
 				break;
@@ -1648,7 +1640,7 @@ linux_sys_getrlimit(l, v, retval)
 # endif
 	} */ *uap = v;
 	struct proc *p = l->l_proc;
-	caddr_t sg = stackgap_init(p, 0);
+	void *sg = stackgap_init(p, 0);
 	struct sys_getrlimit_args ap;
 	struct rlimit rl;
 # ifdef LINUX_LARGEFILE64
@@ -1686,7 +1678,7 @@ linux_sys_setrlimit(l, v, retval)
 # endif
 	} */ *uap = v;
 	struct proc *p = l->l_proc;
-	caddr_t sg = stackgap_init(p, 0);
+	void *sg = stackgap_init(p, 0);
 	struct sys_getrlimit_args ap;
 	struct rlimit rl;
 # ifdef LINUX_LARGEFILE64

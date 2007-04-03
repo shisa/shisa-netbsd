@@ -1,4 +1,4 @@
-/*	$NetBSD: wdsc.c,v 1.19 2007/02/20 21:54:44 rumble Exp $	*/
+/*	$NetBSD: wdsc.c,v 1.21 2007/03/30 19:04:40 rumble Exp $	*/
 
 /*
  * Copyright (c) 2001 Wayne Knowles
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: wdsc.c,v 1.19 2007/02/20 21:54:44 rumble Exp $");
+__KERNEL_RCSID(0, "$NetBSD: wdsc.c,v 1.21 2007/03/30 19:04:40 rumble Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -83,7 +83,7 @@ int	wdsc_match	(struct device *, struct cfdata *, void *);
 CFATTACH_DECL(wdsc, sizeof(struct wdsc_softc),
     wdsc_match, wdsc_attach, NULL, NULL);
 
-int	wdsc_dmasetup	(struct wd33c93_softc *, caddr_t *,size_t *,
+int	wdsc_dmasetup	(struct wd33c93_softc *, void **,size_t *,
 				int, size_t *);
 int	wdsc_dmago	(struct wd33c93_softc *);
 void	wdsc_dmastop	(struct wd33c93_softc *);
@@ -176,13 +176,7 @@ wdsc_attach(struct device *pdp, struct device *dp, void *auxp)
 	sc->sc_adapter.adapt_minphys = minphys;
 
 	sc->sc_id = 0;					/* Host ID = 0 */
-
-	/* IP12 runs at 20mhz, all others at 10. XXX - GIO SCSI cards? */
-	if (mach_type == MACH_SGI_IP12)
-		sc->sc_clkfreq = 200;
-	else
-		sc->sc_clkfreq = 100;
-
+	sc->sc_clkfreq = 200;				/* 20MHz */
 	sc->sc_dmamode = SBIC_CTL_DMA;
 
 	evcnt_attach_dynamic(&wsc->sc_intrcnt, EVCNT_TYPE_INTR, NULL,
@@ -205,7 +199,7 @@ wdsc_attach(struct device *pdp, struct device *dp, void *auxp)
  * Requires splbio() interrupts to be disabled by the caller
  */
 int
-wdsc_dmasetup(struct wd33c93_softc *dev, caddr_t *addr, size_t *len, int datain, size_t *dmasize)
+wdsc_dmasetup(struct wd33c93_softc *dev, void **addr, size_t *len, int datain, size_t *dmasize)
 {
 	struct wdsc_softc *wsc = (void *)dev;
 	struct hpc_dma_softc *dsc = &wsc->sc_hpcdma;

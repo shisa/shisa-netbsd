@@ -1,4 +1,4 @@
-/*	$NetBSD: vm_machdep.c,v 1.22 2007/02/22 05:46:28 thorpej Exp $	*/
+/*	$NetBSD: vm_machdep.c,v 1.24 2007/03/16 08:02:49 skrll Exp $	*/
 
 /*	$OpenBSD: vm_machdep.c,v 1.25 2001/09/19 20:50:56 mickey Exp $	*/
 
@@ -34,7 +34,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: vm_machdep.c,v 1.22 2007/02/22 05:46:28 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: vm_machdep.c,v 1.24 2007/03/16 08:02:49 skrll Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -99,7 +99,7 @@ cpu_swapin(struct lwp *l)
 	 * Stash the physical for the pcb of U for later perusal
 	 */
 	l->l_addr->u_pcb.pcb_uva = (vaddr_t)l->l_addr;
-	tf->tf_cr30 = kvtop((caddr_t)l->l_addr);
+	tf->tf_cr30 = kvtop((void *)l->l_addr);
 	fdcache(HPPA_SID_KERNEL, (vaddr_t)l->l_addr, sizeof(l->l_addr->u_pcb));
 
 #ifdef HPPA_REDZONE
@@ -210,7 +210,9 @@ cpu_setfunc(struct lwp *l, void (*func)(void *), void *arg)
 	cpu_swapin(l);
 
 	osp = sp;
-	sp += HPPA_FRAME_SIZE + 16*4; /* std frame + calee-save registers */
+
+	/* std frame + callee-save registers */
+	sp += HPPA_FRAME_SIZE + 16*4;
 	*HPPA_FRAME_CARG(1, sp) = KERNMODE(func);
 	*HPPA_FRAME_CARG(2, sp) = (register_t)arg;
 	*(register_t*)(sp + HPPA_FRAME_PSP) = osp;
@@ -268,7 +270,7 @@ vmapbuf(struct buf *bp, vsize_t len)
 	off = (vaddr_t)bp->b_data - uva;
 	size = round_page(off + len);
 	kva = uvm_km_alloc(phys_map, len, 0, UVM_KMF_VAONLY | UVM_KMF_WAITVA);
-	bp->b_data = (caddr_t)(kva + off);
+	bp->b_data = (void *)(kva + off);
 	npf = btoc(size);
 	while (npf--) {
 		if (pmap_extract(upmap, uva, &pa) == false)

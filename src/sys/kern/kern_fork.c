@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_fork.c,v 1.134 2007/02/22 06:34:43 thorpej Exp $	*/
+/*	$NetBSD: kern_fork.c,v 1.137 2007/03/13 00:35:44 ad Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2001, 2004 The NetBSD Foundation, Inc.
@@ -76,7 +76,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_fork.c,v 1.134 2007/02/22 06:34:43 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_fork.c,v 1.137 2007/03/13 00:35:44 ad Exp $");
 
 #include "opt_ktrace.h"
 #include "opt_systrace.h"
@@ -287,9 +287,9 @@ fork1(struct lwp *l1, int flags, int exitsig, void *stack, size_t stacksize,
 	 * then copy the section that is copied directly from the parent.
 	 */
 	memset(&p2->p_startzero, 0,
-	    (unsigned) ((caddr_t)&p2->p_endzero - (caddr_t)&p2->p_startzero));
+	    (unsigned) ((char *)&p2->p_endzero - (char *)&p2->p_startzero));
 	memcpy(&p2->p_startcopy, &p1->p_startcopy,
-	    (unsigned) ((caddr_t)&p2->p_endcopy - (caddr_t)&p2->p_startcopy));
+	    (unsigned) ((char *)&p2->p_endcopy - (char *)&p2->p_startcopy));
 
 	CIRCLEQ_INIT(&p2->p_sigpend.sp_info);
 
@@ -320,7 +320,7 @@ fork1(struct lwp *l1, int flags, int exitsig, void *stack, size_t stacksize,
 	/* XXX p_smutex can be IPL_VM except for audio drivers */
 	mutex_init(&p2->p_smutex, MUTEX_SPIN, IPL_SCHED);
 	mutex_init(&p2->p_stmutex, MUTEX_SPIN, IPL_STATCLOCK);
-	mutex_init(&p2->p_rasmutex, MUTEX_SPIN, IPL_NONE);
+	mutex_init(&p2->p_rasmutex, MUTEX_SPIN, IPL_SCHED);
 	mutex_init(&p2->p_mutex, MUTEX_DEFAULT, IPL_NONE);
 	cv_init(&p2->p_refcv, "drainref");
 	cv_init(&p2->p_waitcv, "wait");
@@ -440,7 +440,7 @@ fork1(struct lwp *l1, int flags, int exitsig, void *stack, size_t stacksize,
 	 * It's now safe for the scheduler and other processes to see the
 	 * child process.
 	 */
-	rw_enter(&proclist_lock, RW_WRITER);
+	mutex_enter(&proclist_lock);
 
 	if (p1->p_session->s_ttyvp != NULL && p1->p_lflag & PL_CONTROLT)
 		p2->p_lflag |= PL_CONTROLT;
@@ -453,7 +453,7 @@ fork1(struct lwp *l1, int flags, int exitsig, void *stack, size_t stacksize,
 	LIST_INSERT_HEAD(&allproc, p2, p_list);
 	mutex_exit(&proclist_mutex);
 
-	rw_exit(&proclist_lock);
+	mutex_exit(&proclist_lock);
 
 #ifdef SYSTRACE
 	/* Tell systrace what's happening. */

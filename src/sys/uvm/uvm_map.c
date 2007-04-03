@@ -1,4 +1,4 @@
-/*	$NetBSD: uvm_map.c,v 1.234 2007/02/22 06:05:01 thorpej Exp $	*/
+/*	$NetBSD: uvm_map.c,v 1.236 2007/03/12 18:18:39 ad Exp $	*/
 
 /*
  * Copyright (c) 1997 Charles D. Cranor and Washington University.
@@ -71,7 +71,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: uvm_map.c,v 1.234 2007/02/22 06:05:01 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: uvm_map.c,v 1.236 2007/03/12 18:18:39 ad Exp $");
 
 #include "opt_ddb.h"
 #include "opt_uvmhist.h"
@@ -142,14 +142,14 @@ const char vmmapbsy[] = "vmmapbsy";
  */
 
 POOL_INIT(uvm_vmspace_pool, sizeof(struct vmspace), 0, 0, 0, "vmsppl",
-    &pool_allocator_nointr);
+    &pool_allocator_nointr, IPL_NONE);
 
 /*
  * pool for dynamically-allocated map entries.
  */
 
 POOL_INIT(uvm_map_entry_pool, sizeof(struct vm_map_entry), 0, 0, 0, "vmmpepl",
-    &pool_allocator_nointr);
+    &pool_allocator_nointr, IPL_NONE);
 
 MALLOC_DEFINE(M_VMMAP, "VM map", "VM map structures");
 MALLOC_DEFINE(M_VMPMAP, "VM pmap", "VM pmap");
@@ -3977,7 +3977,7 @@ uvmspace_fork(struct vmspace *vm1)
 
 	vm2 = uvmspace_alloc(vm_map_min(old_map), vm_map_max(old_map));
 	memcpy(&vm2->vm_startcopy, &vm1->vm_startcopy,
-	    (caddr_t) (vm1 + 1) - (caddr_t) &vm1->vm_startcopy);
+	    (char *) (vm1 + 1) - (char *) &vm1->vm_startcopy);
 	new_map = &vm2->vm_map;		  /* XXX */
 
 	old_entry = old_map->header.next;

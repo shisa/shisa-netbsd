@@ -1,4 +1,4 @@
-/*	$NetBSD: clock.c,v 1.46 2006/09/16 00:50:52 gdamore Exp $	 */
+/*	$NetBSD: clock.c,v 1.48 2007/03/17 00:11:03 matt Exp $	 */
 /*
  * Copyright (c) 1995 Ludd, University of Lule}, Sweden.
  * All rights reserved.
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: clock.c,v 1.46 2006/09/16 00:50:52 gdamore Exp $");
+__KERNEL_RCSID(0, "$NetBSD: clock.c,v 1.48 2007/03/17 00:11:03 matt Exp $");
 
 #include <sys/param.h>
 #include <sys/kernel.h>

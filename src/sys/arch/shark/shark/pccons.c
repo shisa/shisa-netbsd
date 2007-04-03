@@ -1,4 +1,4 @@
-/*      $NetBSD: pccons.c,v 1.28 2007/02/22 16:50:42 thorpej Exp $       */
+/*      $NetBSD: pccons.c,v 1.30 2007/03/08 20:48:40 matt Exp $       */
 
 /*
  * Copyright 1997
@@ -135,7 +135,7 @@
 */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: pccons.c,v 1.28 2007/02/22 16:50:42 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pccons.c,v 1.30 2007/03/08 20:48:40 matt Exp $");
 
 #include "opt_ddb.h"
 #include "opt_xserver.h"
@@ -163,6 +163,7 @@ __KERNEL_RCSID(0, "$NetBSD: pccons.c,v 1.28 2007/02/22 16:50:42 thorpej Exp $");
 
 #include <machine/cpu.h>
 #include <machine/intr.h>
+#include <machine/irqhandler.h>
 #include <machine/pio.h>
 
 #include <machine/pccons.h>
@@ -1594,7 +1595,7 @@ pcintr(void *arg)
 int
 pcioctl(dev_t       dev, 
         u_long      cmd, 
-        caddr_t     data, 
+        void *    data, 
         int         flag, 
         struct lwp *l)
 {

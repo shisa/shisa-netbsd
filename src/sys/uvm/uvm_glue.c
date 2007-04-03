@@ -1,4 +1,4 @@
-/*	$NetBSD: uvm_glue.c,v 1.103 2007/02/22 06:05:01 thorpej Exp $	*/
+/*	$NetBSD: uvm_glue.c,v 1.105 2007/03/24 21:15:39 rmind Exp $	*/
 
 /*
  * Copyright (c) 1997 Charles D. Cranor and Washington University.
@@ -67,7 +67,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: uvm_glue.c,v 1.103 2007/02/22 06:05:01 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: uvm_glue.c,v 1.105 2007/03/24 21:15:39 rmind Exp $");
 
 #include "opt_coredump.h"
 #include "opt_kgdb.h"
@@ -101,7 +101,7 @@ static int uvm_nuarea;
 static struct simplelock uvm_uareas_slock = SIMPLELOCK_INITIALIZER;
 #define	UAREA_NEXTFREE(uarea)	(*(vaddr_t *)(UAREA_TO_USER(uarea)))
 
-static void uvm_uarea_free(vaddr_t);
+void uvm_uarea_free(vaddr_t);
 
 /*
  * XXXCDC: do these really belong here?
@@ -114,7 +114,7 @@ static void uvm_uarea_free(vaddr_t);
  */
 
 bool
-uvm_kernacc(caddr_t addr, size_t len, int rw)
+uvm_kernacc(void *addr, size_t len, int rw)
 {
 	bool rv;
 	vaddr_t saddr, eaddr;
@@ -143,7 +143,7 @@ uvm_kernacc(caddr_t addr, size_t len, int rw)
  * we can ensure the change takes place properly.
  */
 void
-uvm_chgkprot(caddr_t addr, size_t len, int rw)
+uvm_chgkprot(void *addr, size_t len, int rw)
 {
 	vm_prot_t prot;
 	paddr_t pa;
@@ -312,7 +312,7 @@ uvm_uarea_alloc(vaddr_t *uaddrp)
  * uvm_uarea_free: free a u-area; never blocks
  */
 
-static inline void
+void
 uvm_uarea_free(vaddr_t uaddr)
 {
 	simple_lock(&uvm_uareas_slock);

@@ -1,4 +1,4 @@
-/*	$NetBSD: vga_raster.c,v 1.25 2006/11/16 01:32:52 christos Exp $	*/
+/*	$NetBSD: vga_raster.c,v 1.27 2007/03/15 16:58:36 dogcow Exp $	*/
 
 /*
  * Copyright (c) 2001, 2002 Bang Jun-Young
@@ -56,7 +56,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: vga_raster.c,v 1.25 2006/11/16 01:32:52 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: vga_raster.c,v 1.27 2007/03/15 16:58:36 dogcow Exp $");
 
 #include "opt_wsmsgattrs.h" /* for WSDISPLAY_CUSTOM_OUTPUT */
 
@@ -301,7 +301,7 @@ const struct wsscreen_list vga_screenlist = {
 	_vga_scrlist_mono
 };
 
-static int	vga_raster_ioctl(void *, void *, u_long, caddr_t, int,
+static int	vga_raster_ioctl(void *, void *, u_long, void *, int,
 		    struct lwp *);
 static paddr_t	vga_raster_mmap(void *, void *, off_t, int);
 static int	vga_raster_alloc_screen(void *, const struct wsscreen_descr *,
@@ -557,6 +557,25 @@ vga_common_attach(struct vga_softc *sc, bus_space_tag_t iot,
 }
 
 int
+vga_cndetach(void)
+{
+	struct vga_config *vc;
+	struct vga_handle *vh;
+
+	vc = &vga_console_vc;
+	vh = &vc->hdl;
+
+	if (vgaconsole) {
+		bus_space_unmap(vh->vh_iot, vh->vh_ioh_vga, 0x10);
+		bus_space_unmap(vh->vh_iot, vh->vh_ioh_6845, 0x10);
+
+		return 1;
+	}
+
+	return 0;
+}
+
+int
 vga_is_console(bus_space_tag_t iot, int type)
 {
 	if (vgaconsole &&
@@ -599,7 +618,7 @@ vga_set_video(struct vga_config *vc, int state)
 }
 
 int
-vga_raster_ioctl(void *v, void *vs, u_long cmd, caddr_t data, int flag,
+vga_raster_ioctl(void *v, void *vs, u_long cmd, void *data, int flag,
 	struct lwp *l)
 {
 	struct vga_config *vc = v;

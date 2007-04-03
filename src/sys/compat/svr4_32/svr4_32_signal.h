@@ -1,4 +1,4 @@
-/*	$NetBSD: svr4_32_signal.h,v 1.8 2005/12/11 12:20:26 christos Exp $	 */
+/*	$NetBSD: svr4_32_signal.h,v 1.10 2007/03/04 07:54:10 christos Exp $	 */
 
 /*-
  * Copyright (c) 1994 The NetBSD Foundation, Inc.

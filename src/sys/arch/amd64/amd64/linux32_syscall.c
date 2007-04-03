@@ -1,7 +1,7 @@
-/*	$NetBSD: linux32_syscall.c,v 1.9 2007/02/17 22:31:37 pavel Exp $ */
+/*	$NetBSD: linux32_syscall.c,v 1.12 2007/03/22 12:08:51 njoly Exp $ */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: linux32_syscall.c,v 1.9 2007/02/17 22:31:37 pavel Exp $");
+__KERNEL_RCSID(0, "$NetBSD: linux32_syscall.c,v 1.12 2007/03/22 12:08:51 njoly Exp $");
 
 #include "opt_ktrace.h"
 #include "opt_systrace.h"
@@ -45,7 +45,7 @@ void
 linux32_syscall_plain(frame)
 	struct trapframe *frame;
 {
-	caddr_t params;
+	char *params;
 	const struct sysent *callp;
 	struct proc *p;
 	struct lwp *l;
@@ -61,7 +61,7 @@ linux32_syscall_plain(frame)
 
 	code = frame->tf_rax;
 	callp = p->p_emul->e_sysent;
-	params = (caddr_t)frame->tf_rsp + sizeof(int);
+	params = (char *)frame->tf_rsp + sizeof(int);
 
 	switch (code) {
 	case SYS_syscall:
@@ -106,7 +106,7 @@ linux32_syscall_plain(frame)
 			args[0] = frame->tf_rbx & 0xffffffff;
 			break;
 		default:
-			printf("linux syscall %d bogus argument size %ld",
+			printf("linux32 syscall %d bogus argument size %ld",
 			    code, argsize);
 			error = ENOSYS;
 			goto out;
@@ -154,7 +154,7 @@ void
 linux32_syscall_fancy(frame)
 	struct trapframe *frame;
 {
-	caddr_t params;
+	char *params;
 	const struct sysent *callp;
 	struct proc *p;
 	struct lwp *l;
@@ -174,7 +174,7 @@ linux32_syscall_fancy(frame)
 
 	code = frame->tf_rax;
 	callp = p->p_emul->e_sysent;
-	params = (caddr_t)frame->tf_rsp + sizeof(int);
+	params = (char *)frame->tf_rsp + sizeof(int);
 
 	switch (code) {
 	case SYS_syscall:
@@ -219,7 +219,7 @@ linux32_syscall_fancy(frame)
 			args[0] = frame->tf_rbx & 0xffffffff;
 			break;
 		default:
-			printf("linux syscall %d bogus argument size %ld",
+			printf("linux32 syscall %d bogus argument size %ld",
 			    code, argsize);
 			error = ENOSYS;
 #if defined(KTRACE) || defined(SYSTRACE)

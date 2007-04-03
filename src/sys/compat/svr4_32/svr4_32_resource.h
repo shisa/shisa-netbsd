@@ -1,4 +1,4 @@
-/*	$NetBSD: svr4_32_resource.h,v 1.1 2001/02/06 16:37:58 eeh Exp $	*/
+/*	$NetBSD: svr4_32_resource.h,v 1.3 2007/03/04 07:54:10 christos Exp $	*/
 
 /*-
  * Copyright (c) 1998 The NetBSD Foundation, Inc.

@@ -1,4 +1,4 @@
-/*	$NetBSD: ofb.c,v 1.55 2007/02/28 04:21:51 thorpej Exp $	*/
+/*	$NetBSD: ofb.c,v 1.57 2007/03/25 23:37:06 macallan Exp $	*/
 
 /*
  * Copyright (c) 1995, 1996 Carnegie-Mellon University.
@@ -28,7 +28,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ofb.c,v 1.55 2007/02/28 04:21:51 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ofb.c,v 1.57 2007/03/25 23:37:06 macallan Exp $");
 
 #include <sys/param.h>
 #include <sys/buf.h>
@@ -97,7 +97,7 @@ struct wsscreen_list ofb_screenlist = {
 	sizeof(_ofb_scrlist) / sizeof(struct wsscreen_descr *), _ofb_scrlist
 };
 
-static int	ofb_ioctl(void *, void *, u_long, caddr_t, int, struct lwp *);
+static int	ofb_ioctl(void *, void *, u_long, void *, int, struct lwp *);
 static paddr_t	ofb_mmap(void *, void *, off_t, int);
 
 static void	ofb_init_screen(void *, struct vcons_screen *, int, long *);
@@ -117,6 +117,7 @@ static void	ofb_putpalreg(struct ofb_softc *, int, uint8_t, uint8_t,
 static int	ofb_getcmap(struct ofb_softc *, struct wsdisplay_cmap *);
 static int	ofb_putcmap(struct ofb_softc *, struct wsdisplay_cmap *);
 static void	ofb_init_cmap(struct ofb_softc *);
+static int	ofb_drm_print(void *, const char *);
 
 extern const u_char rasops_cmap[768];
 
@@ -214,6 +215,16 @@ ofbattach(struct device *parent, struct device *self, void *aux)
 	a.accesscookie = &sc->vd;
 
 	config_found(self, &a, wsemuldisplaydevprint);
+
+	config_found_ia(self, "drm", aux, ofb_drm_print);
+}
+
+static int
+ofb_drm_print(void *aux, const char *pnp)
+{
+	if (pnp)
+		aprint_normal("direct rendering for %s", pnp);
+	return (UNSUPP);
 }
 
 static void
@@ -229,7 +240,7 @@ ofb_init_screen(void *cookie, struct vcons_screen *scr,
 }
 
 static int
-ofb_ioctl(void *v, void *vs, u_long cmd, caddr_t data, int flag, struct lwp *l)
+ofb_ioctl(void *v, void *vs, u_long cmd, void *data, int flag, struct lwp *l)
 {
 	struct vcons_data *vd = v;
 	struct ofb_softc *sc = vd->cookie;
@@ -265,7 +276,7 @@ ofb_ioctl(void *v, void *vs, u_long cmd, caddr_t data, int flag, struct lwp *l)
 		if (ms != NULL) {
 			gm = (void *)data;
 			memset(gm, 0, sizeof(struct grfinfo));
-			gm->gd_fbaddr = (caddr_t)sc->sc_fbaddr;
+			gm->gd_fbaddr = (void *)sc->sc_fbaddr;
 			gm->gd_fbrowbytes = ms->scr_ri.ri_stride;
 			return 0;
 		} else

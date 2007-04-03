@@ -1,4 +1,4 @@
-/*	$NetBSD: init.c,v 1.89 2007/03/01 07:18:07 apb Exp $	*/
+/*	$NetBSD: init.c,v 1.93 2007/03/21 03:51:30 dyoung Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -42,7 +42,7 @@ __COPYRIGHT("@(#) Copyright (c) 1991, 1993\n"
 #if 0
 static char sccsid[] = "@(#)init.c	8.2 (Berkeley) 4/28/95";
 #else
-__RCSID("$NetBSD: init.c,v 1.89 2007/03/01 07:18:07 apb Exp $");
+__RCSID("$NetBSD: init.c,v 1.93 2007/03/21 03:51:30 dyoung Exp $");
 #endif
 #endif /* not lint */
 
@@ -211,29 +211,7 @@ state_t requested_transition = single_user;
 
 #ifdef MFS_DEV_IF_NO_CONSOLE
 
-#define NINODE 1280
-#define FSSIZE ((8192		/* boot area */				\
-	+ 2 * 8192		/* two copies of superblock */		\
-	+ 4096			/* cylinder group info */		\
-	+ NINODE * (128 + 18)	/* inode and directory entry */		\
-	+ mfile[0].len		/* size of MAKEDEV* files */		\
-	+ mfile[1].len							\
-	+ mfile[2].len							\
-	+ 2 * 4096) / 512)	/* some slack */
-
-struct mappedfile {
-	const char *path;	/* filename */
-	char	*buf;		/* contents of file, or target of symlink */
-	size_t	len;		/* 0: no such file; -1: symlink; else size */
-} mfile[] = {
-	{ "/dev/MAKEDEV",	NULL,	0 },
-	{ "/dev/MAKEDEV.local",	NULL,	0 },
-	{ "/dev/MAKEDEV.subr",	NULL,	0 }
-};
-
 static int mfs_dev(void);
-static void mapfile(struct mappedfile *);
-static void writefile(struct mappedfile *);
 
 #endif
 
@@ -398,6 +376,34 @@ delset(sigset_t *maskp, ...)
 	va_end(ap);
 }
 
+#if 0	/* Enable to get error messages from init ! */
+#define vsyslog(level, fmt, ap) print_console(level, fmt, ap)
+#define closelog()
+
+static void
+print_console(int level, const char *message, va_list ap)
+{
+	/*
+	 * XXX: syslog seems to just plain not work in console-only
+	 * XXX: situation... that should be fixed.  Let's leave this
+	 * XXX: note + code here in case someone gets in trouble and
+	 * XXX: wants to debug. -- Jachym Holecek <freza@liberouter.org>
+	 */
+	char errbuf[1024];
+	int fd, len;
+
+	/* We can't do anything on errors, anyway... */
+	fd = open(_PATH_CONSOLE, O_WRONLY);
+	if (fd == -1)
+		return ;
+
+	/* %m will get lost... */
+	len = vsnprintf(errbuf, sizeof(errbuf), message, ap);
+	(void)write(fd, (void *)errbuf, len);
+	(void)close(fd);
+}
+#endif
+
 /*
  * Log a message and sleep for a while (to give someone an opportunity
  * to read it and to save log or hardcopy output if the problem is chronic).
@@ -429,29 +435,6 @@ warning(const char *message, ...)
 	vsyslog(LOG_ALERT, message, ap);
 	va_end(ap);
 	closelog();
-
-#if 0
-	/*
-	 * XXX: syslog seems to just plain not work in console-only
-	 * XXX: situation... that should be fixed.  Let's leave this
-	 * XXX: note + code here in case someone gets in trouble and
-	 * XXX: wants to debug. -- Jachym Holecek <freza@liberouter.org>
-	 */
-	{
-		char errbuf[1024];
-		int fd, len;
-
-		/* We can't do anything on errors, anyway... */
-		fd = open(_PATH_CONSOLE, O_WRONLY);
-		if (fd == -1)
-			return ;
-
-		/* %m will get lost... */
-		len = vsnprintf(errbuf, sizeof(errbuf), message, ap);
-		(void)write(fd, (void *)errbuf, len);
-		(void)close(fd);
-	}
-#endif
 }
 
 /*
@@ -512,11 +495,11 @@ getsecuritylevel(void)
 	len = sizeof curlevel;
 	if (sysctl(name, 2, &curlevel, &len, NULL, 0) == -1) {
 		emergency("cannot get kernel security level: %m");
-		return (-1);
+		return -1;
 	}
-	return (curlevel);
+	return curlevel;
 #else
-	return (-1);
+	return -1;
 #endif
 }
 
@@ -608,7 +591,7 @@ setctty(const char *name)
 	}
 	if (login_tty(fd) == -1) {
 		stall("can't get %s for controlling terminal: %m", name);
-		_exit(1);
+		_exit(2);
 	}
 }
 
@@ -731,7 +714,7 @@ single_user(void)
 		(void)execv(INIT_BSHELL, __UNCONST(argv));
 		emergency("can't exec `%s' for single user: %m", INIT_BSHELL);
 		(void)sleep(STALL_TIMEOUT);
-		_exit(1);
+		_exit(3);
 	}
 
 	if (pid == -1) {
@@ -743,7 +726,7 @@ single_user(void)
 			continue;
 		(void)sigaction(SIGTSTP, &satstp, NULL);
 		(void)sigaction(SIGHUP, &sahup, NULL);
-		return (state_func_t) single_user;
+		return (state_func_t)single_user;
 	}
 
 	requested_transition = 0;
@@ -779,10 +762,11 @@ single_user(void)
 			for (;;)
 				(void)sigsuspend(&s);
 		} else {	
-			warning("single user shell terminated, restarting");
+			warning("single user shell terminated (%x), restarting",
+				status);
 			(void)sigaction(SIGTSTP, &satstp, NULL);
 			(void)sigaction(SIGHUP, &sahup, NULL);
-			return (state_func_t) single_user;
+			return (state_func_t)single_user;
 		}
 	}
 
@@ -790,9 +774,9 @@ single_user(void)
 	(void)sigaction(SIGTSTP, &satstp, NULL);
 	(void)sigaction(SIGHUP, &sahup, NULL);
 #ifndef LETS_GET_SMALL
-	return (state_func_t) runcom;
+	return (state_func_t)runcom;
 #else /* LETS_GET_SMALL */
-	return (state_func_t) single_user;
+	return (state_func_t)single_user;
 #endif /* LETS_GET_SMALL */
 }
 
@@ -829,13 +813,13 @@ runetcrc(int trychroot)
 			if (chroot(rootdir) != 0) {
 				warning("failed to chroot to `%s': %m",
 				    rootdir);
-				_exit(1); 	/* force single user mode */
+				_exit(4); 	/* force single user mode */
 			}
 #endif /* CHROOT */
 
 		(void)execv(INIT_BSHELL, __UNCONST(argv));
 		stall("can't exec `%s' for `%s': %m", INIT_BSHELL, _PATH_RUNCOM);
-		_exit(1);	/* force single user mode */
+		_exit(5);	/* force single user mode */
 		/*NOTREACHED*/
 	case -1:
 		emergency("can't fork for `%s' on `%s': %m", INIT_BSHELL,
@@ -888,7 +872,7 @@ runetcrc(int trychroot)
 	if (WEXITSTATUS(status))
 		return (state_func_t)single_user;
 
-	return (state_func_t) read_ttys;
+	return (state_func_t)read_ttys;
 }
 
 /*
@@ -901,8 +885,8 @@ runcom(void)
 
 	/* Run /etc/rc and choose next state depending on the result. */
 	next_step = runetcrc(0);
-	if (next_step != (state_func_t) read_ttys)
-		return (state_func_t) next_step;
+	if (next_step != (state_func_t)read_ttys)
+		return (state_func_t)next_step;
 
 #ifdef CHROOT
 	/*
@@ -912,8 +896,8 @@ runcom(void)
 	 */
 	if (shouldchroot()) {
 		next_step = runetcrc(1);
-		if (next_step != (state_func_t) read_ttys)
-			return (state_func_t) next_step;
+		if (next_step != (state_func_t)read_ttys)
+			return (state_func_t)next_step;
 
 		did_multiuser_chroot = 1;
 	} else {
@@ -933,7 +917,7 @@ runcom(void)
 #ifdef SUPPORT_UTMP
 	logwtmp("~", "reboot", "");
 #endif
-	return (state_func_t) read_ttys;
+	return (state_func_t)read_ttys;
 }
 
 /*
@@ -949,9 +933,9 @@ start_session_db(void)
 		emergency("session database close: %m");
 	if ((session_db = dbopen(NULL, O_RDWR, 0, DB_HASH, NULL)) == 0) {
 		emergency("session database open: %m");
-		return (1);
+		return 1;
 	}
-	return (0);
+	return 0;
 		
 }
 
@@ -1029,15 +1013,15 @@ construct_argv(char *command)
 	static const char separators[] = " \t";
 
 	if (argv == NULL)
-		return (NULL);
+		return NULL;
 
 	if ((argv[argc++] = strtok(command, separators)) == 0) {
 		free(argv);
-		return (NULL);
+		return NULL;
 	}
 	while ((argv[argc++] = strtok(NULL, separators)) != NULL)
 		continue;
-	return (argv);
+	return argv;
 }
 
 /*
@@ -1069,7 +1053,7 @@ new_session(session_t *sprev, int session_index, struct ttyent *typ)
 
 	if ((typ->ty_status & TTY_ON) == 0 || typ->ty_name == NULL ||
 	    typ->ty_getty == NULL)
-		return (NULL);
+		return NULL;
 
 	sp = malloc(sizeof (session_t));
 	if (sp == NULL)
@@ -1085,7 +1069,7 @@ new_session(session_t *sprev, int session_index, struct ttyent *typ)
 
 	if (setupargv(sp, typ) == 0) {
 		free_session(sp);
-		return (NULL);
+		return NULL;
 	}
 
 	sp->se_next = NULL;
@@ -1097,7 +1081,7 @@ new_session(session_t *sprev, int session_index, struct ttyent *typ)
 		sp->se_prev = sprev;
 	}
 
-	return (sp);
+	return sp;
 }
 
 /*
@@ -1113,13 +1097,13 @@ setupargv(session_t *sp, struct ttyent *typ)
 	}
 	(void)asprintf(&sp->se_getty, "%s %s", typ->ty_getty, typ->ty_name);
 	if (!sp->se_getty)
-		return (0);
+		return 0;
 	sp->se_getty_argv = construct_argv(sp->se_getty);
 	if (sp->se_getty_argv == NULL) {
 		warning("can't parse getty for port `%s'", sp->se_device);
 		free(sp->se_getty);
 		sp->se_getty = NULL;
-		return (0);
+		return 0;
 	}
 	if (typ->ty_window) {
 		if (sp->se_window)
@@ -1131,10 +1115,10 @@ setupargv(session_t *sp, struct ttyent *typ)
 			    sp->se_device);
 			free(sp->se_window);
 			sp->se_window = NULL;
-			return (0);
+			return 0;
 		}
 	}
-	return (1);
+	return 1;
 }
 
 /*
@@ -1233,7 +1217,7 @@ start_window_system(session_t *sp)
 	(void)execv(sp->se_window_argv[0], sp->se_window_argv);
 	stall("can't exec window system `%s' for port `%s': %m",
 	    sp->se_window_argv[0], sp->se_device);
-	_exit(1);
+	_exit(6);
 }
 
 /*
@@ -1264,7 +1248,7 @@ start_getty(session_t *sp)
 		if (chroot(rootdir) != 0) {
 			stall("can't chroot getty `%s' inside `%s': %m",
 			    sp->se_getty_argv[0], rootdir);
-			_exit(1);
+			_exit(7);
 		}
 #endif /* CHROOT */
 
@@ -1286,7 +1270,7 @@ start_getty(session_t *sp)
 	(void)execv(sp->se_getty_argv[0], sp->se_getty_argv);
 	stall("can't exec getty `%s' for port `%s': %m",
 	    sp->se_getty_argv[0], sp->se_device);
-	_exit(1);
+	_exit(8);
 	/*NOTREACHED*/
 }
 #ifdef SUPPORT_UTMPX
@@ -1621,94 +1605,31 @@ death(void)
 
 #ifdef MFS_DEV_IF_NO_CONSOLE
 
-static void
-mapfile(struct mappedfile *mf)
-{
-	int fd;
-	struct stat st;
-	size_t len;
-
-	if (lstat(mf->path, &st) == -1)
-		return;
-
-	len = (size_t)st.st_size;
-	if ((st.st_mode & S_IFMT) == S_IFLNK) {
-		mf->buf = malloc(len + 1);
-		if (mf->buf == NULL)
-			return;
-		mf->buf[len] = 0;
-		if (readlink(mf->path, mf->buf, len) != len)
-			return;
-		mf->len = (size_t)-1;
-		return;
-	}
-
-	if ((fd = open(mf->path, O_RDONLY)) == -1)
-		return;
-	mf->buf = mmap(0, len, PROT_READ, MAP_FILE|MAP_SHARED, fd, (off_t)0);
-	(void)close(fd);
-	if (mf->buf == MAP_FAILED)
-		return;
-	mf->len = len;
-}
-
-static void
-writefile(struct mappedfile *mf)
-{
-	int fd;
-
-	if (mf->len == (size_t)-1) {
-		(void)symlink(mf->buf, mf->path);
-		free(mf->buf);
-		return;
-	}
-
-	if (mf->len == 0)
-		return;
-	fd = open(mf->path, O_WRONLY | O_CREAT | O_TRUNC, 0755);
-	if (fd == -1)
-		return;
-	(void)write(fd, mf->buf, mf->len);
-	(void)munmap(mf->buf, mf->len);
-	(void)close(fd);
-}
-
 static int
 mfs_dev(void)
 {
 	/*
 	 * We cannot print errors so we bail out silently...
 	 */
-	int i;
 	pid_t pid;
 	int status;
-	dev_t dev;
-	char *fs_size;
-#ifdef CPU_CONSDEV
-	static int name[2] = { CTL_MACHDEP, CPU_CONSDEV };
-	size_t olen;
-#endif
 
 	/* If we have /dev/console, assume all is OK  */
-	if (access(_PATH_CONSOLE, F_OK) != -1)
-		return(0);
+	if (access(_PATH_CONSOLE, F_OK) == 0)
+		return 0;
 
-	/* Grab the contents of MAKEDEV* files */
-	for (i = 0; i < __arraycount(mfile); i++)
-		mapfile(&mfile[i]);
-
-	/* Mount an mfs over /dev so we can create devices */
+#if 0	/* Useful for testing MAKEDEV */
+	/* Mount an mfs over /mnt so we can create a console entry */
 	switch ((pid = fork())) {
 	case 0:
-		(void)asprintf(&fs_size, "%zu", FSSIZE);
 		if (fs_size == NULL)
 			return(-1);
 		(void)execl(INIT_MOUNT_MFS, "mount_mfs",
 		    "-b", "4096", "-f", "512",
-		    "-s", fs_size, "-n", STR(NINODE),
+		    "-s", 64, "-n", 10,
 		    "-p", "0755",
-		    "swap", "/dev", NULL);
-		_exit(1);
+		    "swap", "/mnt", NULL);
+		_exit(9);
 		/*NOTREACHED*/
 
 	case -1:
@@ -1722,24 +1643,23 @@ mfs_dev(void)
 		break;
 	}
 
+	{
 #ifdef CPU_CONSDEV
-	olen = sizeof(dev);
-	if (sysctl(name, sizeof(name) / sizeof(name[0]), &dev, &olen,
-	    NULL, 0) == -1)
+		static int name[2] = { CTL_MACHDEP, CPU_CONSDEV };
+		size_t olen;
+		olen = sizeof(dev);
+		if (sysctl(name, sizeof(name) / sizeof(name[0]), &dev, &olen,
+		    NULL, 0) == -1)
 #endif
-		dev = makedev(0, 0);
+			dev = makedev(0, 0);
+	}
 
 	/* Make a console for us, so we can see things happening */
-	if (mknod(_PATH_CONSOLE, 0666 | S_IFCHR, dev) == -1)
+	if (mknod("/mnt/console", 0666 | S_IFCHR, dev) == -1)
 		return(-1);
 
-	(void)freopen(_PATH_CONSOLE, "a", stderr);
-
-	warnx("Creating mfs /dev (%zu blocks, %d inodes)", FSSIZE, NINODE);
-
-	/* Create MAKEDEV* files in the mfs /dev */
-	for (i = 0; i < __arraycount(mfile); i++)
-		writefile(&mfile[i]);
+	(void)freopen("/mnt/console", "a", stderr);
+#endif
 
 	/* Run the makedev script to create devices */
 	switch ((pid = fork())) {
@@ -1747,9 +1667,10 @@ mfs_dev(void)
 		(void)dup2(2, 1);	/* Give the script stdout */
 		if (chdir("/dev") == 0)
 			(void)execl(INIT_BSHELL, "sh",
-			    mfile[0].len ? "./MAKEDEV" : "/etc/MAKEDEV",
-			    "init", NULL); 
-		_exit(1);
+			    access("./MAKEDEV", X_OK) == 0
+				? "./MAKEDEV" : "/etc/MAKEDEV",
+			    "-MM", "-ppax", "init", NULL); 
+		_exit(10);
 		/* NOTREACHED */
 
 	case -1:
@@ -1762,10 +1683,13 @@ mfs_dev(void)
 			errno = EINVAL;
 			break;
 		}
-		return 0;
+		/* Check /dev/console got created */
+		if (access(_PATH_CONSOLE, F_OK) == 0)
+			return 0;
+		_exit(11);
 	}
 	warn("Unable to run MAKEDEV");
-	return (-1);
+	_exit(12);
 }
 #endif
 
@@ -1809,7 +1733,7 @@ createsysctlnode()
 	(void)snprintf(node.sysctl_name, SYSCTL_NAMELEN, "init");
 	if (sysctl(&mib[0], 1, &node, &len, &node, len) == -1) {
 		warning("could not create init node: %m");
-		return (-1);
+		return -1;
 	}
 
 	/*
@@ -1829,10 +1753,10 @@ createsysctlnode()
 	(void)snprintf(node.sysctl_name, SYSCTL_NAMELEN, "root");
 	if (sysctl(&mib[0], 2, NULL, NULL, &node, len) == -1) {
 		warning("could not create init.root node: %m");
-		return (-1);
+		return -1;
 	}
 
-	return (0);
+	return 0;
 }
 
 int
@@ -1864,18 +1788,18 @@ shouldchroot()
 		}
 
 		/* We certainly won't chroot. */
-		return (0);
+		return 0;
 	}
 
 	if (rootdir[len] != '\0' || strlen(rootdir) != len - 1) {
 		warning("init.root is not a string");
-		return (0);
+		return 0;
 	}
 
 	if (strcmp(rootdir, "/") == 0)
-		return (0);
+		return 0;
 
-	return (1);
+	return 1;
 }
 
 #endif /* !LETS_GET_SMALL && CHROOT */

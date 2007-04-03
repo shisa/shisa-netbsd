@@ -1,4 +1,4 @@
-/*	$NetBSD: cg4.c,v 1.35 2006/03/29 04:16:48 thorpej Exp $	*/
+/*	$NetBSD: cg4.c,v 1.37 2007/03/12 12:03:18 tsutsui Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -55,7 +55,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: cg4.c,v 1.35 2006/03/29 04:16:48 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: cg4.c,v 1.37 2007/03/12 12:03:18 tsutsui Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -209,7 +209,7 @@ cg4match(struct device *parent, struct cfdata *cf, void *args)
 			return (0);
 		if (p4id != P4_ID_COLOR8P1) {
 #ifdef	DEBUG
-			printf("cgfour at 0x%x match p4id=0x%x fails\n",
+			printf("cgfour at 0x%lx match p4id=0x%x fails\n",
 				   ca->ca_paddr, p4id & 0xFF);
 #endif
 			return (0);
@@ -336,7 +336,7 @@ cg4open(dev_t dev, int flags, int mode, struct lwp *l)
 }
 
 int 
-cg4ioctl(dev_t dev, u_long cmd, caddr_t data, int flags, struct lwp *l)
+cg4ioctl(dev_t dev, u_long cmd, void *data, int flags, struct lwp *l)
 {
 	struct cg4_softc *sc = cgfour_cd.cd_devs[minor(dev)];
 

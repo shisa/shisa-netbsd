@@ -1,8 +1,9 @@
-#	$NetBSD: Makefile,v 1.420 2007/02/20 16:56:10 kiyohara Exp $
+#	$NetBSD: Makefile,v 1.423 2007/03/25 09:11:56 wiz Exp $
 #	@(#)Makefile	8.1 (Berkeley) 6/18/93
 
 MAN=	aac.4 ac97.4 acardide.4 aceride.4 acphy.4 adc.4 adt7467c.4 adv.4 \
-	adw.4 agp.4 agr.4 ahb.4 ahc.4 ahcisata.4 ahd.4 amdpm.4 amhphy.4 amr.4 \
+	adw.4 agp.4 agr.4 ahb.4 ahc.4 ahcisata.4 ahd.4 aiboost.4 \
+	amdpm.4 amhphy.4 amr.4 \
 	an.4 aria.4 artsata.4 ata.4 atalk.4 ataraid.4 \
 	ath.4 atppc.4 attimer.4 atw.4 \
 	auacer.4 audio.4 audiocs.4 auich.4 \
@@ -14,7 +15,7 @@ MAN=	aac.4 ac97.4 acardide.4 aceride.4 acphy.4 adc.4 adt7467c.4 adv.4 \
 	clockctl.4 cltp.4 cmdide.4 cmpci.4 cms.4 cnw.4 \
 	com.4 crypto.4 cs80bus.4 cypide.4  geodeide.4 \
 	ddb.4 ddc.4 de.4 dge.4 dk.4 dmoverio.4 \
-	dmphy.4 dpt.4 dpti.4 drum.4 eap.4 ebus.4 edc.4 \
+	dmphy.4 dpt.4 dpti.4 drm.4 drum.4 eap.4 ebus.4 edc.4 \
 	elmc.4 emuxki.4 en.4 envsys.4 ep.4 esh.4 esis.4 \
 	esa.4 esiop.4 esl.4 esm.4 eso.4 etherip.4 exphy.4 fast_ipsec.4 fd.4 \
 	fpa.4 fms.4 fss.4 fxp.4 gem.4 gentbi.4 \
@@ -113,6 +114,17 @@ MAN+=	daic.4 isdntrc.4 isdntel.4 isdnbchan.4 ippp.4 irip.4 isdnctl.4 isdn.4 \
 # onewire bus and devices
 MAN+=	gpioow.4 onewire.4 owtemp.4
 
+# DRM devices
+MLINKS+=drm.4 i915drm.4
+MLINKS+=drm.4 mach64drm.4
+MLINKS+=drm.4 mgadrm.4
+MLINKS+=drm.4 r128drm.4
+MLINKS+=drm.4 radeondrm.4
+MLINKS+=drm.4 savagedrm.4
+MLINKS+=drm.4 sisdrm.4
+MLINKS+=drm.4 tdfxdrm.4
+MLINKS+=drm.4 viadrm.4
+
 MLINKS+=ata.4 atabus.4
 MLINKS+=audio.4 mixer.4
 MLINKS+=audio.4 sound.4
@@ -159,8 +171,8 @@ SUBDIR= man4.acorn26 man4.acorn32 man4.alpha man4.amiga man4.arc man4.atari \
 	man4.cobalt \
 	man4.dreamcast man4.evbarm man4.evbmips man4.hp300 man4.hp700 \
 	man4.hpcarm man4.hpcmips man4.hpcsh man4.i386 man4.mac68k \
-	man4.macppc man4.mvme68k man4.pc532 man4.pmax man4.pmppc man4.sgimips \
-	man4.sparc man4.sparc64 man4.sun2 man4.sun3 man4.vax man4.x68k
+	man4.macppc man4.mvme68k man4.pc532 man4.pmax man4.pmppc man4.prep \
+	man4.sgimips man4.sparc man4.sparc64 man4.sun2 man4.sun3 man4.vax man4.x68k
 
 .include <bsd.man.mk>
 .include <bsd.subdir.mk>

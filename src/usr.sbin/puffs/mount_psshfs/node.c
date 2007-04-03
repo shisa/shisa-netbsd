@@ -1,4 +1,4 @@
-/*	$NetBSD: node.c,v 1.9 2007/02/27 13:28:39 pooka Exp $	*/
+/*	$NetBSD: node.c,v 1.12 2007/03/22 13:43:58 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006  Antti Kantee.  All Rights Reserved.
@@ -30,7 +30,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: node.c,v 1.9 2007/02/27 13:28:39 pooka Exp $");
+__RCSID("$NetBSD: node.c,v 1.12 2007/03/22 13:43:58 pooka Exp $");
 #endif /* !lint */
 
 #include <assert.h>
@@ -52,6 +52,7 @@ psshfs_node_lookup(struct puffs_cc *pcc, void *opc, void **newnode,
 	struct psshfs_node *psn, *psn_dir = pn_dir->pn_data;
 	struct puffs_node *pn;
 	struct psshfs_dir *pd;
+	struct vattr va;
 	int rv;
 
 	if (PCNISDOTDOT(pcn)) {
@@ -65,21 +66,40 @@ psshfs_node_lookup(struct puffs_cc *pcc, void *opc, void **newnode,
 
 	rv = sftp_readdir(pcc, pctx, pn_dir);
 	if (rv) {
-		assert(rv != ENOENT);
-		return rv;
+		printf("got error from readdir: %d\n", rv);
+		if (rv != EPERM)
+			return rv;
+
+		/*
+		 * Can't read the directory.  We still might be
+		 * able to find the node with getattr in -r+x dirs
+		 */
+		rv = getpathattr(pcc, PCNPATH(pcn), &va);
+		if (rv)
+			return rv;
+
+		/* guess */
+		if (va.va_type == VDIR)
+			va.va_nlink = 2;
+		else
+			va.va_nlink = 1;
+
+		pn = allocnode(pu, pn_dir, pcn->pcn_name, &va);
+		psn = pn->pn_data;
+		psn->attrread = time(NULL);
+	} else {
+		pd = lookup(psn_dir->dir, psn_dir->dentnext, pcn->pcn_name);
+		if (!pd) {
+			return ENOENT;
+		}
+
+		if (pd->entry)
+			pn = pd->entry;
+		else
+			pn = makenode(pu, pn_dir, pd, &pd->va);
+		psn = pn->pn_data;
 	}
 
-	pd = lookup(psn_dir->dir, psn_dir->dentnext, pcn->pcn_name);
-	if (!pd) {
-		return ENOENT;
-	}
-
-	if (pd->entry)
-		pn = pd->entry;
-	else
-		pn = makenode(pu, pn_dir, pd, &pd->va);
-
-	psn = pn->pn_data;
 	psn->reclaimed = 0;
 
 	*newnode = pn;
@@ -93,43 +113,16 @@ int
 psshfs_node_getattr(struct puffs_cc *pcc, void *opc, struct vattr *vap,
 	const struct puffs_cred *pcr, pid_t pid)
 {
-	PSSHFSAUTOVAR(pcc);
 	struct puffs_node *pn = opc;
-	struct psshfs_node *psn = pn->pn_data;
-	struct vattr va;
+	int rv;
 
-	rv = 0;
-
-	if ((time(NULL) - psn->attrread) >= PSSHFS_REFRESHIVAL) {
-		psbuf_req_str(pb, SSH_FXP_LSTAT, reqid, PNPATH(pn));
-		pssh_outbuf_enqueue(pctx, pb, pcc, reqid);
-		puffs_cc_yield(pcc);
-
-		rv = psbuf_expect_attrs(pb, &va);
-		if (rv)
-			goto out;
-
-#if 0
-		/*
-		 * check if the file was modified from below us
-		 *
-		 * XXX: what's the right place(s) to do this?
-		 * XXX2: resolution only per second, since sftp doesn't
-		 *       support nanoseconds
-		 */
-		if (psn->attrread)
-			if (pn->pn_va.va_mtime.tv_sec != va.va_mtime.tv_sec)
-				puffs_inval_pagecache_node(pu, opc);
-#endif
-
-		puffs_setvattr(&pn->pn_va, &va);
-		psn->attrread = time(NULL);
-	}
+	rv = getnodeattr(pcc, pn);
+	if (rv)
+		return rv;
 
 	memcpy(vap, &pn->pn_va, sizeof(struct vattr));
 
- out:
-	PSSHFSRETURN(rv);
+	return 0;
 }
 
 int
@@ -258,7 +251,7 @@ psshfs_node_read(struct puffs_cc *pcc, void *opc, uint8_t *buf,
 
 	if (pn->pn_va.va_type == VDIR) {
 		rv = EISDIR;
-		goto out;
+		goto err;
 	}
 
 	puffs_vattr_null(&va);
@@ -271,7 +264,7 @@ psshfs_node_read(struct puffs_cc *pcc, void *opc, uint8_t *buf,
 
 	rv = psbuf_expect_handle(pb, &fhand, &fhandlen);
 	if (rv)
-		goto out;
+		goto err;
 
 	readlen = *resid;
 	reqid = NEXTREQ(pctx);
@@ -290,13 +283,12 @@ psshfs_node_read(struct puffs_cc *pcc, void *opc, uint8_t *buf,
 	reqid = NEXTREQ(pctx);
 	psbuf_recycle(pb, PSB_OUT);
 	psbuf_req_data(pb, SSH_FXP_CLOSE, reqid, fhand, fhandlen);
-	pssh_outbuf_enqueue(pctx, pb, pcc, reqid);
 
-	puffs_cc_yield(pcc);
+	pssh_outbuf_enqueue_nocc(pctx, pb, NULL, NULL, reqid);
+	free(fhand);
+	return 0;
 
-	/* don't care */
-
- out:
+ err:
 	free(fhand);
 	PSSHFSRETURN(rv);
 }
@@ -315,7 +307,7 @@ psshfs_node_write(struct puffs_cc *pcc, void *opc, uint8_t *buf,
 
 	if (pn->pn_va.va_type == VDIR) {
 		rv = EISDIR;
-		goto out;
+		goto err;
 	}
 
 	/*
@@ -334,7 +326,7 @@ psshfs_node_write(struct puffs_cc *pcc, void *opc, uint8_t *buf,
 	kludgeva2.va_mode = 0700;
 	rv = psshfs_node_setattr(pcc, opc, &kludgeva2, cred, 0);
 	if (rv)
-		goto out;
+		goto err;
 
 	/* XXXcontinuation: ok, file is mode 700 now, we can open it rw */
 
@@ -360,7 +352,7 @@ psshfs_node_write(struct puffs_cc *pcc, void *opc, uint8_t *buf,
 
 	rv = psbuf_expect_handle(pb, &fhand, &fhandlen);
 	if (rv)
-		goto out;
+		goto err;
 
 	/* moreXXX: file is open, revert old creds for crying out loud! */
 	rv = psshfs_node_setattr(pcc, opc, &kludgeva1, cred, 0);
@@ -390,12 +382,12 @@ psshfs_node_write(struct puffs_cc *pcc, void *opc, uint8_t *buf,
 	reqid = NEXTREQ(pctx);
 	psbuf_recycle(pb, PSB_OUT);
 	psbuf_req_data(pb, SSH_FXP_CLOSE, reqid, fhand, fhandlen);
-	pssh_outbuf_enqueue(pctx, pb, pcc, reqid);
 
-	puffs_cc_yield(pcc);
+	pssh_outbuf_enqueue_nocc(pctx, pb, NULL, NULL, reqid);
+	free(fhand);
+	return 0;
 
-	/* dontcare */
- out:
+ err:
 	free(fhand);
 	PSSHFSRETURN(rv);
 }

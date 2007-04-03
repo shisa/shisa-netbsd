@@ -1,11 +1,11 @@
-/*	$NetBSD: sem.c,v 1.11 2006/12/24 18:39:46 ad Exp $	*/
+/*	$NetBSD: sem.c,v 1.14 2007/03/24 18:52:00 ad Exp $	*/
 
 /*-
- * Copyright (c) 2003 The NetBSD Foundation, Inc.
+ * Copyright (c) 2003, 2006, 2007 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
  * This code is derived from software contributed to The NetBSD Foundation
- * by Jason R. Thorpe of Wasabi Systems, Inc.
+ * by Jason R. Thorpe of Wasabi Systems, Inc, and by Andrew Doran.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -66,7 +66,7 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: sem.c,v 1.11 2006/12/24 18:39:46 ad Exp $");
+__RCSID("$NetBSD: sem.c,v 1.14 2007/03/24 18:52:00 ad Exp $");
 
 #include <sys/types.h>
 #include <sys/ksem.h>
@@ -287,6 +287,7 @@ sem_wait(sem_t *sem)
 {
 	pthread_t self;
 	extern int pthread__started;
+	struct pthread_queue_t *queue;
 
 #ifdef ERRORCHECK
 	if (sem == NULL || *sem == NULL || (*sem)->usem_magic != USEM_MAGIC) {
@@ -318,48 +319,24 @@ sem_wait(sem_t *sem)
 		return 0;
 	}
 
+	queue = &(*sem)->usem_waiters;
+	pthread_spinlock(self, &(*sem)->usem_interlock);
 	for (;;) {
-		pthread_spinlock(self, &(*sem)->usem_interlock);
-		pthread_spinlock(self, &self->pt_statelock);
 		if (self->pt_cancel) {
-			pthread_spinunlock(self, &self->pt_statelock);
 			pthread_spinunlock(self, &(*sem)->usem_interlock);
 			pthread_exit(PTHREAD_CANCELED);
 		}
 
-		if ((*sem)->usem_count > 0) {
-			pthread_spinunlock(self, &self->pt_statelock);
+		if ((*sem)->usem_count > 0)
 			break;
-		}
 
-#ifdef PTHREAD_SA
-		PTQ_INSERT_TAIL(&(*sem)->usem_waiters, self, pt_sleep);
-		self->pt_sleepobj = *sem;
-		self->pt_state = PT_STATE_BLOCKED_QUEUE;
-		self->pt_sleepq = &(*sem)->usem_waiters;
-		self->pt_sleeplock = &(*sem)->usem_interlock;
-		pthread_spinunlock(self, &self->pt_statelock);
-
-		/* XXX What about signals? */
-
-		pthread__block(self, &(*sem)->usem_interlock);
-		/* interlock is not held when we return */
-#else
-		/*
-		 * Should be no race against self->pt_cancel here, as the
-		 * kernel needs to preserve L_CANCELLED.
-		 *
-		 * XXXLWP lock soup
-		 */
-		pthread_spinunlock(self, &self->pt_statelock);
-		(void)pthread__park(self, &(*sem)->usem_interlock, *sem,
-		    &(*sem)->usem_waiters, NULL, 1, 1);
-		pthread_spinunlock(self, &(*sem)->usem_interlock);
-#endif
+		PTQ_INSERT_TAIL(queue, self, pt_sleep);
+		self->pt_sleeponq = 1;
+		self->pt_sleepobj = queue,
+		(void)pthread__park(self, &(*sem)->usem_interlock,
+		    queue, NULL, 1, queue);
 	}
-
 	(*sem)->usem_count--;
-
 	pthread_spinunlock(self, &(*sem)->usem_interlock);
 
 	return (0);
@@ -437,13 +414,8 @@ sem_post(sem_t *sem)
 	if (blocked) {
 		PTQ_REMOVE(&(*sem)->usem_waiters, blocked, pt_sleep);
 		/* Give the head of the blocked queue another try. */
-#ifdef PTHREAD_SA
-		pthread__sched(self, blocked);
-		pthread_spinunlock(self, &(*sem)->usem_interlock);
-#else
-		pthread__unpark(self, &(*sem)->usem_interlock, *sem,
-		    blocked);
-#endif
+		pthread__unpark(self, &(*sem)->usem_interlock,
+		    &(*sem)->usem_waiters, blocked);
 	} else
 		pthread_spinunlock(self, &(*sem)->usem_interlock);
 

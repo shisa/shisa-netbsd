@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# $NetBSD: postinstall,v 1.36 2007/03/01 07:51:26 apb Exp $
+# $NetBSD: postinstall,v 1.39 2007/03/26 18:09:42 apb Exp $
 #
 # Copyright (c) 2002-2006 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -615,7 +615,7 @@ do_gid()
 	[ -n "$1" ] || err 2 "USAGE: do_gid  fix|check"
 
 	check_ids $1 groups "${DEST_DIR}/etc/group" \
-	    named ntpd postfix sshd authpf _pflogd _rwhod _timedc
+	    named ntpd postfix sshd authpf _pflogd _rwhod _timedc _sdpd
 }
 
 #
@@ -654,32 +654,25 @@ do_iscsi()
 #
 #	makedev
 #
-additem makedev "/dev/MAKEDEV and /dev/MAKEDEV.subr being up to date"
+additem makedev "/dev/MAKEDEV being up to date"
 do_makedev()
 {
 	[ -n "$1" ] || err 2 "USAGE: do_makedev   fix|check"
-	local _rv=0
 
-	for f in MAKEDEV MAKEDEV.subr; do
-		if [ -f "${SRC_DIR}/etc/${f}.tmpl" ]; then
-			# generate file from source if source is available
-			env MACHINE=${MACHINE} \
-			    MACHINE_ARCH=${MACHINE_ARCH} \
-			    NETBSDSRCDIR="${SRC_DIR}" \
-			    awk -f ${SRC_DIR}/etc/MAKEDEV.awk \
-			    ${SRC_DIR}/etc/${f}.tmpl > ${SCRATCHDIR}/${f}
-		fi
+	if [ -f "${SRC_DIR}/etc/MAKEDEV.tmpl" ]; then
+			# generate MAKEDEV from source if source is available
+		env MACHINE=${MACHINE} \
+		    MACHINE_ARCH=${MACHINE_ARCH} \
+		    NETBSDSRCDIR="${SRC_DIR}" \
+		    awk -f ${SRC_DIR}/etc/MAKEDEV.awk \
+		    ${SRC_DIR}/etc/MAKEDEV.tmpl > ${SCRATCHDIR}/MAKEDEV
+	fi
 
-		if ! find_file_in_dirlist ${f} "${f}" \
-		    ${SCRATCHDIR} ${SRC_DIR}/dev
-		then
-		    _rv=1
-		    continue
-		fi
+	find_file_in_dirlist MAKEDEV "MAKEDEV" \
+	    ${SCRATCHDIR} ${SRC_DIR}/dev \
+	    || return 1
 			# ${dir} is set by find_file_in_dirlist()
-		compare_dir $1 ${dir} ${DEST_DIR}/dev 555 ${f} \
-		|| _rv=1
-	done
+	compare_dir $1 ${dir} ${DEST_DIR}/dev 555 MAKEDEV
 }
 
 #
@@ -879,6 +872,9 @@ do_rc()
 		ip6forwarding \
 		mountcritlocal mountcritremote \
 		network nfsiod_flags \
+		sdpd sdpd_control \
+		sdpd sdpd_groupname \
+		sdpd sdpd_username \
 		sysctl
 	while [ $# -gt 1 ]; do
 		if rcconf_is_set ${op} $1 $2 1; then
@@ -1098,7 +1094,7 @@ do_uid()
 	[ -n "$1" ] || err 2 "USAGE: do_uid  fix|check"
 
 	check_ids $1 users "${DEST_DIR}/etc/master.passwd" \
-	    named ntpd postfix sshd _pflogd _rwhod _timedc
+	    named ntpd postfix sshd _pflogd _rwhod _timedc _sdpd
 }
 
 
@@ -1155,12 +1151,17 @@ Usage: ${PROGNAME} [-s srcdir] [-d destdir] [-m mach] [-a arch] op [item [...]]
 	If no items are provided, all checks or fixes are applied.
 
 	Options:
-	-s srcdir	Source directory to compare from.
-			This may be src/etc, an extracted copy of "etc.tgz",
-			or the file etc.tgz.  In the latter case, etc.tgz
-			is extracted into a temporary directory to be used
-			as the source directory.	[${SRC_DIR:-/}]
-	-d destdir	Destination directory to check.	[${DEST_DIR:-/}]
+	-s {srcdir|tgzfile|tempdir}
+			Location of the source files.  This may be any
+			of the following:
+			* A directory that contains a NetBSD source tree;
+			* A distribution set file such as "etc.tgz" or
+			  "xetc.tgz", or a colon-separated list of such
+			  files;
+			* A temporary directory in which one or both of
+			  "etc.tgz" and "xetc.tgz" have been extracted.
+							[${SRC_DIR:-/}]
+	-d destdir	Destination directory to check. [${DEST_DIR:-/}]
 	-m mach		MACHINE.			[${MACHINE}]
 	-a arch		MACHINE_ARCH.			[${MACHINE_ARCH}]
 
@@ -1194,7 +1195,19 @@ main()
 	while getopts s:d:m:a: ch; do
 		case ${ch} in
 		s)
-			SRC_DIR=${OPTARG}
+			if [ -f "${OPTARG%%:*}" ]; then
+				# arg refers to a *.tgz file, or a
+				# colon-separated list.
+				# This may happen twice, for both etc.tgz and
+				# xetc.tgz, so we build up a colon-separated
+				# list in TGZLIST.
+				TGZLIST="${TGZLIST}${TGZLIST:+:}${OPTARG}"
+				SRC_ARG="${TGZLIST}"
+			elif [ -d "${OPTARG}" ]; then
+				SRC_ARG=${OPTARG}
+			else
+				err 1 "Invalid argument for -s option"
+			fi
 			;;
 		d)
 			DEST_DIR=${OPTARG}
@@ -1213,24 +1226,29 @@ main()
 	shift $((${OPTIND} - 1))
 	[ $# -gt 0 ] || usage
 
-	orig_SRC_DIR="${SRC_DIR}"
-
 	#
-	# If '-s etc.tgz', extract etc.tgz to a scratch directory
-	# and invoke the copy of etc/postinstall contained within.
+	# If '-s etc.tgz' or '-s etc.tgz:xetc.tgz', extract tgz files
+	# to a scratch directory.
 	#
-	if [ -f "${SRC_DIR}" ]; then
+	if [ -n "${TGZLIST}" ]; then
 		ETCTGZDIR="${SCRATCHDIR}/etc.tgz"
-		echo "Note: -s ${SRC_DIR} is a file,"
+		echo "Note: -s ${SRC_ARG} is a file,"
 		echo "      temporarily extracting to ${ETCTGZDIR}"
 		if ! mkdir "${ETCTGZDIR}"; then
 			err 1 "Can't create ${ETCTGZDIR}"
 		fi
-		cat "${SRC_DIR}" | (
-			cd "${ETCTGZDIR}" &&
-			tar -zxf -
-		) || err 1 "Can't extract ${SRC_DIR}"
+		oldIFS="${IFS}"
+		IFS=:
+		for tgz in ${TGZLIST}; do
+			cat "${tgz}" | (
+				cd "${ETCTGZDIR}" &&
+				tar -zxf -
+			) || err 1 "Can't extract ${tgz}"
+		done
+		IFS="${oldIFS}"
 		SRC_DIR="${ETCTGZDIR}"
+	else
+		SRC_DIR="${SRC_ARG}"
 	fi
 
 	[ -d "${SRC_DIR}" ]	|| err 1 "${SRC_DIR} is not a directory"
@@ -1283,8 +1301,8 @@ main()
 	list)
 		echo "Source directory: ${SRC_DIR:-/}"
 		echo "Target directory: ${DEST_DIR:-/}"
-		if [ "${SRC_DIR}" != "${orig_SRC_DIR}" ]; then
-			echo " (extracted from: ${orig_SRC_DIR})"
+		if [ "${SRC_DIR}" != "${SRC_ARG}" ]; then
+			echo " (extracted from: ${SRC_ARG})"
 		fi
 		list
 		;;
@@ -1303,8 +1321,8 @@ main()
 		# perform each check/fix
 		#
 		echo "Source directory: ${SRC_DIR:-/}"
-		if [ "${SRC_DIR}" != "${orig_SRC_DIR}" ]; then
-			echo " (extracted from: ${orig_SRC_DIR})"
+		if [ "${SRC_DIR}" != "${SRC_ARG}" ]; then
+			echo " (extracted from: ${SRC_ARG})"
 		fi
 		echo "Target directory: ${DEST_DIR:-/}"
 		items_passed=
@@ -1331,7 +1349,7 @@ main()
 			[ "$MACHINE" = "$(uname -m)" ] && m= || m=" -m $MACHINE"
 			cat <<_Fix_me_
 To fix, run:
-    ${0} -s ${orig_SRC_DIR} -d ${DEST_DIR:-/}$m fix${items_failed}
+    ${0} -s ${SRC_ARG} -d ${DEST_DIR:-/}$m fix${items_failed}
 _Fix_me_
 		fi
 
@@ -1348,7 +1366,7 @@ _Fix_me_
 # defaults
 #
 PROGNAME=${0##*/}
-SRC_DIR="/usr/src"
+SRC_ARG="/usr/src"
 DEST_DIR="/"
 : ${MACHINE:=$( uname -m )}	# assume native build if $MACHINE is not set
 : ${MACHINE_ARCH:=$( uname -p )}# assume native build if not set

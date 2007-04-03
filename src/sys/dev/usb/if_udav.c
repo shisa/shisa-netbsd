@@ -1,4 +1,4 @@
-/*	$NetBSD: if_udav.c,v 1.15 2006/12/01 20:56:42 drochner Exp $	*/
+/*	$NetBSD: if_udav.c,v 1.17 2007/03/13 13:51:54 drochner Exp $	*/
 /*	$nabe: if_udav.c,v 1.3 2003/08/21 16:57:19 nabe Exp $	*/
 /*
  * Copyright (c) 2003
@@ -44,7 +44,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_udav.c,v 1.15 2006/12/01 20:56:42 drochner Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_udav.c,v 1.17 2007/03/13 13:51:54 drochner Exp $");
 
 #include "opt_inet.h"
 #include "bpfilter.h"
@@ -102,7 +102,7 @@ Static void udav_txeof(usbd_xfer_handle, usbd_private_handle, usbd_status);
 Static void udav_rxeof(usbd_xfer_handle, usbd_private_handle, usbd_status);
 Static void udav_tick(void *);
 Static void udav_tick_task(void *);
-Static int udav_ioctl(struct ifnet *, u_long, caddr_t);
+Static int udav_ioctl(struct ifnet *, u_long, void *);
 Static void udav_stop_task(struct udav_softc *);
 Static void udav_stop(struct ifnet *, int);
 Static void udav_watchdog(struct ifnet *);
@@ -164,9 +164,6 @@ static const struct udav_type {
 USB_MATCH(udav)
 {
 	USB_MATCH_START(udav, uaa);
-
-	if (uaa->iface != NULL)
-		return (UMATCH_NONE);
 
 	return (udav_lookup(uaa->vendor, uaa->product) != NULL ?
 		UMATCH_VENDOR_PRODUCT : UMATCH_NONE);
@@ -1209,7 +1206,7 @@ Static void udav_intr()
 #endif
 
 Static int
-udav_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
+udav_ioctl(struct ifnet *ifp, u_long cmd, void *data)
 {
 	struct udav_softc *sc = ifp->if_softc;
 	struct ifreq *ifr = (struct ifreq *)data;

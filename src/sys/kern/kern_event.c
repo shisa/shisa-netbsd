@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_event.c,v 1.36 2007/02/17 22:31:42 pavel Exp $	*/
+/*	$NetBSD: kern_event.c,v 1.38 2007/03/12 18:18:32 ad Exp $	*/
 
 /*-
  * Copyright (c) 1999,2000,2001 Jonathan Lemon <jlemon@FreeBSD.org>
@@ -29,7 +29,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_event.c,v 1.36 2007/02/17 22:31:42 pavel Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_event.c,v 1.38 2007/03/12 18:18:32 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -104,8 +104,10 @@ static const struct filterops file_filtops =
 static const struct filterops timer_filtops =
 	{ 0, filt_timerattach, filt_timerdetach, filt_timer };
 
-static POOL_INIT(kqueue_pool, sizeof(struct kqueue), 0, 0, 0, "kqueuepl", NULL);
-static POOL_INIT(knote_pool, sizeof(struct knote), 0, 0, 0, "knotepl", NULL);
+static POOL_INIT(kqueue_pool, sizeof(struct kqueue), 0, 0, 0, "kqueuepl", NULL,
+    IPL_VM);
+static POOL_INIT(knote_pool, sizeof(struct knote), 0, 0, 0, "knotepl", NULL,
+    IPL_VM);
 static int	kq_ncallouts = 0;
 static int	kq_calloutmax = (4 * 1024);
 
@@ -254,10 +256,10 @@ kfilter_register(const char *name, const struct filterops *filtops,
 
 		/* copy existing user_kfilters */
 		if (user_kfilters != NULL)
-			memcpy((caddr_t)kfilter, (caddr_t)user_kfilters,
+			memcpy((void *)kfilter, (void *)user_kfilters,
 			    user_kfilterc * sizeof(struct kfilter *));
 					/* zero new sections */
-		memset((caddr_t)kfilter +
+		memset((char *)kfilter +
 		    user_kfilterc * sizeof(struct kfilter *), 0,
 		    (user_kfiltermaxc - user_kfilterc) *
 		    sizeof(struct kfilter *));
@@ -625,7 +627,7 @@ sys_kqueue(struct lwp *l, void *v, register_t *retval)
 	memset((char *)kq, 0, sizeof(struct kqueue));
 	simple_lock_init(&kq->kq_lock);
 	TAILQ_INIT(&kq->kq_head);
-	fp->f_data = (caddr_t)kq;	/* store the kqueue with the fp */
+	fp->f_data = (void *)kq;	/* store the kqueue with the fp */
 	*retval = fd;
 	if (fdp->fd_knlistsize < 0)
 		fdp->fd_knlistsize = 0;	/* this process has a kq */
@@ -1359,7 +1361,7 @@ knote_attach(struct knote *kn, struct filedesc *fdp)
 		list = malloc(size * sizeof(struct klist *), M_KEVENT,M_WAITOK);
 		if (fdp->fd_knlist) {
 			/* copy existing knlist */
-			memcpy((caddr_t)list, (caddr_t)fdp->fd_knlist,
+			memcpy((void *)list, (void *)fdp->fd_knlist,
 			    fdp->fd_knlistsize * sizeof(struct klist *));
 		}
 		/*

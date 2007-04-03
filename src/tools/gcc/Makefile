@@ -1,25 +1,14 @@
-#	$NetBSD: Makefile,v 1.22 2006/08/23 20:45:24 mrg Exp $
+#	$NetBSD: Makefile,v 1.24 2007/03/31 05:55:43 matt Exp $
 
 .include <bsd.own.mk>
 
 GCC_LANGUAGES=c c++ objc
-.if ${HAVE_GCC} == 3
-MODULE=			gcc
-MKNATIVE_TARGET=	gcc3
-GCC_LANGUAGES+=f77
-MKNATIVE_CONFIG_TARGET_LIBS=	configure-target-libf2c
-BINENV=
-.else	# gcc4
 MODULE=			gcc4
 MKNATIVE_TARGET=	gcc4
 MKNATIVE_CONFIG_TARGET_LIBS=
 BINENV=		/usr/bin/env -i
-.endif
 
 VAX_CONFIGURE_ARGS=
-.if ${MACHINE_ARCH} == "vax"
-VAX_CONFIGURE_ARGS+=--disable-shared
-.endif
 
 CONFIGURE_ARGS=	--target=${MACHINE_GNU_PLATFORM} --disable-nls \
 		--enable-long-long \
@@ -54,13 +43,8 @@ MKNATIVE_ENV=	${BINENV} ${CONFIGURE_ENV:NC*:NLD*} \
 ALL_TARGET=	all-gcc
 INSTALL_TARGET=	install-gcc
 
-.if ${HAVE_GCC} == 3
-.include "${.CURDIR}/../Makefile.gnuhost"
-BUILD_MAKE=${MAKE}
-.else
 .include "${.CURDIR}/../Makefile.gmakehost"
 BUILD_MAKE=${TOOL_GMAKE}
-.endif
 
 CXXADDFLAGS=	${CPPFLAG_ISYSTEMXX} ${DESTDIR}/usr/include/g++
 CCADDFLAGS=	${CPPFLAG_ISYSTEM} ${DESTDIR}/usr/include -L${DESTDIR}/lib -L${DESTDIR}/usr/lib -B${DESTDIR}/usr/lib/

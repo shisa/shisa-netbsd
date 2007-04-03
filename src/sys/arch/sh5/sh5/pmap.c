@@ -1,4 +1,4 @@
-/*	$NetBSD: pmap.c,v 1.46 2007/02/22 16:51:43 thorpej Exp $	*/
+/*	$NetBSD: pmap.c,v 1.48 2007/03/12 18:18:27 ad Exp $	*/
 
 /*
  * Copyright 2002 Wasabi Systems, Inc.
@@ -103,7 +103,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.46 2007/02/22 16:51:43 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.48 2007/03/12 18:18:27 ad Exp $");
 
 #include "opt_ddb.h"
 #include "opt_kernel_ipt.h"
@@ -1108,7 +1108,7 @@ pmap_bootstrap(vaddr_t avail, paddr_t kseg0base, struct mem_region *mr)
 	 * Allocate the kernel message buffer
 	 */
 	size = sh5_round_page(MSGBUFSIZE);
-	initmsgbuf((caddr_t)avail, size);
+	initmsgbuf((void *)avail, size);
 
 	avail = sh5_round_page(avail + size);
 	mr[0].mr_start += size;
@@ -1156,7 +1156,7 @@ pmap_bootstrap(vaddr_t avail, paddr_t kseg0base, struct mem_region *mr)
 	pmap_kernel()->pm_asidgen = 0;
 
 	pool_init(&pmap_upvo_pool, sizeof(struct pvo_entry),
-	    0, 0, 0, "pmap_upvopl", &pmap_pool_uallocator);
+	    0, 0, 0, "pmap_upvopl", &pmap_pool_uallocator, IPL_NONE);
 
 	pool_setlowat(&pmap_upvo_pool, 252);
 }
@@ -1238,10 +1238,10 @@ pmap_init(void)
 	s = splvm();
 
 	pool_init(&pmap_pool, sizeof(struct pmap),
-	    sizeof(void *), 0, 0, "pmap_pl", NULL);
+	    sizeof(void *), 0, 0, "pmap_pl", NULL, IPL_NONE);
 
 	pool_init(&pmap_mpvo_pool, sizeof(struct pvo_entry),
-	    0, 0, 0, "pmap_mpvopl", NULL);
+	    0, 0, 0, "pmap_mpvopl", NULL, IPL_NONE);
 
 	pool_setlowat(&pmap_mpvo_pool, 1008);
 
@@ -1283,7 +1283,7 @@ pmap_create(void)
 	pmap_t pm;
 	
 	pm = pool_get(&pmap_pool, PR_WAITOK);
-	memset((caddr_t)pm, 0, sizeof *pm);
+	memset((void *)pm, 0, sizeof *pm);
 	pmap_pinit(pm);
 	return (pm);
 }
@@ -3039,7 +3039,7 @@ pmap_steal_memory(vsize_t vsize, vaddr_t *vstartp, vaddr_t *vendp)
 	}
 
 	va = (vaddr_t)(SH5_KSEG0_BASE + (pa - pmap_kseg0_pa));
-	memset((caddr_t) va, 0, size);
+	memset((void *) va, 0, size);
 
 	return (va);
 }

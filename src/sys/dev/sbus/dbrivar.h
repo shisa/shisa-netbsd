@@ -1,4 +1,4 @@
-/*	$NetBSD: dbrivar.h,v 1.4 2006/03/09 20:44:18 macallan Exp $	*/
+/*	$NetBSD: dbrivar.h,v 1.6 2007/03/14 05:40:35 macallan Exp $	*/
 
 /*
  * Copyright (C) 1997 Rudolf Koenig (rfkoenig@immd4.informatik.uni-erlangen.de)
@@ -86,8 +86,8 @@ struct dbri_pipe {
 
 struct dbri_desc {
 	int		busy;
-	caddr_t		buf;		/* cpu view of buffer */
-	caddr_t		buf_dvma;	/* device view */
+	void *		buf;		/* cpu view of buffer */
+	void *		buf_dvma;	/* device view */
 	bus_addr_t	dmabase;
 	bus_dma_segment_t dmaseg;
 	bus_dmamap_t	dmamap;
@@ -114,11 +114,12 @@ struct dbri_softc {
 	bus_dma_segment_t sc_dmaseg;
 	
 	int		sc_have_powerctl;
-	int		sc_powerstate;
+	int		sc_powerstate;	/* DBRI's powered up or not */
+	int		sc_pmgrstate;	/* PWR_RESUME etc. */
 	int		sc_burst;	/* DVMA burst size in effect */
 	
 	bus_addr_t	sc_dmabase;	/* VA of buffer we provide */
-	caddr_t		sc_membase;
+	void *		sc_membase;
 	int		sc_bufsiz;	/* size of the buffer */
 	int		sc_locked;
 	int		sc_irqp;
@@ -126,6 +127,7 @@ struct dbri_softc {
 	int		sc_waitseen;
 
 	int		sc_open;
+	int		sc_playing;
 
 	int		sc_liu_state;
 	void		(*sc_liu)(void *);
@@ -135,7 +137,11 @@ struct dbri_softc {
 	struct dbri_desc sc_desc[DBRI_NUM_DESCRIPTORS];
 
 	struct cs4215_state	sc_mm;
-	int		sc_latt, sc_ratt;
+	int		sc_latt, sc_ratt;	/* output attenuation */
+	int		sc_linp, sc_rinp;	/* input volume */
+	int		sc_monitor;		/* monitor volume */
+	int		sc_input;		/* 0 - line, 1 - mic */
+
 	int		sc_ctl_mode;
 	
 	uint32_t	sc_version;

@@ -1,4 +1,4 @@
-/*	$NetBSD: svr4_32_types.h,v 1.2 2001/02/11 01:10:25 eeh Exp $	 */
+/*	$NetBSD: svr4_32_types.h,v 1.4 2007/03/04 07:54:10 christos Exp $	 */
 
 /*-
  * Copyright (c) 1994 The NetBSD Foundation, Inc.

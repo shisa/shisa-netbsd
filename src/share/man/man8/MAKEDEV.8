@@ -6,7 +6,7 @@
 .\" *** DO NOT EDIT - any changes will be lost!!!
 .\" *** ------------------------------------------------------------------
 .\"
-.\" $NetBSD: MAKEDEV.8,v 1.18 2007/02/26 22:54:40 apb Exp $
+.\" $NetBSD: MAKEDEV.8,v 1.21 2007/03/11 15:54:10 apb Exp $
 .\"
 .\" Copyright (c) 2001, 2003 The NetBSD Foundation, Inc.
 .\" All rights reserved.
@@ -42,7 +42,7 @@
 .\" ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 .\" POSSIBILITY OF SUCH DAMAGE.
 .\"
-.Dd February 27, 2007
+.Dd March 11, 2007
 .Dt MAKEDEV 8
 .Os
 .Sh NAME
@@ -50,14 +50,11 @@
 .Nd create system and device special files
 .Sh SYNOPSIS
 .Nm
+.Op Fl M
 .Op Fl fs
 .Op Fl m Ar mknod
-.Ar special Op Ar ...
-.Pp
-.Nm
-.Op Fl fs
-.Op Fl m Ar mknod
-.Ar device Op Ar ...
+.Op Fl p Ar pax
+.Bro Ar special | device Brc Op Ar ...
 .Sh DESCRIPTION
 .Nm
 is used to create system and device special files.
@@ -95,11 +92,35 @@ Supported options are:
 .Bl -tag -width XmXmknodXX
 .It Fl f
 Force permissions to be updated on existing devices.
+.It Fl M
+Create a memory filesystem, union mounted over the current directory,
+to contain the device special files.
+This is used by
+.Xr init 1
+when
+.Pa /dev/console
+does not exit.
+If the
+.Fl M
+flag is specified more than once, then
+.Nm
+will also redirect its output to the system console.
 .It Fl m Ar mknod
 Name of
 .Xr mknod 8
 program.
 [Usually, $TOOL_MKNOD or mknod.]
+.It Fl p Ar pax
+Name of
+.Xr pax 1
+program.
+If this is specified, then instead of creating device nodes
+one by one using
+.Xr mknod 8 ,
+.Nm
+will create device nodes all at once using
+.Xr pax 1 .
+This is more efficient when many device nodes are involved.
 .It Fl s
 Generate
 .Xr mtree 8
@@ -743,6 +764,21 @@ wscons event multiplexor, see
 Xen event interface
 . El
 .El
+.Sh ENVIRONMENT
+The following environment variables affect the execution of
+.Nm :
+.Pp
+.Bl -tag -width indent
+.It Ev MAKEDEV_AS_LIBRARY
+If this is set, then
+.Nm
+will define several shell functions and then return,
+ignoring all its command line options and arguments.
+This is used to enable
+.Xr MAKEDEV.local 8
+to use the shell functions defined in
+.Nm .
+.El
 .Sh FILES
 .Bl -tag -width "/dev/MAKEDEV.local" -compact
 .It Pa /dev
@@ -758,6 +794,7 @@ you can get more debugging output by using
 .Dl Ic sh Fl x Ar MAKEDEV Ar argument .
 .Sh SEE ALSO
 .Xr config 1 ,
+.Xr init 1 ,
 .Xr pax 1 ,
 .Xr intro 4 ,
 .Xr MAKEDEV.local 8 ,
@@ -769,6 +806,8 @@ The
 .Nm
 command appeared in
 .Bx 4.2 .
+The ability to be used as a function library was added in
+.Nx 5.0 .
 .Sh NOTES
 Not all devices listed in this manpage are supported on all platforms.
 .Pp

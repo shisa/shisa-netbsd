@@ -1,4 +1,4 @@
-/*	$NetBSD: urio.c,v 1.26 2006/11/16 01:33:27 christos Exp $	*/
+/*	$NetBSD: urio.c,v 1.28 2007/03/13 13:51:56 drochner Exp $	*/
 
 /*
  * Copyright (c) 2000 The NetBSD Foundation, Inc.
@@ -43,7 +43,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: urio.c,v 1.26 2006/11/16 01:33:27 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: urio.c,v 1.28 2007/03/13 13:51:56 drochner Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -154,9 +154,6 @@ USB_MATCH(urio)
 	USB_MATCH_START(urio, uaa);
 
 	DPRINTFN(50,("urio_match\n"));
-
-	if (uaa->iface != NULL)
-		return (UMATCH_NONE);
 
 	return (urio_lookup(uaa->vendor, uaa->product) != NULL ?
 		UMATCH_VENDOR_PRODUCT : UMATCH_NONE);
@@ -488,7 +485,7 @@ uriowrite(dev_t dev, struct uio *uio, int flag)
 
 
 int
-urioioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, struct lwp *l)
+urioioctl(dev_t dev, u_long cmd, void *addr, int flag, struct lwp *l)
 {
 	struct urio_softc * sc;
 	int unit = URIOUNIT(dev);
@@ -543,7 +540,7 @@ urioioctl(dev_t dev, u_long cmd, caddr_t addr, int flag, struct lwp *l)
 	if (len < 0 || len > 32767)
 		return (EINVAL);
 	if (len != 0) {
-		iov.iov_base = (caddr_t)rcmd->buffer;
+		iov.iov_base = (void *)rcmd->buffer;
 		iov.iov_len = len;
 		uio.uio_iov = &iov;
 		uio.uio_iovcnt = 1;
