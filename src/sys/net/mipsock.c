@@ -1,4 +1,4 @@
-/* $Id: mipsock.c,v 1.7 2007/02/13 02:53:43 keiichi Exp $ */
+/* $Id: mipsock.c,v 1.8 2007/04/04 05:08:31 keiichi Exp $ */
 
 /*
  * Copyright (C) 2004 WIDE Project.
@@ -140,7 +140,7 @@ mips_attach(so, proto, p)
 	 * eliminate the spl.
 	 */
 	s = splnet();
-	so->so_pcb = (caddr_t)rp;
+	so->so_pcb = (void *)rp;
 	error = raw_attach(so, proto);
 	rp = sotorawcb(so);
 	if (error) {
@@ -359,7 +359,7 @@ mips_usrreq(so, req, m, nam, control)
 	rp = sotorawcb(so);
 	if (req == PRU_ATTACH && rp) {
 		if (error) {
-			free((caddr_t)rp, M_PCB);
+			free((void *)rp, M_PCB);
 			splx(s);
 			return (error);
 		}
@@ -636,7 +636,7 @@ mips_msg1(type, len)
 	m->m_pkthdr.len = m->m_len = len;
 	m->m_pkthdr.rcvif = 0;
 	miph = mtod(m, struct mip_msghdr *);
-	bzero((caddr_t)miph, len);
+	bzero((void *)miph, len);
 	if (m->m_pkthdr.len != len) {
 		m_freem(m);
 		return (NULL);

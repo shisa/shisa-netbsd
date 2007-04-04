@@ -242,7 +242,7 @@ dest6_nextopt(m, off, ip6o)
 		off += 1;
 	if (m->m_pkthdr.len < off + 1)
 		return -1;
-	m_copydata(m, off, sizeof(type), (caddr_t)&type);
+	m_copydata(m, off, sizeof(type), (void *)&type);
 
 	switch (type) {
 	case IP6OPT_PAD1:
@@ -252,7 +252,7 @@ dest6_nextopt(m, off, ip6o)
 	default:
 		if (m->m_pkthdr.len < off + 2)
 			return -1;
-		m_copydata(m, off, sizeof(ip6o), (caddr_t)ip6o);
+		m_copydata(m, off, sizeof(ip6o), (void *)ip6o);
 		if (m->m_pkthdr.len < off + 2 + ip6o->ip6o_len)
 			return -1;
 		return off;
@@ -305,7 +305,7 @@ dest6_mip6_hao(m, mhoff, nxt)
 			return (0);	/* XXX */
 	}
 	m_copydata(m, off, sizeof(struct ip6_opt_home_address),
-	    (caddr_t)&haopt);
+	    (void *)&haopt);
 
 	swap = 0;
 	if (nxt == IPPROTO_AH || nxt == IPPROTO_ESP || nxt == IPPROTO_MH)
@@ -339,7 +339,7 @@ dest6_mip6_hao(m, mhoff, nxt)
 		if (error)
 			return (error);
 		m_copyback(m, off, sizeof(struct ip6_opt_home_address),
-		    (caddr_t)&haopt);		/* XXX */
+		    (void *)&haopt);		/* XXX */
 		return (0);
 	}
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: in6.c,v 1.124 2007/02/22 08:43:43 dyoung Exp $	*/
+/*	$NetBSD: in6.c,v 1.126 2007/03/15 23:22:30 dyoung Exp $	*/
 /*	$KAME: in6.c,v 1.198 2001/07/18 09:12:38 itojun Exp $	*/
 
 /*
@@ -62,7 +62,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: in6.c,v 1.124 2007/02/22 08:43:43 dyoung Exp $");
+__KERNEL_RCSID(0, "$NetBSD: in6.c,v 1.126 2007/03/15 23:22:30 dyoung Exp $");
 
 #include "opt_inet.h"
 #include "opt_pfil_hooks.h"
@@ -145,7 +145,7 @@ const struct in6_addr in6mask128 = IN6MASK128;
 const struct sockaddr_in6 sa6_any = {sizeof(sa6_any), AF_INET6,
 				     0, 0, IN6ADDR_ANY_INIT, 0};
 
-static int in6_lifaddr_ioctl(struct socket *, u_long, caddr_t,
+static int in6_lifaddr_ioctl(struct socket *, u_long, void *,
 	struct ifnet *, struct lwp *);
 static int in6_ifinit(struct ifnet *, struct in6_ifaddr *,
 	struct sockaddr_in6 *, int);
@@ -236,7 +236,7 @@ in6_ifaddloop(struct ifaddr *ifa)
 	if (rt == NULL || (rt->rt_flags & RTF_HOST) == 0 ||
 	    (rt->rt_ifp->if_flags & IFF_LOOPBACK) == 0)
 		in6_ifloop_request(RTM_ADD, ifa);
-	if (rt)
+	if (rt != NULL)
 		rt->rt_refcnt--;
 }
 
@@ -359,7 +359,7 @@ in6_mask2len(mask, lim0)
 #define ia62ifa(ia6)	(&((ia6)->ia_ifa))
 
 static int
-in6_control1(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
+in6_control1(struct socket *so, u_long cmd, void *data, struct ifnet *ifp,
     struct lwp *l, int privileged)
 {
 	struct	in6_ifreq *ifr = (struct in6_ifreq *)data;
@@ -694,7 +694,7 @@ in6_control1(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
 		if (pr0.ndpr_plen == 128) {
 			break;	/* we don't need to install a host route. */
 #if defined(MOBILE_IPV6) && NMIP > 0
-		} else if ((ia->ia6_flags & IN6_IFF_HOME) && (ifp->if_type == IFT_MIP)) {
+		} else if ((ia->ia6_flags & IN6_IFF_HOME) && (ifp->if_type == IFT_MOBILEIP)) {
 			break;  /* we don't need to install an interface route for home address */
 #endif /* MOBILE_IPV6 && NMIP > 0 */
 		}
@@ -803,7 +803,7 @@ in6_control1(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
 }
 
 int
-in6_control(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
+in6_control(struct socket *so, u_long cmd, void *data, struct ifnet *ifp,
     struct lwp *l)
 {
 	int error, privileged, s;
@@ -973,7 +973,7 @@ in6_update_ifa1(struct ifnet *ifp, struct in6_aliasreq *ifra,
 		    M_NOWAIT);
 		if (ia == NULL)
 			return ENOBUFS;
-		bzero((caddr_t)ia, sizeof(*ia));
+		bzero((void *)ia, sizeof(*ia));
 		LIST_INIT(&ia->ia6_memberships);
 #if defined(MOBILE_IPV6) && NMIP > 0
 		LIST_INIT(&ia->ia6_mbul_list);
@@ -1544,7 +1544,7 @@ static int
 in6_lifaddr_ioctl(so, cmd, data, ifp, l)
 	struct socket *so;
 	u_long cmd;
-	caddr_t	data;
+	void *	data;
 	struct ifnet *ifp;
 	struct lwp *l;
 {
@@ -1655,7 +1655,7 @@ in6_lifaddr_ioctl(so, cmd, data, ifp, l)
 		ifra.ifra_lifetime.ia6t_vltime = ND6_INFINITE_LIFETIME;
 		ifra.ifra_lifetime.ia6t_pltime = ND6_INFINITE_LIFETIME;
 		ifra.ifra_flags = iflr->flags & ~IFLR_PREFIX;
-		return in6_control(so, SIOCAIFADDR_IN6, (caddr_t)&ifra, ifp, l);
+		return in6_control(so, SIOCAIFADDR_IN6, (void *)&ifra, ifp, l);
 	    }
 	case SIOCGLIFADDR:
 	case SIOCDLIFADDR:
@@ -1767,7 +1767,7 @@ in6_lifaddr_ioctl(so, cmd, data, ifp, l)
 			    ia->ia_prefixmask.sin6_len);
 
 			ifra.ifra_flags = ia->ia6_flags;
-			return in6_control(so, SIOCDIFADDR_IN6, (caddr_t)&ifra,
+			return in6_control(so, SIOCDIFADDR_IN6, (void *)&ifra,
 			    ifp, l);
 		}
 	    }
@@ -1807,7 +1807,7 @@ in6_ifinit(ifp, ia, sin6, newhost)
 	ia->ia_addr = *sin6;
 
 	if (ifacount <= 1 && ifp->if_ioctl &&
-	    (error = (*ifp->if_ioctl)(ifp, SIOCSIFADDR, (caddr_t)ia))) {
+	    (error = (*ifp->if_ioctl)(ifp, SIOCSIFADDR, (void *)ia))) {
 		splx(s);
 		return error;
 	}
@@ -2146,8 +2146,7 @@ in6_ifawithifp(ifp, dst)
  * perform DAD when interface becomes IFF_UP.
  */
 void
-in6_if_up(ifp)
-	struct ifnet *ifp;
+in6_if_up(struct ifnet *ifp)
 {
 	struct ifaddr *ifa;
 	struct in6_ifaddr *ia;

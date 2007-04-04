@@ -1,4 +1,4 @@
-/*	$Id: mip6.c,v 1.8 2007/03/23 09:34:29 keiichi Exp $	*/
+/*	$Id: mip6.c,v 1.9 2007/04/04 05:08:32 keiichi Exp $	*/
 
 /*
  * Copyright (C) 2004 WIDE Project.  All rights reserved.
@@ -337,7 +337,7 @@ mip6_input(mp, offp)
 			}
 		}
 		icmp6_error(m, ICMP6_PARAM_PROB, ICMP6_PARAMPROB_HEADER,
-		    (caddr_t)&mh->ip6mh_proto - (caddr_t)ip6);
+		    (char *)&mh->ip6mh_proto - (char *)ip6);
 		return (IPPROTO_DONE);
 	}
 
@@ -370,7 +370,7 @@ mip6_input(mp, offp)
 		}
 
 		icmp6_error(m, ICMP6_PARAM_PROB, ICMP6_PARAMPROB_HEADER,
-		    (caddr_t)&mh->ip6mh_len - (caddr_t)ip6);
+		    (char *)&mh->ip6mh_len - (char *)ip6);
 
 		return (IPPROTO_DONE);
 	}
@@ -502,7 +502,7 @@ mip6_tunnel_input(mp, offp)
 	off = sizeof(struct ip6_hdr);
 	proto = mtod(m, struct ip6_hdr *)->ip6_nxt;
 	while (off < *offp) {
-		m_copydata(m, off, sizeof(exthdr), (caddr_t)exthdr);
+		m_copydata(m, off, sizeof(exthdr), (void *)exthdr);
 		proto = exthdr[0];
 		off += (exthdr[1] + 1) << 3;
 	}
@@ -531,7 +531,7 @@ mip6_tunnel_input(mp, offp)
 		   when receiving ICMPv6 error messages. */
 		if (nxt == IPPROTO_ICMPV6) {
 			m_copydata(m, off, sizeof(struct icmp6_hdr),
-			    (caddr_t)&icmp6);
+			    (void *)&icmp6);
 			if (icmp6.icmp6_type < ICMP6_ECHO_REQUEST)
 				goto dontstartrr;
 		}
@@ -882,7 +882,7 @@ mip6_create_rthdr2(coa)
 	rthdr2->ip6r2_type = 2;
 	rthdr2->ip6r2_segleft = 1;
 	rthdr2->ip6r2_reserved = 0;
-	bcopy((caddr_t)coa, (caddr_t)(rthdr2 + 1), sizeof(struct in6_addr));
+	bcopy((void *)coa, (void *)(rthdr2 + 1), sizeof(struct in6_addr));
 
 	mip6stat.mip6s_orthdr2++;
 
@@ -1279,7 +1279,7 @@ mip6_are_homeprefix(ndpr)
 		if (ia6->ia_ifp == NULL)
 			continue;
 
-		if (ia6->ia_ifp->if_type != IFT_MIP)
+		if (ia6->ia_ifp->if_type != IFT_MOBILEIP)
 			continue;
 
 		if (in6_are_prefix_equal(&ndpr->ndpr_prefix.sin6_addr,
@@ -1301,7 +1301,7 @@ mip6_ifa6_is_addr_valid_hoa(ifa6)
 	if ((ifa6->ia6_flags & IN6_IFF_HOME) == 0)
 		return (0);
 
-	if (ifa6->ia_ifp->if_type != IFT_MIP) {
+	if (ifa6->ia_ifp->if_type != IFT_MOBILEIP) {
 		/* The Mobile Node is attached to the home link */
 		if ((ifa6->ia6_flags & IN6_IFF_DEREGISTERING) == 0)
 			return (1);
@@ -1535,7 +1535,7 @@ mip6_encapsulate(mm, osrc, odst)
 	/* If packet is Binding Error originated by this node, ignore it  */
 	if (ip6->ip6_nxt == IPPROTO_MH) {
 		m_copydata(m, sizeof(struct ip6_hdr),
-			sizeof(struct ip6_mh), (caddr_t)&mh);
+			sizeof(struct ip6_mh), (void *)&mh);
 		if (mh.ip6mh_type == IP6_MH_TYPE_BERROR) {
 			printf("skip encapsulation for BE\n");
 			goto done;
@@ -1682,7 +1682,7 @@ mip6_get_ip6hdrinfo(m, src_addr, dst_addr, hoa_addr, rt_addr, logical, presence)
 	*presence = 0;
 
 	/* IPv6 header may be safe to mtod(), but be conservative. */
-	m_copydata(m, 0, sizeof(struct ip6_hdr), (caddr_t)&ip6);
+	m_copydata(m, 0, sizeof(struct ip6_hdr), (void *)&ip6);
 	*src_addr = ip6.ip6_src;
 	*dst_addr = ip6.ip6_dst;
 
@@ -1700,7 +1700,7 @@ mip6_get_ip6hdrinfo(m, src_addr, dst_addr, hoa_addr, rt_addr, logical, presence)
 		proto = nxt;
 		if (nxt == IPPROTO_DSTOPTS) {
 			m_copydata(m, off, sizeof(struct ip6_dest),
-			    (caddr_t)&ip6d);
+			    (void *)&ip6d);
 			ip6dlen = (ip6d.ip6d_len + 1) << 3;
 
 			/* copy entire destopt header. */
@@ -1754,7 +1754,7 @@ mip6_get_ip6hdrinfo(m, src_addr, dst_addr, hoa_addr, rt_addr, logical, presence)
 		}
 		if (nxt == IPPROTO_ROUTING) {
 			m_copydata(m, off, sizeof(struct ip6_rthdr),
-			    (caddr_t)&ip6r);
+			    (void *)&ip6r);
 			/*
 			 * only type 2 routing header need to be
 			 * checked.
@@ -1769,10 +1769,10 @@ mip6_get_ip6hdrinfo(m, src_addr, dst_addr, hoa_addr, rt_addr, logical, presence)
 #endif
 			if (logical) {
 				m_copydata(m, off + sizeof(struct ip6_rthdr2),
-					   sizeof(struct in6_addr), (caddr_t)dst_addr);
+					   sizeof(struct in6_addr), (void *)dst_addr);
 			} else {
 				m_copydata(m, off + sizeof(struct ip6_rthdr2),
-					   sizeof(struct in6_addr), (caddr_t)rt_addr);
+					   sizeof(struct in6_addr), (void *)rt_addr);
 			}
 			*presence |= RTHDR_PRESENT;
 		}

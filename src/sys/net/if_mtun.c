@@ -1,4 +1,4 @@
-/*	$Id: if_mtun.c,v 1.3 2007/03/04 15:55:20 keiichi Exp $	*/
+/*	$Id: if_mtun.c,v 1.4 2007/04/04 05:08:31 keiichi Exp $	*/
 /*	$NetBSD: if_gif.c,v 1.64 2006/11/23 04:07:07 rpaulo Exp $	*/
 /*	$KAME: if_gif.c,v 1.76 2001/08/20 02:01:02 kjc Exp $	*/
 
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$Id: if_mtun.c,v 1.3 2007/03/04 15:55:20 keiichi Exp $");
+__KERNEL_RCSID(0, "$Id: if_mtun.c,v 1.4 2007/04/04 05:08:31 keiichi Exp $");
 
 #include "opt_inet.h"
 #include "opt_iso.h"
@@ -434,7 +434,7 @@ mtun_input(struct mbuf *m, int af, struct ifnet *ifp)
 
 /* XXX how should we handle IPv6 scope on SIOC[GS]IFPHYADDR? */
 int
-mtun_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
+mtun_ioctl(struct ifnet *ifp, u_long cmd, void *data)
 {
 	struct lwp *l = curlwp;	/* XXX */
 	struct mtun_softc *sc  = (struct mtun_softc*)ifp;
@@ -625,7 +625,7 @@ mtun_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 		}
 		if (src->sa_len > size)
 			return EINVAL;
-		bcopy((caddr_t)src, (caddr_t)dst, src->sa_len);
+		bcopy((void *)src, (void *)dst, src->sa_len);
 		break;
 
 	case SIOCGIFPDSTADDR:
@@ -657,7 +657,7 @@ mtun_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 		}
 		if (src->sa_len > size)
 			return EINVAL;
-		bcopy((caddr_t)src, (caddr_t)dst, src->sa_len);
+		bcopy((void *)src, (void *)dst, src->sa_len);
 		break;
 
 	case SIOCGLIFPHYADDR:
@@ -673,7 +673,7 @@ mtun_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 		size = sizeof(((struct if_laddrreq *)data)->addr);
 		if (src->sa_len > size)
 			return EINVAL;
-		bcopy((caddr_t)src, (caddr_t)dst, src->sa_len);
+		bcopy((void *)src, (void *)dst, src->sa_len);
 
 		/* copy dst */
 		src = sc->mtun_pdst;
@@ -682,7 +682,7 @@ mtun_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 		size = sizeof(((struct if_laddrreq *)data)->dstaddr);
 		if (src->sa_len > size)
 			return EINVAL;
-		bcopy((caddr_t)src, (caddr_t)dst, src->sa_len);
+		bcopy((void *)src, (void *)dst, src->sa_len);
 		break;
 
 	case SIOCSIFFLAGS:
@@ -759,7 +759,7 @@ mtun_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 		}
 		if (src->sa_len > size)
 			return EINVAL;
-		bcopy((caddr_t)src, (caddr_t)dst, src->sa_len);
+		bcopy((void *)src, (void *)dst, src->sa_len);
 #ifdef INET6
 		if (dst->sa_family == AF_INET6) {
 			error = sa6_recoverscope((struct sockaddr_in6 *)dst);
@@ -848,12 +848,12 @@ mtun_set_tunnel(struct ifnet *ifp, struct sockaddr *src, struct sockaddr *dst)
 
 	osrc = sc->mtun_psrc;
 	sa = (struct sockaddr *)malloc(src->sa_len, M_IFADDR, M_WAITOK);
-	bcopy((caddr_t)src, (caddr_t)sa, src->sa_len);
+	bcopy((void *)src, (void *)sa, src->sa_len);
 	sc->mtun_psrc = sa;
 
 	odst = sc->mtun_pdst;
 	sa = (struct sockaddr *)malloc(dst->sa_len, M_IFADDR, M_WAITOK);
-	bcopy((caddr_t)dst, (caddr_t)sa, dst->sa_len);
+	bcopy((void *)dst, (void *)sa, dst->sa_len);
 	sc->mtun_pdst = sa;
 
 	switch (sc->mtun_psrc->sa_family) {
@@ -873,17 +873,17 @@ mtun_set_tunnel(struct ifnet *ifp, struct sockaddr *src, struct sockaddr *dst)
 	}
 	if (error) {
 		/* rollback */
-		free((caddr_t)sc->mtun_psrc, M_IFADDR);
-		free((caddr_t)sc->mtun_pdst, M_IFADDR);
+		free((void *)sc->mtun_psrc, M_IFADDR);
+		free((void *)sc->mtun_pdst, M_IFADDR);
 		sc->mtun_psrc = osrc;
 		sc->mtun_pdst = odst;
 		goto bad;
 	}
 
 	if (osrc)
-		free((caddr_t)osrc, M_IFADDR);
+		free((void *)osrc, M_IFADDR);
 	if (odst)
-		free((caddr_t)odst, M_IFADDR);
+		free((void *)odst, M_IFADDR);
 
 	if (sc->mtun_psrc && sc->mtun_pdst)
 		ifp->if_flags |= IFF_RUNNING;
@@ -924,11 +924,11 @@ mtun_delete_tunnel(struct ifnet *ifp)
 	}
 #endif
 	if (sc->mtun_psrc) {
-		free((caddr_t)sc->mtun_psrc, M_IFADDR);
+		free((void *)sc->mtun_psrc, M_IFADDR);
 		sc->mtun_psrc = NULL;
 	}
 	if (sc->mtun_pdst) {
-		free((caddr_t)sc->mtun_pdst, M_IFADDR);
+		free((void *)sc->mtun_pdst, M_IFADDR);
 		sc->mtun_pdst = NULL;
 	}
 	/* it is safe to detach from both */
@@ -975,7 +975,7 @@ mtun_eon_encap(struct mbuf *m)
 		struct mbuf mhead;
 		memset(&mhead, 0, sizeof(mhead));
 		ehdr->cksum = 0;
-		mhead.m_data = (caddr_t)ehdr;
+		mhead.m_data = (void *)ehdr;
 		mhead.m_len = sizeof(*ehdr);
 		mhead.m_next = 0;
 		iso_gen_csum(&mhead, offsetof(struct eonhdr, cksum),

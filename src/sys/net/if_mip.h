@@ -64,7 +64,7 @@ struct if_bulreq {
 
 extern struct mip_softc_list mip_softc_list;
 
-int mip_ioctl(struct ifnet *, u_long, caddr_t);
+int mip_ioctl(struct ifnet *, u_long, void *);
 int mip_output(struct ifnet *, struct mbuf *, const struct sockaddr *,
     struct rtentry *rt);
 

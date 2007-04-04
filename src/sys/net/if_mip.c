@@ -145,7 +145,7 @@ mipattach(dummy)
 		sc->mip_if.if_mtu = MIP_MTU;
 		sc->mip_if.if_ioctl = mip_ioctl;
 		sc->mip_if.if_output = mip_output;
-		sc->mip_if.if_type = IFT_MIP;
+		sc->mip_if.if_type = IFT_MOBILEIP;
 #ifdef __NetBSD__
 		sc->mip_if.if_dlt = DLT_NULL;
 #endif
@@ -239,12 +239,12 @@ mip_output(ifp, m, dst, rt)
 		}
 
 		if (m->m_pkthdr.len <= maxlen) {
-			m_copydata(m, 0, m->m_pkthdr.len, mtod(n, caddr_t));
+			m_copydata(m, 0, m->m_pkthdr.len, mtod(n, void *));
 			n->m_len = m->m_pkthdr.len;
 			n->m_next = NULL;
 			m_freem(m);
 		} else {
-			m_copydata(m, 0, maxlen, mtod(n, caddr_t));
+			m_copydata(m, 0, maxlen, mtod(n, void *));
 			m_adj(m, maxlen);
 			n->m_len = maxlen;
 			n->m_next = m;
@@ -351,7 +351,7 @@ int
 mip_ioctl(ifp, cmd, data)
 	struct ifnet *ifp;
 	u_long cmd;
-	caddr_t data;
+	void *data;
 {
 	int s, error;
 	struct ifreq *ifr = (struct ifreq *)data;
@@ -460,7 +460,7 @@ mip_is_mip_softc(ifp)
 
 	for (mipsc = LIST_FIRST(&mip_softc_list); mipsc;
 	     mipsc = LIST_NEXT(mipsc, mip_entry)) {
-		if ((caddr_t)ifp == (caddr_t)mipsc)
+		if ((void *)ifp == (void *)mipsc)
 			return (1);
 	}
 	return (0);

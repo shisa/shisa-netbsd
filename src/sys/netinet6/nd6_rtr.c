@@ -1,4 +1,4 @@
-/*	$NetBSD: nd6_rtr.c,v 1.62 2006/11/20 04:34:16 dyoung Exp $	*/
+/*	$NetBSD: nd6_rtr.c,v 1.63 2007/03/04 06:03:27 christos Exp $	*/
 /*	$KAME: nd6_rtr.c,v 1.95 2001/02/07 08:09:47 itojun Exp $	*/
 
 /*
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: nd6_rtr.c,v 1.62 2006/11/20 04:34:16 dyoung Exp $");
+__KERNEL_RCSID(0, "$NetBSD: nd6_rtr.c,v 1.63 2007/03/04 06:03:27 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -311,7 +311,7 @@ nd6_ra_input(m, off, icmp6len)
 
 		for (pt = (struct nd_opt_hdr *)ndopts.nd_opts_pi;
 		     pt <= (struct nd_opt_hdr *)ndopts.nd_opts_pi_end;
-		     pt = (struct nd_opt_hdr *)((caddr_t)pt +
+		     pt = (struct nd_opt_hdr *)((char *)pt +
 						(pt->nd_opt_len << 3))) {
 			if (pt->nd_opt_type != ND_OPT_PREFIX_INFORMATION)
 				continue;
@@ -453,7 +453,7 @@ nd6_rtmsg(cmd, rt)
 {
 	struct rt_addrinfo info;
 
-	bzero((caddr_t)&info, sizeof(info));
+	bzero((void *)&info, sizeof(info));
 	info.rti_info[RTAX_DST] = rt_key(rt);
 	info.rti_info[RTAX_GATEWAY] = rt->rt_gateway;
 	info.rti_info[RTAX_NETMASK] = rt_mask(rt);
@@ -1550,7 +1550,7 @@ pfxlist_onlink_check()
 			    * even when we don't have autoconfigured
 			    * addresses.
 			    */
-		    && !((ifa->ia6_flags & IN6_IFF_HOME) && (ifa->ia_ifp->if_type != IFT_MIP)) 
+		    && !((ifa->ia6_flags & IN6_IFF_HOME) && (ifa->ia_ifp->if_type != IFT_MOBILEIP)) 
 #endif /* MOBILE_IPV6 && NMIP > 0 */
 			)
 			continue;
@@ -1572,7 +1572,7 @@ pfxlist_onlink_check()
 			if (!(ifa->ia6_flags & IN6_IFF_AUTOCONF)
 #if defined(MOBILE_IPV6) && NMIP > 0
 				   /* see the comment above. */
-			    && !((ifa->ia6_flags & IN6_IFF_HOME) && (ifa->ia_ifp->if_type != IFT_MIP)) 
+			    && !((ifa->ia6_flags & IN6_IFF_HOME) && (ifa->ia_ifp->if_type != IFT_MOBILEIP)) 
 #endif /* MOBILE_IPV6 && NMIP > 0 */
 				)
 				continue;

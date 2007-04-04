@@ -1,4 +1,4 @@
-/* $Id: mipsock.h,v 1.3 2007/01/26 10:07:16 keiichi Exp $ */
+/* $Id: mipsock.h,v 1.4 2007/04/04 05:08:31 keiichi Exp $ */
 
 /*
  * Copyright (C) 2004 WIDE Project.
@@ -56,9 +56,9 @@ struct mipm_bc_info {
 	u_int16_t mipmci_flags;
 	struct sockaddr mipmci_addr[0];
 #define MIPC_HOA(mipc)	(&(mipc)->mipmci_addr[0])
-#define MIPC_COA(mipc)	((struct sockaddr *)((caddr_t)(MIPC_HOA(mipc)) \
+#define MIPC_COA(mipc)	((struct sockaddr *)((char *)(MIPC_HOA(mipc)) \
 				+ (MIPC_HOA(mipc))->sa_len))
-#define MIPC_CNADDR(mipc)	((struct sockaddr *)((caddr_t)(MIPC_COA(mipc)) \
+#define MIPC_CNADDR(mipc)	((struct sockaddr *)((char *)(MIPC_COA(mipc)) \
 				+ (MIPC_COA(mipc))->sa_len))
 };
 
@@ -78,9 +78,9 @@ struct mipm_bul_info {
 	u_int8_t        mipmui_reserved[1];
 	struct sockaddr mipmui_addr[0];
 #define MIPU_HOA(mipu)	(&(mipu)->mipmui_addr[0])
-#define MIPU_COA(mipu)	((struct sockaddr *)((caddr_t)(MIPU_HOA(mipu)) \
+#define MIPU_COA(mipu)	((struct sockaddr *)((char *)(MIPU_HOA(mipu)) \
 				+ (MIPU_HOA(mipu))->sa_len))
-#define MIPU_PEERADDR(mipu)	((struct sockaddr *)((caddr_t)(MIPU_COA(mipu)) \
+#define MIPU_PEERADDR(mipu)	((struct sockaddr *)((char *)(MIPU_COA(mipu)) \
 				+ (MIPU_COA(mipu))->sa_len))
 };
 
@@ -162,9 +162,9 @@ struct mipm_md_info {
 	u_int16_t mipmmi_ifindex;
 	struct sockaddr mipmmi_addr[0];
 #define MIPD_HOA(mipd)	(&(mipd)->mipmmi_addr[0])
-#define MIPD_COA(mipd)	((struct sockaddr *)((caddr_t)(MIPD_HOA(mipd)) \
+#define MIPD_COA(mipd)	((struct sockaddr *)((char *)(MIPD_HOA(mipd)) \
 				+ (MIPD_HOA(mipd))->sa_len))
-#define MIPD_COA2(mipd)	((struct sockaddr *)((caddr_t)(MIPD_COA(mipd)) \
+#define MIPD_COA2(mipd)	((struct sockaddr *)((char *)(MIPD_COA(mipd)) \
 				+ (MIPD_COA(mipd))->sa_len))
 };
 
@@ -181,7 +181,7 @@ struct mipm_rr_hint {
 };
 #define MIPMRH_HOA(mipmrh) ((mipmrh)->mipmrh_addr)
 #define MIPMRH_PEERADDR(mipmrh)				\
-    ((struct sockaddr *)((caddr_t)(MIPMRH_HOA(mipmrh))	\
+    ((struct sockaddr *)((char *)(MIPMRH_HOA(mipmrh))	\
     + (MIPMRH_HOA(mipmrh))->sa_len))
 
 struct mipm_be_hint {
@@ -199,10 +199,10 @@ struct mipm_be_hint {
 };
 #define MIPMBEH_PEERADDR(mipmbeh) ((mipmbeh)->mipmbeh_addr)
 #define MIPMBEH_COA(mipmbeh)					\
-    ((struct sockaddr *)((caddr_t)(MIPMBEH_PEERADDR(mipmbeh))	\
+    ((struct sockaddr *)((char *)(MIPMBEH_PEERADDR(mipmbeh))	\
     + (MIPMBEH_PEERADDR(mipmbeh))->sa_len))
 #define MIPMBEH_HOA(mipmbeh)					\
-    ((struct sockaddr *)((caddr_t)(MIPMBEH_COA(mipmbeh))	\
+    ((struct sockaddr *)((char *)(MIPMBEH_COA(mipmbeh))	\
     + (MIPMBEH_COA(mipmbeh))->sa_len))
 
 struct mipm_dad {
