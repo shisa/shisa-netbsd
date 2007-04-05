@@ -227,10 +227,14 @@ const struct ip6protosw inet6sw[] = {
 	.pr_input = frag6_input,
 },
 #ifdef MOBILE_IPV6
-{ SOCK_RAW,	&inet6domain,	IPPROTO_MH,	PR_ATOMIC|PR_ADDR|PR_LASTHDR,
-  mip6_input,	0,		0,		rip6_ctloutput,
-  rip6_usrreq,
-  0,		0,		0,		0,
+{
+	.pr_type = SOCK_RAW,
+	.pr_domain = &inet6domain,
+	.pr_protocol = IPPROTO_MH,
+	.pr_flags = PR_ATOMIC|PR_ADDR|PR_LASTHDR,
+	.pr_input = mip6_input,
+	.pr_ctloutput =	rip6_ctloutput,
+	.pr_usrreq = rip6_usrreq,
 },
 #endif /* MOBILE_IPV6 */
 #ifdef IPSEC
@@ -364,10 +368,15 @@ const struct ip6protosw inet6sw[] = {
 #ifdef MOBILE_IPV6
 /* To receive tunneled packet on mobile node or home agent */
 struct ip6protosw mip6_tunnel_protosw =
-{ SOCK_RAW,	&inet6domain,	IPPROTO_IPV6,	PR_ATOMIC|PR_ADDR,
-  mip6_tunnel_input, rip6_output, 0,		rip6_ctloutput,
-  rip6_usrreq,
-  0,		0,		0,		0,
+{
+	.pr_type = SOCK_RAW,
+	.pr_domain = &inet6domain,
+	.pr_protocol = IPPROTO_IPV6,
+	.pr_flags = PR_ATOMIC|PR_ADDR,
+	.pr_input = mip6_tunnel_input,
+	.pr_output = rip6_output,
+	.pr_ctloutput = rip6_ctloutput,
+	.pr_usrreq = rip6_usrreq,
 };
 #endif /* MOBILE_IPV6 */
 
