@@ -1,4 +1,4 @@
-/*	$NetBSD: ip_input.c,v 1.243 2007/02/17 22:34:11 dyoung Exp $	*/
+/*	$NetBSD: ip_input.c,v 1.248 2007/03/25 20:12:20 liamjfoy Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -98,7 +98,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ip_input.c,v 1.243 2007/02/17 22:34:11 dyoung Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ip_input.c,v 1.248 2007/03/25 20:12:20 liamjfoy Exp $");
 
 #include "opt_inet.h"
 #include "opt_gateway.h"
@@ -334,8 +334,10 @@ do {									\
 
 #define	IPQ_UNLOCK()		ipq_unlock()
 
-POOL_INIT(inmulti_pool, sizeof(struct in_multi), 0, 0, 0, "inmltpl", NULL);
-POOL_INIT(ipqent_pool, sizeof(struct ipqent), 0, 0, 0, "ipqepl", NULL);
+POOL_INIT(inmulti_pool, sizeof(struct in_multi), 0, 0, 0, "inmltpl", NULL,
+    IPL_SOFTNET);
+POOL_INIT(ipqent_pool, sizeof(struct ipqent), 0, 0, 0, "ipqepl", NULL,
+    IPL_VM);
 
 #ifdef INET_CSUM_COUNTERS
 #include <sys/device.h>
@@ -427,7 +429,7 @@ ip_init(void)
 	    M_WAITOK, &in_multihash);
 	ip_mtudisc_timeout_q = rt_timer_queue_create(ip_mtudisc_timeout);
 #ifdef GATEWAY
-	ipflow_init();
+	ipflow_init(ip_hashsize);
 #endif
 
 #ifdef PFIL_HOOKS
@@ -516,7 +518,7 @@ ip_input(struct mbuf *m)
 	 * it.  Otherwise, if it is aligned, make sure the entire
 	 * base IP header is in the first mbuf of the chain.
 	 */
-	if (IP_HDR_ALIGNED_P(mtod(m, caddr_t)) == 0) {
+	if (IP_HDR_ALIGNED_P(mtod(m, void *)) == 0) {
 		if ((m = m_copyup(m, sizeof(struct ip),
 				  (max_linkhdr + 3) & ~3)) == NULL) {
 			/* XXXJRT new stat, please */
@@ -1407,9 +1409,6 @@ ip_slowtimo(void)
 		dropscanidx = i;
 	}
 	IPQ_UNLOCK();
-#ifdef GATEWAY
-	ipflow_slowtimo();
-#endif
 	splx(s);
 }
 
@@ -1528,7 +1527,7 @@ ip_dooptions(struct mbuf *m)
 			/*
 			 * locate outgoing interface
 			 */
-			bcopy((caddr_t)(cp + off), (caddr_t)&ipaddr.sin_addr,
+			bcopy((void *)(cp + off), (void *)&ipaddr.sin_addr,
 			    sizeof(ipaddr.sin_addr));
 			if (opt == IPOPT_SSRR)
 				ia = ifatoia(ifa_ifwithladdr(sintosa(&ipaddr)));
@@ -1540,8 +1539,8 @@ ip_dooptions(struct mbuf *m)
 				goto bad;
 			}
 			ip->ip_dst = ipaddr.sin_addr;
-			bcopy((caddr_t)&ia->ia_addr.sin_addr,
-			    (caddr_t)(cp + off), sizeof(struct in_addr));
+			bcopy((void *)&ia->ia_addr.sin_addr,
+			    (void *)(cp + off), sizeof(struct in_addr));
 			cp[IPOPT_OFFSET] += sizeof(struct in_addr);
 			/*
 			 * Let ip_intr's mcast routing check handle mcast pkts
@@ -1564,7 +1563,7 @@ ip_dooptions(struct mbuf *m)
 			off--;			/* 0 origin */
 			if ((off + sizeof(struct in_addr)) > optlen)
 				break;
-			bcopy((caddr_t)(&ip->ip_dst), (caddr_t)&ipaddr.sin_addr,
+			bcopy((void *)(&ip->ip_dst), (void *)&ipaddr.sin_addr,
 			    sizeof(ipaddr.sin_addr));
 			/*
 			 * locate outgoing interface; if we're the destination,
@@ -1577,8 +1576,8 @@ ip_dooptions(struct mbuf *m)
 				code = ICMP_UNREACH_HOST;
 				goto bad;
 			}
-			bcopy((caddr_t)&ia->ia_addr.sin_addr,
-			    (caddr_t)(cp + off), sizeof(struct in_addr));
+			bcopy((void *)&ia->ia_addr.sin_addr,
+			    (void *)(cp + off), sizeof(struct in_addr));
 			cp[IPOPT_OFFSET] += sizeof(struct in_addr);
 			break;
 
@@ -1647,7 +1646,7 @@ ip_dooptions(struct mbuf *m)
 			}
 			ntime = iptime();
 			cp0 = (u_char *) &ntime; /* XXX grumble, GCC... */
-			bcopy(cp0, (caddr_t)cp + ipt->ipt_ptr - 1,
+			memmove((char *)cp + ipt->ipt_ptr - 1, cp0,
 			    sizeof(n_time));
 			ipt->ipt_ptr += sizeof(n_time);
 		}
@@ -1710,7 +1709,7 @@ save_rte(u_char *option, struct in_addr dst)
 #endif /* 0 */
 	if (olen > sizeof(ip_srcrt) - (1 + sizeof(dst)))
 		return;
-	bcopy((caddr_t)option, (caddr_t)ip_srcrt.srcopt, olen);
+	bcopy((void *)option, (void *)ip_srcrt.srcopt, olen);
 	ip_nhops = (olen - IPOPT_OFFSET - 1) / sizeof(struct in_addr);
 	ip_srcrt.dst = dst;
 }
@@ -1758,9 +1757,9 @@ ip_srcroute(void)
 	 */
 	ip_srcrt.nop = IPOPT_NOP;
 	ip_srcrt.srcopt[IPOPT_OFFSET] = IPOPT_MINOFF;
-	bcopy((caddr_t)&ip_srcrt.nop,
-	    mtod(m, caddr_t) + sizeof(struct in_addr), OPTSIZ);
-	q = (struct in_addr *)(mtod(m, caddr_t) +
+	memmove(mtod(m, char *) + sizeof(struct in_addr), &ip_srcrt.nop,
+	    OPTSIZ);
+	q = (struct in_addr *)(mtod(m, char *) +
 	    sizeof(struct in_addr) + OPTSIZ);
 #undef OPTSIZ
 	/*
@@ -1797,13 +1796,13 @@ ip_stripoptions(struct mbuf *m, struct mbuf *mopt)
 {
 	int i;
 	struct ip *ip = mtod(m, struct ip *);
-	caddr_t opts;
+	void *opts;
 	int olen;
 
 	olen = (ip->ip_hl << 2) - sizeof (struct ip);
-	opts = (caddr_t)(ip + 1);
+	opts = (void *)(ip + 1);
 	i = m->m_len - (sizeof (struct ip) + olen);
-	bcopy(opts  + olen, opts, (unsigned)i);
+	memmove(opts, (char *)opts + olen, (unsigned)i);
 	m->m_len -= olen;
 	if (m->m_flags & M_PKTHDR)
 		m->m_pkthdr.len -= olen;
@@ -2061,13 +2060,13 @@ ip_savecontrol(struct inpcb *inp, struct mbuf **mp, struct ip *ip,
 		struct timeval tv;
 
 		microtime(&tv);
-		*mp = sbcreatecontrol((caddr_t) &tv, sizeof(tv),
+		*mp = sbcreatecontrol((void *) &tv, sizeof(tv),
 		    SCM_TIMESTAMP, SOL_SOCKET);
 		if (*mp)
 			mp = &(*mp)->m_next;
 	}
 	if (inp->inp_flags & INP_RECVDSTADDR) {
-		*mp = sbcreatecontrol((caddr_t) &ip->ip_dst,
+		*mp = sbcreatecontrol((void *) &ip->ip_dst,
 		    sizeof(struct in_addr), IP_RECVDSTADDR, IPPROTO_IP);
 		if (*mp)
 			mp = &(*mp)->m_next;
@@ -2081,14 +2080,14 @@ ip_savecontrol(struct inpcb *inp, struct mbuf **mp, struct ip *ip,
 	 */
 	/* options were tossed already */
 	if (inp->inp_flags & INP_RECVOPTS) {
-		*mp = sbcreatecontrol((caddr_t) opts_deleted_above,
+		*mp = sbcreatecontrol((void *) opts_deleted_above,
 		    sizeof(struct in_addr), IP_RECVOPTS, IPPROTO_IP);
 		if (*mp)
 			mp = &(*mp)->m_next;
 	}
 	/* ip_srcroute doesn't do what we want here, need to fix */
 	if (inp->inp_flags & INP_RECVRETOPTS) {
-		*mp = sbcreatecontrol((caddr_t) ip_srcroute(),
+		*mp = sbcreatecontrol((void *) ip_srcroute(),
 		    sizeof(struct in_addr), IP_RECVRETOPTS, IPPROTO_IP);
 		if (*mp)
 			mp = &(*mp)->m_next;
@@ -2102,7 +2101,7 @@ ip_savecontrol(struct inpcb *inp, struct mbuf **mp, struct ip *ip,
 		sdl.sdl_index = m->m_pkthdr.rcvif ?
 		    m->m_pkthdr.rcvif->if_index : 0;
 		sdl.sdl_nlen = sdl.sdl_alen = sdl.sdl_slen = 0;
-		*mp = sbcreatecontrol((caddr_t) &sdl, sdl.sdl_len,
+		*mp = sbcreatecontrol((void *) &sdl, sdl.sdl_len,
 		    IP_RECVIF, IPPROTO_IP);
 		if (*mp)
 			mp = &(*mp)->m_next;
@@ -2161,8 +2160,7 @@ sysctl_net_inet_ip_pmtudto(SYSCTLFN_ARGS)
 
 #ifdef GATEWAY
 /*
- * sysctl helper routine for net.inet.ip.maxflows.  apparently if
- * maxflows is even looked up, we "reap flows".
+ * sysctl helper routine for net.inet.ip.maxflows.
  */
 static int
 sysctl_net_inet_ip_maxflows(SYSCTLFN_ARGS)
@@ -2170,12 +2168,41 @@ sysctl_net_inet_ip_maxflows(SYSCTLFN_ARGS)
 	int s;
 
 	s = sysctl_lookup(SYSCTLFN_CALL(rnode));
-	if (s)
+	if (s || newp == NULL)
 		return (s);
 
 	s = splsoftnet();
 	ipflow_reap(0);
 	splx(s);
+
+	return (0);
+}
+
+static int
+sysctl_net_inet_ip_hashsize(SYSCTLFN_ARGS)
+{  
+	int error, tmp;
+	struct sysctlnode node;
+
+	node = *rnode;
+	tmp = ip_hashsize;
+	node.sysctl_data = &tmp;
+	error = sysctl_lookup(SYSCTLFN_CALL(&node));
+	if (error || newp == NULL)
+		return (error);
+
+	if ((tmp & (tmp - 1)) == 0 && tmp != 0) {
+		/*
+		 * Can only fail due to malloc()
+		 */
+		if (ipflow_invalidate_all(tmp))
+			return ENOMEM;
+	} else {
+		/*
+		 * EINVAL if not a power of 2
+	         */
+		return EINVAL;
+	}	
 
 	return (0);
 }
@@ -2300,6 +2327,13 @@ SYSCTL_SETUP(sysctl_net_inet_ip_setup, "sysctl net.inet.ip subtree setup")
 		       sysctl_net_inet_ip_maxflows, 0, &ip_maxflows, 0,
 		       CTL_NET, PF_INET, IPPROTO_IP,
 		       IPCTL_MAXFLOWS, CTL_EOL);
+	sysctl_createv(clog, 0, NULL, NULL,
+			CTLFLAG_PERMANENT|CTLFLAG_READWRITE,
+			CTLTYPE_INT, "hashsize",
+			SYSCTL_DESCR("Size of hash table for fast forwarding (IPv4)"),
+			sysctl_net_inet_ip_hashsize, 0, &ip_hashsize, 0,
+			CTL_NET, PF_INET, IPPROTO_IP,
+			CTL_CREATE, CTL_EOL);
 #endif /* GATEWAY */
 	sysctl_createv(clog, 0, NULL, NULL,
 		       CTLFLAG_PERMANENT|CTLFLAG_READWRITE,

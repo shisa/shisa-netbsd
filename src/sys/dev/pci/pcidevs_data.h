@@ -1,10 +1,10 @@
-/*	$NetBSD: pcidevs_data.h,v 1.867 2007/02/16 01:35:53 markd Exp $	*/
+/*	$NetBSD: pcidevs_data.h,v 1.874 2007/03/27 12:42:31 pooka Exp $	*/
 
 /*
  * THIS FILE AUTOMATICALLY GENERATED.  DO NOT EDIT.
  *
  * generated from:
- *	NetBSD: pcidevs,v 1.868 2007/02/16 01:35:04 markd Exp
+ *	NetBSD: pcidevs,v 1.875 2007/03/27 12:41:39 pooka Exp
  */
 
 /*
@@ -3008,6 +3008,10 @@ static const struct pci_product pci_products[] = {
 	    "Dell PERC 3/QC",
 	},
 	{
+	    PCI_VENDOR_ADP2, PCI_PRODUCT_ADP2_HP_M110_G2,
+	    "HP M110 G2 / ASR-2610SA",
+	},
+	{
 	    PCI_VENDOR_ADDTRON, PCI_PRODUCT_ADDTRON_8139,
 	    "8139 Ethernet",
 	},
@@ -3026,6 +3030,10 @@ static const struct pci_product pci_products[] = {
 	{
 	    PCI_VENDOR_ADMTEK, PCI_PRODUCT_ADMTEK_AN985,
 	    "AN985 (Centaur-C) 10/100 Ethernet",
+	},
+	{
+	    PCI_VENDOR_ADMTEK, PCI_PRODUCT_ADMTEK_ADM5120,
+	    "Infineon ADM5120 PCI host bridge",
 	},
 	{
 	    PCI_VENDOR_ADMTEK, PCI_PRODUCT_ADMTEK_ADM8211,
@@ -4192,6 +4200,10 @@ static const struct pci_product pci_products[] = {
 	    "Radeon 7000/VE QZ",
 	},
 	{
+	    PCI_VENDOR_ATI, PCI_PRODUCT_ATI_ES1000,
+	    "ES1000",
+	},
+	{
 	    PCI_VENDOR_ATI, PCI_PRODUCT_ATI_RADEON_9100_S,
 	    "Radeon 9100 Series Secondary",
 	},
@@ -4402,6 +4414,14 @@ static const struct pci_product pci_products[] = {
 	{
 	    PCI_VENDOR_ATI, PCI_PRODUCT_ATI_RADEON_X700_S,
 	    "Radeon X700 Pro Secondary",
+	},
+	{
+	    PCI_VENDOR_ATI, PCI_PRODUCT_ATI_RADEON_X1300,
+	    "Radeon X1300 Series (RV515)",
+	},
+	{
+	    PCI_VENDOR_ATI, PCI_PRODUCT_ATI_RADEON_X1300_S,
+	    "Radeon X1300 Series (RV515) Secondary",
 	},
 	{
 	    PCI_VENDOR_ATI, PCI_PRODUCT_ATI_RADEON_RS300_7834,
@@ -5382,6 +5402,22 @@ static const struct pci_product pci_products[] = {
 	{
 	    PCI_VENDOR_CONEXANT, PCI_PRODUCT_CONEXANT_LANFINITY,
 	    "LANfinity MiniPCI 10/100 Ethernet",
+	},
+	{
+	    PCI_VENDOR_CONEXANT, PCI_PRODUCT_CONEXANT_CX2388X,
+	    "CX23880/1/2/3 PCI Video/Audio Decoder",
+	},
+	{
+	    PCI_VENDOR_CONEXANT, PCI_PRODUCT_CONEXANT_CX2388XAUDIO,
+	    "CX23880/1/2/3 PCI Audio Port",
+	},
+	{
+	    PCI_VENDOR_CONEXANT, PCI_PRODUCT_CONEXANT_CX2388XMPEG,
+	    "CX23880/1/2/3 PCI MPEG Port",
+	},
+	{
+	    PCI_VENDOR_CONEXANT, PCI_PRODUCT_CONEXANT_CX2388XIR,
+	    "CX23880/1/2/3 PCI IR Port",
 	},
 	{
 	    PCI_VENDOR_CONTAQ, PCI_PRODUCT_CONTAQ_82C599,
@@ -9844,6 +9880,10 @@ static const struct pci_product pci_products[] = {
 	    "nForce MCP55 Serial ATA Controller",
 	},
 	{
+	    PCI_VENDOR_NVIDIA, PCI_PRODUCT_NVIDIA_GF_GO_7600,
+	    "GeForce Go 7600",
+	},
+	{
 	    PCI_VENDOR_NVIDIA, PCI_PRODUCT_NVIDIA_MCP61_ISA,
 	    "nForce MCP61 PCI-ISA Bridge",
 	},
@@ -10194,6 +10234,10 @@ static const struct pci_product pci_products[] = {
 	{
 	    PCI_VENDOR_PCHDTV, PCI_PRODUCT_PCHDTV_HD2000,
 	    "HD-2000 HDTV video capture",
+	},
+	{
+	    PCI_VENDOR_PCHDTV, PCI_PRODUCT_PCHDTV_HD5500,
+	    "HD-5500 HDTV video capture",
 	},
 	{
 	    PCI_VENDOR_PCTECH, PCI_PRODUCT_PCTECH_RZ1000,
@@ -12800,4 +12844,4 @@ static const struct pci_product pci_products[] = {
 	    "Video Controller",
 	},
 };
-const int pci_nproducts = 2606;
+const int pci_nproducts = 2617;

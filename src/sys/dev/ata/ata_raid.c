@@ -1,4 +1,4 @@
-/*	$NetBSD: ata_raid.c,v 1.20 2006/11/16 01:32:47 christos Exp $	*/
+/*	$NetBSD: ata_raid.c,v 1.22 2007/03/27 00:10:20 garbled Exp $	*/
 
 /*
  * Copyright (c) 2003 Wasabi Systems, Inc.
@@ -40,7 +40,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ata_raid.c,v 1.20 2006/11/16 01:32:47 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ata_raid.c,v 1.22 2007/03/27 00:10:20 garbled Exp $");
 
 #include <sys/param.h>
 #include <sys/buf.h>
@@ -113,6 +113,7 @@ ata_raid_type_name(u_int type)
 	static const char *ata_raid_type_names[] = {
 		"Promise",
 		"Adaptec",
+		"VIA V-RAID",
 	};
 
 	if (type < sizeof(ata_raid_type_names) / sizeof(ata_raid_type_names[0]))
@@ -132,7 +133,7 @@ ata_raid_finalize(struct device *self)
 	static struct cfdata ataraid_cfdata = {
 		.cf_name = "ataraid",
 		.cf_atname = "ataraid",
-		.cf_unit = DVUNIT_ANY,
+		.cf_unit = 0,
 		.cf_fstate = FSTATE_STAR,
 	};
 	extern struct cfdriver ataraid_cd;
@@ -239,6 +240,8 @@ ata_raid_check_component(struct device *self)
 	if (ata_raid_read_config_adaptec(sc) == 0)
 		return;
 	if (ata_raid_read_config_promise(sc) == 0)
+		return;
+	if (ata_raid_read_config_via(sc) == 0)
 		return;
 }
 

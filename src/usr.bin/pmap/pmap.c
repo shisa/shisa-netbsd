@@ -1,4 +1,4 @@
-/*	$NetBSD: pmap.c,v 1.32 2006/10/22 22:56:26 pooka Exp $ */
+/*	$NetBSD: pmap.c,v 1.35 2007/03/06 11:28:46 dillo Exp $ */
 
 /*
  * Copyright (c) 2002, 2003 The NetBSD Foundation, Inc.
@@ -38,7 +38,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: pmap.c,v 1.32 2006/10/22 22:56:26 pooka Exp $");
+__RCSID("$NetBSD: pmap.c,v 1.35 2007/03/06 11:28:46 dillo Exp $");
 #endif
 
 #include <string.h>
@@ -418,6 +418,7 @@ PMAPFUNC(dump_vm_map_entry,VERSION)(kvm_t *kd,
 		case VT_UDF:
 		case VT_SYSVBFS:
 		case VT_PUFFS:
+		case VT_HFS:
 			break;
 		}
 	}
@@ -766,10 +767,10 @@ findname(kvm_t *kd, struct kbit *vmspace,
 		}
 	}
 
-	else if (D(vmspace, vmspace)->vm_maxsaddr <=
-		 (caddr_t)vme->start &&
-		 (D(vmspace, vmspace)->vm_maxsaddr + (size_t)maxssiz) >=
-		 (caddr_t)vme->end)
+	else if ((char *)D(vmspace, vmspace)->vm_maxsaddr <=
+		 (char *)vme->start &&
+		 ((char *)D(vmspace, vmspace)->vm_maxsaddr + (size_t)maxssiz) >=
+		 (char *)vme->end)
 		name = "  [ stack ]";
 
 	else if (!heapfound &&

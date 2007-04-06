@@ -1,4 +1,4 @@
-/*	$NetBSD: agp_i810.c,v 1.35 2006/11/16 01:33:08 christos Exp $	*/
+/*	$NetBSD: agp_i810.c,v 1.40 2007/03/24 23:02:24 christos Exp $	*/
 
 /*-
  * Copyright (c) 2000 Doug Rabson
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: agp_i810.c,v 1.35 2006/11/16 01:33:08 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: agp_i810.c,v 1.40 2007/03/24 23:02:24 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -155,6 +155,7 @@ agp_i810_attach(struct device *parent, struct device *self, void *aux)
 	struct agp_i810_softc *isc;
 	struct agp_gatt *gatt;
 	int error, apbase;
+	bus_size_t mmadrsize;
 
 	isc = malloc(sizeof *isc, M_AGP, M_NOWAIT|M_ZERO);
 	if (isc == NULL) {
@@ -218,7 +219,8 @@ agp_i810_attach(struct device *parent, struct device *self, void *aux)
 
 	if (isc->chiptype == CHIP_I915) {
 		error = pci_mapreg_map(&isc->vga_pa, AGP_I915_MMADR,
-		    PCI_MAPREG_TYPE_MEM, 0, &isc->bst, &isc->bsh, NULL, NULL);
+		    PCI_MAPREG_TYPE_MEM, 0, &isc->bst, &isc->bsh,
+		    NULL, &mmadrsize);
 		if (error != 0) {
 			aprint_error(": can't map mmadr registers\n");
 			agp_generic_detach(sc);
@@ -235,7 +237,8 @@ agp_i810_attach(struct device *parent, struct device *self, void *aux)
 		}
 	} else {
 		error = pci_mapreg_map(&isc->vga_pa, AGP_I810_MMADR,
-		    PCI_MAPREG_TYPE_MEM, 0, &isc->bst, &isc->bsh, NULL, NULL);
+		    PCI_MAPREG_TYPE_MEM, 0, &isc->bst, &isc->bsh,
+		    NULL, &mmadrsize);
 		if (error != 0) {
 			aprint_error(": can't map mmadr registers\n");
 			agp_generic_detach(sc);
@@ -255,7 +258,7 @@ agp_i810_attach(struct device *parent, struct device *self, void *aux)
 	gatt->ag_entries = AGP_GET_APERTURE(sc) >> AGP_PAGE_SHIFT;
 
 	if (isc->chiptype == CHIP_I810) {
-		caddr_t virtual;
+		void *virtual;
 		int dummyseg;
 
 		/* Some i810s have on-chip memory called dcache */
@@ -407,6 +410,14 @@ agp_i810_attach(struct device *parent, struct device *self, void *aux)
 		printf("%s: WARNING: unable to establish PCI power hook\n",
 		    sc->as_dev.dv_xname);
 
+#if 0
+	/*      
+	 * another device (drm) may need access to this region
+	 * we do not need it anymore
+	 */     
+	bus_space_unmap(isc->bst, isc->bsh, mmadrsize);
+#endif
+
 	return 0;
 }
 
@@ -436,7 +447,7 @@ agp_i810_detach(struct agp_softc *sc)
 
 	if (sc->chiptype == CHIP_I810) {
 		agp_free_dmamem(sc->as_dmat, gatt->ag_size, gatt->ag_dmamap,
-		    (caddr_t)gatt->ag_virtual, &gatt->ag_dmaseg, 1);
+		    (void *)gatt->ag_virtual, &gatt->ag_dmaseg, 1);
 	}
 	free(sc->gatt, M_AGP);
 
@@ -713,6 +724,8 @@ agp_i810_bind_memory(struct agp_softc *sc, struct agp_memory *mem,
 	 * to the GTT through the MMIO window.
 	 * Until the issue is solved, simply restore it.
 	 */
+
+#if 0
 	regval = bus_space_read_4(isc->bst, isc->bsh, AGP_I810_PGTBL_CTL);
 	if (regval != (isc->gatt->ag_physical | 1)) {
 		printf("agp_i810_bind_memory: PGTBL_CTL is 0x%x - fixing\n",
@@ -720,6 +733,8 @@ agp_i810_bind_memory(struct agp_softc *sc, struct agp_memory *mem,
 		bus_space_write_4(isc->bst, isc->bsh, AGP_I810_PGTBL_CTL,
 				  isc->gatt->ag_physical | 1);
 	}
+#endif
+	regval = 0;
 
 	if (mem->am_type == 2) {
 		WRITEGTT(offset, mem->am_physical | 1);

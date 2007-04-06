@@ -1,4 +1,4 @@
-/*	$NetBSD: key.h,v 1.21 2007/02/17 22:34:17 dyoung Exp $	*/
+/*	$NetBSD: key.h,v 1.22 2007/03/04 06:03:34 christos Exp $	*/
 /*	$KAME: key.h,v 1.32 2003/09/07 05:25:20 itojun Exp $	*/
 
 /*
@@ -82,7 +82,7 @@ struct mbuf *key_setdumpsa_spi __P((u_int32_t));
 extern int key_parse __P((struct mbuf *, struct socket *));
 extern void key_init __P((void));
 extern int key_checktunnelsanity __P((struct secasvar *, u_int,
-					caddr_t, caddr_t));
+					void *, void *));
 extern void key_sa_recordxfer __P((struct secasvar *, struct mbuf *));
 extern void key_sa_routechange __P((struct sockaddr *));
 extern void key_sa_stir_iv __P((struct secasvar *));
@@ -93,12 +93,12 @@ u_int16_t key_portfromsaddr __P((struct sockaddr *));
 #define KEY_PORTFROMSADDR(saddr) key_portfromsaddr((struct sockaddr *)(saddr))
 #endif
 
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 void key_mip6_update_mobile_node_ipsecdb(struct sockaddr_in6 *,
     struct sockaddr_in6 *, struct sockaddr_in6 *, struct sockaddr_in6 *);
 void key_mip6_update_home_agent_ipsecdb(struct sockaddr_in6 *,
     struct sockaddr_in6 *, struct sockaddr_in6 *, struct sockaddr_in6 *);
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 
 #endif /* defined(_KERNEL) */
 #endif /* !_NETKEY_KEY_H_ */

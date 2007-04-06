@@ -1,4 +1,4 @@
-/*	$NetBSD: ata.c,v 1.85 2007/02/09 21:55:27 ad Exp $	*/
+/*	$NetBSD: ata.c,v 1.88 2007/03/17 06:41:36 dyoung Exp $	*/
 
 /*
  * Copyright (c) 1998, 2001 Manuel Bouyer.  All rights reserved.
@@ -30,11 +30,9 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ata.c,v 1.85 2007/02/09 21:55:27 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ata.c,v 1.88 2007/03/17 06:41:36 dyoung Exp $");
 
-#ifndef ATADEBUG
-#define ATADEBUG
-#endif /* ATADEBUG */
+#include "opt_ata.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -79,7 +77,8 @@ int atadebug_mask = 0;
 #define ATADEBUG_PRINT(args, level)
 #endif
 
-POOL_INIT(ata_xfer_pool, sizeof(struct ata_xfer), 0, 0, 0, "ataspl", NULL);
+POOL_INIT(ata_xfer_pool, sizeof(struct ata_xfer), 0, 0, 0, "ataspl", NULL,
+    IPL_BIO);
 
 /*
  * A queue of atabus instances, used to ensure the same bus probe order
@@ -577,7 +576,7 @@ ata_get_params(struct ata_drive_datas *drvp, u_int8_t flags,
 	int i;
 	u_int16_t *p;
 
-	ATADEBUG_PRINT(("ata_get_parms\n"), DEBUG_FUNCS);
+	ATADEBUG_PRINT(("%s\n", __func__), DEBUG_FUNCS);
 
 	memset(tb, 0, DEV_BSIZE);
 	memset(prms, 0, sizeof(struct ataparams));
@@ -1412,7 +1411,7 @@ atabusclose(dev_t dev, int flag, int fmt,
 }
 
 int
-atabusioctl(dev_t dev, u_long cmd, caddr_t addr, int flag,
+atabusioctl(dev_t dev, u_long cmd, void *addr, int flag,
     struct lwp *l)
 {
 	struct atabus_softc *sc = atabus_cd.cd_devs[minor(dev)];

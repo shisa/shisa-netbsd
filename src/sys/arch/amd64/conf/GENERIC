@@ -1,4 +1,4 @@
-# $NetBSD: GENERIC,v 1.127 2007/03/01 14:57:38 kiyohara Exp $
+# $NetBSD: GENERIC,v 1.137 2007/03/20 21:29:28 xtraeme Exp $
 #
 # GENERIC machine description file
 # 
@@ -22,7 +22,7 @@ include	"arch/amd64/conf/std.amd64"
 
 options 	INCLUDE_CONFIG_FILE	# embed config file in kernel binary
 
-#ident 		"GENERIC-$Revision: 1.127 $"
+#ident 		"GENERIC-$Revision: 1.137 $"
 
 maxusers	32		# estimated number of users
 
@@ -72,6 +72,9 @@ options 	SYSCTL_INCLUDE_DESCR	# Include sysctl descriptions in kernel
 
 # AMD PowerNow! and Cool`n'Quiet technology
 options 	POWERNOW_K8
+
+# Intel(R) On Demand Clock Modulation (aka ODCM)
+# options       INTEL_ONDEMAND_CLOCKMOD
 
 # Enable experimental buffer queue strategy for better responsiveness under 
 # high disk I/O load. Use it with caution - it's not proven to be stable yet.
@@ -123,12 +126,14 @@ file-system 	NULLFS		# loopback file system
 file-system 	OVERLAY		# overlay file system
 file-system 	PORTAL		# portal filesystem (still experimental)
 file-system 	PROCFS		# /proc
+file-system 	SMBFS		# experimental - SMB/CIFS file-system
 file-system 	UMAPFS		# NULLFS + uid and gid remapping
 file-system 	UNION		# union file system
 file-system	CODA		# Coda File System; also needs vcoda (below)
 file-system	PTYFS		# /dev/pts/N support
 file-system	TMPFS		# Efficient memory file-system
 #file-system	UDF		# experimental - OSTA UDF CD/DVD file-system
+#file-system	HFS		# experimental - Apple HFS+ (read-only)
 
 # File system options
 options 	QUOTA		# UFS quotas
@@ -230,8 +235,9 @@ config		netbsd	root on ? type ?
 
 mainbus0 at root
 
-#acpi0 		at mainbus0
-#options 	ACPI_SCANPCI		# find PCI roots using ACPI
+# ACPI will be used if present. If not it will fall back to MPBIOS
+acpi0 		at mainbus0
+options 	ACPI_SCANPCI		# find PCI roots using ACPI
 options 	MPBIOS			# configure CPUs and APICs using MPBIOS 
 options 	MPBIOS_SCANPCI		# MPBIOS configures PCI roots
 #options 	PCI_INTR_FIXUP		# PCI interrupt routing via ACPI
@@ -247,8 +253,10 @@ options 	MPBIOS_SCANPCI		# MPBIOS configures PCI roots
 #acpitz* 	at acpi?		# ACPI Thermal Zone
 
 # Mainboard devices
+#aiboost* 	at acpi?		# ASUS AI Booster Hardware monitor
 #com* 		at acpi?		# Serial communications interface
 #fdc* 		at acpi?		# Floppy disk controller
+#hpet*		at acpi?		# High Precision Event Timer
 #joy*		at acpi?		# Joystick/Game port
 #lpt* 		at acpi?		# Parallel port
 #mpu*		at acpi?		# Roland MPU-401 MIDI UART
@@ -284,15 +292,17 @@ ppb*	at pci? dev ? function ?	# PCI-PCI bridges
 # XXX 'puc's aren't really bridges, but there's no better place for them here
 puc*	at pci? dev ? function ?	# PCI "universal" comm. cards
 
+#amdpcib* at pci? dev ? function ?	# AMD 8111 PCI-ISA w/ HPET
+#hpet* 	at amdpcib?
+
 aapic* 	at pci? dev ? function ?	# AMD 8131 IO apic
 
 #agp* 	at pchb?
 
-#
-
 # ISA bus support
 isa0	at mainbus?
 isa0	at pcib?
+#isa0 	at amdpcib?
 
 # CardBus bridge support
 #cbb*		at pci? dev ? function ?
@@ -642,7 +652,7 @@ usb*	at uhci?
 
 # USB Hubs
 uhub*	at usb?
-uhub*	at uhub? port ? configuration ? interface ?
+uhub*	at uhub? port ?
 
 # USB HID device
 uhidev*	at uhub? port ? configuration ? interface ?
@@ -834,7 +844,7 @@ radio* at bktr?
 #bt3c* at pcmcia? function ?		# 3Com 3CRWB6096-A
 
 # Bluetooth USB Controllers
-ubt* at uhub? port ? configuration ? interface ?
+ubt* at uhub? port ?
 
 # Bluetooth Device Hub
 #bthub* at bt3c?
@@ -924,6 +934,9 @@ pseudo-device	lockstat		# lock profiling
 
 # a pseudo device needed for Coda	# also needs CODA (above)
 pseudo-device	vcoda		4	# coda minicache <-> venus comm.
+
+# a pseudo device needed for SMBFS
+pseudo-device	nsmb			# experimental - SMB requester
 
 # wscons pseudo-devices
 pseudo-device	wsmux			# mouse & keyboard multiplexor

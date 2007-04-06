@@ -1,4 +1,4 @@
-/*	$NetBSD: subr_vmem.c,v 1.26 2007/02/22 06:34:45 thorpej Exp $	*/
+/*	$NetBSD: subr_vmem.c,v 1.29 2007/03/26 22:52:44 hubertf Exp $	*/
 
 /*-
  * Copyright (c)2006 YAMAMOTO Takashi,
@@ -38,7 +38,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: subr_vmem.c,v 1.26 2007/02/22 06:34:45 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: subr_vmem.c,v 1.29 2007/03/26 22:52:44 hubertf Exp $");
 
 #define	VMEM_DEBUG
 #if defined(_KERNEL)
@@ -225,7 +225,7 @@ xfree(void *p)
 
 #if defined(_KERNEL)
 static struct pool_cache bt_poolcache;
-static POOL_INIT(bt_pool, sizeof(bt_t), 0, 0, 0, "vmembtpl", NULL);
+static POOL_INIT(bt_pool, sizeof(bt_t), 0, 0, 0, "vmembtpl", NULL, IPL_VM);
 #endif /* defined(_KERNEL) */
 
 static bt_t *
@@ -491,12 +491,14 @@ qc_init(vmem_t *vm, size_t qcache_max)
 		snprintf(qc->qc_name, sizeof(qc->qc_name), "%s-%zu",
 		    vm->vm_name, size);
 		pool_init(&qc->qc_pool, size, ORDER2SIZE(vm->vm_quantum_shift),
-		    0, PR_NOALIGN | PR_NOTOUCH /* XXX */, qc->qc_name, pa);
+		    0, PR_NOALIGN | PR_NOTOUCH /* XXX */, qc->qc_name, pa,
+		    IPL_NONE);
 		if (prevqc != NULL &&
 		    qc->qc_pool.pr_itemsperpage ==
 		    prevqc->qc_pool.pr_itemsperpage) {
 			pool_destroy(&qc->qc_pool);
 			vm->vm_qcache[i - 1] = prevqc;
+			continue;
 		}
 		pool_cache_init(&qc->qc_cache, &qc->qc_pool, NULL, NULL, NULL);
 		vm->vm_qcache[i - 1] = qc;
@@ -1164,8 +1166,6 @@ vmem_dump(const vmem_t *vm)
 }
 
 #if !defined(_KERNEL)
-
-#include <stdlib.h>
 
 int
 main()

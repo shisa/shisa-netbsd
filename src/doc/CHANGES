@@ -1,4 +1,4 @@
-LIST OF CHANGES FROM LAST RELEASE:			<$Revision: 1.798 $>
+LIST OF CHANGES FROM LAST RELEASE:			<$Revision: 1.818 $>
 
 
 [Note: This file does not mention every change made to the NetBSD source tree.
@@ -46,8 +46,30 @@ Changes from NetBSD 4.0 to NetBSD 5.0:
 	btuartd(8): Add support for Bluetooth HCI UART (H4) daemon.
 		[kiyohara 20070221]
         mutex(9), rwlock(9): Support priority inheritance. [yamt 20070226]
-        MAKEDEV(8): Added MAKEDEV.subr with functions shared between
-        	MAKEDEV and MAKEDEV.local. [apb 20070227]
 	eeprom(8): Add the missing kernel bits on arm and powerpc that kept
 		eeprom from actually changing firmware settings
 		[macallan 20070228]
+	MAKEDEV(8), MAKEDEV.local(8): Let MAKEDEV.local use functions
+		defined in MAKEDEV. [apb 20070303]
+	x68k: Add generic softintr(9) support. [tsutsui 20070304]
+	luna68k: Add generic softintr(9) support. [tsutsui 20070304]
+	file(1): update to 4.20.  [pooka 20070304]
+	hfs: Add read-only Apple HFS+ file system support. [dillo 20070305]
+	build: 'make iso-image' in src/ (or build.sh iso-image) will build
+		iso images, eventually bootable, using in-tree tools.
+		[bouyer 20070306]
+	i386, amd64: switch bootable iso images to native boot format, and add
+		different bootable kenrels on the iso images. Enable ACPI
+		in default INSTALL and GENERIC kernels. [bouyer 20070306]
+	openssl: Import OpenSSL 0.9.8e. [mjf 20070307]
+	ipv6: add ipv6 fast forward. [liamjfoy 20070307]
+	openssh: import 4.6 [christos 20070310]
+	aiboost(4): ASUS AI Booster ACPI Hardware monitor driver,
+		adapted from FreeBSD for envsys(4). [xtraeme 20070313]
+	evbmips: add Infineon ADM5120 port. [dyoung 20070320]
+	i386, amd64: Intel(R) On Demand Clock Modulation driver, to save
+		power and overheating in CPUs supporting the Thermal
+		Monitor feature (TM). Adapted from OpenBSD/FreeBSD.
+		See options(4) for more information. [xtraeme 20070320]
+	libc: add support for LC_TIME [manu 20070328]
+	bind: import 9.4.0 [ghen 20070330]

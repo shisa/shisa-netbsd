@@ -1,4 +1,4 @@
-/*	$NetBSD: pmap.c,v 1.30 2007/02/22 04:54:36 thorpej Exp $	*/
+/*	$NetBSD: pmap.c,v 1.33 2007/03/12 18:18:23 ad Exp $	*/
 
 /*
  *
@@ -108,7 +108,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.30 2007/02/22 04:54:36 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.33 2007/03/12 18:18:23 ad Exp $");
 
 #ifndef __x86_64__
 #include "opt_cputype.h"
@@ -483,7 +483,7 @@ struct pool pmap_pmap_pool;
  * special VAs and the PTEs that map them
  */
 static pt_entry_t *csrc_pte, *cdst_pte, *zero_pte, *ptp_pte, *early_zero_pte;
-static caddr_t csrcp, cdstp, zerop, ptpp, early_zerop;
+static char *csrcp, *cdstp, *zerop, *ptpp, *early_zerop;
 
 /*
  * pool and cache that PDPs are allocated from
@@ -495,7 +495,7 @@ u_int pmap_pdp_cache_generation;
 
 int	pmap_pdp_ctor(void *, void *, int);
 
-caddr_t vmmap; /* XXX: used by mem.c... it should really uvm_map_reserve it */
+void *vmmap; /* XXX: used by mem.c... it should really uvm_map_reserve it */
 
 
 extern vaddr_t idt_vaddr;			/* we allocate IDT early */
@@ -973,7 +973,7 @@ pmap_bootstrap(kva_start)
 	 * XXXfvdl fix this for MULTIPROCESSOR later.
 	 */
 
-	early_zerop = (caddr_t)(KERNBASE + NKL2_KIMG_ENTRIES * NBPD_L2);
+	early_zerop = (void *)(KERNBASE + NKL2_KIMG_ENTRIES * NBPD_L2);
 	early_zero_pte = PTE_BASE + pl1_i((unsigned long)early_zerop);
 #endif
 
@@ -996,27 +996,27 @@ pmap_bootstrap(kva_start)
 	 * as well; we could waste less space if we knew the largest
 	 * CPU ID beforehand.
 	 */
-	csrcp = (caddr_t) virtual_avail;  csrc_pte = pte;
+	csrcp = (void *) virtual_avail;  csrc_pte = pte;
 
-	cdstp = (caddr_t) virtual_avail+PAGE_SIZE;  cdst_pte = pte+1;
+	cdstp = (char *) virtual_avail+PAGE_SIZE;  cdst_pte = pte+1;
 
-	zerop = (caddr_t) virtual_avail+PAGE_SIZE*2;  zero_pte = pte+2;
+	zerop = (char *) virtual_avail+PAGE_SIZE*2;  zero_pte = pte+2;
 
-	ptpp = (caddr_t) virtual_avail+PAGE_SIZE*3;  ptp_pte = pte+3;
+	ptpp = (char *) virtual_avail+PAGE_SIZE*3;  ptp_pte = pte+3;
 
 	virtual_avail += PAGE_SIZE * X86_MAXPROCS * NPTECL;
 	pte += X86_MAXPROCS * NPTECL;
 #else
-	csrcp = (caddr_t) virtual_avail;  csrc_pte = pte;	/* allocate */
+	csrcp = (void *) virtual_avail;  csrc_pte = pte;	/* allocate */
 	virtual_avail += PAGE_SIZE; pte++;			/* advance */
 
-	cdstp = (caddr_t) virtual_avail;  cdst_pte = pte;
+	cdstp = (void *) virtual_avail;  cdst_pte = pte;
 	virtual_avail += PAGE_SIZE; pte++;
 
-	zerop = (caddr_t) virtual_avail;  zero_pte = pte;
+	zerop = (void *) virtual_avail;  zero_pte = pte;
 	virtual_avail += PAGE_SIZE; pte++;
 
-	ptpp = (caddr_t) virtual_avail;  ptp_pte = pte;
+	ptpp = (void *) virtual_avail;  ptp_pte = pte;
 	virtual_avail += PAGE_SIZE; pte++;
 #endif
 
@@ -1083,7 +1083,7 @@ pmap_bootstrap(kva_start)
 	 */
 
 	pool_init(&pmap_pmap_pool, sizeof(struct pmap), 0, 0, 0, "pmappl",
-	    &pool_allocator_nointr);
+	    &pool_allocator_nointr, IPL_NONE);
 
 	/*
 	 * Initialize the TLB shootdown queues.
@@ -1101,9 +1101,9 @@ pmap_bootstrap(kva_start)
 	 */
 
 	pool_init(&pmap_pdp_pool, PAGE_SIZE, 0, 0, 0, "pdppl",
-		  &pool_allocator_nointr);
+	    &pool_allocator_nointr, IPL_NONE);
 	pool_cache_init(&pmap_pdp_cache, &pmap_pdp_pool,
-			pmap_pdp_ctor, NULL, NULL);
+	    pmap_pdp_ctor, NULL, NULL);
 
 	/*
 	 * ensure the TLB is sync'd with reality by flushing it...
@@ -2200,7 +2200,7 @@ pmap_zero_page(pa)
 	int id = cpu_number();
 #endif
 	pt_entry_t *zpte = PTESLEW(zero_pte, id);
-	caddr_t zerova = VASLEW(zerop, id);
+	void *zerova = VASLEW(zerop, id);
 
 #ifdef DIAGNOSTIC
 	if (*zpte)
@@ -2230,7 +2230,7 @@ pmap_pageidlezero(pa)
 	int id = cpu_number();
 #endif
 	pt_entry_t *zpte = PTESLEW(zero_pte, id);
-	caddr_t zerova = VASLEW(zerop, id);
+	void *zerova = VASLEW(zerop, id);
 	bool rv = true;
 	int i, *ptr;
 
@@ -2275,8 +2275,8 @@ pmap_copy_page(srcpa, dstpa)
 #endif
 	pt_entry_t *spte = PTESLEW(csrc_pte,id);
 	pt_entry_t *dpte = PTESLEW(cdst_pte,id);
-	caddr_t csrcva = VASLEW(csrcp, id);
-	caddr_t cdstva = VASLEW(cdstp, id);
+	void *csrcva = VASLEW(csrcp, id);
+	void *cdstva = VASLEW(cdstp, id);
 
 #ifdef DIAGNOSTIC
 	if (*spte || *dpte)

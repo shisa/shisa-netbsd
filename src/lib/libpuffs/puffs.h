@@ -1,4 +1,4 @@
-/*	$NetBSD: puffs.h,v 1.31 2007/02/15 17:04:46 pooka Exp $	*/
+/*	$NetBSD: puffs.h,v 1.38 2007/03/22 16:57:27 pooka Exp $	*/
 
 /*
  * Copyright (c) 2005, 2006  Antti Kantee.  All Rights Reserved.
@@ -65,6 +65,14 @@ struct puffs_pathinfo {
 	struct puffs_pathobj *pi_new;
 };
 
+/* describes one segment cached in the kernel */
+struct puffs_kcache {
+	off_t	pkc_start;
+	off_t	pkc_end;
+
+	LIST_ENTRY(puffs_kcache) pkc_entries;
+};
+
 /* XXX: might disappear from here into a private header */
 struct puffs_node {
 	off_t			pn_size;
@@ -77,6 +85,8 @@ struct puffs_node {
 
 	struct puffs_usermount 	*pn_mnt;
 	LIST_ENTRY(puffs_node)	pn_entries;
+
+	LIST_HEAD(,puffs_kcache)pn_cacheinfo;	/* PUFFS_KFLAG_CACHE	*/
 };
 
 
@@ -88,6 +98,9 @@ struct puffs_usermount;
  */
 #define PUFFS_VNOVAL (-1)
 #define PUFFS_IO_APPEND 0x20
+#define PUFFS_VEXEC	01
+#define PUFFS_VWRITE	02
+#define PUFFS_VREAD	04
 
 #define PUFFS_FSYNC_DATAONLY 0x0002
 #define PUFFS_FSYNC_CACHE    0x0100
@@ -198,6 +211,9 @@ struct puffs_ops {
 	    uint8_t *, off_t, size_t *, const struct puffs_cred *, int);
 	int (*puffs_node_write)(struct puffs_cc *, void *,
 	    uint8_t *, off_t, size_t *, const struct puffs_cred *, int);
+
+	int (*puffs_cache_write)(struct puffs_usermount *,
+		void *, size_t, struct puffs_cacherun *);
 };
 
 typedef	int (*pu_pathbuild_fn)(struct puffs_usermount *,
@@ -261,26 +277,6 @@ enum {
 #define		DENT_DOT	0
 #define		DENT_DOTDOT	1
 #define		DENT_ADJ(a)	((a)-2)	/* nth request means dir's n-2th */
-
-
-/*
- * Operation credentials
- */
-
-/* Credential fetch */
-int	puffs_cred_getuid(const struct puffs_cred *pcr, uid_t *);
-int	puffs_cred_getgid(const struct puffs_cred *pcr, gid_t *);
-int	puffs_cred_getgroups(const struct puffs_cred *pcr, gid_t *, short *);
-
-/* Credential check */
-int	puffs_cred_isuid(const struct puffs_cred *pcr, uid_t);
-int	puffs_cred_hasgroup(const struct puffs_cred *pcr, gid_t);
-/* kernel internal NOCRED */
-int	puffs_cred_iskernel(const struct puffs_cred *pcr);
-/* kernel internal FSCRED */
-int	puffs_cred_isfs(const struct puffs_cred *pcr);
-/* root || NOCRED || FSCRED */
-int	puffs_cred_isjuggernaut(const struct puffs_cred *pcr);
 
 
 /*
@@ -365,7 +361,10 @@ int	puffs_cred_isjuggernaut(const struct puffs_cred *pcr);
 	int fsname##_node_read(struct puffs_cc *, void *,		\
 	    uint8_t *, off_t, size_t *, const struct puffs_cred *, int);\
 	int fsname##_node_write(struct puffs_cc *, void *,		\
-	    uint8_t *, off_t, size_t *, const struct puffs_cred *, int);
+	    uint8_t *, off_t, size_t *, const struct puffs_cred *, int);\
+									\
+	int fsname##_cache_write(struct puffs_usermount *, void *,	\
+	    size_t, struct puffs_cacheinfo *);
 
 #define PUFFSOP_INIT(ops)						\
     ops = malloc(sizeof(struct puffs_ops));				\
@@ -375,7 +374,7 @@ int	puffs_cred_isjuggernaut(const struct puffs_cred *pcr);
 #define PUFFSOP_SETFSNOP(ops, opname)					\
     (ops)->puffs_fs_##opname = puffs_fsnop_##opname
 
-#define PUFFS_DEVEL_LIBVERSION 8
+#define PUFFS_DEVEL_LIBVERSION 10
 #define puffs_mount(a,b,c,d,e,f,g) \
     _puffs_mount(PUFFS_DEVEL_LIBVERSION,a,b,c,d,e,f,g)
 
@@ -434,6 +433,36 @@ int		puffs_nextdent(struct dirent **, const char *, ino_t,
 int		puffs_vtype2dt(enum vtype);
 enum vtype	puffs_mode2vt(mode_t);
 void		puffs_stat2vattr(struct vattr *va, const struct stat *);
+mode_t		puffs_addvtype2mode(mode_t, enum vtype);
+
+
+/*
+ * credentials & permissions
+ */
+
+/* Credential fetch */
+int	puffs_cred_getuid(const struct puffs_cred *pcr, uid_t *);
+int	puffs_cred_getgid(const struct puffs_cred *pcr, gid_t *);
+int	puffs_cred_getgroups(const struct puffs_cred *pcr, gid_t *, short *);
+
+/* Credential check */
+int	puffs_cred_isuid(const struct puffs_cred *, uid_t);
+int	puffs_cred_hasgroup(const struct puffs_cred *, gid_t);
+int	puffs_cred_isregular(const struct puffs_cred *);
+int	puffs_cred_iskernel(const struct puffs_cred *);
+int	puffs_cred_isfs(const struct puffs_cred *);
+int	puffs_cred_isjuggernaut(const struct puffs_cred *);
+
+/* misc */
+int	puffs_access(enum vtype, mode_t, uid_t, gid_t, mode_t,
+		     const struct puffs_cred *);
+int	puffs_access_chown(uid_t, gid_t, uid_t, gid_t,
+			   const struct puffs_cred *);
+int	puffs_access_chmod(uid_t, gid_t, enum vtype, mode_t,
+			   const struct puffs_cred *);
+int	puffs_access_times(uid_t, gid_t, mode_t, int,
+			   const struct puffs_cred *);
+
 
 /*
  * Requests
@@ -482,6 +511,8 @@ int	puffs_docc(struct puffs_cc *, struct puffs_putreq *);
 
 int	puffs_inval_namecache_dir(struct puffs_usermount *, void *);
 int	puffs_inval_namecache_all(struct puffs_usermount *);
+
+int	puffs_inval_pagecache_node(struct puffs_usermount *, void *);
 
 /*
  * Path constructicons

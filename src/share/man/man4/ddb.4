@@ -1,4 +1,4 @@
-.\"	$NetBSD: ddb.4,v 1.101 2007/02/20 15:17:28 wiz Exp $
+.\"	$NetBSD: ddb.4,v 1.103 2007/03/28 14:45:35 uwe Exp $
 .\"
 .\" Copyright (c) 1997 - 2007 The NetBSD Foundation, Inc.
 .\" All rights reserved.
@@ -63,7 +63,7 @@
 .\" any improvements or extensions that they make and grant Carnegie Mellon
 .\" the rights to redistribute these changes.
 .\"
-.Dd February 20, 2007
+.Dd March 28, 2007
 .Dt DDB 4
 .Os
 .Sh NAME
@@ -263,6 +263,10 @@ one more page.
 .It Ic q
 abort the current command, and return to the command input mode.
 .El
+.Pp
+You can set
+.Va lines
+variable to zero to disable this feature.
 .Pp
 If
 .Nm
@@ -613,6 +617,11 @@ Set the named variable or register to the value of
 .Ar expression .
 Valid variable names are described in
 .Sx VARIABLES .
+.It Ic show all callout
+Display information about callouts in the system.
+See
+.Xr callout 9
+for more information on callouts.
 .It Ic show all pages
 Display basic information about all physical pages managed by the VM system.
 For more detailed information about a single page, use
@@ -654,6 +663,11 @@ address, and wait channel message.
 show each process' associated LWP information, including each LWP's
 LID, flags, kernel LWP structure address, u-area, and wait channel.
 .El
+.It Ic show arptab
+Dump the entire
+.Dv AF_INET
+routing table.
+This command is available only on systems which support inet and ARP.
 .It Ic show breaks
 Display all breakpoints.
 .It Xo
@@ -674,6 +688,25 @@ event counters.
 If
 .Cm /f
 is specified, all event counters with a count of zero are printed as well.
+.It Xo
+.Ic show lock
+.Ar address
+.Xc
+Display information about a lock at
+.Ar address .
+This command is useful only if a kernel is compiled with
+.Cd options LOCKDEBUG .
+.It Xo
+.Ic show malloc
+.Ar address
+.Xc
+If
+.Ar address
+is supplied, display the kernel memory allocator's idea on the
+allocation status for it.
+Also, print out global statistics for the memory allocator.
+This command is useful only if a kernel is compiled with
+.Cd options MALLOC_DEBUG .
 .It Xo
 .Ic show map Ns Op Cm /f
 .Ar address
@@ -1152,6 +1185,9 @@ The number of lines.
 This is used by the
 .Ic more
 feature.
+When this varibale is set to zero the
+.Ic more
+feature is disabled.
 .It Va maxoff
 Addresses are printed as
 .Li 'symbol'+offset
@@ -1161,6 +1197,13 @@ is greater than
 .Va maxoff .
 .It Va maxwidth
 The width of the displayed line.
+.Nm
+wraps the current line by printing new line when
+.Va maxwidth
+column is reached.
+When this varibale is set to zero
+.Nm
+doesn't perform any wrapping.
 .It Va onpanic
 If non-zero (the default),
 .Nm

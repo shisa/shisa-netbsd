@@ -1,4 +1,4 @@
-/*	$NetBSD: maple.c,v 1.31 2005/12/11 12:17:06 christos Exp $	*/
+/*	$NetBSD: maple.c,v 1.33 2007/03/12 14:03:48 tsutsui Exp $	*/
 
 /*-
  * Copyright (c) 2002 The NetBSD Foundation, Inc.
@@ -69,7 +69,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: maple.c,v 1.31 2005/12/11 12:17:06 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: maple.c,v 1.33 2007/03/12 14:03:48 tsutsui Exp $");
 
 #include <sys/param.h>
 #include <sys/device.h>
@@ -248,7 +248,7 @@ mapleattach(struct device *parent, struct device *self, void *aux)
 	callout_init(&sc->maple_callout_ch);
 
 	sc->sc_intrhand = sysasic_intr_establish(SYSASIC_EVENT_MAPLE_DMADONE,
-	    IPL_MAPLE, maple_intr, sc);
+	    IPL_MAPLE, SYSASIC_IRL9, maple_intr, sc);
 
 	config_pending_incr();	/* create thread before mounting root */
 	kthread_create(maple_create_event_thread, sc);
@@ -1649,7 +1649,7 @@ mapleclose(dev_t dev, int flag, int mode, struct lwp *l)
 
 int
 maple_unit_ioctl(struct device *dev, struct maple_unit *u, u_long cmd,
-    caddr_t data, int flag, struct lwp *l)
+    void *data, int flag, struct lwp *l)
 {
 	struct maple_softc *sc = (struct maple_softc *)dev;
 
@@ -1668,7 +1668,7 @@ maple_unit_ioctl(struct device *dev, struct maple_unit *u, u_long cmd,
 }
 
 int
-mapleioctl(dev_t dev, u_long cmd, caddr_t data, int flag, struct lwp *l)
+mapleioctl(dev_t dev, u_long cmd, void *data, int flag, struct lwp *l)
 {
 	struct maple_softc *sc;
 	struct maple_unit *u;

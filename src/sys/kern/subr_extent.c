@@ -1,4 +1,4 @@
-/*	$NetBSD: subr_extent.c,v 1.61 2006/11/01 10:17:58 yamt Exp $	*/
+/*	$NetBSD: subr_extent.c,v 1.65 2007/03/13 15:59:47 ad Exp $	*/
 
 /*-
  * Copyright (c) 1996, 1998 The NetBSD Foundation, Inc.
@@ -41,7 +41,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: subr_extent.c,v 1.61 2006/11/01 10:17:58 yamt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: subr_extent.c,v 1.65 2007/03/13 15:59:47 ad Exp $");
 
 #ifdef _KERNEL
 #include "opt_lockdebug.h"
@@ -132,7 +132,7 @@ expool_init(void)
 
 #if defined(_KERNEL)
 	pool_init(&expool, sizeof(struct extent_region), 0, 0, 0,
-	    "extent", NULL);
+	    "extent", NULL, IPL_VM);
 #else
 	expool.pr_size = sizeof(struct extent_region);
 #endif
@@ -268,10 +268,10 @@ extent_free_region_descriptor(struct extent *ex, struct extent_region *rp)
  */
 struct extent *
 extent_create(const char *name, u_long start, u_long end,
-    struct malloc_type *mtype, caddr_t storage, size_t storagesize, int flags)
+    struct malloc_type *mtype, void *storage, size_t storagesize, int flags)
 {
 	struct extent *ex;
-	caddr_t cp = storage;
+	char *cp = storage;
 	size_t sz = storagesize;
 	struct extent_region *rp;
 	int fixed_extent = (storage != NULL);

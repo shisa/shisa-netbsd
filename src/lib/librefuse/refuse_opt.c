@@ -1,4 +1,4 @@
-/* 	$NetBSD: refuse_opt.c,v 1.2 2007/02/28 21:48:46 agc Exp $	*/
+/* 	$NetBSD: refuse_opt.c,v 1.4 2007/03/13 22:47:04 agc Exp $	*/
 
 /*-
  * Copyright (c) 2007 Juan Romero Pardines.

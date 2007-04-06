@@ -1,4 +1,4 @@
-/*	$NetBSD: svr4_32_sockio.c,v 1.13 2007/02/09 21:55:26 ad Exp $	 */
+/*	$NetBSD: svr4_32_sockio.c,v 1.15 2007/03/16 22:21:43 dsl Exp $	 */
 
 /*-
  * Copyright (c) 1995 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: svr4_32_sockio.c,v 1.13 2007/02/09 21:55:26 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: svr4_32_sockio.c,v 1.15 2007/03/16 22:21:43 dsl Exp $");
 
 #include <sys/param.h>
 #include <sys/proc.h>
@@ -97,7 +97,7 @@ svr4_32_sock_ioctl(fp, l, retval, fd, cmd, data)
 	register_t *retval;
 	int fd;
 	u_long cmd;
-	caddr_t data;
+	void *data;
 {
 	int error;
 	int (*ctl)(struct file *, u_long, void *, struct lwp *) =
@@ -175,7 +175,7 @@ svr4_32_sock_ioctl(fp, l, retval, fd, cmd, data)
 				sc.svr4_32_ifc_len));
 
 			ifc.ifc_len = sc.svr4_32_ifc_len;
-			ifc.ifc_buf = (void *)(uintptr_t)sc.ifc_ifcu.ifcu_buf;
+			ifc.ifc_buf = NETBSD32PTR64(sc.ifc_ifcu.ifcu_buf);
 
 			if ((error = (*ctl)(fp, OSIOCGIFCONF, &ifc, l)) != 0)
 				return error;

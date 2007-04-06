@@ -1,4 +1,4 @@
-/*	$NetBSD: route6.c,v 1.16 2006/11/16 01:33:46 christos Exp $	*/
+/*	$NetBSD: route6.c,v 1.17 2007/03/04 06:03:28 christos Exp $	*/
 /*	$KAME: route6.c,v 1.22 2000/12/03 00:54:00 itojun Exp $	*/
 
 /*
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: route6.c,v 1.16 2006/11/16 01:33:46 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: route6.c,v 1.17 2007/03/04 06:03:28 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/mbuf.h>
@@ -47,10 +47,20 @@ __KERNEL_RCSID(0, "$NetBSD: route6.c,v 1.16 2006/11/16 01:33:46 christos Exp $")
 #include <netinet6/ip6_var.h>
 #include <netinet6/scope6_var.h>
 
+#ifdef MOBILE_IPV6
+#include "mip.h"
+#include <netinet/ip6mh.h>
+#include <netinet6/mip6_var.h>
+#endif
+
 #include <netinet/icmp6.h>
 
 static int ip6_rthdr0 __P((struct mbuf *, struct ip6_hdr *,
     struct ip6_rthdr0 *));
+#if defined(MOBILE_IPV6) && NMIP > 0
+static int ip6_rthdr2 __P((struct mbuf *, struct ip6_hdr *,
+    struct ip6_rthdr2 *));
+#endif /* defined(MOBILE_IPV6) && NMIP > 0 */
 
 int
 route6_input(struct mbuf **mp, int *offp, int proto)
@@ -86,6 +96,18 @@ route6_input(struct mbuf **mp, int *offp, int proto)
 		if (ip6_rthdr0(m, ip6, (struct ip6_rthdr0 *)rh))
 			return (IPPROTO_DONE);
 		break;
+#if defined(MOBILE_IPV6) && NMIP > 0
+	case IPV6_RTHDR_TYPE_2:
+		rhlen = (rh->ip6r_len + 1) << 3;
+		IP6_EXTHDR_GET(rh, struct ip6_rthdr *, m, off, rhlen);
+		if (rh == NULL) {
+			ip6stat.ip6s_tooshort++;
+			return IPPROTO_DONE;
+		}
+		if (ip6_rthdr2(m, ip6, (struct ip6_rthdr2 *)rh)) 
+			return(IPPROTO_DONE);
+		break;
+#endif /* defined(MOBILE_IPV6) && NMIP > 0 */
 	default:
 		/* unknown routing type */
 		if (rh->ip6r_segleft == 0) {
@@ -94,7 +116,7 @@ route6_input(struct mbuf **mp, int *offp, int proto)
 		}
 		ip6stat.ip6s_badoptions++;
 		icmp6_error(m, ICMP6_PARAM_PROB, ICMP6_PARAMPROB_HEADER,
-			    (caddr_t)&rh->ip6r_type - (caddr_t)ip6);
+			    (char *)&rh->ip6r_type - (char *)ip6);
 		return (IPPROTO_DONE);
 	}
 
@@ -133,14 +155,14 @@ ip6_rthdr0(m, ip6, rh0)
 		 */
 		ip6stat.ip6s_badoptions++;
 		icmp6_error(m, ICMP6_PARAM_PROB, ICMP6_PARAMPROB_HEADER,
-			    (caddr_t)&rh0->ip6r0_len - (caddr_t)ip6);
+			    (char *)&rh0->ip6r0_len - (char *)ip6);
 		return (-1);
 	}
 
 	if ((addrs = rh0->ip6r0_len / 2) < rh0->ip6r0_segleft) {
 		ip6stat.ip6s_badoptions++;
 		icmp6_error(m, ICMP6_PARAM_PROB, ICMP6_PARAMPROB_HEADER,
-			    (caddr_t)&rh0->ip6r0_segleft - (caddr_t)ip6);
+			    (char *)&rh0->ip6r0_segleft - (char *)ip6);
 		return (-1);
 	}
 
@@ -203,3 +225,126 @@ ip6_rthdr0(m, ip6, rh0)
 	m_freem(m);
 	return (-1);
 }
+
+#if defined(MOBILE_IPV6) && NMIP > 0
+/* Type2 routing header processing */
+static int
+ip6_rthdr2(struct mbuf *m, struct ip6_hdr *ip6, struct ip6_rthdr2 *rh2)
+{
+	struct in6_addr *nextaddr, tmpaddr;
+	struct in6_ifaddr *ifa;
+	struct in6_ifaddr *ia;
+	int  myhoa = 0;
+	int  mycoa = 0;
+
+	if (rh2->ip6r2_segleft == 0) {
+		nextaddr = (struct in6_addr *)(rh2 + 1);
+
+		if (IN6_IS_ADDR_MULTICAST(nextaddr) ||
+		    IN6_IS_ADDR_UNSPECIFIED(nextaddr) ||
+		    IN6_IS_ADDR_V4MAPPED(nextaddr) ||
+		    IN6_IS_ADDR_V4COMPAT(nextaddr)) {
+			ip6stat.ip6s_badoptions++;
+			goto bad;
+		}
+
+		if (IN6_IS_ADDR_MULTICAST(&ip6->ip6_dst) ||
+		    IN6_IS_ADDR_UNSPECIFIED(&ip6->ip6_dst) ||
+		    IN6_IS_ADDR_V4MAPPED(&ip6->ip6_dst) ||
+		    IN6_IS_ADDR_V4COMPAT(&ip6->ip6_dst)) {
+			ip6stat.ip6s_badoptions++;
+			goto bad;
+		}
+
+		if ((ifa = ip6_getdstifaddr(m)) == NULL) 
+			goto bad;
+		if (in6_setscope(nextaddr, ifa->ia_ifp, NULL) != 0) {
+			ip6stat.ip6s_badscope++;
+			goto bad;
+		}
+
+		/*
+		 * check dst addr = hoa
+		 */
+		for (ia = in6_ifaddr; ia; ia = ia->ia_next) {
+			if (ia->ia6_flags & IN6_IFF_HOME) 
+				if (IN6_ARE_ADDR_EQUAL(&ip6->ip6_dst, &ia->ia_addr.sin6_addr))
+					myhoa = 1;
+
+			if (IN6_ARE_ADDR_EQUAL(nextaddr, &ia->ia_addr.sin6_addr))
+					mycoa = 1;
+		} 
+
+		if (!myhoa || !mycoa) {
+			ip6stat.ip6s_badoptions++;
+			goto bad;
+		} 
+
+		return (0);
+	} 
+
+	if (rh2->ip6r2_segleft != 1) { 
+		ip6stat.ip6s_badoptions++;
+		goto bad;
+	}
+	
+	/* section 11.3.3 */
+	if (rh2->ip6r2_len != 2) {
+		ip6stat.ip6s_badoptions++;
+		goto bad;
+	}
+
+	rh2->ip6r2_segleft--;
+	nextaddr = (struct in6_addr *)(rh2 + 1);
+
+	/*
+	 * reject invalid addresses.  be proactive about malicious use of
+	 * IPv4 mapped/compat address.
+	 * XXX need more checks?
+	 */
+	if (IN6_IS_ADDR_MULTICAST(nextaddr) ||
+		IN6_IS_ADDR_UNSPECIFIED(nextaddr) ||
+		IN6_IS_ADDR_V4MAPPED(nextaddr) ||
+		IN6_IS_ADDR_V4COMPAT(nextaddr)) {
+		ip6stat.ip6s_badoptions++;
+		goto bad;
+	}
+
+	if (IN6_IS_ADDR_MULTICAST(&ip6->ip6_dst) ||
+		IN6_IS_ADDR_UNSPECIFIED(&ip6->ip6_dst) ||
+		IN6_IS_ADDR_V4MAPPED(&ip6->ip6_dst) ||
+		IN6_IS_ADDR_V4COMPAT(&ip6->ip6_dst)) {
+		ip6stat.ip6s_badoptions++;
+		goto bad;
+	}
+
+	/*
+	 * determine the scope zone of the next hop, based on the interface
+	 * of the current hop. [RFC4007, Section 9]
+	 * Then disambiguate the scope zone for the next hop (if necessary).
+	 */
+	if ((ifa = ip6_getdstifaddr(m)) == NULL) 
+		goto bad;
+	if (in6_setscope(nextaddr, ifa->ia_ifp, NULL) != 0) {
+		ip6stat.ip6s_badscope++;
+		goto bad;
+	}
+
+	/*
+	 * Swap the IPv6 destination address and nextaddr. Forward the packet.
+	 */
+  	tmpaddr = *nextaddr;
+	*nextaddr = ip6->ip6_dst;
+	in6_clearscope(nextaddr); /* XXX */
+	ip6->ip6_dst = tmpaddr;
+
+  	ip6_forward(m, 1);
+
+	return (-1);			/* m would be freed in ip6_forward() */
+
+  bad:
+	m_freem(m);
+	return (-1);
+
+}
+#endif /* defined(MOBILE_IPV6) && NMIP > 0 */

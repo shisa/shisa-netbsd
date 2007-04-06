@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.339 2007/02/26 20:44:03 apb Exp $
+#	$NetBSD: Makefile,v 1.342 2007/03/16 21:12:17 bad Exp $
 #	from: @(#)Makefile	8.7 (Berkeley) 5/25/95
 
 # Environment variables without default values:
@@ -52,7 +52,9 @@ DISTRIBVER!=	${HOST_SH} ${NETBSDSRCDIR}/sys/conf/osrelease.sh
 # mkisofs is expected to be in $PATH, install via pkgsrc/sysutils/cdrtools
 # Note: At least mkisofs 2.0 should be used.
 #
-MKISOFS?=	mkisofs
+.if !defined(MKISOFS)
+MKISOFS!=       (which mkisofs || echo true)
+.endif
 DISTRIBREV!=	${HOST_SH} ${KERNSRCDIR}/conf/osrelease.sh -s
 # ISO 9660 volume ID.  Note that this can only contain [A-Z0-9_].
 ISO_VOLID!=	echo NETBSD_${DISTRIBREV} | tr a-z A-Z
@@ -163,18 +165,12 @@ distribution: .PHONY .MAKE check_DESTDIR distrib-dirs
 .endif	# !DISTRIBUTION_DONE
 
 
-CLEANFILES+=	MAKEDEV MAKEDEV.subr
+CLEANFILES+=	MAKEDEV
 MAKEDEV: .EXEC
 	${_MKTARGET_CREATE}
 	MACHINE=${MACHINE:Q} MACHINE_ARCH=${MACHINE_ARCH:Q} \
 	    NETBSDSRCDIR=${NETBSDSRCDIR:Q} \
 	    awk -f ${.CURDIR}/MAKEDEV.awk ${.CURDIR}/MAKEDEV.tmpl > ${.TARGET}
-MAKEDEV.subr: .EXEC
-	${_MKTARGET_CREATE}
-	MACHINE=${MACHINE:Q} MACHINE_ARCH=${MACHINE_ARCH:Q} \
-	    NETBSDSRCDIR=${NETBSDSRCDIR:Q} \
-	    awk -f ${.CURDIR}/MAKEDEV.awk ${.CURDIR}/MAKEDEV.subr.tmpl \
-	    > ${.TARGET}
 
 RELEASEVARS=	BSDOBJDIR BSDSRCDIR BUILDID \
 		DESTDIR EXTERNAL_TOOLCHAIN HAVE_GCC HAVE_GDB \
@@ -273,7 +269,7 @@ CONFIGSYMLINKS+=	${TZDIR}/${LOCALTIME}	/etc/localtime \
 # install-etc-files --
 #	Install etc (config) files; not performed by "make build"
 #
-install-etc-files: .PHONY .MAKE check_DESTDIR MAKEDEV MAKEDEV.subr
+install-etc-files: .PHONY .MAKE check_DESTDIR MAKEDEV
 	${_MKMSG_INSTALL} ${DESTDIR}/etc/master.passwd
 	${ETC_INSTALL_FILE} -o root -g wheel -m 600 \
 	    master.passwd ${DESTDIR}/etc
@@ -292,9 +288,6 @@ install-etc-files: .PHONY .MAKE check_DESTDIR MAKEDEV MAKEDEV.subr
 	${_MKMSG_INSTALL} ${DESTDIR}/dev/MAKEDEV
 	${ETC_INSTALL_OBJ_FILE} -o ${BINOWN} -g ${BINGRP} -m 555 \
 	    MAKEDEV ${DESTDIR}/dev
-	${_MKMSG_INSTALL} ${DESTDIR}/dev/MAKEDEV.subr
-	${ETC_INSTALL_OBJ_FILE} -o ${BINOWN} -g ${BINGRP} -m 555 \
-	    MAKEDEV.subr ${DESTDIR}/dev
 .for owner group mode file in \
 		${BINOWN} operator	664	/etc/dumpdates  \
 		${BINOWN} operator	600	/etc/skeykeys \
@@ -416,6 +409,7 @@ release snapshot: .PHONY .MAKE check_DESTDIR check_RELEASEDIR snap_md_post
 # iso-image --
 #	Standalone target to create a CDROM image after the release
 #	was composed.  Should be run after "make release" in src and xsrc.
+#	The do-iso-image is to be called from etc.$MACHINE/Makefile.inc
 #
 #	Note: At least mkisofs 2.0 should be used.
 #
@@ -424,9 +418,16 @@ CDROM.image=${RELEASEDIR}/${RELEASEMACHINEDIR}/installation/cdrom/netbsd-${MACHI
 CDROM.dir=	${.OBJDIR}/cdrom.dir
 CDROM.pathlist=	${.OBJDIR}/cdrom.pathlist
 
-iso-image: .PHONY check_DESTDIR check_RELEASEDIR iso-image-md-post
+iso-image:
+
+.if ${MKISOFS} != true
+do-iso-image: .PHONY check_DESTDIR check_RELEASEDIR iso-image-md-post
 	${MAKESUMS} -t ${RELEASEDIR}/${RELEASEMACHINEDIR}/installation/cdrom '*.iso'
 	@echo "iso-image created as: ${CDROM.image}"
+.else
+do-iso-image:
+	@echo iso-image: mkisofs not found
+.endif
 
 iso-image-setup: .PHONY check_RELEASEDIR
 	rm -f ${CDROM.pathlist}
@@ -435,7 +436,7 @@ iso-image-setup: .PHONY check_RELEASEDIR
 	echo "${extra}=${RELEASEDIR}/${extra}" >> ${CDROM.pathlist}
 .endif
 .endfor
-	echo "${MACHINE}=${RELEASEDIR}/${RELEASEMACHINEDIR}" >> ${CDROM.pathlist}
+	echo "${MACHINE}/=${RELEASEDIR}/${RELEASEMACHINEDIR}/" >> ${CDROM.pathlist}
 	mkdir -p ${CDROM.dir}
 	mkdir -p ${RELEASEDIR}/${RELEASEMACHINEDIR}/installation/cdrom
 

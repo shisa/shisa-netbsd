@@ -1,4 +1,4 @@
-/*	$NetBSD: rfcomm_sppd.c,v 1.2 2007/01/31 08:12:21 plunky Exp $	*/
+/*	$NetBSD: rfcomm_sppd.c,v 1.6 2007/03/31 07:14:44 plunky Exp $	*/
 
 /*-
  * Copyright (c) 2006 Itronix Inc.
@@ -55,8 +55,6 @@
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- *
- * $FreeBSD: src/usr.bin/bluetooth/rfcomm_sppd/rfcomm_sppd.c,v 1.8 2005/12/07 19:41:58 emax Exp $
  */
 
 #include <sys/cdefs.h>
@@ -64,7 +62,7 @@ __COPYRIGHT("@(#) Copyright (c) 2007 Iain Hibbert\n"
 	    "@(#) Copyright (c) 2006 Itronix, Inc.\n"
 	    "@(#) Copyright (c) 2003 Maksim Yevmenkin <m_evmenkin@yahoo.com>\n"
 	    "All rights reserved.\n");
-__RCSID("$NetBSD: rfcomm_sppd.c,v 1.2 2007/01/31 08:12:21 plunky Exp $");
+__RCSID("$NetBSD: rfcomm_sppd.c,v 1.6 2007/03/31 07:14:44 plunky Exp $");
 
 #include <bluetooth.h>
 #include <ctype.h>
@@ -88,9 +86,8 @@ __RCSID("$NetBSD: rfcomm_sppd.c,v 1.2 2007/01/31 08:12:21 plunky Exp $");
 
 #define max(a, b)	((a) > (b) ? (a) : (b))
 
-uint8_t query_channel(bdaddr_t *, bdaddr_t *, const char *);
 int open_tty(const char *);
-int open_client(bdaddr_t *, bdaddr_t *, uint8_t);
+int open_client(bdaddr_t *, bdaddr_t *, const char *);
 int open_server(bdaddr_t *, uint8_t, const char *);
 void copy_data(int, int);
 void sighandler(int);
@@ -118,7 +115,10 @@ struct service {
 	  SDP_SERVICE_CLASS_SERIAL_PORT,
 	  sizeof(struct sdp_sp_profile)
 	},
-	{ NULL }
+	{ NULL,		NULL,
+	  0,
+	  0
+	}
 };
 
 int
@@ -127,13 +127,15 @@ main(int argc, char *argv[])
 	struct termios		t;
 	bdaddr_t		laddr, raddr;
 	fd_set			rdset;
-	char			*ep, *service, *tty, *class;
+	const char		*service;
+	char			*ep, *tty;
 	int			n, rfcomm, tty_in, tty_out;
 	uint8_t			channel;
 
 	bdaddr_copy(&laddr, BDADDR_ANY);
 	bdaddr_copy(&raddr, BDADDR_ANY);
-	class = service = tty = NULL;
+	service = "SP";
+	tty = NULL;
 	channel = 0;
 
 	/* Parse command line options */
@@ -153,10 +155,9 @@ main(int argc, char *argv[])
 
 		case 'c': /* RFCOMM channel */
 			channel = strtoul(optarg, &ep, 10);
-			if (*ep != '\0') {
-				channel = 0;
-				class = optarg;
-			}
+			if (*ep != '\0' || channel < 1 || channel > 30)
+				errx(EXIT_FAILURE, "Invalid channel: %s", optarg);
+
 			break;
 
 		case 'd': /* local device address */
@@ -165,7 +166,7 @@ main(int argc, char *argv[])
 
 			break;
 
-		case 's': /* register as service */
+		case 's': /* service class */
 			service = optarg;
 			break;
 
@@ -186,21 +187,11 @@ main(int argc, char *argv[])
 
 	/*
 	 * validate options:
-	 *	must have service or remote address
-	 *	service must have channel but no remote address
+	 *	must have channel or remote address but not both
 	 */
-	if ((service == NULL && bdaddr_any(&raddr))
-	    || (service != NULL && (!bdaddr_any(&raddr) || channel == 0)))
+	if ((channel == 0 && bdaddr_any(&raddr))
+	    || (channel != 0 && !bdaddr_any(&raddr)))
 		usage();
-
-	/*
-	 * lookup remote channel now if we don't have it (client mode)
-	 */
-	if (channel == 0)
-		channel = query_channel(&laddr, &raddr, class);
-
-	if (channel < 1 || channel > 30)
-		errx(EXIT_FAILURE, "Invalid RFCOMM channel number %d", channel);
 
 	/*
 	 * grab ttys before we start the bluetooth
@@ -214,13 +205,13 @@ main(int argc, char *argv[])
 	}
 
 	/* open RFCOMM */
-	if (service == NULL)
-		rfcomm = open_client(&laddr, &raddr, channel);
+	if (channel == 0)
+		rfcomm = open_client(&laddr, &raddr, service);
 	else
 		rfcomm = open_server(&laddr, channel, service);
 
 	/*
-	 * now we are ready to go, so either detach or turn
+	 * now we are ready to go, so either detach or maybe turn
 	 * off some input processing, so that rfcomm_sppd can
 	 * be used directly with stdio
 	 */
@@ -232,10 +223,12 @@ main(int argc, char *argv[])
 		t.c_lflag &= ~(ECHO | ICANON);
 		t.c_iflag &= ~(ICRNL);
 
-		if (tcsetattr(tty_in, TCSANOW, &t) < 0)
-			err(EXIT_FAILURE, "tcsetattr");
+		if (memcmp(&tio, &t, sizeof(tio))) {
+			if (tcsetattr(tty_in, TCSANOW, &t) < 0)
+				err(EXIT_FAILURE, "tcsetattr");
 
-		atexit(reset_tio);
+			atexit(reset_tio);
+		}
 	} else {
 		if (daemon(0, 0) < 0)
 			err(EXIT_FAILURE, "daemon() failed");
@@ -274,29 +267,6 @@ main(int argc, char *argv[])
 
 	syslog(LOG_INFO, "Completed on %s", (tty ? tty : "stdio"));
 	exit(EXIT_SUCCESS);
-}
-
-uint8_t
-query_channel(bdaddr_t *laddr, bdaddr_t *raddr, const char *class)
-{
-	struct service *s;
-	uint8_t channel;
-
-	if (class == NULL)
-		class = "SP";	/* default */
-
-	for (s = services ; ; s++) {
-		if (s->name == NULL)
-			usage();
-
-		if (strcasecmp(s->name, class) == 0)
-			break;
-	}
-
-	if (rfcomm_channel_lookup(laddr, raddr, s->class, &channel, &errno) < 0)
-		err(EXIT_FAILURE, "%s", s->name);
-
-	return channel;
 }
 
 int
@@ -344,11 +314,31 @@ open_tty(const char *tty)
 }
 
 int
-open_client(bdaddr_t *laddr, bdaddr_t *raddr, uint8_t channel)
+open_client(bdaddr_t *laddr, bdaddr_t *raddr, const char *service)
 {
 	struct sockaddr_bt sa;
+	struct service *s;
 	struct linger l;
+	char *ep;
 	int fd;
+	uint8_t channel;
+
+	for (s = services ; ; s++) {
+		if (s->name == NULL) {
+			channel = strtoul(service, &ep, 10);
+			if (*ep != '\0' || channel < 1 || channel > 30)
+				errx(EXIT_FAILURE, "Invalid service: %s", service);
+
+			break;
+		}
+
+		if (strcasecmp(s->name, service) == 0) {
+			if (rfcomm_channel_lookup(laddr, raddr, s->class, &channel, &errno) < 0)
+				err(EXIT_FAILURE, "%s", s->name);
+
+			break;
+		}
+	}
 
 	memset(&sa, 0, sizeof(sa));
 	sa.bt_len = sizeof(sa);
@@ -463,6 +453,9 @@ copy_data(int src, int dst)
 		}
 	}
 
+	if (nr == 0)	/* reached EOF */
+		done++;
+
 	for (off = 0 ; nr ; nr -= nw, off += nw) {
 		if ((nw = write(dst, buf + off, (size_t)nr)) == -1) {
 			syslog(LOG_ERR, "write failed: %m");
@@ -490,20 +483,19 @@ usage(void)
 {
 	struct service *s;
 
-	fprintf(stderr, "Usage: %s [-c channel] [-d device] [-t tty] -a bdaddr\n"
-			"       %s [-d device] [-t tty] -c channel -s service\n"
+	fprintf(stderr, "Usage: %s  [-d device] [-s service] [-t tty] -a bdaddr | -c channel\n"
 			"\n"
 			"Where:\n"
 			"\t-a bdaddr    remote device address\n"
-			"\t-c channel   RFCOMM channel or remote service\n"
+			"\t-c channel   local RFCOMM channel\n"
 			"\t-d device    local device address\n"
-			"\t-s service   local service to register\n"
+			"\t-s service   service class\n"
 			"\t-t tty       run in background using pty\n"
-			"\n", getprogname(), getprogname());
+			"\n", getprogname());
 
-	fprintf(stderr, "Known services:\n");
+	fprintf(stderr, "Known service classes:\n");
 	for (s = services ; s->name != NULL ; s++)
-		fprintf(stderr, "\t%s\t%s\n", s->name, s->description);
+		fprintf(stderr, "\t%-13s%s\n", s->name, s->description);
 
 	exit(EXIT_FAILURE);
 }

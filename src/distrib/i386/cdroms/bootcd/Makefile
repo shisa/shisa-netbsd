@@ -1,7 +1,8 @@
-#	$NetBSD: Makefile,v 1.1 2006/06/02 22:35:22 hubertf Exp $
+#	$NetBSD: Makefile,v 1.3 2007/03/08 13:48:36 bouyer Exp $
 #
 
+.include "${.CURDIR}/../Makefile.cdrom"
+
 CDBASE=		boot			# gives ${CDBASE}.iso
-CDKERNEL=	netbsd-INSTALL.gz	# from ../instkernel
 
 .include "${.CURDIR}/../../../common/Makefile.bootcd"

@@ -1,4 +1,4 @@
-.\"	$NetBSD: options.4,v 1.343 2007/02/24 21:42:28 pooka Exp $
+.\"	$NetBSD: options.4,v 1.348 2007/03/21 19:29:30 xtraeme Exp $
 .\"
 .\" Copyright (c) 1996
 .\" 	Perry E. Metzger.  All rights reserved.
@@ -30,7 +30,7 @@
 .\" THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 .\"
 .\"
-.Dd February 24, 2007
+.Dd March 21, 2007
 .Os
 .Dt OPTIONS 4
 .Sh NAME
@@ -1505,7 +1505,7 @@ such as
 or
 .Tn XNS ) .
 .Em GATEWAY
-option also compiles IPv4 fast forwarding code into the kernel.
+option also compiles IPv4 and IPv6 fast forwarding code into the kernel.
 .It Cd options ICMPPRINTFS
 The
 .Em ICMPPRINTFS
@@ -1581,6 +1581,10 @@ The option is not recommended as it degrades system stability.
 Increases the allowed size of the network interface packet queues.
 The default queue size is 50 packets, and you do not normally need
 to increase it.
+.It Cd options IPSELSRC
+Includes support for source-address selection policies.
+See
+.Xr in_getifa 9 .
 .It Cd options MROUTING
 Includes support for IP multicast routers.
 You certainly want
@@ -1848,7 +1852,8 @@ server services via user libraries and applications.
 .It Cd options BLUETOOTH
 Include support for the
 .Tn Bluetooth
-protocol stack. See
+protocol stack.
+See
 .Xr bluetooth 4
 for details.
 .It Cd options IPNOPRIVPORTS
@@ -2230,10 +2235,10 @@ knob, see
 .Xr sysctl 3 .
 If 0, PaX MPROTECT will be enabled only if explicitly set on programs
 using
-.Xr paxctl 1 .
+.Xr paxctl 8 .
 If 1, PaX MPROTECT will be enabled for all programs.
 Programs can be exempted using
-.Xr paxctl 1 .
+.Xr paxctl 8 .
 .Pp
 See
 .Xr security 8
@@ -2249,10 +2254,10 @@ knob, see
 .Xr sysctl 3 .
 If 0, PaX Segvguard will be enabled only if explicitly set on programs
 using
-.Xr paxctl 1 .
+.Xr paxctl 8 .
 If 1, PaX Segvguard will be enabled to all programs, and exemption can
 be done using
-.Xr paxctl 1 .
+.Xr paxctl 8 .
 .Pp
 See
 .Xr security 8
@@ -2349,6 +2354,16 @@ on a Shark.
 .El
 .Ss amd64-specific Options
 .Bl -ohang
+.It Cd options INTEL_ONDEMAND_CLOCKMOD
+This enables the On Demand Clock Modulation by software
+on Intel
+.Tn CPUs
+supporting the Thermal Monitor feature (TM).
+You can select the duty cycle with
+.Xr sysctl 8
+in the node
+.Em machdep.clockmod
+if supported.
 .It Cd options POWERNOW_K8
 Include support for AMD Athlon 64 PowerNow! and Cool`n'Quiet
 Technology, used to change the cpu and voltage frequency
@@ -2411,6 +2426,16 @@ Allow any user to change the frequency of an
 .Tn Enhanced SpeedStep Technology
 capable
 .Tn CPU .
+.It Cd options INTEL_ONDEMAND_CLOCKMOD
+This enables the On Demand Clock Modulation by software
+on Intel
+.Tn CPUs
+supporting the Thermal Monitor feature (TM).
+You can select the duty cycle with
+.Xr sysctl 8
+in the node
+.Em machdep.clockmod
+if supported.
 .It Cd options POWERNOW_K7
 Include support for the AMD
 .Tn PowerNow! Technology
@@ -2753,7 +2778,8 @@ bolded
 .Xr ntpd 8 ,
 .Xr quotaon 8 ,
 .Xr rpc.rquotad 8 ,
-.Xr sysctl 8
+.Xr sysctl 8 ,
+.Xr in_getifa 9
 .Sh HISTORY
 The
 .Nm

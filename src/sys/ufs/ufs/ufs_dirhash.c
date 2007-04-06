@@ -1,4 +1,4 @@
-/*	$NetBSD: ufs_dirhash.c,v 1.12 2007/02/09 21:55:42 ad Exp $	*/
+/*	$NetBSD: ufs_dirhash.c,v 1.14 2007/03/12 18:18:38 ad Exp $	*/
 
 /*
  * Copyright (c) 2001, 2002 Ian Dowse.  All rights reserved.
@@ -75,7 +75,7 @@ static doff_t ufsdirhash_getprev(struct direct *dp, doff_t offset,
 static int ufsdirhash_recycle(int wanted);
 
 static POOL_INIT(ufsdirhash_pool, DH_NBLKOFF * sizeof(daddr_t), 0, 0, 0,
-    "ufsdirhash", &pool_allocator_nointr);
+    "ufsdirhash", &pool_allocator_nointr, IPL_NONE);
 
 #define DIRHASHLIST_LOCK()		do { } while (0)
 #define DIRHASHLIST_UNLOCK()		do { } while (0)
@@ -400,7 +400,7 @@ restart:
 			if (ufs_blkatoff(vp, (off_t)blkoff, NULL, &bp) != 0)
 				return (EJUSTRETURN);
 		}
-		dp = (struct direct *)(bp->b_data + (offset & bmask));
+		dp = (struct direct *)((char *)bp->b_data + (offset & bmask));
 		if (dp->d_reclen == 0 || dp->d_reclen >
 		    dirblksiz - (offset & (dirblksiz - 1))) {
 			/* Corrupted directory. */
@@ -1053,7 +1053,7 @@ ufsdirhash_init()
 {
 #ifdef _LKM
 	pool_init(&ufsdirhash_pool, DH_NBLKOFF * sizeof(daddr_t), 0, 0, 0,
-	    "ufsdirhash", &pool_allocator_nointr);
+	    "ufsdirhash", &pool_allocator_nointr, IPL_NONE);
 #endif
 	TAILQ_INIT(&ufsdirhash_list);
 }

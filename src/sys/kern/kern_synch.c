@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_synch.c,v 1.185 2007/02/27 15:07:29 yamt Exp $	*/
+/*	$NetBSD: kern_synch.c,v 1.187 2007/03/11 21:36:49 ad Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2000, 2004, 2006, 2007 The NetBSD Foundation, Inc.
@@ -74,7 +74,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_synch.c,v 1.185 2007/02/27 15:07:29 yamt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_synch.c,v 1.187 2007/03/11 21:36:49 ad Exp $");
 
 #include "opt_ddb.h"
 #include "opt_kstack.h"
@@ -412,7 +412,7 @@ schedcpu(void *arg)
 	}
 	mutex_exit(&proclist_mutex);
 	uvm_meter();
-	wakeup((caddr_t)&lbolt);
+	wakeup((void *)&lbolt);
 	callout_schedule(&schedcpu_ch, hz);
 }
 
@@ -495,6 +495,34 @@ ltsleep(wchan_t ident, pri_t priority, const char *wmesg, int timo,
 
 	if (interlock != NULL && (priority & PNORELOCK) == 0)
 		simple_lock(interlock);
+ 
+	return error;
+}
+
+int
+mtsleep(wchan_t ident, pri_t priority, const char *wmesg, int timo,
+	kmutex_t *mtx)
+{
+	struct lwp *l = curlwp;
+	sleepq_t *sq;
+	int error, catch;
+
+	if (sleepq_dontsleep(l)) {
+		(void)sleepq_abort(mtx, (priority & PNORELOCK) != 0);
+		return 0;
+	}
+
+	sq = sleeptab_lookup(&sleeptab, ident);
+	sleepq_enter(sq, l);
+	mutex_exit(mtx);
+
+	catch = priority & PCATCH;
+	sleepq_block(sq, priority & PRIMASK, ident, wmesg, timo, catch,
+	    &sleep_syncobj);
+	error = sleepq_unblock(timo, catch);
+
+	if ((priority & PNORELOCK) == 0)
+		mutex_enter(mtx);
  
 	return error;
 }

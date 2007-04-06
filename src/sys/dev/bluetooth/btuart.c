@@ -1,4 +1,4 @@
-/*	$NetBSD: btuart.c,v 1.1 2007/02/20 16:53:20 kiyohara Exp $	*/
+/*	$NetBSD: btuart.c,v 1.5 2007/03/13 19:26:06 plunky Exp $	*/
 /*
  * Copyright (c) 2006, 2007 KIYOHARA Takashi
  * All rights reserved.
@@ -26,7 +26,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: btuart.c,v 1.1 2007/02/20 16:53:20 kiyohara Exp $");
+__KERNEL_RCSID(0, "$NetBSD: btuart.c,v 1.5 2007/03/13 19:26:06 plunky Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -117,7 +117,7 @@ static void bth4init_input(struct hci_unit *, struct mbuf *);
 
 static int bth4open(dev_t, struct tty *);
 static int bth4close(struct tty *, int);
-static int bth4ioctl(struct tty *, u_long, caddr_t, int, struct lwp *);
+static int bth4ioctl(struct tty *, u_long, void *, int, struct lwp *);
 static int bth4input(int, struct tty *);
 static int bth4start(struct tty *);
 
@@ -548,7 +548,7 @@ init_csr(struct btuart_softc *sc)
 		/*
 		 * XXXX:
 		 * We will have to check the HCI_EVENT_VENDOR packet. For
-		 * instance, it might be a different HCI_EVENT_VENDOR packet. 
+		 * instance, it might be a different HCI_EVENT_VENDOR packet.
 		 */
 		if (error != 0) {
 			printf("%s: CSR set UART speed failed: Status 0x%02x\n",
@@ -845,7 +845,7 @@ init_stlc2500(struct btuart_softc *sc)
 	/*
 	 * XXXX:
 	 * We do not know the beginning point of this character string.
-	 * Because it doesn't know the event of this packet. 
+	 * Because it doesn't know the event of this packet.
 	 *
 	 * printf("%s: %s\n", sc->sc_dev.dv_xname, ???);
 	 */
@@ -1066,7 +1066,7 @@ bth4open(dev_t device __unused, struct tty *tp)
 	static char name[] = "btuart";
 
 	if ((error = kauth_authorize_device_tty(l->l_cred,
-	    KAUTH_DEVICE_TTY_OPEN, tp)) != 0)
+	    KAUTH_GENERIC_ISSUSER, tp)) != 0)
 		return error;
 
 	s = spltty();
@@ -1088,7 +1088,7 @@ bth4open(dev_t device __unused, struct tty *tp)
 	cfdata->cf_name = name;
 	cfdata->cf_atname = name;
 	cfdata->cf_unit = unit;
-	cfdata->cf_fstate = FSTATE_STAR,
+	cfdata->cf_fstate = FSTATE_STAR;
 
 	printf("%s%d at tty major %d minor %d",
 	    name, unit, major(tp->t_dev), minor(tp->t_dev));
@@ -1150,7 +1150,7 @@ bth4close(struct tty *tp, int flag __unused)
 
 /* ARGSUSED */
 static int
-bth4ioctl(struct tty *tp, u_long cmd, caddr_t data,
+bth4ioctl(struct tty *tp, u_long cmd, void *data,
     int flag __unused, struct lwp *l __unused)
 {
 	struct btuart_softc *sc = (struct btuart_softc *)tp->t_sc;

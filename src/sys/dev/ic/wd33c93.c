@@ -1,4 +1,4 @@
-/*	$NetBSD: wd33c93.c,v 1.9 2006/10/01 22:02:55 bjh21 Exp $	*/
+/*	$NetBSD: wd33c93.c,v 1.11 2007/03/12 18:18:30 ad Exp $	*/
 
 /*
  * Copyright (c) 1990 The Regents of the University of California.
@@ -79,7 +79,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: wd33c93.c,v 1.9 2006/10/01 22:02:55 bjh21 Exp $");
+__KERNEL_RCSID(0, "$NetBSD: wd33c93.c,v 1.11 2007/03/12 18:18:30 ad Exp $");
 
 #include "opt_ddb.h"
 
@@ -244,7 +244,7 @@ wd33c93_init(struct wd33c93_softc *dev)
 	if (!wd33c93_pool_initialized) {
 		/* All instances share the same pool */
 		pool_init(&wd33c93_pool, sizeof(struct wd33c93_acb), 0, 0, 0,
-		    "wd33c93_acb", NULL);
+		    "wd33c93_acb", NULL, IPL_BIO);
 		++wd33c93_pool_initialized;
 	}
 
@@ -476,7 +476,7 @@ wd33c93_dma_stop(struct wd33c93_softc *dev)
 			    dev->sc_dleft, count);
 
 		/* Fixup partial xfers */
-		dev->sc_daddr += count;
+		dev->sc_daddr = (char*)dev->sc_daddr + count;
 		dev->sc_dleft -= count;
 		dev->sc_tcnt   = 0;
 		dev->sc_flags &= ~SBICF_INDMA;
@@ -1903,7 +1903,8 @@ wd33c93_nextstate(struct wd33c93_softc *dev, struct wd33c93_acb	*acb, u_char csr
 				resid = wd33c93_xfout(dev, dev->sc_dleft,
 				    		  dev->sc_daddr);
 
-			dev->sc_daddr += (acb->dleft - resid);
+			dev->sc_daddr = (char*)dev->sc_daddr +
+				(acb->dleft - resid);
 			dev->sc_dleft = resid;
 		} else {
 			int datain = SBIC_PHASE(csr) == DATA_IN_PHASE;

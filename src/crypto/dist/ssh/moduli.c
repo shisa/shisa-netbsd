@@ -1,4 +1,4 @@
-/*	$NetBSD: moduli.c,v 1.3 2006/09/28 21:22:14 christos Exp $	*/
+/*	$NetBSD: moduli.c,v 1.5 2007/03/10 23:05:25 christos Exp $	*/
 /* $OpenBSD: moduli.c,v 1.18 2006/08/03 03:34:42 deraadt Exp $ */
 /*
  * Copyright 1994 Phil Karn <karn@qualcomm.com>
@@ -38,7 +38,7 @@
  * Second step: test primes' safety (processor intensive)
  */
 #include "includes.h"
-__RCSID("$NetBSD: moduli.c,v 1.3 2006/09/28 21:22:14 christos Exp $");
+__RCSID("$NetBSD: moduli.c,v 1.5 2007/03/10 23:05:25 christos Exp $");
 
 #include <sys/types.h>
 

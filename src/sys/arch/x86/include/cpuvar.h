@@ -1,4 +1,4 @@
-/* 	$NetBSD: cpuvar.h,v 1.6 2007/01/01 20:56:59 ad Exp $ */
+/* 	$NetBSD: cpuvar.h,v 1.12 2007/03/21 00:16:52 xtraeme Exp $ */
 
 /*-
  * Copyright (c) 2000 The NetBSD Foundation, Inc.
@@ -70,30 +70,33 @@
  * SUCH DAMAGE.
  */
 
+#ifndef _X86_CPUVAR_H_
+#define	_X86_CPUVAR_H_
+
 struct cpu_functions {
 	int (*start)(struct cpu_info *);
 	int (*stop)(struct cpu_info *);
 	void (*cleanup)(struct cpu_info *);
 };
 
-extern struct cpu_functions mp_cpu_funcs;
+extern const struct cpu_functions mp_cpu_funcs;
 
 #define CPU_ROLE_SP	0
 #define CPU_ROLE_BP	1
 #define CPU_ROLE_AP	2
 
 struct cpu_attach_args {
-	const char *caa_name;
 	int cpu_number;
 	int cpu_role;
-	struct cpu_functions *cpu_func;
+	const struct cpu_functions *cpu_func;
 };
-
-#define MP_PICMODE	0x00000001      /* System booted in picmode */
 
 #ifdef _KERNEL
 
 #include "opt_multiprocessor.h"
+#ifndef XEN
+#include "opt_intel_odcm.h"
+#endif
 
 #ifdef MULTIPROCESSOR
 extern u_int32_t cpus_running;
@@ -108,4 +111,10 @@ void identifycpu(struct cpu_info *);
 void cpu_init(struct cpu_info *);
 void cpu_init_first(void);
 
+#ifdef INTEL_ONDEMAND_CLOCKMOD
+void clockmod_init(void);
 #endif
+
+#endif
+
+#endif /* !_X86_CPUVAR_H_ */

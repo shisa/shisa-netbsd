@@ -1,4 +1,4 @@
-/*	$NetBSD: l2cap_signal.c,v 1.3 2006/12/07 21:36:27 plunky Exp $	*/
+/*	$NetBSD: l2cap_signal.c,v 1.6 2007/03/15 19:47:51 plunky Exp $	*/
 
 /*-
  * Copyright (c) 2005 Iain Hibbert.
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: l2cap_signal.c,v 1.3 2006/12/07 21:36:27 plunky Exp $");
+__KERNEL_RCSID(0, "$NetBSD: l2cap_signal.c,v 1.6 2007/03/15 19:47:51 plunky Exp $");
 
 #include <sys/param.h>
 #include <sys/kernel.h>
@@ -204,9 +204,11 @@ l2cap_recv_command_rej(struct mbuf *m, struct hci_link *link)
 	case L2CAP_REJ_MTU_EXCEEDED:
 		/*
 		 * I didnt send any commands over L2CAP_MTU_MINIMUM size, but..
+		 *
+		 * XXX maybe we should resend this, instead?
 		 */
 		link->hl_mtu = le16toh(cp.data[0]);
-		callout_schedule(&req->lr_rtx, 0);  // XX maybe resend instead?
+		callout_schedule(&req->lr_rtx, 0);
 		break;
 
 	case L2CAP_REJ_INVALID_CID:
@@ -300,7 +302,8 @@ l2cap_recv_connect_req(struct mbuf *m, struct hci_link *link)
 		l2cap_send_signal(link, L2CAP_CONNECT_RSP, cmd.ident,
 						sizeof(rp), &rp);
 
-		new->lc_state = L2CAP_WAIT_CONFIG_REQ | L2CAP_WAIT_CONFIG_RSP;
+		new->lc_state = L2CAP_WAIT_CONFIG;
+		new->lc_flags |= (L2CAP_WAIT_CONFIG_REQ | L2CAP_WAIT_CONFIG_RSP);
 		l2cap_send_config_req(new);
 		return;
 	}
@@ -355,12 +358,13 @@ l2cap_recv_connect_rsp(struct mbuf *m, struct hci_link *link)
 		 */
 		l2cap_request_free(req);
 		chan->lc_rcid = cp.dcid;
-		chan->lc_state = L2CAP_WAIT_CONFIG_REQ | L2CAP_WAIT_CONFIG_RSP;
+		chan->lc_state = L2CAP_WAIT_CONFIG;
+		chan->lc_flags |= (L2CAP_WAIT_CONFIG_REQ | L2CAP_WAIT_CONFIG_RSP);
 		l2cap_send_config_req(chan);
 		break;
 
 	case L2CAP_PENDING:
-		// dont release request, should start eRTX timeout?
+		/* XXX dont release request, should start eRTX timeout? */
 		(*chan->lc_proto->connecting)(chan->lc_upper);
 		break;
 
@@ -404,7 +408,10 @@ l2cap_recv_config_req(struct mbuf *m, struct hci_link *link)
 	cp.flags = le16toh(cp.flags);
 
 	chan = l2cap_cid_lookup(cp.dcid);
-	if (chan == NULL || (chan->lc_state & L2CAP_WAIT_CONFIG_REQ) == 0) {
+	if (chan == NULL || chan->lc_link != link
+	    || chan->lc_state != L2CAP_WAIT_CONFIG
+	    || (chan->lc_flags & L2CAP_WAIT_CONFIG_REQ) == 0) {
+		/* XXX we should really accept reconfiguration requests */
 		l2cap_send_command_rej(link, cmd.ident, L2CAP_REJ_INVALID_CID,
 					L2CAP_NULL_CID, cp.dcid);
 		goto out;
@@ -521,11 +528,11 @@ l2cap_recv_config_req(struct mbuf *m, struct hci_link *link)
 	if ((cp.flags & L2CAP_OPT_CFLAG_BIT) == 0
 	    && rp.result == le16toh(L2CAP_SUCCESS)) {
 
-		chan->lc_state &= ~L2CAP_WAIT_CONFIG_REQ;
+		chan->lc_flags &= ~L2CAP_WAIT_CONFIG_REQ;
 
-		if ((chan->lc_state & L2CAP_WAIT_CONFIG_RSP) == 0) {
+		if ((chan->lc_flags & L2CAP_WAIT_CONFIG_RSP) == 0) {
 			chan->lc_state = L2CAP_OPEN;
-			// XXX how to distinguish REconfiguration?
+			/* XXX how to distinguish REconfiguration? */
 			(*chan->lc_proto->connected)(chan->lc_upper);
 		}
 	}
@@ -576,7 +583,8 @@ l2cap_recv_config_rsp(struct mbuf *m, struct hci_link *link)
 
 	l2cap_request_free(req);
 
-	if (chan == NULL || (chan->lc_state & L2CAP_WAIT_CONFIG_RSP) == 0)
+	if (chan == NULL || chan->lc_state != L2CAP_WAIT_CONFIG
+	    || (chan->lc_flags & L2CAP_WAIT_CONFIG_RSP) == 0)
 		goto out;
 
 	if ((cp.flags & L2CAP_OPT_CFLAG_BIT)) {
@@ -608,11 +616,11 @@ l2cap_recv_config_rsp(struct mbuf *m, struct hci_link *link)
 		 * ignore those..
 		 */
 		if ((cp.flags & L2CAP_OPT_CFLAG_BIT) == 0) {
-			chan->lc_state &= ~L2CAP_WAIT_CONFIG_RSP;
+			chan->lc_flags &= ~L2CAP_WAIT_CONFIG_RSP;
 
-			if ((chan->lc_state & L2CAP_WAIT_CONFIG_REQ) == 0) {
+			if ((chan->lc_flags & L2CAP_WAIT_CONFIG_REQ) == 0) {
 				chan->lc_state = L2CAP_OPEN;
-				// XXX how to distinguish REconfiguration?
+				/* XXX how to distinguish REconfiguration? */
 				(*chan->lc_proto->connected)(chan->lc_upper);
 			}
 		}
@@ -670,7 +678,7 @@ l2cap_recv_config_rsp(struct mbuf *m, struct hci_link *link)
 		}
 
 		if ((cp.flags & L2CAP_OPT_CFLAG_BIT) == 0)
-			l2cap_send_config_req(chan);	// no state change
+			l2cap_send_config_req(chan);	/* no state change */
 
 		goto out;
 
@@ -767,7 +775,7 @@ l2cap_recv_disconnect_req(struct mbuf *m, struct hci_link *link)
 	cp.dcid = le16toh(cp.dcid);
 
 	chan = l2cap_cid_lookup(cp.dcid);
-	if (chan == NULL || chan->lc_rcid != cp.scid) {
+	if (chan == NULL || chan->lc_link != link || chan->lc_rcid != cp.scid) {
 		l2cap_send_command_rej(link, cmd.ident, L2CAP_REJ_INVALID_CID,
 					cp.dcid, cp.scid);
 		return;

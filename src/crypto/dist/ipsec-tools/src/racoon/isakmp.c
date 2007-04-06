@@ -1,4 +1,4 @@
-/*	$NetBSD: isakmp.c,v 1.23 2007/02/20 09:11:30 vanhu Exp $	*/
+/*	$NetBSD: isakmp.c,v 1.25 2007/03/21 14:29:22 vanhu Exp $	*/
 
 /* Id: isakmp.c,v 1.74 2006/05/07 21:32:59 manubsd Exp */
 
@@ -845,8 +845,7 @@ ph1_main(iph1, msg)
 	VPTRINIT(iph1->sendbuf);
 
 	/* turn off schedule */
-	if (iph1->scr)
-		SCHED_KILL(iph1->scr);
+	SCHED_KILL(iph1->scr);
 
 	/* send */
 	plog(LLV_DEBUG, LOCATION, NULL, "===\n");
@@ -1007,8 +1006,7 @@ quick_main(iph2, msg)
 	VPTRINIT(iph2->sendbuf);
 
 	/* turn off schedule */
-	if (iph2->scr)
-		SCHED_KILL(iph2->scr);
+	SCHED_KILL(iph2->scr);
 
 	/* send */
 	plog(LLV_DEBUG, LOCATION, NULL, "===\n");
@@ -1931,7 +1929,7 @@ isakmp_ph1resend(iph1)
 {
 	/* Note: NEVER do the rem/del here, it will be done by the caller or by the _stub function
 	 */
-	if (iph1->retry_counter < 0) {
+	if (iph1->retry_counter <= 0) {
 		plog(LLV_ERROR, LOCATION, NULL,
 			"phase1 negotiation failed due to time up. %s\n",
 			isakmp_pindex(&iph1->index, iph1->msgid));
@@ -1991,7 +1989,7 @@ isakmp_ph2resend(iph2)
 		return -1;
 	}
 
-	if (iph2->retry_counter < 0) {
+	if (iph2->retry_counter <= 0) {
 		plog(LLV_ERROR, LOCATION, NULL,
 			"phase2 negotiation failed due to time up. %s\n",
 				isakmp_pindex(&iph2->ph1->index, iph2->msgid));
@@ -3399,8 +3397,7 @@ purge_remote(iph1)
 		 "purged ISAKMP-SA spi=%s.\n",
 		 isakmp_pindex(&(iph1->index), iph1->msgid));
 
-	if (iph1->sce)
-		SCHED_KILL(iph1->sce);
+	SCHED_KILL(iph1->sce);
 
 	iph1->sce = sched_new(1, isakmp_ph1delete_stub, iph1);
 }

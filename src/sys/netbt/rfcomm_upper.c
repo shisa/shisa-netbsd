@@ -1,4 +1,4 @@
-/*	$NetBSD: rfcomm_upper.c,v 1.1 2006/06/19 15:44:45 gdamore Exp $	*/
+/*	$NetBSD: rfcomm_upper.c,v 1.4 2007/03/30 20:47:03 plunky Exp $	*/
 
 /*-
  * Copyright (c) 2006 Itronix Inc.
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: rfcomm_upper.c,v 1.1 2006/06/19 15:44:45 gdamore Exp $");
+__KERNEL_RCSID(0, "$NetBSD: rfcomm_upper.c,v 1.4 2007/03/30 20:47:03 plunky Exp $");
 
 #include <sys/param.h>
 #include <sys/kernel.h>
@@ -65,9 +65,9 @@ rfcomm_attach(struct rfcomm_dlc **handle,
 {
 	struct rfcomm_dlc *dlc;
 
-	KASSERT(handle);
-	KASSERT(proto);
-	KASSERT(upper);
+	KASSERT(handle != NULL);
+	KASSERT(proto != NULL);
+	KASSERT(upper != NULL);
 
 	dlc = malloc(sizeof(struct rfcomm_dlc), M_BLUETOOTH, M_NOWAIT | M_ZERO);
 	if (dlc == NULL)
@@ -417,22 +417,23 @@ int
 rfcomm_setopt(struct rfcomm_dlc *dlc, int opt, void *addr)
 {
 	int err = 0;
+	uint16_t mtu;
 
 	if (dlc->rd_state != RFCOMM_DLC_CLOSED)
 		return EBUSY;
 
 	switch (opt) {
 	case SO_RFCOMM_MTU:
-		dlc->rd_mtu = *(uint16_t *)addr;
-		if (dlc->rd_mtu < RFCOMM_MTU_MIN
-		    || dlc->rd_mtu > RFCOMM_MTU_MAX) {
-			dlc->rd_mtu = rfcomm_mtu_default;
+		mtu = *(uint16_t *)addr;
+		if (mtu < RFCOMM_MTU_MIN || mtu > RFCOMM_MTU_MAX)
 			err = EINVAL;
-		}
+		else
+			dlc->rd_mtu = mtu;
+
 		break;
 
 	default:
-		err = EINVAL;
+		err = ENOPROTOOPT;
 		break;
 	}
 	return err;

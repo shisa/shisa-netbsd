@@ -1,4 +1,4 @@
-/*	$NetBSD: raw_ip6.c,v 1.83 2007/02/22 09:30:33 dyoung Exp $	*/
+/*	$NetBSD: raw_ip6.c,v 1.84 2007/03/04 06:03:28 christos Exp $	*/
 /*	$KAME: raw_ip6.c,v 1.82 2001/07/23 18:57:56 jinmei Exp $	*/
 
 /*
@@ -62,10 +62,9 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: raw_ip6.c,v 1.83 2007/02/22 09:30:33 dyoung Exp $");
+__KERNEL_RCSID(0, "$NetBSD: raw_ip6.c,v 1.84 2007/03/04 06:03:28 christos Exp $");
 
 #include "opt_ipsec.h"
-#include "opt_mip6.h"
 
 #include <sys/param.h>
 #include <sys/sysctl.h>
@@ -95,9 +94,9 @@ __KERNEL_RCSID(0, "$NetBSD: raw_ip6.c,v 1.83 2007/02/22 09:30:33 dyoung Exp $");
 #include <netinet6/scope6_var.h>
 #include <netinet6/raw_ip6.h>
 
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 #include <netinet/ip6mh.h>
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 
 #ifdef IPSEC
 #include <netinet6/ipsec.h>
@@ -521,9 +520,9 @@ rip6_output(m, va_alist)
 	ip6->ip6_hlim = in6_selecthlim(in6p, oifp);
 
 	if (so->so_proto->pr_protocol == IPPROTO_ICMPV6 ||
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 	    so->so_proto->pr_protocol == IPPROTO_MH ||
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 	    in6p->in6p_cksum != -1) {
 		int off;
 		u_int16_t sum;
@@ -531,10 +530,10 @@ rip6_output(m, va_alist)
 		/* compute checksum */
 		if (so->so_proto->pr_protocol == IPPROTO_ICMPV6)
 			off = offsetof(struct icmp6_hdr, icmp6_cksum);
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 		else if (so->so_proto->pr_protocol == IPPROTO_MH)
 			off = offsetof(struct ip6_mh, ip6mh_cksum);
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 		else
 			off = in6p->in6p_cksum;
 		if (plen < off + 1) {
@@ -544,14 +543,14 @@ rip6_output(m, va_alist)
 		off += sizeof(struct ip6_hdr);
 
 		sum = 0;
-		m = m_copyback_cow(m, off, sizeof(sum), (caddr_t)&sum,
+		m = m_copyback_cow(m, off, sizeof(sum), (void *)&sum,
 		    M_DONTWAIT);
 		if (m == NULL) {
 			error = ENOBUFS;
 			goto bad;
 		}
 		sum = in6_cksum(m, ip6->ip6_nxt, sizeof(*ip6), plen);
-		m = m_copyback_cow(m, off, sizeof(sum), (caddr_t)&sum,
+		m = m_copyback_cow(m, off, sizeof(sum), (void *)&sum,
 		    M_DONTWAIT);
 		if (m == NULL) {
 			error = ENOBUFS;
@@ -651,7 +650,7 @@ rip6_usrreq(so, req, m, nam, control, l)
 		priv++;
 
 	if (req == PRU_CONTROL)
-		return in6_control(so, (u_long)m, (caddr_t)nam,
+		return in6_control(so, (u_long)m, (void *)nam,
 		    (struct ifnet *)control, l);
 
 	if (req == PRU_PURGEIF) {

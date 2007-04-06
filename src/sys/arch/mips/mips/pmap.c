@@ -1,4 +1,4 @@
-/*	$NetBSD: pmap.c,v 1.171 2007/02/28 04:21:53 thorpej Exp $	*/
+/*	$NetBSD: pmap.c,v 1.173 2007/03/12 18:18:25 ad Exp $	*/
 
 /*-
  * Copyright (c) 1998, 2001 The NetBSD Foundation, Inc.
@@ -74,7 +74,7 @@
 
 #include <sys/cdefs.h>
 
-__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.171 2007/02/28 04:21:53 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.173 2007/03/12 18:18:25 ad Exp $");
 
 /*
  *	Manages physical address maps.
@@ -357,9 +357,9 @@ pmap_bootstrap(void)
 	 * Initialize the pools.
 	 */
 	pool_init(&pmap_pmap_pool, sizeof(struct pmap), 0, 0, 0, "pmappl",
-	    &pool_allocator_nointr);
+	    &pool_allocator_nointr, IPL_NONE);
 	pool_init(&pmap_pv_pool, sizeof(struct pv_entry), 0, 0, 0, "pvpl",
-	    &pmap_pv_page_allocator);
+	    &pmap_pv_page_allocator, IPL_NONE);
 
 	/*
 	 * Initialize the kernel pmap.
@@ -469,7 +469,7 @@ pmap_steal_memory(vsize_t size, vaddr_t *vstartp, vaddr_t *vendp)
 		}
 
 		va = MIPS_PHYS_TO_KSEG0(pa);
-		memset((caddr_t)va, 0, size);
+		memset((void *)va, 0, size);
 		return va;
 	}
 
@@ -1605,7 +1605,7 @@ pmap_zero_page(paddr_t phys)
 	}
 #endif
 
-	mips_pagezero((caddr_t)va);
+	mips_pagezero((void *)va);
 
 #if defined(MIPS3_PLUS)	/* XXX mmu XXX */
 	/*
@@ -1662,8 +1662,8 @@ pmap_copy_page(paddr_t src, paddr_t dst)
 	}
 #endif	/* MIPS3_PLUS */
 
-	mips_pagecopy((caddr_t)MIPS_PHYS_TO_KSEG0(dst),
-		      (caddr_t)MIPS_PHYS_TO_KSEG0(src));
+	mips_pagecopy((void *)MIPS_PHYS_TO_KSEG0(dst),
+		      (void *)MIPS_PHYS_TO_KSEG0(src));
 
 #if defined(MIPS3_PLUS) /* XXX mmu XXX */
 	/*

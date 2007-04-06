@@ -1,4 +1,4 @@
-/*	$NetBSD: route.c,v 1.86 2007/02/17 22:34:10 dyoung Exp $	*/
+/*	$NetBSD: route.c,v 1.88 2007/03/12 18:18:35 ad Exp $	*/
 
 /*-
  * Copyright (c) 1998 The NetBSD Foundation, Inc.
@@ -98,7 +98,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: route.c,v 1.86 2007/02/17 22:34:10 dyoung Exp $");
+__KERNEL_RCSID(0, "$NetBSD: route.c,v 1.88 2007/03/12 18:18:35 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -128,8 +128,10 @@ struct	radix_node_head *rt_tables[AF_MAX+1];
 int	rttrash;		/* routes not in table but not freed */
 struct	sockaddr wildcard;	/* zero valued cookie for wildcard searches */
 
-POOL_INIT(rtentry_pool, sizeof(struct rtentry), 0, 0, 0, "rtentpl", NULL);
-POOL_INIT(rttimer_pool, sizeof(struct rttimer), 0, 0, 0, "rttmrpl", NULL);
+POOL_INIT(rtentry_pool, sizeof(struct rtentry), 0, 0, 0, "rtentpl", NULL,
+    IPL_SOFTNET);
+POOL_INIT(rttimer_pool, sizeof(struct rttimer), 0, 0, 0, "rttmrpl", NULL,
+    IPL_SOFTNET);
 
 struct callout rt_timer_ch; /* callout for rt_timer_timer() */
 
@@ -293,7 +295,7 @@ rtalloc1(const struct sockaddr *dst, int report)
 	} else {
 		rtstat.rts_unreach++;
 	miss:	if (report) {
-			memset((caddr_t)&info, 0, sizeof(info));
+			memset((void *)&info, 0, sizeof(info));
 			info.rti_info[RTAX_DST] = dst;
 			rt_missmsg(msgtype, &info, 0, err);
 		}
@@ -441,7 +443,7 @@ out:
 		rtstat.rts_badredirect++;
 	else if (stat != NULL)
 		(*stat)++;
-	memset((caddr_t)&info, 0, sizeof(info));
+	memset((void *)&info, 0, sizeof(info));
 	info.rti_info[RTAX_DST] = dst;
 	info.rti_info[RTAX_GATEWAY] = gateway;
 	info.rti_info[RTAX_NETMASK] = netmask;
@@ -463,7 +465,7 @@ rtdeletemsg(struct rtentry *rt)
 	 * deleted.  That will allow the information being reported to
 	 * be accurate (and consistent with route_output()).
 	 */
-	memset((caddr_t)&info, 0, sizeof(info));
+	memset((void *)&info, 0, sizeof(info));
 	info.rti_info[RTAX_DST] = rt_key(rt);
 	info.rti_info[RTAX_NETMASK] = rt_mask(rt);
 	info.rti_info[RTAX_GATEWAY] = rt->rt_gateway;
@@ -509,7 +511,7 @@ rtflushclone(struct radix_node_head *rnh, struct rtentry *parent)
  * Routing table ioctl interface.
  */
 int
-rtioctl(u_long req, caddr_t data, struct lwp *l)
+rtioctl(u_long req, void *data, struct lwp *l)
 {
 	return (EOPNOTSUPP);
 }
@@ -761,8 +763,8 @@ rt_setgate( struct rtentry *rt0, const struct sockaddr *dst,
 	struct rtentry *rt = rt0;
 
 	if (rt->rt_gateway == NULL || glen > ROUNDUP(rt->rt_gateway->sa_len)) {
-		old = (caddr_t)rt_key(rt);
-		R_Malloc(new, caddr_t, dlen + glen);
+		old = (void *)rt_key(rt);
+		R_Malloc(new, void *, dlen + glen);
 		if (new == NULL)
 			return 1;
 		Bzero(new, dlen + glen);

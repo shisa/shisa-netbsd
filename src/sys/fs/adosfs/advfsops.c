@@ -1,4 +1,4 @@
-/*	$NetBSD: advfsops.c,v 1.33 2007/01/19 14:49:09 hannken Exp $	*/
+/*	$NetBSD: advfsops.c,v 1.35 2007/03/13 01:34:21 ad Exp $	*/
 
 /*
  * Copyright (c) 1994 Christian E. Hopps
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: advfsops.c,v 1.33 2007/01/19 14:49:09 hannken Exp $");
+__KERNEL_RCSID(0, "$NetBSD: advfsops.c,v 1.35 2007/03/13 01:34:21 ad Exp $");
 
 #if defined(_KERNEL_OPT)
 #include "opt_compat_netbsd.h"
@@ -79,7 +79,7 @@ int adosfs_loadbitmap __P((struct adosfsmount *));
 struct simplelock adosfs_hashlock;
 
 POOL_INIT(adosfs_node_pool, sizeof(struct anode), 0, 0, 0, "adosndpl",
-    &pool_allocator_nointr);
+    &pool_allocator_nointr, IPL_NONE);
 
 MALLOC_DEFINE(M_ADOSFSMNT, "adosfs mount", "adosfs mount structures");
 MALLOC_DEFINE(M_ANODE, "adosfs anode", "adosfs anode structures and tables");
@@ -453,7 +453,7 @@ adosfs_vget(mp, an, vpp)
 		 * convert from BCPL string and
 		 * from: "part:dir/file" to: "/part/dir/file"
 		 */
-		nam = bp->b_data + (6 * sizeof(long));
+		nam = (char *)bp->b_data + (6 * sizeof(long));
 		namlen = strlen(nam);
 		tmp = nam;
 		while (*tmp && *tmp != ':')
@@ -489,7 +489,7 @@ adosfs_vget(mp, an, vpp)
 	/*
 	 * copy in name (from original block)
 	 */
-	nam = bp->b_data + (ap->nwords - 20) * sizeof(u_int32_t);
+	nam = (char *)bp->b_data + (ap->nwords - 20) * sizeof(u_int32_t);
 	namlen = *(u_char *)nam++;
 	if (namlen > 30) {
 #ifdef DIAGNOSTIC
@@ -797,7 +797,7 @@ adosfs_init()
 	malloc_type_attach(M_ANODE);
 	malloc_type_attach(M_ADOSFSBITMAP);
 	pool_init(&adosfs_node_pool, sizeof(struct anode), 0, 0, 0, "adosndpl",
-	    &pool_allocator_nointr);
+	    &pool_allocator_nointr, IPL_NONE);
 #endif
 	simple_lock_init(&adosfs_hashlock);
 }

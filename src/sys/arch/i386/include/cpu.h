@@ -1,4 +1,4 @@
-/*	$NetBSD: cpu.h,v 1.133 2007/02/17 00:28:25 daniel Exp $	*/
+/*	$NetBSD: cpu.h,v 1.139 2007/03/21 18:20:59 xtraeme Exp $	*/
 
 /*-
  * Copyright (c) 1990 The Regents of the University of California.
@@ -57,7 +57,7 @@
 #include <x86/via_padlock.h>
 
 #include <sys/device.h>
-#include <sys/lock.h>			/* will also get LOCKDEBUG */
+#include <sys/simplelock.h>			/* will also get LOCKDEBUG */
 #include <sys/cpu_data.h>
 #include <sys/cc_microtime.h>
 
@@ -141,7 +141,7 @@ struct cpu_info {
 	uint32_t	ci_cpu_serial[3]; /* PIII serial number */
 	uint64_t	ci_tsc_freq;	 /* cpu cycles/second */
 
-	struct cpu_functions *ci_func;  /* start/stop functions */
+	const struct cpu_functions *ci_func;  /* start/stop functions */
 	void (*cpu_setup)(struct cpu_info *);
  					/* proc-dependant init */
 	void (*ci_info)(struct cpu_info *);
@@ -392,7 +392,7 @@ void	npxsave_lwp(struct lwp *, int);
 void	npxsave_cpu(struct cpu_info *, int);
 
 /* vm_machdep.c */
-int kvtop(caddr_t);
+int kvtop(void *);
 
 #ifdef MATH_EMULATE
 /* math_emulate.c */
@@ -424,7 +424,7 @@ void x86_bus_space_mallocok(void);
 #include <machine/psl.h>	/* Must be after struct cpu_info declaration */
 
 /* est.c */
-void	est_init(struct cpu_info *, int);
+void	est_init(int);
 
 #endif /* _KERNEL */
 

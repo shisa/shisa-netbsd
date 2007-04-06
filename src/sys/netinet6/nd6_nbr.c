@@ -1,4 +1,4 @@
-/*	$NetBSD: nd6_nbr.c,v 1.70 2007/02/17 22:34:15 dyoung Exp $	*/
+/*	$NetBSD: nd6_nbr.c,v 1.72 2007/03/15 23:39:51 dyoung Exp $	*/
 /*	$KAME: nd6_nbr.c,v 1.61 2001/02/10 16:06:14 jinmei Exp $	*/
 
 /*
@@ -31,11 +31,10 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: nd6_nbr.c,v 1.70 2007/02/17 22:34:15 dyoung Exp $");
+__KERNEL_RCSID(0, "$NetBSD: nd6_nbr.c,v 1.72 2007/03/15 23:39:51 dyoung Exp $");
 
 #include "opt_inet.h"
 #include "opt_ipsec.h"
-#include "opt_mip6.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -70,7 +69,7 @@ __KERNEL_RCSID(0, "$NetBSD: nd6_nbr.c,v 1.70 2007/02/17 22:34:15 dyoung Exp $");
 #include <netinet6/ipsec.h>
 #endif
 
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 #include "mip.h"
 #include <net/mipsock.h>
 #include <netinet6/mip6.h>
@@ -78,7 +77,7 @@ __KERNEL_RCSID(0, "$NetBSD: nd6_nbr.c,v 1.70 2007/02/17 22:34:15 dyoung Exp $");
 #if NMIP > 0
 #include <net/if_mip.h>
 #endif /* NMIP > 0 */
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 
 #include "carp.h"
 #if NCARP > 0
@@ -90,16 +89,16 @@ __KERNEL_RCSID(0, "$NetBSD: nd6_nbr.c,v 1.70 2007/02/17 22:34:15 dyoung Exp $");
 #define SDL(s) ((struct sockaddr_dl *)s)
 
 struct dadq;
-struct dadq *nd6_dad_find __P((struct ifaddr *));
-static void nd6_dad_starttimer __P((struct dadq *, int));
-static void nd6_dad_stoptimer __P((struct dadq *));
-static void nd6_dad_timer __P((struct ifaddr *));
-static void nd6_dad_ns_output __P((struct dadq *, struct ifaddr *));
-static void nd6_dad_ns_input __P((struct ifaddr *));
-static void nd6_dad_na_input __P((struct ifaddr *));
-#ifdef MIP6
-struct ifaddr *nd6_dad_find_by_addr __P((struct in6_addr *));
-#endif /* MIP6 */
+struct dadq *nd6_dad_find(struct ifaddr *);
+static void nd6_dad_starttimer(struct dadq *, int);
+static void nd6_dad_stoptimer(struct dadq *);
+static void nd6_dad_timer(struct ifaddr *);
+static void nd6_dad_ns_output(struct dadq *, struct ifaddr *);
+static void nd6_dad_ns_input(struct ifaddr *);
+static void nd6_dad_na_input(struct ifaddr *);
+#ifdef MOBILE_IPV6
+struct ifaddr *nd6_dad_find_by_addr(struct in6_addr *);
+#endif /* MOBILE_IPV6 */
 
 static int dad_ignore_ns = 0;	/* ignore NS in DAD - specwise incorrect*/
 static int dad_maxtry = 15;	/* max # of *tries* to transmit DAD packet */
@@ -111,9 +110,7 @@ static int dad_maxtry = 15;	/* max # of *tries* to transmit DAD packet */
  * Based on RFC 2462 (duplicate address detection)
  */
 void
-nd6_ns_input(m, off, icmp6len)
-	struct mbuf *m;
-	int off, icmp6len;
+nd6_ns_input(struct mbuf *m, int off, int icmp6len)
 {
 	struct ifnet *ifp = m->m_pkthdr.rcvif;
 	struct ip6_hdr *ip6 = mtod(m, struct ip6_hdr *);
@@ -357,11 +354,10 @@ nd6_ns_input(m, off, icmp6len)
  * Based on RFC 2462 (duplicate address detection)
  */
 void
-nd6_ns_output(ifp, daddr6, taddr6, ln, dad)
-	struct ifnet *ifp;
-	const struct in6_addr *daddr6, *taddr6;
-	struct llinfo_nd6 *ln;	/* for source address determination */
-	int dad;	/* duplicate address detection */
+nd6_ns_output(struct ifnet *ifp, const struct in6_addr *daddr6,
+    const struct in6_addr *taddr6,
+    struct llinfo_nd6 *ln,	/* for source address determination */
+    int dad			/* duplicate address detection */)
 {
 	struct mbuf *m;
 	struct ip6_hdr *ip6;
@@ -370,7 +366,7 @@ nd6_ns_output(ifp, daddr6, taddr6, ln, dad)
 	struct ip6_moptions im6o;
 	int icmp6len;
 	int maxlen;
-	caddr_t mac;
+	void *mac;
 	struct route_in6 ro;
 
 	memset(&ro, 0, sizeof(ro));
@@ -470,14 +466,14 @@ nd6_ns_output(ifp, daddr6, taddr6, ln, dad)
 			int error;
 			struct sockaddr_in6 dst_sa;
 			struct ip6_pktopts *popts = NULL;
-#if defined(MIP6) && NMIP > 0
+#if defined(MOBILE_IPV6) && NMIP > 0
 			struct ip6_pktopts opts;
 
 			bzero(&opts, sizeof(opts));
 			opts.ip6po_hlim = -1;
 			opts.ip6po_flags |= IP6PO_USECOA;
 			popts = &opts;
-#endif /* MIP6 && NMIP > 0 */
+#endif /* MOBILE_IPV6 && NMIP > 0 */
 
 			bzero(&dst_sa, sizeof(dst_sa));
 			dst_sa.sin6_family = AF_INET6;
@@ -494,7 +490,7 @@ nd6_ns_output(ifp, daddr6, taddr6, ln, dad)
 				goto bad;
 			}
 		}
-#if defined(MIP6) && NMIP > 0
+#if defined(MOBILE_IPV6) && NMIP > 0
 		/*
 		 * returning home case: don't send a unicast NS before
 		 * deregistration has been completed.
@@ -522,7 +518,7 @@ nd6_ns_output(ifp, daddr6, taddr6, ln, dad)
 				dad = 1; /* XXX to set IPV6_UNSPECSRC */
 			}
 		}
-#endif /* MIP6 && NMIP > 0 */
+#endif /* MOBILE_IPV6 && NMIP > 0 */
 	} else {
 		/*
 		 * Source address for DAD packet must always be IPv6
@@ -563,10 +559,10 @@ nd6_ns_output(ifp, daddr6, taddr6, ln, dad)
 		m->m_pkthdr.len += optlen;
 		m->m_len += optlen;
 		icmp6len += optlen;
-		bzero((caddr_t)nd_opt, optlen);
+		bzero((void *)nd_opt, optlen);
 		nd_opt->nd_opt_type = ND_OPT_SOURCE_LINKADDR;
 		nd_opt->nd_opt_len = optlen >> 3;
-		bcopy(mac, (caddr_t)(nd_opt + 1), ifp->if_addrlen);
+		bcopy(mac, (void *)(nd_opt + 1), ifp->if_addrlen);
 	}
 
 	ip6->ip6_plen = htons((u_int16_t)icmp6len);
@@ -599,9 +595,7 @@ nd6_ns_output(ifp, daddr6, taddr6, ln, dad)
  * - anycast advertisement delay rule (RFC2461 7.2.7, SHOULD)
  */
 void
-nd6_na_input(m, off, icmp6len)
-	struct mbuf *m;
-	int off, icmp6len;
+nd6_na_input(struct mbuf *m, int off, int icmp6len)
 {
 	struct ifnet *ifp = m->m_pkthdr.rcvif;
 	struct ip6_hdr *ip6 = mtod(m, struct ip6_hdr *);
@@ -672,7 +666,7 @@ nd6_na_input(m, off, icmp6len)
 		lladdrlen = ndopts.nd_opts_tgt_lladdr->nd_opt_len << 3;
 	}
 
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 	ifa = nd6_dad_find_by_addr(&taddr6);
 	if (!ifa)
 #endif
@@ -923,12 +917,12 @@ nd6_na_output(ifp, daddr6_0, taddr6, flags, tlladdr, sdl0)
 	struct sockaddr_in6 dst_sa;
 	struct in6_addr *src, daddr6;
 	int icmp6len, maxlen, error;
-	caddr_t mac;
+	void *mac;
 	struct route_in6 ro;
 	struct ip6_pktopts *popts = NULL;
-#if defined(MIP6) && NMIP > 0
+#if defined(MOBILE_IPV6) && NMIP > 0
 	struct ip6_pktopts opts;
-#endif /* MIP6 && NMIP > 0 */
+#endif /* MOBILE_IPV6 && NMIP > 0 */
 
 	mac = NULL;
 	memset(&ro, 0, sizeof(ro));
@@ -998,12 +992,12 @@ nd6_na_output(ifp, daddr6_0, taddr6, flags, tlladdr, sdl0)
 	/*
 	 * Select a source whose scope is the same as that of the dest.
 	 */
-#if defined(MIP6) && NMIP > 0
+#if defined(MOBILE_IPV6) && NMIP > 0
 	bzero(&opts, sizeof(opts));
 	opts.ip6po_hlim = -1;
 	opts.ip6po_flags |= IP6PO_USECOA;
 	popts = &opts;
-#endif /* MIP6 && NMIP > 0 */
+#endif /* MOBILE_IPV6 && NMIP > 0 */
 
 	ro.ro_dst = dst_sa;
 	src = in6_selectsrc(&dst_sa, popts, NULL, (struct route *)&ro, NULL,
@@ -1052,10 +1046,10 @@ nd6_na_output(ifp, daddr6_0, taddr6, flags, tlladdr, sdl0)
 		m->m_pkthdr.len += optlen;
 		m->m_len += optlen;
 		icmp6len += optlen;
-		bzero((caddr_t)nd_opt, optlen);
+		bzero((void *)nd_opt, optlen);
 		nd_opt->nd_opt_type = ND_OPT_TARGET_LINKADDR;
 		nd_opt->nd_opt_len = optlen >> 3;
-		bcopy(mac, (caddr_t)(nd_opt + 1), ifp->if_addrlen);
+		bcopy(mac, (void *)(nd_opt + 1), ifp->if_addrlen);
 	} else
 		flags &= ~ND_NA_FLAG_OVERRIDE;
 
@@ -1080,9 +1074,8 @@ nd6_na_output(ifp, daddr6_0, taddr6, flags, tlladdr, sdl0)
 	return;
 }
 
-caddr_t
-nd6_ifptomac(ifp)
-	struct ifnet *ifp;
+void *
+nd6_ifptomac(struct ifnet *ifp)
 {
 	switch (ifp->if_type) {
 	case IFT_ARCNET:
@@ -1114,7 +1107,7 @@ struct dadq {
 static struct dadq_head dadq;
 static int dad_init = 0;
 
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 struct ifaddr *
 nd6_dad_find_by_addr(struct in6_addr *addr)
 {
@@ -1126,15 +1119,14 @@ nd6_dad_find_by_addr(struct in6_addr *addr)
 	}
 	return NULL;
 }
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 
 struct dadq *
-nd6_dad_find(ifa)
-	struct ifaddr *ifa;
+nd6_dad_find(struct ifaddr *ifa)
 {
 	struct dadq *dp;
 
-	for (dp = dadq.tqh_first; dp; dp = dp->dad_list.tqe_next) {
+	TAILQ_FOREACH(dp, &dadq, dad_list) {
 		if (dp->dad_ifa == ifa)
 			return dp;
 	}
@@ -1142,13 +1134,11 @@ nd6_dad_find(ifa)
 }
 
 static void
-nd6_dad_starttimer(dp, ticks)
-	struct dadq *dp;
-	int ticks;
+nd6_dad_starttimer(struct dadq *dp, int ticks)
 {
 
 	callout_reset(&dp->dad_timer_ch, ticks,
-	    (void (*) __P((void *)))nd6_dad_timer, (void *)dp->dad_ifa);
+	    (void (*)(void *))nd6_dad_timer, (void *)dp->dad_ifa);
 }
 
 static void
@@ -1161,11 +1151,11 @@ nd6_dad_stoptimer(dp)
 
 /*
  * Start Duplicate Address Detection (DAD) for specified interface address.
+ *
+ * xtick: minimum delay ticks for IFF_UP event
  */
 void
-nd6_dad_start(ifa, xtick)
-	struct ifaddr *ifa;
-	int xtick;	/* minimum delay ticks for IFF_UP event */
+nd6_dad_start(struct ifaddr *ifa, int xtick)
 {
 	struct in6_ifaddr *ia = (struct in6_ifaddr *)ifa;
 	struct dadq *dp;
@@ -1244,8 +1234,7 @@ nd6_dad_start(ifa, xtick)
  * terminate DAD unconditionally.  used for address removals.
  */
 void
-nd6_dad_stop(ifa)
-	struct ifaddr *ifa;
+nd6_dad_stop(struct ifaddr *ifa)
 {
 	struct dadq *dp;
 
@@ -1266,8 +1255,7 @@ nd6_dad_stop(ifa)
 }
 
 static void
-nd6_dad_timer(ifa)
-	struct ifaddr *ifa;
+nd6_dad_timer(struct ifaddr *ifa)
 {
 	int s;
 	struct in6_ifaddr *ia = (struct in6_ifaddr *)ifa;
@@ -1308,13 +1296,13 @@ nd6_dad_timer(ifa)
 		TAILQ_REMOVE(&dadq, dp, dad_list);
 		free(dp, M_IP6NDP);
 		dp = NULL;
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 		if (ia->ia6_flags & IN6_IFF_PSEUDOIFA) {
 			/* Notify the address was not duplicated via mipsock */
 			mips_notify_dad_result(MIPM_DAD_SUCCESS,
 			    &ia->ia_addr.sin6_addr, ia->ia_ifp->if_index);
 		}
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 		IFAFREE(ifa);
 		goto done;
 	}
@@ -1368,10 +1356,10 @@ nd6_dad_timer(ifa)
 			TAILQ_REMOVE(&dadq, dp, dad_list);
 			free(dp, M_IP6NDP);
 			dp = NULL;
-#if defined(MIP6) && NMIP > 0
+#if defined(MOBILE_IPV6) && NMIP > 0
 			rt_addrinfomsg((struct ifaddr *)ia);
-#endif /* MIP6 && NMIP > 0 */
-#ifdef MIP6
+#endif /* MOBILE_IPV6 && NMIP > 0 */
+#ifdef MOBILE_IPV6
 			if (ia->ia6_flags & IN6_IFF_PSEUDOIFA) {
 				/* Notify the address was not duplicated
 				   via mipsock */
@@ -1379,7 +1367,7 @@ nd6_dad_timer(ifa)
 				    &ia->ia_addr.sin6_addr,
 				    ia->ia_ifp->if_index);
 			}
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 			IFAFREE(ifa);
 		}
 	}
@@ -1389,8 +1377,7 @@ done:
 }
 
 void
-nd6_dad_duplicated(ifa)
-	struct ifaddr *ifa;
+nd6_dad_duplicated(struct ifaddr *ifa)
 {
 	struct in6_ifaddr *ia = (struct in6_ifaddr *)ifa;
 	struct ifnet *ifp;
@@ -1456,20 +1443,18 @@ nd6_dad_duplicated(ifa)
 	TAILQ_REMOVE(&dadq, dp, dad_list);
 	free(dp, M_IP6NDP);
 	dp = NULL;
-#ifdef MIP6
+#ifdef MOBILE_IPV6
 	if (ia->ia6_flags & IN6_IFF_PSEUDOIFA) {
 		/* Notify the address was not duplicated via mipsock */
 		mips_notify_dad_result(MIPM_DAD_FAIL, &ia->ia_addr.sin6_addr,
 		    ia->ia_ifp->if_index);
        }
-#endif /* MIP6 */
+#endif /* MOBILE_IPV6 */
 	IFAFREE(ifa);
 }
 
 static void
-nd6_dad_ns_output(dp, ifa)
-	struct dadq *dp;
-	struct ifaddr *ifa;
+nd6_dad_ns_output(struct dadq *dp, struct ifaddr *ifa)
 {
 	struct in6_ifaddr *ia = (struct in6_ifaddr *)ifa;
 	struct ifnet *ifp = ifa->ifa_ifp;
@@ -1494,8 +1479,7 @@ nd6_dad_ns_output(dp, ifa)
 }
 
 static void
-nd6_dad_ns_input(ifa)
-	struct ifaddr *ifa;
+nd6_dad_ns_input(struct ifaddr *ifa)
 {
 	struct in6_ifaddr *ia;
 	const struct in6_addr *taddr6;
@@ -1542,8 +1526,7 @@ nd6_dad_ns_input(ifa)
 }
 
 static void
-nd6_dad_na_input(ifa)
-	struct ifaddr *ifa;
+nd6_dad_na_input(struct ifaddr *ifa)
 {
 	struct dadq *dp;
 

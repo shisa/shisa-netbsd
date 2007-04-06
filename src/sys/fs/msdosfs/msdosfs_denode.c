@@ -1,4 +1,4 @@
-/*	$NetBSD: msdosfs_denode.c,v 1.18 2007/02/20 16:21:03 ad Exp $	*/
+/*	$NetBSD: msdosfs_denode.c,v 1.20 2007/03/12 18:18:32 ad Exp $	*/
 
 /*-
  * Copyright (C) 1994, 1995, 1997 Wolfgang Solfrank.
@@ -48,7 +48,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: msdosfs_denode.c,v 1.18 2007/02/20 16:21:03 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: msdosfs_denode.c,v 1.20 2007/03/12 18:18:32 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -79,7 +79,7 @@ u_long dehash;			/* size of hash table - 1 */
 struct simplelock msdosfs_ihash_slock;
 
 POOL_INIT(msdosfs_denode_pool, sizeof(struct denode), 0, 0, 0, "msdosnopl",
-    &pool_allocator_nointr);
+    &pool_allocator_nointr, IPL_NONE);
 
 extern int prtactive;
 
@@ -105,7 +105,7 @@ msdosfs_init()
 	malloc_type_attach(M_MSDOSFSMNT);
 	malloc_type_attach(M_MSDOSFSFAT);
 	pool_init(&msdosfs_denode_pool, sizeof(struct denode), 0, 0, 0,
-	    "msdosnopl", &pool_allocator_nointr);
+	    "msdosnopl", &pool_allocator_nointr, IPL_NONE);
 #endif
 	dehashtbl = hashinit(desiredvnodes / 2, HASH_LIST, M_MSDOSFSMNT,
 	    M_WAITOK, &dehash);
@@ -465,7 +465,8 @@ detrunc(struct denode *dep, u_long length, int flags, kauth_cred_t cred,
 #endif
 				return (error);
 			}
-			memset(bp->b_data + boff, 0, pmp->pm_bpcluster - boff);
+			memset((char *)bp->b_data + boff, 0,
+			    pmp->pm_bpcluster - boff);
 			if (flags & IO_SYNC)
 				bwrite(bp);
 			else

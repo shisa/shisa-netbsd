@@ -1,4 +1,4 @@
-/* $NetBSD: pmap.c,v 1.6 2007/02/28 04:21:51 thorpej Exp $ */
+/* $NetBSD: pmap.c,v 1.8 2007/03/12 18:18:25 ad Exp $ */
 
 
 /*-
@@ -92,7 +92,7 @@
 
 #include <sys/cdefs.h>
 
-__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.6 2007/02/28 04:21:51 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.8 2007/03/12 18:18:25 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -382,7 +382,7 @@ pmap_steal_memory(vsize_t size, vaddr_t *vstartp, vaddr_t *vendp)
 		}
 
 		va = IA64_PHYS_TO_RR7(pa);
-		memset((caddr_t)va, 0, size);
+		memset((void *)va, 0, size);
 		pmap_pages_stolen += npgs;
 		return (va);
 	}
@@ -515,7 +515,7 @@ pmap_steal_vhpt_memory(vsize_t size)
 	 */
 	pa = ptoa(vhpt_start);
 	va = IA64_PHYS_TO_RR7(pa);
-	memset((caddr_t)va, 0, size);
+	memset((void *)va, 0, size);
 	pmap_pages_stolen += npgs;
 	return (va);
 }
@@ -646,9 +646,8 @@ pmap_bootstrap()
 	 * Initialize the pmap pools and list.
 	 */
 	pmap_ncpuids = pmap_ridmax;
-	pool_init(&pmap_pmap_pool,
-		  sizeof(struct pmap), 0, 0, 0, "pmappl",
-		  &pool_allocator_nointr); /* This may block. */
+	pool_init(&pmap_pmap_pool, sizeof(struct pmap), 0, 0, 0, "pmappl",
+	    &pool_allocator_nointr, IPL_NONE); /* This may block. */
 
 	/* XXX: Need to convert ia64_kptdir[][] to a pool. ????*/
 
@@ -656,11 +655,11 @@ pmap_bootstrap()
 	 * XXX: We should be using regular vm_alloced mem for regular, non-kernel ptesl
 	 */
 
-	pool_init(&pmap_ia64_lpte_pool, sizeof (struct ia64_lpte), sizeof(void *), 0, 0, "ptpl",
-		  NULL); 
+	pool_init(&pmap_ia64_lpte_pool, sizeof (struct ia64_lpte),
+	    sizeof(void *), 0, 0, "ptpl", NULL, IPL_NONE); 
 
-	pool_init(&pmap_pv_pool, sizeof (struct pv_entry), sizeof(void *), 0, 0, "pvpl",
-	    &pmap_pv_page_allocator);
+	pool_init(&pmap_pv_pool, sizeof (struct pv_entry), sizeof(void *),
+	    0, 0, "pvpl", &pmap_pv_page_allocator, IPL_NONE);
 
 	TAILQ_INIT(&pmap_all_pmaps);
 
@@ -936,7 +935,7 @@ void
 pmap_zero_page(paddr_t phys)
 {
 	vaddr_t va = IA64_PHYS_TO_RR7(phys);
-	bzero((caddr_t) va, PAGE_SIZE);
+	bzero((void *) va, PAGE_SIZE);
 }
 
 /*
@@ -953,7 +952,7 @@ pmap_copy_page(paddr_t psrc, paddr_t pdst)
 {
 	vaddr_t vsrc = IA64_PHYS_TO_RR7(psrc);
 	vaddr_t vdst = IA64_PHYS_TO_RR7(pdst);
-	bcopy((caddr_t) vsrc, (caddr_t) vdst, PAGE_SIZE);
+	bcopy((void *) vsrc, (void *) vdst, PAGE_SIZE);
 }
 
 
