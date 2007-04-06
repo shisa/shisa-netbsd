@@ -1,4 +1,4 @@
-/* $Id: mipsock.c,v 1.8 2007/04/04 05:08:31 keiichi Exp $ */
+/* $Id: mipsock.c,v 1.9 2007/04/06 02:33:01 keiichi Exp $ */
 
 /*
  * Copyright (C) 2004 WIDE Project.
@@ -456,9 +456,9 @@ mips_output(m, va_alist)
 		bcopy(MIPC_COA(mipc), &coa, MIPC_COA(mipc)->sa_len);
 		switch (hoa.ss_family) {
 		case AF_INET6:
-#ifdef MIP6_MCOA
+#ifdef MOBILE_IPV6_MCOA
 			bid = ((struct sockaddr_in6 *)&coa)->sin6_port;
-#endif /* MIP6_MCOA */
+#endif /* MOBILE_IPV6_MCOA */
 			error = mip6_bce_update((struct sockaddr_in6 *)&cnaddr,
 						(struct sockaddr_in6 *)&hoa,
 						(struct sockaddr_in6 *)&coa,
@@ -477,9 +477,9 @@ mips_output(m, va_alist)
 		bcopy(MIPC_COA(mipc), &coa, MIPC_COA(mipc)->sa_len);
 		switch (hoa.ss_family) {
 		case AF_INET6:
-#ifdef MIP6_MCOA
+#ifdef MOBILE_IPV6_MCOA
 			bid = ((struct sockaddr_in6 *)&coa)->sin6_port;
-#endif /* MIP6_MCOA */
+#endif /* MOBILE_IPV6_MCOA */
 			error = mip6_bce_remove_addr((struct sockaddr_in6 *)&cnaddr,
 						     (struct sockaddr_in6 *)&hoa,
 						     (struct sockaddr_in6 *)&coa,
@@ -532,9 +532,9 @@ mips_output(m, va_alist)
 				error = EPFNOSUPPORT; /* XXX ? */
 				break;
 			}
-#ifdef MIP6_MCOA
+#ifdef MOBILE_IPV6_MCOA
 			bid = ((struct sockaddr_in6 *)&coa)->sin6_port;
-#endif /* MIP6_MCOA */
+#endif /* MOBILE_IPV6_MCOA */
 			error = mip6_bul_add(&((struct sockaddr_in6 *)&cnaddr)->sin6_addr,
 					     &((struct sockaddr_in6 *)&hoa)->sin6_addr,
 					     &((struct sockaddr_in6 *)&coa)->sin6_addr,
@@ -552,10 +552,10 @@ mips_output(m, va_alist)
 		mipu = (struct mipm_bul_info *)miph;
 		bcopy(MIPU_PEERADDR(mipu), &cnaddr, MIPU_PEERADDR(mipu)->sa_len);
 		bcopy(MIPU_HOA(mipu), &hoa, MIPU_HOA(mipu)->sa_len);
-#ifdef MIP6_MCOA
+#ifdef MOBILE_IPV6_MCOA
 		bcopy(&((struct sockaddr_in6 *)MIPU_COA(mipu))->sin6_port,
 		      &bid, sizeof(bid));
-#endif /* MIP6_MCOA */
+#endif /* MOBILE_IPV6_MCOA */
 		mbul = mip6_bul_get(&((struct sockaddr_in6 *)&hoa)->sin6_addr, &((struct sockaddr_in6 *)&cnaddr)->sin6_addr, bid);
 		if (mbul == NULL) 
 			return (ENOENT);
