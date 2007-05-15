@@ -1,4 +1,4 @@
-.\" $NetBSD: tar.1,v 1.22 2005/05/24 00:05:01 wiz Exp $
+.\" $NetBSD: tar.1,v 1.25 2007/05/04 21:19:37 christos Exp $
 .\"
 .\" Copyright (c) 1996 SigmaSoft, Th. Lockert
 .\" All rights reserved.
@@ -25,7 +25,7 @@
 .\"
 .\"	OpenBSD: tar.1,v 1.28 2000/11/09 23:58:56 aaron Exp
 .\"
-.Dd May 7, 2005
+.Dd May 4, 2007
 .Dt TAR 1
 .Os
 .Sh NAME
@@ -115,7 +115,8 @@ This option is a GNU extension.
 .It Fl k , -keep-old-files
 Keep existing files; don't overwrite them from archive.
 .It Fl l , -one-file-system
-Do not cross filesystems.
+Do not descend across mount points.
+.\" should be '-X'
 .It Fl m , -modification-time
 Do not preserve modification time.
 .It Fl O
@@ -160,7 +161,7 @@ using the syntax of the
 .Xr ed 1
 utility regular expressions.
 The format of these regular expressions are:
-.Dl /old/new/[gp]
+.Dl /old/new/[gps]
 As in
 .Xr ed 1 ,
 .Cm old
@@ -195,6 +196,10 @@ in the following format:
 .Dl \*[Lt]original pathname\*[Gt] \*[Gt]\*[Gt] \*[Lt]new pathname\*[Gt]
 File or archive member names that substitute to the empty string
 are not selected and will be skipped.
+The substitutions are applied by default to the destination hard and symbolic
+links. The optional trailing
+.Cm s
+prevents the substitutions from being performed on symbolic link destinations.
 .It Fl v
 Verbose operation mode.
 .It Fl w , -interactive , -confirmation
@@ -216,7 +221,21 @@ from the directory.
 This argument and its parameter may also appear in a file list specified by
 .Fl T .
 .It Fl H
-Follow symlinks given on command line only.
+Only follow symlinks given on command line.
+.Pp
+Note SysVr3/i386 picked up ISC/SCO UNIX compatabilty which implemented
+.Dq Fl F Ar file
+which was defined as obtaining a list of command line switches and files
+on which to operate from the specified file,
+but SunOS-5 uses
+.Dq Fl I Ar file
+because they use
+.Sq Fl F
+to mean something else.  We might someday provide SunOS-5 compatability
+but it makes little sense to confuse things with ISC/SCO compatability.
+.\".It Fl L
+.\"Do not follow any symlinks (do the opposite of
+.\".Fl h ).
 .It Fl P , -absolute-paths
 Do not strip leading slashes
 .Pq Sq /
@@ -229,6 +248,10 @@ A line may also specify the positional argument
 .Dq Fl C Ar directory .
 .It Fl X Ar file , Fl -exclude-from Ar file
 Exclude files listed in the given file.
+.\" exclude should be '-E' and '-X' should be one-file-system
+.Pp
+Note that it would be more standard to use this option to mean ``do not
+cross filesystem mount points.''
 .It Fl Z , -compress , -uncompress
 Compress archive using compress.
 .It Fl -strict

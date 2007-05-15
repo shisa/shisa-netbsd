@@ -1,4 +1,4 @@
-/*	$NetBSD: dtfs_vfsops.c,v 1.11 2007/01/26 23:02:05 pooka Exp $	*/
+/*	$NetBSD: dtfs_vfsops.c,v 1.16 2007/05/07 17:22:50 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006  Antti Kantee.  All Rights Reserved.
@@ -31,10 +31,12 @@
 #include <sys/types.h>
 #include <sys/resource.h>
 
+#include <assert.h>
 #include <err.h>
 #include <errno.h>
 #include <puffs.h>
 #include <string.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <util.h>
 
@@ -50,7 +52,7 @@ dtfs_domount(struct puffs_usermount *pu)
 	struct vattr *va;
 
 	/* create mount-local thingie */
-	dtm = pu->pu_privdata;
+	dtm = puffs_getspecific(pu);
 	dtm->dtm_nextfileid = 2;
 	dtm->dtm_nfiles = 1;
 	dtm->dtm_fsizes = 0;
@@ -70,7 +72,7 @@ dtfs_domount(struct puffs_usermount *pu)
 	/* not adddented, so compensate */
 	va->va_nlink = 2;
 
-	pu->pu_pn_root = pn;
+	puffs_setroot(pu, pn);
 
 	/* XXX: should call dtfs_fs_statvfs */
 	puffs_zerostatvfs(&sb);
@@ -114,7 +116,7 @@ dtfs_fs_statvfs(struct puffs_cc *pcc, struct statvfs *sbp, pid_t pid)
 	int pgsize;
 
 	pu = puffs_cc_getusermount(pcc);
-	dtm = pu->pu_privdata;
+	dtm = puffs_getspecific(pu);
 	pgsize = getpagesize();
 	memset(sbp, 0, sizeof(struct statvfs));
 
@@ -142,6 +144,70 @@ dtfs_fs_statvfs(struct puffs_cc *pcc, struct statvfs *sbp, pid_t pid)
 }
 #undef ROUND 
 
+static void *
+addrcmp(struct puffs_usermount *pu, struct puffs_node *pn, void *arg)
+{
+
+	if (pn == arg)
+		return pn;
+
+	return NULL;
+}
+
+int
+dtfs_fs_fhtonode(struct puffs_cc *pcc, void *fid, size_t fidsize,
+	void **fcookie, enum vtype *ftype, voff_t *fsize, dev_t *fdev)
+{
+	struct puffs_usermount *pu = puffs_cc_getusermount(pcc);
+	struct dtfs_fid *dfid;
+	struct puffs_node *pn;
+
+	assert(fidsize == sizeof(struct dtfs_fid));
+	dfid = fid;
+
+	pn = puffs_pn_nodewalk(pu, addrcmp, dfid->dfid_addr);
+	if (pn == NULL)
+		return EINVAL;
+
+	if (pn->pn_va.va_fileid != dfid->dfid_fileid
+	    || pn->pn_va.va_gen != dfid->dfid_gen)
+		return EINVAL;
+	
+	*fcookie = pn;
+	*ftype = pn->pn_va.va_type;
+	*fsize = pn->pn_va.va_size;
+	*fdev = pn->pn_va.va_rdev;
+
+	return 0;
+}
+
+int
+dtfs_fs_nodetofh(struct puffs_cc *pcc, void *cookie,
+	void *fid, size_t *fidsize)
+{
+	struct puffs_node *pn = cookie;
+	struct dtfs_fid *dfid;
+	extern int dynamicfh;
+
+	if (dynamicfh == 0) {
+		assert(*fidsize >= sizeof(struct dtfs_fid));
+	} else {
+		if (*fidsize < sizeof(struct dtfs_fid)) {
+			*fidsize = sizeof(struct dtfs_fid);
+			return E2BIG;
+		}
+		*fidsize = sizeof(struct dtfs_fid);
+	}
+
+	dfid = fid;
+
+	dfid->dfid_addr = pn;
+	dfid->dfid_fileid = pn->pn_va.va_fileid;
+	dfid->dfid_gen = pn->pn_va.va_gen;
+
+	return 0;
+}
+
 void
 dtfs_fs_suspend(struct puffs_cc *pcc, int status)
 {
@@ -149,4 +215,11 @@ dtfs_fs_suspend(struct puffs_cc *pcc, int status)
 	printf("suspend status %d\n", status);
 	if (status == 1)
 		sleep(3);
+}
+
+int
+dtfs_fs_unmount(struct puffs_cc *pcc, int flags, pid_t pid)
+{
+
+	return 0;
 }

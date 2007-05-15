@@ -1,4 +1,4 @@
-/* $NetBSD: puffs_transport.c,v 1.11 2007/03/30 18:25:02 pooka Exp $ */
+/* $NetBSD: puffs_transport.c,v 1.17 2007/05/01 12:18:40 pooka Exp $ */
 
 /*
  * Copyright (c) 2006  Antti Kantee.  All Rights Reserved.
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: puffs_transport.c,v 1.11 2007/03/30 18:25:02 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: puffs_transport.c,v 1.17 2007/05/01 12:18:40 pooka Exp $");
 
 #include <sys/param.h>
 #include <sys/conf.h>
@@ -44,6 +44,8 @@ __KERNEL_RCSID(0, "$NetBSD: puffs_transport.c,v 1.11 2007/03/30 18:25:02 pooka E
 #include <sys/namei.h>
 #include <sys/poll.h>
 #include <sys/socketvar.h>
+
+#include <uvm/uvm_param.h>
 
 #include <fs/puffs/puffs_sys.h>
 
@@ -200,7 +202,7 @@ puffs_fop_close(struct file *fp, struct lwp *l)
 	}
 
 	/*
-	 * Next, analyze unmount was called and the instance is dead.
+	 * Next, analyze if unmount was called and the instance is dead.
 	 * In this case we can just free the structure and go home, it
 	 * was removed from the list by puffs_nukebypmp().
 	 */
@@ -220,7 +222,11 @@ puffs_fop_close(struct file *fp, struct lwp *l)
 	 */
 	mp = PMPTOMP(pmp);
 	mutex_exit(&pi_mtx);
+
+	/* hmm?  suspicious locking? */
+
 	mutex_enter(&pmp->pmp_lock);
+	puffs_mp_reference(pmp);
 
 	/*
 	 * Free the waiting callers before proceeding any further.
@@ -246,30 +252,15 @@ puffs_fop_close(struct file *fp, struct lwp *l)
 	 */
 	if (pmp->pmp_unmounting) {
 		cv_wait(&pmp->pmp_unmounting_cv, &pmp->pmp_lock);
+		puffs_mp_release(pmp);
 		mutex_exit(&pmp->pmp_lock);
 		DPRINTF(("puffs_fop_close: unmount was in progress for pmp %p, "
 		    "restart\n", pmp));
 		goto restart;
 	}
 
-	/*
-	 * Check that suspend isn't running.  Issues here:
-	 * + we cannot nuke the mountpoint while suspend is running
-	 *   because we risk nuking it from under us (as usual... does
-	 *   anyone see a pattern forming?)
-	 * + we must have userdead or the suspend thread might deadlock.
-	 *   this has been done above
-	 * + this DOES NOT solve the problem with the regular unmount path.
-	 *   however, it is way way way way less likely a problem.
-	 *   perhaps vfs_busy() in vfs_suspend() would help?
-	 */
-	if (pmp->pmp_suspend) {
-		cv_wait(&pmp->pmp_suspend_cv, &pmp->pmp_lock);
-		mutex_exit(&pmp->pmp_lock);
-		DPRINTF(("puffs_fop_close: suspend was in progress for pmp %p, "
-		    "restart\n", pmp));
-		goto restart;
-	}
+	/* Won't access pmp from here anymore */
+	puffs_mp_release(pmp);
 	mutex_exit(&pmp->pmp_lock);
 
 	/*
@@ -340,7 +331,8 @@ static int
 puffs_flush(struct puffs_mount *pmp, struct puffs_flush *pf)
 {
 	struct vnode *vp;
-	int rv;
+	voff_t offlo, offhi;
+	int rv, flags = 0;
 
 	/* XXX: slurry */
 	if (pf->pf_op == PUFFS_INVAL_NAMECACHE_ALL) {
@@ -377,20 +369,34 @@ puffs_flush(struct puffs_mount *pmp, struct puffs_flush *pf)
 
 #endif
 	case PUFFS_INVAL_NAMECACHE_DIR:
+		if (vp->v_type != VDIR) {
+			rv = EINVAL;
+			break;
+		}
 		cache_purge1(vp, NULL, PURGE_CHILDREN);
 		break;
 
-#if 0
 	case PUFFS_INVAL_PAGECACHE_NODE_RANGE:
-		simple_lock(&vp->v_uobj.vmobjlock);
-		/* XXX: validate args? */
-		rv = VOP_PUTPAGES(vp, pf->pf_start, pf->pf_end, PGO_FREE);
-		break;
-#endif
+		flags = PGO_FREE;
+		/*FALLTHROUGH*/
+	case PUFFS_FLUSH_PAGECACHE_NODE_RANGE:
+		if (flags == 0)
+			flags = PGO_CLEANIT;
 
-	case PUFFS_INVAL_PAGECACHE_NODE:
+		if (pf->pf_end > vp->v_size || vp->v_type != VREG) {
+			rv = EINVAL;
+			break;
+		}
+
+		offlo = trunc_page(pf->pf_start);
+		offhi = round_page(pf->pf_end);
+		if (offhi != 0 && offlo >= offhi) {
+			rv = EINVAL;
+			break;
+		}
+
 		simple_lock(&vp->v_uobj.vmobjlock);
-		rv = VOP_PUTPAGES(vp, 0, 0, PGO_FREE | PGO_ALLPAGES);
+		rv = VOP_PUTPAGES(vp, offlo, offhi, flags);
 		break;
 
 	default:
@@ -420,18 +426,18 @@ dosuspendresume(void *arg)
 		goto out;
 	}
 
-	/* do the dance */
-	rv = vfs_suspend(PMPTOMP(pmp), 0);
+	/* Do the dance.  Allow only one concurrent suspend */
+	rv = vfs_suspend(PMPTOMP(pmp), 1);
 	if (rv == 0)
 		vfs_resume(PMPTOMP(pmp));
 
+ out:
 	mutex_enter(&pmp->pmp_lock);
-	KASSERT(pmp->pmp_suspend);
+	KASSERT(pmp->pmp_suspend == 1);
 	pmp->pmp_suspend = 0;
-	cv_broadcast(&pmp->pmp_suspend_cv);
+	puffs_mp_release(pmp);
 	mutex_exit(&pmp->pmp_lock);
 
- out:
 	kthread_exit(0);
 }
 
@@ -440,6 +446,13 @@ puffs_fop_ioctl(struct file *fp, u_long cmd, void *data, struct lwp *l)
 {
 	struct puffs_mount *pmp = FPTOPMP(fp);
 	int rv;
+
+	/*
+	 * work already done in sys_ioctl().  skip sanity checks to enable
+	 * setting non-blocking fd without yet having mounted the fs
+	 */
+	if (cmd == FIONBIO)
+		return 0;
 
 	if (pmp == PMP_EMBRYO || pmp == PMP_DEAD) {
 		printf("puffs_fop_ioctl: puffs %p, not mounted\n", pmp);
@@ -472,19 +485,16 @@ puffs_fop_ioctl(struct file *fp, u_long cmd, void *data, struct lwp *l)
 	case PUFFSSUSPENDOP:
 		rv = 0;
 		mutex_enter(&pmp->pmp_lock);
-		if (pmp->pmp_suspend || pmp->pmp_status != PUFFSTAT_RUNNING)
+		if (pmp->pmp_suspend || pmp->pmp_status != PUFFSTAT_RUNNING) {
 			rv = EBUSY;
-		else
+		} else {
+			puffs_mp_reference(pmp);
 			pmp->pmp_suspend = 1;
+		}
 		mutex_exit(&pmp->pmp_lock);
 		if (rv)
 			break;
 		rv = kthread_create1(dosuspendresume, pmp, NULL, "puffsusp");
-		break;
-
-	/* already done in sys_ioctl() */
-	case FIONBIO:
-		rv = 0;
 		break;
 
 	default:
@@ -524,7 +534,7 @@ filt_puffsioctl(struct knote *kn, long hint)
 		return 0;
 
 	mutex_enter(&pmp->pmp_lock);
-	kn->kn_data = pmp->pmp_req_waiters;
+	kn->kn_data = pmp->pmp_req_touser_count;
 	mutex_exit(&pmp->pmp_lock);
 
 	return kn->kn_data != 0;

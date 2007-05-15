@@ -1,4 +1,4 @@
-/*	$NetBSD: callcontext.c,v 1.3 2007/02/17 23:00:16 pooka Exp $	*/
+/*	$NetBSD: callcontext.c,v 1.5 2007/05/10 12:36:44 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006 Antti Kantee.  All Rights Reserved.
@@ -30,7 +30,7 @@
 
 #include <sys/cdefs.h>
 #if !defined(lint)
-__RCSID("$NetBSD: callcontext.c,v 1.3 2007/02/17 23:00:16 pooka Exp $");
+__RCSID("$NetBSD: callcontext.c,v 1.5 2007/05/10 12:36:44 pooka Exp $");
 #endif /* !lint */
 
 #include <sys/types.h>
@@ -53,6 +53,7 @@ puffs_cc_yield(struct puffs_cc *pcc)
 {
 
 	assert((pcc->pcc_flags & PCC_DONE) == 0);
+	assert(pcc->pcc_flags & PCC_REALCC);
 
 	/* romanes eunt domus */
 	swapcontext(&pcc->pcc_uc, &pcc->pcc_uc_ret);
@@ -61,6 +62,8 @@ puffs_cc_yield(struct puffs_cc *pcc)
 void
 puffs_cc_continue(struct puffs_cc *pcc)
 {
+
+	assert(pcc->pcc_flags & PCC_REALCC);
 
 	/* ramble on */
 	swapcontext(&pcc->pcc_uc_ret, &pcc->pcc_uc);
@@ -71,6 +74,13 @@ puffs_cc_getusermount(struct puffs_cc *pcc)
 {
 
 	return pcc->pcc_pu;
+}
+
+void *
+puffs_cc_getspecific(struct puffs_cc *pcc)
+{
+
+	return puffs_getspecific(pcc->pcc_pu);
 }
 
 struct puffs_cc *

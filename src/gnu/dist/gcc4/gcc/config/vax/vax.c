@@ -169,7 +169,8 @@ vax_init_libfuncs (void)
 /* This is like nonimmediate_operand with a restriction on the type of MEM.  */
 
 static void
-split_quadword_operands (rtx insn, rtx * operands, rtx * low, int n)
+split_quadword_operands (rtx insn, enum rtx_code code, rtx * operands,
+			 rtx * low, int n)
 {
   int i;
 
@@ -187,6 +188,7 @@ split_quadword_operands (rtx insn, rtx * operands, rtx * low, int n)
 	}
       else if (optimize_size && MEM_P (operands[i])
 	       && REG_P (XEXP (operands[i], 0))
+	       && (code != MINUS || operands[1] != const0_rtx)
 	       && find_regno_note (insn, REG_DEAD,
 				   REGNO (XEXP (operands[i], 0))))
 	{
@@ -203,6 +205,17 @@ split_quadword_operands (rtx insn, rtx * operands, rtx * low, int n)
     }
 }
 
+static const char *
+register_name (rtx reg)
+{
+  int regno;
+  regno = REGNO (reg);
+  if (regno >= FIRST_PSEUDO_REGISTER)
+    regno = reg_renumber[regno];
+  gcc_assert (regno >= 0);
+  return reg_names[regno];
+}
+
 void
 print_operand_address (FILE * file, rtx addr)
 {
@@ -219,15 +232,15 @@ print_operand_address (FILE * file, rtx addr)
       goto retry;
 
     case REG:
-      fprintf (file, "(%s)", reg_names[REGNO (addr)]);
+      fprintf (file, "(%s)", register_name (addr));
       break;
 
     case PRE_DEC:
-      fprintf (file, "-(%s)", reg_names[REGNO (XEXP (addr, 0))]);
+      fprintf (file, "-(%s)", register_name (XEXP (addr, 0)));
       break;
 
     case POST_INC:
-      fprintf (file, "(%s)+", reg_names[REGNO (XEXP (addr, 0))]);
+      fprintf (file, "(%s)+", register_name (XEXP (addr, 0)));
       break;
 
     case PLUS:
@@ -397,14 +410,14 @@ print_operand_address (FILE * file, rtx addr)
 	}
 
       if (breg != 0)
-	fprintf (file, "(%s)", reg_names[REGNO (breg)]);
+	fprintf (file, "(%s)", register_name (breg));
 
       if (ireg != 0)
 	{
 	  if (GET_CODE (ireg) == MULT)
 	    ireg = XEXP (ireg, 0);
 	  gcc_assert (REG_P (ireg));
-	  fprintf (file, "[%s]", reg_names[REGNO (ireg)]);
+	  fprintf (file, "[%s]", register_name (ireg));
 	}
       break;
 
@@ -442,7 +455,7 @@ print_operand (FILE *file, rtx x, int code)
   else if (code == 'M' && CONST_INT_P (x))
     fprintf (file, "$%d", ~((1 << INTVAL (x)) - 1));
   else if (REG_P (x))
-    fprintf (file, "%s", reg_names[REGNO (x)]);
+    fprintf (file, "%s", register_name (x));
   else if (MEM_P (x))
     output_address (XEXP (x, 0));
   else if (GET_CODE (x) == CONST_DOUBLE && GET_MODE (x) == SFmode)
@@ -1060,8 +1073,8 @@ vax_output_int_move (rtx insn ATTRIBUTE_UNUSED, rtx *operands,
 	      /*  If n is 0, then ashq is not the best way to emit this.  */
 	      if (n > 0)
 		{
-		  operands[2] = GEN_INT (lval);
-		  operands[1] = GEN_INT (n);
+		  operands[1] = GEN_INT (lval);
+		  operands[2] = GEN_INT (n);
 		  return "ashq %2,%1,%0";
 		}
 #if HOST_BITS_PER_WIDE_INT == 32
@@ -1072,8 +1085,8 @@ vax_output_int_move (rtx insn ATTRIBUTE_UNUSED, rtx *operands,
 		   && (n = exact_log2 (hval & (- hval)) - 1) != -1
 		   && (hval >> n) < 64)
 	    {
-	      operands[2] = GEN_INT (hval >> n);
-	      operands[1] = GEN_INT (n + 32);
+	      operands[1] = GEN_INT (hval >> n);
+	      operands[2] = GEN_INT (n + 32);
 	      return "ashq %2,%1,%0";
 #endif
 	    }
@@ -1091,7 +1104,7 @@ vax_output_int_move (rtx insn ATTRIBUTE_UNUSED, rtx *operands,
 	  hi[0] = operands[0];
 	  hi[1] = operands[1];
 
-	  split_quadword_operands(insn, hi, lo, 2);
+	  split_quadword_operands(insn, SET, hi, lo, 2);
 
 	  pattern_lo = vax_output_int_move (NULL, lo, SImode);
 	  pattern_hi = vax_output_int_move (NULL, hi, SImode);
@@ -1148,7 +1161,6 @@ vax_output_int_move (rtx insn ATTRIBUTE_UNUSED, rtx *operands,
 	  int n;
 	  if ((unsigned HOST_WIDE_INT)(~i) < 64)
 	    return "mcoml %N1,%0";
-	  if ((unsigned HOST_WIDE_INT)i < 0x10000)
 	  if ((unsigned HOST_WIDE_INT)i < 0x100)
 	    return "movzbl %1,%0";
 	  if (i >= -0x80 && i < 0)
@@ -1227,11 +1239,12 @@ vax_output_int_add (rtx insn, rtx *operands, enum machine_mode mode)
 	rtx low[3];
 	const char *pattern;
 	int carry = 1;
+	bool sub;
 
 	if (TARGET_QMATH && 0)
 	  debug_rtx (insn);
 
-	split_quadword_operands (insn, operands, low, 3);
+	split_quadword_operands (insn, PLUS, operands, low, 3);
 
 	if (TARGET_QMATH)
 	  {
@@ -1241,21 +1254,37 @@ vax_output_int_add (rtx insn, rtx *operands, enum machine_mode mode)
             gcc_assert (!flag_pic || !external_memory_operand (low[0], SImode));
 #endif
 
-
 	    /* No reason to add a 0 to the low part and thus no carry, so just
 	       emit the appropriate add/sub instruction.  */
 	    if (low[2] == const0_rtx)
 	      return vax_output_int_add (NULL, operands, SImode);
 
-	    /* Select the add pattern for the low part using the SImode 
-	       add instruction selector.  No need to duplicate that work.  */
-	    output_asm_insn (vax_output_int_add (NULL, low, SImode), low);
+	    /* Are we doing addition or subtraction?  */
+	    sub = CONST_INT_P (operands[2]) && INTVAL (operands[2]) < 0;
+
+	    /* We can't use vax_output_int_add since some the patterns don't
+	       modify the carry bit.  */
+	    if (sub)
+	      {
+		if (low[2] == constm1_rtx)
+		  pattern = "decl %0";
+		else
+		  pattern = "subl2 $%n2,%0";
+	      }
+	    else
+	      {
+	        if (low[2] == const1_rtx)
+		  pattern = "incl %0";
+		else
+	          pattern = "addl2 %2,%0";
+	      }
+	    output_asm_insn (pattern, low);
 
 	    /* In 2's complement, -n = ~n + 1.  Since we are dealing with
 	       two 32bit parts, we complement each and then add one to
 	       low part.  We know that the low part can't overflow since
 	       it's value can never be 0.  */
-	    if (CONST_INT_P (operands[2]) && INTVAL (operands[2]) < 0)
+	    if (sub)
 		return "sbwc %N2,%0";
 	    return "adwc %2,%0";
 	  }
@@ -1424,19 +1453,28 @@ vax_output_int_subtract (rtx insn, rtx *operands, enum machine_mode mode)
 	if (TARGET_QMATH && 0)
 	  debug_rtx (insn);
 
-	split_quadword_operands (insn, operands, low, 3);
+	split_quadword_operands (insn, MINUS, operands, low, 3);
 
 	if (TARGET_QMATH)
 	  {
-	    gcc_assert (!CONSTANT_P (operands[2]) && !CONSTANT_P (low[2]));
 	    if (operands[1] == const0_rtx && low[1] == const0_rtx)
 	      {
+		/* Negation is tricky.  It's basically complement and increment.
+		   Negate hi, then lo, and subtract the carry back.  */
+		if ((MEM_P (low[0]) && GET_CODE (XEXP (low[0], 0)) == POST_INC)
+		    || (MEM_P (operands[0])
+			&& GET_CODE (XEXP (operands[0], 0)) == POST_INC))
+		  fatal_insn ("illegal operand detected", insn);
+		output_asm_insn ("mnegl %2,%0", operands);
 		output_asm_insn ("mnegl %2,%0", low);
-		return "mnegl %2,%0";
+		return "sbwc $0,%0";
 	      }
 	    gcc_assert (rtx_equal_p (operands[0], operands[1]));
 	    gcc_assert (rtx_equal_p (low[0], low[1]));
-	    output_asm_insn ("subl2 %2,%0", low);
+	    if (low[2] == const1_rtx)
+	      output_asm_insn ("decl %0", low);
+	    else
+	      output_asm_insn ("subl2 %2,%0", low);
 	    return "sbwc %2,%0";
 	  }
 
@@ -1495,6 +1533,85 @@ vax_output_conditional_branch (enum rtx_code code)
       default:
 	gcc_unreachable ();
     }
+}
+
+static rtx
+mkrtx(enum rtx_code code, enum machine_mode mode, rtx base, HOST_WIDE_INT off)
+{
+  rtx tmp;
+
+  if (GET_CODE (base) == CONST)
+    base = XEXP (base, 0);
+
+  if (GET_CODE (base) == PLUS)
+    {
+      off += INTVAL (XEXP (base, 1));
+      base = XEXP (base, 0);
+    }
+  if (code == POST_INC)
+    tmp = gen_rtx_POST_INC (SImode, base);
+  else if (off == 0 || (REG_P (base) && code == REG))
+    tmp = base;
+  else
+    tmp = plus_constant (base, off);
+  return gen_rtx_MEM (mode, tmp);
+}
+
+const char *
+vax_output_movmemsi (rtx insn, rtx *operands)
+{
+  HOST_WIDE_INT n = INTVAL (operands[2]);
+  HOST_WIDE_INT off;
+  rtx src, dest;
+  const char *pat = NULL;
+  const enum rtx_code *src_codes;
+  const enum rtx_code *dest_codes;
+  int code_idx = 0;
+  int mode_idx;
+
+  static const enum machine_mode xmodes[4] =
+    {
+      QImode, HImode, SImode, DImode
+    };
+  static const char * const pats[4] = 
+    {
+      "movb %1,%0", "movw %1,%0", "movl %1,%0", "movq %1,%0", 
+    };
+  static const enum rtx_code codes[2][3] =
+    {
+      { PLUS, PLUS, PLUS },
+      { POST_INC, POST_INC, REG },
+    };
+
+  src = XEXP (operands[1], 0);
+
+  src_codes =
+    codes[REG_P (src) && find_regno_note (insn, REG_DEAD, REGNO(src))];
+
+  dest = XEXP (operands[0], 0);
+
+  dest_codes =
+    codes[REG_P (dest) && find_regno_note (insn, REG_DEAD, REGNO(dest))];
+
+  for (off = 0, code_idx = 0, mode_idx = 3; mode_idx >= 0; mode_idx--)
+    {
+      const enum machine_mode mode = xmodes[mode_idx];
+      const HOST_WIDE_INT mode_len = GET_MODE_SIZE (mode);
+      for (; n >= mode_len; n -= mode_len, off += mode_len)
+	{
+	  if (pat != NULL)
+	    output_asm_insn (pat, operands);
+	  if (n == mode_len)
+	    code_idx = 2;
+	  operands[0] = mkrtx(dest_codes[code_idx], mode, dest, off);
+	  operands[1] = mkrtx(src_codes[code_idx], mode, src, off);
+	  if (pat == NULL)
+	    code_idx = 1;
+	  pat = pats[mode_idx];
+	}
+    }
+
+  return pat;
 }
 
 /* 1 if X is an rtx for a constant that is a valid address.  */
@@ -1730,9 +1847,13 @@ vax_mode_dependent_address_p (rtx x)
   xfoo0 = XEXP (x, 0);
   xfoo1 = XEXP (x, 1);
 
-  if (CONSTANT_ADDRESS_P (xfoo0) && REG_P (xfoo1))
+  if (CONST_INT_P (xfoo0) && REG_P (xfoo1))
     return false;
-  if (CONSTANT_ADDRESS_P (xfoo1) && REG_P (xfoo0))
+  if (CONST_INT_P (xfoo1) && REG_P (xfoo0))
+    return false;
+  if (!flag_pic && CONSTANT_ADDRESS_P (xfoo0) && REG_P (xfoo1))
+    return false;
+  if (!flag_pic && CONSTANT_ADDRESS_P (xfoo1) && REG_P (xfoo0))
     return false;
 
   return true;

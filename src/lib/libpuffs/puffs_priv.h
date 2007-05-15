@@ -1,4 +1,4 @@
-/*	$NetBSD: puffs_priv.h,v 1.4 2007/01/15 00:39:02 pooka Exp $	*/
+/*	$NetBSD: puffs_priv.h,v 1.8 2007/05/10 12:26:28 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006 Antti Kantee.  All Rights Reserved.
@@ -39,6 +39,37 @@
 
 #define PU_CMAP(pu, c)	(pu->pu_cmap ? pu->pu_cmap(c) : (struct puffs_node *)c)
 
+struct puffs_framectrl;
+
+/*
+ * usermount: describes one file system instance
+ */
+struct puffs_usermount {
+	struct puffs_ops	pu_ops;
+	struct puffs_kargs	pu_kargs;
+
+	uint32_t		pu_flags;
+	size_t			pu_cc_stacksize;
+
+	int			pu_state;
+
+	struct puffs_node	*pu_pn_root;
+
+	LIST_HEAD(, puffs_node)	pu_pnodelst;
+
+	struct puffs_node	*(*pu_cmap)(void *);
+
+	pu_pathbuild_fn		pu_pathbuild;
+	pu_pathtransform_fn	pu_pathtransform;
+	pu_pathcmp_fn		pu_pathcmp;
+	pu_pathfree_fn		pu_pathfree;
+	pu_namemod_fn		pu_namemod;
+
+	struct puffs_framectrl	*pu_framectrl;
+
+	void	*pu_privdata;
+};
+
 /* call context */
 
 struct puffs_cc {
@@ -57,7 +88,7 @@ struct puffs_cc {
 
 	TAILQ_ENTRY(puffs_cc)	entries;
 };
-#define PCC_ONCE	0x01
+#define PCC_FAKECC	0x01
 #define PCC_REALCC	0x02
 #define PCC_FREEPRIV	0x04
 #define PCC_PREQ_NOCOPY	0x08
@@ -74,7 +105,7 @@ struct puffs_cc {
 #define pcc_init_local(ap)   						\
 do {									\
 	memset(ap, 0, sizeof(*ap));					\
-	(ap)->pcc_flags = PCC_ONCE;					\
+	(ap)->pcc_flags = PCC_FAKECC;					\
 } while (/*CONSTCOND*/0)
 
 /*

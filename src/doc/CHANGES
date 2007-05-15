@@ -1,4 +1,4 @@
-LIST OF CHANGES FROM LAST RELEASE:			<$Revision: 1.818 $>
+LIST OF CHANGES FROM LAST RELEASE:			<$Revision: 1.848 $>
 
 
 [Note: This file does not mention every change made to the NetBSD source tree.
@@ -11,18 +11,15 @@ Changes from NetBSD 4.0 to NetBSD 5.0:
 	evbppc: add support for Xilinx Virtex II-Pro/4-FX. [freza 20061202]
 	mac68k: add support for four more Nubus video cards, including the 
 		VillageTronic MacPicasso 340. [hauke 20061206]
-	shark: add support for igsfb at ofbus. [macallan 20061207]
 	ixp425: add support for NPE Ethernet. [scw 20061210]
-	shark: add support for XFree86 with wsfb. [macallan 20061220]
 	postfix(1): Updated to 2.3.5. [rpaulo 20061220]
 	nfs: Remove NQNFS support from kernel. [yamt 20061227]
+	mount_psshfs(8): add puffs sshfs [pooka 20061229]
   	zaurus: add support for Sharp C3x00 PDA. [ober 20070105]
 	i386: add support for Microsoft Xbox. [jmcneill 20070105]
 	ntp: Import ntp 4.2.4 (20061228). Tracking of network interface address
 		changes is now supported - no more ntpd restarts when interface
 		addresses are re-configured (WLAN/DSL/ppp/...). [kardel 20070106]
-	ug(4): driver for the Abit uGuru hardware system monitor,
-		contributed by Mihai Chelaru. [xtraeme 20070106]
 	kernel: global 'securelevel' variable removed; it is now internal to
 		the secmodel. [elad 20070110]
 	GCC: Updated to version 4.1.2-20070110.  [mrg 20070111]
@@ -31,6 +28,7 @@ Changes from NetBSD 4.0 to NetBSD 5.0:
 		optical drive should use for reading data,
 		contributed by Kimura Fuyuki. [bouyer 20070122]
 	bind: import 9.4.0-rc2 [christos 20070127]
+	i386, amd64: add cmos(4), driver for x86 CMOS RAM. [dyoung 20070206]
 	newlock2: Merge the newlock2 branch. Introduces a number of new
 		kernel synchronization primitives, improves scalability
 		on MP systems, and replaces the existing SA threads model
@@ -73,3 +71,38 @@ Changes from NetBSD 4.0 to NetBSD 5.0:
 		See options(4) for more information. [xtraeme 20070320]
 	libc: add support for LC_TIME [manu 20070328]
 	bind: import 9.4.0 [ghen 20070330]
+	sh5, evbsh5: Port deleted [scw 20070408]
+	genfb: generic framebuffer console driver with PCI and SBus
+		frontends [macallan 20070411]
+	sgimips: add support for SGI O2 PS/2 controller macekbc(4) and
+		onboard display adapter crmfb(4) [jmcneill 20070412]
+	sgimips: import mavb(4) audio device driver for SGI O2 from
+		OpenBSD [jmcneill 20070412]
+	sparc64: add support for hardware monitoring on
+		Ultra Enterprise 450. See envctrl(4) [tnn 20070414]
+	ipf(8): Updated to version 4.1.19. [martin 20070414]
+	coda: overhaul kernel module (vnode locking rules, uvm_fault
+		handling, general cleanup) [gdt 20070415]
+	puffs(4): Support NFS exporting puffs file servers [pooka 20070416]
+	xargs(1): Bring in xargs from FreeBSD to gain -I, -J etc. but keep our
+		GNU compatible exit values. [christos 20070418]
+	bluetooth(4): add 'service level' security [plunky 20070421]
+	mount_9p(8): Add support to mount a 9P file service with puffs.
+		[pooka 20070421]
+	kernel: Remove the CHECK_ALT_xxx() defines and emul_find() used
+		to locate files within an emulation's root directory.
+		Instead get namei() to check the emulation root first.
+		[dsl 20070422]
+	prep: add support for the MTX604 RAVEN based machine.  Other RAVEN
+		based machines are also likely to work now. [garbled 20070426]
+	kernel: Added support for POSIX Asynchronous I/O. [rmind 20070430]
+	bind: import 9.4.1 [christos 20070501]
+	puffs(3): Add puffs_framebuf(3), which abstracts the buffer
+		management and event loop for networked file systems
+		using puffs_cc(3).  Convert mount_psshfs(8) and 
+		mount_9p(8) to use it.  [pooka 20070505]
+	kernel: Add the TFTPROOT kernel option for TFTP'ing root RAMdisk 
+		at root mount time. [manu 20070508]
+	ug(4): Driver splitted in three parts to support the new ACPI
+		attachment (ug* at acpi?). Patch from Mihai Chelaru.
+		[xtraeme 20070508]

@@ -1,4 +1,4 @@
-/*	$NetBSD: hdtoa.c,v 1.5 2007/02/26 01:29:25 christos Exp $	*/
+/*	$NetBSD$	*/
 
 /*-
  * Copyright (c) 2004, 2005 David Schultz <das@FreeBSD.ORG>
@@ -30,7 +30,7 @@
 #if 0
 __FBSDID("$FreeBSD: src/lib/libc/gdtoa/_hdtoa.c,v 1.4 2007/01/03 04:57:58 das Exp $");
 #else
-__RCSID("$NetBSD: hdtoa.c,v 1.5 2007/02/26 01:29:25 christos Exp $");
+__RCSID("$NetBSD$");
 #endif
 
 #include <float.h>

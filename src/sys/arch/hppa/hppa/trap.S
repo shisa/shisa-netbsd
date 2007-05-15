@@ -1,4 +1,4 @@
-/*	$NetBSD: trap.S,v 1.15 2007/02/19 13:23:11 skrll Exp $	*/
+/*	$NetBSD: trap.S,v 1.18 2007/05/08 07:06:45 skrll Exp $	*/
 
 /*-
  * Copyright (c) 2002 The NetBSD Foundation, Inc.
@@ -187,7 +187,7 @@ $bsd_syscall:
 	.import $syscall,code
 	.call
 	ldil	L%$syscall, %t2
-	be,n	R%$syscall(%sr7, %t2)
+	be,n	R%$syscall(%sr1, %t2)
 	nop
 
 	.align	NBPG
@@ -503,7 +503,6 @@ $syscall_return_copy_loop:
 	 */
 	rsm	RESET_PSW, %r0
 	nop ! nop ! nop ! nop ! nop ! nop ! nop ! nop	/* XXX really? */
-$syscall_return_phys:
 
 	ldil	L%$trap_tmp_save, %t3
 	ldo     R%$trap_tmp_save(%t3), %t3
@@ -543,7 +542,6 @@ $syscall_end:
 /*
  * interrupt vector table
  */
-/* XXX - fredette changed sr4 to sr7 below: */
 #define	TLABEL(name)	$trap$name
 #define	TELABEL(num)	__CONCAT(trap_ep_,num)
 #define TRAP(name,num) \

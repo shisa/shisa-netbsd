@@ -1,4 +1,4 @@
-#	$NetBSD: files.i386,v 1.303 2007/03/05 16:51:01 drochner Exp $
+#	$NetBSD: files.i386,v 1.305 2007/04/16 19:12:18 ad Exp $
 #
 # new style config file for i386 architecture
 #
@@ -90,7 +90,6 @@ file	netns/ns_cksum.c		ns
 file	arch/i386/i386/pmap.c
 file	arch/i386/i386/process_machdep.c
 file	arch/i386/i386/procfs_machdep.c	procfs
-file	arch/i386/i386/sys_machdep.c
 file	arch/i386/i386/syscall.c
 file	arch/i386/i386/trap.c
 file	arch/i386/i386/vm_machdep.c
@@ -157,6 +156,7 @@ file	arch/i386/i386/mainbus.c	mainbus
 # XXX MUST BE INCLUDED BEFORE files.isa, as long as files.isa attaches
 # XXX devices to 'pci'.
 #
+include "dev/wsfb/files.wsfb"
 
 include	"dev/pci/files.pci"
 include "dev/pci/files.agp"

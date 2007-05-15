@@ -1,4 +1,4 @@
-.\"	$NetBSD: puffs.3,v 1.16 2007/03/22 17:38:09 pooka Exp $
+.\"	$NetBSD: puffs.3,v 1.22 2007/05/09 18:24:11 pooka Exp $
 .\"
 .\" Copyright (c) 2006, 2007 Antti Kantee.  All rights reserved.
 .\"
@@ -23,7 +23,7 @@
 .\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 .\" SUCH DAMAGE.
 .\"
-.Dd March 20, 2007
+.Dd May 9, 2007
 .Dt PUFFS 3
 .Os
 .Sh NAME
@@ -34,10 +34,17 @@
 .Sh SYNOPSIS
 .In puffs.h
 .Ft struct puffs_usermount *
+.Fo puffs_init
+.Fa "struct puffs_ops *pops" "const char *puffsname" "void *private"
+.Fa "uint32_t flags"
+.Fc
+.Ft int
+.Fn puffs_domount "struct puffs_usermount *pu" "const char *dir" "int mntflags"
+.Ft struct puffs_usermount *
 .Fo puffs_mount
 .Fa "struct puffs_ops *pops" "const char *dir" "int mntflags"
 .Fa "const char *puffsname" "void *private"
-.Fa "uint32_t pflags" "size_t maxreqlen"
+.Fa "uint32_t pflags"
 .Fc
 .Ft int
 .Fo puffs_start
@@ -53,116 +60,20 @@
 .Fn puffs_getstate "struct puffs_usermount *pu"
 .Ft int
 .Fn puffs_setstacksize "struct puffs_usermount *pu" "size_t stacksize"
-.Ft int
-.Fn puffs_fs_unmount "struct puffs_cc *pcc" "int flags" "pid_t pid"
-.Ft int
-.Fo puffs_fs_statvfs
-.Fa "struct puffs_cc *pcc" "struct statvfs *sbp" "pid_t pid"
-.Fc
-.Ft int
-.Fo puffs_fs_sync
-.Fa "struct puffs_cc *pcc" "int waitfor" "const struct puffs_cred *cred"
-.Fa "pid_t pid"
-.Fc
-.Ft int
-.Fo puffs_node_lookup
-.Fa "struct puffs_cc *pcc" "void *opc" "void **newnode"
-.Fa "enum vtype *newtype" "voff_t *newsize" "dev_t *newrdev"
-.Fa "const struct puffs_cn *pcn"
-.Fc
-.Ft int
-.Fo puffs_node_getattr
-.Fa "struct puffs_cc *pcc" "void *opc" "struct vattr *va"
-.Fa "const struct puffs_cred *pcr" "pid_t pid"
-.Fc
-.Ft int
-.Fo puffs_node_setattr
-.Fa "struct puffs_cc *pcc" "void *opc" "const struct vattr *va"
-.Fa "const struct puffs_cred *pcr" "pid_t pid"
-.Fc
-.Ft int
-.Fo puffs_node_create
-.Fa "struct puffs_cc *pcc" "void *opc" "void **newnode"
-.Fa "const struct puffs_cn *pcn" "const struct vattr *va"
-.Fc
-.Ft int
-.Fo puffs_node_remove
-.Fa "struct puffs_cc *pcc" "void *opc" "void *targ"
-.Fa "const struct puffs_cn *pcn"
-.Fc
-.Ft int
-.Fo puffs_node_mkdir
-.Fa "struct puffs_cc *pcc" "void *opc" "void **newnode"
-.Fa "const struct puffs_cn *pcn" "const struct vattr *va"
-.Fc
-.Ft int
-.Fo puffs_node_rmdir
-.Fa "struct puffs_cc *pcc" "void *opc" "void *targ"
-.Fa "const struct puffs_cn *pcn"
-.Fc
-.Ft int
-.Fo puffs_node_readdir
-.Fa "struct puffs_cc *pcc" "void *opc" "struct dirent *dent"
-.Fa "const struct puffs_cred *pcr" "off_t *readoff" "size_t *reslen"
-.Fc
-.Ft int
-.Fo puffs_node_rename
-.Fa "struct puffs_cc *pcc" "void *opc" "void *src"
-.Fa "const struct puffs_cn *pcn_src" "void *targ_dir" "void *targ"
-.Fa "const struct puffs_cn *pcn_targ"
-.Fc
-.Ft int
-.Fo puffs_node_link
-.Fa "struct puffs_cc *pcc" "void *opc" "void *targ"
-.Fa "const struct puffs_cn *pcn"
-.Fc
-.Ft int
-.Fo puffs_node_symlink
-.Fa "struct puffs_cc *pcc" "void *opc" "void **newnode"
-.Fa "const struct puffs_cn *pcn_src" "const struct vattr *va"
-.Fa "const char *link_target"
-.Fc
-.Ft int
-.Fo puffs_node_readlink
-.Fa "struct puffs_cc *pcc" "void *opc" "const struct puffs_cred *cred"
-.Fa "char *link" "size_t *linklen"
-.Fc
-.Ft int
-.Fo puffs_node_mknod
-.Fa "struct puffs_cc *pcc" "void *opc" "void **newnode"
-.Fa "const struct puffs_cn *pcn" "const struct vattr *va"
-.Fc
-.Ft int
-.Fo puffs_node_open
-.Fa "struct puffs_cc *pcc" "void *opc" "int flags"
-.Fa "const struct puffs_cred *pcr" "pid_t pid"
-.Fc
-.Ft int
-.Fo puffs_node_close
-.Fa "struct puffs_cc *pcc" "void *opc" "int flags"
-.Fa "const struct puffs_cred *pcr" "pid_t pid"
-.Fc
-.Ft int
-.Fo puffs_node_access
-.Fa "struct puffs_cc *pcc" "void *opc" "int mode"
-.Fa "const struct puffs_cred *pcr" "pid_t pid"
-.Fc
-.Ft int
-.Fo puffs_node_read
-.Fa "struct puffs_cc *pcc" "void *opc" "uint8_t *buf"
-.Fa "off_t offset" "size_t *resid" "const struct puffs_cred *pcr" "int ioflag"
-.Fc
-.Ft int
-.Fo puffs_node_write
-.Fa "struct puffs_cc *pcc" "void *opc" "uint8_t *buf"
-.Fa "off_t offset" "size_t *resid" "const struct puffs_cred *pcr" "int ioflag"
-.Fc
-.Ft int
-.Fn puffs_node_reclaim "struct puffs_cc *pcc" "void *opc" "pid_t pid"
-.Ft int
-.Fo puffs_node_inactive
-.Fa "struct puffs_cc *pcc" "void *opc" "pid_t pid" "int *refcount"
-.Fc
+.Ft void
+.Fn puffs_setroot "struct puffs_usermount *pu" "struct puffs_node *node"
+.Ft struct puffs_node *
+.Fn puffs_getroot "struct puffs_usermount *pu"
+.Ft void *
+.Fn puffs_getspecific "struct puffs_usermount *pu"
+.Ft void
+.Fn puffs_setmaxreqlen "struct puffs_usermount *pu" "size_t maxreqlen"
+.Ft size_t
+.Fn puffs_getmaxreqlen "struct puffs_usermount *pu"
+.Ft void
+.Fn puffs_setfhsize "struct puffs_usermount *pu" "size_t fhsize" "int flags"
+.Ft void
+.Fn puffs_setncookiehash "struct puffs_usermount *pu" "int nhashes"
 .Sh DESCRIPTION
 .Em IMPORTANT NOTE!
 This document describes interfaces which are not yet guaranteed to be
@@ -182,16 +93,32 @@ where they are processed and results are sent back to the kernel.
 .Pp
 It is possible to use
 .Nm
-in two different ways.
+in three different ways.
 Calling
 .Fn puffs_mainloop
 takes execution context away from the caller and automatically handles
 all requests by using the callbacks.
-Alternatively, control can be kept with the caller and operations
-handled manually.
+Using the
+.Xr puffs_framebuf 3
+functionality provides it's own, network-oriented event loop.
+Finally, control can be kept with the caller and operations
+handled manually using
+.Xr puffs_req 3
+directly.
 .Ss Library operation
-The file system is mounted using
+Operations on the library always require a poiter to the opaque context
+identifier,
+.Va struct puffs_usermount .
+There are two ways of acquiring this context:
+.Fn puffs_init
+and
 .Fn puffs_mount .
+They are equivalent except in the sense that the latter also proceeds
+to mount the file system.
+The former can be used when special parameters need to be set and
+only then proceed with mounting by calling
+.Fn puffs_domount .
+.Pp
 The callbacks are passed as the fields in the structure
 .Fa pops .
 They can be initialized using the macro
@@ -219,6 +146,11 @@ is the flagset given to
 and
 .Fa puffsname
 is the name of the file system implementation.
+The parameter
+.Fa private
+is stored within the context structure and can be retrieved by
+calling
+.Fn puffs_getspecific .
 Flags for
 .Nm
 can be given via
@@ -237,6 +169,23 @@ for example).
 This flag requests that all operations are sent to userspace.
 Normally the kernel shortcircuits unimplemented operations.
 This flag is mostly useful for debugging purposes.
+.It Dv PUFFS_KFLAG_WTCACHE
+Set the file system cache behaviour as write-through.
+This means that all writes are immediately issued to the file server
+instead of being flushed in file system sync.
+This is useful especially for distributed file systems.
+.It Dv PUFFS_KFLAG_IAONDEMAND
+Issue inactive only on demand.
+If a file server defines the inactive method, call it only if the file
+server has explicitly requested that inactive be called for the
+node in question.
+Once inactive has been called for a node, it will not be called
+again unless the request to call inactive is reissued by the file server.
+See
+.Fn puffs_setback
+in
+.Xr puffs_ops 3
+for more information.
 .It Dv PUFFS_FLAG_BUILDPATH
 The framework will build a complete path name, which is supplied
 with each operation and can be found from the
@@ -251,26 +200,155 @@ for more information on cookie mapping.
 See
 .Xr puffs_path 3
 for more information on library calls involving paths.
+.It Dv PUFFS_FLAG_HASHPATH
+Calculate a hash of the path into the path object field
+.Va po_hash .
+This hash value is used by
+.Fn puffs_path_walkcmp
+to avoid doing a full comparison for every path equal in length to
+the one searched for.
+Especially if the file system uses the abovementioned function, it
+is a good idea to define this flag.
 .It Dv PUFFS_FLAG_OPDUMP
 This option makes the framework dump a textual representation of
 each operation before executing it.
 It is useful for debugging purposes.
 .El
 .Pp
-Finally, the maximum operation buffer length is requested by
-.Fa maxreqlen .
-The field
-.Va pu_maxreqlen
-from the returned mount structure is the kernel sanity-checked value and
-should always be consulted after the mount call returns.
-Supplying 0 as this parameter will make the kernel choose the longest
-possible buffer length.
-In case of success,
-.Fn puffs_fs_mount
-returns the address of the user mount instance.
-Otherwise,
-.Dv NULL
-is returned and errno is set to specify the error.
+The following functions can be used to query or modify the global
+state of the file system.
+Note, that all calls are not available at all times.
+.Bl -tag -width xxxx
+.It Fn puffs_getselectable "pu"
+Returns a handle to do I/O multiplexing with:
+.Xr select 2 ,
+.Xr poll 2 ,
+and
+.Xr kqueue 2
+are all examples of acceptable operations.
+.It Fn puffs_setblockingmode "pu" "mode"
+Sets the library to blocking or non-blocking mode.
+Acceptable values for the argument are
+.Dv PUFFSDEV_BLOCK
+and
+.Dv PUFFSDEV_NONBLOCK .
+.It Fn puffs_getstate "pu"
+Returns the state of the file system.
+It is maintained by the framework and is mostly useful for the framework
+itself.
+Possible values are
+.Dv PUFFS_STATE_MOUNTING ,
+.Dv PUFFS_STATE_RUNNING ,
+.Dv PUFFS_STATE_UNMOUNTING
+and
+.Dv PUFFS_STATE_UNMOUNTED .
+.It Fn puffs_setstacksize "stacksize"
+Sets the stack size used when running callbacks.
+The default is one megabyte of stack space per request.
+See
+.Xr puffs_cc 3 .
+.It Fn puffs_setroot "pu" "node"
+Sets the root node of mount
+.Fa pu
+to
+.Fa "node" .
+Setting the root node is currently required only if the path
+framework is used, see
+.Xr puffs_path 3 .
+.Pp
+This, if desired, should be done before the file system is activated
+with
+.Fn puffs_start .
+.It Fn puffs_getroot "pu"
+Returns the root node set earlier.
+.It Fn puffs_getspecific "pu"
+Returns the
+.Fa private
+argument of
+.Fn puffs_mount .
+.It Fn puffs_setmaxreqlen "pu" "maxreqlen"
+In case the file system desires a maximum buffer length different from
+the default, the amount
+.Fa maxreqlen
+will be requested from the kernel when the file system is mounted.
+.Pp
+It is legal to call this function only between
+.Fn puffs_init
+and
+.Fn puffs_domount .
+.It Fn puffs_getmaxreqlen "pu"
+Returns the maximum request length the kernel will need for a single
+request.
+This information can be used to allocate the request buffer and
+.B must
+be passed as the parameter to
+.Fn puffs_req_makeget .
+.It Fn puffs_setfhsize "pu" "fhsize" "flags"
+Sets the desired file handle size.
+This must be called if the file system wishes to support nfs exporting
+file systems of the
+.Fn fh*
+family of function calls.
+.Pp
+In case all nodes in the file system produce the same length file handle,
+it must be supplied as
+.Fa fhsize .
+In this case, the file system may ignore the length parameters in the
+file handle callback routines, as the kernel will always pass the
+correct length buffer.
+However, if the file handle size varies according to file, the argument
+.Fa fhsize
+defines the maximum size of a file handle for the file system.
+In this case the file system must take care of the handle lengths by
+itself in the file handle callbacks, see
+.Xr puffs_ops 3
+for more information.
+Also, the flag
+.Dv PUFFS_FHFLAG_DYNAMIC
+must be provided in the argument
+.Fa flags .
+.Pp
+In case the file system wants to sanity check its file handle lengths
+for the limits of NFS, it can supply
+.Dv PUFFS_FHFLAG_NFSV2
+and
+.Dv PUFFS_FHFLAG_NFSV3
+in the
+.Fa flags
+parameter.
+It is especially important to note that these are not directly the
+limits specified by the protocols, as the kernel uses some bytes from
+the buffer space.
+In case the file handles are too large, mount will return an error.
+.Pp
+It is legal to call this function only between
+.Fn puffs_init
+and
+.Fn puffs_domount .
+.It Fn puffs_setncookiehash "pu" "ncookiehash"
+The parameter
+.Fa ncookiehash
+controls the amount of hash buckets the kernel has for reverse lookups
+from cookie to vnode.
+Technically the default is enough, but a memory/time tradeoff can be
+made by increasing this for file systems which know they will have
+very many active files.
+.Pp
+It is legal to call this function only between
+.Fn puffs_init
+and
+.Fn puffs_domount .
+.El
+.Pp
+After the correct setup for the library has been established and the
+backend has been initialized (and the file system has been mounted if
+.Fn puffs_init
+was used to acquire the usermount context!), the file system is made
+operational
+by calling
+.Fn puffs_start .
+Immediately after the return of this function the file system must
+be ready to process requests.
 .Pp
 To handle all requests automatically until the file system is
 unmounted,
@@ -284,45 +362,6 @@ is used to pass
 .Dv PUFFSLOOP_NODAEMON ,
 .Fn puffs_mainloop
 will also detach from the terminal.
-.Pp
-.Fn puffs_getselectable
-can be used to query a handle to do I/O multiplexing with:
-.Xr select 2 ,
-.Xr poll 2 ,
-and
-.Xr kqueue 2
-are all examples of acceptable operations.
-.Pp
-The library can be set in blocking or non-blocking mode using
-.Fn puffs_setblockingmode .
-Acceptable values for the argument are
-.Dv PUFFSDEV_BLOCK
-and
-.Dv PUFFSDEV_NONBLOCK .
-.Pp
-The state of the file system can be queried with
-.Fn puffs_getstate .
-It is maintained by the framework and is mostly useful for the framework
-itself.
-Possible values are
-.Dv PUFFS_STATE_MOUNTING ,
-.Dv PUFFS_STATE_RUNNING ,
-.Dv PUFFS_STATE_UNMOUNTING
-and
-.Dv PUFFS_STATE_UNMOUNTED .
-.Pp
-The stack size for handling requests can be set with
-.Fn puffs_setstacksize .
-The default is one megabyte of stack space per request.
-See
-.Xr puffs_cc 3 .
-.Pp
-After the correct setup for the library has been established and the
-backend has been initialized, the file system is made operational
-by calling
-.Fn puffs_start .
-Immediately after the return of this function the file system must
-be ready to process requests.
 .Ss Cookies
 Every file (regular file, directory, device node, ...) instance is
 attached to the kernel using a cookie.
@@ -345,248 +384,12 @@ The library assumes this by default.
 If it is not desireable, the file system implementation can call
 .Fn puffs_set_cookiemap
 to provide an alternative cookie-to-node mapping function.
-.Ss File system callbacks
-The callbacks do all the actual work in implementing the file system.
-Currently they are fairly close to the vfs and vnode operations in
-the kernel but with simplified operation.
-This section describes the calls which relate to the file system
-itself.
-.Pp
-All callbacks can be prototyped with the file system name and operation
-name using the macro
-.Fn PUFFSOP_PROTOS fsname .
-.Pp
-.Fn puffs_fs_statvfs
-should fill in the following fields of
-.Fa sbp :
-.Bd -literal
- * unsigned long   f_bsize;         file system block size
- * unsigned long   f_frsize;        fundamental file system block size
- * fsblkcnt_t      f_blocks;        number of blocks in file system,
- *                                            (in units of f_frsize)
- *
- * fsblkcnt_t      f_bfree;         free blocks avail in file system
- * fsblkcnt_t      f_bavail;        free blocks avail to non-root
- * fsblkcnt_t      f_bresvd;        blocks reserved for root
- *
- * fsfilcnt_t      f_files;         total file nodes in file system
- * fsfilcnt_t      f_ffree;         free file nodes in file system
- * fsfilcnt_t      f_favail;        free file nodes avail to non-root
- * fsfilcnt_t      f_fresvd;        file nodes reserved for root
-.Ed
-The process requiring this information is given by
-.Fa pid .
-.Pp
-The file system should be sychronized to storage when
-.Fn puffs_fs_sync
-is called.
-The
-.Fa waitfor
-parameter should handled similarly as inside the kernel.
-.Pp
-The file system should be unmounted when
-.Fn puffs_fs_unmount
-is called.
-If the flag
-.Dv MNT_FORCE
-is not honored, the kernel will proceed to forcibly unmount the file system
-despite this.
-.Ss Node callbacks
-These operations operate in the level of individual files.
-The file cookie is always provided as the second argument
-.Fa opc .
-If the operation is for a file, it will be the cookie of the file.
-The case the operation involves a directory (such as
-.Dq create file in directory ) ,
-the cookie will be for the directory.
-Some operations take additional cookies to describe the rest of
-the operands.
-The return value 0 signals success, else an appropriate errno value
-should be returned.
-Please note that neither this list nor the descriptions are complete.
-.Pp
-The
-.Fn puffs_node_lookup
-function is used to locate nodes.
-The implementation should match the name in
-.Fa pcn
-against the existing entries in the directory provided by the cookie.
-If found, the cookie for the located node should be returned in
-.Fa newnode .
-Additionally, the type and size (latter applicable to regular files only)
-should be returned in
-.Fa newtype
-and
-.Fa newsize ,
-respectively.
-If the located entry is a block device or character device file,
-the dev_t for the entry should be returned in
-.Fa newrdev .
-Otherwise, 0 signals a found node and a nonzero value signals an errno.
-As a special case,
-.Er ENOENT
-signals success for cases where the lookup operation is
-.Dv PUFFSLOOKUP_CREATE
-or
-.Dv PUFFSLOOKUP_RENAME .
-Failure in these cases can be signalled by returning another appropriate
-error code, for example
-.Er EACCESS .
-.Pp
-.Fn puffs_node_getattr
-fills out a struct vattr pointed to by
-.Fa va .
-.Pp
-.Fn puffs_node_setattr
-sets the attributes in
-.Fa va .
-Instead of setting everything according to that file, only fields which
-are not marked
-.Dv VNOVAL
-should be set.
-.Pp
-A file node is created in the directory specified by the cookie when
-.Fn puffs_node_create
-is called.
-The attributes are specified by
-.Fa va
-and the cookie for the newly created node should be returned in
-.Fa newnode .
-Similarly,
-.Fn puffs_node_mkdir
-creates a directory.
-.Pp
-.Fn puffs_node_remove
-removes the file
-.Fa targ
-from the directory indicated by the cookie.
-Similarly,
-.Fn puffs_node_rmdir
-removes a directory.
-The name of the directory entry to remove is described by
-.Fa pcn .
-.Pp
-To read directory entries,
-.Fn puffs_node_readdir
-is called.
-It should store directories as struct dirents in the space pointed to by
-.Fa dent .
-The amount of space available is given by
-.Fa reslen
-and before returning it should be set to the amount of space
-.Em remaining
-in the buffer.
-The argument
-.Fa offset
-is used to specify the offset to the directory.
-Its intepretation is up to the file systme and it should be set to
-signal the continuation point when there is no more room for the next
-entry in
-.Fa dent .
-It is most performant to return the maximal amount of directory
-entries each call.
-In case the directory was exhausted, the parameters should not be
-modified to signal end-of-directory.
-.Pp
-A node rename is done by calling
-.Fn puffs_node_rename .
-If the destination file cookie is non-null, it must be removed
-and the new entry overwritten atomically.
-The directory entry names to be used are described by the
-struct puffs_cn's (cf. create and remove).
-.Pp
-A hard link is created by
-.Fn puffs_node_link .
-In practice this means adding a directory entry described by
-.Fa pcn
-to the cookied directory and the entry pointing to the target node.
-.Pp
-A symbolic link in turn is created by
-.Fn puffs_node_symlink .
-It is similar to creating a regular file, except that
-.Fa link_target
-specifies the target of the link which should be set for the link.
-.Pp
-To read the target of a symbolic link,
-.Fa puffs_node_readlink
-is called.
-The path in the link target should be copied to
-.Fa link
-and the length without the terminating nul set in
-.Fa linklen .
-.Pp
-A device node is created using
-.Fn puffs_node_mknod .
-The only difference to creating a normal file is that the attribute
-struct contains the device identifier in
-.Fa va-\*[Gt]va_rdev .
-.Pp
-Files are opened with a call to
-.Fn puffs_node_open .
-Most of the time this can be left unimplemented, unless special
-resource allocation is required.
-.Pp
-.Fn puffs_node_close
-releases all the resources allocated by
-.Fn puffs_node_open .
-.Pp
-To check if access of type
-.Va mode
-to a file is allowed,
-.Fn puffs_node_access
-is called.
-This controls file access, not e.g.
-.Fn puffs_node_open .
-.Pp
-.Fn puffs_node_read
-reads the contents of a file.
-It will gather the data from
-.Fa offset
-in the file and read the number
-.Fa resid
-octets.
-The buffer is guaranteed to have this much space.
-The amount of data requested by
-.Fa resid
-should be read, except in the case of eof-of-file or an error.
-The parameter
-.Fa resid
-should be set to indicate the amount of request NOT completed.
-In the normal case this should be 0.
-.Pp
-.Fn puffs_node_write
-writes data to a file at
-.Fa offset
-extending the file if necessary.
-The number of octets written is indicated by
-.Fa resid ;
-everything must be written or an error will be generated.
-The parameter must be set to indicate the amount of data NOT written.
-In case the flag
-.Dv PUFFS_IO_APPEND
-is specified, the data should be appended to the end of the file.
-.Pp
-.Fn puffs_node_reclaim
-signals that the cookie will no longer be referenced without a further
-call to
-.Fn puffs_node_lookup .
-This information can be used to free resources and specifically release
-a file for which no directory entries remain.
-.Pp
-.Fn puffs_node_inactive
-signals that the kernel has released its last reference to the node.
-However, the cookie must still remain valid until
-.Fn puffs_node_reclaim
-is called.
-The file system should return its internal reference count on the file
-(usually number of links to the file) in
-.Fa refcount .
-If this is zero, the kernel will call reclaim immediately.
 .Sh SEE ALSO
 .Xr puffs_cc 3 ,
 .Xr puffs_cred 3 ,
 .Xr puffs_flush 3 ,
 .Xr puffs_node 3 ,
+.Xr puffs_ops 3 ,
 .Xr puffs_path 3 ,
 .Xr puffs_req 3 ,
 .Xr puffs_suspend 3 ,

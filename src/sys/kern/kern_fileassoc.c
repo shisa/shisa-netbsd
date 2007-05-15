@@ -1,4 +1,4 @@
-/* $NetBSD: kern_fileassoc.c,v 1.25 2007/03/09 05:51:50 yamt Exp $ */
+/* $NetBSD: kern_fileassoc.c,v 1.28 2007/04/05 01:33:31 rmind Exp $ */
 
 /*-
  * Copyright (c) 2006 Elad Efrat <elad@NetBSD.org>
@@ -28,7 +28,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_fileassoc.c,v 1.25 2007/03/09 05:51:50 yamt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_fileassoc.c,v 1.28 2007/04/05 01:33:31 rmind Exp $");
 
 #include "opt_fileassoc.h"
 

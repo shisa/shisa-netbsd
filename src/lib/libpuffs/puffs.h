@@ -1,7 +1,7 @@
-/*	$NetBSD: puffs.h,v 1.38 2007/03/22 16:57:27 pooka Exp $	*/
+/*	$NetBSD: puffs.h,v 1.53 2007/05/09 18:36:52 pooka Exp $	*/
 
 /*
- * Copyright (c) 2005, 2006  Antti Kantee.  All Rights Reserved.
+ * Copyright (c) 2005, 2006, 2007  Antti Kantee.  All Rights Reserved.
  *
  * Development of this software was supported by the
  * Google Summer of Code program and the Ulla Tuominen Foundation.
@@ -55,8 +55,9 @@ struct puffs_putreq;
 
 /* paths */
 struct puffs_pathobj {
-	void 	*po_path;
-	size_t	po_len;
+	void 		*po_path;
+	size_t		po_len;
+	uint32_t	po_hash;
 };
 
 /* for prefix rename */
@@ -145,6 +146,10 @@ struct puffs_ops {
 	    struct statvfs *, pid_t);
 	int (*puffs_fs_sync)(struct puffs_cc *, int,
 	    const struct puffs_cred *, pid_t);
+	int (*puffs_fs_fhtonode)(struct puffs_cc *, void *, size_t,
+	    void **, enum vtype *, voff_t *, dev_t *);
+	int (*puffs_fs_nodetofh)(struct puffs_cc *, void *cookie,
+	    void *, size_t *);
 	void (*puffs_fs_suspend)(struct puffs_cc *, int);
 
 	int (*puffs_node_lookup)(struct puffs_cc *,
@@ -187,8 +192,8 @@ struct puffs_ops {
 	    void *, void **, const struct puffs_cn *, const struct vattr *,
 	    const char *);
 	int (*puffs_node_readdir)(struct puffs_cc *,
-	    void *, struct dirent *, const struct puffs_cred *,
-	    off_t *, size_t *);
+	    void *, struct dirent *, off_t *, size_t *,
+	    const struct puffs_cred *, int *, off_t *, size_t *);
 	int (*puffs_node_readlink)(struct puffs_cc *,
 	    void *, const struct puffs_cred *, char *, size_t *);
 	int (*puffs_node_reclaim)(struct puffs_cc *,
@@ -231,41 +236,19 @@ typedef void (*pu_pathfree_fn)(struct puffs_usermount *,
 typedef int (*pu_namemod_fn)(struct puffs_usermount *,
 			     struct puffs_pathobj *, struct puffs_cn *);
 
-struct puffs_usermount {
-	struct puffs_ops	pu_ops;
-
-	int			pu_fd;
-	uint32_t		pu_flags;
-	size_t			pu_maxreqlen;
-	size_t			pu_cc_stacksize;
-
-	int			pu_state;
-
-	struct puffs_node	*pu_pn_root;
-
-	LIST_HEAD(, puffs_node)	pu_pnodelst;
-
-	struct puffs_node	*(*pu_cmap)(void *);
-
-	pu_pathbuild_fn		pu_pathbuild;
-	pu_pathtransform_fn	pu_pathtransform;
-	pu_pathcmp_fn		pu_pathcmp;
-	pu_pathfree_fn		pu_pathfree;
-	pu_namemod_fn		pu_namemod;
-
-	void	*pu_privdata;
-};
-
 enum {
-	PUFFS_STATE_MOUNTING,	PUFFS_STATE_RUNNING,
-	PUFFS_STATE_UNMOUNTING,	PUFFS_STATE_UNMOUNTED
+	PUFFS_STATE_BEFOREMOUNT,
+	PUFFS_STATE_MOUNTING,		PUFFS_STATE_RUNNING,
+	PUFFS_STATE_UNMOUNTING,		PUFFS_STATE_UNMOUNTED
 };
-
-#define PUFFS_FLAG_KERN(a)	((a) & 0x0000ffff)
-#define PUFFS_FLAG_LIB(a)	((a) & 0xffff0000)
 
 #define PUFFS_FLAG_BUILDPATH	0x80000000	/* node paths in pnode */
 #define PUFFS_FLAG_OPDUMP	0x40000000	/* dump all operations */
+#define PUFFS_FLAG_HASHPATH	0x20000000	/* speedup: hash paths */
+#define PUFFS_FLAG_MASK		0xe0000000
+
+#define PUFFS_FLAG_KERN(a)	((a) & PUFFS_KFLAG_MASK)
+#define PUFFS_FLAG_LIB(a)	((a) & PUFFS_FLAG_MASK)
 
 /* blocking mode argument */
 #define PUFFSDEV_BLOCK 0
@@ -291,6 +274,10 @@ enum {
 	    struct statvfs *, pid_t);					\
 	int fsname##_fs_sync(struct puffs_cc *, int,			\
 	    const struct puffs_cred *cred, pid_t);			\
+	int fsname##_fs_fhtonode(struct puffs_cc *, void *, size_t,	\
+	    void **, enum vtype *, voff_t *, dev_t *);			\
+	int fsname##_fs_nodetofh(struct puffs_cc *, void *cookie,	\
+	    void *, size_t *);						\
 	void fsname##_fs_suspend(struct puffs_cc *, int);		\
 									\
 	int fsname##_node_lookup(struct puffs_cc *,			\
@@ -338,8 +325,8 @@ enum {
 	    void *, void **, const struct puffs_cn *,			\
 	    const struct vattr *, const char *);			\
 	int fsname##_node_readdir(struct puffs_cc *,			\
-	    void *, struct dirent *, const struct puffs_cred *,		\
-	    off_t *, size_t *);						\
+	    void *, struct dirent *, off_t *, size_t *,			\
+	    const struct puffs_cred *, int *, off_t *, size_t *);	\
 	int fsname##_node_readlink(struct puffs_cc *,			\
 	    void *, const struct puffs_cred *, char *, size_t *);	\
 	int fsname##_node_reclaim(struct puffs_cc *,			\
@@ -374,9 +361,11 @@ enum {
 #define PUFFSOP_SETFSNOP(ops, opname)					\
     (ops)->puffs_fs_##opname = puffs_fsnop_##opname
 
-#define PUFFS_DEVEL_LIBVERSION 10
-#define puffs_mount(a,b,c,d,e,f,g) \
-    _puffs_mount(PUFFS_DEVEL_LIBVERSION,a,b,c,d,e,f,g)
+#define PUFFS_DEVEL_LIBVERSION 14
+#define puffs_mount(a,b,c,d,e,f) \
+    _puffs_mount(PUFFS_DEVEL_LIBVERSION,a,b,c,d,e,f)
+#define puffs_init(a,b,c,d) \
+    _puffs_init(PUFFS_DEVEL_LIBVERSION,a,b,c,d)
 
 
 #define PNPATH(pnode)	((pnode)->pn_po.po_path)
@@ -386,10 +375,37 @@ enum {
 #define PCNISDOTDOT(pcnode) \
 	((pcnode)->pcn_namelen == 2 && strcmp((pcnode)->pcn_name, "..") == 0)
 
+#define PUFFS_STORE_DCOOKIE(cp, ncp, off)				\
+if (cp)	{								\
+	*((cp)++) = off;						\
+	(*(ncp))++;							\
+}
+
+/* framebuf stuff */
+struct puffs_framebuf;
+typedef int (*puffs_framebuf_readframe_fn)(struct puffs_usermount *,
+					   struct puffs_framebuf *,
+					   int, int *);
+typedef	int (*puffs_framebuf_writeframe_fn)(struct puffs_usermount *,
+					    struct puffs_framebuf *,
+					    int, int *);
+typedef int (*puffs_framebuf_respcmp_fn)(struct puffs_usermount *,
+					 struct puffs_framebuf *,
+					 struct puffs_framebuf *);
+typedef void (*puffs_framebuf_loop_fn)(struct puffs_usermount *);
+
+typedef void (*puffs_framebuf_cb)(struct puffs_usermount *,
+				  struct puffs_framebuf *,
+				  void *);
+
+
 __BEGIN_DECLS
 
 struct puffs_usermount *_puffs_mount(int, struct puffs_ops *, const char *, int,
-				    const char *, void *, uint32_t, size_t);
+				    const char *, void *, uint32_t);
+struct puffs_usermount *_puffs_init(int, struct puffs_ops *pops, const char *,
+				    void *, uint32_t);
+int		puffs_domount(struct puffs_usermount *, const char *, int);
 int		puffs_start(struct puffs_usermount *, void *, struct statvfs *);
 int		puffs_exit(struct puffs_usermount *, int);
 int		puffs_mainloop(struct puffs_usermount *, int);
@@ -400,10 +416,24 @@ int	puffs_setblockingmode(struct puffs_usermount *, int);
 int	puffs_getstate(struct puffs_usermount *);
 void	puffs_setstacksize(struct puffs_usermount *, size_t);
 
+void			puffs_setroot(struct puffs_usermount *,
+				      struct puffs_node *);
+struct puffs_node 	*puffs_getroot(struct puffs_usermount *);
+void			*puffs_getspecific(struct puffs_usermount *);
+void			puffs_setmaxreqlen(struct puffs_usermount *, size_t);
+size_t			puffs_getmaxreqlen(struct puffs_usermount *);
+void			puffs_setfhsize(struct puffs_usermount *, size_t, int);
+
+void			puffs_setncookiehash(struct puffs_usermount *, int);
+
 struct puffs_pathobj	*puffs_getrootpathobj(struct puffs_usermount *);
+
+void			puffs_setback(struct puffs_cc *, int);
 
 struct puffs_node	*puffs_pn_new(struct puffs_usermount *, void *);
 void			puffs_pn_put(struct puffs_node *);
+
+void			*puffs_pn_getmntspecific(struct puffs_node *);
 
 typedef		void *	(*puffs_nodewalk_fn)(struct puffs_usermount *,
 					     struct puffs_node *, void *);
@@ -483,8 +513,7 @@ int			puffs_req_putput(struct puffs_putreq *);
 void			puffs_req_resetput(struct puffs_putreq *);
 void			puffs_req_destroyput(struct puffs_putreq *);
 
-int			puffs_req_handle(struct puffs_usermount *,
-					 struct puffs_getreq *,
+int			puffs_req_handle(struct puffs_getreq *,
 					 struct puffs_putreq *, int);
 
 /*
@@ -494,6 +523,7 @@ int			puffs_req_handle(struct puffs_usermount *,
 void			puffs_cc_yield(struct puffs_cc *);
 void			puffs_cc_continue(struct puffs_cc *);
 struct puffs_usermount	*puffs_cc_getusermount(struct puffs_cc *);
+void 			*puffs_cc_getspecific(struct puffs_cc *);
 struct puffs_cc 	*puffs_cc_create(struct puffs_usermount *);
 void			puffs_cc_destroy(struct puffs_cc *);
 
@@ -513,6 +543,11 @@ int	puffs_inval_namecache_dir(struct puffs_usermount *, void *);
 int	puffs_inval_namecache_all(struct puffs_usermount *);
 
 int	puffs_inval_pagecache_node(struct puffs_usermount *, void *);
+int	puffs_inval_pagecache_node_range(struct puffs_usermount *, void *,
+					 off_t, off_t);
+int	puffs_flush_pagecache_node(struct puffs_usermount *, void *);
+int	puffs_flush_pagecache_node_range(struct puffs_usermount *, void *,
+					 off_t, off_t);
 
 /*
  * Path constructicons
@@ -532,6 +567,7 @@ void	*puffs_path_prefixadj(struct puffs_usermount *,
 			      struct puffs_node *, void *);
 int	puffs_path_pcnbuild(struct puffs_usermount *,
 			    struct puffs_cn *, void *);
+void	puffs_path_buildhash(struct puffs_usermount *, struct puffs_pathobj *);
 
 void	puffs_set_pathbuild(struct puffs_usermount *, pu_pathbuild_fn);
 void	puffs_set_pathtransform(struct puffs_usermount *, pu_pathtransform_fn);
@@ -544,6 +580,43 @@ void	puffs_set_namemod(struct puffs_usermount *, pu_namemod_fn);
  */
 
 int	puffs_fs_suspend(struct puffs_usermount *);
+
+/*
+ * Frame buffering
+ */
+
+struct puffs_framebuf 	*puffs_framebuf_make(void);
+void			puffs_framebuf_destroy(struct puffs_framebuf *);
+void			puffs_framebuf_recycle(struct puffs_framebuf *);
+int			puffs_framebuf_reserve_space(struct puffs_framebuf *,
+						     size_t);
+
+int	puffs_framebuf_putdata(struct puffs_framebuf *, const void *, size_t);
+int	puffs_framebuf_putdata_atoff(struct puffs_framebuf *, size_t,
+				     const void *, size_t);
+int	puffs_framebuf_getdata(struct puffs_framebuf *, void *, size_t);
+int	puffs_framebuf_getdata_atoff(struct puffs_framebuf *, size_t,
+				     void *, size_t);
+
+size_t	puffs_framebuf_telloff(struct puffs_framebuf *);
+size_t	puffs_framebuf_tellsize(struct puffs_framebuf *);
+size_t	puffs_framebuf_remaining(struct puffs_framebuf *);
+int	puffs_framebuf_seekset(struct puffs_framebuf *, size_t);
+int	puffs_framebuf_getwindow(struct puffs_framebuf *, size_t,
+				 void **, size_t *);
+
+int	puffs_framebuf_enqueue_cc(struct puffs_cc *, struct puffs_framebuf *);
+void	puffs_framebuf_enqueue_cb(struct puffs_usermount *,
+				  struct puffs_framebuf *,
+				  puffs_framebuf_cb, void *);
+void	puffs_framebuf_enqueue_justsend(struct puffs_usermount *,
+					struct puffs_framebuf *, int);
+
+int	puffs_framebuf_eventloop(struct puffs_usermount *, int,
+				 puffs_framebuf_readframe_fn,
+				 puffs_framebuf_writeframe_fn,
+				 puffs_framebuf_respcmp_fn,
+				 puffs_framebuf_loop_fn);
 
 __END_DECLS
 

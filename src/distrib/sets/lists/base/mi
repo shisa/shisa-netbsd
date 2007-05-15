@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.697 2007/03/14 15:49:25 tnozaki Exp $
+# $NetBSD: mi,v 1.704 2007/05/01 17:18:52 bouyer Exp $
 .						base-sys-root
 ./altroot					base-sys-root
 ./bin						base-sys-root
@@ -123,6 +123,7 @@
 ./sbin/amrctl					base-sysutil-root
 ./sbin/apmlabel					base-sysutil-root
 ./sbin/atactl					base-sysutil-root
+./sbin/bioctl					base-sysutil-root
 ./sbin/badsect					base-sysutil-root
 ./sbin/brconfig					base-netutil-root
 ./sbin/ccdconfig				base-sysutil-root
@@ -1048,6 +1049,7 @@
 ./usr/sbin/flush				base-obsolete		obsolete
 ./usr/sbin/fsinfo				base-sysutil-bin
 ./usr/sbin/fssconfig				base-sysutil-bin
+./usr/sbin/fusermount				base-miscfs-bin		puffs
 ./usr/sbin/fwctl				base-sysutil-bin
 ./usr/sbin/g711conv				base-obsolete		obsolete
 ./usr/sbin/getencstat				base-sysutil-bin
@@ -1126,6 +1128,7 @@
 ./usr/sbin/mopd					base-bootserver-bin
 ./usr/sbin/mopprobe				base-bootserver-bin
 ./usr/sbin/moptrace				base-bootserver-bin
+./usr/sbin/mount_9p				base-miscfs-bin		puffs
 ./usr/sbin/mount_psshfs				base-miscfs-bin		puffs
 ./usr/sbin/mountd				base-nfsserver-bin
 ./usr/sbin/moused				base-sysutil-bin
@@ -1890,21 +1893,25 @@
 ./usr/share/i18n/csmapper/MISC			base-sysutil-share
 ./usr/share/i18n/csmapper/MISC/ATARIST%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/Big5%UCS.mps	base-obsolete		obsolete
+./usr/share/i18n/csmapper/MISC/DECMCS%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/HP-ROMAN8%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/KOI8-R%UCS.mps	base-obsolete		obsolete
 ./usr/share/i18n/csmapper/MISC/KOI8-U%UCS.mps	base-obsolete		obsolete
 ./usr/share/i18n/csmapper/MISC/MULELAO-1%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/NEXTSTEP%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/PTCP154%UCS.mps	base-obsolete		obsolete
+./usr/share/i18n/csmapper/MISC/RISCOS-LATIN1%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/TDS565%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/UCS%ATARIST.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/UCS%Big5.mps	base-obsolete		obsolete
+./usr/share/i18n/csmapper/MISC/UCS%DECMCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/UCS%HP-ROMAN8.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/UCS%KOI8-R.mps	base-obsolete		obsolete
 ./usr/share/i18n/csmapper/MISC/UCS%KOI8-U.mps	base-obsolete		obsolete
 ./usr/share/i18n/csmapper/MISC/UCS%MULELAO-1.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/UCS%NEXTSTEP.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/UCS%PTCP154.mps	base-obsolete		obsolete
+./usr/share/i18n/csmapper/MISC/UCS%RISCOS-LATIN1.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/MISC/UCS%TDS565.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/TCVN			base-sysutil-share
 ./usr/share/i18n/csmapper/TCVN/TCVN5712-1%UCS.mps	base-sysutil-share	nls
@@ -2020,6 +2027,9 @@
 ./usr/share/i18n/esdb/CP/CP943C.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP949.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP950.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/DEC			base-sysutil-share
+./usr/share/i18n/esdb/DEC/DECHanyu.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/DEC/DECMCS.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/EBCDIC			base-sysutil-share
 ./usr/share/i18n/esdb/EBCDIC/EBCDIC-AT-DE-A.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/EBCDIC/EBCDIC-AT-DE.esdb	base-sysutil-share	nls
@@ -2132,6 +2142,7 @@
 ./usr/share/i18n/esdb/MISC/MULELAO-1.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/NEXTSTEP.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/PTCP154.esdb		base-obsolete		obsolete
+./usr/share/i18n/esdb/MISC/RISCOS-LATIN1.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/Shift_JIS.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/Shift_JIS-2004.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/TDS565.esdb		base-sysutil-share	nls
@@ -2596,7 +2607,7 @@
 ./usr/share/man/cat8/evbmips			base-man-share
 ./usr/share/man/cat8/evbppc			base-man-share
 ./usr/share/man/cat8/evbsh3			base-man-share
-./usr/share/man/cat8/evbsh5			base-man-share
+./usr/share/man/cat8/evbsh5			base-obsolete	obsolete
 ./usr/share/man/cat8/hp300			base-man-share
 ./usr/share/man/cat8/hp700			base-man-share
 ./usr/share/man/cat8/hpcarm			base-man-share
@@ -2713,7 +2724,7 @@
 ./usr/share/man/html8/evbmips			base-man-share
 ./usr/share/man/html8/evbppc			base-man-share
 ./usr/share/man/html8/evbsh3			base-man-share
-./usr/share/man/html8/evbsh5			base-man-share
+./usr/share/man/html8/evbsh5			base-obsolete	obsolete
 ./usr/share/man/html8/hp300			base-man-share
 ./usr/share/man/html8/hp700			base-man-share
 ./usr/share/man/html8/hpcarm			base-man-share
@@ -2833,7 +2844,7 @@
 ./usr/share/man/man8/evbmips			base-man-share
 ./usr/share/man/man8/evbppc			base-man-share
 ./usr/share/man/man8/evbsh3			base-man-share
-./usr/share/man/man8/evbsh5			base-man-share
+./usr/share/man/man8/evbsh5			base-obsolete	obsolete
 ./usr/share/man/man8/hp300			base-man-share
 ./usr/share/man/man8/hp700			base-man-share
 ./usr/share/man/man8/hpcarm			base-man-share
@@ -3458,6 +3469,7 @@
 ./usr/share/zoneinfo/America/Indiana/Petersburg	base-sys-share		share
 ./usr/share/zoneinfo/America/Indiana/Vevay	base-sys-share		share
 ./usr/share/zoneinfo/America/Indiana/Vincennes	base-sys-share		share
+./usr/share/zoneinfo/America/Indiana/Winamac	base-sys-share		share
 ./usr/share/zoneinfo/America/Indianapolis	base-sys-share		share
 ./usr/share/zoneinfo/America/Inuvik		base-sys-share		share
 ./usr/share/zoneinfo/America/Iqaluit		base-sys-share		share
@@ -3508,6 +3520,7 @@
 ./usr/share/zoneinfo/America/Rankin_Inlet	base-sys-share		share
 ./usr/share/zoneinfo/America/Recife		base-sys-share		share
 ./usr/share/zoneinfo/America/Regina		base-sys-share		share
+./usr/share/zoneinfo/America/Resolute		base-sys-share		share
 ./usr/share/zoneinfo/America/Rio_Branco		base-sys-share		share
 ./usr/share/zoneinfo/America/Rosario		base-sys-share		share
 ./usr/share/zoneinfo/America/Santiago		base-sys-share		share

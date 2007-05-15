@@ -1,4 +1,4 @@
-/*	$NetBSD: pax.c,v 1.40 2006/02/11 11:04:57 dsl Exp $	*/
+/*	$NetBSD: pax.c,v 1.42 2007/04/29 20:23:34 msaitoh Exp $	*/
 
 /*-
  * Copyright (c) 1992 Keith Muller.
@@ -44,7 +44,7 @@ __COPYRIGHT("@(#) Copyright (c) 1992, 1993\n\
 #if 0
 static char sccsid[] = "@(#)pax.c	8.2 (Berkeley) 4/18/94";
 #else
-__RCSID("$NetBSD: pax.c,v 1.40 2006/02/11 11:04:57 dsl Exp $");
+__RCSID("$NetBSD: pax.c,v 1.42 2007/04/29 20:23:34 msaitoh Exp $");
 #endif
 #endif /* not lint */
 
@@ -91,6 +91,7 @@ int	Dflag;			/* same as uflag except inode change time */
 int	Hflag;			/* follow command line symlinks (write only) */
 int	Lflag;			/* follow symlinks when writing */
 int	Mflag;			/* treat stdin as an mtree(8) specfile */
+int	Vflag;			/* produce somewhat verbose output (no listing) */
 int	Xflag;			/* archive files with same device id only */
 int	Yflag;			/* same as Dflg except after name mode */
 int	Zflag;			/* same as uflg except after name mode */
@@ -168,7 +169,7 @@ int	secure = 1;		/* don't extract names that contain .. */
  * 2.1	Write operation will stop instead of allowing a user to create a flawed
  *	flawed archive (due to any problem).
  * 2.2	Archives written by pax are forced to strictly conform to both the
- *	archive and pax the spceific format specifications.
+ *	archive and pax the specific format specifications.
  * 2.3	Blocking size and format is rigidly enforced on writes.
  * 2.4	Formats which may exhibit header overflow problems (they have fields
  *	too small for large file systems, such as inode number storage), use
@@ -422,7 +423,7 @@ gen_init(void)
 	/*
 	 * signal handling to reset stored directory times and modes. Since
 	 * we deal with broken pipes via failed writes we ignore it. We also
-	 * deal with any file size limit thorugh failed writes. CPU time
+	 * deal with any file size limit through failed writes. CPU time
 	 * limits are caught and a cleanup is forced.
 	 */
 	if ((sigemptyset(&s_mask) < 0) || (sigaddset(&s_mask, SIGTERM) < 0) ||

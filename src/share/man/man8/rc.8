@@ -1,4 +1,4 @@
-.\" 	$NetBSD: rc.8,v 1.28 2004/01/06 14:46:11 wiz Exp $
+.\" 	$NetBSD: rc.8,v 1.30 2007/04/06 14:20:17 apb Exp $
 .\"
 .\" Copyright (c) 2000-2004 The NetBSD Foundation, Inc.
 .\" All rights reserved.
@@ -34,7 +34,7 @@
 .\" ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 .\" POSSIBILITY OF SUCH DAMAGE.
 .\"
-.Dd January 6, 2004
+.Dd April 6, 2007
 .Dt RC 8
 .Os
 .Sh NAME
@@ -111,7 +111,9 @@ keyword (refer to
 flag),
 and assigns the result to a variable.
 .It
-Calls each script in turn using run_rc_script() (from
+Calls each script in turn using
+.Fn run_rc_script
+(from
 .Xr rc.subr 8 ) ,
 which sets
 .Dv $1
@@ -143,7 +145,9 @@ keyword (refer to
 flag),
 reverses that order, and assigns the result to a variable.
 .It
-Calls each script in turn using run_rc_script() (from
+Calls each script in turn using
+.Fn run_rc_script
+(from
 .Xr rc.subr 8 ) ,
 which sets
 .Dv $1
@@ -219,16 +223,11 @@ configuration (including
 early in the boot.
 .It Pa bar
 Scripts that are sourced in a subshell.
-These can stop the boot if necessary with the following shell
-commands:
-.Bd -literal -offset
-	if [ "$autoboot" = yes ]; then
-		kill -TERM $$
-	fi
-	exit 1
-.Ed
-.Pp
-Note that this should be used extremely sparingly!
+The boot does not stop if such a script terminates with a non-zero status,
+but a script can stop the boot if necessary by invoking the
+.Fn stop_boot
+function (from
+.Xr rc.subr 8 ) .
 .El
 .Pp
 Each script should contain
@@ -298,7 +297,9 @@ Skips the
 check, but performs all other prerequisite tests.
 .El
 .Pp
-In order to simplify scripts, the run_rc_command() function from
+In order to simplify scripts, the
+.Fn run_rc_command
+function from
 .Xr rc.subr 8
 may be used.
 .Sh FILES

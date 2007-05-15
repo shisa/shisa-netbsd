@@ -1,4 +1,4 @@
-/*	$NetBSD: dtfs.c,v 1.16 2007/03/20 18:30:30 pooka Exp $	*/
+/*	$NetBSD: dtfs.c,v 1.23 2007/05/07 17:22:50 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006  Antti Kantee.  All Rights Reserved.
@@ -54,6 +54,7 @@
 #endif
 
 static struct puffs_usermount *pu;
+int dynamicfh;
 
 static void usage(void);
 
@@ -61,8 +62,8 @@ static void
 usage()
 {
 
-	errx(1, "usage: %s [-bs] [-o mntopt] [-o puffsopt] mountpath",
-	    getprogname());
+	errx(1, "usage: %s [-bsd] [-c hashbuckets] [-o mntopt] [-o puffsopt] "
+	    "mountpath", getprogname());
 }
 
 /*
@@ -73,6 +74,7 @@ static void
 dosuspend(int v)
 {
 
+	puffs_fs_suspend(pu);
 	puffs_fs_suspend(pu);
 }
 
@@ -87,14 +89,26 @@ main(int argc, char *argv[])
 	mntoptparse_t mp;
 	int pflags, lflags, mntflags;
 	int ch;
+	int khashbuckets;
 
 	setprogname(argv[0]);
 
-	pflags = lflags = mntflags = 0;
-	while ((ch = getopt(argc, argv, "bo:s")) != -1) {
+	lflags = mntflags = 0;
+	khashbuckets = 256;
+	pflags = PUFFS_KFLAG_IAONDEMAND;
+	while ((ch = getopt(argc, argv, "bc:dio:s")) != -1) {
 		switch (ch) {
 		case 'b': /* build paths, for debugging the feature */
 			pflags |= PUFFS_FLAG_BUILDPATH;
+			break;
+		case 'c':
+			khashbuckets = atoi(optarg);
+			break;
+		case 'd':
+			dynamicfh = 1;
+			break;
+		case 'i':
+			pflags &= ~PUFFS_KFLAG_IAONDEMAND;
 			break;
 		case 'o':
 			mp = getmntopts(optarg, puffsmopts, &mntflags, &pflags);
@@ -104,6 +118,9 @@ main(int argc, char *argv[])
 			break;
 		case 's': /* stay on top */
 			lflags |= PUFFSLOOP_NODAEMON;
+			break;
+		case 't':
+			pflags |= PUFFS_KFLAG_WTCACHE;
 			break;
 		default:
 			usage();
@@ -121,8 +138,10 @@ main(int argc, char *argv[])
 	PUFFSOP_INIT(pops);
 
 	PUFFSOP_SET(pops, dtfs, fs, statvfs);
-	PUFFSOP_SETFSNOP(pops, unmount);
+	PUFFSOP_SET(pops, dtfs, fs, unmount);
 	PUFFSOP_SETFSNOP(pops, sync);
+	PUFFSOP_SET(pops, dtfs, fs, fhtonode);
+	PUFFSOP_SET(pops, dtfs, fs, nodetofh);
 	PUFFSOP_SET(pops, dtfs, fs, suspend);
 
 	PUFFSOP_SET(pops, dtfs, node, lookup);
@@ -144,8 +163,18 @@ main(int argc, char *argv[])
 	PUFFSOP_SET(pops, dtfs, node, inactive);
 	PUFFSOP_SET(pops, dtfs, node, reclaim);
 
-	if ((pu = puffs_mount(pops, argv[0], mntflags, FSNAME, &dtm, pflags, 0))
-	    == NULL)
+	srandom(time(NULL)); /* for random generation numbers */
+
+	pu = puffs_init(pops, FSNAME, &dtm, pflags);
+	if (pu == NULL)
+		err(1, "init");
+
+	puffs_setfhsize(pu, sizeof(struct dtfs_fid),
+	    PUFFS_FHFLAG_NFSV2 | PUFFS_FHFLAG_NFSV3
+	    | (dynamicfh ? PUFFS_FHFLAG_DYNAMIC : 0));
+	puffs_setncookiehash(pu, khashbuckets);
+
+	if (puffs_domount(pu, argv[0], mntflags) == -1)
 		err(1, "mount");
 
 	if (signal(SIGUSR1, dosuspend) == SIG_ERR)

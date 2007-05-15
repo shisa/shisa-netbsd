@@ -1,4 +1,4 @@
-#	$NetBSD: 3RDPARTY,v 1.518 2007/03/30 21:36:11 ghen Exp $
+#	$NetBSD: 3RDPARTY,v 1.523 2007/05/02 09:26:57 wiz Exp $
 #
 # This file contains a list of the software that has been integrated into
 # NetBSD where we are not the primary maintainer.
@@ -389,8 +389,8 @@ License:	BSD (3-clause)
 Notes:
 
 Package:	ipf
-Version:	4.1.13
-Current Vers:	4.1.19
+Version:	4.1.20
+Current Vers:	4.1.20
 Maintainer:	Darren Reed
 Archive Site:	http://coombs.anu.edu.au/~avalon/
 Home Page:	http://coombs.anu.edu.au/~avalon/
@@ -669,7 +669,7 @@ and more.
 
 Package:	postfix
 Version:	2.3.7
-Current Vers:	2.3.8
+Current Vers:	2.4.1
 Maintainer:	Wietse Venema <wietse@porcupine.org>
 Archive Site:	ftp://postfix.cloud9.net/official/
 Home Page:	http://www.postfix.org/
@@ -845,8 +845,8 @@ License:	BSD (4-clause)
 Notes:
 
 Package:	tz
-Version:	tzcode2004a / tzdata2007a
-Current Vers:	tzcode2007b / tzdata2007b
+Version:	tzcode2004a / tzdata2007e
+Current Vers:	tzcode2007e / tzdata2007e
 Maintainer:	Arthur David Olson <ado@elsie.nci.nih.gov>
 Archive Site:	ftp://elsie.nci.nih.gov/pub/
 Home Page:

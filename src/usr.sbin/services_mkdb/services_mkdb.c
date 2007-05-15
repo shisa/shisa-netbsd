@@ -1,4 +1,4 @@
-/*	$NetBSD: services_mkdb.c,v 1.5 2006/07/28 16:34:28 christos Exp $	*/
+/*	$NetBSD: services_mkdb.c,v 1.7 2007/05/08 20:17:57 christos Exp $	*/
 
 /*-
  * Copyright (c) 1999 The NetBSD Foundation, Inc.
@@ -38,7 +38,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: services_mkdb.c,v 1.5 2006/07/28 16:34:28 christos Exp $");
+__RCSID("$NetBSD: services_mkdb.c,v 1.7 2007/05/08 20:17:57 christos Exp $");
 #endif /* not lint */
 
 
@@ -75,11 +75,15 @@ main(int argc, char *argv[])
 	DBT	 data, key;
 	const char *fname = _PATH_SERVICES;
 	const char *dbname = _PATH_SERVICES_DB;
+	int	 warndup = 1;
 
 	setprogname(argv[0]);
 
-	while ((ch = getopt(argc, argv, "o:")) != -1)
+	while ((ch = getopt(argc, argv, "qo:")) != -1)
 		switch (ch) {
+		case 'q':
+			warndup = 0;
+			break;
 		case 'o':
 			dbname = optarg;
 			break;
@@ -143,12 +147,12 @@ main(int argc, char *argv[])
 		data.size = snprintf(datab, sizeof(datab), "%zu", cnt++) + 1;
 		key.size = snprintf(keyb, sizeof(keyb), "%s %s/%s %s",
 		    name, port, proto, aliases ? aliases : "") + 1;
-		store(fname, line, db, &data, &key, 1);
+		store(fname, line, db, &data, &key, warndup);
 
 		/* key `\377port/proto', data = `indirect key' */
 		key.size = snprintf(keyb, sizeof(keyb), "\377%s/%s",
 		    port, proto) + 1;
-		store(fname, line, db, &key, &data, 1);
+		store(fname, line, db, &key, &data, warndup);
 
 		/* key `\377port', data = `indirect key' */
 		killproto(&key);
@@ -168,7 +172,7 @@ main(int argc, char *argv[])
 			/* key `\376service/proto', data = `indirect key' */
 			key.size = snprintf(keyb, sizeof(keyb), "\376%s/%s",
 			    sl->sl_str[i], proto) + 1;
-			store(fname, line, db, &key, &data, 1);
+			store(fname, line, db, &key, &data, warndup);
 
 			/* key `\376service', data = `indirect key' */
 			killproto(&key);
@@ -244,7 +248,7 @@ store(const char *fname, size_t line, DB *db, DBT *key, DBT *data, int warndup)
 static void
 usage(void)
 {
-	(void)fprintf(stderr, "Usage: %s [-o <db>] [<servicefile>]\n",
+	(void)fprintf(stderr, "Usage: %s [-q] [-o <db>] [<servicefile>]\n",
 	    getprogname());
 	exit(1);
 }

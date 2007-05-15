@@ -1,4 +1,4 @@
-#	$NetBSD: BRANCHES,v 1.170 2007/03/29 10:54:14 skrll Exp $
+#	$NetBSD: BRANCHES,v 1.190 2007/05/07 13:05:17 yamt Exp $
 #
 # This file contains a list of branches that exist in the NetBSD CVS
 # tree and their current state.
@@ -356,6 +356,19 @@ Notes:		A more flexible infrastructure for third-party packages by
 		allowing multiple conflicting packages and versions to co-exist
 		within the same tree
 
+Branch:		ppcoea-renovation
+Description:	General renovation and cleanup of all OEA PowerPC ports.
+Status:		Active
+Start Date:	30 April 2007
+End Date:
+Base Tag:	ppcoea-renovation-base
+Maintainer:	Tim Rightnour <garbled@netbsd.org>
+Scope:		src/sys/arch
+Notes:		This branch is for a general cleanup of all OEA-based PowerPC
+		ports.  The general concept is to get them all compiling, and
+		sharing as much code as possible.  All developers are welcome
+		to commit to this branch.
+
 Branch:		rpaulo-netinet-merge-pcb
 Description:	merge in6pcb with inpcb
 Status:		Dormant
@@ -401,21 +414,6 @@ Scope:		x11
 Notes:		Requires parts of xsrc/xfree (HEAD)
 		xsrc/local, xsrc/xfree/xc/programs/Xserver/hw/netbsd
 		Requires xorg (XORG-6_8_1)
-
-Branch:		thorpej-devvp
-Description:	replace dev_t with struct vnode * in devsw entry points
-Status:		Active
-Start Date:	Sep 6 2001
-End Date:
-Base Tag:	thorpej-devvp-base
-Maintainer:	Jason Thorpe <thorpej@NetBSD.org>
-Scope:		syssrc
-Notes:		Kernels built from this branch are not expected
-		to function correctly at this time.
-
-		Ports known to compile on this branch:
-			alpha
-			i386
 
 Branch:		vmlocking
 Description:	Make memory allocators and trap handling MP safe
@@ -473,29 +471,32 @@ Description:	idle lwp, and some changes depending on it.
 		   (cf. gmcgarry_ctxsw)
 		2. implement idle lwp.
 		3. clean up related MD/MI interfaces.
-		4. implement interrupt LWPs.
-		5. make scheduler(s) modular.
+		4. make scheduler(s) modular.
 
 Status:		Active
 Start Date:	Fri Feb 17 2007
 End Date:	
-Base Tag:	yamt-idlelwp-base4
+Base Tag:	yamt-idlelwp-base6
 Maintainer:	YAMAMOTO Takashi <yamt@NetBSD.org>
 Scope:		src/sys  (src/common is tagged but not branched)
 Notes:		
-		Status of ports (minimal goals):
-		  alpha			[ Done,
-					  UP tested, MP not tested ]
+		Status of ports:
+		  alpha			[ Done, UP tested, MP not tested ]
 		  i386			[ Done, tested ]
 		  amd64			[ Done, tested ]
-		  mips			[ WIP ]
-		  sparc			[ Not yet ]
-		  sparc64		[ Not yet ]
-		  arm			[ Done.
-					  SA1 tested. ]
-		  macppc/powerpc	[ Not yet ]
-		  hppa			[ WIP ]
+		  mips			[ Done, MIPS1 tested, MIPSX needs
+					  further testing + fixes ]
+		  sparc			[ WIP, commited known broken ]
+		  sparc64		[ WIP, commited known broken ]
+		  arm			[ Done, SA1 tested. ]
+		  macppc/powerpc	[ Done, OEA tested ]
+		  hppa			[ WIP. SYSCALLGATE trap issues remain. ]
 		  sh3			[ Done, tested ]
+		  vax			[ Done, UP tested, MP untested ]
+		  m68k			[ broken ]
+		  ns32k			[ broken ]
+		  ia64			[ broken ]
+		  pdp10			[ broken ]
 
 		How to adapt a port?
 
@@ -575,6 +576,79 @@ Scope:		src/sys and src/common
 Notes:		Used as expiriment sandbox and if successful hopefully one day
 		to be intergrated.
 
+Branch:		thorpej-atomic
+Description:	Implementation of an atomic memory operations API modeled
+		after the one in Solaris 10.
+Status:		Active
+Start Date:	Apr 11 2007
+End Date:
+Base tag:	thorpej-atomic-base
+Maintainer:	Jason Thorpe <thorpej@netbsd.org>
+Scope:		src/common
+		src/sys
+Notes:		Base atomic primitives need to be implemented for
+		all of the supported architectures:
+
+		alpha		DONE
+		arm		DONE
+		hppa
+		i386		DONE
+		ia64
+		m68k		DONE (except for 68010)
+		mips
+		ns32k
+		powerpc		DONE except for membar_*()
+		powerpc64	DONE except for membar_*()
+		sh3
+		sparc		DONE except for membar_*()
+		sparc64		DONE except for membar_*()
+		vax
+		x86_64		DONE
+
+		Tested:
+
+		alpha		NO
+		arm		NO
+		hppa		NO
+		i386		NO
+		ia64		NO
+		m68k		NO
+		mips		NO
+		ns32k		NO
+		powerpc		NO
+		powerpc64	NO
+		sh3		NO
+		sparc		NO
+		sparc64		NO
+		vax		NO
+		x86_64		NO
+
+		TODO:
+
+		all		- Need to replace mb_*() with membar_*().
+
+				- Audit MUTEX_CAS() and RWLOCK_CAS() uses
+				  to see of membar_enter() is required here.
+
+				- Talk to ad@ -- figure out of non-atomic
+				  mutex / rwlock release is actually safe.
+
+		arm		- Consider using a RAS technique like
+				  MIPS uses for _lock_cas() and the mutex
+				  stubs.  Possibly do more than one atomic
+				  op as a RAS.  Possibly implement mutex
+				  stubs using the technique.
+
+		m68k		- Need to do 68010 support.
+		
+		i386		- Need to change when x86_patch() is called
+				  so we can test ncpus.
+
+		powerpc		- Figure out if we need barriers in the
+				  atomic ops themselves (hopefully not!)
+
+		x86_64		- Need to change when x86_patch() is called
+				  so we can test ncpus.
 
 ########################################################################
 # Individual developers' branches (Terminated):
@@ -849,6 +923,21 @@ Maintainer:	Konrad Schroder <perseant@NetBSD.org>
 Scope:		basesrc/{sbin/*lfs,libexec/lfs_cleanerd,usr.sbin/dumplfs}, syssrc/sys/ufs
 Notes:		This branch should be short-lived, I expect to merge as soon
 		as the data structures required for unremove are in and tested.
+
+Branch:		thorpej-devvp
+Description:	replace dev_t with struct vnode * in devsw entry points
+Status:		Terminated
+Start Date:	Sep 6 2001
+End Date:	???
+Base Tag:	thorpej-devvp-base
+Maintainer:	Jason Thorpe <thorpej@NetBSD.org>
+Scope:		syssrc
+Notes:		Kernels built from this branch are not expected
+		to function correctly at this time.
+
+		Ports known to compile on this branch:
+			alpha
+			i386
 
 Branch:		peter-altq
 Description:	New ALTQ framework:

@@ -1,4 +1,4 @@
-.\"	$NetBSD: main,v 1.328 2007/02/27 09:06:17 tron Exp $
+.\"	$NetBSD: main,v 1.339 2007/05/10 18:34:02 plunky Exp $
 .\"
 .\" Copyright (c) 1999-2005 The NetBSD Foundation, Inc.
 .\" All rights reserved.
@@ -46,14 +46,14 @@
 .nr DOC_XR 1
 .ds MACHINE_LIST acorn26 acorn32 algor alpha amd64 amiga amigappc arc atari
 .as MACHINE_LIST " bebox cats cesfic cobalt dreamcast evbarm evbmips evbppc
-.as MACHINE_LIST " evbsh3 evbsh5 ews4800mips hp300 hp700 hpcarm hpcmips hpcsh
+.as MACHINE_LIST " evbsh3 ews4800mips hp300 hp700 hpcarm hpcmips hpcsh
 .as MACHINE_LIST " hppa i386 ibmnws iyonix luna68k mac68k macppc mipsco mmeye
 .as MACHINE_LIST " mvme68k mvmeppc netwinder news68k newsmips next68k ofppc
 .as MACHINE_LIST " pc532 pdp10 playstation2 pmax pmppc prep sandpoint sbmips
 .as MACHINE_LIST " sgimips shark sparc sparc64 sun2 sun3 vax x68k xen zaurus .
 .so \*[.CURDIR]/../common/macros
 .
-.Dd August 22, 2004
+.Dd May 6, 2007
 .Dt INSTALL 8
 .Os NetBSD
 .Sh NAME
@@ -430,10 +430,10 @@ possible, it's likely that
 wouldn't exist.
 .
 .if \n[FOR_RELEASE] \{\
-.Ss Changes Between The NetBSD 2.0 and 3.0 Releases
+.Ss Changes Between The NetBSD 3.0 and 4.0 Releases
 .Pp
 The
-.Nx 3.0
+.Nx 4.0
 release
 provides numerous significant functional enhancements, including
 support for many new devices, integration of hundreds of bug fixes,
@@ -441,7 +441,7 @@ new and updated kernel subsystems, and many user-land enhancements.
 The result of these improvements is a stable operating system fit for
 production use that rivals most commercially available systems.
 .Pp
-It is impossible to completely summarize a year of development that
+It is impossible to completely summarize more than a year of development that
 went into the
 .Nx
 \*V release.
@@ -450,46 +450,85 @@ Some highlights include:
 .Ss2 Kernel
 .
 .(bullet
-Ports to new platforms including:
-iyonix
-and
-Xen 2.0.
+Added a Bluetooth protocol stack including:
+.(bullet -compact -offset indent
+hardware drivers:
+.Xr ubt 4
+for USB controllers, and
+.Xr bt3c 4
+for the 3Com Bluetooth PC-Card
+.It
+socket based access to the HCI, L2CAP, RFCOMM and SCO protocols
+.It
+pseudo drivers for integrating services on remote Bluetooth
+devices such as Keyboards, Mice and SCO Audio into the
+.Nx
+device framework
+.bullet)
+.It
+TBD
 .bullet)
 .
 .Ss2 Networking
 .
 .(bullet
-TCP now supports TCP Selective Acknowledgement Options (RFC 2018) for
-enhanced performance especially on long distance connections and
-TCP MD5 signatures (RFC 2385) for enhanced protection agains attacks.
-.It
-The OpenBSD Packet Filter has been integrated as alternative packet
-filer solution.
-.It
-IP Filter has been upgraded to version 4.1.8.
-.It
-The KAME IPsec stack now support ESP over NAT connections (RFC 3948).
-.It
-ipsec-tools 0.6.2 provides IKE support for ESP over NAT connections (RFC 3947),
-user authentification via XAuth and automatic network configurations of VPN
-clients via Mode Config.
+TBD
 .bullet)
 .
 .Ss2 File system
 .
 .(bullet
-UFS_DIRHASH
+TBD
 .bullet)
 .
 .Ss2 Security
 .
 .(bullet
+The kernel authorization framework
+.Xr kauth 9
+was added, replacing the traditional BSD credential management and
+privileged operation access control with an abstract layer, allowing
+the implementation of various security models either as part of the
+.Nx
+distribution or as third-party LKMs.
+.Pp
+.Nx Ap s
+kernel authorization is a hybrid clean-room implementation of a
+similar interface developed by Apple, extending its capabilities
+and combining concepts of credential inheritance control.
+.It
 TBD
 .bullet)
 .
 .Ss2 System administration and user tools
 .
 .(bullet
+Various utilities to support Bluetooth were added:
+.(bullet -compact -offset indent
+.Xr btconfig 8
+for controller configuration
+.It
+.Xr btdevctl 8
+to manage pseudo devices relating to remote services
+.It
+.Xr bthcid 8
+and
+.Xr btpin 1
+for authenticating radio connections
+.It
+.Xr sdpd 8
+for providing service discovery to remote devices
+.It
+.Xr sdpquery 1
+for querying services on remote devices
+.It
+.Xr rfcomm_sppd 1
+to access remote services over RFCOMM via stdio or pty
+.It
+.Xr bthset 1
+for making connections to Bluetooth headsets
+.bullet)
+.It
 TBD
 .bullet)
 .
@@ -498,23 +537,7 @@ TBD
 .(bullet
 TBD
 .(bullet -compact -offset indent
-am-utils 6-1-20050417
-.It
-BIND 9.3.0
-.It
-cvs 1.11.20
-.It
-OpenSSH 3.9
-.It
-OpenSSL 0.9.7d
-.It
-Postfix 2.1.5
-.It
-sendmail 8.13.3
-.It
-tcpdump 3.8.3
-.It
-XFree86 4.5.0
+TBD: 3rd party package updates
 .bullet)
 .It
 Many new packages in the
@@ -1045,11 +1068,11 @@ Without CVS, this project would be impossible to manage, so our hats
 go off to Brian Berliner, Jeff Polk, and the various other people
 who've had a hand in making CVS a useful tool.
 .It
-The following individuals and organizations (each in alphabetical order)
-have made donations or loans of hardware and/or money, to support
+We list the individuals and organizations
+that have made donations or loans of hardware and/or money, to support
 .Nx
-development, and deserve credit for it:
-.so ../common/donations -----------------------------------------------
+development, and deserve credit for it at
+.Lk http://www.NetBSD.org/donations .
 (If you're not on that list and should be, tell us!
 We probably were not able to get in touch with you, to verify that you
 wanted to be listed.)
@@ -1074,10 +1097,10 @@ If you're one of them, and would like to mentioned, tell us!)
 .br_ne 1i
 .It Em "The NetBSD core group:"
 .It Ta Ta
-.It Ta Allen Briggs Ta Mt briggs@NetBSD.org
+.It Ta Alistair Crooks Ta Mt agc@NetBSD.org
+.It Ta YAMAMOTO Takashi Ta Mt yamt@NetBSD.org
 .It Ta Matt Thomas Ta Mt matt@NetBSD.org
 .It Ta Valeriy E. Ushakov Ta Mt uwe@NetBSD.org
-.It Ta YAMAMOTO Takashi Ta Mt yamt@NetBSD.org
 .It Ta Christos Zoulas Ta Mt christos@NetBSD.org
 .It Ta Ta
 .
@@ -1137,7 +1160,6 @@ If you're one of them, and would like to mentioned, tell us!)
 .It Ta Simon Burge                    Ta Mt    simonb@NetBSD.org Ta Sy evbppc
 .It Ta Simon Burge                    Ta Mt    simonb@NetBSD.org Ta Sy pmax
 .It Ta Simon Burge                    Ta Mt    simonb@NetBSD.org Ta Sy sbmips
-.It Ta Steve Woodford                 Ta Mt       scw@NetBSD.org Ta Sy evbsh5
 .It Ta Steve Woodford                 Ta Mt       scw@NetBSD.org Ta Sy mvme68k
 .It Ta Steve Woodford                 Ta Mt       scw@NetBSD.org Ta Sy mvmeppc
 .It Ta Takayoshi Kochi                Ta Mt     kochi@NetBSD.org Ta Sy ia64
@@ -1155,13 +1177,14 @@ If you're one of them, and would like to mentioned, tell us!)
 .It Em "The NetBSD \*V Release Engineering team:"
 .It Ta Ta
 .It Ta Grant Beattie Ta Mt grant@NetBSD.org
-.It Ta H\(oavard Eidnes Ta Mt he@NetBSD.org
+.It Ta Manuel Bouyer Ta Mt bouyer@NetBSD.org
+.It Ta Pavel Cahyna Ta Mt pavel@NetBSD.org
 .It Ta James Chacon Ta Mt jmc@NetBSD.org
 .It Ta Julian Coleman Ta Mt jdc@NetBSD.org
-.It Ta Jim Wise Ta Mt jwise@NetBSD.org
+.It Ta H\(oavard Eidnes Ta Mt he@NetBSD.org
 .It Ta Geert Hendrickx Ta Mt ghen@NetBSD.org
-.It Ta Jeff Rizzo Ta Mt riz@NetBSD.org
 .It Ta Soren Jacobsen Ta Mt snj@NetBSD.org
+.It Ta Jeff Rizzo Ta Mt riz@NetBSD.org
 .It Ta Ta
 .
 .br_ne 2i
@@ -1307,6 +1330,7 @@ If you're one of them, and would like to mentioned, tell us!)
 .It Ta Martti Kuparinen Ta Mt martti@NetBSD.org
 .It Ta Kentaro A. Kurahone Ta Mt kurahone@NetBSD.org
 .It Ta Kevin Lahey Ta Mt kml@NetBSD.org
+.It Ta David Laight Ta Mt dsl@NetBSD.org
 .It Ta Johnny C. Lam Ta Mt jlam@NetBSD.org
 .It Ta Martin J. Laubach Ta Mt mjl@NetBSD.org
 .It Ta Greg Lehey Ta Mt grog@NetBSD.org
@@ -1345,6 +1369,7 @@ If you're one of them, and would like to mentioned, tell us!)
 .It Ta Tohru Nishimura Ta Mt nisimura@NetBSD.org
 .It Ta NONAKA Kimihiro Ta Mt nonaka@NetBSD.org
 .It Ta Takehiko NOZAKI Ta Mt tnozaki@NetBSD.org
+.It Ta Tobias Nygren Ta Mt tnn@NetBSD.org
 .It Ta OBATA Akio Ta Mt obache@NetBSD.org
 .It Ta Jesse Off Ta Mt joff@NetBSD.org
 .It Ta Tatoku Ogaito Ta Mt tacha@NetBSD.org
@@ -1400,6 +1425,7 @@ If you're one of them, and would like to mentioned, tell us!)
 .It Ta Naoto Shimazaki Ta Mt igy@NetBSD.org
 .It Ta Takao Shinohara Ta Mt shin@NetBSD.org
 .It Ta Takuya SHIOZAKI Ta Mt tshiozak@NetBSD.org
+.It Ta Daniel Sieger Ta Mt dsieger@NetBSD.org
 .It Ta Chuck Silvers Ta Mt chs@NetBSD.org
 .It Ta Thor Lancelot Simon Ta Mt tls@NetBSD.org
 .It Ta Jeff Smith Ta Mt jeffs@NetBSD.org

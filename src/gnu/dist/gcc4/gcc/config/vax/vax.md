@@ -64,7 +64,7 @@
 
 (define_insn "tst<mode>"
   [(set (cc0)
-	(match_operand:VAXint 0 "nonimmediate_operand" "g"))]
+	(match_operand:VAXint 0 "nonimmediate_operand" "nrmT"))]
   ""
   "tst<VAXint:isfx> %0")
 
@@ -232,17 +232,31 @@
    (match_operand 3 "" "")]
   ""
   "
+{
+  if (CONST_INT_P (operands[2]) && INTVAL (operands[2]) <= 48)
+    {
+      emit_insn (gen_movmemsi1_2 (operands[0], operands[1], operands[2]));
+      DONE;
+    }
   emit_insn (gen_movmemhi1 (operands[0], operands[1], operands[2]));
   DONE;
-")
+}")
 
 ;; The definition of this insn does not really explain what it does,
 ;; but it should suffice
 ;; that anything generated as this insn will be recognized as one
 ;; and that it won't successfully combine with anything.
+
+(define_insn "movmemsi1_2"
+  [(set (match_operand:BLK 0 "memory_operand" "=R")
+	(match_operand:BLK 1 "memory_operand" "R"))
+   (use (match_operand:SI 2 "const_int_operand" "g"))]
+  "INTVAL (operands[2]) <= 48"
+  "* return vax_output_movmemsi (insn, operands);")
+
 (define_insn "movmemhi1"
-  [(set (match_operand:BLK 0 "memory_operand" "=m")
-	(match_operand:BLK 1 "memory_operand" "m"))
+  [(set (match_operand:BLK 0 "memory_operand" "=o")
+	(match_operand:BLK 1 "memory_operand" "o"))
    (use (match_operand:HI 2 "general_operand" "g"))
    (clobber (reg:SI 0))
    (clobber (reg:SI 1))
@@ -436,7 +450,7 @@
 (define_insn "sbcdi3"
   [(set (match_operand:DI 0 "nonimmediate_addsub_di_operand" "=Rr,=Rr")
 	(minus:DI (match_operand:DI 1 "general_addsub_di_operand" "0,I")
-		  (match_operand:DI 2 "general_addsub_di_operand" "nRr,=Rr")))]
+		  (match_operand:DI 2 "general_addsub_di_operand" "nRr,Rr")))]
   "TARGET_QMATH"
   "* return vax_output_int_subtract (insn, operands, DImode);")
 
@@ -678,9 +692,17 @@
       if (i == 1)
 	return \"addl3 %1,%1,%0\";
       if (i == 2 && !optimize_size)
-	return \"moval 0[%1],%0\";
+	{
+	  if (push_operand (operands[0], SImode))
+	    return \"pushal 0[%1]\";
+	  return \"moval 0[%1],%0\";
+	}
       if (i == 3 && !optimize_size)
-	return \"movaq 0[%1],%0\";
+	{
+	  if (push_operand (operands[0], SImode))
+	    return \"pushaq 0[%1]\";
+	  return \"movaq 0[%1],%0\";
+	}
     }
   return \"ashl %2,%1,%0\";
 }")
@@ -957,12 +979,12 @@
   ""
   "*
 {
-  if (GET_CODE (operands[0]) != REG || GET_CODE (operands[2]) != CONST_INT
-      || GET_CODE (operands[3]) != CONST_INT
+  if (!REG_P (operands[0]) || !CONST_INT_P (operands[2])
+      || !CONST_INT_P (operands[3])
       || (INTVAL (operands[2]) != 8 && INTVAL (operands[2]) != 16)
       || INTVAL (operands[2]) + INTVAL (operands[3]) > 32
       || side_effects_p (operands[1])
-      || (GET_CODE (operands[1]) == MEM
+      || (MEM_P (operands[1])
 	  && mode_dependent_address_p (XEXP (operands[1], 0))))
     return \"extv %3,%2,%1,%0\";
   if (INTVAL (operands[2]) == 8)
@@ -986,17 +1008,39 @@
   ""
   "*
 {
-  if (GET_CODE (operands[0]) != REG || GET_CODE (operands[2]) != CONST_INT
-      || GET_CODE (operands[3]) != CONST_INT
+  if (!REG_P (operands[0]) || !CONST_INT_P (operands[2])
+      || !CONST_INT_P (operands[3])
       || INTVAL (operands[2]) + INTVAL (operands[3]) > 32
       || side_effects_p (operands[1])
-      || (GET_CODE (operands[1]) == MEM
+      || (MEM_P (operands[1])
 	  && mode_dependent_address_p (XEXP (operands[1], 0))))
     return \"extzv %3,%2,%1,%0\";
   if (INTVAL (operands[2]) == 8)
     return \"rotl %R3,%1,%0\;movzbl %0,%0\";
   if (INTVAL (operands[2]) == 16)
     return \"rotl %R3,%1,%0\;movzwl %0,%0\";
+  if (MEM_P (operands[1])
+      && GET_CODE (XEXP (operands[1], 0)) == PLUS
+      && REG_P (XEXP (XEXP (operands[1], 0), 0))
+      && CONST_INT_P (XEXP (XEXP (operands[1], 0), 1))
+      && CONST_INT_P (operands[2])
+      && CONST_INT_P (operands[3]))
+    {
+      HOST_WIDE_INT o = INTVAL (XEXP (XEXP (operands[1], 0), 1));
+      HOST_WIDE_INT l = INTVAL (operands[2]);
+      HOST_WIDE_INT v = INTVAL (operands[3]);
+      if ((o & 3) && (o & 3) * 8 + v + l <= 32)
+	{
+	  rtx tmp;
+	  tmp = XEXP (XEXP (operands[1], 0), 0);
+	  if (o & ~3)
+	    tmp = gen_rtx_PLUS (SImode, tmp, GEN_INT (o & ~3));
+	  operands[1] = gen_rtx_MEM (QImode, tmp);
+	  operands[3] = GEN_INT (v + (o & 3) * 8);
+	}
+      if (optimize_size)
+	return \"extzv %3,%2,%1,%0\";
+    }
   return \"rotl %R3,%1,%0\;bicl2 %M2,%0\";
 }")
 
@@ -1014,7 +1058,30 @@
 			 (match_operand:SI 2 "general_operand" "nrmT"))
 	(match_operand:SI 3 "general_operand" "nrmT"))]
   ""
-  "insv %3,%2,%1,%0")
+  "*
+{
+  if (MEM_P (operands[0])
+      && GET_CODE (XEXP (operands[0], 0)) == PLUS
+      && REG_P (XEXP (XEXP (operands[0], 0), 0))
+      && CONST_INT_P (XEXP (XEXP (operands[0], 0), 1))
+      && CONST_INT_P (operands[1])
+      && CONST_INT_P (operands[2]))
+    {
+      HOST_WIDE_INT o = INTVAL (XEXP (XEXP (operands[0], 0), 1));
+      HOST_WIDE_INT v = INTVAL (operands[2]);
+      HOST_WIDE_INT l = INTVAL (operands[1]);
+      if ((o & 3) && (o & 3) * 8 + v + l <= 32)
+	{
+	  rtx tmp;
+	  tmp = XEXP (XEXP (operands[0], 0), 0);
+	  if (o & ~3)
+	    tmp = gen_rtx_PLUS (SImode, tmp, GEN_INT (o & ~3));
+	  operands[0] = gen_rtx_MEM (QImode, tmp);
+	  operands[2] = GEN_INT (v + (o & 3) * 8);
+	}
+    }
+  return \"insv %3,%2,%1,%0\";
+}")
 
 (define_insn ""
   [(set (zero_extract:SI (match_operand:SI 0 "register_operand" "+r")
@@ -1549,3 +1616,5 @@
   [(unspec_volatile [(const_int 0)] VUNSPEC_SYNC_ISTREAM)]
   ""
   "movpsl -(%|sp)\;pushal 1(%|pc)\;rei")
+
+(include "builtins.md")

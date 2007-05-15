@@ -1,4 +1,4 @@
-LIST OF CHANGES FROM PREVIOUS RELEASES:			<$Revision: 1.58 $>
+LIST OF CHANGES FROM PREVIOUS RELEASES:			<$Revision: 1.64 $>
 
 
 Changes from 386bsd 0.1 + patchkit 0.2.2 to NetBSD 0.8:
@@ -8477,6 +8477,7 @@ Changes from NetBSD 3.0 to NetBSD 4.0:
 	vge(4): Make this driver work on big endian machines
 		(at least on macppc). [tsutsui 20061014]
 	gpt(8): Added from FreeBSD [christos 20061015]
+	evbarm: Add support for the gumstix. [kiyohara 20061016]
 	tcp(4): Added RFC 3465 Appropriate Byte Counting (ABC) [yamt 20061019]
 	wm(4): Added support for the Intel 80003 gigabit ethernet controller.
 		[bouyer 20061021]
@@ -8568,11 +8569,21 @@ Changes from NetBSD 3.0 to NetBSD 4.0:
 		support, threading and sorting of messages, improved message
 		selection, and redirection of command output; from Anon Ymous.
 		[christos 20061201]
+	shark: add support for igsfb at ofbus. [macallan 20061207]
 	re(4): Fix hardware VLAN tagging support. [tsutsui 20061216]
+	mfi(4): driver for LSI Logic & Dell MegaRAID SAS RAID controller.
+		Ported from OpenBSD, tested on i386 and amd64.
+		[bouyer 20061217]
+	bnx(4): driver for Broadcom NetXtreme II 10/100/1000 Ethernet
+		device. Ported from OpenBSD by cube@, with some bus_dma
+		fixes by me. [bouyer 20061217]
+	shark: add support for XFree86 with wsfb. [macallan 20061220]
 	nfe(4): Enable hardware checksum support. [tsutsui 20070109]
 	iwi(4): Update to use the single file firmware format. The new
 		firmware is available in pkgsrc/sysutils/iwi-firmware3.
 		[skrll 20061229]
+	ug(4): driver for the Abit uGuru hardware system monitor,
+		contributed by Mihai Chelaru. [xtraeme 20070106]
 	i386, amd64: remove option COMPAT_386BSD_MBRPART from default
 		kernels.  NetBSD has not used partition ID 0x165 for many,
 		many years, and the presence of this option in INSTALL
@@ -8581,3 +8592,11 @@ Changes from NetBSD 3.0 to NetBSD 4.0:
 		Those with very, very old NetBSD installations may find
 		that they must update their fdisk partition tables to use
 		partition ID 0x169 for their NetBSD partitions. [tls 20070124]
+	ataraid(4): Add support for Via V-RAID. [garbled 20070326]
+	wm(4): Added support for the Intel i82801H (ICH8) gigabit ethernet
+		controller.  [bouyer 20070429]
+	ipf(8): Updated to version 4.1.20. [martti 20070501]
+	kernel: added bio(4) and associated bioctl(8), a framework to
+		query/control block device controllers. [bouyer 20070501]
+	envsys(4): added DRIVE type sensor. [bouyer 20070501]
+	mfi(4): added bio(4) and envsys(4) support. [bouyer 20070501]

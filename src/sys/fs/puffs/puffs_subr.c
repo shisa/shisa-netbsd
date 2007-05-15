@@ -1,4 +1,4 @@
-/*	$NetBSD: puffs_subr.c,v 1.27 2007/03/30 17:48:58 pooka Exp $	*/
+/*	$NetBSD: puffs_subr.c,v 1.29 2007/05/08 21:39:03 pooka Exp $	*/
 
 /*
  * Copyright (c) 2005, 2006  Antti Kantee.  All Rights Reserved.
@@ -33,7 +33,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: puffs_subr.c,v 1.27 2007/03/30 17:48:58 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: puffs_subr.c,v 1.29 2007/05/08 21:39:03 pooka Exp $");
 
 #include <sys/param.h>
 #include <sys/conf.h>
@@ -132,6 +132,9 @@ puffs_getvnode(struct mount *mp, void *cookie, enum vtype type,
 	/*
 	 * clerical tasks & footwork
 	 */
+
+	/* default size */
+	uvm_vnp_setsize(vp, 0);
 
 	/* dances based on vnode type. almost ufs_vinit(), but not quite */
 	switch (type) {
@@ -475,4 +478,21 @@ puffs_parkdone_asyncbioread(struct puffs_req *preq, void *arg)
 
 	biodone(bp);
 	free(preq, M_PUFFS);
+}
+
+void
+puffs_mp_reference(struct puffs_mount *pmp)
+{
+
+	KASSERT(mutex_owned(&pmp->pmp_lock));
+	pmp->pmp_refcount++;
+}
+
+void
+puffs_mp_release(struct puffs_mount *pmp)
+{
+
+	KASSERT(mutex_owned(&pmp->pmp_lock));
+	if (--pmp->pmp_refcount == 0)
+		cv_broadcast(&pmp->pmp_refcount_cv);
 }
