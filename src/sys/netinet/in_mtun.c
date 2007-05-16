@@ -1,4 +1,4 @@
-/*	$Id: in_mtun.c,v 1.5 2007/02/20 02:00:23 keiichi Exp $	*/
+/*	$Id: in_mtun.c,v 1.6 2007/05/16 03:47:59 keiichi Exp $	*/
 /*	$NetBSD: in_gif.c,v 1.51 2006/11/23 04:07:07 rpaulo Exp $	*/
 /*	$KAME: in_gif.c,v 1.66 2001/07/29 04:46:09 itojun Exp $	*/
 
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$Id: in_mtun.c,v 1.5 2007/02/20 02:00:23 keiichi Exp $");
+__KERNEL_RCSID(0, "$Id: in_mtun.c,v 1.6 2007/05/16 03:47:59 keiichi Exp $");
 
 #include "opt_inet.h"
 #include "opt_iso.h"
@@ -92,12 +92,15 @@ int
 in_mtun_output(struct ifnet *ifp, int family, struct mbuf *m)
 {
 	struct mtun_softc *sc = (struct mtun_softc*)ifp;
-	struct sockaddr_in *dst = (struct sockaddr_in *)&sc->mtun_ro.ro_dst;
 	struct sockaddr_in *sin_src = (struct sockaddr_in *)sc->mtun_psrc;
 	struct sockaddr_in *sin_dst = (struct sockaddr_in *)sc->mtun_pdst;
 	struct ip iphdr;	/* capsule IP header, host byte ordered */
 	int proto, error;
 	u_int8_t tos;
+	union {
+		struct sockaddr dst;
+		struct sockaddr_in dst4;
+	} u;
 
 	if (sin_src == NULL || sin_dst == NULL ||
 	    sin_src->sin_family != AF_INET ||
@@ -180,34 +183,17 @@ in_mtun_output(struct ifnet *ifp, int family, struct mbuf *m)
 		return ENOBUFS;
 	bcopy(&iphdr, mtod(m, struct ip *), sizeof(struct ip));
 
-	if (sc->mtun_route_expire - time_second <= 0 ||
-	    dst->sin_family != sin_dst->sin_family ||
-	    !in_hosteq(dst->sin_addr, sin_dst->sin_addr)) {
-		/* cache route doesn't match */
-		bzero(dst, sizeof(*dst));
-		dst->sin_family = sin_dst->sin_family;
-		dst->sin_len = sizeof(struct sockaddr_in);
-		dst->sin_addr = sin_dst->sin_addr;
-		if (sc->mtun_ro.ro_rt) {
-			RTFREE(sc->mtun_ro.ro_rt);
-			sc->mtun_ro.ro_rt = NULL;
-		}
+	sockaddr_in_init(&u.dst4, &sin_dst->sin_addr, 0);
+	if (rtcache_lookup(&sc->mtun_ro, &u.dst) == NULL) {
+		m_freem(m);
+		return ENETUNREACH;
 	}
 
-	if (sc->mtun_ro.ro_rt == NULL) {
-		rtalloc(&sc->mtun_ro);
-		if (sc->mtun_ro.ro_rt == NULL) {
-			m_freem(m);
-			return ENETUNREACH;
-		}
-
-		/* if it constitutes infinite encapsulation, punt. */
-		if (sc->mtun_ro.ro_rt->rt_ifp == ifp) {
-			m_freem(m);
-			return ENETUNREACH;	/*XXX*/
-		}
-
-		sc->mtun_route_expire = time_second + MTUN_ROUTE_TTL;
+	/* If the route constitutes infinite encapsulation, punt. */
+	if (sc->mtun_ro.ro_rt->rt_ifp == ifp) {
+		rtcache_free(&sc->mtun_ro);
+		m_freem(m);
+		return ENETUNREACH;	/*XXX*/
 	}
 
 	error = ip_output(m, NULL, &sc->mtun_ro, 0, NULL, NULL);

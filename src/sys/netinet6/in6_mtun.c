@@ -1,4 +1,4 @@
-/*	$Id: in6_mtun.c,v 1.5 2007/03/23 09:34:29 keiichi Exp $	*/
+/*	$Id: in6_mtun.c,v 1.6 2007/05/16 03:47:59 keiichi Exp $	*/
 /*	$NetBSD: in6_gif.c,v 1.44.4.1 2006/09/09 02:58:55 rpaulo Exp $	*/
 /*	$KAME: in6_gif.c,v 1.62 2001/07/29 04:27:25 itojun Exp $	*/
 
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$Id: in6_mtun.c,v 1.5 2007/03/23 09:34:29 keiichi Exp $");
+__KERNEL_RCSID(0, "$Id: in6_mtun.c,v 1.6 2007/05/16 03:47:59 keiichi Exp $");
 
 #include "opt_inet.h"
 #include "opt_iso.h"
@@ -99,12 +99,15 @@ in6_mtun_output(ifp, family, m)
 	struct mbuf *m;
 {
 	struct mtun_softc *sc = (struct mtun_softc*)ifp;
-	struct sockaddr_in6 *dst = (struct sockaddr_in6 *)&sc->mtun_ro6.ro_dst;
 	struct sockaddr_in6 *sin6_src = (struct sockaddr_in6 *)sc->mtun_psrc;
 	struct sockaddr_in6 *sin6_dst = (struct sockaddr_in6 *)sc->mtun_pdst;
 	struct ip6_hdr *ip6;
 	int proto, error;
 	u_int8_t itos, otos;
+	union {
+		struct sockaddr dst;
+		struct sockaddr_in6 dst6;
+	} u;
 	struct ip6_pktopts pktopt;
 
 	if (sin6_src == NULL || sin6_dst == NULL ||
@@ -202,34 +205,16 @@ in6_mtun_output(ifp, family, m)
 	ip6->ip6_flow &= ~ntohl(0xff00000);
 	ip6->ip6_flow |= htonl((u_int32_t)otos << 20);
 
-	if (sc->mtun_route_expire - time_second <= 0 ||
-	     dst->sin6_family != sin6_dst->sin6_family ||
-	     !IN6_ARE_ADDR_EQUAL(&dst->sin6_addr, &sin6_dst->sin6_addr)) {
-		/* cache route doesn't match */
-		bzero(dst, sizeof(*dst));
-		dst->sin6_family = sin6_dst->sin6_family;
-		dst->sin6_len = sizeof(struct sockaddr_in6);
-		dst->sin6_addr = sin6_dst->sin6_addr;
-		if (sc->mtun_ro6.ro_rt) {
-			RTFREE(sc->mtun_ro6.ro_rt);
-			sc->mtun_ro6.ro_rt = NULL;
-		}
+	sockaddr_in6_init(&u.dst6, &sin6_dst->sin6_addr, 0, 0, 0);
+	if (rtcache_lookup(&sc->mtun_ro, &u.dst) == NULL) {
+		m_freem(m);
+		return ENETUNREACH;
 	}
 
-	if (sc->mtun_ro6.ro_rt == NULL) {
-		rtalloc((struct route *)&sc->mtun_ro6);
-		if (sc->mtun_ro6.ro_rt == NULL) {
-			m_freem(m);
-			return ENETUNREACH;
-		}
-
-		/* if it constitutes infinite encapsulation, punt. */
-		if (sc->mtun_ro.ro_rt->rt_ifp == ifp) {
-			m_freem(m);
-			return ENETUNREACH;	/* XXX */
-		}
-
-		sc->mtun_route_expire = time_second + MTUN_ROUTE_TTL;
+	/* If the route constitutes infinite encapsulation, punt. */
+	if (sc->mtun_ro.ro_rt->rt_ifp == ifp) {
+		m_freem(m);
+		return ENETUNREACH;	/* XXX */
 	}
 
 	/* 
@@ -261,10 +246,10 @@ in6_mtun_output(ifp, family, m)
 	 * it is too painful to ask for resend of inner packet, to achieve
 	 * path MTU discovery for encapsulated packets.
 	 */
-	error = ip6_output(m, &pktopt, &sc->mtun_ro6, IPV6_MINMTU,
+	error = ip6_output(m, &pktopt, &sc->mtun_ro, IPV6_MINMTU,
 		    (struct ip6_moptions *)NULL, (struct socket *)NULL, NULL);
 #else
-	error = ip6_output(m, &pktopt, &sc->mtun_ro6, 0,
+	error = ip6_output(m, &pktopt, &sc->mtun_ro, 0,
 		    (struct ip6_moptions *)NULL, (struct socket *)NULL, NULL);
 #endif
 
@@ -443,10 +428,7 @@ in6_mtun_detach(sc)
 	if (error == 0)
 		sc->encap_cookie6 = NULL;
 
-	if (sc->mtun_ro6.ro_rt) {
-		RTFREE(sc->mtun_ro6.ro_rt);
-		sc->mtun_ro6.ro_rt = NULL;
-	}
+	rtcache_free(&sc->mtun_ro);
 
 	return error;
 }
@@ -460,7 +442,7 @@ in6_mtun_ctlinput(cmd, sa, d)
 	struct mtun_softc *sc;
 	struct ip6ctlparam *ip6cp = NULL;
 	struct ip6_hdr *ip6;
-	struct sockaddr_in6 *dst6;
+	const struct sockaddr_in6 *dst6;
 
 	if (sa->sa_family != AF_INET6 ||
 	    sa->sa_len != sizeof(struct sockaddr_in6))
@@ -489,21 +471,19 @@ in6_mtun_ctlinput(cmd, sa, d)
 	 * XXX slow.  sc (or sc->encap_cookie6) should be passed from
 	 * ip_encap.c.
 	 */
-	for (sc = LIST_FIRST(&mtun_softc_list); sc;
-	     sc = LIST_NEXT(sc, mtun_list)) {
+	LIST_FOREACH(sc, &mtun_softc_list, mtun_list) {
 		if ((sc->mtun_if.if_flags & IFF_RUNNING) == 0)
 			continue;
 		if (sc->mtun_psrc->sa_family != AF_INET6)
 			continue;
-		if (!sc->mtun_ro6.ro_rt)
+		if (sc->mtun_ro.ro_rt == NULL)
 			continue;
 
-		dst6 = (struct sockaddr_in6 *)&sc->mtun_ro6.ro_dst;
+		dst6 = satocsin6(rtcache_getdst(&sc->mtun_ro));
 		/* XXX scope */
-		if (IN6_ARE_ADDR_EQUAL(&ip6->ip6_dst, &dst6->sin6_addr)) {
-			/* flush route cache */
-			RTFREE(sc->mtun_ro6.ro_rt);
-			sc->mtun_ro6.ro_rt = NULL;
-		}
+		if (dst6 == NULL)
+			;
+		else if (IN6_ARE_ADDR_EQUAL(&ip6->ip6_dst, &dst6->sin6_addr))
+			rtcache_free(&sc->mtun_ro);
 	}
 }

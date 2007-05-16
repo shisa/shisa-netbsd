@@ -26,7 +26,7 @@ makeoptions	DEBUG="-g"
 
 options 	INCLUDE_CONFIG_FILE	# embed config file in kernel binary
 
-#ident 		"GENERIC-$Revision: 1.15 $"
+#ident 		"GENERIC-$Revision: 1.16 $"
 
 maxusers	32		# estimated number of users
 
@@ -268,8 +268,8 @@ options 	NFS_BOOT_DHCP,NFS_BOOT_BOOTPARAM
 options 	WSEMUL_VT100		# VT100 / VT220 emulation
 # customization of console and kernel output - see dev/wscons/wsdisplayvar.h
 options 	WSDISPLAY_CUSTOM_OUTPUT	# color customization from wsconsctl(8)
-options 	WS_DEFAULT_FG=WSCOL_BLACK
-options 	WS_DEFAULT_BG=WSCOL_WHITE
+#options 	WS_DEFAULT_FG=WSCOL_WHITE
+#options 	WS_DEFAULT_BG=WSCOL_BLACK
 #options 	WS_DEFAULT_COLATTR="(0)"
 #options 	WS_DEFAULT_MONOATTR="(0)"
 options 	WS_KERNEL_FG=WSCOL_GREEN
@@ -374,6 +374,7 @@ mpu*		at acpi?		# Roland MPU-401 MIDI UART
 npx*		at acpi?		# Math coprocessor
 pckbc*  	at acpi?		# PC keyboard controller
 pcppi*		at acpi?                # AT-style speaker sound
+ug* 		at acpi?		# Abit uGuru Hardware monitor
 wss* 		at acpi?		# NeoMagic 256AV in wss mode
 ym* 		at acpi?		# Yamaha OPL3-SA[23] audio
 
@@ -538,14 +539,14 @@ wskbd*		at pckbd? console ?
 wsmouse*	at pms? mux 0
 
 # VESA framebuffer console
-options 	KVM86			# required for vesabios
-vesabios*	at vesabiosbus?
-vesafb* 	at vesabios?
-options 	VESAFB_WIDTH=1024
-options 	VESAFB_HEIGHT=768
-options 	VESAFB_DEPTH=8
+#options 	KVM86			# required for vesabios
+#vesabios*	at vesabiosbus?
+#vesafb* 	at vesabios?
+#options 	VESAFB_WIDTH=640
+#options 	VESAFB_HEIGHT=480
+#options 	VESAFB_DEPTH=8
 #options 	VESAFB_PM		# power management support
-wsdisplay*	at vesafb? console ?
+#wsdisplay*	at vesafb? console ?
 
 # VIA Unichrome framebuffer console
 #unichromefb* 	at pci? dev ? function ?
@@ -633,6 +634,9 @@ iic*	at piixpm?			# SMBus on PIIX4
 # PC87366 hardware monitor
 #nsclpcsio*	at isa?
 #gpio*		at nsclpcsio?
+
+# Abit uGuru Hardware system monitor
+#ug0    at isa? port 0xe0
 
 # VIA VT82C686A/VT8231 Hardware Monitor and Power Management Timer
 #viaenv*	at pci? dev ? function ?
@@ -798,6 +802,7 @@ wdc1	at isa? port 0x170 irq 15 flags 0x00
 
 # ATA (IDE) bus support
 atabus* at ata?
+options	ATADEBUG
 
 # IDE drives
 # Flags are used only with controllers that support DMA operations
@@ -969,8 +974,8 @@ ath*	at cardbus? function ?	# Atheros 5210/5211/5212 802.11
 atw*	at cardbus? function ?	# ADMtek ADM8211 (802.11)
 ex*	at cardbus? function ?	# 3Com 3C575TX
 fxp*	at cardbus? function ?	# Intel i8255x
+ral*	at cardbus? function ?	# Ralink Technology RT25x0 802.11a/b/g
 rtk*	at cardbus? function ?	# Realtek 8129/8139
-ral*	at cardbus? function ?	# Ralink Technology
 rtw*	at cardbus? function ?	# Realtek 8180L (802.11)
 tlp*	at cardbus? function ?	# DECchip 21143
 
@@ -1023,9 +1028,9 @@ ohci*	at pci?	dev ? function ?	# Open Host Controller
 uhci*	at pci?	dev ? function ?	# Universal Host Controller (Intel)
 
 # CardBus USB controllers
-ehci*	at cardbus? function ?	# Enhanced Host Controller
-ohci*	at cardbus? function ?	# Open Host Controller
-uhci*	at cardbus? function ?	# Universal Host Controller (Intel)
+ehci*	at cardbus? function ?		# Enhanced Host Controller
+ohci*	at cardbus? function ?		# Open Host Controller
+uhci*	at cardbus? function ?		# Universal Host Controller (Intel)
 
 # ISA USB controllers
 #slhci0	at isa? port 0x300 irq 5	# ScanLogic SL811HS
@@ -1365,6 +1370,7 @@ pseudo-device 	crypto		# /dev/crypto device
 pseudo-device	swcrypto	# software crypto implementation
 
 # disk/mass storage pseudo-devices
+pseudo-device	bio			# RAID control device driver
 pseudo-device	ccd		4	# concatenated/striped disk devices
 #pseudo-device	cgd		4	# cryptographic disk devices
 pseudo-device	raid		8	# RAIDframe disk driver
@@ -1402,8 +1408,8 @@ pseudo-device	stf			# 6to4 IPv6 over IPv4 encapsulation
 pseudo-device	vlan			# IEEE 802.1q encapsulation
 pseudo-device	bridge			# simple inter-network bridging
 #options 	BRIDGE_IPF		# bridge uses IP/IPv6 pfil hooks too
-pseudo-device	pf			# PF packet filter
-pseudo-device	pflog			# PF log if
+#pseudo-device	pf			# PF packet filter
+#pseudo-device	pflog			# PF log if
 # srt is EXPERIMENTAL
 #pseudo-device	srt			# source-address-based routing
 

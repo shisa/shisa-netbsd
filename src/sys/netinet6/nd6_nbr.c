@@ -1,4 +1,4 @@
-/*	$NetBSD: nd6_nbr.c,v 1.72 2007/03/15 23:39:51 dyoung Exp $	*/
+/*	$NetBSD: nd6_nbr.c,v 1.73 2007/05/02 20:40:28 dyoung Exp $	*/
 /*	$KAME: nd6_nbr.c,v 1.61 2001/02/10 16:06:14 jinmei Exp $	*/
 
 /*
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: nd6_nbr.c,v 1.72 2007/03/15 23:39:51 dyoung Exp $");
+__KERNEL_RCSID(0, "$NetBSD: nd6_nbr.c,v 1.73 2007/05/02 20:40:28 dyoung Exp $");
 
 #include "opt_inet.h"
 #include "opt_ipsec.h"
@@ -367,7 +367,7 @@ nd6_ns_output(struct ifnet *ifp, const struct in6_addr *daddr6,
 	int icmp6len;
 	int maxlen;
 	void *mac;
-	struct route_in6 ro;
+	struct route ro;
 
 	memset(&ro, 0, sizeof(ro));
 
@@ -481,7 +481,7 @@ nd6_ns_output(struct ifnet *ifp, const struct in6_addr *daddr6,
 			dst_sa.sin6_addr = ip6->ip6_dst;
 
 			src = in6_selectsrc(&dst_sa, popts,
-			    NULL, (struct route *)&ro, NULL, NULL, &error);
+			    NULL, &ro, NULL, NULL, &error);
 			if (src == NULL) {
 				nd6log((LOG_DEBUG,
 				    "nd6_ns_output: source can't be "
@@ -575,11 +575,11 @@ nd6_ns_output(struct ifnet *ifp, const struct in6_addr *daddr6,
 	icmp6_ifstat_inc(ifp, ifs6_out_neighborsolicit);
 	icmp6stat.icp6s_outhist[ND_NEIGHBOR_SOLICIT]++;
 
-	rtcache_free((struct route *)&ro);
+	rtcache_free(&ro);
 	return;
 
   bad:
-	rtcache_free((struct route *)&ro);
+	rtcache_free(&ro);
 	m_freem(m);
 	return;
 }
@@ -914,11 +914,15 @@ nd6_na_output(ifp, daddr6_0, taddr6, flags, tlladdr, sdl0)
 	struct ip6_hdr *ip6;
 	struct nd_neighbor_advert *nd_na;
 	struct ip6_moptions im6o;
-	struct sockaddr_in6 dst_sa;
+	struct sockaddr *dst;
+	union {
+		struct sockaddr		dst;
+		struct sockaddr_in6	dst6;
+	} u;
 	struct in6_addr *src, daddr6;
 	int icmp6len, maxlen, error;
 	void *mac;
-	struct route_in6 ro;
+	struct route ro;
 	struct ip6_pktopts *popts = NULL;
 #if defined(MOBILE_IPV6) && NMIP > 0
 	struct ip6_pktopts opts;
@@ -984,10 +988,9 @@ nd6_na_output(ifp, daddr6_0, taddr6, flags, tlladdr, sdl0)
 		flags &= ~ND_NA_FLAG_SOLICITED;
 	}
 	ip6->ip6_dst = daddr6;
-	memset(&dst_sa, 0, sizeof(dst_sa));
-	dst_sa.sin6_family = AF_INET6;
-	dst_sa.sin6_len = sizeof(struct sockaddr_in6);
-	dst_sa.sin6_addr = daddr6;
+	sockaddr_in6_init(&u.dst6, &daddr6, 0, 0, 0);
+	dst = &u.dst;
+	rtcache_setdst(&ro, dst);
 
 	/*
 	 * Select a source whose scope is the same as that of the dest.
@@ -999,13 +1002,12 @@ nd6_na_output(ifp, daddr6_0, taddr6, flags, tlladdr, sdl0)
 	popts = &opts;
 #endif /* MOBILE_IPV6 && NMIP > 0 */
 
-	ro.ro_dst = dst_sa;
-	src = in6_selectsrc(&dst_sa, popts, NULL, (struct route *)&ro, NULL,
-	    NULL, &error);
+	src = in6_selectsrc(satosin6(dst), popts, NULL, &ro, NULL, NULL,
+	    &error);
 	if (src == NULL) {
 		nd6log((LOG_DEBUG, "nd6_na_output: source can't be "
 		    "determined: dst=%s, error=%d\n",
-		    ip6_sprintf(&dst_sa.sin6_addr), error));
+		    ip6_sprintf(&satocsin6(dst)->sin6_addr), error));
 		goto bad;
 	}
 	ip6->ip6_src = *src;
@@ -1065,11 +1067,11 @@ nd6_na_output(ifp, daddr6_0, taddr6, flags, tlladdr, sdl0)
 	icmp6_ifstat_inc(ifp, ifs6_out_neighboradvert);
 	icmp6stat.icp6s_outhist[ND_NEIGHBOR_ADVERT]++;
 
-	rtcache_free((struct route *)&ro);
+	rtcache_free(&ro);
 	return;
 
   bad:
-	rtcache_free((struct route *)&ro);
+	rtcache_free(&ro);
 	m_freem(m);
 	return;
 }

@@ -1,4 +1,4 @@
-/*	$NetBSD: parse.y,v 1.7 2006/09/27 15:35:12 christos Exp $	*/
+/*	$NetBSD: parse.y,v 1.8 2007/05/10 22:30:54 dyoung Exp $	*/
 /*	$OpenBSD: parse.y,v 1.482 2005/03/07 13:20:03 henning Exp $	*/
 
 /*
@@ -456,6 +456,7 @@ typedef struct {
 %type	<v.string>		label string tag
 %type	<v.keep_state>		keep
 %type	<v.state_opt>		state_opt_spec state_opt_list state_opt_item
+%type	<v.state_opt>		opt_statelock
 %type	<v.logquick>		logquick
 %type	<v.interface>		antispoof_ifspc antispoof_iflst antispoof_if
 %type	<v.qassign>		qname
@@ -1848,6 +1849,22 @@ pfrule		: action dir logquick interface route af proto fromto
 			expand_rule(&r, $4, $5.host, $7, $8.src_os,
 			    $8.src.host, $8.src.port, $8.dst.host, $8.dst.port,
 			    $9.uid, $9.gid, $9.icmpspec, $9.mhspec, "");
+		}
+		;
+
+
+opt_statelock	: statelock
+		{
+			$$ = calloc(1, sizeof(struct node_state_opt));
+			if ($$ == NULL)
+				err(EXIT_FAILURE, "opt_statelock: calloc");
+			$$->type = PF_STATE_OPT_STATELOCK;
+			$$->data.statelock = $1;
+			$$->next = NULL;
+			$$->tail = $$;
+		}
+		| /* empty */	{
+			$$ = NULL;
 		}
 		;
 
@@ -3304,7 +3321,7 @@ nataction	: no NAT natpass {
 		}
 		;
 
-natrule		: nataction interface af proto fromto tag tagged redirpool pool_opts
+natrule		: nataction interface af proto fromto tag tagged redirpool pool_opts opt_statelock
 		{
 			struct pf_rule	r;
 
@@ -3450,6 +3467,13 @@ natrule		: nataction interface af proto fromto tag tagged redirpool pool_opts
 				}
 				r.rpool.proxy_port[0] = 0;
 				r.rpool.proxy_port[1] = 0;
+			}
+
+			if ($10 == NULL)
+				r.rule_flag |= default_statelock;
+			else {
+				r.rule_flag |= $10->data.statelock;
+				free($10);
 			}
 
 			expand_rule(&r, $2, $8 == NULL ? NULL : $8->host, $4,

@@ -1,11 +1,13 @@
-/*	$NetBSD: lock.h,v 1.3 2003/09/26 22:46:01 nathanw Exp $	*/
+/*	$NetBSD: linux32_misc.c,v 1.7 2007/04/30 14:05:47 dsl Exp $	*/
 
 /*-
- * Copyright (c) 2000 The NetBSD Foundation, Inc.
+ * Copyright (c) 1995, 1998, 1999 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
  * This code is derived from software contributed to The NetBSD Foundation
- * by Jason R. Thorpe.
+ * by Frank van der Linden and Eric Haszlakiewicz; by Jason R. Thorpe
+ * of the Numerical Aerospace Simulation Facility, NASA Ames Research Center;
+ * by Edgar Fu\ss, Mathematisches Institut der Uni Bonn.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -36,46 +38,58 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <sys/cdefs.h>
+__KERNEL_RCSID(0, "$NetBSD: linux32_misc.c,v 1.7 2007/04/30 14:05:47 dsl Exp $");
+
+#include <sys/param.h>
+#include <sys/proc.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <sys/malloc.h>
+#include <sys/fstypes.h>
+#include <sys/vfs_syscalls.h>
+
+#include <compat/netbsd32/netbsd32.h>
+#include <compat/netbsd32/netbsd32_syscallargs.h>
+
+#include <compat/linux32/common/linux32_types.h>
+#include <compat/linux32/common/linux32_signal.h>
+#include <compat/linux32/linux32_syscallargs.h>
+
+#include <compat/linux/common/linux_types.h>
+#include <compat/linux/common/linux_signal.h>
+#include <compat/linux/common/linux_misc.h>
+#include <compat/linux/common/linux_statfs.h>
+#include <compat/linux/linux_syscallargs.h>
+
+extern const struct linux_mnttypes linux_fstypes[];
+extern const int linux_fstypes_cnt;
+
+
 /*
- * Machine-dependent spin lock operations.
+ * Implement the fs stat functions. Straightforward.
  */
-
-#ifndef _SH5_LOCK_H_
-#define	_SH5_LOCK_H_
-
-static __inline void
-__cpu_simple_lock_init(__cpu_simple_lock_t *alp)
+int
+linux32_sys_statfs(l, v, retval)
+	struct lwp *l;
+	void *v;
+	register_t *retval;
 {
+	struct linux32_sys_statfs_args /* {
+		syscallarg(const netbsd32_charp char) path;
+		syscallarg(linux32_statfsp) sp;
+	} */ *uap = v;
+	struct statvfs *sb;
+	struct linux_statfs ltmp;
+	int error;
 
-	*alp = __SIMPLELOCK_UNLOCKED;
+	sb = STATVFSBUF_GET();
+	error = do_sys_pstatvfs(l, SCARG_P32(uap, path), ST_WAIT, sb);
+	if (error == 0) {
+		bsd_to_linux_statfs(sb, &ltmp);
+		error = copyout(&ltmp, SCARG_P32(uap, sp), sizeof ltmp);
+	}
+
+	STATVFSBUF_PUT(sb);
+	return error;
 }
-
-static __inline void
-__cpu_simple_lock(__cpu_simple_lock_t *alp)
-{
-	register_t l;
-
-	do {
-		__asm __volatile("movi 1, %0; swap.q %1, r63, %0" :
-		    "=r"(l) : "r"(alp));
-	} while (l == __SIMPLELOCK_LOCKED);
-}
-
-static __inline int
-__cpu_simple_lock_try(__cpu_simple_lock_t *alp)
-{
-	register_t l;
-
-	__asm __volatile("movi 1, %0; swap.q %1, r63, %0" : "=r"(l) : "r"(alp));
-
-	return (__SIMPLELOCK_LOCKED - (int)l);
-}
-
-static __inline void
-__cpu_simple_unlock(__cpu_simple_lock_t *alp)
-{
-
-	*alp = __SIMPLELOCK_UNLOCKED;
-}
-
-#endif /* _SH5_LOCK_H_ */

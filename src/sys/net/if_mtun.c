@@ -1,4 +1,4 @@
-/*	$Id: if_mtun.c,v 1.4 2007/04/04 05:08:31 keiichi Exp $	*/
+/*	$Id: if_mtun.c,v 1.5 2007/05/16 03:47:59 keiichi Exp $	*/
 /*	$NetBSD: if_gif.c,v 1.64 2006/11/23 04:07:07 rpaulo Exp $	*/
 /*	$KAME: if_gif.c,v 1.76 2001/08/20 02:01:02 kjc Exp $	*/
 
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$Id: if_mtun.c,v 1.4 2007/04/04 05:08:31 keiichi Exp $");
+__KERNEL_RCSID(0, "$Id: if_mtun.c,v 1.5 2007/05/16 03:47:59 keiichi Exp $");
 
 #include "opt_inet.h"
 #include "opt_iso.h"
@@ -191,6 +191,7 @@ mtun_clone_destroy(struct ifnet *ifp)
 	bpfdetach(ifp);
 #endif
 	if_detach(ifp);
+	rtcache_free(&sc->mtun_ro);
 
 	free(sc, M_DEVBUF);
 

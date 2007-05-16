@@ -1,4 +1,4 @@
-/*	$Id: if_mtun.h,v 1.7 2007/04/04 05:08:31 keiichi Exp $	*/
+/*	$Id: if_mtun.h,v 1.8 2007/05/16 03:47:59 keiichi Exp $	*/
 /*	$NetBSD: if_gif.h,v 1.13 2005/12/11 23:05:25 thorpej Exp $	*/
 /*	$KAME: if_gif.h,v 1.23 2001/07/27 09:21:42 itojun Exp $	*/
 
@@ -55,9 +55,6 @@ struct mtun_softc {
 	struct sockaddr	*mtun_pdst; /* Physical dst addr */
 	union {
 		struct route  mtunscr_ro;    /* xxx */
-#ifdef INET6
-		struct route_in6 mtunscr_ro6; /* xxx */
-#endif
 	} mtunsc_mtunscr;
 	int		mtun_flags;
 	const struct encaptab *encap_cookie4;
@@ -72,9 +69,6 @@ struct mtun_softc {
 #define MTUN_ROUTE_TTL	10
 
 #define mtun_ro mtunsc_mtunscr.mtunscr_ro
-#ifdef INET6
-#define mtun_ro6 mtunsc_mtunscr.mtunscr_ro6
-#endif
 
 #define MTUN_MTU	(1280)	/* Default MTU */
 #define	MTUN_MTU_MIN	(1280)	/* Minimum MTU */
