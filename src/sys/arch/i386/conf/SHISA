@@ -26,7 +26,7 @@ makeoptions	DEBUG="-g"
 
 options 	INCLUDE_CONFIG_FILE	# embed config file in kernel binary
 
-#ident 		"GENERIC-$Revision: 1.16 $"
+#ident 		"GENERIC-$Revision: 1.17 $"
 
 maxusers	32		# estimated number of users
 
@@ -1437,7 +1437,7 @@ pseudo-device	wsfont
 options 	FILEASSOC		# fileassoc(9) - required for Veriexec
 
 # Veriexec
-pseudo-device	veriexec
+# pseudo-device	veriexec
 #
 # Uncomment the fingerprint methods below that are desired. Note that
 # removing fingerprint methods will have almost no impact on the kernel
