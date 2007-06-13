@@ -1,4 +1,4 @@
-LIST OF CHANGES FROM LAST RELEASE:			<$Revision: 1.848 $>
+LIST OF CHANGES FROM LAST RELEASE:			<$Revision: 1.869 $>
 
 
 [Note: This file does not mention every change made to the NetBSD source tree.
@@ -27,7 +27,6 @@ Changes from NetBSD 4.0 to NetBSD 5.0:
 	scsictl(8): added setspeed command, to set the highest speed that the
 		optical drive should use for reading data,
 		contributed by Kimura Fuyuki. [bouyer 20070122]
-	bind: import 9.4.0-rc2 [christos 20070127]
 	i386, amd64: add cmos(4), driver for x86 CMOS RAM. [dyoung 20070206]
 	newlock2: Merge the newlock2 branch. Introduces a number of new
 		kernel synchronization primitives, improves scalability
@@ -53,9 +52,6 @@ Changes from NetBSD 4.0 to NetBSD 5.0:
 	luna68k: Add generic softintr(9) support. [tsutsui 20070304]
 	file(1): update to 4.20.  [pooka 20070304]
 	hfs: Add read-only Apple HFS+ file system support. [dillo 20070305]
-	build: 'make iso-image' in src/ (or build.sh iso-image) will build
-		iso images, eventually bootable, using in-tree tools.
-		[bouyer 20070306]
 	i386, amd64: switch bootable iso images to native boot format, and add
 		different bootable kenrels on the iso images. Enable ACPI
 		in default INSTALL and GENERIC kernels. [bouyer 20070306]
@@ -70,7 +66,6 @@ Changes from NetBSD 4.0 to NetBSD 5.0:
 		Monitor feature (TM). Adapted from OpenBSD/FreeBSD.
 		See options(4) for more information. [xtraeme 20070320]
 	libc: add support for LC_TIME [manu 20070328]
-	bind: import 9.4.0 [ghen 20070330]
 	sh5, evbsh5: Port deleted [scw 20070408]
 	genfb: generic framebuffer console driver with PCI and SBus
 		frontends [macallan 20070411]
@@ -80,7 +75,6 @@ Changes from NetBSD 4.0 to NetBSD 5.0:
 		OpenBSD [jmcneill 20070412]
 	sparc64: add support for hardware monitoring on
 		Ultra Enterprise 450. See envctrl(4) [tnn 20070414]
-	ipf(8): Updated to version 4.1.19. [martin 20070414]
 	coda: overhaul kernel module (vnode locking rules, uvm_fault
 		handling, general cleanup) [gdt 20070415]
 	puffs(4): Support NFS exporting puffs file servers [pooka 20070416]
@@ -96,13 +90,41 @@ Changes from NetBSD 4.0 to NetBSD 5.0:
 	prep: add support for the MTX604 RAVEN based machine.  Other RAVEN
 		based machines are also likely to work now. [garbled 20070426]
 	kernel: Added support for POSIX Asynchronous I/O. [rmind 20070430]
-	bind: import 9.4.1 [christos 20070501]
 	puffs(3): Add puffs_framebuf(3), which abstracts the buffer
 		management and event loop for networked file systems
 		using puffs_cc(3).  Convert mount_psshfs(8) and 
 		mount_9p(8) to use it.  [pooka 20070505]
 	kernel: Add the TFTPROOT kernel option for TFTP'ing root RAMdisk 
 		at root mount time. [manu 20070508]
-	ug(4): Driver splitted in three parts to support the new ACPI
-		attachment (ug* at acpi?). Patch from Mihai Chelaru.
-		[xtraeme 20070508]
+	pf(4): Make 'nat' and 'rdr' translation rules obey state
+		policy flags ('if-bound', 'group-bound', 'floating').
+		Extend pf.conf(5) syntax to express the translation-state
+		policies. [dyoung 20070510]
+	xen: Add timecounter support. [jld 20070512]
+	kernel: add jmide(4), a driver for the JMicron Technology JMB36x
+		PCIe to SATA II/PATA controllers. [bouyer 20070515]
+	idlelwp: yamt-idlelwp branch was merged.
+		1. separate context switching and thread scheduling.
+		2. implement idle lwp.
+		3. clean up related MD/MI interfaces.
+		4. make scheduler(s) modular.
+		[yamt 20070518]
+	ld.elf_so: Support Solaris $ORIGIN etc. expansions in paths.
+		[christos 20070518]
+	postfix(1): Updated to 2.4.1 [heas 20070519]
+	uslsa(4): added CP210x USB-RS232 ucom driver, as submitted by
+		Jonathan A. Kollasch in PR kern/33496 [dogcow 20070520]
+	top(1): Allow a single process to be selected by pid.
+		Add a 'thread mode' that displays LWPs.
+		[ad 20070524]
+	aac(4): Compile and run on amd64. [briggs 20070525]
+	libcurses: Merge in wide curses work done by Ruibiao Qui as a
+		Google Summer of Code project [blymn 20070529]
+	powerpc: Add booted_kernel and booted_device sysctl [nisimura 20070601]
+	smsc(4): Added a driver for the hardware monitoring portion of
+		the SMSC LPC47B397 [blymn 20070601]
+	amd64: The Enhanced Speedstep driver is now able to work on EM64T
+		CPUs running in 64bit mode. [xtraeme 20070603]
+	file(1): update to 4.21.  [pooka 20070607]
+	zyd(4): Added OpenBSD's driver. Supports ZyDAS ZD1211/ZD1211B
+		USB IEEE 802.11b/g wireless network device. [kiyohara 20070609]

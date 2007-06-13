@@ -1,4 +1,4 @@
-#	$NetBSD: mi,v 1.1026 2007/05/07 11:17:13 yamt Exp $
+#	$NetBSD: mi,v 1.1032 2007/06/01 22:54:52 uwe Exp $
 ./etc/mtree/set.comp				comp-sys-root
 ./usr/bin/addr2line				comp-debug-bin		bfd
 ./usr/bin/ar					comp-util-bin		bfd
@@ -1727,6 +1727,7 @@
 ./usr/include/ssp/ssp.h				comp-c-include
 ./usr/include/ssp/stdio.h			comp-c-include
 ./usr/include/ssp/string.h			comp-c-include
+./usr/include/ssp/strings.h			comp-c-include
 ./usr/include/ssp/unistd.h			comp-c-include
 ./usr/include/stab.h				comp-c-include
 ./usr/include/stdarg.h				comp-c-include
@@ -2189,8 +2190,8 @@
 ./usr/lib/libssh_p.a				comp-c-proflib		profile,crypto
 ./usr/lib/libssl.a				comp-c-lib		crypto
 ./usr/lib/libssl_p.a				comp-c-proflib		profile,crypto
-./usr/lib/libssp.a				comp-c-lib
-./usr/lib/libssp_p.a				comp-c-proflib		profile
+./usr/lib/libssp.a				comp-obsolete		obsolete
+./usr/lib/libssp_p.a				comp-obsolete		obsolete
 ./usr/lib/libstdc++.a				comp-cxx-lib
 ./usr/lib/libstdc++_p.a				comp-cxx-proflib	profile
 ./usr/lib/libsupc++.a				comp-cxx-lib
@@ -3066,7 +3067,7 @@
 ./usr/libdata/lint/llib-lsm.ln			comp-obsolete		obsolete
 ./usr/libdata/lint/llib-lssh.ln			comp-c-lintlib		lint,crypto
 ./usr/libdata/lint/llib-lssl.ln			comp-c-lintlib		lint,crypto
-./usr/libdata/lint/llib-lssp.ln			comp-c-lintlib		lint
+./usr/libdata/lint/llib-lssp.ln			comp-obsolete		obsolete
 ./usr/libdata/lint/llib-lstdc.ln		comp-c-lintlib		lint
 ./usr/libdata/lint/llib-ltelnet.ln		comp-obsolete		obsolete
 ./usr/libdata/lint/llib-ltermcap.ln		comp-c-lintlib		lint
@@ -3962,6 +3963,7 @@
 ./usr/share/man/cat3/__SHIFTIN.0		comp-c-catman		.cat
 ./usr/share/man/cat3/__SHIFTOUT.0		comp-c-catman		.cat
 ./usr/share/man/cat3/__SHIFTOUT_MASK.0		comp-c-catman		.cat
+./usr/share/man/cat3/__builtin_object_size.0	comp-c-catman		.cat
 ./usr/share/man/cat3/__svc_getcallercreds.0	comp-c-catman		.cat
 ./usr/share/man/cat3/_longjmp.0			comp-c-catman		.cat
 ./usr/share/man/cat3/_lwp_makecontext.0		comp-c-catman		.cat
@@ -5972,6 +5974,7 @@
 ./usr/share/man/cat3/srandom.0			comp-c-catman		.cat
 ./usr/share/man/cat3/sscanf.0			comp-c-catman		.cat
 ./usr/share/man/cat3/ssl.0			comp-c-catman		crypto,.cat
+./usr/share/man/cat3/ssp.0			comp-c-catman		.cat
 ./usr/share/man/cat3/standend.0			comp-c-catman		.cat
 ./usr/share/man/cat3/standout.0			comp-c-catman		.cat
 ./usr/share/man/cat3/start_color.0		comp-c-catman		.cat
@@ -6721,9 +6724,9 @@
 ./usr/share/man/cat9/cpu_dump.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/cpu_dumpconf.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/cpu_dumpsize.0		comp-sys-catman		.cat
-./usr/share/man/cat9/cpu_exit.0			comp-sys-catman		.cat
+./usr/share/man/cat9/cpu_exit.0			comp-obsolete		obsolete
 ./usr/share/man/cat9/cpu_fork.0			comp-obsolete		obsolete
-./usr/share/man/cat9/cpu_idle.0			comp-obsolete		obsolete
+./usr/share/man/cat9/cpu_idle.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/cpu_initclocks.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/cpu_lwp_fork.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/cpu_need_resched.0		comp-sys-catman		.cat
@@ -6733,7 +6736,8 @@
 ./usr/share/man/cat9/cpu_startup.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/cpu_swapin.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/cpu_swapout.0		comp-sys-catman		.cat
-./usr/share/man/cat9/cpu_switch.0		comp-sys-catman		.cat
+./usr/share/man/cat9/cpu_switch.0		comp-obsolete		obsolete
+./usr/share/man/cat9/cpu_switchto.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/cpu_sysctl.0		comp-obsolete		obsolete
 ./usr/share/man/cat9/cpu_wait.0			comp-obsolete		obsolete
 ./usr/share/man/cat9/crcopy.0			comp-obsolete		obsolete
@@ -6755,7 +6759,7 @@
 ./usr/share/man/cat9/crypto_newsession.0	comp-sys-catman		.cat
 ./usr/share/man/cat9/crypto_register.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/crypto_unregister.0	comp-sys-catman		.cat
-./usr/share/man/cat9/ctxsw.0			comp-sys-catman		.cat
+./usr/share/man/cat9/ctxsw.0			comp-obsolete		obsolete
 ./usr/share/man/cat9/curcpu.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/curproc.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/cv.0			comp-sys-catman		.cat
@@ -7052,7 +7056,7 @@
 ./usr/share/man/cat9/memmove.0			comp-sys-catman		.cat
 ./usr/share/man/cat9/memoryallocators.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/memset.0			comp-sys-catman		.cat
-./usr/share/man/cat9/mi_switch.0		comp-sys-catman		.cat
+./usr/share/man/cat9/mi_switch.0		comp-obsolete		obsolete
 ./usr/share/man/cat9/microtime.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/microuptime.0		comp-sys-catman		.cat
 ./usr/share/man/cat9/mono_time.0		comp-obsolete		obsolete
@@ -8298,6 +8302,7 @@
 ./usr/share/man/man3/__SHIFTIN.3		comp-c-man		.man
 ./usr/share/man/man3/__SHIFTOUT.3		comp-c-man		.man
 ./usr/share/man/man3/__SHIFTOUT_MASK.3		comp-c-man		.man
+./usr/share/man/man3/__builtin_object_size.3	comp-c-man		.man
 ./usr/share/man/man3/__svc_getcallercreds.3	comp-c-man		.man
 ./usr/share/man/man3/_longjmp.3			comp-c-man		.man
 ./usr/share/man/man3/_lwp_makecontext.3		comp-c-man		.man
@@ -10304,6 +10309,7 @@
 ./usr/share/man/man3/srandom.3			comp-c-man		.man
 ./usr/share/man/man3/sscanf.3			comp-c-man		.man
 ./usr/share/man/man3/ssl.3			comp-c-man		crypto,.man
+./usr/share/man/man3/ssp.3			comp-c-man		.man
 ./usr/share/man/man3/standend.3			comp-c-man		.man
 ./usr/share/man/man3/standout.3			comp-c-man		.man
 ./usr/share/man/man3/start_color.3		comp-c-man		.man
@@ -11052,9 +11058,9 @@
 ./usr/share/man/man9/cpu_dump.9			comp-sys-man		.man
 ./usr/share/man/man9/cpu_dumpconf.9		comp-sys-man		.man
 ./usr/share/man/man9/cpu_dumpsize.9		comp-sys-man		.man
-./usr/share/man/man9/cpu_exit.9			comp-sys-man		.man
+./usr/share/man/man9/cpu_exit.9			comp-obsolete		obsolete
 ./usr/share/man/man9/cpu_fork.9			comp-obsolete		obsolete
-./usr/share/man/man9/cpu_idle.9			comp-obsolete		obsolete
+./usr/share/man/man9/cpu_idle.9			comp-sys-man		.man
 ./usr/share/man/man9/cpu_initclocks.9		comp-sys-man		.man
 ./usr/share/man/man9/cpu_lwp_fork.9		comp-sys-man		.man
 ./usr/share/man/man9/cpu_need_resched.9		comp-sys-man		.man
@@ -11064,7 +11070,8 @@
 ./usr/share/man/man9/cpu_startup.9		comp-sys-man		.man
 ./usr/share/man/man9/cpu_swapin.9		comp-sys-man		.man
 ./usr/share/man/man9/cpu_swapout.9		comp-sys-man		.man
-./usr/share/man/man9/cpu_switch.9		comp-sys-man		.man
+./usr/share/man/man9/cpu_switch.9		comp-obsolete		obsolete
+./usr/share/man/man9/cpu_switchto.9		comp-sys-man		.man
 ./usr/share/man/man9/cpu_sysctl.9		comp-obsolete		obsolete
 ./usr/share/man/man9/cpu_wait.9			comp-obsolete		obsolete
 ./usr/share/man/man9/crcopy.9			comp-obsolete		obsolete
@@ -11086,7 +11093,7 @@
 ./usr/share/man/man9/crypto_newsession.9	comp-sys-man		.man
 ./usr/share/man/man9/crypto_register.9		comp-sys-man		.man
 ./usr/share/man/man9/crypto_unregister.9	comp-sys-man		.man
-./usr/share/man/man9/ctxsw.9			comp-sys-man		.man
+./usr/share/man/man9/ctxsw.9			comp-obsolete		obsolete
 ./usr/share/man/man9/curcpu.9			comp-sys-man		.man
 ./usr/share/man/man9/curproc.9			comp-sys-man		.man
 ./usr/share/man/man9/cv.9			comp-sys-man		.man
@@ -11383,7 +11390,7 @@
 ./usr/share/man/man9/memmove.9			comp-sys-man		.man
 ./usr/share/man/man9/memoryallocators.9		comp-sys-man		.man
 ./usr/share/man/man9/memset.9			comp-sys-man		.man
-./usr/share/man/man9/mi_switch.9		comp-sys-man		.man
+./usr/share/man/man9/mi_switch.9		comp-obsolete		obsolete
 ./usr/share/man/man9/microtime.9		comp-sys-man		.man
 ./usr/share/man/man9/microuptime.9		comp-sys-man		.man
 ./usr/share/man/man9/mono_time.9		comp-obsolete		obsolete

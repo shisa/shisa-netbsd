@@ -3124,12 +3124,14 @@ case "$target" in
 	fi
       fi]) ;;
   *-*-netbsd*)
-      if $gcc_cv_nm $($CC -print-file-name=libc.a) | \
+    AC_CACHE_CHECK(__stack_chk_guard in C library,
+      gcc_cv_libc_provides_ssp,
+      [if $gcc_cv_nm $($CC -print-file-name=libc.a) | \
 	grep 'B __stack_chk_guard' > /dev/null; then
 	gcc_cv_libc_provides_ssp=yes
       else
 	gcc_cv_libc_provides_ssp=no
-      fi ;;
+      fi]) ;;
   *) gcc_cv_libc_provides_ssp=no ;;
 esac
 if test x$gcc_cv_libc_provides_ssp = xyes; then

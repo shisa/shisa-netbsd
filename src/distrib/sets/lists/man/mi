@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.999 2007/05/08 22:33:51 xtraeme Exp $
+# $NetBSD: mi,v 1.1006 2007/06/09 11:20:57 kiyohara Exp $
 ./etc/mtree/set.man				man-sys-root
 ./usr/share/info/am-utils.info			man-amd-info		info
 ./usr/share/info/as.info			man-computil-info	bfd,info
@@ -574,6 +574,9 @@
 ./usr/share/man/cat4/acpilid.0			man-sys-catman		.cat
 ./usr/share/man/cat4/acpitz.0			man-sys-catman		.cat
 ./usr/share/man/cat4/adb.0			man-sys-catman		.cat
+./usr/share/man/cat4/adbbt.0			man-sys-catman		.cat
+./usr/share/man/cat4/adbkbd.0			man-sys-catman		.cat
+./usr/share/man/cat4/adbms.0			man-sys-catman		.cat
 ./usr/share/man/cat4/adc.0			man-sys-catman		.cat
 ./usr/share/man/cat4/adt7467c.0			man-sys-catman		.cat
 ./usr/share/man/cat4/adv.0			man-sys-catman		.cat
@@ -772,6 +775,7 @@
 ./usr/share/man/cat4/crypto.0			man-sys-catman		.cat
 ./usr/share/man/cat4/cs.0			man-sys-catman		.cat
 ./usr/share/man/cat4/cs80bus.0			man-sys-catman		.cat
+./usr/share/man/cat4/cuda.0			man-sys-catman		.cat
 ./usr/share/man/cat4/cue.0			man-sys-catman		.cat
 ./usr/share/man/cat4/cy.0			man-sys-catman		.cat
 ./usr/share/man/cat4/cypide.0			man-sys-catman		.cat
@@ -1030,6 +1034,7 @@
 ./usr/share/man/cat4/isp.0			man-sys-catman		.cat
 ./usr/share/man/cat4/it.0			man-sys-catman		.cat
 ./usr/share/man/cat4/iteide.0			man-sys-catman		.cat
+./usr/share/man/cat4/jmide.0			man-sys-catman		.cat
 ./usr/share/man/cat4/iwi.0			man-sys-catman		.cat
 ./usr/share/man/cat4/iwic.0			man-sys-catman		.cat
 ./usr/share/man/cat4/ix.0			man-sys-catman		.cat
@@ -1119,6 +1124,7 @@
 ./usr/share/man/cat4/mvme68k/pcctwo.0		man-sys-catman		.cat
 ./usr/share/man/cat4/mvme68k/wdsc.0		man-sys-catman		.cat
 ./usr/share/man/cat4/mvme68k/zsc.0		man-sys-catman		.cat
+./usr/share/man/cat4/nadb.0			man-sys-catman		.cat
 ./usr/share/man/cat4/nca.0			man-sys-catman		.cat
 ./usr/share/man/cat4/ncr.0			man-obsolete		obsolete
 ./usr/share/man/cat4/ne.0			man-sys-catman		.cat
@@ -1202,6 +1208,7 @@
 ./usr/share/man/cat4/pmppc/rtc.0		man-sys-catman		.cat
 ./usr/share/man/cat4/pms.0			man-sys-catman		.cat
 ./usr/share/man/cat4/pmsi.0			man-sys-catman		.cat
+./usr/share/man/cat4/pmu.0			man-sys-catman		.cat
 ./usr/share/man/cat4/pnaphy.0			man-sys-catman		.cat
 ./usr/share/man/cat4/podulebus.0		man-sys-catman		.cat
 ./usr/share/man/cat4/ppb.0			man-sys-catman		.cat
@@ -1281,6 +1288,7 @@
 ./usr/share/man/cat4/sgimips/pic.0		man-sys-catman		.cat
 ./usr/share/man/cat4/sgimips/sq.0		man-sys-catman		.cat
 ./usr/share/man/cat4/sgimips/wdsc.0		man-sys-catman		.cat
+./usr/share/man/cat4/sgsmix.0			man-sys-catman		.cat
 ./usr/share/man/cat4/shb.0			man-sys-catman		.cat
 ./usr/share/man/cat4/shpcic.0			man-sys-catman		.cat
 ./usr/share/man/cat4/si.0			man-sys-catman		.cat
@@ -1295,6 +1303,7 @@
 ./usr/share/man/cat4/slide.0			man-sys-catman		.cat
 ./usr/share/man/cat4/slip.0			man-sys-catman		.cat
 ./usr/share/man/cat4/sm.0			man-sys-catman		.cat
+./usr/share/man/cat4/smsc.0			man-sys-catman		.cat
 ./usr/share/man/cat4/sound.0			man-sys-catman		.cat
 ./usr/share/man/cat4/sp.0			man-obsolete		obsolete
 ./usr/share/man/cat4/sparc/audioamd.0		man-sys-catman		.cat
@@ -1452,6 +1461,7 @@
 ./usr/share/man/cat4/usbtask.0			man-sys-catman		.cat
 ./usr/share/man/cat4/uscanner.0			man-sys-catman		.cat
 ./usr/share/man/cat4/userconf.0			man-sys-catman		.cat
+./usr/share/man/cat4/uslsa.0			man-sys-catman		.cat
 ./usr/share/man/cat4/usscanner.0		man-sys-catman		.cat
 ./usr/share/man/cat4/ustir.0			man-sys-catman		.cat
 ./usr/share/man/cat4/utoppy.0			man-sys-catman		.cat
@@ -1552,12 +1562,14 @@
 ./usr/share/man/cat4/xbox.0			man-sys-catman		.cat
 ./usr/share/man/cat4/xge.0			man-sys-catman		.cat
 ./usr/share/man/cat4/xi.0			man-sys-catman		.cat
+./usr/share/man/cat4/xirc.0			man-sys-catman		.cat
 ./usr/share/man/cat4/yds.0			man-sys-catman		.cat
 ./usr/share/man/cat4/ym.0			man-sys-catman		.cat
 ./usr/share/man/cat4/zero.0			man-sys-catman		.cat
 ./usr/share/man/cat4/zs.0			man-sys-catman		.cat
 ./usr/share/man/cat4/zsc.0			man-sys-catman		.cat
 ./usr/share/man/cat4/zstty.0			man-sys-catman		.cat
+./usr/share/man/cat4/zyd.0			man-sys-catman		.cat
 ./usr/share/man/cat5/a.out.0			man-sys-catman		.cat
 ./usr/share/man/cat5/access.0			man-postfix-catman	postfix,.cat
 ./usr/share/man/cat5/acct.0			man-sys-catman		.cat
@@ -3028,6 +3040,9 @@
 ./usr/share/man/man4/acpilid.4			man-sys-man		.man
 ./usr/share/man/man4/acpitz.4			man-sys-man		.man
 ./usr/share/man/man4/adb.4			man-sys-man		.man
+./usr/share/man/man4/adbbt.4			man-sys-man		.man
+./usr/share/man/man4/adbkbd.4			man-sys-man		.man
+./usr/share/man/man4/adbms.4			man-sys-man		.man
 ./usr/share/man/man4/adc.4			man-sys-man		.man
 ./usr/share/man/man4/adt7467c.4			man-sys-man		.man
 ./usr/share/man/man4/adv.4			man-sys-man		.man
@@ -3226,6 +3241,7 @@
 ./usr/share/man/man4/crypto.4			man-sys-man		.man
 ./usr/share/man/man4/cs.4			man-sys-man		.man
 ./usr/share/man/man4/cs80bus.4			man-sys-man		.man
+./usr/share/man/man4/cuda.4			man-sys-man		.man
 ./usr/share/man/man4/cue.4			man-sys-man		.man
 ./usr/share/man/man4/cy.4			man-sys-man		.man
 ./usr/share/man/man4/cypide.4			man-sys-man		.man
@@ -3484,6 +3500,7 @@
 ./usr/share/man/man4/isp.4			man-sys-man		.man
 ./usr/share/man/man4/it.4			man-sys-man		.man
 ./usr/share/man/man4/iteide.4			man-sys-man		.man
+./usr/share/man/man4/jmide.4			man-sys-man		.man
 ./usr/share/man/man4/iwi.4			man-sys-man		.man
 ./usr/share/man/man4/iwic.4			man-sys-man		.man
 ./usr/share/man/man4/ix.4			man-sys-man		.man
@@ -3573,6 +3590,7 @@
 ./usr/share/man/man4/mvme68k/pcctwo.4		man-sys-man		.man
 ./usr/share/man/man4/mvme68k/wdsc.4		man-sys-man		.man
 ./usr/share/man/man4/mvme68k/zsc.4		man-sys-man		.man
+./usr/share/man/man4/nadb.4			man-sys-man		.man
 ./usr/share/man/man4/nca.4			man-sys-man		.man
 ./usr/share/man/man4/ncr.4			man-obsolete		obsolete
 ./usr/share/man/man4/ne.4			man-sys-man		.man
@@ -3656,6 +3674,7 @@
 ./usr/share/man/man4/pmppc/rtc.4		man-sys-man		.man
 ./usr/share/man/man4/pms.4			man-sys-man		.man
 ./usr/share/man/man4/pmsi.4			man-sys-man		.man
+./usr/share/man/man4/pmu.4			man-sys-man		.man
 ./usr/share/man/man4/pnaphy.4			man-sys-man		.man
 ./usr/share/man/man4/podulebus.4		man-sys-man		.man
 ./usr/share/man/man4/ppb.4			man-sys-man		.man
@@ -3735,6 +3754,7 @@
 ./usr/share/man/man4/sgimips/pic.4		man-sys-man		.man
 ./usr/share/man/man4/sgimips/sq.4		man-sys-man		.man
 ./usr/share/man/man4/sgimips/wdsc.4		man-sys-man		.man
+./usr/share/man/man4/sgsmix.4			man-sys-man		.man
 ./usr/share/man/man4/shb.4			man-sys-man		.man
 ./usr/share/man/man4/shpcic.4			man-sys-man		.man
 ./usr/share/man/man4/si.4			man-sys-man		.man
@@ -3749,6 +3769,7 @@
 ./usr/share/man/man4/slide.4			man-sys-man		.man
 ./usr/share/man/man4/slip.4			man-sys-man		.man
 ./usr/share/man/man4/sm.4			man-sys-man		.man
+./usr/share/man/man4/smsc.4			man-sys-man		.man
 ./usr/share/man/man4/sound.4			man-sys-man		.man
 ./usr/share/man/man4/sp.4			man-obsolete		obsolete
 ./usr/share/man/man4/sparc/audioamd.4		man-sys-man		.man
@@ -3906,6 +3927,7 @@
 ./usr/share/man/man4/usbtask.4			man-sys-man		.man
 ./usr/share/man/man4/uscanner.4			man-sys-man		.man
 ./usr/share/man/man4/userconf.4			man-sys-man		.man
+./usr/share/man/man4/uslsa.4			man-sys-man		.man
 ./usr/share/man/man4/usscanner.4		man-sys-man		.man
 ./usr/share/man/man4/ustir.4			man-sys-man		.man
 ./usr/share/man/man4/utoppy.4			man-sys-man		.man
@@ -4006,12 +4028,14 @@
 ./usr/share/man/man4/xbox.4			man-sys-man		.man
 ./usr/share/man/man4/xge.4			man-sys-man		.man
 ./usr/share/man/man4/xi.4			man-sys-man		.man
+./usr/share/man/man4/xirc.4			man-sys-man		.man
 ./usr/share/man/man4/yds.4			man-sys-man		.man
 ./usr/share/man/man4/ym.4			man-sys-man		.man
 ./usr/share/man/man4/zero.4			man-sys-man		.man
 ./usr/share/man/man4/zs.4			man-sys-man		.man
 ./usr/share/man/man4/zsc.4			man-sys-man		.man
 ./usr/share/man/man4/zstty.4			man-sys-man		.man
+./usr/share/man/man4/zyd.4			man-sys-man		.man
 ./usr/share/man/man5/a.out.5			man-sys-man		.man
 ./usr/share/man/man5/access.5			man-postfix-man		postfix,.man
 ./usr/share/man/man5/acct.5			man-sys-man		.man

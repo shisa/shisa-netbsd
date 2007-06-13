@@ -1,4 +1,4 @@
-/*	$NetBSD: cfparse.y,v 1.20 2007/03/22 10:26:19 vanhu Exp $	*/
+/*	$NetBSD: cfparse.y,v 1.22 2007/05/16 21:00:40 christos Exp $	*/
 
 /* Id: cfparse.y,v 1.66 2006/08/22 18:17:17 manubsd Exp */
 
@@ -1018,12 +1018,16 @@ authgroup
 
 			grouplist = racoon_realloc(icc->grouplist,
 					sizeof(char**)*(icc->groupcount+1));
-			if (grouplist == NULL)
+			if (grouplist == NULL) {
 				yyerror("unable to allocate auth group list");
+				return -1;
+			}
 
 			groupname = racoon_malloc($1->l+1);
-			if (groupname == NULL)
+			if (groupname == NULL) {
 				yyerror("unable to allocate auth group name");
+				return -1;
+			}
 
 			memcpy(groupname,$1->v,$1->l);
 			groupname[$1->l]=0;
@@ -1051,8 +1055,10 @@ splitdns
 			if (!icc->splitdns_len)
 			{
 				icc->splitdns_list = racoon_malloc($1->l);
-				if(icc->splitdns_list == NULL)
+				if(icc->splitdns_list == NULL) {
 					yyerror("error allocating splitdns list buffer");
+					return -1;
+				}
 				memcpy(icc->splitdns_list,$1->v,$1->l);
 				icc->splitdns_len = $1->l;
 			}
@@ -1060,8 +1066,10 @@ splitdns
 			{
 				int len = icc->splitdns_len + $1->l + 1;
 				icc->splitdns_list = racoon_realloc(icc->splitdns_list,len);
-				if(icc->splitdns_list == NULL)
+				if(icc->splitdns_list == NULL) {
 					yyerror("error allocating splitdns list buffer");
+					return -1;
+				}
 				icc->splitdns_list[icc->splitdns_len] = ',';
 				memcpy(icc->splitdns_list + icc->splitdns_len + 1, $1->v, $1->l);
 				icc->splitdns_len = len;

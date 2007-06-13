@@ -1,4 +1,4 @@
-#	$NetBSD: BRANCHES,v 1.190 2007/05/07 13:05:17 yamt Exp $
+#	$NetBSD: BRANCHES,v 1.196 2007/05/28 09:29:18 hubertf Exp $
 #
 # This file contains a list of branches that exist in the NetBSD CVS
 # tree and their current state.
@@ -279,6 +279,20 @@ Maintainer:	Gregory McGarry <gmcgarry@NetBSD.org>
 Scope:		kernel
 Notes:		merge pcred and ucred and poolify
 
+Branch:		itohy-usb1
+Description:	USB stack overhaul, mostly DMA related
+Status:		Active
+Start Date:	22 May 2007
+End Date:
+Base Tag:	itohy-usb1-base
+Maintainer:	ITOH Yasufumi <itohy@NetBSD.org>
+Scope:		kernel
+Notes:		To check out the kernel source tree,
+		1. check out checkout script
+			cvs checkout -ritohy-usb1 src/sys/dev/usb/filelist
+		2. update files in the branch
+			sh -e src/sys/dev/usb/filelist
+
 Branch:		kame
 Description:	KAME Project
 Status:		Dormant
@@ -365,9 +379,11 @@ Base Tag:	ppcoea-renovation-base
 Maintainer:	Tim Rightnour <garbled@netbsd.org>
 Scope:		src/sys/arch
 Notes:		This branch is for a general cleanup of all OEA-based PowerPC
-		ports.  The general concept is to get them all compiling, and
-		sharing as much code as possible.  All developers are welcome
-		to commit to this branch.
+		ports. OEA (Operating Environment Architecture) PowerPC refers
+		to the 601, 603, 604, and similar chips.  Specifically, not the
+		403/401 and other embedded chips. The general concept is to get
+		them all compiling, and sharing as much code as possible.  All
+		developers are welcome to commit to this branch.
 
 Branch:		rpaulo-netinet-merge-pcb
 Description:	merge in6pcb with inpcb
@@ -414,6 +430,23 @@ Scope:		x11
 Notes:		Requires parts of xsrc/xfree (HEAD)
 		xsrc/local, xsrc/xfree/xc/programs/Xserver/hw/netbsd
 		Requires xorg (XORG-6_8_1)
+
+Branch:  	wrstuden-fixsa
+Description:	Fix a number of issues present with Scheduler Activations.
+Status: 	Active
+Start Date:	15 May 2007
+End Date:
+Base Tag:	wrstuden-fixsa-base
+Maintainer:	Bill Stouder-Studenmund <wrstuden@NetBSD.org>
+Scope:		src, though all the interesting stuff is in the kernel
+		or lib/libpthread or maybe gdb.
+Notes:		This branch is based off of the netbsd-4 branch!
+		This branch is intended to stage improvements for the
+		Scheduler Activations system for NetBSD 4. Improvements
+		include not allocating memory while preparing to tsleep(),
+		reducing inappropriate upcall delivery (hopefully also
+		eliminating the need to mlock stacks), and being
+		able to pthread_kill() running threads.
 
 Branch:		vmlocking
 Description:	Make memory allocators and trap handling MP safe
@@ -464,70 +497,9 @@ Notes:
 
 		Lots of testing required.
 
-Branch:		yamt-idlelwp
-Description:	idle lwp, and some changes depending on it.
-
-		1. separate context switching and thread scheduling.
-		   (cf. gmcgarry_ctxsw)
-		2. implement idle lwp.
-		3. clean up related MD/MI interfaces.
-		4. make scheduler(s) modular.
-
-Status:		Active
-Start Date:	Fri Feb 17 2007
-End Date:	
-Base Tag:	yamt-idlelwp-base6
-Maintainer:	YAMAMOTO Takashi <yamt@NetBSD.org>
-Scope:		src/sys  (src/common is tagged but not branched)
-Notes:		
-		Status of ports:
-		  alpha			[ Done, UP tested, MP not tested ]
-		  i386			[ Done, tested ]
-		  amd64			[ Done, tested ]
-		  mips			[ Done, MIPS1 tested, MIPSX needs
-					  further testing + fixes ]
-		  sparc			[ WIP, commited known broken ]
-		  sparc64		[ WIP, commited known broken ]
-		  arm			[ Done, SA1 tested. ]
-		  macppc/powerpc	[ Done, OEA tested ]
-		  hppa			[ WIP. SYSCALLGATE trap issues remain. ]
-		  sh3			[ Done, tested ]
-		  vax			[ Done, UP tested, MP untested ]
-		  m68k			[ broken ]
-		  ns32k			[ broken ]
-		  ia64			[ broken ]
-		  pdp10			[ broken ]
-
-		How to adapt a port?
-
-		- unify cpu_switch, cpu_exit, cpu_switchto into
-		  a single cpu_switchto.  see cpu_switchto.9.
-
-		- implement cpu_idle.  see cpu_idle.9.
-
-		- add a flag argument to cpu_need_resched.
-		  handle RESCHED_IMMED flag, which means "cause a preemption
-		  as soon as possible."  eg. in the case of MULTIPROCESSOR,
-		  send an IPI to the target cpu.
-
-		- "curlwp == NULL" is not a valid check for idle state anymore.
-		  use "(curlwp->l_flag & LW_IDLE) != 0" instead.  curlwp is
-		  almost always non-NULL, with exceptions like early on boot.
-
-		- remove idle pcbs.
-
-		- (if MULTIPROCESSOR) tweak processor trampoline code.
-
-		- (if MULTIPROCESSOR) call mi_cpu_attach when attaching
-		  secondary processors.
-
-		- (if schedhz!=0) call schedclock regardless of the value of
-		  curlwp.
-
-		- of course, update MD users of scheduler/switching API.
-
 Branch:		yamt-lazymbuf
 Description:	implement and evaluate lazy mapping of mbuf external data pages
+		also, change the way to share mbuf external storage.
 		it's intended as the first step of larger changes.
 			1. support operations (esp. bus_dma load) on
 			   unmapped mbuf.
@@ -542,6 +514,10 @@ Base Tag:	yamt-lazymbuf-base4
 Maintainer:	YAMAMOTO Takashi <yamt@NetBSD.org>
 Scope:		src/sys  (src/common is tagged but not branched)
 Notes:		
+		i386		DONE
+		amd64		DONE
+		other ports should work as the trunk does.
+		(conditionalized by __HAVE_LAZY_MBUF macro)
 
 Branch:		reinoud-bufcleanup
 Description:	implement and evaluate struct buf usage cleanup strategies.
@@ -1124,6 +1100,68 @@ Notes:		No longer active due to lack of time, and introduction
 		deal.
 
 		Any other wrstuden-devbsize tag may (and should) go away.
+
+Branch:		yamt-idlelwp
+Description:	idle lwp, and some changes depending on it.
+
+		1. separate context switching and thread scheduling.
+		   (cf. gmcgarry_ctxsw)
+		2. implement idle lwp.
+		3. clean up related MD/MI interfaces.
+		4. make scheduler(s) modular.
+
+Status:		Terminated; merged to -current
+Start Date:	Fri Feb 17 2007
+End Date:	Thu May 17 2007
+Base Tag:	yamt-idlelwp-base8
+Maintainer:	YAMAMOTO Takashi <yamt@NetBSD.org>
+Scope:		src/sys  (src/common is tagged but not branched)
+Notes:		
+		Status of ports:
+		  alpha			[ Done, UP tested, MP not tested ]
+		  i386			[ Done, tested ]
+		  amd64			[ Done, tested ]
+		  mips			[ Done, MIPS1 tested, MIPSX needs
+					  further testing + fixes ]
+		  sparc			[ WIP, commited known broken ]
+		  sparc64		[ WIP, commited known broken ]
+		  arm			[ Done, SA1 tested. ]
+		  macppc/powerpc	[ Done, OEA tested ]
+		  hppa			[ WIP. SYSCALLGATE trap issues remain. ]
+		  sh3			[ Done, tested ]
+		  vax			[ Done, UP tested, MP untested ]
+		  m68k			[ broken ]
+		  ns32k			[ broken ]
+		  ia64			[ broken ]
+		  pdp10			[ broken ]
+
+		How to adapt a port?
+
+		- unify cpu_switch, cpu_exit, cpu_switchto into
+		  a single cpu_switchto.  see cpu_switchto.9.
+
+		- implement cpu_idle.  see cpu_idle.9.
+
+		- add a flag argument to cpu_need_resched.
+		  handle RESCHED_IMMED flag, which means "cause a preemption
+		  as soon as possible."  eg. in the case of MULTIPROCESSOR,
+		  send an IPI to the target cpu.
+
+		- "curlwp == NULL" is not a valid check for idle state anymore.
+		  use "(curlwp->l_flag & LW_IDLE) != 0" instead.  curlwp is
+		  almost always non-NULL, with exceptions like early on boot.
+
+		- remove idle pcbs.
+
+		- (if MULTIPROCESSOR) tweak processor trampoline code.
+
+		- (if MULTIPROCESSOR) call mi_cpu_attach when attaching
+		  secondary processors.
+
+		- (if schedhz!=0) call schedclock regardless of the value of
+		  curlwp.
+
+		- of course, update MD users of scheduler/switching API.
 
 Branch:		yamt-km, yamt-km-doc
 Description:	simplify/improve kernel memory management and bootstrap

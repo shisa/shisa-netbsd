@@ -1,4 +1,4 @@
-#	$NetBSD: list.ramdisk,v 1.3 2007/05/10 23:22:30 dogcow Exp $
+#	$NetBSD: list.ramdisk,v 1.5 2007/05/30 16:23:22 tls Exp $
 
 SRCDIRS	usr.bin/less
 SRCDIRS	bin sbin usr.bin usr.sbin gnu/usr.bin

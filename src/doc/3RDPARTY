@@ -1,4 +1,4 @@
-#	$NetBSD: 3RDPARTY,v 1.523 2007/05/02 09:26:57 wiz Exp $
+#	$NetBSD: 3RDPARTY,v 1.530 2007/06/07 11:41:20 pooka Exp $
 #
 # This file contains a list of the software that has been integrated into
 # NetBSD where we are not the primary maintainer.
@@ -76,8 +76,8 @@ Notes:
 bc includes dc, both of which are in the NetBSD tree.
 
 Package:	bind/named
-Version:	libc/includes: 9.4.0, bind: 9.4.0
-Current Vers:	9.4.0
+Version:	libc/includes: 9.4.1, bind: 9.4.1
+Current Vers:	9.4.1
 Maintainer:	Paul Vixie <vixie@vix.com>
 Archive Site:	ftp://ftp.isc.org/isc/bind9/
 Home Page:	http://www.isc.org/sw/bind/
@@ -243,8 +243,8 @@ No hexadecimal floating-point string conversion for VAX FP yet.
 Only double-precision addressed at this time.
 
 Package:	file
-Version:	4.20
-Current Vers:	4.20
+Version:	4.21
+Current Vers:	4.21
 Maintainer:	Christos Zoulas <christos@zoulas.com>
 Archive Site:	ftp://ftp.astron.com/pub/file/
 Home Page:
@@ -270,7 +270,7 @@ Newer flex will be found in:
 
 Package:	gcc
 Version:	4.1.2-20070110
-Current Vers:	4.1.2
+Current Vers:	4.2.0
 Maintainer:	FSF
 Archive Site:	ftp://ftp.gnu.org/gnu/gcc/
 Home Page:	http://www.gnu.org/software/gcc/
@@ -293,7 +293,7 @@ Maintainer:	FSF
 Archive Site:	ftp://ftp.gnu.org/gnu/gdb/
 Home Page:	http://www.gnu.org/software/gdb/
 Mailing List:	bug-gdb@gnu.org
-Responsible:	thorpej, mrg
+Responsible:	thorpej
 License:	GPLv2, LGPLv2
 Notes:
 When updating GDB, it is imperative to test that:
@@ -389,8 +389,8 @@ License:	BSD (3-clause)
 Notes:
 
 Package:	ipf
-Version:	4.1.20
-Current Vers:	4.1.20
+Version:	4.1.22
+Current Vers:	4.1.22
 Maintainer:	Darren Reed
 Archive Site:	http://coombs.anu.edu.au/~avalon/
 Home Page:	http://coombs.anu.edu.au/~avalon/
@@ -668,7 +668,7 @@ formating in man pages, disallowing flood pinging, alignment fixes,
 and more.
 
 Package:	postfix
-Version:	2.3.7
+Version:	2.4.1
 Current Vers:	2.4.1
 Maintainer:	Wietse Venema <wietse@porcupine.org>
 Archive Site:	ftp://postfix.cloud9.net/official/
@@ -845,8 +845,8 @@ License:	BSD (4-clause)
 Notes:
 
 Package:	tz
-Version:	tzcode2004a / tzdata2007e
-Current Vers:	tzcode2007e / tzdata2007e
+Version:	tzcode2004a / tzdata2007f
+Current Vers:	tzcode2007f / tzdata2007f
 Maintainer:	Arthur David Olson <ado@elsie.nci.nih.gov>
 Archive Site:	ftp://elsie.nci.nih.gov/pub/
 Home Page:
