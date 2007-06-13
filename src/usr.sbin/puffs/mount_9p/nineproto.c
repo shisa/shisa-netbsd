@@ -1,4 +1,4 @@
-/*	$NetBSD: nineproto.c,v 1.5 2007/05/06 22:17:50 pooka Exp $	*/
+/*	$NetBSD: nineproto.c,v 1.7 2007/05/16 09:57:21 pooka Exp $	*/
 
 /*
  * Copyright (c) 2007  Antti Kantee.  All Rights Reserved.
@@ -27,7 +27,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: nineproto.c,v 1.5 2007/05/06 22:17:50 pooka Exp $");
+__RCSID("$NetBSD: nineproto.c,v 1.7 2007/05/16 09:57:21 pooka Exp $");
 #endif /* !lint */
 
 #include <sys/types.h>
@@ -187,7 +187,7 @@ proto_cc_dupfid(struct puffs_cc *pcc, p9pfid_t oldfid, p9pfid_t newfid)
 	struct puffs_framebuf *pb;
 	p9ptag_t tag = NEXTTAG(p9p);
 	uint16_t qids;
-	int rv, error = 0;
+	int rv = 0;
 
 	pb = p9pbuf_makeout();
 	p9pbuf_put_1(pb, P9PROTO_T_WALK);
@@ -195,25 +195,25 @@ proto_cc_dupfid(struct puffs_cc *pcc, p9pfid_t oldfid, p9pfid_t newfid)
 	p9pbuf_put_4(pb, oldfid);
 	p9pbuf_put_4(pb, newfid);
 	p9pbuf_put_2(pb, 0);
-	puffs_framebuf_enqueue_cc(pcc, pb);
+	GETRESPONSE(pb);
 
 	rv = proto_expect_walk_nqids(pb, &qids);
-	if (rv)
-		error = rv;
-	if (qids != 0)
-		error = EPROTO;
+	if (rv == 0 && qids != 0)
+		rv = EPROTO;
 
+ out:
 	puffs_framebuf_destroy(pb);
-	return error;
+	return rv;
 }
 
 int
 proto_cc_clunkfid(struct puffs_cc *pcc, p9pfid_t fid, int waitforit)
 {
+	struct puffs_usermount *pu = puffs_cc_getusermount(pcc);
 	struct puffs9p *p9p = puffs_cc_getspecific(pcc);
 	struct puffs_framebuf *pb;
 	p9ptag_t tag = NEXTTAG(p9p);
-	int error = 0;
+	int rv = 0;
 
 	pb = p9pbuf_makeout();
 	p9pbuf_put_1(pb, P9PROTO_T_CLUNK);
@@ -221,16 +221,19 @@ proto_cc_clunkfid(struct puffs_cc *pcc, p9pfid_t fid, int waitforit)
 	p9pbuf_put_4(pb, fid);
 
 	if (waitforit) {
-		puffs_framebuf_enqueue_cc(pcc, pb);
-		if (p9pbuf_get_type(pb) != P9PROTO_R_CLUNK)
-			error = EPROTO;
+		if (puffs_framev_enqueue_cc(pcc, p9p->servsock, pb) == 0) {
+			if (p9pbuf_get_type(pb) != P9PROTO_R_CLUNK)
+				rv = EPROTO;
+		} else {
+			rv = errno;
+		}
 		puffs_framebuf_destroy(pb);
 	} else {
-		puffs_framebuf_enqueue_justsend(puffs_cc_getusermount(pcc),
-		    pb, 1);
+		JUSTSEND(pb);
 	}
 
-	return error;
+ out:
+	return rv;
 }
 
 /*
@@ -242,23 +245,24 @@ proto_cc_open(struct puffs_cc *pcc, p9pfid_t fid, p9pfid_t newfid, int mode)
 	struct puffs9p *p9p = puffs_cc_getspecific(pcc);
 	struct puffs_framebuf *pb;
 	p9ptag_t tag = NEXTTAG(p9p);
-	int error;
+	int rv;
 
-	error = proto_cc_dupfid(pcc, fid, newfid);
-	if (error)
-		return error;
+	rv = proto_cc_dupfid(pcc, fid, newfid);
+	if (rv)
+		return rv;
 
 	pb = p9pbuf_makeout();
 	p9pbuf_put_1(pb, P9PROTO_T_OPEN);
 	p9pbuf_put_2(pb, tag);
 	p9pbuf_put_4(pb, newfid);
 	p9pbuf_put_1(pb, mode);
-	puffs_framebuf_enqueue_cc(pcc, pb);
+	GETRESPONSE(pb);
 	if (p9pbuf_get_type(pb) != P9PROTO_R_OPEN)
-		error = EPROTO;
+		rv = EPROTO;
 
+ out:
 	puffs_framebuf_destroy(pb);
-	return error;
+	return rv;
 }
 
 void

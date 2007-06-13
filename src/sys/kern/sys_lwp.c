@@ -1,4 +1,4 @@
-/*	$NetBSD: sys_lwp.c,v 1.18 2007/03/24 16:43:56 rmind Exp $	*/
+/*	$NetBSD: sys_lwp.c,v 1.20 2007/06/03 09:50:12 dsl Exp $	*/
 
 /*-
  * Copyright (c) 2001, 2006, 2007 The NetBSD Foundation, Inc.
@@ -42,7 +42,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: sys_lwp.c,v 1.18 2007/03/24 16:43:56 rmind Exp $");
+__KERNEL_RCSID(0, "$NetBSD: sys_lwp.c,v 1.20 2007/06/03 09:50:12 dsl Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -128,10 +128,10 @@ sys__lwp_create(struct lwp *l, void *v, register_t *retval)
 	    	if (p->p_stat == SSTOP || (p->p_sflag & PS_STOPPING) != 0)
 	    		l2->l_stat = LSSTOP;
 		else {
-			KASSERT(lwp_locked(l2, &sched_mutex));
+			KASSERT(lwp_locked(l2, l2->l_cpu->ci_schedstate.spc_mutex));
 			p->p_nrlwps++;
 			l2->l_stat = LSRUN;
-			setrunqueue(l2);
+			sched_enqueue(l2, false);
 		}
 	} else
 		l2->l_stat = LSSUSPENDED;
@@ -428,24 +428,38 @@ sys__lwp_park(struct lwp *l, void *v, register_t *retval)
 {
 	struct sys__lwp_park_args /* {
 		syscallarg(const struct timespec *)	ts;
-		syscallarg(ucontext_t *)		uc;
+		syscallarg(ucontext_t *)		ucp;
 		syscallarg(const void *)		hint;
 	} */ *uap = v;
-	const struct timespec *tsp;
-	struct timespec ts, tsx;
+	struct timespec ts;
+	int error;
+
+	if (SCARG(uap, ts) == NULL)
+		return do_sys_lwp_park(l, NULL, SCARG(uap, ucp),
+					SCARG(uap, hint));
+
+	if ((error = copyin(SCARG(uap, ts), &ts, sizeof(ts))) != 0)
+		return error;
+
+	return do_sys_lwp_park(l, &ts, SCARG(uap, ucp), SCARG(uap, hint));
+}
+
+int
+do_sys_lwp_park(struct lwp *l, struct timespec *ts, ucontext_t *uc,
+    const void *hint)
+{
+	struct timespec tsx;
 	struct timeval tv;
 	sleepq_t *sq;
 	wchan_t wchan;
 	int timo, error;
 
 	/* Fix up the given timeout value. */
-	if ((tsp = SCARG(uap, ts)) != NULL) {
-		if ((error = copyin(tsp, &ts, sizeof(ts))) != 0)
-			return error;
+	if (ts != NULL) {
 		getnanotime(&tsx);
-		timespecsub(&ts, &tsx, &ts);
-		tv.tv_sec = ts.tv_sec;
-		tv.tv_usec = ts.tv_nsec / 1000;
+		timespecsub(ts, &tsx, ts);
+		tv.tv_sec = ts->tv_sec;
+		tv.tv_usec = ts->tv_nsec / 1000;
 		if (tv.tv_sec < 0 || (tv.tv_sec == 0 && tv.tv_usec < 0))
 			return ETIMEDOUT;
 		if ((error = itimerfix(&tv)) != 0)
@@ -455,33 +469,25 @@ sys__lwp_park(struct lwp *l, void *v, register_t *retval)
 		timo = 0;
 
 	/* Find and lock the sleep queue. */
-	wchan = lwp_park_wchan(l->l_proc, SCARG(uap, hint));
+	wchan = lwp_park_wchan(l->l_proc, hint);
 	sq = sleeptab_lookup(&lwp_park_tab, wchan);
 
 	/*
 	 * Before going the full route and blocking, check to see if an
 	 * unpark op is pending.
 	 */
-	sleepq_lwp_lock(l);
+	lwp_lock(l);
 	if ((l->l_flag & (LW_CANCELLED | LW_UNPARKED)) != 0) {
 		l->l_flag &= ~(LW_CANCELLED | LW_UNPARKED);
-		sleepq_lwp_unlock(l);
+		lwp_unlock(l);
 		sleepq_unlock(sq);
 		return EALREADY;
 	}
-#if defined(MULTIPROCESSOR) || defined(LOCKDEBUG)
 	lwp_unlock_to(l, sq->sq_mutex);
-#endif
 
-	/*
-	 * For now we ignore the ucontext argument.  In the future, we may
-	 * put our stack up to be recycled.  If it's binned, a trampoline
-	 * function could call sleepq_unblock() on our behalf.
-	 */
 	KERNEL_UNLOCK_ALL(l, &l->l_biglocks); /* XXX for compat32 */
-	sleepq_block(sq, sched_kpri(l), wchan, "parked", timo, 1,
-	    &lwp_park_sobj);
-	error = sleepq_unblock(timo, 1);
+	sleepq_enqueue(sq, sched_kpri(l), wchan, "parked", &lwp_park_sobj);
+	error = sleepq_block(timo, true);
 	switch (error) {
 	case EWOULDBLOCK:
 		error = ETIMEDOUT;

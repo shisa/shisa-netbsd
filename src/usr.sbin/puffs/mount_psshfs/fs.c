@@ -1,4 +1,4 @@
-/*	$NetBSD: fs.c,v 1.8 2007/05/05 15:49:51 pooka Exp $	*/
+/*	$NetBSD: fs.c,v 1.11 2007/06/06 01:55:03 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006  Antti Kantee.  All Rights Reserved.
@@ -11,9 +11,6 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. The name of the company nor the name of the author may be used to
- *    endorse or promote products derived from this software without specific
- *    prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -30,7 +27,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: fs.c,v 1.8 2007/05/05 15:49:51 pooka Exp $");
+__RCSID("$NetBSD: fs.c,v 1.11 2007/06/06 01:55:03 pooka Exp $");
 #endif /* !lint */
 
 #include <err.h>
@@ -53,7 +50,6 @@ __RCSID("$NetBSD: fs.c,v 1.8 2007/05/05 15:49:51 pooka Exp $");
 int
 psshfs_domount(struct puffs_usermount *pu)
 {
-	struct statvfs sb;
 	struct psshfs_ctx *pctx = puffs_getspecific(pu);
 	struct psshfs_node *root = &pctx->psn_root;
 	struct puffs_pathobj *po_root;
@@ -129,10 +125,6 @@ psshfs_domount(struct puffs_usermount *pu)
 	rva->va_fileid = pctx->nextino++;
 	rva->va_nlink = 0156; /* XXX */
 
-	puffs_zerostatvfs(&sb);
-	if (puffs_start(pu, pn_root, &sb) != 0)
-		return errno;
-
 	return 0;
 }
 
@@ -160,7 +152,7 @@ psshfs_fs_nodetofh(struct puffs_cc *pcc, void *cookie,
 	pf->mounttime = pctx->mounttime;
 	pf->node = pn;
 
-	psn->hasfh = 1;
+	psn->stat |= PSN_HASFH;
 
 	return 0;
 }
@@ -181,7 +173,7 @@ psshfs_fs_fhtonode(struct puffs_cc *pcc, void *fid, size_t fidsize,
 	if (pn == 0)
 		return EINVAL;
 	psn = pn->pn_data;
-	if (psn->hasfh == 0)
+	if ((psn->stat & PSN_HASFH) == 0)
 		return EINVAL;
 
 	/* update node attributes */

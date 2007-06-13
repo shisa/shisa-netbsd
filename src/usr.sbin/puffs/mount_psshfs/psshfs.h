@@ -1,4 +1,4 @@
-/*	$NetBSD: psshfs.h,v 1.12 2007/05/06 19:48:51 pooka Exp $	*/
+/*	$NetBSD: psshfs.h,v 1.20 2007/06/06 01:55:03 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006, 2007  Antti Kantee.  All Rights Reserved.
@@ -11,9 +11,6 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. The name of the company nor the name of the author may be used to
- *    endorse or promote products derived from this software without specific
- *    prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -49,9 +46,6 @@
  */
 #define PSSHFS_REFRESHIVAL 30
 
-/* warm getattr cache in readdir */
-#define SUPERREADDIR
-
 PUFFSOP_PROTOS(psshfs);
 
 #define NEXTREQ(pctx) ((pctx->nextreq)++)
@@ -65,6 +59,30 @@ PUFFSOP_PROTOS(psshfs);
 	puffs_framebuf_destroy(pb);					\
 	return (rv)
 
+#define GETRESPONSE(pb)							\
+do {									\
+	if (puffs_framev_enqueue_cc(pcc, pctx->sshfd, pb) == -1) {	\
+		rv = errno;						\
+		goto out;						\
+	}								\
+} while (/*CONSTCOND*/0)
+
+#define JUSTSEND(pb)							\
+do {									\
+	if (puffs_framev_enqueue_justsend(pu,pctx->sshfd,pb,1) == -1) {	\
+		rv = errno;						\
+		goto out;						\
+	}								\
+} while (/*CONSTCOND*/0)
+
+#define SENDCB(pb, f, a)						\
+do {									\
+	if (puffs_framev_enqueue_cb(pu, pctx->sshfd, pb, f,a) == -1) {	\
+		rv = errno;						\
+		goto out;						\
+	}								\
+} while (/*CONSTCOND*/0)
+
 struct psshfs_dir {
 	int valid;
 	struct puffs_node *entry;
@@ -72,6 +90,8 @@ struct psshfs_dir {
 	char *entryname;
 	struct vattr va;
 	time_t attrread;
+
+	struct puffs_framebuf *getattr_pb;
 };
 
 struct psshfs_fid {
@@ -83,20 +103,29 @@ struct psshfs_node {
 	struct puffs_node *parent;
 
 	struct psshfs_dir *dir;	/* only valid if we're of type VDIR */
+	struct delayattr {
+		struct puffs_framebuf *pufbuf;
+		struct readdirattr *rda;
+	} *da;
+	size_t nextda;
+
 	size_t denttot;
 	size_t dentnext;
 	time_t dentread;
 	int childcount;
-	int reclaimed;
-	int hasfh;
+
+	int stat;
 
 	time_t attrread;
+	struct puffs_framebuf *getattr_pb;
 
 	char *fhand_r;
 	char *fhand_w;
-	size_t fhand_r_len;
-	size_t fhand_w_len;
+	uint32_t fhand_r_len;
+	uint32_t fhand_w_len;
 };
+#define PSN_RECLAIMED	0x01
+#define PSN_HASFH	0x02
 
 struct psshfs_ctx {
 	int sshfd;

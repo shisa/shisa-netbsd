@@ -1,4 +1,4 @@
-/*	$NetBSD: puffs.h,v 1.53 2007/05/09 18:36:52 pooka Exp $	*/
+/*	$NetBSD: puffs.h,v 1.62 2007/06/06 01:55:01 pooka Exp $	*/
 
 /*
  * Copyright (c) 2005, 2006, 2007  Antti Kantee.  All Rights Reserved.
@@ -15,9 +15,6 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. The name of the company nor the name of the author may be used to
- *    endorse or promote products derived from this software without specific
- *    prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -40,6 +37,7 @@
 #include <sys/mount.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
+#include <sys/time.h>
 #include <sys/vnode.h>
 
 #include <fs/puffs/puffs_msgif.h>
@@ -169,8 +167,7 @@ struct puffs_ops {
 	    void *, struct vattr *, const struct puffs_cred *, pid_t);
 	int (*puffs_node_setattr)(struct puffs_cc *,
 	    void *, const struct vattr *, const struct puffs_cred *, pid_t);
-	int (*puffs_node_poll)(struct puffs_cc *,
-	    void *, struct puffs_vnreq_poll *);
+	int (*puffs_node_poll)(struct puffs_cc *, void *, int *, pid_t);
 	int (*puffs_node_mmap)(struct puffs_cc *,
 	    void *, int, const struct puffs_cred *, pid_t);
 	int (*puffs_node_fsync)(struct puffs_cc *,
@@ -237,8 +234,7 @@ typedef int (*pu_namemod_fn)(struct puffs_usermount *,
 			     struct puffs_pathobj *, struct puffs_cn *);
 
 enum {
-	PUFFS_STATE_BEFOREMOUNT,
-	PUFFS_STATE_MOUNTING,		PUFFS_STATE_RUNNING,
+	PUFFS_STATE_BEFOREMOUNT,	PUFFS_STATE_RUNNING,
 	PUFFS_STATE_UNMOUNTING,		PUFFS_STATE_UNMOUNTED
 };
 
@@ -300,8 +296,7 @@ enum {
 	int fsname##_node_setattr(struct puffs_cc *,			\
 	    void *, const struct vattr *, const struct puffs_cred *,	\
 	    pid_t);							\
-	int fsname##_node_poll(struct puffs_cc *,			\
-	    void *, struct puffs_vnreq_poll *);				\
+	int fsname##_node_poll(struct puffs_cc *, void *, int *,pid_t);	\
 	int fsname##_node_mmap(struct puffs_cc *,			\
 	    void *, int, const struct puffs_cred *, pid_t);		\
 	int fsname##_node_fsync(struct puffs_cc *,			\
@@ -361,9 +356,7 @@ enum {
 #define PUFFSOP_SETFSNOP(ops, opname)					\
     (ops)->puffs_fs_##opname = puffs_fsnop_##opname
 
-#define PUFFS_DEVEL_LIBVERSION 14
-#define puffs_mount(a,b,c,d,e,f) \
-    _puffs_mount(PUFFS_DEVEL_LIBVERSION,a,b,c,d,e,f)
+#define PUFFS_DEVEL_LIBVERSION 20
 #define puffs_init(a,b,c,d) \
     _puffs_init(PUFFS_DEVEL_LIBVERSION,a,b,c,d)
 
@@ -381,32 +374,34 @@ if (cp)	{								\
 	(*(ncp))++;							\
 }
 
+/* mainloop */
+typedef void (*puffs_ml_loop_fn)(struct puffs_usermount *);
+
 /* framebuf stuff */
 struct puffs_framebuf;
-typedef int (*puffs_framebuf_readframe_fn)(struct puffs_usermount *,
+typedef int (*puffs_framev_readframe_fn)(struct puffs_usermount *,
 					   struct puffs_framebuf *,
 					   int, int *);
-typedef	int (*puffs_framebuf_writeframe_fn)(struct puffs_usermount *,
+typedef	int (*puffs_framev_writeframe_fn)(struct puffs_usermount *,
 					    struct puffs_framebuf *,
 					    int, int *);
-typedef int (*puffs_framebuf_respcmp_fn)(struct puffs_usermount *,
+typedef int (*puffs_framev_cmpframe_fn)(struct puffs_usermount *,
 					 struct puffs_framebuf *,
 					 struct puffs_framebuf *);
-typedef void (*puffs_framebuf_loop_fn)(struct puffs_usermount *);
-
-typedef void (*puffs_framebuf_cb)(struct puffs_usermount *,
-				  struct puffs_framebuf *,
-				  void *);
+typedef void (*puffs_framev_fdnotify_fn)(struct puffs_usermount *, int, int);
+typedef void (*puffs_framev_cb)(struct puffs_usermount *,
+				struct puffs_framebuf *,
+				void *, int);
+#define PUFFS_FBGONE_READ	0x01
+#define PUFFS_FBGONE_WRITE	0x02
+#define PUFFS_FBGONE_BOTH(a)	((a)==(PUFFS_FBGONE_READ|PUFFS_FBGONE_WRITE))
 
 
 __BEGIN_DECLS
 
-struct puffs_usermount *_puffs_mount(int, struct puffs_ops *, const char *, int,
-				    const char *, void *, uint32_t);
 struct puffs_usermount *_puffs_init(int, struct puffs_ops *pops, const char *,
 				    void *, uint32_t);
-int		puffs_domount(struct puffs_usermount *, const char *, int);
-int		puffs_start(struct puffs_usermount *, void *, struct statvfs *);
+int		puffs_mount(struct puffs_usermount *, const char *, int, void*);
 int		puffs_exit(struct puffs_usermount *, int);
 int		puffs_mainloop(struct puffs_usermount *, int);
 
@@ -416,9 +411,15 @@ int	puffs_setblockingmode(struct puffs_usermount *, int);
 int	puffs_getstate(struct puffs_usermount *);
 void	puffs_setstacksize(struct puffs_usermount *, size_t);
 
+void	puffs_ml_setloopfn(struct puffs_usermount *, puffs_ml_loop_fn);
+void	puffs_ml_settimeout(struct puffs_usermount *, struct timespec *);
+
 void			puffs_setroot(struct puffs_usermount *,
 				      struct puffs_node *);
 struct puffs_node 	*puffs_getroot(struct puffs_usermount *);
+void			puffs_setrootinfo(struct puffs_usermount *,
+					  enum vtype, vsize_t, dev_t); 
+
 void			*puffs_getspecific(struct puffs_usermount *);
 void			puffs_setmaxreqlen(struct puffs_usermount *, size_t);
 size_t			puffs_getmaxreqlen(struct puffs_usermount *);
@@ -533,7 +534,7 @@ void			puffs_cc_destroy(struct puffs_cc *);
 
 int	puffs_dopreq(struct puffs_usermount *, struct puffs_req *,
 		     struct puffs_putreq *);
-int	puffs_docc(struct puffs_cc *, struct puffs_putreq *);
+void	puffs_docc(struct puffs_cc *, struct puffs_putreq *);
 
 /*
  * Flushing / invalidation routines
@@ -585,6 +586,12 @@ int	puffs_fs_suspend(struct puffs_usermount *);
  * Frame buffering
  */
 
+void	puffs_framev_init(struct puffs_usermount *,
+			  puffs_framev_readframe_fn,
+			  puffs_framev_writeframe_fn,
+			  puffs_framev_cmpframe_fn,
+			  puffs_framev_fdnotify_fn);
+
 struct puffs_framebuf 	*puffs_framebuf_make(void);
 void			puffs_framebuf_destroy(struct puffs_framebuf *);
 void			puffs_framebuf_recycle(struct puffs_framebuf *);
@@ -605,18 +612,19 @@ int	puffs_framebuf_seekset(struct puffs_framebuf *, size_t);
 int	puffs_framebuf_getwindow(struct puffs_framebuf *, size_t,
 				 void **, size_t *);
 
-int	puffs_framebuf_enqueue_cc(struct puffs_cc *, struct puffs_framebuf *);
-void	puffs_framebuf_enqueue_cb(struct puffs_usermount *,
-				  struct puffs_framebuf *,
-				  puffs_framebuf_cb, void *);
-void	puffs_framebuf_enqueue_justsend(struct puffs_usermount *,
-					struct puffs_framebuf *, int);
+int	puffs_framev_enqueue_cc(struct puffs_cc *, int,
+				struct puffs_framebuf *);
+int	puffs_framev_enqueue_cb(struct puffs_usermount *, int,
+				struct puffs_framebuf *,
+				puffs_framev_cb, void *);
+int	puffs_framev_enqueue_justsend(struct puffs_usermount *, int,
+				      struct puffs_framebuf *, int);
+int	puffs_framev_framebuf_ccpromote(struct puffs_framebuf *,
+					struct puffs_cc *);
 
-int	puffs_framebuf_eventloop(struct puffs_usermount *, int,
-				 puffs_framebuf_readframe_fn,
-				 puffs_framebuf_writeframe_fn,
-				 puffs_framebuf_respcmp_fn,
-				 puffs_framebuf_loop_fn);
+int	puffs_framev_addfd(struct puffs_usermount *pu, int);
+int	puffs_framev_removefd(struct puffs_usermount *pu, int, int);
+void	puffs_framev_unmountonclose(struct puffs_usermount *pu, int, int);
 
 __END_DECLS
 

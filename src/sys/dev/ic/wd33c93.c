@@ -1,4 +1,4 @@
-/*	$NetBSD: wd33c93.c,v 1.14 2007/05/08 02:08:17 rumble Exp $	*/
+/*	$NetBSD: wd33c93.c,v 1.16 2007/05/21 19:25:54 rumble Exp $	*/
 
 /*
  * Copyright (c) 1990 The Regents of the University of California.
@@ -79,7 +79,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: wd33c93.c,v 1.14 2007/05/08 02:08:17 rumble Exp $");
+__KERNEL_RCSID(0, "$NetBSD: wd33c93.c,v 1.16 2007/05/21 19:25:54 rumble Exp $");
 
 #include "opt_ddb.h"
 
@@ -273,16 +273,16 @@ wd33c93_init(struct wd33c93_softc *dev)
 	for (i = 0; i < 8; i++) {
 		struct wd33c93_tinfo *ti = &dev->sc_tinfo[i];
 		/*
-		 * sc_flags = 0xTTRRSS
+		 * cf_flags = 0xTTSSRR
 		 *
 		 *   TT = Bitmask to disable Tagged Queues
+		 *   SS = Bitmask to disable Sync negotiation
 		 *   RR = Bitmask to disable disconnect/reselect
-		 *   SS = Bitmask to diable Sync negotiation
 		 */
 		ti->flags = T_NEED_RESET;
-		if (dev->sc_cfflags & (1<<(i+8)))
+		if (CFFLAGS_NOSYNC(dev->sc_cfflags, i))
 			ti->flags |= T_NOSYNC;
-		if (dev->sc_cfflags & (1<<i) || wd33c93_nodisc)
+		if (CFFLAGS_NODISC(dev->sc_cfflags, i) || wd33c93_nodisc)
 			ti->flags |= T_NODISC;
 		ti->period = dev->sc_minsyncperiod;
 		ti->offset = 0;
@@ -556,6 +556,8 @@ wd33c93_scsi_request(struct scsipi_channel *chan, scsipi_adapter_req_t req, void
 	struct wd33c93_acb *acb;
 	int flags, s;
 
+	SBIC_DEBUG(MISC, ("wd33c93_scsi_request: req 0x%x\n", (int)req));
+
 	switch (req) {
 	case ADAPTER_REQ_RUN_XFER:
 		xs = arg;
@@ -628,7 +630,7 @@ wd33c93_scsi_request(struct scsipi_channel *chan, scsipi_adapter_req_t req, void
 		ti = &dev->sc_tinfo[xm->xm_target];
 		ti->flags &= ~T_WANTSYNC;
 
-		if ((dev->sc_cfflags & (1<<(xm->xm_target+16))) == 0 &&
+		if ((CFFLAGS_NOTAGS(dev->sc_cfflags, xm->xm_target) == 0) &&
 		    (xm->xm_mode & PERIPH_CAP_TQING) && !wd33c93_notags)
 			ti->flags |= T_TAG;
 		else
@@ -1665,8 +1667,19 @@ void wd33c93_msgin(struct wd33c93_softc *dev, u_char *msgaddr, int msglen)
 				ti->period =
 				    MAX(msgaddr[3], dev->sc_minsyncperiod);
 				ti->offset = MIN(msgaddr[4], dev->sc_maxoffset);
+
+				/*
+				 * <SGI, IBM DORS-32160, WA6A> will do nothing
+				 * but attempt sync negotiation until it gets
+				 * what it wants. To avoid an infinite loop set
+				 * off by the identify request, oblige them.
+				 */
+				if ((dev->sc_flags&SBICF_SYNCNEGO) == 0 &&
+				    msgaddr[3] != 0)
+					ti->flags |= T_WANTSYNC;
+
 				if (!(ti->flags & T_WANTSYNC))
-				    ti->period = ti->offset = 0;
+					ti->period = ti->offset = 0;
 
 				ti->flags &= ~T_NEGOTIATE;
 
@@ -1675,8 +1688,8 @@ void wd33c93_msgin(struct wd33c93_softc *dev, u_char *msgaddr, int msglen)
 				else
 					ti->flags |= T_SYNCMODE; /* Sync */
 
+				/* target initiated negotiation */
 				if ((dev->sc_flags&SBICF_SYNCNEGO) == 0)
-					/* target initiated negotiation */
 					wd33c93_sched_msgout(dev, SEND_SDTR);
 				dev->sc_flags &= ~SBICF_SYNCNEGO;
 

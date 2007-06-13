@@ -1,4 +1,4 @@
-/*	$NetBSD: pmap.c,v 1.188 2007/03/30 21:14:13 martin Exp $	*/
+/*	$NetBSD: pmap.c,v 1.190 2007/05/23 09:36:22 martin Exp $	*/
 /*
  *
  * Copyright (C) 1996-1999 Eduardo Horvath.
@@ -26,7 +26,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.188 2007/03/30 21:14:13 martin Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.190 2007/05/23 09:36:22 martin Exp $");
 
 #undef	NO_VCACHE /* Don't forget the locked TLB in dostart */
 #define	HWREF
@@ -1097,7 +1097,6 @@ pmap_bootstrap(u_long kernelstart, u_long kernelend)
 		cpus->ci_fplwp = NULL;
 		cpus->ci_spinup = main; /* Call main when we're running. */
 		cpus->ci_paddr = cpu0paddr;
-		cpus->ci_idle_u = (struct pcb *)IDLE_U_VA;
 		cpus->ci_cpcb = (struct pcb *)u0va;
 		cpus->ci_initstack = (void *)INITSTACK_VA;
 		proc0paddr = cpus->ci_cpcb;
@@ -1485,6 +1484,8 @@ pmap_kenter_pa(va, pa, prot)
 	/* We don't track mod/ref here. */
 	if (prot & VM_PROT_WRITE)
 		tte.data |= TLB_REAL_W|TLB_W;
+	if (prot & VM_PROT_EXECUTE)
+		tte.data |= TLB_EXEC;
 	tte.data |= TLB_TSB_LOCK;	/* wired */
 	ptp = 0;
 

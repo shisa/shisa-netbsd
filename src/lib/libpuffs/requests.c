@@ -1,4 +1,4 @@
-/*	$NetBSD: requests.c,v 1.6 2007/05/09 18:36:52 pooka Exp $	*/
+/*	$NetBSD: requests.c,v 1.8 2007/06/06 01:55:01 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006 Antti Kantee.  All Rights Reserved.
@@ -11,9 +11,6 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. The name of the company nor the name of the author may be used to
- *    endorse or promote products derived from this software without specific
- *    prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -30,7 +27,7 @@
 
 #include <sys/cdefs.h>
 #if !defined(lint)
-__RCSID("$NetBSD: requests.c,v 1.6 2007/05/09 18:36:52 pooka Exp $");
+__RCSID("$NetBSD: requests.c,v 1.8 2007/06/06 01:55:01 pooka Exp $");
 #endif /* !lint */
 
 #include <sys/types.h>
@@ -241,7 +238,7 @@ puffs_req_handle(struct puffs_getreq *pgr, struct puffs_putreq *ppr, int maxops)
 
 	pval = 0;
 	while ((preq = puffs_req_get(pgr)) != NULL
-	    && pu->pu_state != PUFFS_STATE_UNMOUNTED)
+	    && puffs_getstate(pu) != PUFFS_STATE_UNMOUNTED)
 		pval = puffs_dopreq(pu, preq, ppr);
 
 	return pval;

@@ -1,4 +1,4 @@
-$NetBSD: pcidevs,v 1.878 2007/05/02 21:28:28 bouyer Exp $
+$NetBSD: pcidevs,v 1.881 2007/05/28 05:54:07 mrg Exp $
 
 /*
  * Copyright (c) 1995, 1996 Christopher G. Demetriou
@@ -767,6 +767,7 @@ product ALI M5237	0x5237	M5237 USB 1.1 Host Controller
 product ALI M5239	0x5239	M5239 USB 2.0 Host Controller
 product ALI M5243	0x5243	M5243 PCI-AGP Bridge
 product ALI M5249	0x5249	M5249 Hypertransport to PCI bridge
+product ALI M5261	0x5261	M5261 Tulip Ethernet Controller
 product ALI M5451	0x5451	M5451 AC-Link Controller Audio Device
 product ALI M5453	0x5453	M5453 AC-Link Controller Modem Device
 product ALI M5455	0x5455	M5455 AC-Link Controller Audio Device
@@ -1881,6 +1882,7 @@ product IBM GXT150P	0x001b	GXT-150P 2D Accelerator
 product IBM MCABRIDGE2	0x0020	MCA Bridge
 product IBM 82351	0x0022	82351 PCI-PCI Bridge
 product IBM SERVERAID	0x002e	ServeRAID
+product IBM GXT250P	0x003c	GXT-250P
 product IBM OLYMPIC	0x003e	16/4 Token Ring
 product IBM MIAMI	0x0036	Miami/PCI
 product IBM 82660	0x0037	82660 PowerPC to PCI Bridge and Memory Controller
@@ -2691,6 +2693,7 @@ product NVIDIA	RIVATNT2	0x0028	RIVA TNT2
 product NVIDIA	RIVATNT2U	0x0029	RIVA TNT2 Ultra
 product NVIDIA	VANTA		0x002c	Vanta
 product NVIDIA	RIVATNT2M64	0x002d	RIVA TNT2 Model 64
+product NVIDIA	MCP04_SMBUS	0x0034	MCP04 SMBus
 product NVIDIA	MCP04_IDE	0x0035	MCP04 IDE
 product NVIDIA	MCP04_SATA	0x0036	MCP04 SATA
 product NVIDIA	MCP04_LAN1	0x0037	MCP04 Ethernet

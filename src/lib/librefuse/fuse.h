@@ -1,3 +1,5 @@
+/* $NetBSD: fuse.h,v 1.19 2007/05/17 01:55:43 christos Exp $ */
+
 /*
  * Copyright © 2007 Alistair Crooks.  All rights reserved.
  *
@@ -27,6 +29,12 @@
  */
 #ifndef FUSE_H_
 #define FUSE_H_	20070123
+
+/* set the default version to use for the fuse interface */
+/* this value determines the API to be used */
+#ifndef FUSE_USE_VERSION
+#define FUSE_USE_VERSION	26
+#endif
 
 #include <sys/types.h>
 
@@ -165,8 +173,13 @@ void fuse_teardown(struct fuse *, char *);
 
 void fuse_unmount_compat22(const char *);
 
+#if FUSE_USE_VERSION >= 26
+#define fuse_main(argc, argv, op, arg) \
+            fuse_main_real(argc, argv, op, sizeof(*(op)), arg)
+#else
 #define fuse_main(argc, argv, op) \
             fuse_main_real(argc, argv, op, sizeof(*(op)), NULL)
+#endif
 
 #ifdef __cplusplus
 }

@@ -1,10 +1,10 @@
-/*	$NetBSD: pcidevs_data.h,v 1.877 2007/05/02 21:29:16 bouyer Exp $	*/
+/*	$NetBSD: pcidevs_data.h,v 1.880 2007/05/28 05:55:10 mrg Exp $	*/
 
 /*
  * THIS FILE AUTOMATICALLY GENERATED.  DO NOT EDIT.
  *
  * generated from:
- *	NetBSD: pcidevs,v 1.878 2007/05/02 21:28:28 bouyer Exp
+ *	NetBSD: pcidevs,v 1.881 2007/05/28 05:54:07 mrg Exp
  */
 
 /*
@@ -2814,6 +2814,10 @@ static const struct pci_product pci_products[] = {
 	{
 	    PCI_VENDOR_ALI, PCI_PRODUCT_ALI_M5249,
 	    "M5249 Hypertransport to PCI bridge",
+	},
+	{
+	    PCI_VENDOR_ALI, PCI_PRODUCT_ALI_M5261,
+	    "M5261 Tulip Ethernet Controller",
 	},
 	{
 	    PCI_VENDOR_ALI, PCI_PRODUCT_ALI_M5451,
@@ -6484,6 +6488,10 @@ static const struct pci_product pci_products[] = {
 	    "ServeRAID",
 	},
 	{
+	    PCI_VENDOR_IBM, PCI_PRODUCT_IBM_GXT250P,
+	    "GXT-250P",
+	},
+	{
 	    PCI_VENDOR_IBM, PCI_PRODUCT_IBM_OLYMPIC,
 	    "16/4 Token Ring",
 	},
@@ -9250,6 +9258,10 @@ static const struct pci_product pci_products[] = {
 	{
 	    PCI_VENDOR_NVIDIA, PCI_PRODUCT_NVIDIA_RIVATNT2M64,
 	    "RIVA TNT2 Model 64",
+	},
+	{
+	    PCI_VENDOR_NVIDIA, PCI_PRODUCT_NVIDIA_MCP04_SMBUS,
+	    "MCP04 SMBus",
 	},
 	{
 	    PCI_VENDOR_NVIDIA, PCI_PRODUCT_NVIDIA_MCP04_IDE,
@@ -12880,4 +12892,4 @@ static const struct pci_product pci_products[] = {
 	    "Video Controller",
 	},
 };
-const int pci_nproducts = 2625;
+const int pci_nproducts = 2628;

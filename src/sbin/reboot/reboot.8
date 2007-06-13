@@ -1,4 +1,4 @@
-.\"	$NetBSD: reboot.8,v 1.21 2003/08/07 10:04:37 agc Exp $
+.\"	$NetBSD: reboot.8,v 1.23 2007/06/03 22:39:47 uwe Exp $
 .\"
 .\" Copyright (c) 1990, 1991, 1993
 .\"	The Regents of the University of California.  All rights reserved.
@@ -29,7 +29,7 @@
 .\"
 .\"	@(#)reboot.8	8.1 (Berkeley) 6/9/93
 .\"
-.Dd April 4, 2003
+.Dd June 3, 2007
 .Dt REBOOT 8
 .Os
 .Sh NAME
@@ -44,6 +44,7 @@
 .Op Fl dlnq
 .Nm
 .Op Fl dlnq
+.Op Ar arg ...
 .Sh DESCRIPTION
 The
 .Nm poweroff ,
@@ -82,6 +83,15 @@ Do not give processes a chance to shut down before halting or restarting.
 This option should not normally be used.
 .El
 .Pp
+If there are any arguments passed to
+.Nm reboot
+they are concatenated with spaces and passed as
+.Fa bootstr
+to
+.Xr reboot 2
+system call.
+The string is passed to the firmware on platforms that support it.
+.Pp
 Normally, the
 .Xr shutdown 8
 utility is used when the system needs to be halted or restarted, giving
@@ -110,6 +120,15 @@ physically reset.
 To prevent premature termination, the command
 blocks many signals early in its execution.
 However, nothing can defend against deliberate attempts to evade this.
+.Pp
+This command will stop the system without running any
+.Xr shutdown 8
+scripts.  Amongst other things, this means that swapping will not be
+disabled so that
+.Xr raid 4
+can shutdown cleanly.  You should normally use
+.Xr shutdown 8
+unless you are running in single user mode.
 .Sh BUGS
 The single user shell will ignore the SIGTERM signal.
 To avoid waiting for the timeout when

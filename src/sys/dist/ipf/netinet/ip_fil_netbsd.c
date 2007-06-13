@@ -1,4 +1,4 @@
-/*	$NetBSD: ip_fil_netbsd.c,v 1.35 2007/05/02 20:40:22 dyoung Exp $	*/
+/*	$NetBSD: ip_fil_netbsd.c,v 1.37 2007/06/04 12:38:58 martti Exp $	*/
 
 /*
  * Copyright (C) 1993-2003 by Darren Reed.
@@ -7,7 +7,7 @@
  */
 #if !defined(lint)
 static const char sccsid[] = "@(#)ip_fil.c	2.41 6/5/96 (C) 1993-2000 Darren Reed";
-static const char rcsid[] = "@(#)Id: ip_fil_netbsd.c,v 2.55.2.48 2007/04/06 09:17:38 darrenr Exp";
+static const char rcsid[] = "@(#)Id: ip_fil_netbsd.c,v 2.55.2.49 2007/05/10 06:00:56 darrenr Exp";
 #endif
 
 #if defined(KERNEL) || defined(_KERNEL)
@@ -282,14 +282,14 @@ void
 ipfilterattach(int count)
 {
 # if 0
-	if (iplattach() != 0)
+	if (ipfattach() != 0)
 		printf("IP Filter failed to attach\n");
 # endif
 }
 #endif
 
 
-int iplattach()
+int ipfattach()
 {
 	int s;
 #if defined(NETBSD_PF) && (__NetBSD_Version__ >= 104200000)
@@ -419,7 +419,7 @@ pfil_error:
  * Disable the filter by removing the hooks from the IP input/output
  * stream.
  */
-int ipldetach()
+int ipfdetach()
 {
 	int s;
 #if defined(NETBSD_PF) && (__NetBSD_Version__ >= 104200000)
@@ -1180,7 +1180,8 @@ frdest_t *fdp;
 		if (!fr || !(fr->fr_flags & FR_RETMASK)) {
 			u_32_t pass;
 
-			(void) fr_checkstate(fin, &pass);
+			if (fr_checkstate(fin, &pass) != NULL)
+				fr_statederef((ipstate_t **)&fin->fin_state);
 		}
 
 		switch (fr_checknatout(fin, NULL))

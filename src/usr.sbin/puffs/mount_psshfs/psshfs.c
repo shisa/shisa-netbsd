@@ -1,4 +1,4 @@
-/*	$NetBSD: psshfs.c,v 1.23 2007/05/09 21:46:27 pooka Exp $	*/
+/*	$NetBSD: psshfs.c,v 1.29 2007/06/06 01:55:03 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006  Antti Kantee.  All Rights Reserved.
@@ -11,9 +11,6 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. The name of the company nor the name of the author may be used to
- *    endorse or promote products derived from this software without specific
- *    prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -44,7 +41,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: psshfs.c,v 1.23 2007/05/09 21:46:27 pooka Exp $");
+__RCSID("$NetBSD: psshfs.c,v 1.29 2007/06/06 01:55:03 pooka Exp $");
 #endif /* !lint */
 
 #include <sys/types.h>
@@ -53,6 +50,7 @@ __RCSID("$NetBSD: psshfs.c,v 1.23 2007/05/09 21:46:27 pooka Exp $");
 #include <err.h>
 #include <errno.h>
 #include <mntopts.h>
+#include <paths.h>
 #include <poll.h>
 #include <puffs.h>
 #include <signal.h>
@@ -99,8 +97,8 @@ main(int argc, char *argv[])
 	char **sshargs;
 	char *userhost;
 	char *hostpath;
-	int mntflags, pflags, ch;
-	int detach, exportfs;
+	int mntflags, pflags, lflags, ch;
+	int exportfs;
 	int nargs, x;
 
 	setprogname(argv[0]);
@@ -108,8 +106,7 @@ main(int argc, char *argv[])
 	if (argc < 3)
 		usage();
 
-	mntflags = pflags = exportfs = nargs = 0;
-	detach = 1;
+	mntflags = pflags = lflags = exportfs = nargs = 0;
 	sshargs = NULL;
 	add_ssharg(&sshargs, &nargs, SSH_PATH);
 	add_ssharg(&sshargs, &nargs, "-axs");
@@ -131,7 +128,7 @@ main(int argc, char *argv[])
 			freemntopts(mp);
 			break;
 		case 's':
-			detach = 0;
+			lflags |= PUFFSLOOP_NODAEMON;
 			break;
 		default:
 			usage();
@@ -147,7 +144,7 @@ main(int argc, char *argv[])
 #endif
 
 	if (pflags & PUFFS_FLAG_OPDUMP)
-		detach = 0;
+		lflags |= PUFFSLOOP_NODAEMON;
 	pflags |= PUFFS_FLAG_BUILDPATH;
 	pflags |= PUFFS_KFLAG_WTCACHE | PUFFS_KFLAG_IAONDEMAND;
 
@@ -205,21 +202,21 @@ main(int argc, char *argv[])
 		puffs_setfhsize(pu, sizeof(struct psshfs_fid),
 		    PUFFS_FHFLAG_NFSV2 | PUFFS_FHFLAG_NFSV3);
 
-	if (puffs_domount(pu, argv[1], mntflags) == -1)
-		err(1, "puffs_domount");
-
 	if (psshfs_domount(pu) != 0)
 		errx(1, "psshfs_domount");
-
 	x = 1;
 	if (ioctl(pctx.sshfd, FIONBIO, &x) == -1)
 		err(1, "nonblocking descriptor");
 
-	if (detach)
-		daemon(1, 0);
+	puffs_framev_init(pu, psbuf_read, psbuf_write, psbuf_cmp,
+	    puffs_framev_unmountonclose);
+	if (puffs_framev_addfd(pu, pctx.sshfd) == -1)
+		err(1, "framebuf addfd");
 
-	return puffs_framebuf_eventloop(pu, pctx.sshfd,
-	    psbuf_read, psbuf_write, psbuf_cmp, NULL);
+	if (puffs_mount(pu, argv[1], mntflags, puffs_getroot(pu)) == -1)
+		err(1, "puffs_mount");
+
+	return puffs_mainloop(pu, lflags);
 }
 
 static void
@@ -227,6 +224,7 @@ pssh_connect(struct psshfs_ctx *pctx, char **sshargs)
 {
 	int fds[2];
 	pid_t pid;
+	int dnfd;
 
 	if (socketpair(AF_UNIX, SOCK_STREAM, 0, fds) == -1)
 		err(1, "socketpair");
@@ -243,6 +241,11 @@ pssh_connect(struct psshfs_ctx *pctx, char **sshargs)
 			err(1, "child dup2");
 		close(fds[0]);
 		close(fds[1]);
+
+		dnfd = open(_PATH_DEVNULL, O_RDWR);
+		if (dnfd != -1)
+			dup2(dnfd, STDERR_FILENO);
+
 		execvp(sshargs[0], sshargs);
 		break;
 	default:

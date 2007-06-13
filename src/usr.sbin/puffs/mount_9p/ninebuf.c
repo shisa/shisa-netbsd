@@ -1,4 +1,4 @@
-/*      $NetBSD: ninebuf.c,v 1.3 2007/05/06 10:54:55 pooka Exp $	*/
+/*      $NetBSD: ninebuf.c,v 1.6 2007/05/20 16:24:37 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006, 2007  Antti Kantee.  All Rights Reserved.
@@ -27,7 +27,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: ninebuf.c,v 1.3 2007/05/06 10:54:55 pooka Exp $");
+__RCSID("$NetBSD: ninebuf.c,v 1.6 2007/05/20 16:24:37 pooka Exp $");
 #endif /* !lint */
 
 #include <sys/types.h>
@@ -137,7 +137,7 @@ p9pbuf_write(struct puffs_usermount *pu, struct puffs_framebuf *pb,
 		winlen = howmuch;
 		if (puffs_framebuf_getwindow(pb, CUROFF(pb), &win, &winlen)==-1)
 			return errno;
-		n = write(fd, win, winlen);
+		n = send(fd, win, winlen, MSG_NOSIGNAL);
 		switch (n) {
 		case 0:
 			return ECONNRESET;
@@ -162,7 +162,7 @@ p9pbuf_cmp(struct puffs_usermount *pu,
 	struct puffs_framebuf *c1, struct puffs_framebuf *c2)
 {
 
-	return p9pbuf_get_tag(c1) == p9pbuf_get_tag(c2);
+	return p9pbuf_get_tag(c1) != p9pbuf_get_tag(c2);
 }
 
 struct puffs_framebuf *
@@ -307,8 +307,10 @@ p9pbuf_get_data(struct puffs_framebuf *pb, uint8_t **dp, uint16_t *dlenp)
 	if (dp) {
 		data = emalloc(len+1);   
 		rv = puffs_framebuf_getdata(pb, data, len);
-		if (rv)
+		if (rv) {
+			free(data);
 			return errno;
+		}
 		data[len] = '\0';
 		*dp = data;
 	} else

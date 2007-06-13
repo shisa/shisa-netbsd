@@ -1,4 +1,4 @@
-/*      $NetBSD: psbuf.c,v 1.6 2007/05/06 10:54:56 pooka Exp $        */
+/*      $NetBSD: psbuf.c,v 1.10 2007/06/06 01:55:03 pooka Exp $        */
 
 /*
  * Copyright (c) 2006, 2007  Antti Kantee.  All Rights Reserved.
@@ -11,9 +11,6 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. The name of the company nor the name of the author may be used to
- *    endorse or promote products derived from this software without specific
- *    prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -30,7 +27,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: psbuf.c,v 1.6 2007/05/06 10:54:56 pooka Exp $");
+__RCSID("$NetBSD: psbuf.c,v 1.10 2007/06/06 01:55:03 pooka Exp $");
 #endif /* !lint */
 
 /*
@@ -156,7 +153,7 @@ psbuf_write(struct puffs_usermount *pu, struct puffs_framebuf *pb,
 		winlen = howmuch;
 		if (puffs_framebuf_getwindow(pb, CUROFF(pb), &win, &winlen)==-1)
 			return errno;
-		n = write(fd, win, winlen);
+		n = send(fd, win, winlen, MSG_NOSIGNAL);
 		switch (n) {
 		case 0:
 			return ECONNRESET;
@@ -181,7 +178,7 @@ psbuf_cmp(struct puffs_usermount *pu,
 	struct puffs_framebuf *cmp1, struct puffs_framebuf *cmp2)
 {
 
-	return psbuf_get_reqid(cmp1) == psbuf_get_reqid(cmp2);
+	return psbuf_get_reqid(cmp1) != psbuf_get_reqid(cmp2);
 }
 
 struct puffs_framebuf *
@@ -492,8 +489,8 @@ int
 psbuf_do_data(struct puffs_framebuf *pb, uint8_t *data, uint32_t *dlen)
 {
 	void *win;
-	size_t bufoff;
-	uint32_t len, dataoff, winlen;
+	size_t bufoff, winlen;
+	uint32_t len, dataoff;
 
 	if (psbuf_get_type(pb) != SSH_FXP_DATA) {
 		uint32_t val;

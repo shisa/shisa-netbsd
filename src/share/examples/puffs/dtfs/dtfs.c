@@ -1,4 +1,4 @@
-/*	$NetBSD: dtfs.c,v 1.23 2007/05/07 17:22:50 pooka Exp $	*/
+/*	$NetBSD: dtfs.c,v 1.28 2007/06/06 01:55:02 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006  Antti Kantee.  All Rights Reserved.
@@ -11,9 +11,6 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. The name of the company nor the name of the author may be used to
- *    endorse or promote products derived from this software without specific
- *    prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -53,7 +50,8 @@
 #define FSNAME "dt"
 #endif
 
-static struct puffs_usermount *pu;
+static struct puffs_usermount *gpu;
+static struct dtfs_mount gdtm;
 int dynamicfh;
 
 static void usage(void);
@@ -62,8 +60,8 @@ static void
 usage()
 {
 
-	errx(1, "usage: %s [-bsd] [-c hashbuckets] [-o mntopt] [-o puffsopt] "
-	    "mountpath", getprogname());
+	errx(1, "usage: %s [-bsdt] [-c hashbuckets] [-o mntopt] [-o puffsopt]\n"
+	    "    [-r rootnodetype] mountpath", getprogname());
 }
 
 /*
@@ -74,8 +72,32 @@ static void
 dosuspend(int v)
 {
 
-	puffs_fs_suspend(pu);
-	puffs_fs_suspend(pu);
+	puffs_fs_suspend(gpu);
+	puffs_fs_suspend(gpu);
+}
+
+static void
+wipe_the_sleep_out_of_my_eyes(int v)
+{
+
+	gdtm.dtm_needwakeup++;
+}
+
+static void
+loopfun(struct puffs_usermount *pu)
+{
+	struct dtfs_mount *dtm = puffs_getspecific(pu);
+	struct dtfs_poll *dp;
+
+	while (dtm->dtm_needwakeup) {
+		dtm->dtm_needwakeup--;
+		dp = LIST_FIRST(&dtm->dtm_pollent);
+		if (dp == NULL)
+			return;
+
+		LIST_REMOVE(dp, dp_entries);
+		puffs_cc_continue(dp->dp_pcc);
+	}
 }
 
 int
@@ -83,9 +105,11 @@ main(int argc, char *argv[])
 {
 	extern char *optarg;
 	extern int optind;
-	struct dtfs_mount dtm;
+	struct puffs_usermount *pu;
 	struct puffs_pathobj *po_root;
 	struct puffs_ops *pops;
+	struct timespec ts;
+	char *rtstr;
 	mntoptparse_t mp;
 	int pflags, lflags, mntflags;
 	int ch;
@@ -93,10 +117,11 @@ main(int argc, char *argv[])
 
 	setprogname(argv[0]);
 
+	rtstr = NULL;
 	lflags = mntflags = 0;
 	khashbuckets = 256;
 	pflags = PUFFS_KFLAG_IAONDEMAND;
-	while ((ch = getopt(argc, argv, "bc:dio:s")) != -1) {
+	while ((ch = getopt(argc, argv, "bc:dio:r:st")) != -1) {
 		switch (ch) {
 		case 'b': /* build paths, for debugging the feature */
 			pflags |= PUFFS_FLAG_BUILDPATH;
@@ -115,6 +140,9 @@ main(int argc, char *argv[])
 			if (mp == NULL)
 				err(1, "getmntopts");
 			freemntopts(mp);
+			break;
+		case 'r':
+			rtstr = optarg;
 			break;
 		case 's': /* stay on top */
 			lflags |= PUFFSLOOP_NODAEMON;
@@ -151,6 +179,7 @@ main(int argc, char *argv[])
 	PUFFSOP_SET(pops, dtfs, node, create);
 	PUFFSOP_SET(pops, dtfs, node, remove);
 	PUFFSOP_SET(pops, dtfs, node, readdir);
+	PUFFSOP_SET(pops, dtfs, node, poll);
 	PUFFSOP_SET(pops, dtfs, node, mkdir);
 	PUFFSOP_SET(pops, dtfs, node, rmdir);
 	PUFFSOP_SET(pops, dtfs, node, rename);
@@ -160,35 +189,41 @@ main(int argc, char *argv[])
 	PUFFSOP_SET(pops, dtfs, node, symlink);
 	PUFFSOP_SET(pops, dtfs, node, readlink);
 	PUFFSOP_SET(pops, dtfs, node, mknod);
-	PUFFSOP_SET(pops, dtfs, node, inactive);
 	PUFFSOP_SET(pops, dtfs, node, reclaim);
 
 	srandom(time(NULL)); /* for random generation numbers */
 
-	pu = puffs_init(pops, FSNAME, &dtm, pflags);
+	pu = puffs_init(pops, FSNAME, &gdtm, pflags);
 	if (pu == NULL)
 		err(1, "init");
+	gpu = pu;
 
 	puffs_setfhsize(pu, sizeof(struct dtfs_fid),
 	    PUFFS_FHFLAG_NFSV2 | PUFFS_FHFLAG_NFSV3
 	    | (dynamicfh ? PUFFS_FHFLAG_DYNAMIC : 0));
 	puffs_setncookiehash(pu, khashbuckets);
 
-	if (puffs_domount(pu, argv[0], mntflags) == -1)
-		err(1, "mount");
-
 	if (signal(SIGUSR1, dosuspend) == SIG_ERR)
 		warn("cannot set suspend sighandler");
+	if (signal(SIGALRM, wipe_the_sleep_out_of_my_eyes) == SIG_ERR)
+		warn("cannot set alarm sighandler");
 
-	/* init & call puffs_start() */
-	if (dtfs_domount(pu) != 0)
+	/* init */
+	if (dtfs_domount(pu, rtstr) != 0)
 		errx(1, "dtfs_domount failed");
 
-	/* XXX: wrong order, but I need to refactor this further anyway */
 	po_root = puffs_getrootpathobj(pu);
 	po_root->po_path = argv[0];
 	po_root->po_len = strlen(argv[0]);
 
+	/* often enough for testing poll */
+	ts.tv_sec = 1;
+	ts.tv_nsec = 0;
+	puffs_ml_setloopfn(pu, loopfun);
+	puffs_ml_settimeout(pu, &ts);
+
+	if (puffs_mount(pu,  argv[0], mntflags, puffs_getroot(pu)) == -1)
+		err(1, "mount");
 	if (puffs_mainloop(pu, lflags) == -1)
 		err(1, "mainloop");
 

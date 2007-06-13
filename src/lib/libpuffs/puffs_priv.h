@@ -1,4 +1,4 @@
-/*	$NetBSD: puffs_priv.h,v 1.8 2007/05/10 12:26:28 pooka Exp $	*/
+/*	$NetBSD: puffs_priv.h,v 1.12 2007/06/06 01:55:01 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006 Antti Kantee.  All Rights Reserved.
@@ -11,9 +11,6 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. The name of the company nor the name of the author may be used to
- *    endorse or promote products derived from this software without specific
- *    prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -39,7 +36,40 @@
 
 #define PU_CMAP(pu, c)	(pu->pu_cmap ? pu->pu_cmap(c) : (struct puffs_node *)c)
 
-struct puffs_framectrl;
+struct puffs_framectrl {
+	puffs_framev_readframe_fn rfb;
+	puffs_framev_writeframe_fn wfb;
+	puffs_framev_cmpframe_fn cmpfb;
+	puffs_framev_fdnotify_fn fdnotfn;
+
+	struct kevent *evs;
+	size_t nfds;
+
+	struct timespec timeout;
+	struct timespec *timp;
+
+	LIST_HEAD(, puffs_fctrl_io) fb_ios;
+	LIST_HEAD(, puffs_fctrl_io) fb_ios_rmlist;
+};
+
+struct puffs_fctrl_io {
+	int io_fd;
+	int stat;
+
+	struct puffs_framebuf *cur_in;
+
+	TAILQ_HEAD(, puffs_framebuf) snd_qing;	/* queueing to be sent */
+	TAILQ_HEAD(, puffs_framebuf) res_qing;	/* q'ing for rescue */
+
+	LIST_ENTRY(puffs_fctrl_io) fio_entries;
+};
+#define FIO_WR		0x01
+#define FIO_WRGONE	0x02
+#define FIO_RDGONE	0x04
+#define FIO_DEAD	0x08
+
+#define FIO_EN_WRITE(fio) (!(fio->stat & FIO_WR)&& !TAILQ_EMPTY(&fio->snd_qing))
+#define FIO_RM_WRITE(fio) ((fio->stat & FIO_WR) && TAILQ_EMPTY(&fio->snd_qing))
 
 /*
  * usermount: describes one file system instance
@@ -51,11 +81,18 @@ struct puffs_usermount {
 	uint32_t		pu_flags;
 	size_t			pu_cc_stacksize;
 
+	int			pu_kq;
+	int			pu_haskq;
 	int			pu_state;
+#define PU_STATEMASK	0xff
+#define PU_INLOOP	0x100
+#define PU_ASYNCFD	0x200
+#define PU_SETSTATE(pu, s) (pu->pu_state = (s) | (pu->pu_state & ~PU_STATEMASK))
 
 	struct puffs_node	*pu_pn_root;
 
 	LIST_HEAD(, puffs_node)	pu_pnodelst;
+	LIST_HEAD(, puffs_cc)	pu_ccnukelst;
 
 	struct puffs_node	*(*pu_cmap)(void *);
 
@@ -65,9 +102,13 @@ struct puffs_usermount {
 	pu_pathfree_fn		pu_pathfree;
 	pu_namemod_fn		pu_namemod;
 
-	struct puffs_framectrl	*pu_framectrl;
+	struct puffs_framectrl	pu_framectrl;
 
-	void	*pu_privdata;
+	puffs_ml_loop_fn	pu_ml_lfn;
+	struct timespec		pu_ml_timeout;
+	struct timespec		*pu_ml_timep;
+
+	void			*pu_privdata;
 };
 
 /* call context */
@@ -81,23 +122,15 @@ struct puffs_cc {
 	void			*pcc_stack;
 
 	int			pcc_flags;
-
-	/* these are for threading information to the implementation	*/
-	void			*pcc_priv;
-	int			pcc_rv;
+	struct puffs_putreq	*pcc_ppr;
 
 	TAILQ_ENTRY(puffs_cc)	entries;
+	LIST_ENTRY(puffs_cc)	nlst_entries;
 };
 #define PCC_FAKECC	0x01
 #define PCC_REALCC	0x02
-#define PCC_FREEPRIV	0x04
-#define PCC_PREQ_NOCOPY	0x08
-#define PCC_DONE	0x10
-
-#define PCC_CALL_NONE	0x10000
-#define PCC_CALL_IN	0x20000
-#define PCC_CALL_OUT	0x40000
-#define PCC_CALL_MASK	0x70000
+#define PCC_DONE	0x04
+#define PCC_BORROWED	0x08
 
 #define pcc_callstat(a)	   (a->pcc_flags & PCC_CALL_MASK)
 #define pcc_callset(a, b)  (a->pcc_flags = (a->pcc_flags & ~PCC_CALL_MASK) | b)
@@ -142,9 +175,22 @@ struct puffs_putreq {
 	struct puffs_getreq	*ppr_pgr;
 };
 
+
 __BEGIN_DECLS
 
 void	puffs_calldispatcher(struct puffs_cc *);
+
+void	puffs_framev_input(struct puffs_usermount *, struct puffs_framectrl *,
+			   struct puffs_fctrl_io *, struct puffs_putreq *);
+int	puffs_framev_output(struct puffs_usermount *, struct puffs_framectrl*,
+			    struct puffs_fctrl_io *);
+void	puffs_framev_exit(struct puffs_usermount *);
+void	puffs_framev_readclose(struct puffs_usermount *,
+			       struct puffs_fctrl_io *, int);
+void	puffs_framev_writeclose(struct puffs_usermount *,
+				struct puffs_fctrl_io *, int);
+
+void	puffs_goto(struct puffs_cc *);
 
 __END_DECLS
 

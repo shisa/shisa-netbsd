@@ -1,4 +1,4 @@
-/*	$NetBSD: subr.c,v 1.2 2007/05/05 15:49:51 pooka Exp $	*/
+/*	$NetBSD: subr.c,v 1.5 2007/05/16 09:57:21 pooka Exp $	*/
 
 /*
  * Copyright (c) 2007  Antti Kantee.  All Rights Reserved.
@@ -27,7 +27,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: subr.c,v 1.2 2007/05/05 15:49:51 pooka Exp $");
+__RCSID("$NetBSD: subr.c,v 1.5 2007/05/16 09:57:21 pooka Exp $");
 #endif /* !lint */
 
 #include <sys/types.h>
@@ -108,7 +108,7 @@ getdfwithoffset(struct puffs_cc *pcc, struct p9pnode *p9n, off_t wantoff,
 	p9ptag_t tag = NEXTTAG(p9p);
 	off_t curoff, advance;
 	uint32_t count;
-	int error;
+	int rv;
 
 	LIST_FOREACH(dfp, &p9n->dir_openlist, entries) {
 		if (dfp->seekoff == wantoff) {
@@ -122,9 +122,9 @@ getdfwithoffset(struct puffs_cc *pcc, struct p9pnode *p9n, off_t wantoff,
 	pb = p9pbuf_makeout();
 	dfp = ecalloc(1, sizeof(struct dirfid));
 	dfp->fid = NEXTFID(p9p);
-	error = proto_cc_open(pcc, p9n->fid_base, dfp->fid, P9PROTO_OMODE_READ);
-	if (error)
-		goto errout;
+	rv = proto_cc_open(pcc, p9n->fid_base, dfp->fid, P9PROTO_OMODE_READ);
+	if (rv)
+		goto out;
 
 	for (curoff = 0;;) {
 		advance = wantoff - curoff;
@@ -135,11 +135,11 @@ getdfwithoffset(struct puffs_cc *pcc, struct p9pnode *p9n, off_t wantoff,
 		p9pbuf_put_4(pb, dfp->fid);       
 		p9pbuf_put_8(pb, 0);
 		p9pbuf_put_4(pb, advance);       
-		puffs_framebuf_enqueue_cc(pcc, pb);
+		GETRESPONSE(pb);
 
 		if (p9pbuf_get_type(pb) != P9PROTO_R_READ) {
-			error = EPROTO;
-			goto errout;
+			rv = EPROTO;
+			goto out;
 		}
 
 		/*
@@ -157,15 +157,16 @@ getdfwithoffset(struct puffs_cc *pcc, struct p9pnode *p9n, off_t wantoff,
 
 		p9pbuf_recycleout(pb);
 	}
+	puffs_framebuf_destroy(pb);
 
 	dfp->seekoff = curoff;
 	*rfid = dfp;
 	return 0;
 
- errout:
+ out:
 	puffs_framebuf_destroy(pb);
 	free(dfp);
-	return error;
+	return rv;
 }
 
 void
@@ -186,10 +187,9 @@ storedf(struct p9pnode *p9n, struct dirfid *dfp)
 void
 nukealldf(struct puffs_cc *pcc, struct p9pnode *p9n)
 {
-	struct dirfid *dfp, *dfp_next;
+	struct dirfid *dfp;
 
-	for (dfp = LIST_FIRST(&p9n->dir_openlist); dfp; dfp = dfp_next) {
-		dfp_next = LIST_NEXT(dfp, entries);
+	while ((dfp = LIST_FIRST(&p9n->dir_openlist)) != NULL) {
 		LIST_REMOVE(dfp, entries);
 		releasedf(pcc, dfp);
 	}

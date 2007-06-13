@@ -1,4 +1,4 @@
-/*	$NetBSD: trap.c,v 1.118 2007/03/04 06:00:38 christos Exp $	*/
+/*	$NetBSD: trap.c,v 1.120 2007/05/18 11:16:28 rjs Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996 Wolfgang Solfrank.
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: trap.c,v 1.118 2007/03/04 06:00:38 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: trap.c,v 1.120 2007/05/18 11:16:28 rjs Exp $");
 
 #include "opt_altivec.h"
 #include "opt_ddb.h"

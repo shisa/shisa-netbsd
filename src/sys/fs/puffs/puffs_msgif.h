@@ -1,4 +1,4 @@
-/*	$NetBSD: puffs_msgif.h,v 1.29 2007/05/07 17:14:54 pooka Exp $	*/
+/*	$NetBSD: puffs_msgif.h,v 1.33 2007/06/06 01:55:00 pooka Exp $	*/
 
 /*
  * Copyright (c) 2005, 2006  Antti Kantee.  All Rights Reserved.
@@ -15,9 +15,6 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. The name of the company nor the name of the author may be used to
- *    endorse or promote products derived from this software without specific
- *    prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -86,7 +83,7 @@ enum {
 #define PUFFS_VN_MAX PUFFS_VN_SETEXTATTR
 
 #define PUFFSDEVELVERS	0x80000000
-#define PUFFSVERSION	9
+#define PUFFSVERSION	10
 #define PUFFSNAMESIZE	32
 struct puffs_kargs {
 	unsigned int	pa_vers;
@@ -99,6 +96,13 @@ struct puffs_kargs {
 	size_t		pa_fhsize;
 	int		pa_fhflags;
 
+	void		*pa_root_cookie;
+	enum vtype	pa_root_vtype;
+	voff_t		pa_root_vsize;
+	dev_t		pa_root_rdev;
+
+	struct statvfs	pa_svfsb;
+	
 	char		pa_name[PUFFSNAMESIZE+1];   /* name for puffs type */
 	uint8_t		pa_vnopmask[PUFFS_VN_MAX];
 };
@@ -239,7 +243,9 @@ struct puffs_req {
 
 #define PUFFS_SETBACK_INACT_N1	0x01	/* set VOP_INACTIVE for node 1 */
 #define PUFFS_SETBACK_INACT_N2	0x02	/* set VOP_INACTIVE for node 2 */
-#define PUFFS_SETBACK_MASK	0x03
+#define PUFFS_SETBACK_NOREF_N1	0x04	/* set pn PN_NOREFS for node 1 */
+#define PUFFS_SETBACK_NOREF_N2	0x08	/* set pn PN_NOREFS for node 2 */
+#define PUFFS_SETBACK_MASK	0x0f
 
 /*
  * Some operations have unknown size requirements.  So as the first
@@ -284,15 +290,14 @@ struct puffs_flush {
 /*
  * Available ioctl operations
  */
-#define PUFFSSTARTOP		_IOWR('p', 1, struct puffs_startreq)
-#define PUFFSGETOP		_IOWR('p', 2, struct puffs_reqh_get)
-#define PUFFSPUTOP		_IOWR('p', 3, struct puffs_reqh_put)
-#define PUFFSSIZEOP		_IOWR('p', 4, struct puffs_sizeop)
-#define PUFFSFLUSHOP		_IOW ('p', 5, struct puffs_flush)
+#define PUFFSGETOP		_IOWR('p', 1, struct puffs_reqh_get)
+#define PUFFSPUTOP		_IOWR('p', 2, struct puffs_reqh_put)
+#define PUFFSSIZEOP		_IOWR('p', 3, struct puffs_sizeop)
+#define PUFFSFLUSHOP		_IOW ('p', 4, struct puffs_flush)
 #if 0
-#define PUFFSFLUSHMULTIOP	_IOW ('p', 6, struct puffs_flushmulti)
+#define PUFFSFLUSHMULTIOP	_IOW ('p', 5, struct puffs_flushmulti)
 #endif
-#define PUFFSSUSPENDOP		_IO  ('p', 7)
+#define PUFFSSUSPENDOP		_IO  ('p', 6)
 
 
 /*
@@ -356,13 +361,6 @@ struct puffs_kcn {
  * by generic routines while the other stuff is supposed to be
  * modified only by specific routines.
  */
-
-struct puffs_startreq {
-	struct puffs_req	psr_pr;
-
-	void			*psr_cookie;	/* IN: root node cookie */
-	struct statvfs		psr_sb;		/* IN: statvfs buffer */
-};
 
 /*
  * aux structures for vfs operations.
@@ -517,8 +515,8 @@ struct puffs_vnreq_fcnioctl {
 struct puffs_vnreq_poll {
 	struct puffs_req	pvn_pr;
 
-	int			pvnr_events;		/* OUT	*/
-	pid_t			pvnr_pid;		/* OUT	*/
+	int			pvnr_events;		/* IN/OUT */
+	pid_t			pvnr_pid;		/* OUT	  */
 };
 
 struct puffs_vnreq_fsync {

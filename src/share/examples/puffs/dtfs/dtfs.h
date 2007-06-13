@@ -1,4 +1,4 @@
-/*	$NetBSD: dtfs.h,v 1.14 2007/04/11 21:07:54 pooka Exp $	*/
+/*	$NetBSD: dtfs.h,v 1.17 2007/06/06 01:55:02 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006  Antti Kantee.  All Rights Reserved.
@@ -11,9 +11,6 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. The name of the company nor the name of the author may be used to
- *    endorse or promote products derived from this software without specific
- *    prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -36,7 +33,7 @@
 #include <puffs.h>
 
 PUFFSOP_PROTOS(dtfs);
-int	dtfs_domount(struct puffs_usermount *);
+int	dtfs_domount(struct puffs_usermount *, const char *);
 
 #define DTFS_BLOCKSHIFT	(16)
 #define DTFS_BLOCKSIZE	(1<<DTFS_BLOCKSHIFT)
@@ -50,6 +47,9 @@ struct dtfs_mount {
 
 	size_t		dtm_fsizes;	/* sum of file sizes in bytes	*/
 	fsfilcnt_t	dtm_nfiles;	/* number of files		*/
+
+	LIST_HEAD(, dtfs_poll) dtm_pollent;
+	int		dtm_needwakeup;
 };
 
 struct dtfs_file {
@@ -91,6 +91,11 @@ struct dtfs_fid {
 	u_long			dfid_gen;
 };
 #define DTFS_FIDSIZE (sizeof(struct dtfs_fid))
+
+struct dtfs_poll {
+	struct puffs_cc *dp_pcc;
+	LIST_ENTRY(dtfs_poll) dp_entries;
+};
 
 struct puffs_node *	dtfs_genfile(struct puffs_node *,
 				     const struct puffs_cn *, enum vtype);

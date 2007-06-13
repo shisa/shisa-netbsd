@@ -1,4 +1,4 @@
-/*	$NetBSD: puffs_sys.h,v 1.34 2007/05/07 17:14:54 pooka Exp $	*/
+/*	$NetBSD: puffs_sys.h,v 1.39 2007/06/06 01:55:00 pooka Exp $	*/
 
 /*
  * Copyright (c) 2005, 2006  Antti Kantee.  All Rights Reserved.
@@ -15,9 +15,6 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. The name of the company nor the name of the author may be used to
- *    endorse or promote products derived from this software without specific
- *    prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -137,8 +134,13 @@ struct puffs_mount {
 	int				pmp_npnodehash;
 
 	struct mount			*pmp_mp;
+
 	struct vnode			*pmp_root;
-	void				*pmp_rootcookie;
+	void				*pmp_root_cookie;
+	enum vtype			pmp_root_vtype;
+	vsize_t				pmp_root_vsize;
+	dev_t				pmp_root_rdev;
+
 	struct selinfo			*pmp_sel;	/* in puffs_instance */
 
 	unsigned int			pmp_refcount;
@@ -159,9 +161,10 @@ struct puffs_mount {
 #define PUFFSTAT_DYING		3 /* Do you want your possessions identified? */
 
 
-#define PNODE_NOREFS	0x01	/* vnode inactive, no backend reference	*/
-#define PNODE_SUSPEND	0x02	/* issue all operations as FAF		*/
-#define PNODE_DOINACT	0x04	/* if inactive-on-demand, call inactive */
+#define PNODE_NOREFS	0x01	/* no backend reference			*/
+#define PNODE_DYING	0x02	/* NOREF + inactive 			*/
+#define PNODE_SUSPEND	0x04	/* issue all operations as FAF		*/
+#define PNODE_DOINACT	0x08	/* if inactive-on-demand, call inactive */
 
 #define PNODE_METACACHE_ATIME	0x10	/* cache atime metadata */
 #define PNODE_METACACHE_CTIME	0x20	/* cache atime metadata */
@@ -172,9 +175,15 @@ struct puffs_mount {
 struct puffs_node {
 	struct genfs_node pn_gnode;	/* genfs glue			*/
 
+	kmutex_t	pn_mtx;
+	int		pn_refcount;
+
 	void		*pn_cookie;	/* userspace pnode cookie	*/
 	struct vnode	*pn_vp;		/* backpointer to vnode		*/
 	uint32_t	pn_stat;	/* node status			*/
+
+	struct selinfo	pn_sel;		/* for selecting on the node	*/
+	short		pn_revents;	/* available events		*/
 
 	/* metacache */
 	struct timespec	pn_mc_atime;
@@ -195,8 +204,6 @@ void	puffs_msgif_destroy(void);
 void 	*puffs_park_alloc(int);
 void	puffs_park_release(void *, int);
 
-int	puffs_start2(struct puffs_mount *, struct puffs_startreq *);
-
 int	puffs_vfstouser(struct puffs_mount *, int, void *, size_t);
 void	puffs_suspendtouser(struct puffs_mount *, int);
 int	puffs_vntouser(struct puffs_mount *, int, void *, size_t, size_t,
@@ -216,12 +223,17 @@ int	puffs_getvnode(struct mount *, void *, enum vtype, voff_t, dev_t,
 int	puffs_newnode(struct mount *, struct vnode *, struct vnode **,
 		      void *, struct componentname *, enum vtype, dev_t);
 void	puffs_putvnode(struct vnode *);
+
+void	puffs_releasenode(struct puffs_node *);
+void	puffs_referencenode(struct puffs_node *);
+
 struct vnode *puffs_pnode2vnode(struct puffs_mount *, void *, int);
 void	puffs_makecn(struct puffs_kcn *, const struct componentname *);
 void	puffs_credcvt(struct puffs_cred *, kauth_cred_t);
 pid_t	puffs_lwp2pid(struct lwp *);
 
 void	puffs_parkdone_asyncbioread(struct puffs_req *, void *);
+void	puffs_parkdone_poll(struct puffs_req *, void *);
 
 void	puffs_mp_reference(struct puffs_mount *);
 void	puffs_mp_release(struct puffs_mount *);

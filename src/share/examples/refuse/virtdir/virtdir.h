@@ -65,7 +65,7 @@ typedef struct VIRTDIR {
 } VIRTDIR;
 
 int virtdir_init(virtdir_t *, struct stat *, struct stat *, struct stat *);
-int virtdir_add(virtdir_t *, const char *, size_t, uint8_t, char *);
+int virtdir_add(virtdir_t *, const char *, size_t, uint8_t, char *, size_t);
 int virtdir_del(virtdir_t *, const char *, size_t);
 virt_dirent_t *virtdir_find(virtdir_t *, const char *, size_t);
 virt_dirent_t *virtdir_find_tgt(virtdir_t *, const char *, size_t);
@@ -74,5 +74,7 @@ void virtdir_drop(virtdir_t *);
 VIRTDIR *openvirtdir(virtdir_t *, const char *);
 virt_dirent_t *readvirtdir(VIRTDIR *);
 void closevirtdir(VIRTDIR *);
+
+int virtdir_offset(virtdir_t *, virt_dirent_t *);
 
 #endif

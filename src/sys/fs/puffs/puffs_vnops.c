@@ -1,4 +1,4 @@
-/*	$NetBSD: puffs_vnops.c,v 1.67 2007/05/08 21:39:03 pooka Exp $	*/
+/*	$NetBSD: puffs_vnops.c,v 1.76 2007/06/06 01:55:00 pooka Exp $	*/
 
 /*
  * Copyright (c) 2005, 2006, 2007  Antti Kantee.  All Rights Reserved.
@@ -15,9 +15,6 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. The name of the company nor the name of the author may be used to
- *    endorse or promote products derived from this software without specific
- *    prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -33,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: puffs_vnops.c,v 1.67 2007/05/08 21:39:03 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: puffs_vnops.c,v 1.76 2007/06/06 01:55:00 pooka Exp $");
 
 #include <sys/param.h>
 #include <sys/fstrans.h>
@@ -146,9 +143,9 @@ const struct vnodeopv_entry_desc puffs_vnodeop_entries[] = {
         { &vop_islocked_desc, puffs_islocked },		/* REAL islocked */
         { &vop_bwrite_desc, genfs_nullop },		/* REAL bwrite */
         { &vop_mmap_desc, puffs_mmap },			/* REAL mmap */
+        { &vop_poll_desc, puffs_poll },			/* REAL poll */
 
-        { &vop_poll_desc, genfs_eopnotsupp },		/* poll XXX */
-        { &vop_poll_desc, genfs_eopnotsupp },		/* kqfilter XXX */
+        { &vop_kqfilter_desc, genfs_eopnotsupp },	/* kqfilter XXX */
 	{ NULL, NULL }
 };
 const struct vnodeopv_desc puffs_vnodeop_opv_desc =
@@ -174,7 +171,7 @@ const struct vnodeopv_entry_desc puffs_specop_entries[] = {
 	{ &vop_poll_desc, spec_poll },			/* spec_poll */
 	{ &vop_kqfilter_desc, spec_kqfilter },		/* spec_kqfilter */
 	{ &vop_revoke_desc, spec_revoke },		/* genfs_revoke */
-	{ &vop_mmap_desc, spec_mmap },			/* genfs_mmap (dummy) */
+	{ &vop_mmap_desc, spec_mmap },			/* spec_mmap */
 	{ &vop_fsync_desc, spec_fsync },		/* vflushbuf */
 	{ &vop_seek_desc, spec_seek },			/* genfs_nullop */
 	{ &vop_remove_desc, spec_remove },		/* genfs_badop */
@@ -345,10 +342,7 @@ puffs_checkop(void *v)
 	struct vnodeop_desc *desc = ap->a_desc;
 	struct puffs_mount *pmp;
 	struct vnode *vp;
-	int offset;
-
-	DPRINTF_VERBOSE(("checkop call %s (%d)\n",
-	    ap->a_desc->vdesc_name, ap->a_desc->vdesc_offset));
+	int offset, rv;
 
 	offset = ap->a_desc->vdesc_vp_offsets[0];
 #ifdef DIAGNOSTIC
@@ -357,6 +351,9 @@ puffs_checkop(void *v)
 #endif
 	vp = *VOPARG_OFFSETTO(struct vnode **, offset, ap);
 	pmp = MPTOPUFFSMP(vp->v_mount);
+
+	DPRINTF_VERBOSE(("checkop call %s (%d), vp %p\n",
+	    ap->a_desc->vdesc_name, ap->a_desc->vdesc_offset, vp));
 
 	if (!ALLOPS(pmp)) {
 		switch (desc->vdesc_offset) {
@@ -395,7 +392,12 @@ puffs_checkop(void *v)
 		}
 	}
 
-	return VOCALL(puffs_msgop_p, ap->a_desc->vdesc_offset, v);
+	rv = VOCALL(puffs_msgop_p, ap->a_desc->vdesc_offset, v);
+
+	DPRINTF_VERBOSE(("checkop return %s (%d), vp %p: %d\n",
+	    ap->a_desc->vdesc_name, ap->a_desc->vdesc_offset, vp, rv));
+
+	return rv;
 }
 
 
@@ -855,8 +857,8 @@ puffs_inactive(void *v)
 	 * user server thinks it's gone?  then don't be afraid care,
 	 * node's life was already all it would ever be
 	 */
-	if (vnrefs == 0) {
-		pnode->pn_stat |= PNODE_NOREFS;
+	if (vnrefs == 0 || (pnode->pn_stat & PNODE_NOREFS)) {
+		pnode->pn_stat |= PNODE_DYING;
 		vrecycle(ap->a_vp, NULL, ap->a_l);
 	}
 
@@ -1002,6 +1004,16 @@ puffs_readdir(void *v)
 }
 #undef CSIZE
 
+/*
+ * poll works by consuming the bitmask in pn_revents.  If there are
+ * events available, poll returns immediately.  If not, it issues a
+ * poll to userspace, selrecords itself and returns with no available
+ * events.  When the file server returns, it executes puffs_parkdone_poll(),
+ * where available events are added to the bitmask.  selnotify() is
+ * then also executed by that function causing us to enter here again
+ * and hopefully find the missing bits (unless someone got them first,
+ * in which case it starts all over again).
+ */
 int
 puffs_poll(void *v)
 {
@@ -1011,14 +1023,42 @@ puffs_poll(void *v)
 		int a_events;
 		struct lwp *a_l;
 	} */ *ap = v;
+	struct vnode *vp = ap->a_vp;
+	struct puffs_mount *pmp = MPTOPUFFSMP(vp->v_mount);
+	struct puffs_vnreq_poll *poll_argp;
+	struct puffs_node *pn = vp->v_data;
+	int events;
 
-	PUFFS_VNREQ(poll);
+	if (EXISTSOP(pmp, POLL)) {
+		mutex_enter(&pn->pn_mtx);
+		events = pn->pn_revents & ap->a_events;
+		if (events & ap->a_events) {
+			pn->pn_revents &= ~ap->a_events;
+			mutex_exit(&pn->pn_mtx);
 
-	poll_arg.pvnr_events = ap->a_events;
-	poll_arg.pvnr_pid = puffs_lwp2pid(ap->a_l);
+			return events;
+		} else {
+			puffs_referencenode(pn);
+			mutex_exit(&pn->pn_mtx);
 
-	return puffs_vntouser(MPTOPUFFSMP(ap->a_vp->v_mount), PUFFS_VN_POLL,
-	    &poll_arg, sizeof(poll_arg), 0, ap->a_vp, NULL);
+			/* freed in puffs_parkdone_poll */
+			poll_argp = malloc(sizeof(struct puffs_vnreq_poll),
+			    M_PUFFS, M_ZERO | M_WAITOK);
+
+			poll_argp->pvnr_events = ap->a_events;
+			poll_argp->pvnr_pid = puffs_lwp2pid(ap->a_l);
+
+			selrecord(ap->a_l, &pn->pn_sel);
+			puffs_vntouser_call(pmp, PUFFS_VN_POLL,
+			    poll_argp, sizeof(struct puffs_vnreq_poll), 0,
+			    puffs_parkdone_poll, pn,
+			    vp, NULL);
+
+			return 0;
+		}
+	} else {
+		return genfs_poll(v);
+	}
 }
 
 int
@@ -1047,7 +1087,8 @@ puffs_fsync(void *v)
 	pmp = MPTOPUFFSMP(vp->v_mount);
 
 	/* flush out information from our metacache, see vop_setattr */
-	if (pn->pn_stat & PNODE_METACACHE_MASK) {
+	if (pn->pn_stat & PNODE_METACACHE_MASK
+	    && (pn->pn_stat & PNODE_DYING) == 0) {
 		vattr_null(&va);
 		error = VOP_SETATTR(vp, &va, FSCRED, NULL); 
 		if (error)
@@ -1072,7 +1113,7 @@ puffs_fsync(void *v)
 	 * has references neither in the kernel or the fs server.
 	 * Otherwise we continue to issue fsync() forward.
 	 */
-	if (!EXISTSOP(pmp, FSYNC) || (pn->pn_stat & PNODE_NOREFS))
+	if (!EXISTSOP(pmp, FSYNC) || (pn->pn_stat & PNODE_DYING))
 		return 0;
 
 	dofaf = (ap->a_flags & FSYNC_WAIT) == 0 || ap->a_flags == FSYNC_LAZY;
@@ -1508,12 +1549,11 @@ puffs_write(void *v)
 		struct uio *a_uio;
 		int a_ioflag;
 		kauth_cred_t a_cred;
-	} */ *ap = v;
+	} */ *ap = v;
 	struct puffs_vnreq_write *write_argp;
 	struct puffs_mount *pmp;
 	struct uio *uio;
 	struct vnode *vp;
-	void *win;
 	size_t tomove, argsize;
 	off_t oldoff, newoff, origoff;
 	vsize_t bytelen;
@@ -1527,7 +1567,7 @@ puffs_write(void *v)
 	pmp = MPTOPUFFSMP(ap->a_vp->v_mount);
 
 	if (vp->v_type == VREG && PUFFS_DOCACHE(pmp)) {
-		ubcflags = 0;
+		ubcflags = UBC_WRITE | UBC_PARTIALOK;
 		if (UBC_WANT_UNMAP(vp))
 			ubcflags = UBC_UNMAP;
 
@@ -1545,26 +1585,28 @@ puffs_write(void *v)
 			oldoff = uio->uio_offset;
 			bytelen = uio->uio_resid;
 
-			win = ubc_alloc(&vp->v_uobj, oldoff, &bytelen,
-			    UVM_ADV_NORMAL, UBC_WRITE);
-			error = uiomove(win, bytelen, uio);
+			newoff = oldoff + bytelen;
+			if (vp->v_size < newoff) {
+				uvm_vnp_setwritesize(vp, newoff);
+			}
+			error = ubc_uiomove(&vp->v_uobj, uio, bytelen,
+			    ubcflags);
 
 			/*
-			 * There is no guarantee that the faults
-			 * generated by uiomove() succeed at all.
-			 * Therefore, in case of an uiomove() error,
+			 * In case of a ubc_uiomove() error,
 			 * opt to not extend the file at all and
 			 * return an error.  Otherwise, if we attempt
 			 * to clear the memory we couldn't fault to,
 			 * we might generate a kernel page fault.
 			 */
-			newoff = oldoff + bytelen;
-			if (vp->v_size < newoff && error == 0) {
-				uflags |= PUFFS_UPDATESIZE;
-				uvm_vnp_setsize(vp, newoff);
+			if (vp->v_size < newoff) {
+				if (error == 0) {
+					uflags |= PUFFS_UPDATESIZE;
+					uvm_vnp_setsize(vp, newoff);
+				} else {
+					uvm_vnp_setwritesize(vp, vp->v_size);
+				}
 			}
-
-			ubc_release(win, ubcflags);
 			if (error)
 				break;
 
@@ -1858,7 +1900,8 @@ puffs_strategy(void *v)
 	 * Short-circuit optimization: don't flush buffer in between
 	 * VOP_INACTIVE and VOP_RECLAIM in case the node has no references.
 	 */
-	if (pn->pn_stat & PNODE_NOREFS) {
+	if (pn->pn_stat & PNODE_DYING) {
+		KASSERT((bp->b_flags & B_READ) == 0);
 		bp->b_resid = 0;
 		goto out;
 	}
@@ -2014,7 +2057,7 @@ puffs_strategy(void *v)
 		bp->b_flags |= B_ERROR;
 	}
 
-	if ((bp->b_flags & (B_READ | B_ASYNC)) != (B_READ | B_ASYNC))
+	if (error || ((bp->b_flags & (B_READ | B_ASYNC)) != (B_READ | B_ASYNC)))
 		biodone(bp);
  wayout:
 	return error;

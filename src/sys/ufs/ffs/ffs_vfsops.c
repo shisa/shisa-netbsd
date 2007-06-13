@@ -1,4 +1,4 @@
-/*	$NetBSD: ffs_vfsops.c,v 1.198 2007/04/07 14:21:52 hannken Exp $	*/
+/*	$NetBSD: ffs_vfsops.c,v 1.201 2007/05/29 11:30:17 tsutsui Exp $	*/
 
 /*
  * Copyright (c) 1989, 1991, 1993, 1994
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ffs_vfsops.c,v 1.198 2007/04/07 14:21:52 hannken Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ffs_vfsops.c,v 1.201 2007/05/29 11:30:17 tsutsui Exp $");
 
 #if defined(_KERNEL_OPT)
 #include "opt_ffs.h"
@@ -1081,14 +1081,14 @@ ffs_oldfscompat_read(struct fs *fs, struct ufsmount *ump, daddr_t sblockloc)
 	}
 
 	if (fs->fs_old_inodefmt < FS_44INODEFMT) {
-		ump->um_maxfilesize = (u_quad_t) 1LL << 39;
+		fs->fs_maxfilesize = (u_quad_t) 1LL << 39;
 		fs->fs_qbmask = ~fs->fs_bmask;
 		fs->fs_qfmask = ~fs->fs_fmask;
 	}
 
 	maxfilesize = (u_int64_t)0x80000000 * fs->fs_bsize - 1;
-	if (ump->um_maxfilesize > maxfilesize)
-		ump->um_maxfilesize = maxfilesize;
+	if (fs->fs_maxfilesize > maxfilesize)
+		fs->fs_maxfilesize = maxfilesize;
 
 	/* Compatibility for old filesystems */
 	if (fs->fs_avgfilesize <= 0)
@@ -1312,8 +1312,7 @@ ffs_sync(struct mount *mp, int waitfor, kauth_cred_t cred, struct lwp *l)
 		printf("fs = %s\n", fs->fs_fsmnt);
 		panic("update: rofs mod");
 	}
-	if ((error = fstrans_start(mp, FSTRANS_SHARED)) != 0)
-		return error;
+	fstrans_start(mp, FSTRANS_SHARED);
 	/*
 	 * Write back each (modified) inode.
 	 */
@@ -1426,6 +1425,7 @@ ffs_vget(struct mount *mp, ino_t ino, struct vnode **vpp)
 	ump = VFSTOUFS(mp);
 	dev = ump->um_dev;
 
+ retry:
 	if ((*vpp = ufs_ihashget(dev, ino, LK_EXCLUSIVE)) != NULL)
 		return (0);
 
@@ -1437,15 +1437,15 @@ ffs_vget(struct mount *mp, ino_t ino, struct vnode **vpp)
 	ip = pool_get(&ffs_inode_pool, PR_WAITOK);
 
 	/*
-	 * If someone beat us to it while sleeping in getnewvnode(),
-	 * push back the freshly allocated vnode we don't need, and return.
+	 * If someone beat us to it, put back the freshly allocated
+	 * vnode/inode pair and retry.
 	 */
 	mutex_enter(&ufs_hashlock);
-	if ((*vpp = ufs_ihashget(dev, ino, LK_EXCLUSIVE)) != NULL) {
+	if (ufs_ihashget(dev, ino, 0) != NULL) {
 		mutex_exit(&ufs_hashlock);
 		ungetnewvnode(vp);
 		pool_put(&ffs_inode_pool, ip);
-		return (0);
+		goto retry;
 	}
 
 	vp->v_flag |= VLOCKSWORK;

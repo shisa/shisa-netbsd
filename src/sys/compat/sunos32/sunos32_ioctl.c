@@ -1,4 +1,4 @@
-/*	$NetBSD: sunos32_ioctl.c,v 1.20 2007/03/16 22:21:42 dsl Exp $	*/
+/*	$NetBSD: sunos32_ioctl.c,v 1.23 2007/06/01 10:21:22 hannken Exp $	*/
 /* from: NetBSD: sunos_ioctl.c,v 1.35 2001/02/03 22:20:02 mrg Exp 	*/
 
 /*
@@ -56,7 +56,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: sunos32_ioctl.c,v 1.20 2007/03/16 22:21:42 dsl Exp $");
+__KERNEL_RCSID(0, "$NetBSD: sunos32_ioctl.c,v 1.23 2007/06/01 10:21:22 hannken Exp $");
 
 #if defined(_KERNEL_OPT)
 #include "opt_compat_netbsd32.h"
@@ -83,6 +83,8 @@ __KERNEL_RCSID(0, "$NetBSD: sunos32_ioctl.c,v 1.20 2007/03/16 22:21:42 dsl Exp $
 #include <net/if.h>
 
 #include <dev/sun/disklabel.h>
+
+#include <compat/sys/sockio.h>
 
 #include <compat/sunos/sunos.h>
 #include <compat/sunos/sunos_syscallargs.h>
@@ -636,14 +638,14 @@ sunos32_sys_ioctl(l, v, retval)
  * Socket ioctl translations.
  */
 #define IFREQ_IN(a) { \
-	struct ifreq ifreq; \
+	struct oifreq ifreq; \
 	error = copyin(SCARG_P32(uap, data), &ifreq, sizeof (ifreq)); \
 	if (error) \
 		return error; \
 	return (*ctl)(fp, a, &ifreq, l); \
 }
 #define IFREQ_INOUT(a) { \
-	struct ifreq ifreq; \
+	struct oifreq ifreq; \
 	error = copyin(SCARG_P32(uap, data), &ifreq, sizeof (ifreq)); \
 	if (error) \
 		return error; \
@@ -652,50 +654,50 @@ sunos32_sys_ioctl(l, v, retval)
 	return copyout(&ifreq, SCARG_P32(uap, data), sizeof (ifreq)); \
 }
 
-	case _IOW('i', 12, struct ifreq):
+	case _IOW('i', 12, struct oifreq):
 		/* SIOCSIFADDR */
 		break;
 
-	case _IOWR('i', 13, struct ifreq):
-		IFREQ_INOUT(OSIOCGIFADDR);
+	case _IOWR('i', 13, struct oifreq):
+		IFREQ_INOUT(OOSIOCGIFADDR);
 
-	case _IOW('i', 14, struct ifreq):
+	case _IOW('i', 14, struct oifreq):
 		/* SIOCSIFDSTADDR */
 		break;
 
-	case _IOWR('i', 15, struct ifreq):
-		IFREQ_INOUT(OSIOCGIFDSTADDR);
+	case _IOWR('i', 15, struct oifreq):
+		IFREQ_INOUT(OOSIOCGIFDSTADDR);
 
-	case _IOW('i', 16, struct ifreq):
+	case _IOW('i', 16, struct oifreq):
 		/* SIOCSIFFLAGS */
 		break;
 
-	case _IOWR('i', 17, struct ifreq):
+	case _IOWR('i', 17, struct oifreq):
 		/* SIOCGIFFLAGS */
 		break;
 
-	case _IOW('i', 21, struct ifreq):
+	case _IOW('i', 21, struct oifreq):
 		IFREQ_IN(SIOCSIFMTU);
 
-	case _IOWR('i', 22, struct ifreq):
+	case _IOWR('i', 22, struct oifreq):
 		IFREQ_INOUT(SIOCGIFMTU);
 
-	case _IOWR('i', 23, struct ifreq):
+	case _IOWR('i', 23, struct oifreq):
 		IFREQ_INOUT(SIOCGIFBRDADDR);
 
-	case _IOW('i', 24, struct ifreq):
+	case _IOW('i', 24, struct oifreq):
 		IFREQ_IN(SIOCSIFBRDADDR);
 
-	case _IOWR('i', 25, struct ifreq):
-		IFREQ_INOUT(OSIOCGIFNETMASK);
+	case _IOWR('i', 25, struct oifreq):
+		IFREQ_INOUT(OOSIOCGIFNETMASK);
 
-	case _IOW('i', 26, struct ifreq):
+	case _IOW('i', 26, struct oifreq):
 		IFREQ_IN(SIOCSIFNETMASK);
 
-	case _IOWR('i', 27, struct ifreq):
+	case _IOWR('i', 27, struct oifreq):
 		IFREQ_INOUT(SIOCGIFMETRIC);
 
-	case _IOWR('i', 28, struct ifreq):
+	case _IOWR('i', 28, struct oifreq):
 		IFREQ_IN(SIOCSIFMETRIC);
 
 	case _IOW('i', 30, struct arpreq):
@@ -710,22 +712,22 @@ sunos32_sys_ioctl(l, v, retval)
 		/* SIOCDARP */
 		break;
 
-	case _IOW('i', 18, struct ifreq):	/* SIOCSIFMEM */
-	case _IOWR('i', 19, struct ifreq):	/* SIOCGIFMEM */
-	case _IOW('i', 40, struct ifreq):	/* SIOCUPPER */
-	case _IOW('i', 41, struct ifreq):	/* SIOCLOWER */
-	case _IOW('i', 44, struct ifreq):	/* SIOCSETSYNC */
-	case _IOWR('i', 45, struct ifreq):	/* SIOCGETSYNC */
-	case _IOWR('i', 46, struct ifreq):	/* SIOCSDSTATS */
-	case _IOWR('i', 47, struct ifreq):	/* SIOCSESTATS */
+	case _IOW('i', 18, struct oifreq):	/* SIOCSIFMEM */
+	case _IOWR('i', 19, struct oifreq):	/* SIOCGIFMEM */
+	case _IOW('i', 40, struct oifreq):	/* SIOCUPPER */
+	case _IOW('i', 41, struct oifreq):	/* SIOCLOWER */
+	case _IOW('i', 44, struct oifreq):	/* SIOCSETSYNC */
+	case _IOWR('i', 45, struct oifreq):	/* SIOCGETSYNC */
+	case _IOWR('i', 46, struct oifreq):	/* SIOCSDSTATS */
+	case _IOWR('i', 47, struct oifreq):	/* SIOCSESTATS */
 	case _IOW('i', 48, int):		/* SIOCSPROMISC */
-	case _IOW('i', 49, struct ifreq):	/* SIOCADDMULTI */
-	case _IOW('i', 50, struct ifreq):	/* SIOCDELMULTI */
+	case _IOW('i', 49, struct oifreq):	/* SIOCADDMULTI */
+	case _IOW('i', 50, struct oifreq):	/* SIOCDELMULTI */
 		return EOPNOTSUPP;
 
-	case _IOWR('i', 20, struct ifconf):	/* SIOCGIFCONF */
+	case _IOWR('i', 20, struct oifconf):	/* SIOCGIFCONF */
 	    {
-		struct ifconf ifcf;
+		struct oifconf ifcf;
 
 		/*
 		 * XXX: two more problems
@@ -736,7 +738,7 @@ sunos32_sys_ioctl(l, v, retval)
 		    sizeof (ifcf));
 		if (error)
 			return error;
-		error = (*ctl)(fp, OSIOCGIFCONF, &ifcf, l);
+		error = (*ctl)(fp, OOSIOCGIFCONF, &ifcf, l);
 		if (error)
 			return error;
 		return copyout(&ifcf, SCARG_P32(uap, data),
@@ -1028,7 +1030,6 @@ sunos32_sys_fcntl(l, v, retval)
 		syscallarg(int) cmd;
 		syscallarg(netbsd32_voidp) arg;
 	} */ *uap = v;
-	struct proc *p = l->l_proc;
 	uintptr_t flg;
 	int n, ret;
 
@@ -1050,37 +1051,19 @@ sunos32_sys_fcntl(l, v, retval)
 	case F_SETLKW:
 		{
 			int error;
-			struct sunos_flock	 ifl;
-			struct flock		*flp, fl;
-			void *sg = stackgap_init(p, 0);
-			struct sys_fcntl_args		fa;
-
-			SCARG(&fa, fd) = SCARG(uap, fd);
-			SCARG(&fa, cmd) = SCARG(uap, cmd);
-
-			flp = stackgap_alloc(p, &sg, sizeof(struct flock));
-			SCARG(&fa, arg) = (void *) flp;
+			struct sunos_flock	ifl;
+			struct flock		fl;
 
 			error = copyin(SCARG_P32(uap, arg), &ifl, sizeof ifl);
 			if (error)
 				return error;
-
 			sunos_to_bsd_flock(&ifl, &fl);
 
-			error = copyout(&fl, flp, sizeof fl);
-			if (error)
-				return error;
-
-			error = sys_fcntl(l, &fa, retval);
-			if (error || SCARG(&fa, cmd) != F_GETLK)
-				return error;
-
-			error = copyin(flp, &fl, sizeof fl);
-			if (error)
+			error = do_fcntl_lock(l, SCARG(uap, fd), SCARG(uap, cmd), &fl);
+			if (error || SCARG(uap, cmd) != F_GETLK)
 				return error;
 
 			bsd_to_sunos_flock(&fl, &ifl);
-
 			return copyout(&ifl, SCARG_P32(uap, arg), sizeof ifl);
 		}
 		break;

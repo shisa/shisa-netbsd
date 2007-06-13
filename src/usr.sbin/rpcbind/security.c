@@ -1,4 +1,4 @@
-/*	$NetBSD: security.c,v 1.8 2006/03/17 14:40:11 elad Exp $	*/
+/*	$NetBSD: security.c,v 1.10 2007/05/16 14:42:08 christos Exp $	*/
 
 #include <sys/types.h>
 #include <sys/time.h>
@@ -192,7 +192,7 @@ logit(int severity, struct sockaddr *addr, rpcproc_t procnum, rpcprog_t prognum,
 		/* Try to map program number to name. */
 
 		if (prognum == 0) {
-			progname = "";
+			progname = __UNCONST("");
 		} else if ((rpc = getrpcbynumber((int) prognum))) {
 			progname = rpc->r_name;
 		} else {

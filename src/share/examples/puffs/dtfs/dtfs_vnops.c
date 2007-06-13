@@ -1,4 +1,4 @@
-/*	$NetBSD: dtfs_vnops.c,v 1.25 2007/05/07 17:18:50 pooka Exp $	*/
+/*	$NetBSD: dtfs_vnops.c,v 1.28 2007/06/06 01:55:02 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006  Antti Kantee.  All Rights Reserved.
@@ -11,9 +11,6 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. The name of the company nor the name of the author may be used to
- *    endorse or promote products derived from this software without specific
- *    prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS
  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -29,6 +26,7 @@
  */
 
 #include <sys/types.h>
+#include <sys/poll.h>
 
 #include <assert.h>
 #include <errno.h>
@@ -36,7 +34,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ucontext.h>
+#include <unistd.h>
 #include <util.h>
 
 #include "dtfs.h"
@@ -191,8 +189,8 @@ dtfs_node_remove(struct puffs_cc *pcc, void *opc, void *targ,
 
 	dtfs_nukenode(targ, pn_parent, pcn->pcn_name);
 
-	/* call inactive for removed node when its time comes */
-	puffs_setback(pcc, PUFFS_SETBACK_INACT_N2);
+	if (pn->pn_va.va_nlink == 0)
+		puffs_setback(pcc, PUFFS_SETBACK_NOREF_N2);
 
 	return 0;
 }
@@ -223,6 +221,7 @@ dtfs_node_rmdir(struct puffs_cc *pcc, void *opc, void *targ,
 		return ENOTEMPTY;
 
 	dtfs_nukenode(targ, pn_parent, pcn->pcn_name);
+	puffs_setback(pcc, PUFFS_SETBACK_NOREF_N2);
 
 	return 0;
 }
@@ -269,6 +268,26 @@ dtfs_node_readdir(struct puffs_cc *pcc, void *opc,
 		(*readoff)++;
 	}
 
+	return 0;
+}
+
+int
+dtfs_node_poll(struct puffs_cc *pcc, void *opc, int *events, pid_t pid)
+{
+	struct dtfs_mount *dtm = puffs_cc_getspecific(pcc);
+	struct dtfs_poll dp;
+	struct itimerval it;
+
+	memset(&it, 0, sizeof(struct itimerval));
+	it.it_value.tv_sec = 4;
+	if (setitimer(ITIMER_REAL, &it, NULL) == -1)
+		return errno;
+
+	dp.dp_pcc = pcc;
+	LIST_INSERT_HEAD(&dtm->dtm_pollent, &dp, dp_entries);
+	puffs_cc_yield(pcc);
+
+	*events = *events & (POLLIN | POLLOUT | POLLRDNORM | POLLWRNORM);
 	return 0;
 }
 
@@ -473,17 +492,6 @@ dtfs_node_reclaim(struct puffs_cc *pcc, void *opc, pid_t pid)
 
 	if (pn->pn_va.va_nlink == 0)
 		dtfs_freenode(pn);
-
-	return 0;
-}
-
-int
-dtfs_node_inactive(struct puffs_cc *pcc, void *opc, pid_t pid,
-	int *refcount)
-{
-	struct puffs_node *pn = opc;
-
-	*refcount = pn->pn_va.va_nlink;
 
 	return 0;
 }

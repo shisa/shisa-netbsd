@@ -1,4 +1,4 @@
-/*	$NetBSD: kdump.c,v 1.90 2007/03/19 18:51:09 njoly Exp $	*/
+/*	$NetBSD: kdump.c,v 1.92 2007/06/01 19:05:50 dsl Exp $	*/
 
 /*-
  * Copyright (c) 1988, 1993
@@ -39,7 +39,7 @@ __COPYRIGHT("@(#) Copyright (c) 1988, 1993\n\
 #if 0
 static char sccsid[] = "@(#)kdump.c	8.4 (Berkeley) 4/28/95";
 #else
-__RCSID("$NetBSD: kdump.c,v 1.90 2007/03/19 18:51:09 njoly Exp $");
+__RCSID("$NetBSD: kdump.c,v 1.92 2007/06/01 19:05:50 dsl Exp $");
 #endif
 #endif /* not lint */
 
@@ -872,7 +872,7 @@ ktrpsig(void *v, int len)
 			switch (si->si_code) {
 			case SI_TIMER:
 				printf(": code=SI_TIMER sigval %p)\n",
-				    si->si_sigval.sival_ptr);
+				    si->si_value.sival_ptr);
 				return;
 			case SI_QUEUE:
 				code = "SI_QUEUE";
@@ -943,11 +943,18 @@ ktruser(struct ktr_user *usr, int len)
 	int i;
 	unsigned char *dta;
 
-	printf("\"%.*s: %d, ", KTR_USER_MAXIDLEN, usr->ktr_id, len);
-	dta = (unsigned char *)usr;
-	for (i = sizeof(struct ktr_user); i < len; i++)
+	len -= sizeof(struct ktr_user);
+	printf("%.*s:", KTR_USER_MAXIDLEN, usr->ktr_id);
+	dta = (unsigned char *)(usr + 1);
+	if (word_size) {
+		printf("\n");
+		hexdump_buf(dta, len, word_size);
+		return;
+	}
+	printf(" %d, ", len);
+	for (i = 0; i < len; i++)
 		printf("%02x", (unsigned int) dta[i]);
-	printf("\"\n");
+	printf("\n");
 }
 
 static void

@@ -1,19 +1,16 @@
-#	$NetBSD: Makefile,v 1.52 2004/04/21 06:24:32 jdc Exp $
+#	$NetBSD: Makefile,v 1.54 2007/05/29 13:20:21 blymn Exp $
 #	@(#)Makefile	8.2 (Berkeley) 1/2/94
 
 .include <bsd.own.mk>
 
-CPPFLAGS+=#-DTFILE=\"/dev/ttyp0\"
 CPPFLAGS+=-I${.CURDIR} -I${NETBSDSRCDIR}/lib/libterm
 .if defined(DEBUG_CURSES)
-CFLAGS+=-g
-.if defined(FULL_DEBUG)
-CPPFLAGS+=-DDEBUG
-.endif
+CPPFLAGS+=-g -DDEBUG
 .endif
 .if defined(SMALL)
 CPPFLAGS+=-DSMALL
 .endif
+COPTS+=-Wuninitialized -Wstrict-prototypes -Wmissing-prototypes
 LIB=	curses
 SRCS=	acs.c addbytes.c addch.c addchnstr.c addnstr.c attributes.c \
 	background.c bell.c border.c box.c clear.c clearok.c clrtobot.c \
@@ -42,6 +39,13 @@ INCSDIR=/usr/include
 CPPFLAGS+=-DCM_N -DCM_GT -DCM_B -DCM_D
 SRCS+=	termcap.c tgoto.c tputs.c
 .PATH: ${NETBSDSRCDIR}/lib/libterm
+
+.if !defined(DISABLE_WCHAR)
+CPPFLAGS+=-DHAVE_WCHAR
+SRCS+= cchar.c add_wch.c add_wchstr.c addwstr.c echo_wchar.c ins_wch.c \
+	insstr.c ins_wstr.c get_wch.c get_wstr.c in_wch.c in_wchstr.c \
+	inwstr.c
+.endif
 
 MLINKS+= curses_addch.3 addch.3 curses_addchstr.3 addchnstr.3 \
 	 curses_addchstr.3 addchstr.3 curses_addstr.3 addnstr.3 \
