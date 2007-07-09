@@ -1,4 +1,4 @@
-/*	$NetBSD: route6.c,v 1.18 2007/04/22 19:47:41 christos Exp $	*/
+/*	$NetBSD: route6.c,v 1.20 2007/05/23 17:15:04 christos Exp $	*/
 /*	$KAME: route6.c,v 1.22 2000/12/03 00:54:00 itojun Exp $	*/
 
 /*
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: route6.c,v 1.18 2007/04/22 19:47:41 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: route6.c,v 1.20 2007/05/23 17:15:04 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/mbuf.h>
@@ -55,12 +55,13 @@ __KERNEL_RCSID(0, "$NetBSD: route6.c,v 1.18 2007/04/22 19:47:41 christos Exp $")
 
 #include <netinet/icmp6.h>
 
-int ip6_rht0 = -1;	/* disabled by default */
-
+#if 0
 static int ip6_rthdr0(struct mbuf *, struct ip6_hdr *, struct ip6_rthdr0 *);
+#endif
 #if defined(MOBILE_IPV6) && NMIP > 0
 static int ip6_rthdr2(struct mbuf *, struct ip6_hdr *, struct ip6_rthdr2 *);
 #endif /* defined(MOBILE_IPV6) && NMIP > 0 */
+
 
 int
 route6_input(struct mbuf **mp, int *offp, int proto)
@@ -78,6 +79,41 @@ route6_input(struct mbuf **mp, int *offp, int proto)
 	}
 
 	switch (rh->ip6r_type) {
+#if 0
+	/*
+	 * See http://www.secdev.org/conf/IPv6_RH_security-csw07.pdf
+	 * for why IPV6_RTHDR_TYPE_0 is banned here.
+	 *
+	 * We return ICMPv6 parameter problem so that innocent people
+	 * (not an attacker) would notice about the use of IPV6_RTHDR_TYPE_0.
+	 * Since there's no amplification, and ICMPv6 error will be rate-
+	 * controlled, it shouldn't cause any problem.
+	 * If you are concerned about this, you may want to use the following
+	 * code fragment:
+	 *
+	 * case IPV6_RTHDR_TYPE_0:
+	 *	m_freem(m);
+	 *	return (IPPROTO_DONE);
+	 */
+	case IPV6_RTHDR_TYPE_0:
+		rhlen = (rh->ip6r_len + 1) << 3;
+		/*
+		 * note on option length:
+		 * maximum rhlen: 2048
+		 * max mbuf m_pulldown can handle: MCLBYTES == usually 2048
+		 * so, here we are assuming that m_pulldown can handle
+		 * rhlen == 2048 case.  this may not be a good thing to
+		 * assume - we may want to avoid pulling it up altogether.
+		 */
+		IP6_EXTHDR_GET(rh, struct ip6_rthdr *, m, off, rhlen);
+		if (rh == NULL) {
+			ip6stat.ip6s_tooshort++;
+			return IPPROTO_DONE;
+		}
+		if (ip6_rthdr0(m, ip6, (struct ip6_rthdr0 *)rh))
+			return (IPPROTO_DONE);
+		break;
+#endif
 #if defined(MOBILE_IPV6) && NMIP > 0
 	case IPV6_RTHDR_TYPE_2:
 		rhlen = (rh->ip6r_len + 1) << 3;
@@ -90,28 +126,6 @@ route6_input(struct mbuf **mp, int *offp, int proto)
 			return(IPPROTO_DONE);
 		break;
 #endif /* defined(MOBILE_IPV6) && NMIP > 0 */
-	case IPV6_RTHDR_TYPE_0:
-		if ((ip6_forwarding && ip6_rht0 == 0) || ip6_rht0 > 0) {
-			rhlen = (rh->ip6r_len + 1) << 3;
-			/*
-			 * note on option length:
-			 * maximum rhlen: 2048
-			 * max mbuf m_pulldown can handle: MCLBYTES == usually
-			 * 2048 so, here we are assuming that m_pulldown can
-			 * handle hlen == 2048 case. This may not be a good
-			 * thing to assume - we may want to avoid pulling it
-			 * up altogether.
-			 */
-			IP6_EXTHDR_GET(rh, struct ip6_rthdr *, m, off, rhlen);
-			if (rh == NULL) {
-				ip6stat.ip6s_tooshort++;
-				return IPPROTO_DONE;
-			}
-			if (ip6_rthdr0(m, ip6, (struct ip6_rthdr0 *)rh))
-				return IPPROTO_DONE;
-			break;
-		}
-		/*FALLTHROUGH*/
 	default:
 		/* unknown routing type */
 		if (rh->ip6r_segleft == 0) {
@@ -128,6 +142,7 @@ route6_input(struct mbuf **mp, int *offp, int proto)
 	return (rh->ip6r_nxt);
 }
 
+#if 0
 /*
  * Type0 routing header processing
  *
@@ -135,10 +150,8 @@ route6_input(struct mbuf **mp, int *offp, int proto)
  * as it was dropped between RFC1883 and RFC2460.
  */
 static int
-ip6_rthdr0(m, ip6, rh0)
-	struct mbuf *m;
-	struct ip6_hdr *ip6;
-	struct ip6_rthdr0 *rh0;
+ip6_rthdr0(struct mbuf *m, struct ip6_hdr *ip6, 
+	struct ip6_rthdr0 *rh0)
 {
 	int addrs, index;
 	struct in6_addr *nextaddr, tmpaddr;
@@ -229,6 +242,7 @@ ip6_rthdr0(m, ip6, rh0)
 	m_freem(m);
 	return (-1);
 }
+#endif
 
 #if defined(MOBILE_IPV6) && NMIP > 0
 /* Type2 routing header processing */

@@ -8,7 +8,7 @@ How to export the NetBSD current srouce
 
 	cd ${CURDIR}
 	cvs -d:pserver:anoncvs@anoncvs.netbsd.org:/cvsroot
-		export -D20060630 src
+		export -D20070707 src
                          ~~~~~~~~ (date of the target NetBSD)
 
 2) Import
@@ -17,7 +17,7 @@ How to export the NetBSD current srouce
 
 	cd ${CURDIR}
 	cvs -dmobilegravity.sfc.wide.ad.jp:/cvsroot
-		import -I! -ko shisa-netbsd NETBSD netbsd-current-20060630
+		import -I! -ko shisa-netbsd NETBSD netbsd-current-20070707
                                                                   ~~~~~~~~
                                                 (date of the target NetBSD)
 
@@ -26,7 +26,7 @@ How to export the NetBSD current srouce
                 of NetBSD resides
 
 	cd ${CURDIR}/src
-	cvs update -jnetbsd-current-20060531 -jnetbsd-current-20060630 -dP
+	cvs update -jnetbsd-current-20070615 -jnetbsd-current-20070707 -dP
                      ~~~~~~~~~~~~~~~~~~~~~~~   ~~~~~~~~~~~~~~~~~~~~~~~
                   (the tag of the previously   (the tag just imported
                    imported NetBSD)             NetBSD)

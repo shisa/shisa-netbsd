@@ -1,4 +1,4 @@
-/*	$NetBSD: ip6_input.c,v 1.105 2007/05/06 02:29:33 dyoung Exp $	*/
+/*	$NetBSD: ip6_input.c,v 1.107 2007/05/23 17:15:02 christos Exp $	*/
 /*	$KAME: ip6_input.c,v 1.188 2001/03/29 05:34:31 itojun Exp $	*/
 
 /*
@@ -62,7 +62,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ip6_input.c,v 1.105 2007/05/06 02:29:33 dyoung Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ip6_input.c,v 1.107 2007/05/23 17:15:02 christos Exp $");
 
 #include "opt_inet.h"
 #include "opt_inet6.h"
@@ -871,9 +871,7 @@ ip6_input(struct mbuf *m)
  * set/grab in6_ifaddr correspond to IPv6 destination address.
  */
 static struct m_tag *
-ip6_setdstifaddr(m, ia6)
-	struct mbuf *m;
-	struct in6_ifaddr *ia6;
+ip6_setdstifaddr(struct mbuf *m, struct in6_ifaddr *ia6)
 {
 	struct m_tag *mtag;
 
@@ -884,8 +882,7 @@ ip6_setdstifaddr(m, ia6)
 }
 
 struct in6_ifaddr *
-ip6_getdstifaddr(m)
-	struct mbuf *m;
+ip6_getdstifaddr(struct mbuf *m)
 {
 	struct m_tag *mtag;
 
@@ -899,13 +896,12 @@ ip6_getdstifaddr(m)
 /*
  * Hop-by-Hop options header processing. If a valid jumbo payload option is
  * included, the real payload length will be stored in plenp.
+ *
+ * rtalertp - XXX: should be stored more smart way
  */
 static int
-ip6_hopopts_input(plenp, rtalertp, mp, offp)
-	u_int32_t *plenp;
-	u_int32_t *rtalertp;	/* XXX: should be stored more smart way */
-	struct mbuf **mp;
-	int *offp;
+ip6_hopopts_input(u_int32_t *plenp, u_int32_t *rtalertp, 
+	struct mbuf **mp, int *offp)
 {
 	struct mbuf *m = *mp;
 	int off = *offp, hbhlen;
@@ -949,12 +945,8 @@ ip6_hopopts_input(plenp, rtalertp, mp, offp)
  * opthead + hbhlen is located in continuous memory region.
  */
 int
-ip6_process_hopopts(m, opthead, hbhlen, rtalertp, plenp)
-	struct mbuf *m;
-	u_int8_t *opthead;
-	int hbhlen;
-	u_int32_t *rtalertp;
-	u_int32_t *plenp;
+ip6_process_hopopts(struct mbuf *m, u_int8_t *opthead, int hbhlen, 
+	u_int32_t *rtalertp, u_int32_t *plenp)
 {
 	struct ip6_hdr *ip6;
 	int optlen = 0;
@@ -1086,10 +1078,7 @@ ip6_process_hopopts(m, opthead, hbhlen, rtalertp, plenp)
  * is not continuous in order to return an ICMPv6 error.
  */
 int
-ip6_unknown_opt(optp, m, off)
-	u_int8_t *optp;
-	struct mbuf *m;
-	int off;
+ip6_unknown_opt(u_int8_t *optp, struct mbuf *m, int off)
 {
 	struct ip6_hdr *ip6;
 
@@ -1131,11 +1120,8 @@ ip6_unknown_opt(optp, m, off)
  * you are using IP6_EXTHDR_CHECK() not m_pulldown())
  */
 void
-ip6_savecontrol(in6p, mp, ip6, m)
-	struct in6pcb *in6p;
-	struct mbuf **mp;
-	struct ip6_hdr *ip6;
-	struct mbuf *m;
+ip6_savecontrol(struct in6pcb *in6p, struct mbuf **mp, 
+	struct ip6_hdr *ip6, struct mbuf *m)
 {
 #ifdef RFC2292
 #define IS2292(x, y)	((in6p->in6p_flags & IN6P_RFC2292) ? (x) : (y))
@@ -1392,10 +1378,7 @@ ip6_notify_pmtu(struct in6pcb *in6p, const struct sockaddr_in6 *dst,
  * contains the result, or NULL on error.
  */
 static struct mbuf *
-ip6_pullexthdr(m, off, nxt)
-	struct mbuf *m;
-	size_t off;
-	int nxt;
+ip6_pullexthdr(struct mbuf *m, size_t off, int nxt)
 {
 	struct ip6_ext ip6e;
 	size_t elen;
@@ -1454,9 +1437,7 @@ ip6_pullexthdr(m, off, nxt)
  * we develop `neater' mechanism to process extension headers.
  */
 u_int8_t *
-ip6_get_prevhdr(m, off)
-	struct mbuf *m;
-	int off;
+ip6_get_prevhdr(struct mbuf *m, int off)
 {
 	struct ip6_hdr *ip6 = mtod(m, struct ip6_hdr *);
 
@@ -1495,11 +1476,7 @@ ip6_get_prevhdr(m, off)
  * get next header offset.  m will be retained.
  */
 int
-ip6_nexthdr(m, off, proto, nxtp)
-	struct mbuf *m;
-	int off;
-	int proto;
-	int *nxtp;
+ip6_nexthdr(struct mbuf *m, int off, int proto, int *nxtp)
 {
 	struct ip6_hdr ip6;
 	struct ip6_ext ip6e;
@@ -1578,11 +1555,7 @@ ip6_nexthdr(m, off, proto, nxtp)
  * get offset for the last header in the chain.  m will be kept untainted.
  */
 int
-ip6_lasthdr(m, off, proto, nxtp)
-	struct mbuf *m;
-	int off;
-	int proto;
-	int *nxtp;
+ip6_lasthdr(struct mbuf *m, int off, int proto, int *nxtp)
 {
 	int newoff;
 	int nxt;
@@ -1606,8 +1579,7 @@ ip6_lasthdr(m, off, proto, nxtp)
 }
 
 struct m_tag *
-ip6_addaux(m)
-	struct mbuf *m;
+ip6_addaux(struct mbuf *m)
 {
 	struct m_tag *mtag;
 
@@ -1624,8 +1596,7 @@ ip6_addaux(m)
 }
 
 struct m_tag *
-ip6_findaux(m)
-	struct mbuf *m;
+ip6_findaux(struct mbuf *m)
 {
 	struct m_tag *mtag;
 
@@ -1634,8 +1605,7 @@ ip6_findaux(m)
 }
 
 void
-ip6_delaux(m)
-	struct mbuf *m;
+ip6_delaux(struct mbuf *m)
 {
 	struct m_tag *mtag;
 
@@ -1694,31 +1664,6 @@ sysctl_net_inet6_ip6_hashsize(SYSCTLFN_ARGS)
 	return (0);
 }
 #endif /* GATEWAY */
-
-static int
-sysctl_net_inet6_ip6_rht0(SYSCTLFN_ARGS)
-{  
-	int error, tmp;
-	struct sysctlnode node;
-
-	node = *rnode;
-	tmp = ip6_rht0;
-	node.sysctl_data = &tmp;
-	error = sysctl_lookup(SYSCTLFN_CALL(&node));
-	if (error || newp == NULL)
-		return error;
-
-	switch (tmp) {
-	case -1:	/* disable processing */
-	case 0:		/* disable for host, enable for router */
-	case 1:		/* enable for all */
-		break;
-	default:
-		return EINVAL;
-	}
-	ip6_rht0 = tmp;
-	return 0;
-}
 
 /*
  * System control for IP6
@@ -2019,11 +1964,4 @@ SYSCTL_SETUP(sysctl_net_inet6_ip6_setup, "sysctl net.inet6.ip6 subtree setup")
 			CTL_NET, PF_INET6, IPPROTO_IPV6,
 			CTL_CREATE, CTL_EOL);
 #endif
-	sysctl_createv(clog, 0, NULL, NULL,
-			CTLFLAG_PERMANENT|CTLFLAG_READWRITE,
-			CTLTYPE_INT, "rht0",
-			SYSCTL_DESCR("Processing of routing header type 0 (IPv6)"),
-			sysctl_net_inet6_ip6_rht0, 0, &ip6_rht0, 0,
-			CTL_NET, PF_INET6, IPPROTO_IPV6,
-			CTL_CREATE, CTL_EOL);
 }
