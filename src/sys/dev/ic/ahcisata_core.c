@@ -1,4 +1,4 @@
-/*	$NetBSD: ahcisata_core.c,v 1.1 2007/05/12 11:04:58 bouyer Exp $	*/
+/*	$NetBSD: ahcisata_core.c,v 1.3 2007/06/25 20:58:07 bouyer Exp $	*/
 
 /*
  * Copyright (c) 2006 Manuel Bouyer.
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ahcisata_core.c,v 1.1 2007/05/12 11:04:58 bouyer Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ahcisata_core.c,v 1.3 2007/06/25 20:58:07 bouyer Exp $");
 
 #include <sys/types.h>
 #include <sys/malloc.h>
@@ -276,10 +276,10 @@ ahci_attach(struct ahci_softc *sc)
 				goto end;
 			}
 		}
-		AHCI_WRITE(sc, AHCI_P_CLB(port), achp->ahcic_bus_cmdh);
-		AHCI_WRITE(sc, AHCI_P_CLBU(port), 0);
-		AHCI_WRITE(sc, AHCI_P_FB(port), achp->ahcic_bus_rfis);
-		AHCI_WRITE(sc, AHCI_P_FBU(port), 0);
+		AHCI_WRITE(sc, AHCI_P_CLB(i), achp->ahcic_bus_cmdh);
+		AHCI_WRITE(sc, AHCI_P_CLBU(i), 0);
+		AHCI_WRITE(sc, AHCI_P_FB(i), achp->ahcic_bus_rfis);
+		AHCI_WRITE(sc, AHCI_P_FBU(i), 0);
 		chp->ch_ndrive = 1;
 		if (bus_space_subregion(sc->sc_ahcit, sc->sc_ahcih,
 		    AHCI_P_SSTS(i), 1,  &achp->ahcic_sstatus) != 0) {
@@ -476,9 +476,11 @@ ahci_probe_drive(struct ata_channel *chp)
 		 * cases we get wrong values here, so ignore it.
 		 */
 		s = splbio();
-		if ((sig & 0xffff0000) == 0xeb140000)
-			chp->ch_drive[0].drive_flags |= DRIVE_ATAPI;
-		else
+		if ((sig & 0xffff0000) == 0xeb140000) {
+			aprint_error("%s port %d: ATAPI device ignored\n",
+			    AHCINAME(sc), chp->ch_channel);
+			chp->ch_drive[0].drive_flags |= 0 /* DRIVE_ATAPI XXX */;
+		} else
 			chp->ch_drive[0].drive_flags |= DRIVE_ATA;
 		splx(s);
 		/* enable interrupts */
@@ -738,6 +740,9 @@ ahci_cmd_done(struct ata_channel *chp, struct ata_xfer *xfer, int slot)
 		bus_dmamap_unload(sc->sc_dmat, achp->ahcic_datad[slot]);
 	}
 
+	AHCI_CMDH_SYNC(sc, achp, slot,
+	    BUS_DMASYNC_POSTREAD | BUS_DMASYNC_POSTWRITE);
+
 	ata_c->flags |= AT_DONE;
 	if (achp->ahcic_cmdh[slot].cmdh_prdbc)
 		ata_c->flags |= AT_XFDONE;
@@ -850,7 +855,8 @@ ahci_bio_start(struct ata_channel *chp, struct ata_xfer *xfer)
 	    ((ata_bio->flags & ATA_READ) ? 0 :  AHCI_CMDH_F_WR) |
 	    20 /* fis lenght */ / 4);
 	cmd_h->cmdh_prdbc = 0;
-	AHCI_CMDH_SYNC(sc, achp, slot, BUS_DMASYNC_PREWRITE);
+	AHCI_CMDH_SYNC(sc, achp, slot,
+	    BUS_DMASYNC_PREREAD | BUS_DMASYNC_PREWRITE);
 
 	if (xfer->c_flags & C_POLL) {
 		/* polled command, disable interrupts */

@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.1006 2007/06/09 11:20:57 kiyohara Exp $
+# $NetBSD: mi,v 1.1012 2007/06/29 23:30:18 rumble Exp $
 ./etc/mtree/set.man				man-sys-root
 ./usr/share/info/am-utils.info			man-amd-info		info
 ./usr/share/info/as.info			man-computil-info	bfd,info
@@ -276,6 +276,7 @@
 ./usr/share/man/cat1/netgroup.0			man-nis-catman		.cat
 ./usr/share/man/cat1/netstat.0			man-netutil-catman	.cat
 ./usr/share/man/cat1/newaliases.0		man-postfix-catman	postfix,.cat
+./usr/share/man/cat1/newgrp.0			man-util-catman		.cat
 ./usr/share/man/cat1/nfsstat.0			man-nfsclient-catman	.cat
 ./usr/share/man/cat1/nice.0			man-util-catman		.cat
 ./usr/share/man/cat1/nl.0			man-util-catman		.cat
@@ -943,8 +944,10 @@
 ./usr/share/man/cat4/i386/ed.0			man-sys-catman		.cat
 ./usr/share/man/cat4/i386/elansc.0		man-sys-catman		.cat
 ./usr/share/man/cat4/i386/fdc.0			man-sys-catman		.cat
+./usr/share/man/cat4/i386/gcscide.0		man-sys-catman		.cat
 ./usr/share/man/cat4/i386/geodecntr.0		man-sys-catman		.cat
 ./usr/share/man/cat4/i386/geodewdog.0		man-sys-catman		.cat
+./usr/share/man/cat4/i386/glxsb.0		man-sys-catman		.cat
 ./usr/share/man/cat4/i386/gscpcib.0		man-sys-catman		.cat
 ./usr/share/man/cat4/i386/ie.0			man-obsolete		obsolete
 ./usr/share/man/cat4/i386/intro.0		man-sys-catman		.cat
@@ -1068,7 +1071,7 @@
 ./usr/share/man/cat4/mac68k/mem.0		man-sys-catman		.cat
 ./usr/share/man/cat4/mac68k/netdock.0		man-sys-catman		.cat
 ./usr/share/man/cat4/mac68k/obio.0		man-sys-catman		.cat
-./usr/share/man/cat4/mac68k/sn.0		man-sys-catman		.cat
+./usr/share/man/cat4/mac68k/sn.0		man-obsolete		obsolete
 ./usr/share/man/cat4/mac68k/zsc.0		man-sys-catman		.cat
 ./usr/share/man/cat4/mach64drm.0		man-sys-catman		.cat
 ./usr/share/man/cat4/macppc/autoconf.0		man-sys-catman		.cat
@@ -1304,6 +1307,7 @@
 ./usr/share/man/cat4/slip.0			man-sys-catman		.cat
 ./usr/share/man/cat4/sm.0			man-sys-catman		.cat
 ./usr/share/man/cat4/smsc.0			man-sys-catman		.cat
+./usr/share/man/cat4/sn.0			man-sys-catman		.cat
 ./usr/share/man/cat4/sound.0			man-sys-catman		.cat
 ./usr/share/man/cat4/sp.0			man-obsolete		obsolete
 ./usr/share/man/cat4/sparc/audioamd.0		man-sys-catman		.cat
@@ -2103,6 +2107,7 @@
 ./usr/share/man/cat8/mount_9p.0			man-sysutil-catman	puffs,.cat
 ./usr/share/man/cat8/mount_ados.0		man-adosfs-catman	.cat
 ./usr/share/man/cat8/mount_cd9660.0		man-sysutil-catman	.cat
+./usr/share/man/cat8/mount_efs.0		man-efs-catman		.cat
 ./usr/share/man/cat8/mount_ext2fs.0		man-ext2fs-catman	.cat
 ./usr/share/man/cat8/mount_fdesc.0		man-miscfs-catman	.cat
 ./usr/share/man/cat8/mount_ffs.0		man-sysutil-catman	.cat
@@ -2401,6 +2406,7 @@
 ./usr/share/man/cat8/supscan.0			man-sup-catman		.cat
 ./usr/share/man/cat8/supservers.0		man-sup-catman		.cat
 ./usr/share/man/cat8/sushi.0			man-obsolete		obsolete
+./usr/share/man/cat8/svhlabel.0			man-sysutil-catman	.cat
 ./usr/share/man/cat8/swapctl.0			man-sysutil-catman	.cat
 ./usr/share/man/cat8/swapon.0			man-sysutil-catman	.cat
 ./usr/share/man/cat8/sync.0			man-sysutil-catman	.cat
@@ -2412,6 +2418,7 @@
 ./usr/share/man/cat8/tbrconfig.0		man-router-catman	.cat
 ./usr/share/man/cat8/tcpdchk.0			man-netutil-catman	.cat
 ./usr/share/man/cat8/tcpdmatch.0		man-netutil-catman	.cat
+./usr/share/man/cat8/tcpdrop.0			man-netutil-catman	.cat
 ./usr/share/man/cat8/tcpdump.0			man-netutil-catman	.cat
 ./usr/share/man/cat8/telnetd.0			man-netutil-catman	.cat
 ./usr/share/man/cat8/tftpd.0			man-netutil-catman	.cat
@@ -2742,6 +2749,7 @@
 ./usr/share/man/man1/netgroup.1			man-nis-man		.man
 ./usr/share/man/man1/netstat.1			man-netutil-man		.man
 ./usr/share/man/man1/newaliases.1		man-postfix-man		postfix,.man
+./usr/share/man/man1/newgrp.1			man-util-man		.man
 ./usr/share/man/man1/nfsstat.1			man-nfsclient-man	.man
 ./usr/share/man/man1/nice.1			man-util-man		.man
 ./usr/share/man/man1/nl.1			man-util-man		.man
@@ -3409,8 +3417,10 @@
 ./usr/share/man/man4/i386/ed.4			man-sys-man		.man
 ./usr/share/man/man4/i386/elansc.4		man-sys-man		.man
 ./usr/share/man/man4/i386/fdc.4			man-sys-man		.man
+./usr/share/man/man4/i386/gcscide.4		man-sys-man		.man
 ./usr/share/man/man4/i386/geodecntr.4		man-sys-man		.man
 ./usr/share/man/man4/i386/geodewdog.4		man-sys-man		.man
+./usr/share/man/man4/i386/glxsb.4		man-sys-man		.man
 ./usr/share/man/man4/i386/gscpcib.4		man-sys-man		.man
 ./usr/share/man/man4/i386/ie.4			man-obsolete		obsolete
 ./usr/share/man/man4/i386/intro.4		man-sys-man		.man
@@ -3534,7 +3544,7 @@
 ./usr/share/man/man4/mac68k/mem.4		man-sys-man		.man
 ./usr/share/man/man4/mac68k/netdock.4		man-sys-man		.man
 ./usr/share/man/man4/mac68k/obio.4		man-sys-man		.man
-./usr/share/man/man4/mac68k/sn.4		man-sys-man		.man
+./usr/share/man/man4/mac68k/sn.4		man-obsolete		obsolete
 ./usr/share/man/man4/mac68k/zsc.4		man-sys-man		.man
 ./usr/share/man/man4/mach64drm.4		man-sys-man		.man
 ./usr/share/man/man4/macppc/autoconf.4		man-sys-man		.man
@@ -3770,6 +3780,7 @@
 ./usr/share/man/man4/slip.4			man-sys-man		.man
 ./usr/share/man/man4/sm.4			man-sys-man		.man
 ./usr/share/man/man4/smsc.4			man-sys-man		.man
+./usr/share/man/man4/sn.4			man-sys-man		.man
 ./usr/share/man/man4/sound.4			man-sys-man		.man
 ./usr/share/man/man4/sp.4			man-obsolete		obsolete
 ./usr/share/man/man4/sparc/audioamd.4		man-sys-man		.man
@@ -4569,6 +4580,7 @@
 ./usr/share/man/man8/mount_9p.8			man-sysutil-man		puffs,.man
 ./usr/share/man/man8/mount_ados.8		man-adosfs-man		.man
 ./usr/share/man/man8/mount_cd9660.8		man-sysutil-man		.man
+./usr/share/man/man8/mount_efs.8		man-efs-man		.man
 ./usr/share/man/man8/mount_ext2fs.8		man-ext2fs-man		.man
 ./usr/share/man/man8/mount_fdesc.8		man-miscfs-man		.man
 ./usr/share/man/man8/mount_ffs.8		man-sysutil-man		.man
@@ -4867,6 +4879,7 @@
 ./usr/share/man/man8/supscan.8			man-sup-man		.man
 ./usr/share/man/man8/supservers.8		man-sup-man		.man
 ./usr/share/man/man8/sushi.8			man-obsolete		obsolete
+./usr/share/man/man8/svhlabel.8			man-sysutil-man		.man
 ./usr/share/man/man8/swapctl.8			man-sysutil-man		.man
 ./usr/share/man/man8/swapon.8			man-sysutil-man		.man
 ./usr/share/man/man8/sync.8			man-sysutil-man		.man
@@ -4878,6 +4891,7 @@
 ./usr/share/man/man8/tbrconfig.8		man-router-man		.man
 ./usr/share/man/man8/tcpdchk.8			man-netutil-man		.man
 ./usr/share/man/man8/tcpdmatch.8		man-netutil-man		.man
+./usr/share/man/man8/tcpdrop.8			man-netutil-man		.man
 ./usr/share/man/man8/tcpdump.8			man-netutil-man		.man
 ./usr/share/man/man8/telnetd.8			man-netutil-man		.man
 ./usr/share/man/man8/tftpd.8			man-netutil-man		.man

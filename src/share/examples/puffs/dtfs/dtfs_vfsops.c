@@ -1,4 +1,4 @@
-/*	$NetBSD: dtfs_vfsops.c,v 1.19 2007/06/06 01:55:02 pooka Exp $	*/
+/*	$NetBSD: dtfs_vfsops.c,v 1.21 2007/07/01 18:40:15 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006  Antti Kantee.  All Rights Reserved.
@@ -191,7 +191,8 @@ dtfs_domount(struct puffs_usermount *pu, const char *typestr)
 #define ROUND(a,b) (((a) + ((b)-1)) & ~((b)-1))
 #define NFILES 1024*1024
 int
-dtfs_fs_statvfs(struct puffs_cc *pcc, struct statvfs *sbp, pid_t pid)
+dtfs_fs_statvfs(struct puffs_cc *pcc, struct statvfs *sbp,
+	const struct puffs_cid *pcid)
 {
 	struct puffs_usermount *pu;
 	struct rlimit rlim;
@@ -240,7 +241,7 @@ addrcmp(struct puffs_usermount *pu, struct puffs_node *pn, void *arg)
 
 int
 dtfs_fs_fhtonode(struct puffs_cc *pcc, void *fid, size_t fidsize,
-	void **fcookie, enum vtype *ftype, voff_t *fsize, dev_t *fdev)
+	struct puffs_newinfo *pni)
 {
 	struct puffs_usermount *pu = puffs_cc_getusermount(pcc);
 	struct dtfs_fid *dfid;
@@ -257,10 +258,10 @@ dtfs_fs_fhtonode(struct puffs_cc *pcc, void *fid, size_t fidsize,
 	    || pn->pn_va.va_gen != dfid->dfid_gen)
 		return EINVAL;
 	
-	*fcookie = pn;
-	*ftype = pn->pn_va.va_type;
-	*fsize = pn->pn_va.va_size;
-	*fdev = pn->pn_va.va_rdev;
+	puffs_newinfo_setcookie(pni, pn);
+	puffs_newinfo_setvtype(pni, pn->pn_va.va_type);
+	puffs_newinfo_setsize(pni, pn->pn_va.va_size);
+	puffs_newinfo_setrdev(pni, pn->pn_va.va_rdev);
 
 	return 0;
 }
@@ -302,7 +303,7 @@ dtfs_fs_suspend(struct puffs_cc *pcc, int status)
 }
 
 int
-dtfs_fs_unmount(struct puffs_cc *pcc, int flags, pid_t pid)
+dtfs_fs_unmount(struct puffs_cc *pcc, int flags, const struct puffs_cid *pcid)
 {
 
 	return 0;

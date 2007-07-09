@@ -1,8 +1,9 @@
-#	$NetBSD: Makefile,v 1.5 2006/10/29 06:17:08 dogcow Exp $
+#	$NetBSD: Makefile,v 1.7 2007/07/03 16:29:24 joerg Exp $
 
-HOSTPROGNAME=	${_TOOL_PREFIX}install
+HOSTPROGNAME=	${MACHINE_GNU_PLATFORM}-install
 HOST_SRCDIR=	usr.bin/xinstall
 CPPFLAGS+=	-I${.CURDIR}/../compat/sys
+CPPFLAGS+=	-DTARGET_STRIP=\"${STRIP}\"
 
 .include "${.CURDIR}/../Makefile.host"
 

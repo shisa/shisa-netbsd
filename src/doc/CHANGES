@@ -1,4 +1,4 @@
-LIST OF CHANGES FROM LAST RELEASE:			<$Revision: 1.869 $>
+LIST OF CHANGES FROM LAST RELEASE:			<$Revision: 1.885 $>
 
 
 [Note: This file does not mention every change made to the NetBSD source tree.
@@ -53,7 +53,7 @@ Changes from NetBSD 4.0 to NetBSD 5.0:
 	file(1): update to 4.20.  [pooka 20070304]
 	hfs: Add read-only Apple HFS+ file system support. [dillo 20070305]
 	i386, amd64: switch bootable iso images to native boot format, and add
-		different bootable kenrels on the iso images. Enable ACPI
+		different bootable kernels on the iso images. Enable ACPI
 		in default INSTALL and GENERIC kernels. [bouyer 20070306]
 	openssl: Import OpenSSL 0.9.8e. [mjf 20070307]
 	ipv6: add ipv6 fast forward. [liamjfoy 20070307]
@@ -100,7 +100,6 @@ Changes from NetBSD 4.0 to NetBSD 5.0:
 		policy flags ('if-bound', 'group-bound', 'floating').
 		Extend pf.conf(5) syntax to express the translation-state
 		policies. [dyoung 20070510]
-	xen: Add timecounter support. [jld 20070512]
 	kernel: add jmide(4), a driver for the JMicron Technology JMB36x
 		PCIe to SATA II/PATA controllers. [bouyer 20070515]
 	idlelwp: yamt-idlelwp branch was merged.
@@ -128,3 +127,36 @@ Changes from NetBSD 4.0 to NetBSD 5.0:
 	file(1): update to 4.21.  [pooka 20070607]
 	zyd(4): Added OpenBSD's driver. Supports ZyDAS ZD1211/ZD1211B
 		USB IEEE 802.11b/g wireless network device. [kiyohara 20070609]
+	mac68k: Switch sn(4) Ethernet on mac68k to using MI SONIC driver.
+		[tsutsui 20070610]
+	audio(4): New ioctl AUDIO_GETBUFINFO reduces system overhead for many
+		emulated OSS functions. [joerg 20070611]
+	i386:	Import AMD Geode LX Security Block driver glxsb(4) from
+		OpenBSD. [jmcneill 20070615]
+	ipf:	Updated to v4.1.23 [martin 20070616]
+	tcp(4): Per socket keepalive timer settings. Ability to change
+		connection timeout [christos 20070620].
+	newgrp(1): Add POSIX (IEEE Std 1003.1, 2004 / Open Group Base
+		Specifications Issue 6) User Portability Utility to change
+		effective group ID. [ginsbach 20060621]
+	GCC: Updated to version 4.1.3-20070620.  [mrg 20070621]
+	ntp: Updated to version 4.2.4p2. [kardel 20070624]
+	tcpdrop(8): Ported by anon ymous (from FreeBSD/OpenBSD)
+		[christos 20070625]
+	fast_ipsec(4): Add support for IPsec NAT-T [degroote 20070627]
+	i386: Imported gcscide(4), a driver for the AMD CS5535 Companion
+		IDE Controller for systems with an AMD Geode GX2 CPU
+		(for example the decTOP). [xtraeme 20070627]
+	efs: Added read-only Silicon Graphics EFS file system. [rumble 20070629]
+	envsys(4), sysmon_envsys(9): Imported envsys2. New API with the following
+		features:
+		- Cleaned up the API for simplicity and efficiency.
+		- Ability to send capacity/critical/warning events to powerd(8).
+		- Added support for a 'dictionary based communication channel'
+		  between sysmon_power(9) and powerd(8), that means there is
+		  no 32 bytes event size event restriction anymore.
+		- Binary compatibility with old envstat(8) and powerd(8) via
+		  COMPAT_40.
+		And more, please see envsys(4) and sysmon_envsys(9) for more
+		information.
+		[xtraeme 20070701]

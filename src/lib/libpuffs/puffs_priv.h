@@ -1,4 +1,4 @@
-/*	$NetBSD: puffs_priv.h,v 1.12 2007/06/06 01:55:01 pooka Exp $	*/
+/*	$NetBSD: puffs_priv.h,v 1.16 2007/07/01 18:39:39 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006 Antti Kantee.  All Rights Reserved.
@@ -175,6 +175,32 @@ struct puffs_putreq {
 	struct puffs_getreq	*ppr_pgr;
 };
 
+struct puffs_newinfo {
+	void		**pni_cookie;
+	enum vtype	*pni_vtype;
+	voff_t		*pni_size;
+	dev_t		*pni_rdev;
+};
+
+#define PUFFS_MAKEKCRED(to, from)					\
+	/*LINTED: tnilxnaht, the cast is ok */				\
+	const struct puffs_kcred *to = (const void *)from
+#define PUFFS_MAKECRED(to, from)					\
+	/*LINTED: tnilxnaht, the cast is ok */				\
+	const struct puffs_cred *to = (const void *)from
+#define PUFFS_KCREDTOCRED(to, from)					\
+	/*LINTED: tnilxnaht, the cast is ok */				\
+	to = (void *)from
+
+#define PUFFS_MAKEKCID(to, from)					\
+	/*LINTED: tnilxnaht, the cast is ok */				\
+	const struct puffs_kcid *to = (const void *)from
+#define PUFFS_MAKECID(to, from)						\
+	/*LINTED: tnilxnaht, the cast is ok */				\
+	const struct puffs_cid *to = (const void *)from
+#define PUFFS_KCIDTOCID(to, from)					\
+	/*LINTED: tnilxnaht, the cast is ok */				\
+	to = (void *)from
 
 __BEGIN_DECLS
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: nfs_socket.c,v 1.157 2007/06/01 11:56:03 yamt Exp $	*/
+/*	$NetBSD: nfs_socket.c,v 1.159 2007/06/30 15:27:02 dsl Exp $	*/
 
 /*
  * Copyright (c) 1989, 1991, 1993, 1995
@@ -39,7 +39,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: nfs_socket.c,v 1.157 2007/06/01 11:56:03 yamt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: nfs_socket.c,v 1.159 2007/06/30 15:27:02 dsl Exp $");
 
 #include "fs_nfs.h"
 #include "opt_nfs.h"
@@ -1968,7 +1968,8 @@ nfs_getreq(nd, nfsd, has_header)
 			else
 				tl++;
 		}
-		kauth_cred_setgroups(nd->nd_cr, grbuf, min(len, NGROUPS), -1);
+		kauth_cred_setgroups(nd->nd_cr, grbuf, min(len, NGROUPS), -1,
+		    UIO_SYSSPACE);
 		free(grbuf, M_TEMP);
 
 		len = fxdr_unsigned(int, *++tl);
@@ -2497,6 +2498,7 @@ nfsrv_wakenfsd(slp)
 		if (nd->nfsd_slp)
 			panic("nfsd wakeup");
 		slp->ns_sref++;
+		KASSERT(slp->ns_sref > 0);
 		nd->nfsd_slp = slp;
 		cv_signal(&nd->nfsd_cv);
 	} else {

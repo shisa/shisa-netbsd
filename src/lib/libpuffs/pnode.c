@@ -1,4 +1,4 @@
-/*	$NetBSD: pnode.c,v 1.6 2007/06/06 01:55:01 pooka Exp $	*/
+/*	$NetBSD: pnode.c,v 1.8 2007/07/01 18:39:39 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006 Antti Kantee.  All Rights Reserved.
@@ -27,7 +27,7 @@
 
 #include <sys/cdefs.h>
 #if !defined(lint)
-__RCSID("$NetBSD: pnode.c,v 1.6 2007/06/06 01:55:01 pooka Exp $");
+__RCSID("$NetBSD: pnode.c,v 1.8 2007/07/01 18:39:39 pooka Exp $");
 #endif /* !lint */
 
 #include <sys/types.h>
@@ -64,12 +64,21 @@ puffs_pn_new(struct puffs_usermount *pu, void *privdata)
 }
 
 void
+puffs_pn_remove(struct puffs_node *pn)
+{
+
+	LIST_REMOVE(pn, pn_entries);
+	pn->pn_flags |= PUFFS_NODE_REMOVED;
+}
+
+void
 puffs_pn_put(struct puffs_node *pn)
 {
 	struct puffs_usermount *pu = pn->pn_mnt;
 
 	pu->pu_pathfree(pu, &pn->pn_po);
-	LIST_REMOVE(pn, pn_entries);
+	if ((pn->pn_flags & PUFFS_NODE_REMOVED) == 0)
+		LIST_REMOVE(pn, pn_entries);
 	free(pn);
 }
 
@@ -98,4 +107,35 @@ puffs_pn_getmntspecific(struct puffs_node *pn)
 {
 
 	return pn->pn_mnt->pu_privdata;
+}
+
+/*
+ * newnode parameters
+ */
+void
+puffs_newinfo_setcookie(struct puffs_newinfo *pni, void *cookie)
+{
+
+	*pni->pni_cookie = cookie;
+}
+
+void
+puffs_newinfo_setvtype(struct puffs_newinfo *pni, enum vtype vt)
+{
+
+	*pni->pni_vtype = vt;
+}
+
+void
+puffs_newinfo_setsize(struct puffs_newinfo *pni, voff_t size)
+{
+
+	*pni->pni_size = size;
+}
+
+void
+puffs_newinfo_setrdev(struct puffs_newinfo *pni, dev_t rdev)
+{
+
+	*pni->pni_rdev = rdev;
 }

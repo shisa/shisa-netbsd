@@ -1,4 +1,4 @@
-/*	$NetBSD: rot13fs.c,v 1.8 2007/06/06 01:55:02 pooka Exp $	*/
+/*	$NetBSD: rot13fs.c,v 1.11 2007/06/24 18:59:27 pooka Exp $	*/
 
 /*
  * Copyright (c) 2007  Antti Kantee.  All Rights Reserved.
@@ -28,8 +28,13 @@
 /*
  * rot13fs: puffs layering experiment
  * (unfinished, as is probably fairly easy to tell)
+ *
+ * This also demonstrates how namemod can be easily set to any
+ * function which reverses itself (argument -f provides a case-flipping
+ * file system).
  */
 
+#include <ctype.h>
 #include <err.h>
 #include <errno.h>
 #include <puffs.h>
@@ -37,7 +42,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-PUFFSOP_PROTOS(puffs_null) /* XXX */
 PUFFSOP_PROTOS(rot13)
 
 static void usage(void);
@@ -49,6 +53,8 @@ usage()
 	errx(1, "usage: %s [-s] [-o mntopts] rot13path mountpath",
 	    getprogname());
 }
+
+static void (*flipflop)(void *, size_t);
 
 static uint8_t tbl[256];
 
@@ -63,12 +69,24 @@ dorot13(void *buf, size_t buflen)
 	}
 }
 
+static void
+docase(void *buf, size_t buflen)
+{
+	unsigned char *b = buf;
+
+	while (buflen--) {
+		if (isalpha(*b))
+			*b ^= 0x20;
+		b++;
+	}
+}
+
 static int
 rot13path(struct puffs_usermount *pu, struct puffs_pathobj *base,
 	struct puffs_cn *pcn)
 {
 
-	dorot13(pcn->pcn_name, pcn->pcn_namelen);
+	flipflop(pcn->pcn_name, pcn->pcn_namelen);
 
 	return 0;
 }
@@ -91,9 +109,13 @@ main(int argc, char *argv[])
 	if (argc < 3)
 		usage();
 
+	flipflop = dorot13;
 	pflags = lflags = mntflags = 0;
-	while ((ch = getopt(argc, argv, "o:s")) != -1) {
+	while ((ch = getopt(argc, argv, "fo:s")) != -1) {
 		switch (ch) {
+		case 'f':
+			flipflop = docase;
+			break;
 		case 'o':
 			mp = getmntopts(optarg, puffsmopts, &mntflags, &pflags);
 			if (mp == NULL)
@@ -121,29 +143,11 @@ main(int argc, char *argv[])
 		errx(1, "%s is not a directory", argv[0]);
 
 	PUFFSOP_INIT(pops);
-
-	PUFFSOP_SET(pops, puffs_null, fs, statvfs);
-	PUFFSOP_SETFSNOP(pops, unmount);
-	PUFFSOP_SETFSNOP(pops, sync);
+	puffs_null_setops(pops);
 
 	PUFFSOP_SET(pops, rot13, node, readdir);
 	PUFFSOP_SET(pops, rot13, node, read);
 	PUFFSOP_SET(pops, rot13, node, write);
-
-	PUFFSOP_SET(pops, puffs_null, node, lookup);
-	PUFFSOP_SET(pops, puffs_null, node, create);
-	PUFFSOP_SET(pops, puffs_null, node, mknod);
-	PUFFSOP_SET(pops, puffs_null, node, getattr);
-	PUFFSOP_SET(pops, puffs_null, node, setattr);
-	PUFFSOP_SET(pops, puffs_null, node, fsync);
-	PUFFSOP_SET(pops, puffs_null, node, remove);
-	PUFFSOP_SET(pops, puffs_null, node, link);
-	PUFFSOP_SET(pops, puffs_null, node, rename);
-	PUFFSOP_SET(pops, puffs_null, node, mkdir);
-	PUFFSOP_SET(pops, puffs_null, node, rmdir);
-	PUFFSOP_SET(pops, puffs_null, node, symlink);
-	PUFFSOP_SET(pops, puffs_null, node, readlink);
-	PUFFSOP_SET(pops, puffs_null, node, reclaim);
 
 	if ((pu = puffs_init(pops, "rot13", NULL, pflags)) == NULL)
 		err(1, "mount");
@@ -170,7 +174,7 @@ main(int argc, char *argv[])
 	for (i = 0; i < 26; i++)
 		tbl[i + 'A'] = 'A' + ((i + 13) % 26);
 
-	if (puffs_mount(pu, argv[0], mntflags, pn_root) == -1)
+	if (puffs_mount(pu, argv[1], mntflags, pn_root) == -1)
 		err(1, "puffs_mount");
 
 	return puffs_mainloop(pu, lflags);
@@ -194,7 +198,7 @@ rot13_node_readdir(struct puffs_cc *pcc, void *opc, struct dirent *dent,
 		return rv;
 
 	while (rl > *reslen) {
-		dorot13((uint8_t *)dp->d_name, dp->d_namlen);
+		flipflop((uint8_t *)dp->d_name, dp->d_namlen);
 		rl -= _DIRENT_SIZE(dp);
 		dp = _DIRENT_NEXT(dp);
 	}
@@ -214,7 +218,7 @@ rot13_node_read(struct puffs_cc *pcc, void *opc, uint8_t *buf, off_t offset,
 	if (rv)
 		return rv;
 
-	dorot13(prebuf, preres - *resid);
+	flipflop(prebuf, preres - *resid);
 
 	return rv;
 }
@@ -224,6 +228,6 @@ rot13_node_write(struct puffs_cc *pcc, void *opc, uint8_t *buf, off_t offset,
 	size_t *resid, const struct puffs_cred *pcr, int ioflag)
 {
 
-	dorot13(buf, *resid);
+	flipflop(buf, *resid);
 	return puffs_null_node_write(pcc, opc, buf, offset, resid, pcr, ioflag);
 }

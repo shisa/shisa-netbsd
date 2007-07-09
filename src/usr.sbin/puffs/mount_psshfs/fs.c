@@ -1,4 +1,4 @@
-/*	$NetBSD: fs.c,v 1.11 2007/06/06 01:55:03 pooka Exp $	*/
+/*	$NetBSD: fs.c,v 1.13 2007/07/01 18:40:16 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006  Antti Kantee.  All Rights Reserved.
@@ -27,7 +27,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: fs.c,v 1.11 2007/06/06 01:55:03 pooka Exp $");
+__RCSID("$NetBSD: fs.c,v 1.13 2007/07/01 18:40:16 pooka Exp $");
 #endif /* !lint */
 
 #include <err.h>
@@ -129,7 +129,7 @@ psshfs_domount(struct puffs_usermount *pu)
 }
 
 int
-psshfs_fs_unmount(struct puffs_cc *pcc, int flags, pid_t pid)
+psshfs_fs_unmount(struct puffs_cc *pcc, int flags, const struct puffs_cid *pcid)
 {
 	struct puffs_usermount *pu = puffs_cc_getusermount(pcc);
 	struct psshfs_ctx *pctx = puffs_getspecific(pu);
@@ -159,7 +159,7 @@ psshfs_fs_nodetofh(struct puffs_cc *pcc, void *cookie,
 
 int
 psshfs_fs_fhtonode(struct puffs_cc *pcc, void *fid, size_t fidsize,
-	void **fcookie, enum vtype *ftype, voff_t *fsize, dev_t *fdev)
+	struct puffs_newinfo *pni)
 {
 	struct puffs_usermount *pu = puffs_cc_getusermount(pcc);
 	struct psshfs_ctx *pctx = puffs_getspecific(pu);
@@ -181,9 +181,9 @@ psshfs_fs_fhtonode(struct puffs_cc *pcc, void *fid, size_t fidsize,
 	if (rv)
 		return EINVAL;
 
-	*fcookie = pn;
-	*ftype = pn->pn_va.va_type;
-	*fsize = pn->pn_va.va_size;
+	puffs_newinfo_setcookie(pni, pn);
+	puffs_newinfo_setvtype(pni, pn->pn_va.va_type);
+	puffs_newinfo_setsize(pni, pn->pn_va.va_size);
 
 	return 0;
 }

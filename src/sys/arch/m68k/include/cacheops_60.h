@@ -1,4 +1,4 @@
-/*	$NetBSD: cacheops_60.h,v 1.9 2007/06/08 15:57:17 tsutsui Exp $	*/
+/*	$NetBSD: cacheops_60.h,v 1.11 2007/06/13 13:13:29 he Exp $	*/
 
 /*-
  * Copyright (c) 1997 The NetBSD Foundation, Inc.

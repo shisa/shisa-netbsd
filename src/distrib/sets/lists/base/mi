@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.706 2007/06/09 11:20:56 kiyohara Exp $
+# $NetBSD: mi,v 1.713 2007/06/29 23:30:17 rumble Exp $
 .						base-sys-root
 ./altroot					base-sys-root
 ./bin						base-sys-root
@@ -104,6 +104,9 @@
 ./lib/libdes.so					base-obsolete		obsolete
 ./lib/libdes.so.6				base-obsolete		obsolete
 ./lib/libdes.so.6.0				base-obsolete		obsolete
+./lib/libssp.so					base-obsolete		obsolete
+./lib/libssp.so.0				base-obsolete		obsolete
+./lib/libssp.so.0.0				base-obsolete		obsolete
 ./libdata					base-sys-root
 ./libdata/firmware				base-sys-root
 ./libdata/firmware/ral				base-sys-root
@@ -127,8 +130,8 @@
 ./sbin/amrctl					base-sysutil-root
 ./sbin/apmlabel					base-sysutil-root
 ./sbin/atactl					base-sysutil-root
-./sbin/bioctl					base-sysutil-root
 ./sbin/badsect					base-sysutil-root
+./sbin/bioctl					base-sysutil-root
 ./sbin/brconfig					base-netutil-root
 ./sbin/ccdconfig				base-sysutil-root
 ./sbin/cgdconfig				base-sysutil-root	crypto
@@ -170,6 +173,7 @@
 ./sbin/mount_ados				base-adosfs-root
 ./sbin/mount_cd9660				base-sysutil-root
 ./sbin/mount_ext2fs				base-ext2fs-root
+./sbin/mount_efs				base-efs-root
 ./sbin/mount_fdesc				base-miscfs-root
 ./sbin/mount_ffs				base-sysutil-root
 ./sbin/mount_filecore				base-filecorefs-root
@@ -229,6 +233,7 @@
 ./sbin/setkey					base-netutil-root
 ./sbin/shutdown					base-sysutil-root
 ./sbin/slattach					base-slip-root
+./sbin/svhlabel					base-sysutil-root
 ./sbin/swapctl					base-sysutil-root
 ./sbin/swapon					base-sysutil-root
 ./sbin/sysctl					base-sysutil-root
@@ -567,6 +572,7 @@
 ./usr/bin/netgroup				base-nis-bin
 ./usr/bin/netstat				base-netutil-bin
 ./usr/bin/newaliases				base-mailwrapper-bin
+./usr/bin/newgrp				base-util-bin
 ./usr/bin/newsyslog				base-util-bin
 ./usr/bin/nfsstat				base-nfsclient-bin
 ./usr/bin/nice					base-util-bin
@@ -775,6 +781,7 @@
 ./usr/include/dev/wscons			base-c-usr
 ./usr/include/filecorefs			base-c-usr
 ./usr/include/fs				base-c-usr
+./usr/include/fs/efs				base-c-usr
 ./usr/include/fs/hfs				base-c-usr
 ./usr/include/fs/hfsp				base-obsolete		obsolete
 ./usr/include/fs/puffs				base-c-usr
@@ -854,6 +861,9 @@
 ./usr/lib/libntp.so				base-obsolete		obsolete
 ./usr/lib/libntp.so.0				base-obsolete		obsolete
 ./usr/lib/libntp.so.0.0				base-obsolete		obsolete
+./usr/lib/libssp.so				base-obsolete		obsolete
+./usr/lib/libssp.so.0				base-obsolete		obsolete
+./usr/lib/libssp.so.0.0				base-obsolete		obsolete
 ./usr/lib/libusb.a				base-obsolete		obsolete
 ./usr/lib/libusb.so				base-obsolete		obsolete
 ./usr/lib/libusb.so.0				base-obsolete		obsolete
@@ -1264,6 +1274,7 @@
 ./usr/sbin/tbrconfig				base-obsolete		obsolete
 ./usr/sbin/tcpdchk				base-netutil-bin
 ./usr/sbin/tcpdmatch				base-netutil-bin
+./usr/sbin/tcpdrop				base-netutil-bin
 ./usr/sbin/tcpdump				base-netutil-bin
 ./usr/sbin/timed				base-timed-bin
 ./usr/sbin/timedc				base-timed-bin
@@ -1578,8 +1589,12 @@
 ./usr/share/i18n/csmapper/CP/CP1046%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP1124%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP1125%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/CP1129%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP1131%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP1133%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/CP1161%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/CP1162%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/CP1163%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP1250%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP1251%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP1252%UCS.mps	base-sysutil-share	nls
@@ -1656,8 +1671,12 @@
 ./usr/share/i18n/csmapper/CP/UCS%CP1046.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP1124.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP1125.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/UCS%CP1129.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP1131.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP1133.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/UCS%CP1161.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/UCS%CP1162.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/UCS%CP1163.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP1250.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP1251.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP1252.mps	base-sysutil-share	nls
@@ -1972,8 +1991,12 @@
 ./usr/share/i18n/esdb/CP/CP1046.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP1124.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP1125.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/CP/CP1129.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP1131.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP1133.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/CP/CP1161.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/CP/CP1162.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/CP/CP1163.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP1250.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP1251.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP1252.esdb		base-sysutil-share	nls
@@ -2156,8 +2179,8 @@
 ./usr/share/i18n/esdb/MISC/NEXTSTEP.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/PTCP154.esdb		base-obsolete		obsolete
 ./usr/share/i18n/esdb/MISC/RISCOS-LATIN1.esdb	base-sysutil-share	nls
-./usr/share/i18n/esdb/MISC/Shift_JIS.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/Shift_JIS-2004.esdb	base-sysutil-share	nls
+./usr/share/i18n/esdb/MISC/Shift_JIS.esdb	base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/TDS565.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/MISC/ZW.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/TCVN			base-sysutil-share
@@ -3669,8 +3692,8 @@
 ./usr/share/zoneinfo/Atlantic/Bermuda		base-sys-share		share
 ./usr/share/zoneinfo/Atlantic/Canary		base-sys-share		share
 ./usr/share/zoneinfo/Atlantic/Cape_Verde	base-sys-share		share
-./usr/share/zoneinfo/Atlantic/Faroe		base-sys-share		share
 ./usr/share/zoneinfo/Atlantic/Faeroe		base-sys-share		share
+./usr/share/zoneinfo/Atlantic/Faroe		base-sys-share		share
 ./usr/share/zoneinfo/Atlantic/Jan_Mayen		base-sys-share		share
 ./usr/share/zoneinfo/Atlantic/Madeira		base-sys-share		share
 ./usr/share/zoneinfo/Atlantic/Reykjavik		base-sys-share		share

@@ -1,4 +1,4 @@
-#	$NetBSD: 3RDPARTY,v 1.530 2007/06/07 11:41:20 pooka Exp $
+#	$NetBSD: 3RDPARTY,v 1.537 2007/07/02 16:20:21 wiz Exp $
 #
 # This file contains a list of the software that has been integrated into
 # NetBSD where we are not the primary maintainer.
@@ -269,7 +269,7 @@ Newer flex will be found in:
 	http://sourceforge.net/projects/lex/
 
 Package:	gcc
-Version:	4.1.2-20070110
+Version:	4.1.3-20070620
 Current Vers:	4.2.0
 Maintainer:	FSF
 Archive Site:	ftp://ftp.gnu.org/gnu/gcc/
@@ -389,8 +389,8 @@ License:	BSD (3-clause)
 Notes:
 
 Package:	ipf
-Version:	4.1.22
-Current Vers:	4.1.22
+Version:	4.1.23
+Current Vers:	4.1.23
 Maintainer:	Darren Reed
 Archive Site:	http://coombs.anu.edu.au/~avalon/
 Home Page:	http://coombs.anu.edu.au/~avalon/
@@ -540,8 +540,8 @@ and ndbootd-raw.c.  Restore saved config.h, and force it to define
 HAVE_STRICT_ALIGNMENT.  Fix RCS IDs, import.
 
 Package:	ntp
-Version:	4.2.4
-Current Vers:	4.2.4
+Version:	4.2.4p2
+Current Vers:	4.2.4p3
 Maintainer:	David L. Mills <mills@udel.edu>
 Archive Site:	ftp://ftp.udel.edu/pub/ntp/ntp4/
 Home Page:	http://www.ntp.org/, http://ntp.isc.org/
@@ -805,13 +805,13 @@ Notes:
 
 Package:	texinfo
 Version:	4.7
-Current Vers:	4.8a
+Current Vers:	4.9
 Maintainer:	FSF
 Archive Site:	ftp://ftp.gnu.org/gnu/texinfo/
 Home Page:	http://www.gnu.org/software/texinfo/
 Mailing List:	bug-texinfo@gnu.org
 Responsible:	wiz
-License:	GPLv2
+License:	GPLv2 (4.9 is GPLv3)
 Notes:
 Use src/gnu/dist/texinfo/texinfo2netbsd for preparing the source tree
 for the import.
@@ -908,3 +908,24 @@ Responsible:	gwr, tron, christos
 License:	BSD (3-clause)
 Notes:
 Imported to src/common/dist/zlib and shared by the kernel and userland.
+
+Package:	services, protocols
+Version:	2007-06-14
+Current Vers:	2007-06-14
+Maintainer:	IANA
+Archive Site:	http://www.iana.org/assignments/
+Home Page:	http://www.iana.org
+Mailing List:
+Responsible:	christos
+License:	None
+Notes:
+1. Download the latest converter from:
+	http://www.sethwklein.net/projects/iana-etc/
+2. Unpack it and run:
+	gmake get
+	gmake
+3. Add NetBSD rcsid to the generated protocols and services.
+4. Append the local services from the current services file.
+5. Run:
+	services_mkdb -u services > /usr/src/etc/services
+	cp protocols /usr/src/etc/protocols

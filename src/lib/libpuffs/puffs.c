@@ -1,4 +1,4 @@
-/*	$NetBSD: puffs.c,v 1.52 2007/06/06 01:55:01 pooka Exp $	*/
+/*	$NetBSD: puffs.c,v 1.55 2007/07/05 12:27:39 pooka Exp $	*/
 
 /*
  * Copyright (c) 2005, 2006, 2007  Antti Kantee.  All Rights Reserved.
@@ -31,7 +31,7 @@
 
 #include <sys/cdefs.h>
 #if !defined(lint)
-__RCSID("$NetBSD: puffs.c,v 1.52 2007/06/06 01:55:01 pooka Exp $");
+__RCSID("$NetBSD: puffs.c,v 1.55 2007/07/05 12:27:39 pooka Exp $");
 #endif /* !lint */
 
 #include <sys/param.h>
@@ -297,7 +297,8 @@ puffs_setback(struct puffs_cc *pcc, int whatback)
 	    preq->preq_optype == PUFFS_VN_OPEN ||
 	    preq->preq_optype == PUFFS_VN_MMAP ||
 	    preq->preq_optype == PUFFS_VN_REMOVE ||
-	    preq->preq_optype == PUFFS_VN_RMDIR));
+	    preq->preq_optype == PUFFS_VN_RMDIR ||
+	    preq->preq_optype == PUFFS_VN_INACTIVE));
 
 	preq->preq_setbacks |= whatback & PUFFS_SETBACK_MASK;
 }
@@ -331,17 +332,19 @@ _puffs_init(int develv, struct puffs_ops *pops, const char *puffsname,
 	int fd;
 
 	if (develv != PUFFS_DEVEL_LIBVERSION) {
-		warnx("puffs_mount: mounting with lib version %d, need %d",
+		warnx("puffs_init: mounting with lib version %d, need %d",
 		    develv, PUFFS_DEVEL_LIBVERSION);
 		errno = EINVAL;
 		return NULL;
 	}
 
 	fd = open("/dev/puffs", O_RDONLY);
-	if (fd == -1)
+	if (fd == -1) {
+		warnx("puffs_init: cannot open /dev/puffs");
 		return NULL;
+	}
 	if (fd <= 2)
-		warnx("puffs_mount: device fd %d (<= 2), sure this is "
+		warnx("puffs_init: device fd %d (<= 2), sure this is "
 		    "what you want?", fd);
 
 	pu = malloc(sizeof(struct puffs_usermount));
@@ -474,18 +477,6 @@ puffs_mainloop(struct puffs_usermount *pu, int flags)
 		if (pu->pu_ml_lfn)
 			pu->pu_ml_lfn(pu);
 
-		/* micro optimization: skip kevent syscall if possible */
-		if (pfctrl->nfds == 0 && pu->pu_ml_timep == NULL
-		    && (pu->pu_state & PU_ASYNCFD) == 0) {
-			if (puffs_req_handle(pgr, ppr, 0) == -1)
-				goto out;
-			if (puffs_req_putput(ppr) == -1)
-				goto out;
-			puffs_req_resetput(ppr);
-			continue;
-		}
-		/* else: do full processing */
-
 		/*
 		 * Do this here, because:
 		 *  a) loopfunc might generate some results
@@ -494,6 +485,16 @@ puffs_mainloop(struct puffs_usermount *pu, int flags)
 		if (puffs_req_putput(ppr) == -1)
 			goto out;
 		puffs_req_resetput(ppr);
+
+		/* micro optimization: skip kevent syscall if possible */
+		if (pfctrl->nfds == 0 && pu->pu_ml_timep == NULL
+		    && (pu->pu_state & PU_ASYNCFD) == 0) {
+			if (puffs_req_handle(pgr, ppr, 0) == -1)
+				goto out;
+			continue;
+		}
+
+		/* else: do full processing */
 
 		/*
 		 * Build list of which to enable/disable in writecheck.
@@ -571,7 +572,7 @@ puffs_mainloop(struct puffs_usermount *pu, int flags)
 			}
 
 			if (curev->filter == EVFILT_READ) {
-				if (curev->flags & EV_EOF)
+				if (curev->flags & EV_EOF && curev->data == 0)
 					puffs_framev_readclose(pu, fio,
 					    ECONNRESET);
 				else

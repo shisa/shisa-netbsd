@@ -1,4 +1,4 @@
-/*	$NetBSD: null.c,v 1.14 2007/06/06 01:55:01 pooka Exp $	*/
+/*	$NetBSD: null.c,v 1.21 2007/07/01 18:39:39 pooka Exp $	*/
 
 /*
  * Copyright (c) 2007  Antti Kantee.  All Rights Reserved.
@@ -27,7 +27,7 @@
 
 #include <sys/cdefs.h>
 #if !defined(lint)
-__RCSID("$NetBSD: null.c,v 1.14 2007/06/06 01:55:01 pooka Exp $");
+__RCSID("$NetBSD: null.c,v 1.21 2007/07/01 18:39:39 pooka Exp $");
 #endif /* !lint */
 
 /*
@@ -102,11 +102,11 @@ writeableopen(const char *path)
 	if (fd == -1) {
 		if (errno == EACCES) {
 			if (stat(path, &sb) == -1)
-				return errno;
+				return -1;
 			origmode = sb.st_mode & ALLPERMS;
 
 			if (chmod(path, 0200) == -1)
-				return errno;
+				return -1;
 
 			fd = open(path, O_WRONLY);
 			if (fd == -1)
@@ -116,7 +116,7 @@ writeableopen(const char *path)
 			if (sverr)
 				errno = sverr;
 		} else
-			return errno;
+			return -1;
 	}
 
 	return fd;
@@ -133,9 +133,62 @@ inodecmp(struct puffs_usermount *pu, struct puffs_node *pn, void *arg)
 	return NULL;
 }
 
+static int
+makenode(struct puffs_usermount *pu, struct puffs_newinfo *pni,
+	const struct puffs_cn *pcn, const struct vattr *va, int regular)
+{
+	struct puffs_node *pn;
+	struct stat sb;
+	int rv;
+
+	if ((rv = processvattr(PCNPATH(pcn), va, regular)) != 0)
+		return rv;
+
+	pn = puffs_pn_new(pu, NULL);
+	if (!pn)
+		return ENOMEM;
+	puffs_setvattr(&pn->pn_va, va);
+
+	if (lstat(PCNPATH(pcn), &sb) == -1)
+		return errno;
+	puffs_stat2vattr(&pn->pn_va, &sb);
+
+	puffs_newinfo_setcookie(pni, pn);
+	return 0;
+}
+
+/* This should be called first and overriden from the file system */
+void
+puffs_null_setops(struct puffs_ops *pops)
+{
+
+	PUFFSOP_SET(pops, puffs_null, fs, statvfs);
+	PUFFSOP_SETFSNOP(pops, unmount);
+	PUFFSOP_SETFSNOP(pops, sync);
+
+	PUFFSOP_SET(pops, puffs_null, node, lookup);
+	PUFFSOP_SET(pops, puffs_null, node, create);
+	PUFFSOP_SET(pops, puffs_null, node, mknod);
+	PUFFSOP_SET(pops, puffs_null, node, getattr);
+	PUFFSOP_SET(pops, puffs_null, node, setattr);
+	PUFFSOP_SET(pops, puffs_null, node, fsync);
+	PUFFSOP_SET(pops, puffs_null, node, remove);
+	PUFFSOP_SET(pops, puffs_null, node, link);
+	PUFFSOP_SET(pops, puffs_null, node, rename);
+	PUFFSOP_SET(pops, puffs_null, node, mkdir);
+	PUFFSOP_SET(pops, puffs_null, node, rmdir);
+	PUFFSOP_SET(pops, puffs_null, node, symlink);
+	PUFFSOP_SET(pops, puffs_null, node, readlink);
+	PUFFSOP_SET(pops, puffs_null, node, readdir);
+	PUFFSOP_SET(pops, puffs_null, node, read);
+	PUFFSOP_SET(pops, puffs_null, node, write);
+	PUFFSOP_SET(pops, puffs_null, node, reclaim);
+}
+
 /*ARGSUSED*/
 int
-puffs_null_fs_statvfs(struct puffs_cc *pcc, struct statvfs *svfsb, pid_t pid)
+puffs_null_fs_statvfs(struct puffs_cc *pcc, struct statvfs *svfsb,
+	const struct puffs_cid *pcid)
 {
 	struct puffs_usermount *pu = puffs_cc_getusermount(pcc);
 
@@ -146,9 +199,8 @@ puffs_null_fs_statvfs(struct puffs_cc *pcc, struct statvfs *svfsb, pid_t pid)
 }
 
 int
-puffs_null_node_lookup(struct puffs_cc *pcc, void *opc, void **newnode,
-	enum vtype *newtype, voff_t *newsize, dev_t *newrdev,
-	const struct puffs_cn *pcn)
+puffs_null_node_lookup(struct puffs_cc *pcc, void *opc,
+	struct puffs_newinfo *pni, const struct puffs_cn *pcn)
 {
 	struct puffs_usermount *pu = puffs_cc_getusermount(pcc);
 	struct puffs_node *pn = opc, *pn_res;
@@ -177,50 +229,41 @@ puffs_null_node_lookup(struct puffs_cc *pcc, void *opc, void **newnode,
 		puffs_stat2vattr(&pn_res->pn_va, &sb);
 	}
 
-	*newnode = pn_res;
-	*newtype = pn_res->pn_va.va_type;
-	*newsize = pn_res->pn_va.va_size;
-	*newrdev = pn_res->pn_va.va_rdev;
+	puffs_newinfo_setcookie(pni, pn_res);
+	puffs_newinfo_setvtype(pni, pn_res->pn_va.va_type);
+	puffs_newinfo_setsize(pni, (voff_t)pn_res->pn_va.va_size);
+	puffs_newinfo_setrdev(pni, pn_res->pn_va.va_rdev);
 
 	return 0;
 }
 
 /*ARGSUSED*/
 int
-puffs_null_node_create(struct puffs_cc *pcc, void *opc, void **newnode,
-	const struct puffs_cn *pcn, const struct vattr *va)
+puffs_null_node_create(struct puffs_cc *pcc, void *opc,
+	struct puffs_newinfo *pni, const struct puffs_cn *pcn,
+	const struct vattr *va)
 {
 	struct puffs_usermount *pu = puffs_cc_getusermount(pcc);
-	struct puffs_node *pn;
 	int fd, rv;
 
 	fd = open(PCNPATH(pcn), O_RDWR | O_CREAT | O_TRUNC);
 	if (fd == -1)
 		return errno;
 	close(fd);
-	if ((rv = processvattr(PCNPATH(pcn), va, 1)) != 0) {
-		unlink(PCNPATH(pcn));
-		return rv;
-	}
 
-	pn = puffs_pn_new(pu, NULL);
-	if (!pn) {
+	rv = makenode(pu, pni, pcn, va, 1);
+	if (rv)
 		unlink(PCNPATH(pcn));
-		return ENOMEM;
-	}
-	puffs_setvattr(&pn->pn_va, va);
-
-	*newnode = pn;
-	return 0;
+	return rv;
 }
 
 /*ARGSUSED*/
 int
-puffs_null_node_mknod(struct puffs_cc *pcc, void *opc, void **newnode,
-	const struct puffs_cn *pcn, const struct vattr *va)
+puffs_null_node_mknod(struct puffs_cc *pcc, void *opc,
+	struct puffs_newinfo *pni, const struct puffs_cn *pcn,
+	const struct vattr *va)
 {
 	struct puffs_usermount *pu = puffs_cc_getusermount(pcc);
-	struct puffs_node *pn;
 	mode_t mode;
 	int rv;
 
@@ -228,26 +271,16 @@ puffs_null_node_mknod(struct puffs_cc *pcc, void *opc, void **newnode,
 	if (mknod(PCNPATH(pcn), mode, va->va_rdev) == -1)
 		return errno;
 
-	if ((rv = processvattr(PCNPATH(pcn), va, 0)) != 0) {
+	rv = makenode(pu, pni, pcn, va, 0);
+	if (rv)
 		unlink(PCNPATH(pcn));
-		return rv;
-	}
-
-	pn = puffs_pn_new(pu, NULL);
-	if (!pn) {
-		unlink(PCNPATH(pcn));
-		return ENOMEM;
-	}
-	puffs_setvattr(&pn->pn_va, va);
-
-	*newnode = pn;
-	return 0;
+	return rv;
 }
 
 /*ARGSUSED*/
 int
 puffs_null_node_getattr(struct puffs_cc *pcc, void *opc, struct vattr *va,
-	const struct puffs_cred *pcred, pid_t pid)
+	const struct puffs_cred *pcred, const struct puffs_cid *pcid)
 {
 	struct puffs_node *pn = opc;
 	struct stat sb;
@@ -262,7 +295,8 @@ puffs_null_node_getattr(struct puffs_cc *pcc, void *opc, struct vattr *va,
 /*ARGSUSED*/
 int
 puffs_null_node_setattr(struct puffs_cc *pcc, void *opc,
-	const struct vattr *va, const struct puffs_cred *pcred, pid_t pid)
+	const struct vattr *va, const struct puffs_cred *pcred,
+	const struct puffs_cid *pcid)
 {
 	struct puffs_node *pn = opc;
 	int rv;
@@ -280,7 +314,7 @@ puffs_null_node_setattr(struct puffs_cc *pcc, void *opc,
 int
 puffs_null_node_fsync(struct puffs_cc *pcc, void *opc,
 	const struct puffs_cred *pcred, int how,
-	off_t offlo, off_t offhi, pid_t pid)
+	off_t offlo, off_t offhi, const struct puffs_cid *pcid)
 {
 	struct puffs_node *pn = opc;
 	int fd, rv;
@@ -315,6 +349,7 @@ puffs_null_node_remove(struct puffs_cc *pcc, void *opc, void *targ,
 
 	if (unlink(PNPATH(pn_targ)) == -1)
 		return errno;
+	puffs_pn_remove(pn_targ);
 
 	return 0;
 }
@@ -347,30 +382,20 @@ puffs_null_node_rename(struct puffs_cc *pcc, void *opc, void *src,
 
 /*ARGSUSED*/
 int
-puffs_null_node_mkdir(struct puffs_cc *pcc, void *opc, void **newnode,
-	const struct puffs_cn *pcn, const struct vattr *va)
+puffs_null_node_mkdir(struct puffs_cc *pcc, void *opc,
+	struct puffs_newinfo *pni, const struct puffs_cn *pcn,
+	const struct vattr *va)
 {
 	struct puffs_usermount *pu = puffs_cc_getusermount(pcc);
-	struct puffs_node *pn;
 	int rv;
 
 	if (mkdir(PCNPATH(pcn), va->va_mode) == -1)
 		return errno;
 
-	if ((rv = processvattr(PCNPATH(pcn), va, 0)) != 0) {
+	rv = makenode(pu, pni, pcn, va, 0);
+	if (rv)
 		rmdir(PCNPATH(pcn));
-		return rv;
-	}
-
-	pn = puffs_pn_new(pu, NULL);
-	if (pn == NULL) {
-		rmdir(PCNPATH(pcn));
-		return ENOMEM;
-	}
-	puffs_setvattr(&pn->pn_va, va);
-
-	*newnode = pn;
-	return 0;
+	return rv;
 }
 
 /*ARGSUSED*/
@@ -382,37 +407,27 @@ puffs_null_node_rmdir(struct puffs_cc *pcc, void *opc, void *targ,
 
 	if (rmdir(PNPATH(pn_targ)) == -1)
 		return errno;
+	puffs_pn_remove(pn_targ);
 
 	return 0;
 }
 
 /*ARGSUSED*/
 int
-puffs_null_node_symlink(struct puffs_cc *pcc, void *opc, void **newnode,
-	const struct puffs_cn *pcn, const struct vattr *va,
-	const char *linkname)
+puffs_null_node_symlink(struct puffs_cc *pcc, void *opc,
+	struct puffs_newinfo *pni, const struct puffs_cn *pcn,
+	const struct vattr *va, const char *linkname)
 {
 	struct puffs_usermount *pu = puffs_cc_getusermount(pcc);
-	struct puffs_node *pn;
 	int rv;
 
 	if (symlink(linkname, PCNPATH(pcn)) == -1)
 		return errno;
 
-	if ((rv = processvattr(PCNPATH(pcn), va, 0)) != 0) {
+	rv = makenode(pu, pni, pcn, va, 0);
+	if (rv)
 		unlink(PCNPATH(pcn));
-		return rv;
-	}
-
-	pn = puffs_pn_new(pu, NULL);
-	if (pn == NULL) {
-		rmdir(PCNPATH(pcn));
-		return ENOMEM;
-	}
-	puffs_setvattr(&pn->pn_va, va);
-
-	*newnode = pn;
-	return 0;
+	return rv;
 }
 
 /*ARGSUSED*/
@@ -550,8 +565,9 @@ puffs_null_node_write(struct puffs_cc *pcc, void *opc, uint8_t *buf,
 
 /*ARGSUSED*/
 int
-puffs_null_node_reclaim(struct puffs_cc *pcc, void *opc, pid_t pid)
+puffs_null_node_reclaim(struct puffs_cc *pcc, void *opc,
+	const struct puffs_cid *pcid)
 {
 
-	return puffs_genfs_node_reclaim(pcc, opc, pid);
+	return puffs_genfs_node_reclaim(pcc, opc, pcid);
 }

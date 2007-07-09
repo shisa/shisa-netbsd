@@ -1,4 +1,4 @@
-/*	$NetBSD: dk.c,v 1.23 2007/06/09 02:26:27 dyoung Exp $	*/
+/*	$NetBSD: dk.c,v 1.25 2007/06/24 01:43:34 dyoung Exp $	*/
 
 /*-
  * Copyright (c) 2004 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: dk.c,v 1.23 2007/06/09 02:26:27 dyoung Exp $");
+__KERNEL_RCSID(0, "$NetBSD: dk.c,v 1.25 2007/06/24 01:43:34 dyoung Exp $");
 
 #include "opt_dkwedge.h"
 
@@ -642,6 +642,47 @@ dkwedge_list(struct disk *pdk, struct dkwedge_list *dkwl, struct lwp *l)
 	return (error);
 }
 
+device_t
+dkwedge_find_by_wname(const char *wname)
+{
+	device_t dv = NULL;
+	struct dkwedge_softc *sc;
+	int i;
+
+	(void) lockmgr(&dkwedges_lock, LK_EXCLUSIVE, NULL);
+	for (i = 0; i < ndkwedges; i++) {
+		if ((sc = dkwedges[i]) == NULL)
+			continue;
+		if (strcmp(sc->sc_wname, wname) == 0) {
+			if (dv != NULL) {
+				printf(
+				    "WARNING: double match for wedge name %s "
+				    "(%s, %s)\n", wname, device_xname(dv),
+				    device_xname(sc->sc_dev));
+				continue;
+			}
+			dv = sc->sc_dev;
+		}
+	}
+	(void) lockmgr(&dkwedges_lock, LK_RELEASE, NULL);
+	return dv;
+}
+
+void
+dkwedge_print_wnames(void)
+{
+	struct dkwedge_softc *sc;
+	int i;
+
+	(void) lockmgr(&dkwedges_lock, LK_EXCLUSIVE, NULL);
+	for (i = 0; i < ndkwedges; i++) {
+		if ((sc = dkwedges[i]) == NULL)
+			continue;
+		printf(" wedge:%s", sc->sc_wname);
+	}
+	(void) lockmgr(&dkwedges_lock, LK_RELEASE, NULL);
+}
+
 /*
  * dkwedge_set_bootwedge
  *
@@ -920,8 +961,8 @@ dkopen(dev_t dev, int flags, int fmt, struct lwp *l)
 			vp->v_writecount++;
 			VOP_UNLOCK(vp, 0);
 			sc->sc_parent->dk_rawvp = vp;
-			sc->sc_parent->dk_rawopens++;
 		}
+		sc->sc_parent->dk_rawopens++;
 	}
 	if (fmt == S_IFCHR)
 		sc->sc_dk.dk_copenmask |= 1;

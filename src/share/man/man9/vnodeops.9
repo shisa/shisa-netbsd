@@ -1,4 +1,4 @@
-.\"     $NetBSD: vnodeops.9,v 1.63 2007/05/13 19:02:17 tnn Exp $
+.\"     $NetBSD: vnodeops.9,v 1.65 2007/06/28 02:54:23 rumble Exp $
 .\"
 .\" Copyright (c) 2001, 2005, 2006 The NetBSD Foundation, Inc.
 .\" All rights reserved.
@@ -1020,7 +1020,9 @@ and
 are used.
 The value of
 .Fa *eofflag
-will be set to TRUE if the end of the directory is reached while
+will be set to
+.Dv true
+if the end of the directory is reached while
 reading.
 The directory seek cookies are returned to the NFS client and may be
 used later to restart a directory read part way through the directory.
@@ -1114,7 +1116,7 @@ flags.
 If the operation is successful zero is returned, otherwise an
 appropriate error code is returned.
 .Fn VOP_UNLOCK
-is used to serialise access to the file system such as to present two
+is used to serialise access to the file system such as to prevent two
 writes to the same file from happening at the same time.
 .It Fn VOP_ISLOCKED "vp"
 Test if the vnode

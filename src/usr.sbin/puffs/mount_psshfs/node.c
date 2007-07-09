@@ -1,4 +1,4 @@
-/*	$NetBSD: node.c,v 1.30 2007/06/06 01:55:03 pooka Exp $	*/
+/*	$NetBSD: node.c,v 1.33 2007/07/02 10:26:50 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006  Antti Kantee.  All Rights Reserved.
@@ -27,7 +27,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: node.c,v 1.30 2007/06/06 01:55:03 pooka Exp $");
+__RCSID("$NetBSD: node.c,v 1.33 2007/07/02 10:26:50 pooka Exp $");
 #endif /* !lint */
 
 #include <assert.h>
@@ -39,8 +39,7 @@ __RCSID("$NetBSD: node.c,v 1.30 2007/06/06 01:55:03 pooka Exp $");
 #include "sftp_proto.h"
 
 int
-psshfs_node_lookup(struct puffs_cc *pcc, void *opc, void **newnode,
-	enum vtype *newtype, voff_t *newsize, dev_t *newrdev,
+psshfs_node_lookup(struct puffs_cc *pcc, void *opc, struct puffs_newinfo *pni,
 	const struct puffs_cn *pcn)
 {
         struct puffs_usermount *pu = puffs_cc_getusermount(pcc);
@@ -56,8 +55,8 @@ psshfs_node_lookup(struct puffs_cc *pcc, void *opc, void **newnode,
 		psn = psn_dir->parent->pn_data;
 		psn->stat &= ~PSN_RECLAIMED;
 
-		*newnode = psn_dir->parent;
-		*newtype = VDIR;
+		puffs_newinfo_setcookie(pni, psn_dir->parent);
+		puffs_newinfo_setvtype(pni, VDIR);
 		return 0;
 	}
 
@@ -98,16 +97,16 @@ psshfs_node_lookup(struct puffs_cc *pcc, void *opc, void **newnode,
 
 	psn->stat &= ~PSN_RECLAIMED;
 
-	*newnode = pn;
-	*newsize = pn->pn_va.va_size;
-	*newtype = pn->pn_va.va_type;
+	puffs_newinfo_setcookie(pni, pn);
+	puffs_newinfo_setvtype(pni, pn->pn_va.va_type);
+	puffs_newinfo_setsize(pni, pn->pn_va.va_size);
 
 	return 0;
 }
 
 int
 psshfs_node_getattr(struct puffs_cc *pcc, void *opc, struct vattr *vap,
-	const struct puffs_cred *pcr, pid_t pid)
+	const struct puffs_cred *pcr, const struct puffs_cid *pcid)
 {
 	struct puffs_node *pn = opc;
 	int rv;
@@ -123,7 +122,8 @@ psshfs_node_getattr(struct puffs_cc *pcc, void *opc, struct vattr *vap,
 
 int
 psshfs_node_setattr(struct puffs_cc *pcc, void *opc,
-	const struct vattr *va, const struct puffs_cred *pcr, pid_t pid)
+	const struct vattr *va, const struct puffs_cred *pcr,
+	const struct puffs_cid *pcid)
 {
 	PSSHFSAUTOVAR(pcc);
 	struct vattr kludgeva;
@@ -161,7 +161,7 @@ psshfs_node_setattr(struct puffs_cc *pcc, void *opc,
 }
 
 int
-psshfs_node_create(struct puffs_cc *pcc, void *opc, void **newnode,
+psshfs_node_create(struct puffs_cc *pcc, void *opc, struct puffs_newinfo *pni,
 	const struct puffs_cn *pcn, const struct vattr *va)
 {
 	PSSHFSAUTOVAR(pcc);
@@ -184,7 +184,7 @@ psshfs_node_create(struct puffs_cc *pcc, void *opc, void **newnode,
 
 	rv = psbuf_expect_handle(pb, &fhand, &fhandlen);
 	if (rv == 0)
-		*newnode = pn_new;
+		puffs_newinfo_setcookie(pni, pn_new);
 	else
 		goto out;
 
@@ -202,7 +202,7 @@ psshfs_node_create(struct puffs_cc *pcc, void *opc, void **newnode,
 
 int
 psshfs_node_open(struct puffs_cc *pcc, void *opc, int mode,
-	const struct puffs_cred *pcr, pid_t pid)
+	const struct puffs_cred *pcr, const struct puffs_cid *pcid)
 {
 	PSSHFSAUTOVAR(pcc);
 	struct vattr va;
@@ -241,7 +241,8 @@ psshfs_node_open(struct puffs_cc *pcc, void *opc, int mode,
 }
 
 int
-psshfs_node_inactive(struct puffs_cc *pcc, void *opc, pid_t pid, int *refcount)
+psshfs_node_inactive(struct puffs_cc *pcc, void *opc,
+	const struct puffs_cid *pcid)
 {
 	struct psshfs_ctx *pctx = puffs_cc_getspecific(pcc);
 	struct puffs_usermount *pu = puffs_cc_getusermount(pcc);
@@ -269,7 +270,6 @@ psshfs_node_inactive(struct puffs_cc *pcc, void *opc, pid_t pid, int *refcount)
 	}
 
  out:
-	*refcount = 1;
 	return 0;
 }
 
@@ -429,7 +429,7 @@ psshfs_node_remove(struct puffs_cc *pcc, void *opc, void *targ,
 }
 
 int
-psshfs_node_mkdir(struct puffs_cc *pcc, void *opc, void **newnode,
+psshfs_node_mkdir(struct puffs_cc *pcc, void *opc,  struct puffs_newinfo *pni,
 	const struct puffs_cn *pcn, const struct vattr *va)
 {
 	PSSHFSAUTOVAR(pcc);
@@ -450,7 +450,7 @@ psshfs_node_mkdir(struct puffs_cc *pcc, void *opc, void **newnode,
 	rv = psbuf_expect_status(pb);
 
 	if (rv == 0)
-		*newnode = pn_new;
+		puffs_newinfo_setcookie(pni, pn_new);
 	else
 		nukenode(pn_new, pcn->pcn_name, 1);
 
@@ -479,7 +479,7 @@ psshfs_node_rmdir(struct puffs_cc *pcc, void *opc, void *targ,
 }
 
 int
-psshfs_node_symlink(struct puffs_cc *pcc, void *opc, void **newnode,
+psshfs_node_symlink(struct puffs_cc *pcc, void *opc, struct puffs_newinfo *pni,
 	const struct puffs_cn *pcn, const struct vattr *va,
 	const char *link_target)
 {
@@ -509,7 +509,7 @@ psshfs_node_symlink(struct puffs_cc *pcc, void *opc, void **newnode,
 
 	rv = psbuf_expect_status(pb);
 	if (rv == 0)
-		*newnode = pn_new;
+		puffs_newinfo_setcookie(pni, pn_new);
 	else
 		nukenode(pn_new, pcn->pcn_name, 1);
 
@@ -585,7 +585,8 @@ psshfs_node_rename(struct puffs_cc *pcc, void *opc, void *src,
  * bit.
  */
 int
-psshfs_node_reclaim(struct puffs_cc *pcc, void *opc, pid_t pid)
+psshfs_node_reclaim(struct puffs_cc *pcc, void *opc,
+	const struct puffs_cid *pcid)
 {
 	struct puffs_usermount *pu = puffs_cc_getusermount(pcc);
 	struct puffs_node *pn = opc, *pn_next, *pn_root;

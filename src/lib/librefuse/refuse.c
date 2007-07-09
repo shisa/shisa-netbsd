@@ -1,4 +1,4 @@
-/*	$NetBSD: refuse.c,v 1.61 2007/05/24 00:55:57 agc Exp $	*/
+/*	$NetBSD: refuse.c,v 1.71 2007/07/01 18:40:16 pooka Exp $	*/
 
 /*
  * Copyright © 2007 Alistair Crooks.  All rights reserved.
@@ -30,7 +30,7 @@
 
 #include <sys/cdefs.h>
 #if !defined(lint)
-__RCSID("$NetBSD: refuse.c,v 1.61 2007/05/24 00:55:57 agc Exp $");
+__RCSID("$NetBSD: refuse.c,v 1.71 2007/07/01 18:40:16 pooka Exp $");
 #endif /* !lint */
 
 #include <assert.h>
@@ -38,6 +38,9 @@ __RCSID("$NetBSD: refuse.c,v 1.61 2007/05/24 00:55:57 agc Exp $");
 #include <errno.h>
 #include <fuse.h>
 #include <unistd.h>
+#ifdef MULTITHREADED_REFUSE
+#include <pthread.h>
+#endif
 
 #include "defs.h"
 
@@ -119,9 +122,9 @@ newrn(struct puffs_usermount *pu)
 	struct puffs_node *pn;
 	struct refusenode *rn;
 
-	if ((rn = malloc(sizeof(*rn))) == NULL)
-		err(1, "newrn");
-	memset(rn, 0, sizeof(struct refusenode));
+	if ((rn = calloc(1, sizeof(*rn))) == NULL) {
+		err(EXIT_FAILURE, "newrn");
+	}
 	pn = puffs_pn_new(pu, rn);
 
 	return pn;
@@ -137,14 +140,115 @@ nukern(struct puffs_node *pn)
 	puffs_pn_put(pn);
 }
 
+/* XXX - not threadsafe */
 static ino_t fakeino = 3;
 
+/***************** start of pthread context routines ************************/
+
 /*
- * XXX: do this otherwise if/when we grow thread support
- *
- * XXX2: does not consistently supply uid, gid or pid currently
+ * Notes on fuse_context:
+ * we follow fuse's lead and use the pthread specific information to hold
+ * a reference to the fuse_context structure for this thread.
  */
-static struct fuse_context fcon;
+#ifdef MULTITHREADED_REFUSE
+static pthread_mutex_t		context_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_key_t		context_key;
+static uint64_t			context_refc;
+#endif
+
+/* return the fuse_context struct related to this thread */
+struct fuse_context *
+fuse_get_context(void)
+{
+#ifdef MULTITHREADED_REFUSE
+	struct fuse_context	*ctxt;
+
+	if ((ctxt = pthread_getspecific(context_key)) == NULL) {
+		if ((ctxt = calloc(1, sizeof(struct fuse_context))) == NULL) {
+			errx(EXIT_FAILURE, "fuse_get_context: no memory");
+		}
+		pthread_setspecific(context_key, ctxt);
+	}
+	return ctxt;
+#else
+	static struct fuse_context	fcon;
+
+	return &fcon;
+#endif
+}
+
+/* used as a callback function */
+#ifdef MULTITHREADED_REFUSE
+static void
+free_context(void *ctxt)
+{   
+	free(ctxt);
+}
+#endif
+
+/* make the pthread key */
+static int
+create_context_key(void)
+{   
+#ifdef MULTITHREADED_REFUSE
+	if (pthread_mutex_lock(&context_mutex) == 0) {
+		/* we have the lock, attempt to create the key */
+		if (pthread_key_create(&context_key, free_context) != 0) {
+			warnx("create_context_key: pthread_key_create failed");
+			pthread_mutex_unlock(&context_mutex);
+			return 0;
+		}
+	}
+	context_refc += 1;
+	pthread_mutex_unlock(&context_mutex);
+	return 1;
+#else
+	return 1;
+#endif
+}
+
+/* delete the pthread key */
+static void
+delete_context_key(void)
+{   
+#ifdef MULTITHREADED_REFUSE
+	pthread_mutex_lock(&context_mutex);
+	if (--context_refc == 0) {
+		free(pthread_getspecific(context_key));
+		pthread_key_delete(context_key);
+	}
+	pthread_mutex_unlock(&context_mutex);
+#endif
+}
+
+/* set the uid and gid of the calling process in the current fuse context */
+static void
+set_fuse_context_uid_gid(const struct puffs_cred *cred)
+{
+	struct fuse_context	*fusectx;
+	uid_t			 uid;
+	gid_t			 gid;
+
+	fusectx = fuse_get_context();
+	if (puffs_cred_getuid(cred, &uid) == 0) {
+		fusectx->uid = uid;
+	}
+	if (puffs_cred_getgid(cred, &gid) == 0) {
+		fusectx->gid = gid;
+	}
+}
+
+/* set the pid of the calling process in the current fuse context */
+static void
+set_fuse_context_pid(const struct puffs_cid *pcid)
+{
+	struct fuse_context	*fusectx;
+
+	fusectx = fuse_get_context();
+	puffs_cid_getpid(pcid, &fusectx->pid);
+}
+
+/***************** end of pthread context routines ************************/
 
 #define DIR_CHUNKSIZE 4096
 static int
@@ -154,20 +258,22 @@ fill_dirbuf(struct puffs_fuse_dirh *dh, const char *name, ino_t dino,
 
 	/* initial? */
 	if (dh->bufsize == 0) {
-		if ((dh->dbuf = malloc(DIR_CHUNKSIZE)) == NULL)
-			err(1, "fill_dirbuf");
-		(void) memset(dh->dbuf, 0x0, DIR_CHUNKSIZE);
+		if ((dh->dbuf = calloc(1, DIR_CHUNKSIZE)) == NULL) {
+			err(EXIT_FAILURE, "fill_dirbuf");
+		}
 		dh->d = dh->dbuf;
 		dh->reslen = dh->bufsize = DIR_CHUNKSIZE;
 	}
 
-	if (puffs_nextdent(&dh->d, name, dino, dtype, &dh->reslen))
+	if (puffs_nextdent(&dh->d, name, dino, dtype, &dh->reslen)) {
 		return 0;
+	}
 
 	/* try to increase buffer space */
 	dh->dbuf = realloc(dh->dbuf, dh->bufsize + DIR_CHUNKSIZE);
-	if (dh->dbuf == NULL)
-		err(1, "fill_dirbuf realloc");
+	if (dh->dbuf == NULL) {
+		err(EXIT_FAILURE, "fill_dirbuf realloc");
+	}
 	dh->d = (void *)((uint8_t *)dh->dbuf + (dh->bufsize - dh->reslen));
 	dh->reslen += DIR_CHUNKSIZE;
 	dh->bufsize += DIR_CHUNKSIZE;
@@ -197,8 +303,9 @@ puffs_fuse_fill_dir(void *buf, const char *name,
 		 * inode number.   Our readdir() doesn't like to show
 		 * directory entries with inode number 0 ==> workaround.
 		 */
-		if (dino == 0)
+		if (dino == 0) {
 			dino = fakeino++;
+		}
 	}
 
 	return fill_dirbuf(deh, name, dino, dtype);
@@ -210,19 +317,16 @@ puffs_fuse_dirfil(fuse_dirh_t h, const char *name, int type, ino_t ino)
 	ino_t dino;
 	int dtype;
 
-	if (type == 0)
+	if ((dtype = type) == 0) {
 		dtype = DT_UNKNOWN;
-	else
-		dtype = type;
+	}
 
-	if (ino)
-		dino = ino;
-	else
-		dino = fakeino++;
+	dino = (ino) ? ino : fakeino++;
 
 	return fill_dirbuf(h, name, dino, dtype);
 }
 
+/* place the refuse file system name into `name' */
 static void
 set_refuse_mount_name(char **argv, char *name, size_t size)
 {
@@ -257,28 +361,24 @@ fuse_setup(int argc, char **argv, const struct fuse_operations *ops,
 	char			 name[64];
 	int			 i;
 
-	/* whilst this (assigning the pu_privdata in the puffs
-	 * usermount struct to be the fuse struct) might seem like
-	 * we are chasing our tail here, the logic is as follows:
-		+ the operation wrapper gets called with the puffs
-		  calling conventions
-		+ we need to fix up args first
-		+ then call the fuse user-supplied operation
-		+ then we fix up any values on return that we need to
-		+ and fix up any nodes, etc
-	 * so we need to be able to get at the fuse ops from within the
-	 * puffs_usermount struct
-	 */
+	/* set up the proper name */
 	set_refuse_mount_name(argv, name, sizeof(name));
+
+	/* grab the pthread context key */
+	if (!create_context_key()) {
+		err(EXIT_FAILURE, "fuse_setup: can't create context key");
+	}
 
 	/* stuff name into fuse_args */
 	args = fuse_opt_deep_copy_args(argc, argv);
 	if (args->argc > 0) {
 		free(args->argv[0]);
 	}
-	if ((args->argv[0] = strdup(name)) == NULL)
-		err(1, "fuse_setup");
+	if ((args->argv[0] = strdup(name)) == NULL) {
+		err(EXIT_FAILURE, "fuse_setup: can't strdup memory");
+	}
 
+	/* count back from the end over arguments starting with '-' */
 	for (i = argc - 1 ; i > 0 && *argv[i] == '-' ; --i) {
 	}
 
@@ -326,6 +426,7 @@ fuse_getattr(struct fuse *fuse, struct puffs_node *pn, const char *path,
 	return -ret;
 }
 
+/* utility function to set various elements of the attribute */
 static int
 fuse_setattr(struct fuse *fuse, struct puffs_node *pn, const char *path,
 	const struct vattr *va)
@@ -415,12 +516,13 @@ fuse_setattr(struct fuse *fuse, struct puffs_node *pn, const char *path,
 
 static int
 fuse_newnode(struct puffs_usermount *pu, const char *path,
-	const struct vattr *va, struct fuse_file_info *fi, void **newnode)
+	const struct vattr *va, struct fuse_file_info *fi,
+	struct puffs_newinfo *pni, struct puffs_node **pn_new)
 {
-	struct vattr		newva;
-	struct fuse		*fuse;
 	struct puffs_node	*pn;
 	struct refusenode	*rn;
+	struct vattr		 newva;
+	struct fuse		*fuse;
 
 	fuse = puffs_getspecific(pu);
 
@@ -442,7 +544,9 @@ fuse_newnode(struct puffs_usermount *pu, const char *path,
 	if (fi)
 		memcpy(&rn->file_info, fi, sizeof(struct fuse_file_info));
 
-	*newnode = pn;
+	puffs_newinfo_setcookie(pni, pn);
+	if (pn_new)
+		*pn_new = pn;
 
 	return 0;
 }
@@ -453,18 +557,20 @@ fuse_newnode(struct puffs_usermount *pu, const char *path,
 /* lookup the path */
 /* ARGSUSED1 */
 static int
-puffs_fuse_node_lookup(struct puffs_cc *pcc, void *opc, void **newnode,
-	enum vtype *newtype, voff_t *newsize, dev_t *newrdev,
-	const struct puffs_cn *pcn)
+puffs_fuse_node_lookup(struct puffs_cc *pcc, void *opc,
+	struct puffs_newinfo *pni, const struct puffs_cn *pcn)
 {
 	struct puffs_usermount	*pu = puffs_cc_getusermount(pcc);
 	struct puffs_node	*pn_res;
-	struct stat		st;
+	struct stat		 st;
 	struct fuse		*fuse;
 	const char		*path = PCNPATH(pcn);
-	int			ret;
+	int			 ret;
 
 	fuse = puffs_getspecific(pu);
+
+	set_fuse_context_uid_gid(pcn->pcn_cred);
+
 	ret = fuse->op.getattr(path, &st);
 
 	if (ret != 0) {
@@ -481,10 +587,10 @@ puffs_fuse_node_lookup(struct puffs_cc *pcc, void *opc, void **newnode,
 		puffs_stat2vattr(&pn_res->pn_va, &st);
 	}
 
-	*newnode = pn_res;
-	*newtype = pn_res->pn_va.va_type;
-	*newsize = pn_res->pn_va.va_size;
-	*newrdev = pn_res->pn_va.va_rdev;
+	puffs_newinfo_setcookie(pni, pn_res);
+	puffs_newinfo_setvtype(pni, pn_res->pn_va.va_type);
+	puffs_newinfo_setsize(pni, (voff_t)pn_res->pn_va.va_size);
+	puffs_newinfo_setrdev(pni, pn_res->pn_va.va_rdev);
 
 	return 0;
 }
@@ -493,7 +599,7 @@ puffs_fuse_node_lookup(struct puffs_cc *pcc, void *opc, void **newnode,
 /* ARGSUSED3 */
 static int
 puffs_fuse_node_getattr(struct puffs_cc *pcc, void *opc, struct vattr *va,
-	const struct puffs_cred *pcr, pid_t pid) 
+	const struct puffs_cred *pcr, const struct puffs_cid *pcid) 
 {
 	struct puffs_usermount	*pu = puffs_cc_getusermount(pcc);
 	struct puffs_node	*pn = opc;
@@ -501,6 +607,10 @@ puffs_fuse_node_getattr(struct puffs_cc *pcc, void *opc, struct vattr *va,
 	const char		*path = PNPATH(pn);
 
 	fuse = puffs_getspecific(pu);
+
+	set_fuse_context_uid_gid(pcr);
+	set_fuse_context_pid(pcid);
+
 	return fuse_getattr(fuse, pn, path, va);
 }
 
@@ -521,6 +631,8 @@ puffs_fuse_node_readlink(struct puffs_cc *pcc, void *opc,
 		return ENOSYS;
 	}
 
+	set_fuse_context_uid_gid(cred);
+
 	/* wrap up return code */
 	ret = (*fuse->op.readlink)(path, linkname, *linklen);
 
@@ -538,8 +650,9 @@ puffs_fuse_node_readlink(struct puffs_cc *pcc, void *opc,
 /* make the special node */
 /* ARGSUSED1 */
 static int
-puffs_fuse_node_mknod(struct puffs_cc *pcc, void *opc, void **newnode,
-	const struct puffs_cn *pcn, const struct vattr *va)
+puffs_fuse_node_mknod(struct puffs_cc *pcc, void *opc,
+	struct puffs_newinfo *pni, const struct puffs_cn *pcn,
+	const struct vattr *va)
 {
 	struct puffs_usermount	*pu = puffs_cc_getusermount(pcc);
 	struct fuse		*fuse;
@@ -552,12 +665,15 @@ puffs_fuse_node_mknod(struct puffs_cc *pcc, void *opc, void **newnode,
 		return ENOSYS;
 	}
 
+	set_fuse_context_uid_gid(pcn->pcn_cred);
+	set_fuse_context_pid(pcn->pcn_cid);
+
 	/* wrap up return code */
 	mode = puffs_addvtype2mode(va->va_mode, va->va_type);
 	ret = (*fuse->op.mknod)(path, mode, va->va_rdev);
 
 	if (ret == 0) {
-		ret = fuse_newnode(pu, path, va, NULL, newnode);
+		ret = fuse_newnode(pu, path, va, NULL, pni, NULL);
 	}
 
 	return -ret;
@@ -566,8 +682,9 @@ puffs_fuse_node_mknod(struct puffs_cc *pcc, void *opc, void **newnode,
 /* make a directory */
 /* ARGSUSED1 */
 static int
-puffs_fuse_node_mkdir(struct puffs_cc *pcc, void *opc, void **newnode,
-	const struct puffs_cn *pcn, const struct vattr *va)
+puffs_fuse_node_mkdir(struct puffs_cc *pcc, void *opc,
+	struct puffs_newinfo *pni, const struct puffs_cn *pcn,
+	const struct vattr *va)
 {
 	struct puffs_usermount	*pu = puffs_cc_getusermount(pcc);
 	struct fuse		*fuse;
@@ -576,6 +693,10 @@ puffs_fuse_node_mkdir(struct puffs_cc *pcc, void *opc, void **newnode,
 	int			ret;
 
 	fuse = puffs_getspecific(pu);
+
+	set_fuse_context_uid_gid(pcn->pcn_cred);
+	set_fuse_context_pid(pcn->pcn_cid);
+
 	if (fuse->op.mkdir == NULL) {
 		return ENOSYS;
 	}
@@ -584,7 +705,7 @@ puffs_fuse_node_mkdir(struct puffs_cc *pcc, void *opc, void **newnode,
 	ret = (*fuse->op.mkdir)(path, mode);
 
 	if (ret == 0) {
-		ret = fuse_newnode(pu, path, va, NULL, newnode);
+		ret = fuse_newnode(pu, path, va, NULL, pni, NULL);
 	}
 
 	return -ret;
@@ -599,17 +720,22 @@ puffs_fuse_node_mkdir(struct puffs_cc *pcc, void *opc, void **newnode,
  */
 /*ARGSUSED1*/
 static int
-puffs_fuse_node_create(struct puffs_cc *pcc, void *opc, void **newnode,
-	const struct puffs_cn *pcn, const struct vattr *va)
+puffs_fuse_node_create(struct puffs_cc *pcc, void *opc,
+	struct puffs_newinfo *pni, const struct puffs_cn *pcn,
+	const struct vattr *va)
 {
 	struct puffs_usermount	*pu = puffs_cc_getusermount(pcc);
 	struct fuse		*fuse;
 	struct fuse_file_info	fi;
+	struct puffs_node	*pn;
 	mode_t			mode = va->va_mode;
 	const char		*path = PCNPATH(pcn);
 	int			ret, created;
 
 	fuse = puffs_getspecific(pu);
+
+	set_fuse_context_uid_gid(pcn->pcn_cred);
+	set_fuse_context_pid(pcn->pcn_cid);
 
 	created = 0;
 	if (fuse->op.create) {
@@ -618,9 +744,6 @@ puffs_fuse_node_create(struct puffs_cc *pcc, void *opc, void **newnode,
 			created = 1;
 
 	} else if (fuse->op.mknod) {
-		fcon.uid = va->va_uid; /*XXX*/
-		fcon.gid = va->va_gid; /*XXX*/
-
 		ret = fuse->op.mknod(path, mode | S_IFREG, 0);
 
 	} else {
@@ -628,14 +751,12 @@ puffs_fuse_node_create(struct puffs_cc *pcc, void *opc, void **newnode,
 	}
 
 	if (ret == 0) {
-		ret = fuse_newnode(pu, path, va, &fi, newnode);
+		ret = fuse_newnode(pu, path, va, &fi, pni, &pn);
 
 		/* sweet..  create also open the file */
 		if (created) {
-			struct puffs_node *pn;
 			struct refusenode *rn;
 
-			pn = *newnode;
 			rn = pn->pn_data;
 			rn->flags |= RN_OPEN;
 			rn->opencount++;
@@ -658,6 +779,10 @@ puffs_fuse_node_remove(struct puffs_cc *pcc, void *opc, void *targ,
 	int			ret;
 
 	fuse = puffs_getspecific(pu);
+
+	set_fuse_context_uid_gid(pcn->pcn_cred);
+	set_fuse_context_pid(pcn->pcn_cid);
+
 	if (fuse->op.unlink == NULL) {
 		return ENOSYS;
 	}
@@ -681,6 +806,10 @@ puffs_fuse_node_rmdir(struct puffs_cc *pcc, void *opc, void *targ,
 	int			ret;
 
 	fuse = puffs_getspecific(pu);
+
+	set_fuse_context_uid_gid(pcn->pcn_cred);
+	set_fuse_context_pid(pcn->pcn_cid);
+
 	if (fuse->op.rmdir == NULL) {
 		return ENOSYS;
 	}
@@ -694,9 +823,9 @@ puffs_fuse_node_rmdir(struct puffs_cc *pcc, void *opc, void *targ,
 /* create a symbolic link */
 /* ARGSUSED1 */
 static int
-puffs_fuse_node_symlink(struct puffs_cc *pcc, void *opc, void **newnode,
-	const struct puffs_cn *pcn_src, const struct vattr *va,
-	const char *link_target)
+puffs_fuse_node_symlink(struct puffs_cc *pcc, void *opc,
+	struct puffs_newinfo *pni, const struct puffs_cn *pcn_src,
+	const struct vattr *va, const char *link_target)
 {
 	struct puffs_usermount	*pu = puffs_cc_getusermount(pcc);
 	struct fuse		*fuse;
@@ -704,6 +833,10 @@ puffs_fuse_node_symlink(struct puffs_cc *pcc, void *opc, void **newnode,
 	int			ret;
 
 	fuse = puffs_getspecific(pu);
+
+	set_fuse_context_uid_gid(pcn_src->pcn_cred);
+	set_fuse_context_pid(pcn_src->pcn_cid);
+
 	if (fuse->op.symlink == NULL) {
 		return ENOSYS;
 	}
@@ -712,7 +845,7 @@ puffs_fuse_node_symlink(struct puffs_cc *pcc, void *opc, void **newnode,
 	ret = fuse->op.symlink(link_target, path);
 
 	if (ret == 0) {
-		ret = fuse_newnode(pu, path, va, NULL, newnode);
+		ret = fuse_newnode(pu, path, va, NULL, pni, NULL);
 	}
 
 	return -ret;
@@ -732,6 +865,10 @@ puffs_fuse_node_rename(struct puffs_cc *pcc, void *opc, void *src,
 	int			ret;
 
 	fuse = puffs_getspecific(pu);
+
+	set_fuse_context_uid_gid(pcn_targ->pcn_cred);
+	set_fuse_context_pid(pcn_targ->pcn_cid);
+
 	if (fuse->op.rename == NULL) {
 		return ENOSYS;
 	}
@@ -756,6 +893,10 @@ puffs_fuse_node_link(struct puffs_cc *pcc, void *opc, void *targ,
 	int			ret;
 
 	fuse = puffs_getspecific(pu);
+
+	set_fuse_context_uid_gid(pcn->pcn_cred);
+	set_fuse_context_pid(pcn->pcn_cid);
+
 	if (fuse->op.link == NULL) {
 		return ENOSYS;
 	}
@@ -774,7 +915,8 @@ puffs_fuse_node_link(struct puffs_cc *pcc, void *opc, void *targ,
 /* ARGSUSED3 */
 static int
 puffs_fuse_node_setattr(struct puffs_cc *pcc, void *opc,
-	const struct vattr *va, const struct puffs_cred *pcr, pid_t pid)
+	const struct vattr *va, const struct puffs_cred *pcr,
+	const struct puffs_cid *pcid)
 {
 	struct puffs_usermount	*pu = puffs_cc_getusermount(pcc);
 	struct puffs_node	*pn = opc;
@@ -783,13 +925,16 @@ puffs_fuse_node_setattr(struct puffs_cc *pcc, void *opc,
 
 	fuse = puffs_getspecific(pu);
 
+	set_fuse_context_uid_gid(pcr);
+	set_fuse_context_pid(pcid);
+
 	return fuse_setattr(fuse, pn, path, va);
 }
 
 /* ARGSUSED2 */
 static int
 puffs_fuse_node_open(struct puffs_cc *pcc, void *opc, int mode,
-	const struct puffs_cred *cred, pid_t pid)
+	const struct puffs_cred *cred, const struct puffs_cid *pcid)
 {
 	struct puffs_usermount	*pu = puffs_cc_getusermount(pcc);
 	struct puffs_node	*pn = opc;
@@ -799,6 +944,9 @@ puffs_fuse_node_open(struct puffs_cc *pcc, void *opc, int mode,
 	const char		*path = PNPATH(pn);
 
 	fuse = puffs_getspecific(pu);
+
+	set_fuse_context_uid_gid(cred);
+	set_fuse_context_pid(pcid);
 
 	/* if open, don't open again, lest risk nuking file private info */
 	if (rn->flags & RN_OPEN) {
@@ -826,7 +974,7 @@ puffs_fuse_node_open(struct puffs_cc *pcc, void *opc, int mode,
 /* ARGSUSED2 */
 static int
 puffs_fuse_node_close(struct puffs_cc *pcc, void *opc, int fflag,
-	const struct puffs_cred *pcr, pid_t pid)
+	const struct puffs_cred *pcr, const struct puffs_cid *pcid)
 {
 	struct puffs_usermount	*pu = puffs_cc_getusermount(pcc);
 	struct puffs_node	*pn = opc;
@@ -839,6 +987,9 @@ puffs_fuse_node_close(struct puffs_cc *pcc, void *opc, int fflag,
 	fuse = puffs_getspecific(pu);
 	fi = &rn->file_info;
 	ret = 0;
+
+	set_fuse_context_uid_gid(pcr);
+	set_fuse_context_pid(pcid);
 
 	if (rn->flags & RN_OPEN) {
 		if (pn->pn_va.va_type == VDIR) {
@@ -874,6 +1025,8 @@ puffs_fuse_node_read(struct puffs_cc *pcc, void *opc, uint8_t *buf,
 	if (fuse->op.read == NULL) {
 		return ENOSYS;
 	}
+
+	set_fuse_context_uid_gid(pcr);
 
 	maxread = *resid;
 	if (maxread > pn->pn_va.va_size - offset) {
@@ -913,6 +1066,8 @@ puffs_fuse_node_write(struct puffs_cc *pcc, void *opc, uint8_t *buf,
 		return ENOSYS;
 	}
 
+	set_fuse_context_uid_gid(pcr);
+
 	if (ioflag & PUFFS_IO_APPEND)
 		offset = pn->pn_va.va_size;
 
@@ -949,6 +1104,8 @@ puffs_fuse_node_readdir(struct puffs_cc *pcc, void *opc, struct dirent *dent,
 	if (fuse->op.readdir == NULL && fuse->op.getdir == NULL) {
 		return ENOSYS;
 	}
+
+	set_fuse_context_uid_gid(pcr);
 
 	if (pn->pn_va.va_type != VDIR)
 		return ENOTDIR;
@@ -993,23 +1150,28 @@ puffs_fuse_node_readdir(struct puffs_cc *pcc, void *opc, struct dirent *dent,
 
 /* ARGSUSED */
 static int
-puffs_fuse_node_reclaim(struct puffs_cc *pcc, void *opc, pid_t pid)
+puffs_fuse_node_reclaim(struct puffs_cc *pcc, void *opc,
+	const struct puffs_cid *pcid)
 {
 	struct puffs_node	*pn = opc;
 
 	nukern(pn);
+
+	set_fuse_context_pid(pcid);
 
 	return 0;
 }
 
 /* ARGSUSED1 */
 static int
-puffs_fuse_fs_unmount(struct puffs_cc *pcc, int flags, pid_t pid)
+puffs_fuse_fs_unmount(struct puffs_cc *pcc, int flags,
+	const struct puffs_cid *pcid)
 {
         struct puffs_usermount	*pu = puffs_cc_getusermount(pcc);
 	struct fuse		*fuse;
 
 	fuse = puffs_getspecific(pu);
+	set_fuse_context_pid(pcid);
 	if (fuse->op.destroy == NULL) {
 		return 0;
 	}
@@ -1020,20 +1182,24 @@ puffs_fuse_fs_unmount(struct puffs_cc *pcc, int flags, pid_t pid)
 /* ARGSUSED0 */
 static int
 puffs_fuse_fs_sync(struct puffs_cc *pcc, int flags,
-            const struct puffs_cred *cr, pid_t pid)
+            const struct puffs_cred *cr, const struct puffs_cid *pcid)
 {
+	set_fuse_context_uid_gid(cr);
+	set_fuse_context_pid(pcid);
         return 0;
 }
 
 /* ARGSUSED2 */
 static int
-puffs_fuse_fs_statvfs(struct puffs_cc *pcc, struct statvfs *svfsb, pid_t pid)
+puffs_fuse_fs_statvfs(struct puffs_cc *pcc, struct statvfs *svfsb,
+	const struct puffs_cid *pcid)
 {
         struct puffs_usermount	*pu = puffs_cc_getusermount(pcc);
 	struct fuse		*fuse;
 	int			ret;
 
 	fuse = puffs_getspecific(pu);
+	set_fuse_context_pid(pcid);
 	if (fuse->op.statfs == NULL) {
 		if ((ret = statvfs(PNPATH(puffs_getroot(pu)), svfsb)) == -1) {
 			return errno;
@@ -1075,13 +1241,14 @@ fuse_mount(const char *dir, struct fuse_args *args)
  	struct fuse_chan	*fc;
 	char			 name[64];
 
-	if ((fc = malloc(sizeof(*fc))) == NULL)
-		err(1, "fuse_mount");
-	(void) memset(fc, 0x0, sizeof(*fc));
+	if ((fc = calloc(1, sizeof(*fc))) == NULL) {
+		err(EXIT_FAILURE, "fuse_mount");
+	}
 	fc->dead = 0;
 
-	if ((fc->dir = strdup(dir)) == NULL)
-		err(1, "fuse_mount");
+	if ((fc->dir = strdup(dir)) == NULL) {
+		err(EXIT_FAILURE, "fuse_mount");
+	}
 
 	/*
 	 * we need to deep copy the args struct - some fuse file
@@ -1105,26 +1272,31 @@ fuse_new(struct fuse_chan *fc, struct fuse_args *args,
 	const struct fuse_operations *ops, size_t size, void *userdata)
 {
 	struct puffs_usermount	*pu;
+	struct fuse_context	*fusectx;
 	struct puffs_pathobj	*po_root;
 	struct puffs_node	*pn_root;
 	struct puffs_ops	*pops;
 	struct refusenode	*rn_root;
-	struct statvfs		svfsb;
-	struct stat		st;
+	struct statvfs		 svfsb;
+	struct stat		 st;
 	struct fuse		*fuse;
+	extern int		 puffs_fakecc;
 	char			 name[64];
 	char			*argv0;
-	extern int		puffs_fakecc;
 
-	if ((fuse = malloc(sizeof(*fuse))) == NULL)
-		err(1, "fuse_new");
-	(void) memset(fuse, 0x0, sizeof(*fuse));
+	if ((fuse = calloc(1, sizeof(*fuse))) == NULL) {
+		err(EXIT_FAILURE, "fuse_new");
+	}
 
 	/* copy fuse ops to their own stucture */
 	(void) memcpy(&fuse->op, ops, sizeof(fuse->op));
 
-	fcon.fuse = fuse;
-	fcon.private_data = userdata;
+	fusectx = fuse_get_context();
+	fusectx->fuse = fuse;
+	fusectx->uid = 0;
+	fusectx->gid = 0;
+	fusectx->pid = 0;
+	fusectx->private_data = userdata;
 
 	fuse->fc = fc;
 
@@ -1193,7 +1365,7 @@ fuse_new(struct fuse_chan *fc, struct fuse_args *args,
 	assert(pn_root->pn_va.va_type == VDIR);
 
 	if (fuse->op.init)
-		fcon.private_data = fuse->op.init(NULL); /* XXX */
+		fusectx->private_data = fuse->op.init(NULL); /* XXX */
 
 	puffs_zerostatvfs(&svfsb);
 	if (puffs_mount(pu, fc->dir, MNT_NODEV | MNT_NOSUID, pn_root) == -1) {
@@ -1214,17 +1386,9 @@ void
 fuse_destroy(struct fuse *fuse)
 {
 
-
+	delete_context_key();
 	/* XXXXXX: missing stuff */
 	free(fuse);
-}
-
-/* XXX: threads */
-struct fuse_context *
-fuse_get_context()
-{
-
-	return &fcon;
 }
 
 void

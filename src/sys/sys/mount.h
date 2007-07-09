@@ -1,4 +1,4 @@
-/*	$NetBSD: mount.h,v 1.157 2007/04/11 21:06:32 pooka Exp $	*/
+/*	$NetBSD: mount.h,v 1.159 2007/06/29 23:30:32 rumble Exp $	*/
 
 /*
  * Copyright (c) 1989, 1991, 1993
@@ -36,11 +36,11 @@
 
 #ifndef _KERNEL
 #include <sys/featuretest.h>
-#include <sys/ucred.h>
 #if defined(_NETBSD_SOURCE)
 #include <sys/stat.h>
 #endif /* _NETBSD_SOURCE */
 #endif
+#include <sys/ucred.h>
 #include <sys/fstypes.h>
 #include <sys/queue.h>
 #include <sys/lock.h>
@@ -86,6 +86,7 @@
 #define	MOUNT_SYSVBFS	"sysvbfs"	/* System V Boot Filesystem */
 #define MOUNT_PUFFS	"puffs"		/* Pass-to-Userspace filesystem */
 #define MOUNT_HFS	"hfs"		/* Apple HFS+ Filesystem */
+#define MOUNT_EFS	"efs"		/* SGI's Extent Filesystem */
 
 /*
  * Structure per mounted file system.  Each mounted file system has an

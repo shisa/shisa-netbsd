@@ -1,4 +1,4 @@
-/*	$NetBSD: node.c,v 1.12 2007/05/19 10:38:23 pooka Exp $	*/
+/*	$NetBSD: node.c,v 1.16 2007/07/02 10:26:50 pooka Exp $	*/
 
 /*
  * Copyright (c) 2007  Antti Kantee.  All Rights Reserved.
@@ -27,7 +27,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: node.c,v 1.12 2007/05/19 10:38:23 pooka Exp $");
+__RCSID("$NetBSD: node.c,v 1.16 2007/07/02 10:26:50 pooka Exp $");
 #endif /* !lint */
 
 #include <assert.h>
@@ -52,8 +52,7 @@ nodecmp(struct puffs_usermount *pu, struct puffs_node *pn, void *arg)
 }
 
 int
-puffs9p_node_lookup(struct puffs_cc *pcc, void *opc, void **newnode,
-	enum vtype *newtype, voff_t *newsize, dev_t *newrdev,
+puffs9p_node_lookup(struct puffs_cc *pcc, void *opc, struct puffs_newinfo *pni,
 	const struct puffs_cn *pcn)
 {
 	AUTOVAR(pcc);
@@ -90,10 +89,10 @@ puffs9p_node_lookup(struct puffs_cc *pcc, void *opc, void **newnode,
 	else
 		proto_cc_clunkfid(pcc, tfid, 0);
 		
-	*newnode = pn;
-	*newtype = pn->pn_va.va_type;
-	*newsize = pn->pn_va.va_size;
-	*newrdev = pn->pn_va.va_rdev;
+	puffs_newinfo_setcookie(pni, pn);
+	puffs_newinfo_setvtype(pni, pn->pn_va.va_type);
+	puffs_newinfo_setsize(pni, pn->pn_va.va_size);
+	puffs_newinfo_setrdev(pni, pn->pn_va.va_rdev);
 
  out:
 	RETURN(rv);
@@ -172,7 +171,7 @@ puffs9p_node_readdir(struct puffs_cc *pcc, void *opc, struct dirent *dent,
 
 int
 puffs9p_node_getattr(struct puffs_cc *pcc, void *opc, struct vattr *vap,
-	const struct puffs_cred *pcr, pid_t pid)
+	const struct puffs_cred *pcr, const struct puffs_cid *pcid)
 {
 	AUTOVAR(pcc);
 	struct puffs_node *pn = opc;
@@ -195,7 +194,8 @@ puffs9p_node_getattr(struct puffs_cc *pcc, void *opc, struct vattr *vap,
 
 int
 puffs9p_node_setattr(struct puffs_cc *pcc, void *opc,
-	const struct vattr *va, const struct puffs_cred *pcr, pid_t pid)
+	const struct vattr *va, const struct puffs_cred *pcr,
+	const struct puffs_cid *pcid)
 {
 	AUTOVAR(pcc);
 	struct puffs_node *pn = opc;
@@ -228,7 +228,7 @@ puffs9p_node_setattr(struct puffs_cc *pcc, void *opc,
  */
 int
 puffs9p_node_open(struct puffs_cc *pcc, void *opc, int mode,
-	const struct puffs_cred *pcr, pid_t pid)
+	const struct puffs_cred *pcr, const struct puffs_cid *pcid)
 {
 	struct puffs9p *p9p = puffs_cc_getspecific(pcc);
 	struct puffs_node *pn = opc;
@@ -260,8 +260,8 @@ puffs9p_node_open(struct puffs_cc *pcc, void *opc, int mode,
 }
 
 int
-puffs9p_node_inactive(struct puffs_cc *pcc, void *opc, pid_t pid,
-	int *refcount)
+puffs9p_node_inactive(struct puffs_cc *pcc, void *opc,
+	const struct puffs_cid *pcid)
 {
 	struct puffs_node *pn = opc;
 	struct p9pnode *p9n = pn->pn_data;
@@ -279,7 +279,6 @@ puffs9p_node_inactive(struct puffs_cc *pcc, void *opc, pid_t pid,
 		}
 	}
 
-	*refcount = 1;
 	return 0;
 }
 
@@ -370,8 +369,9 @@ puffs9p_node_write(struct puffs_cc *pcc, void *opc, uint8_t *buf,
 }
 
 static int
-nodecreate(struct puffs_cc *pcc, struct puffs_node *pn, void **newnode,
-	const char *name, const struct vattr *vap, uint32_t dirbit)
+nodecreate(struct puffs_cc *pcc, struct puffs_node *pn,
+	struct puffs_newinfo *pni, const char *name,
+	const struct vattr *vap, uint32_t dirbit)
 {
 	AUTOVAR(pcc);
 	struct puffs_usermount *pu = puffs_cc_getusermount(pcc);
@@ -429,26 +429,26 @@ nodecreate(struct puffs_cc *pcc, struct puffs_node *pn, void **newnode,
 
 	pn_new = newp9pnode_va(pu, vap, nfid);
 	qid2vattr(&pn_new->pn_va, &nqid);
-	*newnode = pn_new;
+	puffs_newinfo_setcookie(pni, pn_new);
 
  out:
 	RETURN(rv);
 }
 
 int
-puffs9p_node_create(struct puffs_cc *pcc, void *opc, void **newnode,
+puffs9p_node_create(struct puffs_cc *pcc, void *opc, struct puffs_newinfo *pni,
 	const struct puffs_cn *pcn, const struct vattr *va)
 {
 
-	return nodecreate(pcc, opc, newnode, pcn->pcn_name, va, 0);
+	return nodecreate(pcc, opc, pni, pcn->pcn_name, va, 0);
 }
 
 int
-puffs9p_node_mkdir(struct puffs_cc *pcc, void *opc, void **newnode,
+puffs9p_node_mkdir(struct puffs_cc *pcc, void *opc, struct puffs_newinfo *pni,
 	const struct puffs_cn *pcn, const struct vattr *va)
 {
 
-	return nodecreate(pcc, opc, newnode, pcn->pcn_name,
+	return nodecreate(pcc, opc, pni, pcn->pcn_name,
 	    va, P9PROTO_CPERM_DIR);
 }
 
@@ -460,9 +460,10 @@ puffs9p_node_mkdir(struct puffs_cc *pcc, void *opc, void **newnode,
  * ice with.
  */
 static int
-noderemove(struct puffs_cc *pcc, struct p9pnode *p9n)
+noderemove(struct puffs_cc *pcc, struct puffs_node *pn)
 {
 	AUTOVAR(pcc);
+	struct p9pnode *p9n = pn->pn_data;
 	p9pfid_t testfid = NEXTFID(p9p);
 
 	rv = proto_cc_dupfid(pcc, p9n->fid_base, testfid);
@@ -484,6 +485,7 @@ noderemove(struct puffs_cc *pcc, struct p9pnode *p9n)
 	} else {
 		proto_cc_clunkfid(pcc, p9n->fid_base, 0);
 		p9n->fid_base = P9P_INVALFID;
+		puffs_pn_remove(pn);
 	}
 
  out:
@@ -502,7 +504,7 @@ puffs9p_node_remove(struct puffs_cc *pcc, void *opc, void *targ,
 	if (pn->pn_va.va_type == VDIR)
 		return EISDIR;
 
-	return noderemove(pcc, pn->pn_data);
+	return noderemove(pcc, pn);
 }
 
 int
@@ -514,7 +516,7 @@ puffs9p_node_rmdir(struct puffs_cc *pcc, void *opc, void *targ,
 	if (pn->pn_va.va_type != VDIR)
 		return ENOTDIR;
 
-	return noderemove(pcc, pn->pn_data);
+	return noderemove(pcc, pn);
 }
 
 /*
@@ -569,7 +571,8 @@ puffs9p_node_rename(struct puffs_cc *pcc, void *opc, void *src,
  * - "thanks"
  */
 int
-puffs9p_node_reclaim(struct puffs_cc *pcc, void *opc, pid_t pid)
+puffs9p_node_reclaim(struct puffs_cc *pcc, void *opc,
+	const struct puffs_cid *pcid)
 {
 	struct puffs_node *pn = opc;
 	struct p9pnode *p9n = pn->pn_data;
