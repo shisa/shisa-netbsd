@@ -582,7 +582,7 @@ static usbd_status
 slhci_allocm(struct usbd_bus *bus, usb_dma_t *dma, uint32_t size)
 {
 	usb_dma_block_t *p;
-	caddr_t kaddr;
+	void *kaddr;
 
 	DPRINTF(D_MEM, ("SLallocm"));
 
