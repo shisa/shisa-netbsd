@@ -1,4 +1,4 @@
-/*	$NetBSD: if_sk.c,v 1.38 2007/03/13 09:50:00 msaitoh Exp $	*/
+/*	$NetBSD: if_sk.c,v 1.42 2007/07/19 22:04:23 dsl Exp $	*/
 
 /*-
  * Copyright (c) 2003 The NetBSD Foundation, Inc.
@@ -121,6 +121,8 @@
  * both XMACs to operate as independent interfaces.
  */
 
+#include <sys/cdefs.h>
+
 #include "bpfilter.h"
 #include "rnd.h"
 
@@ -232,13 +234,13 @@ static int sk_sysctl_handler(SYSCTLFN_PROTO);
 static int sk_root_num;
 
 /* supported device vendors */
+/* PCI_PRODUCT_DLINK_DGE560T_2 might belong in if_msk instead */
 static const struct sk_product {
 	pci_vendor_id_t		sk_vendor;
 	pci_product_id_t	sk_product;
 } sk_products[] = {
 	{ PCI_VENDOR_3COM, PCI_PRODUCT_3COM_3C940, },
 	{ PCI_VENDOR_DLINK, PCI_PRODUCT_DLINK_DGE530T, },
-	{ PCI_VENDOR_DLINK, PCI_PRODUCT_DLINK_DGE560T, },
 	{ PCI_VENDOR_DLINK, PCI_PRODUCT_DLINK_DGE560T_2, },
 	{ PCI_VENDOR_LINKSYS, PCI_PRODUCT_LINKSYS_EG1064, },
 	{ PCI_VENDOR_SCHNEIDERKOCH, PCI_PRODUCT_SCHNEIDERKOCH_SKNET_GE, },
@@ -1419,8 +1421,9 @@ sk_attach(struct device *parent, struct device *self, void *aux)
 		sk_init_yukon(sc_if);
 		break;
 	default:
-		panic("%s: unknown device type %d", sc->sk_dev.dv_xname,
-		      sc->sk_type);
+		aprint_error("%s: unknown device type %d\n",
+		    sc->sk_dev.dv_xname, sc->sk_type);
+		goto fail;
 	}
 
  	DPRINTFN(2, ("sk_attach: 1\n"));
@@ -1453,7 +1456,7 @@ sk_attach(struct device *parent, struct device *self, void *aux)
 	} else
 		ifmedia_set(&sc_if->sk_mii.mii_media, IFM_ETHER|IFM_AUTO);
 
-	callout_init(&sc_if->sk_tick_ch);
+	callout_init(&sc_if->sk_tick_ch, 0);
 	callout_reset(&sc_if->sk_tick_ch,hz,sk_tick,sc_if);
 
 	DPRINTFN(2, ("sk_attach: 1\n"));
@@ -1600,6 +1603,11 @@ skc_attach(struct device *parent, struct device *self, void *aux)
 	/* bail out here if chip is not recognized */
 	if ( sc->sk_type != SK_GENESIS && ! SK_YUKON_FAMILY(sc->sk_type)) {
 		aprint_error("%s: unknown chip type\n",sc->sk_dev.dv_xname);
+		goto fail;
+	}
+	if (SK_IS_YUKON2(sc)) {
+		aprint_error("%s: Does not support Yukon2--try msk(4).\n",
+		    sc->sk_dev.dv_xname);
 		goto fail;
 	}
 	DPRINTFN(2, ("skc_attach: allocate interrupt\n"));

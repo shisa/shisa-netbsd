@@ -1,4 +1,4 @@
-/*	$NetBSD: pthread_types.h,v 1.6 2007/05/02 21:54:16 ad Exp $	*/
+/*	$NetBSD: pthread_types.h,v 1.8 2007/09/07 14:09:28 ad Exp $	*/
 
 /*-
  * Copyright (c) 2001 The NetBSD Foundation, Inc.
@@ -54,7 +54,8 @@ struct name {								\
 	struct type **ptqh_last;/* addr of last next element */		\
 }
 
-_PTQ_HEAD(pthread_queue_t, __pthread_st);
+_PTQ_HEAD(pthread_queue_struct_t, __pthread_st);
+typedef struct pthread_queue_struct_t pthread_queue_t;
 
 struct	__pthread_st;
 struct	__pthread_attr_st;
@@ -97,8 +98,8 @@ struct	__pthread_mutex_st {
 	unsigned int	ptm_magic;
 	pthread_spin_t	ptm_lock; 
 	pthread_spin_t	ptm_interlock;
-	pthread_t	ptm_owner;
-	struct pthread_queue_t	ptm_blocked;
+	volatile pthread_t ptm_owner;
+	pthread_queue_t	ptm_blocked;
 	void		*ptm_private;
 };
 
@@ -128,7 +129,7 @@ struct	__pthread_cond_st {
 
 	/* Protects the queue of waiters */
 	pthread_spin_t	ptc_lock;
-	struct pthread_queue_t	ptc_waiters;
+	pthread_queue_t	ptc_waiters;
 
 	pthread_mutex_t	*ptc_mutex;	/* Current mutex */
 	void	*ptc_private;
@@ -181,10 +182,10 @@ struct	__pthread_rwlock_st {
 	/* Protects data below */
 	pthread_spin_t	ptr_interlock;
 
-	struct pthread_queue_t	ptr_rblocked;
-	struct pthread_queue_t	ptr_wblocked;
+	pthread_queue_t	ptr_rblocked;
+	pthread_queue_t	ptr_wblocked;
 	unsigned int	ptr_nreaders;
-	pthread_t	ptr_writer;
+	volatile pthread_t ptr_writer;
 	void	*ptr_private;
 };
 
@@ -214,7 +215,7 @@ struct	__pthread_barrier_st {
 	/* Protects data below */
 	pthread_spin_t	ptb_lock;
 
-	struct pthread_queue_t	ptb_waiters;
+	pthread_queue_t	ptb_waiters;
 	unsigned int	ptb_initcount;
 	unsigned int	ptb_curcount;
 	unsigned int	ptb_generation;

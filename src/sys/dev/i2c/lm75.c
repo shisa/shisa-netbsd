@@ -1,4 +1,4 @@
-/*	$NetBSD: lm75.c,v 1.13 2007/07/04 19:00:43 xtraeme Exp $	*/
+/*	$NetBSD: lm75.c,v 1.15 2007/09/02 00:31:23 xtraeme Exp $	*/
 
 /*
  * Copyright (c) 2003 Wasabi Systems, Inc.
@@ -141,8 +141,10 @@ lmtemp_attach(struct device *parent, struct device *self, void *aux)
 
 	/* Initialize sensor data. */
 	sc->sc_sensor[0].sensor = 0;
-	sc->sc_sensor[0].state = ENVSYS_FVALID;
+	sc->sc_sensor[0].state = ENVSYS_SVALID;
 	sc->sc_sensor[0].units =  ENVSYS_STEMP;
+	(void)strlcpy(sc->sc_sensor[0].desc,
+	    sc->sc_dev.dv_xname, sizeof(sc->sc_sensor[0].desc));
 
 	sc->sc_lmtemp_decode = lmtemptbl[i].lmtemp_decode;
 

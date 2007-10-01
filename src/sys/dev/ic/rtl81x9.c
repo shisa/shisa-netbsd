@@ -1,4 +1,4 @@
-/*	$NetBSD: rtl81x9.c,v 1.74 2007/05/18 14:10:37 joerg Exp $	*/
+/*	$NetBSD: rtl81x9.c,v 1.76 2007/08/26 22:45:56 dyoung Exp $	*/
 
 /*
  * Copyright (c) 1997, 1998
@@ -86,7 +86,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: rtl81x9.c,v 1.74 2007/05/18 14:10:37 joerg Exp $");
+__KERNEL_RCSID(0, "$NetBSD: rtl81x9.c,v 1.76 2007/08/26 22:45:56 dyoung Exp $");
 
 #include "bpfilter.h"
 #include "rnd.h"
@@ -633,7 +633,7 @@ rtk_attach(struct rtk_softc *sc)
 	int error;
 	int i, addr_len;
 
-	callout_init(&sc->rtk_tick_ch);
+	callout_init(&sc->rtk_tick_ch, 0);
 
 	/*
 	 * Check EEPROM type 9346 or 9356.
@@ -1420,7 +1420,7 @@ rtk_init(struct ifnet *ifp)
 
 	/* Init our MAC address */
 	for (i = 0; i < ETHER_ADDR_LEN; i++) {
-		CSR_WRITE_1(sc, RTK_IDR0 + i, LLADDR(ifp->if_sadl)[i]);
+		CSR_WRITE_1(sc, RTK_IDR0 + i, CLLADDR(ifp->if_sadl)[i]);
 	}
 
 	/* Init the RX buffer pointer register. */

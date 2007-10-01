@@ -1,10 +1,10 @@
-/*	$NetBSD: pcmciadevs_data.h,v 1.224 2007/02/10 03:14:56 ichiro Exp $	*/
+/*	$NetBSD: pcmciadevs_data.h,v 1.226 2007/09/22 20:01:21 kiyohara Exp $	*/
 
 /*
  * THIS FILE AUTOMATICALLY GENERATED.  DO NOT EDIT.
  *
  * generated from:
- *	NetBSD: pcmciadevs,v 1.221 2007/02/10 03:14:03 ichiro Exp
+ *	NetBSD: pcmciadevs,v 1.223 2007/09/22 19:59:55 kiyohara Exp
  */
 /* $FreeBSD: src/sys/dev/pccard/pccarddevs,v 1.20 2001/11/19 05:02:55 imp Exp $*/
 
@@ -209,6 +209,13 @@ struct pcmcia_knowndev pcmcia_knowndevs[] = {
 	    0,
 	    "Anycom",
 	    "Anycom Bluetooth CF Card LSE039",	}
+	,
+	{
+	    PCMCIA_VENDOR_ANYCOM, PCMCIA_PRODUCT_ANYCOM_LSE139,
+	    PCMCIA_CIS_ANYCOM_LSE139,
+	    0,
+	    "Anycom",
+	    "Anycom Bluetooth CF Card LSE139",	}
 	,
 	{
 	    PCMCIA_VENDOR_ARCHOS, PCMCIA_PRODUCT_ARCHOS_ARC_ATAPI,
@@ -1135,6 +1142,13 @@ struct pcmcia_knowndev pcmcia_knowndevs[] = {
 	    "TDK LAC-CF010",	}
 	,
 	{
+	    PCMCIA_VENDOR_TDK, PCMCIA_PRODUCT_TDK_DFL9610,
+	    PCMCIA_CIS_TDK_DFL9610,
+	    0,
+	    "TDK Corporation",
+	    "TDK DFL9610 Ethernet & Digital Cellular",	}
+	,
+	{
 	    PCMCIA_VENDOR_TDK, PCMCIA_PRODUCT_TDK_C6500012,
 	    PCMCIA_CIS_TDK_C6500012,
 	    0,
@@ -1142,11 +1156,11 @@ struct pcmcia_knowndev pcmcia_knowndevs[] = {
 	    "TDK ELSA MicroLink MC all",	}
 	,
 	{
-	    PCMCIA_VENDOR_TDK, PCMCIA_PRODUCT_TDK_DFL9610,
-	    PCMCIA_CIS_TDK_DFL9610,
+	    PCMCIA_VENDOR_TDK, PCMCIA_PRODUCT_TDK_BLUETOOTH_PCCARD,
+	    PCMCIA_CIS_TDK_BLUETOOTH_PCCARD,
 	    0,
 	    "TDK Corporation",
-	    "TDK DFL9610 Ethernet & Digital Cellular",	}
+	    "TDK Bluetooth PCcard",	}
 	,
 	{
 	    PCMCIA_VENDOR_TELECOMDEVICE, PCMCIA_PRODUCT_TELECOMDEVICE_TCD_HPC100,

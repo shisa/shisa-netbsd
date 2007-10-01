@@ -1,4 +1,4 @@
-/* $NetBSD: vga.c,v 1.92 2007/03/04 06:02:03 christos Exp $ */
+/* $NetBSD: vga.c,v 1.95 2007/07/28 20:28:56 mjf Exp $ */
 
 /*
  * Copyright (c) 1995, 1996 Carnegie-Mellon University.
@@ -27,15 +27,15 @@
  * rights to redistribute these changes.
  */
 
+#include <sys/cdefs.h>
+__KERNEL_RCSID(0, "$NetBSD: vga.c,v 1.95 2007/07/28 20:28:56 mjf Exp $");
+
 /* for WSCONS_SUPPORT_PCVTFONTS */
 #include "opt_wsdisplay_compat.h"
 /* for WSDISPLAY_CUSTOM_BORDER */
 #include "opt_wsdisplay_border.h"
 /* for WSDISPLAY_CUSTOM_OUTPUT */
 #include "opt_wsmsgattrs.h"
-
-#include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: vga.c,v 1.92 2007/03/04 06:02:03 christos Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -565,7 +565,7 @@ vga_init(struct vga_config *vc, bus_space_tag_t iot, bus_space_tag_t memt)
 	LIST_INIT(&vc->screens);
 	vc->active = NULL;
 	vc->currenttype = vh->vh_mono ? &vga_25lscreen_mono : &vga_25lscreen;
-	callout_init(&vc->vc_switch_callout);
+	callout_init(&vc->vc_switch_callout, 0);
 
 	wsfont_init();
 	if (vga_no_builtinfont) {
@@ -1103,6 +1103,10 @@ vga_allocattr(void *id, int fg, int bg, int flags, long *attrp)
 {
 	struct vgascreen *scr = id;
 	struct vga_config *vc = scr->cfg;
+
+	if (__predict_false((unsigned int)fg >= sizeof(fgansitopc) || 
+	    (unsigned int)bg >= sizeof(bgansitopc)))
+		return (EINVAL);
 
 	if (vc->hdl.vh_mono) {
 		if (flags & WSATTR_WSCOLORS)

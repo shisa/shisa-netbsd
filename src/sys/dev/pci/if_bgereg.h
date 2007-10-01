@@ -1,4 +1,4 @@
-/*	$NetBSD: if_bgereg.h,v 1.42 2007/05/18 22:30:24 pavel Exp $	*/
+/*	$NetBSD: if_bgereg.h,v 1.44 2007/09/24 21:25:45 joerg Exp $	*/
 /*
  * Copyright (c) 2001 Wind River Systems
  * Copyright (c) 1997, 1998, 1999, 2001
@@ -275,6 +275,8 @@
 #define BGE_CHIPID_BCM5715_A0		0x90000000
 #define BGE_CHIPID_BCM5715_A1		0x90010000
 #define BGE_CHIPID_BCM5715_A3		0x90030000
+#define BGE_CHIPID_BCM5787_A0		0xb0000000
+#define BGE_CHIPID_BCM5787_A1		0xb0010000
 #define BGE_CHIPID_BCM5787_A2		0xb0020000
 #define BGE_CHIPID_BCM5906_A1		0xc0010000
 
@@ -2378,7 +2380,7 @@ struct txdmamap_pool_entry {
 #define BGE_JUMBO_RXRING_VALID	0x0004
 
 struct bge_softc {
-	struct device		bge_dev;
+	device_t		bge_dev;
 	struct ethercom		ethercom;		/* interface info */
 	bus_space_handle_t	bge_bhandle;
 	bus_space_tag_t		bge_btag;

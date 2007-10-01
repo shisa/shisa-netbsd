@@ -1,4 +1,4 @@
-/*	$NetBSD: psshfs.h,v 1.20 2007/06/06 01:55:03 pooka Exp $	*/
+/*	$NetBSD: psshfs.h,v 1.24 2007/09/06 16:09:10 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006, 2007  Antti Kantee.  All Rights Reserved.
@@ -61,7 +61,7 @@ PUFFSOP_PROTOS(psshfs);
 
 #define GETRESPONSE(pb)							\
 do {									\
-	if (puffs_framev_enqueue_cc(pcc, pctx->sshfd, pb) == -1) {	\
+	if (puffs_framev_enqueue_cc(pcc, pctx->sshfd, pb, 0) == -1) {	\
 		rv = errno;						\
 		goto out;						\
 	}								\
@@ -69,7 +69,7 @@ do {									\
 
 #define JUSTSEND(pb)							\
 do {									\
-	if (puffs_framev_enqueue_justsend(pu,pctx->sshfd,pb,1) == -1) {	\
+	if (puffs_framev_enqueue_justsend(pu,pctx->sshfd,pb,1,0) == -1){\
 		rv = errno;						\
 		goto out;						\
 	}								\
@@ -77,7 +77,7 @@ do {									\
 
 #define SENDCB(pb, f, a)						\
 do {									\
-	if (puffs_framev_enqueue_cb(pu, pctx->sshfd, pb, f,a) == -1) {	\
+	if (puffs_framev_enqueue_cb(pu, pctx->sshfd, pb,f,a,0) == -1) {	\
 		rv = errno;						\
 		goto out;						\
 	}								\
@@ -99,6 +99,11 @@ struct psshfs_fid {
 	struct puffs_node *node;
 };
 
+struct psshfs_dirwait {
+	struct puffs_cc *dw_cc;
+	LIST_ENTRY(psshfs_dirwait) dw_entries;
+};
+
 struct psshfs_node {
 	struct puffs_node *parent;
 
@@ -115,6 +120,7 @@ struct psshfs_node {
 	int childcount;
 
 	int stat;
+	int opencount;
 
 	time_t attrread;
 	struct puffs_framebuf *getattr_pb;
@@ -123,9 +129,14 @@ struct psshfs_node {
 	char *fhand_w;
 	uint32_t fhand_r_len;
 	uint32_t fhand_w_len;
+
+	LIST_HEAD(, psshfs_dirwait) dw;
 };
 #define PSN_RECLAIMED	0x01
 #define PSN_HASFH	0x02
+#define PSN_READMAP	0x04
+#define PSN_WRITEMAP	0x08
+#define PSN_READDIR	0x10
 
 struct psshfs_ctx {
 	int sshfd;
@@ -149,7 +160,7 @@ int	psshfs_domount(struct puffs_usermount *);
 int	psbuf_read(struct puffs_usermount *, struct puffs_framebuf *,int,int*);
 int	psbuf_write(struct puffs_usermount *, struct puffs_framebuf *,int,int*);
 int	psbuf_cmp(struct puffs_usermount *,
-		  struct puffs_framebuf *, struct puffs_framebuf *);
+		  struct puffs_framebuf *, struct puffs_framebuf *, int *);
 
 struct puffs_framebuf	*psbuf_makeout(void);
 void			psbuf_recycleout(struct puffs_framebuf *);

@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_systrace.c,v 1.73 2007/06/08 17:51:41 christos Exp $	*/
+/*	$NetBSD: kern_systrace.c,v 1.75 2007/09/25 14:04:07 ad Exp $	*/
 
 /*
  * Copyright 2002, 2003 Niels Provos <provos@citi.umich.edu>
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_systrace.c,v 1.73 2007/06/08 17:51:41 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_systrace.c,v 1.75 2007/09/25 14:04:07 ad Exp $");
 
 #include "opt_systrace.h"
 
@@ -520,6 +520,7 @@ systracef_close(struct file *fp, struct lwp *l)
 		vrele(fst->fd_rdir);
 	SYSTRACE_UNLOCK(fst, curlwp);
 
+	seldestroy(&fst->si);
 	FREE(fp->f_data, M_XDATA);
 	fp->f_data = NULL;
 
@@ -563,7 +564,7 @@ systraceopen(dev_t dev, int flag, int mode, struct lwp *l)
 #else
 	lockinit(&fst->lock, PLOCK, "systrace", 0, 0);
 #endif
-
+	selinit(&fst->si);
 	TAILQ_INIT(&fst->processes);
 	TAILQ_INIT(&fst->messages);
 	TAILQ_INIT(&fst->policies);
@@ -1136,13 +1137,14 @@ systrace_getcwd(struct fsystrace *fst, struct str_process *strp)
 
 	/* Store our current values */
 	fst->fd_pid = strp->pid;
+	rw_enter(&mycwdp->cwdi_lock, RW_READER);
 	fst->fd_cdir = mycwdp->cwdi_cdir;
 	fst->fd_rdir = mycwdp->cwdi_rdir;
-
 	if ((mycwdp->cwdi_cdir = cwdp->cwdi_cdir) != NULL)
 		VREF(mycwdp->cwdi_cdir);
 	if ((mycwdp->cwdi_rdir = cwdp->cwdi_rdir) != NULL)
 		VREF(mycwdp->cwdi_rdir);
+	rw_exit(&mycwdp->cwdi_lock);
 #else
 	myfdp = curlwp->p_fd;
 	fdp = strp->proc->p_fd;

@@ -1,4 +1,4 @@
-/*	$NetBSD: aic6915.c,v 1.16 2007/03/04 06:01:48 christos Exp $	*/
+/*	$NetBSD: aic6915.c,v 1.18 2007/08/26 22:36:35 dyoung Exp $	*/
 
 /*-
  * Copyright (c) 2001 The NetBSD Foundation, Inc.
@@ -42,7 +42,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: aic6915.c,v 1.16 2007/03/04 06:01:48 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: aic6915.c,v 1.18 2007/08/26 22:36:35 dyoung Exp $");
 
 #include "bpfilter.h"
 
@@ -156,7 +156,7 @@ sf_attach(struct sf_softc *sc)
 	bus_dma_segment_t seg;
 	u_int8_t enaddr[ETHER_ADDR_LEN];
 
-	callout_init(&sc->sc_tick_callout);
+	callout_init(&sc->sc_tick_callout, 0);
 
 	/*
 	 * If we're I/O mapped, the functional register handle is
@@ -1252,7 +1252,7 @@ sf_add_rxbuf(struct sf_softc *sc, int idx)
 }
 
 static void
-sf_set_filter_perfect(struct sf_softc *sc, int slot, uint8_t *enaddr)
+sf_set_filter_perfect(struct sf_softc *sc, int slot, const uint8_t *enaddr)
 {
 	uint32_t reg0, reg1, reg2;
 
@@ -1325,7 +1325,7 @@ sf_set_filter(struct sf_softc *sc)
 	 * First, write the station address to the perfect filter
 	 * table.
 	 */
-	sf_set_filter_perfect(sc, 0, LLADDR(ifp->if_sadl));
+	sf_set_filter_perfect(sc, 0, CLLADDR(ifp->if_sadl));
 
 	/*
 	 * Now set the hash bits for each multicast address in our

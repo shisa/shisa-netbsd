@@ -1,4 +1,4 @@
-/*	$NetBSD: if_agr.c,v 1.12 2007/05/20 07:57:04 yamt Exp $	*/
+/*	$NetBSD: if_agr.c,v 1.16 2007/09/02 19:42:21 dyoung Exp $	*/
 
 /*-
  * Copyright (c)2005 YAMAMOTO Takashi,
@@ -27,7 +27,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_agr.c,v 1.12 2007/05/20 07:57:04 yamt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_agr.c,v 1.16 2007/09/02 19:42:21 dyoung Exp $");
 
 #include "bpfilter.h"
 #include "opt_inet.h"
@@ -522,7 +522,7 @@ agr_addport(struct ifnet *ifp, struct ifnet *ifp_port)
 		}
 	}
 
-	memcpy(port->port_origlladdr, LLADDR(ifp_port->if_sadl),
+	memcpy(port->port_origlladdr, CLLADDR(ifp_port->if_sadl),
 	    ifp_port->if_addrlen);
 
 	/*
@@ -689,28 +689,19 @@ agrport_cleanup(struct agr_softc *sc, struct agr_port *port)
 			error = (*ifp_port->if_init)(ifp_port);
 		}
 #else
-		struct sockaddr_dl *sdl;
+		union {
+			struct sockaddr sa;
+			struct sockaddr_dl sdl;
+			struct sockaddr_storage ss;
+		} u;
 		struct ifaddr ifa;
-		int sdllen;
-		int addrlen;
 
-		addrlen = ifp_port->if_addrlen;
-		sdllen = sizeof(*sdl) - sizeof(sdl->sdl_data) + addrlen;
-		sdl = malloc(sdllen, M_TEMP, M_WAITOK);
-		if (sdl == NULL) {
-			error = ENOMEM;
-		} else {
-			memset(sdl, 0, sdllen);
-			sdl->sdl_len = sdllen;
-			sdl->sdl_family = AF_LINK;
-			sdl->sdl_type = ifp_port->if_type;
-			sdl->sdl_alen = addrlen;
-			memcpy(LLADDR(sdl), port->port_origlladdr, addrlen);
-			memset(&ifa, 0, sizeof(ifa));
-			ifa.ifa_addr = (struct sockaddr *)sdl;
-			error = agrport_ioctl(port, SIOCSIFADDR, (void *)&ifa);
-			free(sdl, M_TEMP);
-		}
+		sockaddr_dl_init(&u.sdl, sizeof(u.ss),
+		    0, ifp_port->if_type, NULL, 0,
+		    port->port_origlladdr, ifp_port->if_addrlen);
+		memset(&ifa, 0, sizeof(ifa));
+		ifa.ifa_addr = &u.sa;
+		error = agrport_ioctl(port, SIOCSIFADDR, &ifa);
 #endif
 		if (error) {
 			printf("%s: if_init error %d\n", __func__, error);
@@ -839,7 +830,7 @@ agr_ioctl(struct ifnet *ifp, u_long cmd, void *data)
 
 	case SIOCGIFADDR:
 		sa = (struct sockaddr *)&ifr->ifr_data;
-		memcpy(sa->sa_data, LLADDR(ifp->if_sadl), ifp->if_addrlen);
+		memcpy(sa->sa_data, CLLADDR(ifp->if_sadl), ifp->if_addrlen);
 		break;
 
 #if 0 /* notyet */

@@ -1,4 +1,4 @@
-/*	$NetBSD: vfs_lookup.c,v 1.92 2007/05/19 22:11:22 christos Exp $	*/
+/*	$NetBSD: vfs_lookup.c,v 1.97 2007/08/15 12:07:34 ad Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1989, 1993
@@ -37,9 +37,8 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: vfs_lookup.c,v 1.92 2007/05/19 22:11:22 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: vfs_lookup.c,v 1.97 2007/08/15 12:07:34 ad Exp $");
 
-#include "opt_ktrace.h"
 #include "opt_systrace.h"
 #include "opt_magiclinks.h"
 
@@ -58,10 +57,8 @@ __KERNEL_RCSID(0, "$NetBSD: vfs_lookup.c,v 1.92 2007/05/19 22:11:22 christos Exp
 #include <sys/proc.h>
 #include <sys/syslog.h>
 #include <sys/kauth.h>
-
-#ifdef KTRACE
 #include <sys/ktrace.h>
-#endif
+
 #ifdef SYSTRACE
 #include <sys/systrace.h>
 #endif
@@ -266,8 +263,8 @@ namei(struct nameidata *ndp)
 	/*
 	 * Get root directory for the translation.
 	 */
-	/* XXX: SMP access to p_cwdi needs locking and vnodes held */
 	cwdi = cnp->cn_lwp->l_proc->p_cwdi;
+	rw_enter(&cwdi->cwdi_lock, RW_READER);
 	dp = cwdi->cwdi_rdir;
 	if (dp == NULL)
 		dp = rootvnode;
@@ -299,9 +296,9 @@ namei(struct nameidata *ndp)
 		ndp->ni_erootdir = NULL;
 	}
 	VREF(dp);
-
-#ifdef KTRACE
-	if (KTRPOINT(cnp->cn_lwp->l_proc, KTR_NAMEI)) {
+	rw_exit(&cwdi->cwdi_lock);
+ 
+	if (ktrpoint(KTR_NAMEI)) {
 		if (ndp->ni_erootdir != NULL) {
 			/*
 			 * To make any sense, the trace entry need to have the
@@ -316,12 +313,12 @@ namei(struct nameidata *ndp)
 				emul_path = ndp->ni_next;
 			else
 				emul_path = cnp->cn_lwp->l_proc->p_emul->e_path;
-			ktrnamei2(cnp->cn_lwp, emul_path, strlen(emul_path),
+			ktrnamei2(emul_path, strlen(emul_path),
 			    cnp->cn_pnbuf, ndp->ni_pathlen);
 		} else
-			ktrnamei(cnp->cn_lwp, cnp->cn_pnbuf, ndp->ni_pathlen);
+			ktrnamei(cnp->cn_pnbuf, ndp->ni_pathlen);
 	}
-#endif
+
 #ifdef SYSTRACE
 	if (ISSET(cnp->cn_lwp->l_proc->p_flag, PK_SYSTRACE))
 		systrace_namei(ndp);
@@ -886,15 +883,11 @@ terminal:
 	}
 
 	/*
-	 * Disallow directory write attempts on read-only file systems.
+	 * Disallow directory write attempts on read-only lookups.
+	 * Prefers EEXIST over EROFS for the CREATE case.
 	 */
 	if (rdonly &&
 	    (cnp->cn_nameiop == DELETE || cnp->cn_nameiop == RENAME)) {
-
-		/*
-		 * Disallow directory write attempts on read-only
-		 * file systems.
-		 */
 		error = EROFS;
 		if (dp != ndp->ni_dvp) {
 			vput(dp);
@@ -992,7 +985,7 @@ relookup(struct vnode *dvp, struct vnode **vpp, struct componentname *cnp)
 #endif
 
 	/*
-	 * Check for read-only file systems.
+	 * Check for read-only lookups.
 	 */
 	if (rdonly && cnp->cn_nameiop != LOOKUP) {
 		error = EROFS;

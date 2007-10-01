@@ -1,4 +1,4 @@
-/*	$NetBSD: pthread_lock.c,v 1.20 2007/03/24 18:52:00 ad Exp $	*/
+/*	$NetBSD: pthread_lock.c,v 1.30 2007/09/24 13:56:42 ad Exp $	*/
 
 /*-
  * Copyright (c) 2001, 2006, 2007 The NetBSD Foundation, Inc.
@@ -36,8 +36,12 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * libpthread internal spinlock routines.
+ */
+
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: pthread_lock.c,v 1.20 2007/03/24 18:52:00 ad Exp $");
+__RCSID("$NetBSD: pthread_lock.c,v 1.30 2007/09/24 13:56:42 ad Exp $");
 
 #include <sys/types.h>
 #include <sys/lock.h>
@@ -46,66 +50,146 @@ __RCSID("$NetBSD: pthread_lock.c,v 1.20 2007/03/24 18:52:00 ad Exp $");
 #include <errno.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "pthread.h"
 #include "pthread_int.h"
 
-#ifdef PTHREAD_SPIN_DEBUG_PRINT
-#define SDPRINTF(x) DPRINTF(x)
-#else
-#define SDPRINTF(x)
-#endif
+/* How many times to try acquiring spin locks on MP systems. */
+#define	PTHREAD__NSPINS		1024
 
-/* This does not belong here. */
-#if defined(i386) || defined(__x86_64__)
-#define	smt_pause()	__asm __volatile("rep; nop" ::: "memory")
-#else
-#define	smt_pause()	/* nothing */
-#endif
-
-extern int pthread__nspins;
-static int pthread__atomic;
+static void pthread_spinlock_slow(pthread_spin_t *);
 
 RAS_DECL(pthread__lock);
 
-void
-pthread__simple_lock_init(__cpu_simple_lock_t *alp)
+int
+pthread__simple_locked_p(__cpu_simple_lock_t *alp)
+{
+	return __SIMPLELOCK_LOCKED_P(alp);
+}
+
+#ifdef PTHREAD__ASM_RASOPS
+
+void pthread__ras_simple_lock_init(__cpu_simple_lock_t *);
+int pthread__ras_simple_lock_try(__cpu_simple_lock_t *);
+void pthread__ras_simple_unlock(__cpu_simple_lock_t *);
+
+#else
+
+static void
+pthread__ras_simple_lock_init(__cpu_simple_lock_t *alp)
 {
 
-	if (pthread__atomic) {
-		__cpu_simple_lock_init(alp);
-		return;
-	}
+	__cpu_simple_lock_clear(alp);
+}
 
-	*alp = __SIMPLELOCK_UNLOCKED;
+static int
+pthread__ras_simple_lock_try(__cpu_simple_lock_t *alp)
+{
+	int locked;
+
+	RAS_START(pthread__lock);
+	locked = __SIMPLELOCK_LOCKED_P(alp);
+	__cpu_simple_lock_set(alp);
+	RAS_END(pthread__lock);
+
+	return !locked;
+}
+
+static void
+pthread__ras_simple_unlock(__cpu_simple_lock_t *alp)
+{
+
+	__cpu_simple_lock_clear(alp);
+}
+
+#endif /* PTHREAD__ASM_RASOPS */
+
+static const struct pthread_lock_ops pthread__lock_ops_ras = {
+	pthread__ras_simple_lock_init,
+	pthread__ras_simple_lock_try,
+	pthread__ras_simple_unlock,
+};
+
+static void
+pthread__atomic_simple_lock_init(__cpu_simple_lock_t *alp)
+{
+
+	__cpu_simple_lock_init(alp);
+}
+
+static int
+pthread__atomic_simple_lock_try(__cpu_simple_lock_t *alp)
+{
+
+	return (__cpu_simple_lock_try(alp));
+}
+
+static void
+pthread__atomic_simple_unlock(__cpu_simple_lock_t *alp)
+{
+
+	__cpu_simple_unlock(alp);
+}
+
+static const struct pthread_lock_ops pthread__lock_ops_atomic = {
+	pthread__atomic_simple_lock_init,
+	pthread__atomic_simple_lock_try,
+	pthread__atomic_simple_unlock,
+};
+
+/*
+ * We default to pointing to the RAS primitives; we might need to use
+ * locks early, but before main() starts.  This is safe, since no other
+ * threads will be active for the process, so atomicity will not be
+ * required.
+ */
+const struct pthread_lock_ops *pthread__lock_ops = &pthread__lock_ops_ras;
+
+void
+pthread_spinlock(pthread_spin_t *lock)
+{
+	if (__predict_true(pthread__simple_lock_try(lock)))
+		return;
+
+	pthread_spinlock_slow(lock);
+}
+
+/*
+ * Prevent this routine from being inlined.  The common case is no
+ * contention and it's better to not burden the instruction decoder.
+ */
+#if __GNUC_PREREQ__(3, 0)
+__attribute ((noinline))
+#endif
+static void 
+pthread_spinlock_slow(pthread_spin_t *lock)
+{
+	int count;
+
+	do {
+		count = pthread__nspins;
+		while (pthread__simple_locked_p(lock) && --count > 0)
+			pthread__smt_pause();
+		if (count > 0) {
+			if (pthread__simple_lock_try(lock))
+				break;
+			continue;
+		}
+		sched_yield();
+	} while (/*CONSTCOND*/ 1);
 }
 
 int
-pthread__simple_lock_try(__cpu_simple_lock_t *alp)
+pthread_spintrylock(pthread_spin_t *lock)
 {
-	__cpu_simple_lock_t old;
-
-	if (pthread__atomic)
-		return __cpu_simple_lock_try(alp);
-
-	RAS_START(pthread__lock);
-	old = *alp;
-	*alp = __SIMPLELOCK_LOCKED;
-	RAS_END(pthread__lock);
-
-	return old == __SIMPLELOCK_UNLOCKED;
+	return pthread__simple_lock_try(lock);
 }
 
-inline void
-pthread__simple_unlock(__cpu_simple_lock_t *alp)
+void
+pthread_spinunlock(pthread_spin_t *lock)
 {
-
-	if (pthread__atomic) {
-		__cpu_simple_unlock(alp);
-		return;
-	}
-
-	*alp = __SIMPLELOCK_UNLOCKED;
+	pthread__simple_unlock(lock);
 }
 
 /*
@@ -114,18 +198,26 @@ pthread__simple_unlock(__cpu_simple_lock_t *alp)
  * we fall back onto machine-dependent atomic lock primitives.
  */
 void
-pthread__lockprim_init(int ncpu)
+pthread__lockprim_init(void)
 {
+	char *p;
 
-	if (ncpu != 1) {
-		pthread__atomic = 1;
+	if ((p = getenv("PTHREAD_NSPINS")) != NULL)
+		pthread__nspins = atoi(p);
+	else if (pthread__concurrency != 1)
+		pthread__nspins = PTHREAD__NSPINS;
+	else
+		pthread__nspins = 1;
+
+	if (pthread__concurrency != 1) {
+		pthread__lock_ops = &pthread__lock_ops_atomic;
 		return;
 	}
 
 	if (rasctl(RAS_ADDR(pthread__lock), RAS_SIZE(pthread__lock),
 	    RAS_INSTALL) != 0) {
-	    	pthread__atomic = 1;
-	    	return;
+		pthread__lock_ops = &pthread__lock_ops_atomic;
+		return;
 	}
 }
 
@@ -134,163 +226,4 @@ pthread_lockinit(pthread_spin_t *lock)
 {
 
 	pthread__simple_lock_init(lock);
-}
-
-void
-pthread_spinlock(pthread_t thread, pthread_spin_t *lock)
-{
-	int count, ret;
-
-	count = pthread__nspins;
-	SDPRINTF(("(pthread_spinlock %p) spinlock %p (count %d)\n",
-	    thread, lock, thread->pt_spinlocks));
-#ifdef PTHREAD_SPIN_DEBUG
-	pthread__assert(thread->pt_spinlocks >= 0);
-#endif
-
-	thread->pt_spinlocks++;
-	if (__predict_true(pthread__simple_lock_try(lock))) {
-		PTHREADD_ADD(PTHREADD_SPINLOCKS);
-		return;
-	}
-
-	do {
-		while ((ret = pthread__simple_lock_try(lock)) == 0 &&
-		    --count) {
-			smt_pause();
-		}
-
-		if (ret == 1)
-			break;
-
-		SDPRINTF(("(pthread_spinlock %p) retrying spinlock %p "
-		    "(count %d)\n", thread, lock,
-		    thread->pt_spinlocks));
-		thread->pt_spinlocks--;
-
-		/* XXXLWP far from ideal */
-		sched_yield();
-		count = pthread__nspins;
-		thread->pt_spinlocks++;
-	} while (/*CONSTCOND*/ 1);
-
-	PTHREADD_ADD(PTHREADD_SPINLOCKS);
-}
-
-int
-pthread_spintrylock(pthread_t thread, pthread_spin_t *lock)
-{
-	int ret;
-
-	SDPRINTF(("(pthread_spintrylock %p) spinlock %p (count %d)\n",
-	    thread, lock, thread->pt_spinlocks));
-
-	thread->pt_spinlocks++;
-	ret = pthread__simple_lock_try(lock);
-	if (!ret)
-		thread->pt_spinlocks--;
-
-	return ret;
-}
-
-void
-pthread_spinunlock(pthread_t thread, pthread_spin_t *lock)
-{
-
-	SDPRINTF(("(pthread_spinunlock %p) spinlock %p (count %d)\n",
-	    thread, lock, thread->pt_spinlocks));
-
-	pthread__simple_unlock(lock);
-	thread->pt_spinlocks--;
-#ifdef PTHREAD_SPIN_DEBUG
-	pthread__assert(thread->pt_spinlocks >= 0);
-#endif
-	PTHREADD_ADD(PTHREADD_SPINUNLOCKS);
-}
-
-
-/* 
- * Public (POSIX-specified) spinlocks.
- */
-int
-pthread_spin_init(pthread_spinlock_t *lock, int pshared)
-{
-
-#ifdef ERRORCHECK
-	if (lock == NULL || (pshared != PTHREAD_PROCESS_PRIVATE &&
-	    pshared != PTHREAD_PROCESS_SHARED))
-		return EINVAL;
-#endif
-	lock->pts_magic = _PT_SPINLOCK_MAGIC;
-
-	/*
-	 * We don't actually use the pshared flag for anything;
-	 * CPU simple locks have all the process-shared properties 
-	 * that we want anyway.
-	 */
-	lock->pts_flags = pshared;
-	pthread_lockinit(&lock->pts_spin);
-
-	return 0;
-}
-
-int
-pthread_spin_destroy(pthread_spinlock_t *lock)
-{
-
-#ifdef ERRORCHECK
-	if (lock == NULL || lock->pts_magic != _PT_SPINLOCK_MAGIC)
-		return EINVAL;
-	if (lock->pts_spin != __SIMPLELOCK_UNLOCKED)
-		return EBUSY;
-#endif
-
-	lock->pts_magic = _PT_SPINLOCK_DEAD;
-
-	return 0;
-}
-
-int
-pthread_spin_lock(pthread_spinlock_t *lock)
-{
-
-#ifdef ERRORCHECK
-	if (lock == NULL || lock->pts_magic != _PT_SPINLOCK_MAGIC)
-		return EINVAL;
-#endif
-
-	while (pthread__simple_lock_try(&lock->pts_spin) == 0) {
-		smt_pause();
-	}
-
-	return 0;
-}
-
-int
-pthread_spin_trylock(pthread_spinlock_t *lock)
-{
-
-#ifdef ERRORCHECK
-	if (lock == NULL || lock->pts_magic != _PT_SPINLOCK_MAGIC)
-		return EINVAL;
-#endif
-
-	if (pthread__simple_lock_try(&lock->pts_spin) == 0)
-		return EBUSY;
-
-	return 0;
-}
-
-int
-pthread_spin_unlock(pthread_spinlock_t *lock)
-{
-
-#ifdef ERRORCHECK
-	if (lock == NULL || lock->pts_magic != _PT_SPINLOCK_MAGIC)
-		return EINVAL;
-#endif
-
-	pthread__simple_unlock(&lock->pts_spin);
-
-	return 0;
 }

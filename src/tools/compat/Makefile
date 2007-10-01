@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.49 2007/07/03 12:11:09 nakayama Exp $
+#	$NetBSD: Makefile,v 1.51 2007/09/28 09:12:49 lukem Exp $
 
 HOSTLIB=	nbcompat
 
@@ -7,7 +7,9 @@ SRCS=		atoll.c basename.c dirname.c fgetln.c flock.c fparseln.c \
 		issetugid.c lchflags.c lchmod.c lchown.c libyywrap.c \
 		md2.c md2hl.c md4c.c md4hl.c md5c.c md5hl.c mkdtemp.c \
 		mkstemp.c pread.c putc_unlocked.c pwcache.c pwrite.c \
-		pw_scan.c rmd160.c rmd160hl.c setenv.c setgroupent.c \
+		pw_scan.c \
+		raise_default_signal.c rmd160.c rmd160hl.c \
+		setenv.c setgroupent.c \
 		setpassent.c setprogname.c sha1.c sha1hl.c sha2.c \
 		sha256hl.c sha384hl.c sha512hl.c snprintf.c stat_flags.c \
 		strlcat.c strlcpy.c strmode.c strndup.c strsep.c strsuftoll.c \
@@ -66,9 +68,11 @@ config.cache: include/.stamp configure nbtool_config.h.in defs.mk.in
 defs.mk: config.cache
 	@touch ${.TARGET}
 
-# Run by hand, then "configure" script committed:
+# Run "${TOOLDIR}/bin/nbmake-${MACHINE} regen" by hand after editing
+# configure.ac.  See more detailed instructions in configure.ac.
 regen:
 	cd ${.CURDIR} && ${TOOLDIR}/bin/${_TOOL_PREFIX}autoconf
+	cd ${.CURDIR} && ${TOOLDIR}/bin/${_TOOL_PREFIX}autoheader
 
 include/.stamp:
 	mkdir -p include/sys include/machine include/rpc

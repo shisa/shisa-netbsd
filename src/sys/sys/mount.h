@@ -1,4 +1,4 @@
-/*	$NetBSD: mount.h,v 1.159 2007/06/29 23:30:32 rumble Exp $	*/
+/*	$NetBSD: mount.h,v 1.165 2007/07/31 21:14:21 pooka Exp $	*/
 
 /*
  * Copyright (c) 1989, 1991, 1993
@@ -51,7 +51,6 @@
  * file system statistics
  */
 
-#define	MFSNAMELEN	16	/* length of fs type name, including nul */
 #define	MNAMELEN	90	/* length of buffer for returned name */
 
 /*
@@ -173,47 +172,20 @@ struct mount {
 	{ "magiclinks", CTLTYPE_INT }, \
 }
 
+#if defined(_KERNEL) || defined(__VFSOPS_EXPOSE)
+#if __STDC__
+struct nameidata;
+#endif
+
 /*
  * Operations supported on mounted file system.
  */
-#ifdef _KERNEL
-
-#if __STDC__
-struct nameidata;
-struct mbuf;
-struct vnodeopv_desc;
-struct kauth_cred;
-#endif
-
-#define VFS_PROTOS(fsname)						\
-int	fsname##_mount(struct mount *, const char *, void *,		\
-		struct nameidata *, struct lwp *);			\
-int	fsname##_start(struct mount *, int, struct lwp *);		\
-int	fsname##_unmount(struct mount *, int, struct lwp *);		\
-int	fsname##_root(struct mount *, struct vnode **);			\
-int	fsname##_quotactl(struct mount *, int, uid_t, void *,		\
-		struct lwp *);						\
-int	fsname##_statvfs(struct mount *, struct statvfs *,		\
-		struct lwp *);						\
-int	fsname##_sync(struct mount *, int, struct kauth_cred *,		\
-		struct lwp *);						\
-int	fsname##_vget(struct mount *, ino_t, struct vnode **);		\
-int	fsname##_fhtovp(struct mount *, struct fid *, struct vnode **);	\
-int	fsname##_vptofh(struct vnode *, struct fid *, size_t *);	\
-void	fsname##_init(void);						\
-void	fsname##_reinit(void);						\
-void	fsname##_done(void);						\
-int	fsname##_mountroot(void);					\
-int	fsname##_snapshot(struct mount *, struct vnode *,		\
-		struct timespec *);					\
-int	fsname##_extattrctl(struct mount *, int, struct vnode *, int,	\
-		const char *, struct lwp *);				\
-int	fsname##_suspendctl(struct mount *, int);
 
 struct vfsops {
 	const char *vfs_name;
+	size_t	vfs_min_mount_data;
 	int	(*vfs_mount)	(struct mount *, const char *, void *,
-				    struct nameidata *, struct lwp *);
+				    size_t *, struct lwp *);
 	int	(*vfs_start)	(struct mount *, int, struct lwp *);
 	int	(*vfs_unmount)	(struct mount *, int, struct lwp *);
 	int	(*vfs_root)	(struct mount *, struct vnode **);
@@ -242,10 +214,8 @@ struct vfsops {
 	LIST_ENTRY(vfsops) vfs_list;
 };
 
-#define	VFS_ATTACH(vfs)		__link_set_add_data(vfsops, vfs)
-
-#define VFS_MOUNT(MP, PATH, DATA, NDP, L) \
-	(*(MP)->mnt_op->vfs_mount)(MP, PATH, DATA, NDP, L)
+#define VFS_MOUNT(MP, PATH, DATA, DATA_LEN, L) \
+	(*(MP)->mnt_op->vfs_mount)(MP, PATH, DATA, DATA_LEN, L)
 #define VFS_START(MP, FLAGS, L)	  (*(MP)->mnt_op->vfs_start)(MP, FLAGS, L)
 #define VFS_UNMOUNT(MP, FORCE, L) (*(MP)->mnt_op->vfs_unmount)(MP, FORCE, L)
 #define VFS_ROOT(MP, VPP)	  (*(MP)->mnt_op->vfs_root)(MP, VPP)
@@ -259,6 +229,44 @@ struct vfsops {
 #define	VFS_EXTATTRCTL(MP, C, VP, AS, AN, L) \
 	(*(MP)->mnt_op->vfs_extattrctl)(MP, C, VP, AS, AN, L)
 #define VFS_SUSPENDCTL(MP, C)     (*(MP)->mnt_op->vfs_suspendctl)(MP, C)
+
+#endif /* _KERNEL || __VFSOPS_EXPOSE */
+
+#ifdef _KERNEL
+#if __STDC__
+struct mbuf;
+struct vnodeopv_desc;
+struct kauth_cred;
+#endif
+
+#define	VFS_MAX_MOUNT_DATA	8192
+
+#define VFS_PROTOS(fsname)						\
+int	fsname##_mount(struct mount *, const char *, void *,		\
+		size_t *, struct lwp *);				\
+int	fsname##_start(struct mount *, int, struct lwp *);		\
+int	fsname##_unmount(struct mount *, int, struct lwp *);		\
+int	fsname##_root(struct mount *, struct vnode **);			\
+int	fsname##_quotactl(struct mount *, int, uid_t, void *,		\
+		struct lwp *);						\
+int	fsname##_statvfs(struct mount *, struct statvfs *,		\
+		struct lwp *);						\
+int	fsname##_sync(struct mount *, int, struct kauth_cred *,		\
+		struct lwp *);						\
+int	fsname##_vget(struct mount *, ino_t, struct vnode **);		\
+int	fsname##_fhtovp(struct mount *, struct fid *, struct vnode **);	\
+int	fsname##_vptofh(struct vnode *, struct fid *, size_t *);	\
+void	fsname##_init(void);						\
+void	fsname##_reinit(void);						\
+void	fsname##_done(void);						\
+int	fsname##_mountroot(void);					\
+int	fsname##_snapshot(struct mount *, struct vnode *,		\
+		struct timespec *);					\
+int	fsname##_extattrctl(struct mount *, int, struct vnode *, int,	\
+		const char *, struct lwp *);				\
+int	fsname##_suspendctl(struct mount *, int)
+
+#define	VFS_ATTACH(vfs)		__link_set_add_data(vfsops, vfs)
 
 struct vfs_hooks {
 	void	(*vh_unmount)(struct mount *);
@@ -293,6 +301,11 @@ struct export_args30 {
 	char	*ex_indexfile;		/* index file for WebNFS URLs */
 };
 
+struct mnt_export_args30 {
+	const char *fspec;		/* Always NULL */
+	struct export_args30 eargs;
+};
+
 #ifdef _KERNEL
 #include <sys/mallocvar.h>
 MALLOC_DECLARE(M_MOUNT);
@@ -319,7 +332,6 @@ struct vfsops *vfs_getopsbyname(const char *);
 
 int	vfs_stdextattrctl(struct mount *, int, struct vnode *,
 	    int, const char *, struct lwp *);
-int	vfs_stdsuspendctl(struct mount *, int);
 
 extern	CIRCLEQ_HEAD(mntlist, mount) mountlist;	/* mounted filesystem list */
 extern	struct vfsops *vfssw[];			/* filesystem type table */
@@ -328,6 +340,8 @@ extern	struct simplelock mountlist_slock;
 extern	struct simplelock spechash_slock;
 long	makefstype(const char *);
 int	dounmount(struct mount *, int, struct lwp *);
+int	do_sys_mount(struct lwp *, struct vfsops *, const char *, const char *,
+	    int, void *, enum uio_seg, size_t, register_t *);
 void	vfsinit(void);
 void	vfs_opv_init(const struct vnodeopv_desc * const *);
 void	vfs_opv_free(const struct vnodeopv_desc * const *);
@@ -355,10 +369,10 @@ int	getfh(const char *, void *, size_t *)
 	__RENAME(__getfh30);
 #endif
 
-int	mount(const char *, const char *, int, void *);
 int	unmount(const char *, int);
 #if defined(_NETBSD_SOURCE)
 #ifndef __LIBC12_SOURCE__
+int mount(const char *, const char *, int, void *, size_t) __RENAME(__mount50);
 int	fhopen(const void *, size_t, int) __RENAME(__fhopen40);
 int	fhstat(const void *, size_t, struct stat *) __RENAME(__fhstat40);
 #endif

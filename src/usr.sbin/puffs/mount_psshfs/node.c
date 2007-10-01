@@ -1,4 +1,4 @@
-/*	$NetBSD: node.c,v 1.33 2007/07/02 10:26:50 pooka Exp $	*/
+/*	$NetBSD: node.c,v 1.39 2007/08/24 13:33:51 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006  Antti Kantee.  All Rights Reserved.
@@ -27,7 +27,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: node.c,v 1.33 2007/07/02 10:26:50 pooka Exp $");
+__RCSID("$NetBSD: node.c,v 1.39 2007/08/24 13:33:51 pooka Exp $");
 #endif /* !lint */
 
 #include <assert.h>
@@ -201,6 +201,21 @@ psshfs_node_create(struct puffs_cc *pcc, void *opc, struct puffs_newinfo *pni,
 }
 
 int
+psshfs_node_mmap(struct puffs_cc* pcc, void *opc, vm_prot_t prot,
+	const struct puffs_cred *pcr, const struct puffs_cid *pcid)
+{
+	struct puffs_node *pn = opc;
+	struct psshfs_node *psn = pn->pn_data;
+
+	if (prot & (VM_PROT_READ | VM_PROT_EXECUTE))
+		psn->stat |= PSN_READMAP;
+	if (prot & VM_PROT_WRITE)
+		psn->stat |= PSN_WRITEMAP;
+
+	return 0;
+}
+
+int
 psshfs_node_open(struct puffs_cc *pcc, void *opc, int mode,
 	const struct puffs_cred *pcr, const struct puffs_cid *pcid)
 {
@@ -237,22 +252,22 @@ psshfs_node_open(struct puffs_cc *pcc, void *opc, int mode,
 	}
 
  out:
+	if (rv == 0)
+		psn->opencount++;
+
 	PSSHFSRETURN(rv);
 }
 
-int
-psshfs_node_inactive(struct puffs_cc *pcc, void *opc,
-	const struct puffs_cid *pcid)
+static void
+closehandles(struct puffs_cc *pcc, struct psshfs_node *psn)
 {
-	struct psshfs_ctx *pctx = puffs_cc_getspecific(pcc);
 	struct puffs_usermount *pu = puffs_cc_getusermount(pcc);
-	struct puffs_node *pn = opc;
-	struct psshfs_node *psn = pn->pn_data;
-	uint32_t reqid = NEXTREQ(pctx);
+	struct psshfs_ctx *pctx = puffs_cc_getspecific(pcc);
 	struct puffs_framebuf *pb1, *pb2;
-	int rv;
+	uint32_t reqid = NEXTREQ(pctx);
+	int rv; /* macro magic */
 
-	if (psn->fhand_r) {
+	if ((psn->stat & PSN_READMAP) == 0 && psn->fhand_r) {
 		pb1 = psbuf_makeout();
 		psbuf_req_data(pb1, SSH_FXP_CLOSE, reqid,
 		    psn->fhand_r, psn->fhand_r_len);
@@ -260,7 +275,7 @@ psshfs_node_inactive(struct puffs_cc *pcc, void *opc,
 		free(psn->fhand_r);
 		psn->fhand_r = NULL;
 	}
-	if (psn->fhand_w) {
+	if ((psn->stat & PSN_WRITEMAP) == 0 && psn->fhand_w) {
 		pb2 = psbuf_makeout();
 		psbuf_req_data(pb2, SSH_FXP_CLOSE, reqid,
 		    psn->fhand_w, psn->fhand_w_len);
@@ -270,8 +285,44 @@ psshfs_node_inactive(struct puffs_cc *pcc, void *opc,
 	}
 
  out:
+	return;
+}
+
+int
+psshfs_node_close(struct puffs_cc *pcc, void *opc, int flags,
+	const struct puffs_cred *pcr, const struct puffs_cid *pcid)
+{
+	struct puffs_node *pn = opc;
+	struct psshfs_node *psn = pn->pn_data;
+
+	if (psn->opencount > 0)
+		psn->opencount--;
+
+	if (psn->opencount)
+		closehandles(pcc, psn);
+
 	return 0;
 }
+
+int
+psshfs_node_inactive(struct puffs_cc *pcc, void *opc,
+	const struct puffs_cid *pcid)
+{
+	struct puffs_node *pn = opc;
+	struct psshfs_node *psn = pn->pn_data;
+
+	assert(psn->opencount == 0);
+	psn->stat &= ~(PSN_READMAP | PSN_WRITEMAP);
+	closehandles(pcc, psn);
+
+	return 0;
+}
+
+/*
+ * XXXX: I'm not really sure I'll export this symbol eventually,
+ * so fix this a bit in the future.
+ */
+void puffs_goto(struct puffs_cc *);
 
 int
 psshfs_node_readdir(struct puffs_cc *pcc, void *opc, struct dirent *dent,
@@ -282,27 +333,70 @@ psshfs_node_readdir(struct puffs_cc *pcc, void *opc, struct dirent *dent,
 	struct puffs_node *pn = opc;
 	struct psshfs_node *psn = pn->pn_data;
 	struct psshfs_dir *pd;
-	int i, rv;
+	int i, rv, set_readdir;
+
+	if (psn->stat & PSN_READDIR) {
+		struct psshfs_dirwait dw;
+
+		set_readdir = 0;
+		dw.dw_cc = pcc;
+		LIST_INSERT_HEAD(&psn->dw, &dw, dw_entries);
+		puffs_cc_yield(pcc);
+		LIST_REMOVE(&dw, dw_entries);
+	} else {
+		psn->stat |= PSN_READDIR;
+		set_readdir = 1;
+	}
 
 	*ncookies = 0;
 	rv = sftp_readdir(pcc, pctx, pn);
 	if (rv)
-		return rv;
+		goto out;
 
-	for (i = *readoff; i < psn->dentnext; i++) {
+	/* find next dirent */
+	for (i = *readoff;;i++) {
+		if (i >= psn->dentnext)
+			goto out;
 		pd = &psn->dir[i];
-		if (pd->valid == 0)
-			continue;
-		if (!puffs_nextdent(&dent, pd->entryname,
-		    pd->va.va_fileid, puffs_vtype2dt(pd->va.va_type), reslen))
+		if (pd->valid)
 			break;
+	}
+
+	for (;;) {
+		*readoff = i;
+		if (!puffs_nextdent(&dent, pd->entryname,
+		    pd->va.va_fileid, puffs_vtype2dt(pd->va.va_type), reslen)) {
+			rv = 0;
+			goto out;
+		}
+
+		/* find next entry, store possible nfs key */
+		do {
+			if (++i >= psn->dentnext)
+				goto out;
+			pd = &psn->dir[i];
+		} while (pd->valid == 0);
 		PUFFS_STORE_DCOOKIE(cookies, ncookies, (off_t)i);
 	}
-	if (i == psn->dentnext)
-		*eofflag = 1;
 
-	*readoff = i;
-	return 0;
+ out:
+	if (rv == 0) {
+		if (i >= psn->dentnext)
+			*eofflag = 1;
+
+		*readoff = i;
+	}
+
+	if (set_readdir) {
+		struct psshfs_dirwait *dw;
+
+		while ((dw = LIST_FIRST(&psn->dw)) != NULL)
+			puffs_goto(dw->dw_cc);
+
+		psn->stat &= ~PSN_READDIR;
+	}
+
+	return rv;
 }
 
 int
@@ -402,30 +496,59 @@ psshfs_node_readlink(struct puffs_cc *pcc, void *opc,
 	PSSHFSRETURN(rv);
 }
 
+static int
+doremove(struct puffs_cc *pcc, struct puffs_node *pn_dir,
+	struct puffs_node *pn, const char *name)
+{
+	PSSHFSAUTOVAR(pcc);
+	int op;
+
+	if (pn->pn_va.va_type == VDIR)
+		op = SSH_FXP_RMDIR;
+	else
+		op = SSH_FXP_REMOVE;
+
+	psbuf_req_str(pb, op, reqid, PNPATH(pn));
+	GETRESPONSE(pb);
+
+	rv = psbuf_expect_status(pb);
+	if (rv == 0)
+		nukenode(pn, name, 0);
+
+ out:
+	PSSHFSRETURN(rv);
+}
+
 int
 psshfs_node_remove(struct puffs_cc *pcc, void *opc, void *targ,
 	const struct puffs_cn *pcn)
 {
-	PSSHFSAUTOVAR(pcc);
 	struct puffs_node *pn_targ = targ;
+	int rv;
 
-	if (pn_targ->pn_va.va_type == VDIR) {
-		rv = EPERM;
-		goto out;
-	}
+	assert(pn_targ->pn_va.va_type != VDIR);
 
-	psbuf_req_str(pb, SSH_FXP_REMOVE, reqid, PNPATH(pn_targ));
-	GETRESPONSE(pb);
-
-	rv = psbuf_expect_status(pb);
-
-	if (rv == 0) {
-		nukenode(pn_targ, pcn->pcn_name, 0);
+	rv = doremove(pcc, opc, targ, pcn->pcn_name);
+	if (rv == 0)
 		puffs_setback(pcc, PUFFS_SETBACK_NOREF_N2);
-	}
 
- out:
-	PSSHFSRETURN(rv);
+	return rv;
+}
+
+int
+psshfs_node_rmdir(struct puffs_cc *pcc, void *opc, void *targ,
+	const struct puffs_cn *pcn)
+{
+	struct puffs_node *pn_targ = targ;
+	int rv;
+
+	assert(pn_targ->pn_va.va_type == VDIR);
+
+	rv = doremove(pcc, opc, targ, pcn->pcn_name);
+	if (rv == 0)
+		puffs_setback(pcc, PUFFS_SETBACK_NOREF_N2);
+
+	return rv;
 }
 
 int
@@ -453,26 +576,6 @@ psshfs_node_mkdir(struct puffs_cc *pcc, void *opc,  struct puffs_newinfo *pni,
 		puffs_newinfo_setcookie(pni, pn_new);
 	else
 		nukenode(pn_new, pcn->pcn_name, 1);
-
- out:
-	PSSHFSRETURN(rv);
-}
-
-int
-psshfs_node_rmdir(struct puffs_cc *pcc, void *opc, void *targ,
-	const struct puffs_cn *pcn)
-{
-	PSSHFSAUTOVAR(pcc);
-	struct puffs_node *pn_targ = targ;
-
-	psbuf_req_str(pb, SSH_FXP_RMDIR, reqid, PNPATH(pn_targ));
-	GETRESPONSE(pb);
-
-	rv = psbuf_expect_status(pb);
-	if (rv == 0) {
-		nukenode(pn_targ, pcn->pcn_name, 0);
-		puffs_setback(pcc, PUFFS_SETBACK_NOREF_N2);
-	}
 
  out:
 	PSSHFSRETURN(rv);
@@ -533,8 +636,7 @@ psshfs_node_rename(struct puffs_cc *pcc, void *opc, void *src,
 	}
 
 	if (pn_tf) {
-		/* XXX: no backend implementation for now, so call directly */
-		rv = psshfs_node_remove(pcc, targ_dir, pn_tf, pcn_targ);
+		rv = doremove(pcc, targ_dir, pn_tf, pcn_targ->pcn_name);
 		if (rv)
 			goto out;
 	}

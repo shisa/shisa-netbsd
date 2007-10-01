@@ -1,4 +1,4 @@
-/*	$NetBSD: dtfs.c,v 1.29 2007/07/01 22:59:09 pooka Exp $	*/
+/*	$NetBSD: dtfs.c,v 1.34 2007/09/05 17:15:35 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006  Antti Kantee.  All Rights Reserved.
@@ -35,6 +35,7 @@
 
 #include <err.h>
 #include <mntopts.h>
+#include <paths.h>
 #include <puffs.h>
 #include <signal.h>
 #include <stdio.h>
@@ -49,6 +50,7 @@
 #else
 #define FSNAME "dt"
 #endif
+#define MAXREQMAGIC -37
 
 static struct puffs_usermount *gpu;
 static struct dtfs_mount gdtm;
@@ -60,8 +62,10 @@ static void
 usage()
 {
 
-	errx(1, "usage: %s [-bsdft] [-c hashbuckets] [-o mntopt] "
-	    "[-o puffsopt]\n    [-r rootnodetype] mountpath", getprogname());
+	fprintf(stderr, "usage: %s [-bsdft] [-c hashbuckets] [-m maxreqsize] "
+	    "[-n typename]\n        [-o mntopt] [-o puffsopt] [-p prot] "
+	    "[-r rootnodetype]\n       detrempe mountpath\n", getprogname());
+	exit(1);
 }
 
 /*
@@ -109,11 +113,13 @@ main(int argc, char *argv[])
 	struct puffs_pathobj *po_root;
 	struct puffs_ops *pops;
 	struct timespec ts;
+	const char *typename;
 	char *rtstr;
 	mntoptparse_t mp;
 	int pflags, lflags, mntflags;
 	int ch;
 	int khashbuckets;
+	int maxreqsize;
 
 	setprogname(argv[0]);
 
@@ -121,7 +127,10 @@ main(int argc, char *argv[])
 	lflags = mntflags = 0;
 	khashbuckets = 256;
 	pflags = PUFFS_KFLAG_IAONDEMAND;
-	while ((ch = getopt(argc, argv, "bc:dfio:r:st")) != -1) {
+	typename = FSNAME;
+	maxreqsize = MAXREQMAGIC;
+	gdtm.dtm_allowprot = VM_PROT_ALL;
+	while ((ch = getopt(argc, argv, "bc:dfim:n:o:p:r:st")) != -1) {
 		switch (ch) {
 		case 'b': /* build paths, for debugging the feature */
 			pflags |= PUFFS_FLAG_BUILDPATH;
@@ -138,11 +147,22 @@ main(int argc, char *argv[])
 		case 'i':
 			pflags &= ~PUFFS_KFLAG_IAONDEMAND;
 			break;
+		case 'm':
+			maxreqsize = atoi(optarg);
+			break;
+		case 'n':
+			typename = optarg;
+			break;
 		case 'o':
 			mp = getmntopts(optarg, puffsmopts, &mntflags, &pflags);
 			if (mp == NULL)
 				err(1, "getmntopts");
 			freemntopts(mp);
+			break;
+		case 'p':
+			gdtm.dtm_allowprot = atoi(optarg);
+			if ((gdtm.dtm_allowprot | VM_PROT_ALL) != VM_PROT_ALL)
+				usage();
 			break;
 		case 'r':
 			rtstr = optarg;
@@ -163,7 +183,7 @@ main(int argc, char *argv[])
 	argc -= optind;
 	argv += optind;
 
-	if (argc != 1)
+	if (argc != 2)
 		usage();
 
 	PUFFSOP_INIT(pops);
@@ -183,6 +203,7 @@ main(int argc, char *argv[])
 	PUFFSOP_SET(pops, dtfs, node, remove);
 	PUFFSOP_SET(pops, dtfs, node, readdir);
 	PUFFSOP_SET(pops, dtfs, node, poll);
+	PUFFSOP_SET(pops, dtfs, node, mmap);
 	PUFFSOP_SET(pops, dtfs, node, mkdir);
 	PUFFSOP_SET(pops, dtfs, node, rmdir);
 	PUFFSOP_SET(pops, dtfs, node, rename);
@@ -196,7 +217,7 @@ main(int argc, char *argv[])
 
 	srandom(time(NULL)); /* for random generation numbers */
 
-	pu = puffs_init(pops, FSNAME, &gdtm, pflags);
+	pu = puffs_init(pops, _PATH_PUFFS, typename, &gdtm, pflags);
 	if (pu == NULL)
 		err(1, "init");
 	gpu = pu;
@@ -225,7 +246,10 @@ main(int argc, char *argv[])
 	puffs_ml_setloopfn(pu, loopfun);
 	puffs_ml_settimeout(pu, &ts);
 
-	if (puffs_mount(pu,  argv[0], mntflags, puffs_getroot(pu)) == -1)
+	if (maxreqsize != MAXREQMAGIC)
+		puffs_setmaxreqlen(pu, maxreqsize);
+
+	if (puffs_mount(pu,  argv[1], mntflags, puffs_getroot(pu)) == -1)
 		err(1, "mount");
 	if (puffs_mainloop(pu, lflags) == -1)
 		err(1, "mainloop");

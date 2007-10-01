@@ -1,4 +1,4 @@
-/*	$NetBSD: init_main.c,v 1.305 2007/07/01 07:36:39 xtraeme Exp $	*/
+/*	$NetBSD: init_main.c,v 1.317 2007/09/25 22:33:59 ad Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1989, 1991, 1992, 1993
@@ -71,10 +71,9 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.305 2007/07/01 07:36:39 xtraeme Exp $");
+__KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.317 2007/09/25 22:33:59 ad Exp $");
 
 #include "opt_ipsec.h"
-#include "opt_kcont.h"
 #include "opt_multiprocessor.h"
 #include "opt_ntp.h"
 #include "opt_pipe.h"
@@ -89,6 +88,8 @@ __KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.305 2007/07/01 07:36:39 xtraeme Exp 
 #include "rnd.h"
 #include "sysmon_envsys.h"
 #include "sysmon_power.h"
+#include "sysmon_taskq.h"
+#include "sysmon_wdog.h"
 #include "veriexec.h"
 
 #include <sys/param.h>
@@ -99,7 +100,6 @@ __KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.305 2007/07/01 07:36:39 xtraeme Exp 
 #include <sys/callout.h>
 #include <sys/cpu.h>
 #include <sys/kernel.h>
-#include <sys/kcont.h>
 #include <sys/kmem.h>
 #include <sys/mount.h>
 #include <sys/proc.h>
@@ -126,6 +126,10 @@ __KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.305 2007/07/01 07:36:39 xtraeme Exp 
 #include <sys/sleepq.h>
 #include <sys/iostat.h>
 #include <sys/vmem.h>
+#include <sys/uuid.h>
+#include <sys/extent.h>
+#include <sys/disk.h>
+#include <sys/mqueue.h>
 #ifdef FAST_IPSEC
 #include <netipsec/ipsec.h>
 #endif
@@ -171,6 +175,11 @@ __KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.305 2007/07/01 07:36:39 xtraeme Exp 
 #endif /* PAX_MPROTECT || PAX_SEGVGUARD */
 #include <ufs/ufs/quota.h>
 
+#ifdef DDB
+#include <machine/db_machdep.h>
+#include <ddb/db_command.h>
+#endif
+
 #include <miscfs/genfs/genfs.h>
 #include <miscfs/syncfs/syncfs.h>
 
@@ -178,8 +187,13 @@ __KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.305 2007/07/01 07:36:39 xtraeme Exp 
 
 #include <uvm/uvm.h>
 
+#if NSYSMON_TASKQ > 0
+#include <dev/sysmon/sysmon_taskq.h>
+#endif
+
 #include <dev/cons.h>
-#if NSYSMON_ENVSYS > 0 || NSYSMON_POWER > 0
+
+#if NSYSMON_ENVSYS > 0 || NSYSMON_POWER > 0 || NSYSMON_WDOG > 0
 #include <dev/sysmon/sysmonvar.h>
 #endif
 
@@ -191,6 +205,7 @@ __KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.305 2007/07/01 07:36:39 xtraeme Exp 
 extern struct proc proc0;
 extern struct lwp lwp0;
 extern struct cwdinfo cwdi0;
+extern time_t rootfstime;
 
 #ifndef curlwp
 struct	lwp *curlwp = &lwp0;
@@ -201,7 +216,6 @@ struct	vnode *rootvp, *swapdev_vp;
 int	boothowto;
 int	cold = 1;			/* still working on startup */
 struct timeval boottime;	        /* time at system startup - will only follow settime deltas */
-time_t	rootfstime;			/* recorded root fs time, if known */
 int	ncpu = 0;			/* number of CPUs configured, assume 1 */
 
 volatile int start_init_exec;		/* semaphore for start_init() */
@@ -249,16 +263,25 @@ main(void)
 #ifdef NVNODE_IMPLICIT
 	int usevnodes;
 #endif
+	CPU_INFO_ITERATOR cii;
+	struct cpu_info *ci;
 
-	/*
-	 * Initialize the current LWP pointer (curlwp) before
-	 * any possible traps/probes to simplify trap processing.
-	 */
 	l = &lwp0;
-	curlwp = l;
 	l->l_cpu = curcpu();
 	l->l_proc = &proc0;
 	l->l_lid = 1;
+
+	/*
+	 * XXX This is a temporary check to be removed before
+	 * NetBSD 5.0 is released.
+	 */
+#if !defined(__i386__ ) && !defined(__x86_64__)
+	if (curlwp != l) {
+		printf("NOTICE: curlwp should be set before main()\n");
+		DELAY(250000);
+		curlwp = l;
+	}
+#endif
 
 	/*
 	 * Attempt to find console and initialize
@@ -276,10 +299,13 @@ main(void)
 
 	kmem_init();
 
+	/* Initialize the extent manager. */
+	extent_init();
+
 	/* Do machine-dependent initialization. */
 	cpu_startup();
 
-	/* Initialize callouts. */
+	/* Initialize callouts, part 1. */
 	callout_startup();
 
 	/*
@@ -305,11 +331,6 @@ main(void)
 	/* Initialize sockets. */
 	soinit();
 
-#ifdef KCONT
-	/* Initialize kcont. */
-        kcont_init();
-#endif
-
 	/*
 	 * The following things must be done before autoconfiguration.
 	 */
@@ -328,12 +349,14 @@ main(void)
 	/* Create process 0 (the swapper). */
 	proc0_init();
 
-	/*
-	 * Charge root for one process.
-	 */
+	/* Initialize the UID hash table. */
+	uid_init();
+
+	/* Charge root for one process. */
 	(void)chgproccnt(0, 1);
 
 	/* Initialize the run queues, turnstiles and sleep queues. */
+	mutex_init(&cpu_lock, MUTEX_DEFAULT, IPL_NONE);
 	sched_rqinit();
 	turnstile_init();
 	sleeptab_init(&sleeptab);
@@ -364,19 +387,46 @@ main(void)
 	/* Initialize fstrans. */
 	fstrans_init();
 
+	/* Initialize the select()/poll() system calls. */
+	selsysinit();
+
 	/* Initialize asynchronous I/O. */
 	aio_sysinit();
+
+	/* Initialize message queues. */
+	mqueue_sysinit();
+
+	/* Initialize the system monitor subsystems. */
+#if NSYSMON_TASKQ > 0
+	sysmon_task_queue_preinit();
+#endif
 
 #if NSYSMON_ENVSYS > 0
 	sysmon_envsys_init();
 #endif
+
 #if NSYSMON_POWER > 0
 	sysmon_power_init();
 #endif
+
+#if NSYSMON_WDOG > 0
+	sysmon_wdog_init();
+#endif
+
 #ifdef __HAVE_TIMECOUNTER
 	inittimecounter();
 	ntp_init();
 #endif /* __HAVE_TIMECOUNTER */
+
+#ifdef DDB
+	db_init_commands();
+#endif
+
+	/* Initialize the device switch tables. */
+	devsw_init();
+
+	/* Initialize the disk wedge subsystem. */
+	dkwedge_init();
 
 	/* Configure the system hardware.  This will enable interrupts. */
 	configure();
@@ -477,12 +527,15 @@ main(void)
 #endif
 
 	/* Setup the scheduler */
-	sched_setup();
+	sched_init();
 
 #ifdef KTRACE
 	/* Initialize ktrace. */
 	ktrinit();
 #endif
+
+	/* Initialize the UUID system calls. */
+	uuid_init();
 
 	/*
 	 * Create process 1 (init(8)).  We do this now, as Unix has
@@ -495,12 +548,6 @@ main(void)
 	 */
 	if (fork1(l, 0, SIGCHLD, NULL, 0, start_init, NULL, NULL, &initproc))
 		panic("fork init");
-
-	/*
-	 * Create any kernel threads who's creation was deferred because
-	 * initproc had not yet been created.
-	 */
-	kthread_run_deferred_queue();
 
 	/*
 	 * Now that device driver threads have been created, wait for
@@ -594,13 +641,18 @@ main(void)
 	}
 	mutex_exit(&proclist_lock);
 
+	for (CPU_INFO_FOREACH(cii, ci)) {
+		ci->ci_schedstate.spc_lastmod = time_second;
+	}
+
 	/* Create the pageout daemon kernel thread. */
 	uvm_swap_init();
-	if (kthread_create1(uvm_pageout, NULL, NULL, "pagedaemon"))
+	if (kthread_create(PVM, 0, NULL, uvm_pageout,
+	    NULL, NULL, "pgdaemon"))
 		panic("fork pagedaemon");
 
 	/* Create the filesystem syncer kernel thread. */
-	if (kthread_create1(sched_sync, NULL, NULL, "ioflush"))
+	if (kthread_create(PINOD, 0, NULL, sched_sync, NULL, NULL, "ioflush"))
 		panic("fork syncer");
 
 	/* Create the aiodone daemon kernel thread. */
@@ -627,12 +679,6 @@ main(void)
 	/* The scheduler is an infinite loop. */
 	uvm_scheduler();
 	/* NOTREACHED */
-}
-
-void
-setrootfstime(time_t t)
-{
-	rootfstime = t;
 }
 
 static void

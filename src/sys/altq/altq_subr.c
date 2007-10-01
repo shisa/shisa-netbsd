@@ -1,4 +1,4 @@
-/*	$NetBSD: altq_subr.c,v 1.21 2007/03/05 22:50:32 he Exp $	*/
+/*	$NetBSD: altq_subr.c,v 1.23 2007/09/04 14:17:16 pooka Exp $	*/
 /*	$KAME: altq_subr.c,v 1.24 2005/04/13 03:44:25 suz Exp $	*/
 
 /*
@@ -28,7 +28,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: altq_subr.c,v 1.21 2007/03/05 22:50:32 he Exp $");
+__KERNEL_RCSID(0, "$NetBSD: altq_subr.c,v 1.23 2007/09/04 14:17:16 pooka Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_altq.h"
@@ -91,7 +91,7 @@ __KERNEL_RCSID(0, "$NetBSD: altq_subr.c,v 1.21 2007/03/05 22:50:32 he Exp $");
 static void	tbr_timeout(void *);
 int (*altq_input)(struct mbuf *, int) = NULL;
 static int tbr_timer = 0;	/* token bucket regulator timer */
-static struct callout tbr_callout = CALLOUT_INITIALIZER;
+static struct callout tbr_callout;
 
 #ifdef ALTQ3_CLFIER_COMPAT
 static int 	extract_ports4(struct mbuf *, struct ip *, struct flowinfo_in *);
@@ -783,6 +783,9 @@ extern u_int64_t cycles_per_usec;	/* alpha cpu clock frequency */
 void
 init_machclk(void)
 {
+
+	callout_init(&tbr_callout, 0);
+
 	machclk_usepcc = 1;
 
 #if (!defined(__i386__) && !defined(__alpha__)) || defined(ALTQ_NOPCC)

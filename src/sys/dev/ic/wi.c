@@ -1,4 +1,4 @@
-/*	$NetBSD: wi.c,v 1.219 2007/03/04 06:02:03 christos Exp $	*/
+/*	$NetBSD: wi.c,v 1.221 2007/09/01 07:32:28 dyoung Exp $	*/
 
 /*-
  * Copyright (c) 2004 The NetBSD Foundation, Inc.
@@ -106,7 +106,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: wi.c,v 1.219 2007/03/04 06:02:03 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: wi.c,v 1.221 2007/09/01 07:32:28 dyoung Exp $");
 
 #define WI_HERMES_AUTOINC_WAR	/* Work around data write autoinc bug. */
 #define WI_HERMES_STATS_WAR	/* Work around stats counter bug. */
@@ -547,7 +547,7 @@ wi_attach(struct wi_softc *sc, const u_int8_t *macaddr)
 	sc->sc_cnfauthmode = IEEE80211_AUTH_OPEN;
 	sc->sc_roaming_mode = 1;
 
-	callout_init(&sc->sc_rssadapt_ch);
+	callout_init(&sc->sc_rssadapt_ch, 0);
 
 	/*
 	 * Call MI attach routines.
@@ -1391,10 +1391,7 @@ wi_ioctl(struct ifnet *ifp, u_long cmd, void *data)
 		break;
 	case SIOCADDMULTI:
 	case SIOCDELMULTI:
-		error = (cmd == SIOCADDMULTI) ?
-		    ether_addmulti(ifr, &sc->sc_ec) :
-		    ether_delmulti(ifr, &sc->sc_ec);
-		if (error == ENETRESET) {
+		if ((error = ether_ioctl(ifp, cmd, data)) == ENETRESET) {
 			if (ifp->if_flags & IFF_RUNNING) {
 				/* do not rescan */
 				error = wi_write_multi(sc);

@@ -1,4 +1,4 @@
-/*	$NetBSD: specialreg.h,v 1.17 2007/07/03 17:07:55 christos Exp $	*/
+/*	$NetBSD: specialreg.h,v 1.19 2007/09/26 19:48:38 ad Exp $	*/
 
 /*-
  * Copyright (c) 1991 The Regents of the University of California.
@@ -146,13 +146,14 @@
 #define CPUID_MPC	0x00080000	/* Multiprocessing Capable */
 #define CPUID_NOX	0x00100000	/* No Execute Page Protection */
 #define CPUID_MMXX	0x00400000	/* AMD MMX Extensions */
+#define CPUID_RDTSCP	0x08000000	/* Read TSC Pair Instruction */
 #define CPUID_3DNOW2	0x40000000	/* 3DNow! Instruction Extension */
 #define CPUID_3DNOW	0x80000000	/* 3DNow! Instructions */
 
 #define CPUID_EXT_FLAGS2	"\20\16PGE\17MCA\20CMOV\21PAT\22PSE36\23PN" \
 				    "\24MPC\25NOX\26B21\27MMXX\30MMX"
-#define CPUID_EXT_FLAGS3	"\20\31FXSR\32SSE\33SSE2\34B27\35HTT\36LONG" \
-				    "\0373DNOW2\0403DNOW"
+#define CPUID_EXT_FLAGS3	"\20\31FXSR\32SSE\33SSE2\34RDTSCP\35HTT" \
+				    "\36LONG\0373DNOW2\0403DNOW"
 
 /*
  * Centaur Extended Feature flags
@@ -197,12 +198,6 @@
 /* Extended family and model are defined on amd64 processors */
 #define CPUID2EXTFAMILY(cpuid)	(((cpuid) >> 20) & 0xff)
 #define CPUID2EXTMODEL(cpuid)	(((cpuid) >> 16) & 0xf)
-
-#define CPUID(code, eax, ebx, ecx, edx)                         \
-	__asm("cpuid"                                           \
-	    : "=a" (eax), "=b" (ebx), "=c" (ecx), "=d" (edx)    \
-	    : "a" (code));
-
 
 /*
  * Model-specific registers for the i386 family

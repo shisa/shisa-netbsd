@@ -1,4 +1,4 @@
-/*	$NetBSD: if_hippisubr.c,v 1.28 2007/03/04 06:03:16 christos Exp $	*/
+/*	$NetBSD: if_hippisubr.c,v 1.31 2007/08/30 02:17:35 dyoung Exp $	*/
 
 /*
  * Copyright (c) 1982, 1989, 1993
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_hippisubr.c,v 1.28 2007/03/04 06:03:16 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_hippisubr.c,v 1.31 2007/08/30 02:17:35 dyoung Exp $");
 
 #include "opt_inet.h"
 
@@ -68,8 +68,6 @@ __KERNEL_RCSID(0, "$NetBSD: if_hippisubr.c,v 1.28 2007/03/04 06:03:16 christos E
 #endif
 
 #define senderr(e) { error = (e); goto bad;}
-
-#define SDL(x) ((const struct sockaddr_dl *)x)
 
 #ifndef llc_snap
 #define	llc_snap	llc_un.type_snap
@@ -151,9 +149,9 @@ hippi_output(struct ifnet *ifp, struct mbuf *m0, const struct sockaddr *dst,
 	case AF_INET:
 		if (rt) {
 			const struct sockaddr_dl *sdl =
-				(const struct sockaddr_dl *)SDL(rt->rt_gateway);
+			    satocsdl(rt->rt_gateway);
 			if (sdl->sdl_family == AF_LINK && sdl->sdl_alen != 0)
-				bcopy(CLLADDR(sdl), &ifield, sizeof(ifield));
+				memcpy(&ifield, CLLADDR(sdl), sizeof(ifield));
 		}
 		if (!ifield)  /* XXX:  bogus check, but helps us get going */
 			senderr(EHOSTUNREACH);
@@ -165,9 +163,9 @@ hippi_output(struct ifnet *ifp, struct mbuf *m0, const struct sockaddr *dst,
 	case AF_INET6:
 		if (rt) {
 			const struct sockaddr_dl *sdl =
-				(const struct sockaddr_dl *)SDL(rt->rt_gateway);
+			    satocsdl(rt->rt_gateway);
 			if (sdl->sdl_family == AF_LINK && sdl->sdl_alen != 0)
-				bcopy(CLLADDR(sdl), &ifield, sizeof(ifield));
+				memcpy(&ifield, CLLADDR(sdl), sizeof(ifield));
 		}
 		if (!ifield)  /* XXX:  bogus check, but helps us get going */
 			senderr(EHOSTUNREACH);
@@ -343,7 +341,8 @@ hippi_ifattach(struct ifnet *ifp, void *lla)
 	ifp->if_baudrate = IF_Mbps(800);	/* XXX double-check */
 
 	if_alloc_sadl(ifp);
-	memcpy(LLADDR(ifp->if_sadl), lla, ifp->if_addrlen);
+	sockaddr_dl_setaddr(ifp->if_sadl, ifp->if_sadl->sdl_len, lla,
+	    ifp->if_addrlen);
 
 #if NBPFILTER > 0
 	bpfattach(ifp, DLT_HIPPI, sizeof(struct hippi_header));

@@ -1,4 +1,4 @@
-/*	$NetBSD: param.h,v 1.264 2007/06/30 13:42:47 dsl Exp $	*/
+/*	$NetBSD: param.h,v 1.275 2007/09/07 19:21:42 rmind Exp $	*/
 
 /*-
  * Copyright (c) 1982, 1986, 1989, 1993
@@ -63,7 +63,7 @@
  *	2.99.9		(299000900)
  */
 
-#define	__NetBSD_Version__	499002200	/* NetBSD 4.99.22 */
+#define	__NetBSD_Version__	499003100	/* NetBSD 4.99.31 */
 
 #define __NetBSD_Prereq__(M,m,p) (((((M) * 100000000) + \
     (m) * 1000000) + (p) * 100) <= __NetBSD_Version__)
@@ -158,6 +158,13 @@
 #define	btodb(x)	((x) >> DEV_BSHIFT)
 
 /*
+ * CPU cache values
+ */
+#ifndef CACHE_LINE_SIZE
+#define	CACHE_LINE_SIZE		64
+#endif
+
+/*
  * Stack macros.  On most architectures, the stack grows down,
  * towards lower addresses; it is the rare architecture where
  * it grows up, towards higher addresses.
@@ -209,6 +216,9 @@
 #define	PCATCH		0x100	/* OR'd with pri for tsleep to check signals */
 #define	PNORELOCK	0x200	/* OR'd with pri for cond_wait() to not relock
 				   the interlock */
+
+#define	PRI_NONE	(-1)
+
 #define	NBPW	sizeof(int)	/* number of bytes per word (integer) */
 
 #define	CMASK	022		/* default file mask: S_IWGRP|S_IWOTH */
@@ -257,7 +267,8 @@
 #define	howmany(x, y)	(((x)+((y)-1))/(y))
 #endif
 #define	roundup(x, y)	((((x)+((y)-1))/(y))*(y))
-#define rounddown(x,y)	(((x)/(y))*(y))
+#define	rounddown(x,y)	(((x)/(y))*(y))
+#define	roundup2(x, m)	(((x) + m - 1) & ~(m - 1))
 #define	powerof2(x)	((((x)-1)&(x))==0)
 
 /* Macros for min/max. */

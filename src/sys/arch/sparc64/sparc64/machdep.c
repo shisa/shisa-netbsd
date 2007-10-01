@@ -1,4 +1,4 @@
-/*	$NetBSD: machdep.c,v 1.198 2007/05/17 14:51:32 yamt Exp $ */
+/*	$NetBSD: machdep.c,v 1.202 2007/09/11 16:00:06 martin Exp $ */
 
 /*-
  * Copyright (c) 1996, 1997, 1998 The NetBSD Foundation, Inc.
@@ -78,7 +78,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.198 2007/05/17 14:51:32 yamt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.202 2007/09/11 16:00:06 martin Exp $");
 
 #include "opt_ddb.h"
 #include "opt_multiprocessor.h"
@@ -500,7 +500,7 @@ sendsig_siginfo(const ksiginfo_t *ksi, const sigset_t *mask)
 	    ((l->l_sigstk.ss_flags & SS_ONSTACK)
 		? _UC_SETSTACK : _UC_CLRSTACK);
 	uc.uc_sigmask = *mask;
-	uc.uc_link = NULL;
+	uc.uc_link = l->l_ctxlink;
 	memset(&uc.uc_stack, 0, sizeof(uc.uc_stack));
 
 	sendsig_reset(l, sig);
@@ -1171,7 +1171,7 @@ _bus_dmamap_load_uio(bus_dma_tag_t t, bus_dmamap_t map, struct uio *uio,
 		 * Lock the part of the user address space involved
 		 *    in the transfer.
 		 */
-		PHOLD(p);
+		uvm_lwp_hold(p);
 		if (__predict_false(uvm_vslock(p->p_vmspace, vaddr, buflen,
 			    (uio->uio_rw == UIO_WRITE) ?
 			    VM_PROT_WRITE : VM_PROT_READ) != 0)) {
@@ -1205,7 +1205,7 @@ _bus_dmamap_load_uio(bus_dma_tag_t t, bus_dmamap_t map, struct uio *uio,
 			i++;
 		}
 		uvm_vsunlock(p->p_vmspace, bp->b_data, todo);
-		PRELE(p);
+		uvm_lwp_rele(p);
  		if (buflen > 0 && i >= MAX_DMA_SEGS) 
 			/* Exceeded the size of our dmamap */
 			return EFBIG;
@@ -1513,7 +1513,6 @@ static int	sparc_bus_alloc(bus_space_tag_t, bus_addr_t, bus_addr_t, bus_size_t,
 	bus_size_t, bus_size_t, int, bus_addr_t *, bus_space_handle_t *);
 static void	sparc_bus_free(bus_space_tag_t, bus_space_handle_t, bus_size_t);
 
-vaddr_t iobase = IODEV_BASE;
 struct extent *io_space = NULL;
 
 /*
@@ -1575,8 +1574,6 @@ sparc_bus_map(bus_space_tag_t t, bus_addr_t	addr, bus_size_t size,
 	vm_prot_t pm_prot = VM_PROT_READ;
 	int err, map_little = 0;
 
-	if (iobase == 0UL)
-		iobase = IODEV_BASE;
 	if (io_space == NULL)
 		/*
 		 * And set up IOSPACE extents.
@@ -1956,7 +1953,7 @@ cpu_need_resched(struct cpu_info *ci, int flags)
 
 #if defined(MULTIPROCESSOR)
 	/* Just interrupt the target CPU, so it can notice its AST */
-	if ((flags & RESCHED_IMMED) || ci->ci_cpuid != cpu_number())
-		sparc64_send_ipi(ci->ci_upaid, sparc64_ipi_nop);
+	if ((flags & RESCHED_IMMED) || ci->ci_index != cpu_number())
+		sparc64_send_ipi(ci->ci_cpuid, sparc64_ipi_nop);
 #endif
 }

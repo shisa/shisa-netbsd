@@ -1,4 +1,4 @@
-/*	$NetBSD: puffs_sys.h,v 1.45 2007/07/01 22:54:16 pooka Exp $	*/
+/*	$NetBSD: puffs_sys.h,v 1.53 2007/09/27 23:21:08 pooka Exp $	*/
 
 /*
  * Copyright (c) 2005, 2006  Antti Kantee.  All Rights Reserved.
@@ -53,8 +53,6 @@ extern const struct vnodeopv_desc puffs_fifoop_opv_desc;
 extern const struct vnodeopv_desc puffs_msgop_opv_desc;
 
 extern struct pool puffs_pnpool;
-
-#define PUFFS_NAMEPREFIX "puffs:"
 
 #define PUFFS_SIZEOPREQ_UIO_IN 1
 #define PUFFS_SIZEOPREQ_UIO_OUT 2
@@ -118,6 +116,12 @@ extern int puffsdebug; /* puffs_subr.c */
 
 #define PUFFS_WCACHEINFO(pmp)	0
 
+struct puffs_newcookie {
+	void	*pnc_cookie;
+
+	LIST_ENTRY(puffs_newcookie) pnc_entries;
+};
+
 TAILQ_HEAD(puffs_wq, puffs_park);
 LIST_HEAD(puffs_node_hashlist, puffs_node);
 struct puffs_mount {
@@ -137,6 +141,8 @@ struct puffs_mount {
 
 	struct puffs_node_hashlist	*pmp_pnodehash;
 	int				pmp_npnodehash;
+
+	LIST_HEAD(, puffs_newcookie)	pmp_newcookie;
 
 	struct mount			*pmp_mp;
 
@@ -196,6 +202,8 @@ struct puffs_node {
 	struct timespec	pn_mc_mtime;
 	u_quad_t	pn_mc_size;
 
+	voff_t		pn_serversize;
+
 	LIST_ENTRY(puffs_node) pn_hashent;
 };
 
@@ -222,6 +230,7 @@ void	puffs_vntouser_faf(struct puffs_mount *, int, void *, size_t,
 void	puffs_cacheop(struct puffs_mount *, struct puffs_park *,
 		      struct puffs_cacheinfo *, size_t, void *);
 struct puffs_park *puffs_cacheop_alloc(void);
+void	puffs_errnotify(struct puffs_mount *, uint8_t, int, void *);
 
 int	puffs_getvnode(struct mount *, void *, enum vtype, voff_t, dev_t,
 		       struct vnode **);
@@ -232,7 +241,9 @@ void	puffs_putvnode(struct vnode *);
 void	puffs_releasenode(struct puffs_node *);
 void	puffs_referencenode(struct puffs_node *);
 
-int	puffs_pnode2vnode(struct puffs_mount *, void *, int, struct vnode **);
+#define PUFFS_NOSUCHCOOKIE (-1)
+int	puffs_cookie2vnode(struct puffs_mount *, void *, int, int,
+			   struct vnode **);
 void	puffs_makecn(struct puffs_kcn *, struct puffs_kcred *,
 		     struct puffs_kcid *, const struct componentname *, int);
 void	puffs_credcvt(struct puffs_kcred *, kauth_cred_t);
@@ -244,12 +255,14 @@ void	puffs_parkdone_poll(struct puffs_req *, void *);
 void	puffs_mp_reference(struct puffs_mount *);
 void	puffs_mp_release(struct puffs_mount *);
 
+void	puffs_gop_size(struct vnode *, off_t, off_t *, int); 
+void	puffs_gop_markupdate(struct vnode *, int);
+
 void	puffs_updatenode(struct vnode *, int);
 #define PUFFS_UPDATEATIME	0x01
 #define PUFFS_UPDATECTIME	0x02
 #define PUFFS_UPDATEMTIME	0x04
 #define PUFFS_UPDATESIZE	0x08
-void	puffs_updatevpsize(struct vnode *);
 
 int	puffs_setpmp(pid_t, int, struct puffs_mount *);
 void	puffs_nukebypmp(struct puffs_mount *);

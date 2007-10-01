@@ -1,4 +1,4 @@
-/*	$NetBSD: autoconf.c,v 1.138 2007/06/24 01:43:34 dyoung Exp $ */
+/*	$NetBSD: autoconf.c,v 1.140 2007/08/14 11:10:55 martin Exp $ */
 
 /*
  * Copyright (c) 1996
@@ -48,7 +48,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.138 2007/06/24 01:43:34 dyoung Exp $");
+__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.140 2007/08/14 11:10:55 martin Exp $");
 
 #include "opt_ddb.h"
 #include "opt_kgdb.h"

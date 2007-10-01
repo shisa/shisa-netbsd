@@ -1,4 +1,4 @@
-/*	$NetBSD: if_gm.c,v 1.28 2007/03/04 06:00:10 christos Exp $	*/
+/*	$NetBSD: if_gm.c,v 1.30 2007/09/01 07:32:23 dyoung Exp $	*/
 
 /*-
  * Copyright (c) 2000 Tsubai Masanari.  All rights reserved.
@@ -27,7 +27,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_gm.c,v 1.28 2007/03/04 06:00:10 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_gm.c,v 1.30 2007/09/01 07:32:23 dyoung Exp $");
 
 #include "opt_inet.h"
 #include "rnd.h"
@@ -227,7 +227,7 @@ gmac_attach(parent, self, aux)
 	printf(": Ethernet address %s\n", ether_sprintf(laddr));
 	printf("%s: interrupting at %s\n", sc->sc_dev.dv_xname, intrstr);
 
-	callout_init(&sc->sc_tick_ch);
+	callout_init(&sc->sc_tick_ch, 0);
 
 	gmac_reset(sc);
 	gmac_init_mac(sc);
@@ -854,11 +854,7 @@ gmac_ioctl(ifp, cmd, data)
 
 	case SIOCADDMULTI:
 	case SIOCDELMULTI:
-		error = (cmd == SIOCADDMULTI) ?
-		    ether_addmulti(ifr, &sc->sc_ethercom) :
-		    ether_delmulti(ifr, &sc->sc_ethercom);
-
-		if (error == ENETRESET) {
+		if ((error = ether_ioctl(ifp, cmd, data)) == ENETRESET) {
 			/*
 			 * Multicast list has changed; set the hardware filter
 			 * accordingly.

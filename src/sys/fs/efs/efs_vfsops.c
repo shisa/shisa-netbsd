@@ -1,4 +1,4 @@
-/*	$NetBSD: efs_vfsops.c,v 1.3 2007/07/04 19:24:09 rumble Exp $	*/
+/*	$NetBSD: efs_vfsops.c,v 1.10 2007/09/08 19:19:37 rumble Exp $	*/
 
 /*
  * Copyright (c) 2006 Stephen M. Rumble <rumble@ephemeral.org>
@@ -17,7 +17,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: efs_vfsops.c,v 1.3 2007/07/04 19:24:09 rumble Exp $");
+__KERNEL_RCSID(0, "$NetBSD: efs_vfsops.c,v 1.10 2007/09/08 19:19:37 rumble Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -30,6 +30,7 @@ __KERNEL_RCSID(0, "$NetBSD: efs_vfsops.c,v 1.3 2007/07/04 19:24:09 rumble Exp $"
 #include <sys/fcntl.h>
 #include <sys/stat.h>
 #include <sys/kauth.h>
+#include <sys/proc.h>
 
 #include <miscfs/genfs/genfs_node.h>
 
@@ -151,7 +152,7 @@ efs_mount_common(struct mount *mp, const char *path, struct vnode *devvp,
 	efs_statvfs(mp, &mp->mnt_stat, l);
 
 	err = set_statvfs_info(path, UIO_USERSPACE, args->fspec,
-	    UIO_USERSPACE, mp, l);
+	    UIO_USERSPACE, mp->mnt_op->vfs_name, mp, l);
 	if (err)
 		free(emp, M_EFSMNT);
 
@@ -164,32 +165,33 @@ efs_mount_common(struct mount *mp, const char *path, struct vnode *devvp,
  * Returns 0 on success.
  */
 static int
-efs_mount(struct mount *mp, const char *path, void *data, struct nameidata *ndp,
+efs_mount(struct mount *mp, const char *path, void *data, size_t *data_len,
     struct lwp *l)
 {
-	struct efs_args args;
+	struct efs_args *args = data;
 	struct nameidata devndp;
 	struct efs_mount *emp; 
 	struct vnode *devvp;
 	int err, mode;
 
+	if (*data_len < sizeof *args)
+		return EINVAL;
+
 	if (mp->mnt_flag & MNT_GETARGS) {
 		if ((emp = VFSTOEFS(mp)) == NULL)
 			return (EIO);
-		args.fspec = NULL;
-		args.version = EFS_MNT_VERSION;
-		return (copyout(&args, data, sizeof(args)));
+		args->fspec = NULL;
+		args->version = EFS_MNT_VERSION;
+		*data_len = sizeof *args;
+		return 0;
 	}
-
-	if ((err = copyin(data, &args, sizeof(struct efs_args))))
-		return (err);
 
 	if (mp->mnt_flag & MNT_UPDATE)
 		return (EOPNOTSUPP);	/* XXX read-only */
 
 	/* look up our device's vnode. it is returned locked */
 	NDINIT(&devndp, LOOKUP, FOLLOW | LOCKLEAF,
-	    UIO_USERSPACE, args.fspec, l);
+	    UIO_USERSPACE, args->fspec, l);
 	if ((err = namei(&devndp)))
 		return (err);
 
@@ -219,7 +221,7 @@ efs_mount(struct mount *mp, const char *path, void *data, struct nameidata *ndp,
 		return (err);
 	}
 
-	err = efs_mount_common(mp, path, devvp, &args, l);
+	err = efs_mount_common(mp, path, devvp, args, l);
 	if (err) {
 		VOP_CLOSE(devvp, mode, l->l_cred, l);
 		vput(devvp);
@@ -398,7 +400,6 @@ efs_vget(struct mount *mp, ino_t ino, struct vnode **vpp)
 	}
 
 	efs_sync_dinode_to_inode(eip);
-	vp->v_size = eip->ei_size;
 
 	if (ino == EFS_ROOTINO && !S_ISDIR(eip->ei_mode)) {
 		printf("efs: root inode (%lu) is not a directory!\n",
@@ -440,7 +441,7 @@ efs_vget(struct mount *mp, ino_t ino, struct vnode **vpp)
 		return (EIO);
 	}
 
-	uvm_vnp_setsize(vp, vp->v_size);
+	uvm_vnp_setsize(vp, eip->ei_size);
 	*vpp = vp;
 
 	KASSERT(VOP_ISLOCKED(vp));
@@ -561,13 +562,14 @@ const struct vnodeopv_desc * const efs_vnodeopv_descs[] = {
 
 struct vfsops efs_vfsops = {
 	.vfs_name	= MOUNT_EFS,
+	.vfs_min_mount_data = sizeof (struct efs_args),
 	.vfs_mount	= efs_mount,
 	.vfs_start	= efs_start,
 	.vfs_unmount	= efs_unmount,
 	.vfs_root	= efs_root,
 	.vfs_quotactl	= (void *)eopnotsupp,
 	.vfs_statvfs	= efs_statvfs,
-	.vfs_sync	= (void *)eopnotsupp,
+	.vfs_sync	= (void *)nullop,
 	.vfs_vget	= efs_vget,
 	.vfs_fhtovp	= efs_fhtovp,
 	.vfs_vptofh	= efs_vptofh,
@@ -577,6 +579,7 @@ struct vfsops efs_vfsops = {
 	.vfs_mountroot	= (void *)eopnotsupp,
 	.vfs_snapshot	= (void *)eopnotsupp,
 	.vfs_extattrctl	= vfs_stdextattrctl,
+	.vfs_suspendctl = (void *)eopnotsupp,
 	.vfs_opv_descs	= efs_vnodeopv_descs
 /*	.vfs_refcount */
 /*	.vfs_list */

@@ -1,4 +1,4 @@
-/*	$NetBSD: iso_snpac.c,v 1.43 2007/03/04 06:03:32 christos Exp $	*/
+/*	$NetBSD: iso_snpac.c,v 1.47 2007/09/02 19:42:22 dyoung Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -59,7 +59,7 @@ SOFTWARE.
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: iso_snpac.c,v 1.43 2007/03/04 06:03:32 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: iso_snpac.c,v 1.47 2007/09/02 19:42:22 dyoung Exp $");
 
 #include "opt_iso.h"
 #ifdef ISO
@@ -133,13 +133,7 @@ static struct sockaddr_iso
 	   Bcopy(r, &a.siso_addr, 1 + (r)->isoa_len);}
 #define S(x) ((struct sockaddr *)&(x))
 
-static struct sockaddr_dl blank_dl = {
-	.sdl_len = sizeof(blank_dl),
-	.sdl_family = AF_LINK,
-};
 static struct sockaddr_dl gte_dl;
-#define zap_linkaddr(a, b, c, i) \
-	(*a = blank_dl, memcpy(a->sdl_data, b, a->sdl_alen = c), a->sdl_index = i)
 
 static void snpac_fixdstandmask (int);
 
@@ -207,9 +201,18 @@ llc_rtrequest(int req, struct rtentry *rt, struct rt_addrinfo *info)
 			 * or from a default route.
 			 */
 			if (rt->rt_flags & RTF_CLONING) {
+				union {
+					struct sockaddr sa;
+					struct sockaddr_dl sdl;
+					struct sockaddr_storage ss;
+				} u;
+
 				iso_setmcasts(ifp, req);
-				rt_setgate(rt, rt_key(rt),
-					   (struct sockaddr *) & blank_dl);
+				sockaddr_dl_init(&u.sdl, sizeof(u.ss),
+				    ifp->if_index, ifp->if_type,
+				    NULL, strlen(ifp->if_xname),
+				    NULL, ifp->if_addrlen);
+				rt_setgate(rt, &u.sa);
 				return;
 			}
 			if (lc != 0)
@@ -344,9 +347,8 @@ iso_snparesolve(
 	} else if (iso_systype != SNPA_IS && known_is != 0 &&
 		   (sc = (struct llinfo_llc *) known_is->rt_llinfo) &&
 		   (sc->lc_flags & SNPA_VALID)) {
-		struct sockaddr_dl *sdl =
-		(struct sockaddr_dl *) (known_is->rt_gateway);
-		found_snpa = LLADDR(sdl);
+		const struct sockaddr_dl *sdl = satocsdl(known_is->rt_gateway);
+		found_snpa = CLLADDR(sdl);
 		addrlen = sdl->sdl_alen;
 	} else if (ifp->if_flags & IFF_BROADCAST) {
 		/*
@@ -391,8 +393,8 @@ snpac_free(
 	if (rt && (rt->rt_flags & RTF_UP) &&
 	    (rt->rt_flags & (RTF_DYNAMIC | RTF_MODIFIED))) {
 		RTFREE(rt);
-		rtrequest(RTM_DELETE, rt_key(rt), rt->rt_gateway, rt_mask(rt),
-			  rt->rt_flags, (struct rtentry **) 0);
+		rtrequest(RTM_DELETE, rt_getkey(rt), rt->rt_gateway,
+		    rt_mask(rt), rt->rt_flags, NULL);
 		RTFREE(rt);
 	}
 }
@@ -451,15 +453,16 @@ add:
 			flags = RTF_UP | RTF_HOST;
 		}
 		new_entry = 1;
-		zap_linkaddr((&gte_dl), snpa, snpalen, index);
-		gte_dl.sdl_type = iftype;
+		sockaddr_dl_init(&gte_dl, sizeof(gte_dl), index, iftype,
+		    NULL, 0, snpa, snpalen);
+		 
 		if (rtrequest(RTM_ADD, sisotosa(&dst), S(gte_dl), netmask,
 			      flags, &mrt) || mrt == 0)
 			return (0);
 		rt = mrt;
 		rt->rt_refcnt--;
 	} else {
-		struct sockaddr_dl *sdl = (struct sockaddr_dl *) rt->rt_gateway;
+		struct sockaddr_dl *sdl = satosdl(rt->rt_gateway);
 		rt->rt_refcnt--;
 		if ((rt->rt_flags & RTF_LLINFO) == 0)
 			goto add;
@@ -486,9 +489,8 @@ add:
 				log(LOG_DEBUG, "snpac_add: cant make room for lladdr\n");
 				return (0);
 			}
-			zap_linkaddr(sdl, snpa, snpalen, index);
-			sdl->sdl_len = old_sdl_len;
-			sdl->sdl_type = iftype;
+			sockaddr_dl_init(sdl, sdl->sdl_len, index, iftype,
+			    NULL, 0, snpa, snpalen);
 			new_entry = 1;
 		}
 	}
@@ -602,13 +604,13 @@ snpac_logdefis(struct rtentry *sc)
 	known_is = sc;
 	sc->rt_refcnt++;
 	rt = rtalloc1((struct sockaddr *) & zsi, 0);
-	if (rt == 0)
-		rtrequest(RTM_ADD, sisotosa(&zsi), rt_key(sc), sisotosa(&zmk),
-			  RTF_DYNAMIC | RTF_GATEWAY, 0);
-	else {
+	if (rt == 0) {
+		rtrequest(RTM_ADD, sisotosa(&zsi), rt_getkey(sc),
+		    sisotosa(&zmk), RTF_DYNAMIC | RTF_GATEWAY, 0);
+	} else {
 		if ((rt->rt_flags & RTF_DYNAMIC) &&
 		    (rt->rt_flags & RTF_GATEWAY) && rt_mask(rt)->sa_len == 0)
-			rt_setgate(rt, rt_key(rt), rt_key(sc));
+			rt_setgate(rt, rt_getkey(sc));
 	}
 }
 

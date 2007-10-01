@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_event.c,v 1.38 2007/03/12 18:18:32 ad Exp $	*/
+/*	$NetBSD: kern_event.c,v 1.40 2007/07/21 19:23:03 ad Exp $	*/
 
 /*-
  * Copyright (c) 1999,2000,2001 Jonathan Lemon <jlemon@FreeBSD.org>
@@ -29,7 +29,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_event.c,v 1.38 2007/03/12 18:18:32 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_event.c,v 1.40 2007/07/21 19:23:03 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -54,6 +54,7 @@ __KERNEL_RCSID(0, "$NetBSD: kern_event.c,v 1.38 2007/03/12 18:18:32 ad Exp $");
 #include <sys/filedesc.h>
 #include <sys/syscallargs.h>
 #include <sys/kauth.h>
+#include <sys/conf.h>
 
 static void	kqueue_wakeup(struct kqueue *kq);
 
@@ -505,7 +506,7 @@ filt_timerexpire(void *knx)
 
 	if ((kn->kn_flags & EV_ONESHOT) == 0) {
 		tticks = mstohz(kn->kn_sdata);
-		callout_schedule((struct callout *)kn->kn_hook, tticks);
+		callout_schedule((callout_t *)kn->kn_hook, tticks);
 	}
 }
 
@@ -515,7 +516,7 @@ filt_timerexpire(void *knx)
 static int
 filt_timerattach(struct knote *kn)
 {
-	struct callout *calloutp;
+	callout_t *calloutp;
 	int tticks;
 
 	if (kq_ncallouts >= kq_calloutmax)
@@ -532,9 +533,9 @@ filt_timerattach(struct knote *kn)
 	}
 
 	kn->kn_flags |= EV_CLEAR;		/* automatically set */
-	MALLOC(calloutp, struct callout *, sizeof(*calloutp),
+	MALLOC(calloutp, callout_t *, sizeof(*calloutp),
 	    M_KEVENT, 0);
-	callout_init(calloutp);
+	callout_init(calloutp, 0);
 	callout_reset(calloutp, tticks, filt_timerexpire, kn);
 	kn->kn_hook = calloutp;
 
@@ -544,10 +545,11 @@ filt_timerattach(struct knote *kn)
 static void
 filt_timerdetach(struct knote *kn)
 {
-	struct callout *calloutp;
+	callout_t *calloutp;
 
-	calloutp = (struct callout *)kn->kn_hook;
+	calloutp = (callout_t *)kn->kn_hook;
 	callout_stop(calloutp);
+	callout_destroy(calloutp);
 	FREE(calloutp, M_KEVENT);
 	kq_ncallouts--;
 }

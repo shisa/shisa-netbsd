@@ -1,4 +1,4 @@
-$NetBSD: usbdevs,v 1.477 2007/06/28 03:13:01 itohy Exp $
+$NetBSD: usbdevs,v 1.485 2007/09/22 08:37:01 mlelstv Exp $
 
 /*
  * Copyright (c) 1998-2004 The NetBSD Foundation, Inc.
@@ -366,6 +366,7 @@ vendor CSR		0x0a12	Cambridge Silicon Radio
 vendor TREK		0x0a16	Trek Technology
 vendor ASAHIOPTICAL	0x0a17	Asahi Optical
 vendor BOCASYSTEMS	0x0a43	Boca Systems
+vendor SHANTOU		0x0a46  ShanTou
 vendor MEDIAGEAR	0x0a48	MediaGear
 vendor BROADCOM		0x0a5c	Broadcom
 vendor GREENHOUSE	0x0a6b	GREENHOUSE
@@ -384,6 +385,7 @@ vendor ATI2		0x0b6f	ATI
 vendor ZEEVO		0x0b7a	Zeevo, Inc.
 vendor KURUSUGAWA	0x0b7e	Kurusugawa Electronics, Inc.
 vendor ASIX		0x0b95	ASIX Electronics
+vendor PROLIFIC2	0x0b8c	Prolific Technology Inc
 vendor O2MICRO		0x0b97	O2 Micro
 vendor USR		0x0baf	U.S. Robotics
 vendor AMBIT		0x0bb2	Ambit Microsystems
@@ -490,6 +492,7 @@ vendor MICRONET		0x3980	Micronet Communications
 vendor IODATA2		0x40bb	I-O Data
 vendor IRIVER		0x4102	iRiver
 vendor DELL		0x413c	Dell
+vendor WINCHIPHEAD	0x4348	WinChipHead
 vendor AVERATEC		0x50c2	Averatec
 vendor SWEEX		0x5173	Sweex
 vendor ONSPEC2		0x55aa	OnSpec Electronic Inc.
@@ -1187,6 +1190,7 @@ product HP2 C500		0x6002	PhotoSmart C500
 
 /* Huawei Technologies products */
 product HUAWEI MOBILE		0x1001	Huawei Mobile
+product HUAWEI E220  		0x1003	Huawei E220
 
 /* Huawei-3Com products */
 product HUAWEI3COM RT2573	0x0009	RT2573
@@ -1670,6 +1674,7 @@ product OPTIONNV MC3G		0x5000	Mobile Connect 3G datacard
 product OPTIONNV QUADUMTS2	0x6000	GlobeTrotter Fusion Quad Lite UMTS/GPRS
 product OPTIONNV QUADUMTS	0x6300	GlobeTrotter Fusion Quad Lite 3D
 product OPTIONNV QUADPLUSUMTS	0x6600	GlobeTrotter 3G Quad Plus
+product OPTIONNV HSDPA   	0x6701	GlobeTrotter HSDPA Modem
 
 /* OQO */
 product OQO WIFI01		0x0002	model 01 WiFi interface
@@ -1744,6 +1749,7 @@ product PILOTECH CRW600		0x0001	CRW-600 6-in-1 Reader
 /* Planex Communications products */
 product PLANEX	GW_US11H	0x14ea	GW-US11H WLAN
 product PLANEX2 GW_US11S	0x3220	GW-US11S WLAN
+product PLANEX2 GWUS54GXS	0x5303	GW-US54GXS
 product PLANEX2 GWUS54HP	0xab01	GW-US54HP
 product PLANEX2 GWUS54MINI2	0xab50	GW-US54Mini2
 product PLANEX2 GWUS54SG	0xc002	GW-US54SG
@@ -1803,6 +1809,7 @@ product PROLIFIC ATAPI4		0x2307	ATAPI-4 Bridge Controller
 product PROLIFIC PL2501		0x2501	PL2501 Host-Host interface
 product PROLIFIC PL2303X	0xaaa0	PL2303 Serial adapter (Pharos GPS)
 product PROLIFIC RSAQ3		0xaaa2	PL2303 Serial adapter (IODATA USB-RSAQ3)
+product PROLIFIC2 PL2303	0x2303	PL2303 Serial adapter (SMART Technologies)
 
 /* Putercom products */
 product PUTERCOM UPA100		0x047e	USB-1284 BRIDGE
@@ -1921,6 +1928,9 @@ product SENAO NUB8301		0x2000	NUB-8301
 /* SGI products */
 product SGI SN1_L1_SC		0x1234	SN1 L1 System Controller
 
+/* ShanTou products */
+product SHANTOU ST268_USB_NIC	0x0268  ST268 USB NIC
+
 /* Shark products */
 product SHARK PA		0x0400	Pocket Adapter
 
@@ -1964,6 +1974,8 @@ product SIGMATEL IRDA		0x4200	IrDA
 product SIGMATEL FIR4210	0x4210	StIR4210 FIR
 product SIGMATEL VFIR4220	0x4220	StIR4220 VFIR
 product SIGMATEL I_BEAD100	0x8008	i-Bead 100 MP3 Player
+product SIGMATEL I_BEAD150	0x8009	i-Bead 150 MP3 Player
+product SIGMATEL MUSICSTICK	0x8134	TrekStor Musicstick
 product SIGMATEL DNSSF7X	0x8020	Datum Networks SSF-7X Multi Players
 
 /* SIIG products */
@@ -2236,6 +2248,9 @@ product WACOM GRAPHIRE3_6X8	0x0014	Graphire3 6x8
 product WACOM GRAPHIRE4_4X5	0x0015	Graphire4 4x5
 product WACOM INTUOSA5		0x0021	Intuos A5
 product WACOM GD0912U		0x0022	Intuos 9x12 Graphics Tablet
+
+/* WinChipHead products */
+product WINCHIPHEAD CH341SER	0x5523	CH341/CH340 USB-Serial Bridge
 
 /* Wistron NeWeb products */
 product WISTRONNEWEB UR055G	0x0711	UR055G

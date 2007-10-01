@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_sleepq.c,v 1.9 2007/05/17 14:51:40 yamt Exp $	*/
+/*	$NetBSD: kern_sleepq.c,v 1.14 2007/09/06 23:59:01 ad Exp $	*/
 
 /*-
  * Copyright (c) 2006, 2007 The NetBSD Foundation, Inc.
@@ -42,9 +42,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_sleepq.c,v 1.9 2007/05/17 14:51:40 yamt Exp $");
-
-#include "opt_ktrace.h"
+__KERNEL_RCSID(0, "$NetBSD: kern_sleepq.c,v 1.14 2007/09/06 23:59:01 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/lock.h>
@@ -56,9 +54,7 @@ __KERNEL_RCSID(0, "$NetBSD: kern_sleepq.c,v 1.9 2007/05/17 14:51:40 yamt Exp $")
 #include <sys/sched.h>
 #include <sys/systm.h>
 #include <sys/sleepq.h>
-#ifdef KTRACE
 #include <sys/ktrace.h>
-#endif
 
 #include <uvm/uvm_extern.h>
 
@@ -111,6 +107,7 @@ sleepq_remove(sleepq_t *sq, lwp_t *l)
 {
 	struct schedstate_percpu *spc;
 	struct cpu_info *ci;
+	pri_t pri;
 
 	KASSERT(lwp_locked(l, sq->sq_mutex));
 	KASSERT(sq->sq_waiters > 0);
@@ -165,8 +162,16 @@ sleepq_remove(sleepq_t *sq, lwp_t *l)
 	l->l_slptime = 0;
 	if ((l->l_flag & LW_INMEM) != 0) {
 		sched_enqueue(l, false);
-		if (lwp_eprio(l) < spc->spc_curpriority)
-			cpu_need_resched(ci, 0);
+		pri = lwp_eprio(l);
+		/* XXX This test is not good enough! */
+		if ((pri < spc->spc_curpriority && pri < PUSER) ||
+#ifdef MULTIPROCESSOR
+		   ci->ci_curlwp == ci->ci_data.cpu_idlelwp) {
+#else
+		   curlwp == ci->ci_data.cpu_idlelwp) {
+#endif
+			cpu_need_resched(ci, RESCHED_IMMED);
+		}
 		spc_unlock(ci);
 		return 0;
 	}
@@ -194,7 +199,10 @@ sleepq_insert(sleepq_t *sq, lwp_t *l, syncobj_t *sobj)
 		}
 	}
 
-	TAILQ_INSERT_TAIL(&sq->sq_queue, l, l_sleepchain);
+	if ((sobj->sobj_flag & SOBJ_SLEEPQ_LIFO) != 0)
+		TAILQ_INSERT_HEAD(&sq->sq_queue, l, l_sleepchain);
+	else
+		TAILQ_INSERT_TAIL(&sq->sq_queue, l, l_sleepchain);
 }
 
 /*
@@ -237,14 +245,12 @@ sleepq_enqueue(sleepq_t *sq, pri_t pri, wchan_t wchan, const char *wmesg,
 int
 sleepq_block(int timo, bool catch)
 {
-	int error = 0, expired, sig;
+	int error = 0, sig;
 	struct proc *p;
 	lwp_t *l = curlwp;
+	bool early = false;
 
-#ifdef KTRACE
-	if (KTRPOINT(l->l_proc, KTR_CSW))
-		ktrcsw(l, 1, 0);
-#endif
+	ktrcsw(1, 0);
 
 	/*
 	 * If sleeping interruptably, check for pending signals, exits or
@@ -252,42 +258,34 @@ sleepq_block(int timo, bool catch)
 	 */
 	if (catch) {
 		l->l_flag |= LW_SINTR;
-		if ((l->l_flag & LW_PENDSIG) != 0 && sigispending(l, 0)) {
-			/* lwp_unsleep() will release the lock */
-			lwp_unsleep(l);
-			error = EINTR;
-			goto catchit;
-		}
 		if ((l->l_flag & (LW_CANCELLED|LW_WEXIT|LW_WCORE)) != 0) {
 			l->l_flag &= ~LW_CANCELLED;
-			/* lwp_unsleep() will release the lock */
-			lwp_unsleep(l);
 			error = EINTR;
-			goto catchit;
-		}
+			early = true;
+		} else if ((l->l_flag & LW_PENDSIG) != 0 && sigispending(l, 0))
+			early = true;
 	}
 
-	if (timo)
-		callout_reset(&l->l_tsleep_ch, timo, sleepq_timeout, l);
+	if (early) {
+		/* lwp_unsleep() will release the lock */
+		lwp_unsleep(l);
+	} else {
+		if (timo)
+			callout_schedule(&l->l_timeout_ch, timo);
+		mi_switch(l);
 
-	mi_switch(l);
-
-	/*
-	 * When we reach this point, the LWP and sleep queue are unlocked.
-	 */
-	if (timo) {
-		/*
-		 * Even if the callout appears to have fired, we need to
-		 * stop it in order to synchronise with other CPUs.
-		 */
-		expired = callout_expired(&l->l_tsleep_ch);
-		callout_stop(&l->l_tsleep_ch);
-		if (expired)
-			error = EWOULDBLOCK;
+		/* The LWP and sleep queue are now unlocked. */
+		if (timo) {
+			/*
+			 * Even if the callout appears to have fired, we need to
+			 * stop it in order to synchronise with other CPUs.
+			 */
+			if (callout_stop(&l->l_timeout_ch))
+				error = EWOULDBLOCK;
+		}
 	}
 
 	if (catch && error == 0) {
-  catchit:
 		p = l->l_proc;
 		if ((l->l_flag & (LW_CANCELLED | LW_WEXIT | LW_WCORE)) != 0)
 			error = EINTR;
@@ -301,10 +299,7 @@ sleepq_block(int timo, bool catch)
 		}
 	}
 
-#ifdef KTRACE
-	if (KTRPOINT(l->l_proc, KTR_CSW))
-		ktrcsw(l, 0, 0);
-#endif
+	ktrcsw(0, 0);
 
 	KERNEL_LOCK(l->l_biglocks, l);
 	return error;

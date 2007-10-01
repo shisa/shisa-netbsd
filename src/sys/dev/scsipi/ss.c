@@ -1,4 +1,4 @@
-/*	$NetBSD: ss.c,v 1.70 2007/03/04 06:02:44 christos Exp $	*/
+/*	$NetBSD: ss.c,v 1.72 2007/07/29 12:50:23 ad Exp $	*/
 
 /*
  * Copyright (c) 1995 Kenneth Stailey.  All rights reserved.
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ss.c,v 1.70 2007/03/04 06:02:44 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ss.c,v 1.72 2007/07/29 12:50:23 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -166,7 +166,7 @@ ssattach(struct device *parent, struct device *self, void *aux)
 	 */
 	bufq_alloc(&ss->buf_queue, "fcfs", 0);
 
-	callout_init(&ss->sc_callout);
+	callout_init(&ss->sc_callout, 0);
 
 	/*
 	 * look for non-standard scanners with help of the quirk table
@@ -411,7 +411,6 @@ ssstrategy(struct buf *bp)
 	 * If the device has been made invalid, error out
 	 */
 	if (!device_is_active(&ss->sc_dev)) {
-		bp->b_flags |= B_ERROR;
 		if (periph->periph_flags & PERIPH_OPEN)
 			bp->b_error = EIO;
 		else
@@ -421,7 +420,6 @@ ssstrategy(struct buf *bp)
 
 	/* If negative offset, error */
 	if (bp->b_blkno < 0) {
-		bp->b_flags |= B_ERROR;
 		bp->b_error = EINVAL;
 		goto done;
 	}
@@ -525,8 +523,6 @@ ssdone(struct scsipi_xfer *xs, int error)
 	if (bp) {
 		bp->b_error = error;
 		bp->b_resid = xs->resid;
-		if (error)
-			bp->b_flags |= B_ERROR;
 		biodone(bp);
 	}
 }

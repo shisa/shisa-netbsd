@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_time.c,v 1.124 2007/05/21 15:35:48 christos Exp $	*/
+/*	$NetBSD: kern_time.c,v 1.128 2007/08/09 07:36:19 pooka Exp $	*/
 
 /*-
  * Copyright (c) 2000, 2004, 2005 The NetBSD Foundation, Inc.
@@ -68,7 +68,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_time.c,v 1.124 2007/05/21 15:35:48 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_time.c,v 1.128 2007/08/09 07:36:19 pooka Exp $");
 
 #include <sys/param.h>
 #include <sys/resourcevar.h>
@@ -95,10 +95,6 @@ POOL_INIT(ptimer_pool, sizeof(struct ptimer), 0, 0, 0, "ptimerpl",
     &pool_allocator_nointr, IPL_NONE);
 POOL_INIT(ptimers_pool, sizeof(struct ptimers), 0, 0, 0, "ptimerspl",
     &pool_allocator_nointr, IPL_NONE);
-
-#ifdef __HAVE_TIMECOUNTER
-static int itimespecfix(struct timespec *);		/* XXX move itimerfix to timespecs */
-#endif /* __HAVE_TIMECOUNTER */
 
 /* Time of day and interval timer support.
  *
@@ -685,7 +681,7 @@ timer_create1(timer_t *tid, clockid_t id, struct sigevent *evp,
 	pt->pt_entry = timerid;
 	timerclear(&pt->pt_time.it_value);
 	if (id == CLOCK_REALTIME)
-		callout_init(&pt->pt_ch);
+		callout_init(&pt->pt_ch, 0);
 	else
 		pt->pt_active = 0;
 
@@ -713,9 +709,10 @@ sys_timer_delete(struct lwp *l, void *v, register_t *retval)
 	    ((pt = p->p_timers->pts_timers[timerid]) == NULL))
 		return (EINVAL);
 
-	if (pt->pt_type == CLOCK_REALTIME)
+	if (pt->pt_type == CLOCK_REALTIME) {
 		callout_stop(&pt->pt_ch);
-	else if (pt->pt_active) {
+		callout_destroy(&pt->pt_ch);
+	} else if (pt->pt_active) {
 		s = splclock();
 		ptn = LIST_NEXT(pt, pt_list);
 		LIST_REMOVE(pt, pt_list);
@@ -1183,7 +1180,7 @@ dosetitimer(struct proc *p, int which, struct itimerval *itvp)
 		pt->pt_entry = which;
 		switch (which) {
 		case ITIMER_REAL:
-			callout_init(&pt->pt_ch);
+			callout_init(&pt->pt_ch, 0);
 			pt->pt_ev.sigev_signo = SIGALRM;
 			break;
 		case ITIMER_VIRTUAL:
@@ -1285,8 +1282,10 @@ timers_free(struct proc *p, int which)
 		}
 		for ( ; i < TIMER_MAX; i++)
 			if ((pt = pts->pts_timers[i]) != NULL) {
-				if (pt->pt_type == CLOCK_REALTIME)
+				if (pt->pt_type == CLOCK_REALTIME) {
 					callout_stop(&pt->pt_ch);
+					callout_destroy(&pt->pt_ch);
+				}
 				pts->pts_timers[i] = NULL;
 				pool_put(&ptimer_pool, pt);
 			}
@@ -1298,36 +1297,6 @@ timers_free(struct proc *p, int which)
 		}
 	}
 }
-
-/*
- * Check that a proposed value to load into the .it_value or
- * .it_interval part of an interval timer is acceptable, and
- * fix it to have at least minimal value (i.e. if it is less
- * than the resolution of the clock, round it up.)
- */
-int
-itimerfix(struct timeval *tv)
-{
-
-	if (tv->tv_sec < 0 || tv->tv_usec < 0 || tv->tv_usec >= 1000000)
-		return (EINVAL);
-	if (tv->tv_sec == 0 && tv->tv_usec != 0 && tv->tv_usec < tick)
-		tv->tv_usec = tick;
-	return (0);
-}
-
-#ifdef __HAVE_TIMECOUNTER
-int
-itimespecfix(struct timespec *ts)
-{
-
-	if (ts->tv_sec < 0 || ts->tv_nsec < 0 || ts->tv_nsec >= 1000000000)
-		return (EINVAL);
-	if (ts->tv_sec == 0 && ts->tv_nsec != 0 && ts->tv_nsec < tick * 1000)
-		ts->tv_nsec = tick * 1000;
-	return (0);
-}
-#endif /* __HAVE_TIMECOUNTER */
 
 /*
  * Decrement an interval timer by a specified number

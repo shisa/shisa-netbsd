@@ -1,4 +1,4 @@
-/*	$NetBSD: awacs.c,v 1.28 2007/03/25 23:25:23 macallan Exp $	*/
+/*	$NetBSD: awacs.c,v 1.30 2007/08/14 16:18:20 macallan Exp $	*/
 
 /*-
  * Copyright (c) 2000 Tsubai Masanari.  All rights reserved.
@@ -27,7 +27,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: awacs.c,v 1.28 2007/03/25 23:25:23 macallan Exp $");
+__KERNEL_RCSID(0, "$NetBSD: awacs.c,v 1.30 2007/08/14 16:18:20 macallan Exp $");
 
 #include <sys/param.h>
 #include <sys/audioio.h>
@@ -82,7 +82,7 @@ struct awacs_softc {
 	int sc_have_perch;
 	int vol_l, vol_r;
 	int sc_bass, sc_treble;
-	struct proc *sc_thread;
+	lwp_t *sc_thread;
 	int sc_event;
 	int sc_output_wanted;
 #if NSGSMIX > 0
@@ -144,7 +144,6 @@ static void awacs_set_loopthrough_volume(struct awacs_softc *, int, int);
 static int awacs_set_rate(struct awacs_softc *, const audio_params_t *);
 static void awacs_select_output(struct awacs_softc *, int);
 static int awacs_check_headphones(struct awacs_softc *);
-static void awacs_create_thread(void *);
 static void awacs_thread(void *);
 
 #if NSGSMIX > 0
@@ -412,6 +411,15 @@ awacs_attach(struct device *parent, struct device *self, void *aux)
 
         printf("%s: ", sc->sc_dev.dv_xname);
 
+	/*
+	 * all(?) awacs have GPIOs to detect if there's something plugged into
+	 * the headphone jack. The other GPIOs are either used for other jacks
+	 * ( the PB3400c's microphone jack for instance ) or unused.
+	 * The problem is that there are at least three different ways how
+	 * those GPIOs are wired to the actual jacks.
+	 * For now we bother only with headphone detection
+	 */
+	perch = OF_finddevice("/perch");
 	root_node = OF_finddevice("/");
 	if (of_compatible(root_node, detect_reversed) != -1) {
 
@@ -422,16 +430,15 @@ awacs_attach(struct device *parent, struct device *self, void *aux)
 		 */
 		sc->sc_headphones_mask = 0x8;
 		sc->sc_headphones_in = 0x0;
-	} else if (sc->sc_screamer) {
-
+	} else if (perch != -1) {
 		/*
-		 * XXX 
-		 * not sure if that's true for all screamers or just beige G3
+		 * this is for the beige G3's 'personality card' which uses
+		 * yet another wiring of the headphone detect GPIOs
 		 */
 		sc->sc_headphones_mask = 0x04;
 		sc->sc_headphones_in = 0x04;
 	} else {
-		/* while on other machines it's high active as well */
+		/* while on most machines it's high active as well */
 		sc->sc_headphones_mask = 0x8;
 		sc->sc_headphones_in = 0x8;
 	}
@@ -474,7 +481,7 @@ awacs_attach(struct device *parent, struct device *self, void *aux)
 	sc->sc_sgsmix = NULL;
 #endif
 	sc->sc_have_perch = 0;
-	if ((perch = OF_finddevice("/perch")) != -1) {
+	if (perch != -1) {
 
 		len = OF_getprop(perch, "compatible", compat, 255);
 		if (len > 0) {
@@ -491,7 +498,10 @@ awacs_attach(struct device *parent, struct device *self, void *aux)
 
 	audio_attach_mi(&awacs_hw_if, sc, &sc->sc_dev);
 	
-	kthread_create(awacs_create_thread, sc);
+	if (kthread_create(PRI_NONE, 0, NULL, awacs_thread, sc,
+	    &sc->sc_thread, "%s", "awacs") != 0) {
+		printf("awacs: unable to create event kthread");
+	}
 }
 
 static int
@@ -1304,17 +1314,6 @@ awacs_status_intr(void *cookie)
 	/* clear the interrupt */
 	awacs_write_reg(sc, AWACS_SOUND_CTRL, sc->sc_soundctl | AWACS_PORTCHG);
 	return 1;
-}
-
-static void
-awacs_create_thread(void *cookie)
-{
-	struct awacs_softc *sc = cookie;
-	
-	if (kthread_create1(awacs_thread, sc, &sc->sc_thread, "%s",
-	    "awacs") != 0) {
-		printf("awacs: unable to create event kthread");
-	}
 }
 
 static void

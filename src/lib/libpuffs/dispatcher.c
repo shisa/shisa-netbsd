@@ -1,4 +1,4 @@
-/*	$NetBSD: dispatcher.c,v 1.10 2007/07/02 10:24:17 pooka Exp $	*/
+/*	$NetBSD: dispatcher.c,v 1.12 2007/09/27 21:14:49 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006, 2007  Antti Kantee.  All Rights Reserved.
@@ -30,7 +30,7 @@
 
 #include <sys/cdefs.h>
 #if !defined(lint)
-__RCSID("$NetBSD: dispatcher.c,v 1.10 2007/07/02 10:24:17 pooka Exp $");
+__RCSID("$NetBSD: dispatcher.c,v 1.12 2007/09/27 21:14:49 pooka Exp $");
 #endif /* !lint */
 
 #include <sys/types.h>
@@ -68,6 +68,8 @@ puffs_dopreq(struct puffs_usermount *pu, struct puffs_req *preq,
 	 * the cacheops here already, since they don't need a cc.
 	 * I really should get around to revamping the operation
 	 * dispatching code one of these days.
+	 *
+	 * Do the same for error notifications.
 	 */
 	if (PUFFSOP_OPCLASS(preq->preq_opclass) == PUFFSOP_CACHE) {
 		struct puffs_cacheinfo *pci = (void *)preq;
@@ -77,6 +79,13 @@ puffs_dopreq(struct puffs_usermount *pu, struct puffs_req *preq,
 
 		pu->pu_ops.puffs_cache_write(pu, preq->preq_cookie,
 		    pci->pcache_nruns, pci->pcache_runs);
+		return 0;
+	} else if (PUFFSOP_OPCLASS(preq->preq_opclass) == PUFFSOP_ERROR) {
+		struct puffs_error *perr = (void *)preq;
+
+		pu->pu_errnotify(pu, preq->preq_optype,
+		    perr->perr_error, preq->preq_cookie);
+		return 0;
 	}
 
 	if (pu->pu_flags & PUFFS_FLAG_OPDUMP)
@@ -463,7 +472,7 @@ puffs_calldispatcher(struct puffs_cc *pcc)
 			}
 
 			error = pops->puffs_node_mmap(pcc,
-			    opcookie, auxt->pvnr_fflags, pcr, pcid);
+			    opcookie, auxt->pvnr_prot, pcr, pcid);
 			break;
 		}
 

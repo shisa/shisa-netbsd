@@ -68,9 +68,6 @@ __FBSDID("$FreeBSD: src/sys/dev/cxgb/cxgb_main.c,v 1.21 2007/05/29 04:18:21 kmac
 #ifdef __FreeBSD__
 #include <net/ethernet.h>
 #endif
-#ifdef __NetBSD__
-#define ETHER_ADDR_LEN 6
-#endif
 #include <net/if.h>
 #include <net/if_arp.h>
 #include <net/if_dl.h>
@@ -79,6 +76,7 @@ __FBSDID("$FreeBSD: src/sys/dev/cxgb/cxgb_main.c,v 1.21 2007/05/29 04:18:21 kmac
 
 #include <netinet/in_systm.h>
 #include <netinet/in.h>
+#include <netinet/if_inarp.h>
 #ifdef __FreeBSD__
 #include <netinet/if_ether.h>
 #endif
@@ -110,34 +108,38 @@ __FBSDID("$FreeBSD: src/sys/dev/cxgb/cxgb_main.c,v 1.21 2007/05/29 04:18:21 kmac
 
 #ifdef __NetBSD__
 #include <altq/altq_conf.h>
-typedef char *caddr_t;
 #endif
 
+#ifdef __FreeBSD__
 static int cxgb_setup_msix(adapter_t *, int);
 static void cxgb_init(void *);
+#endif
+#ifdef __NetBSD__
+static int cxgb_init(struct ifnet *);
+#endif
 static void cxgb_init_locked(struct port_info *);
 static void cxgb_stop_locked(struct port_info *);
 static void cxgb_set_rxmode(struct port_info *);
+#ifdef __FreeBSD__
 static int cxgb_ioctl(struct ifnet *, unsigned long, caddr_t);
+#endif
+#ifdef __NetBSD__
+static int cxgb_ioctl(struct ifnet *, unsigned long, void *);
+#endif
 static void cxgb_start(struct ifnet *);
+#ifdef __FreeBSD__
 static void cxgb_start_proc(void *, int ncount);
+#endif
 static int cxgb_media_change(struct ifnet *);
 static void cxgb_media_status(struct ifnet *, struct ifmediareq *);
 static int setup_sge_qsets(adapter_t *);
+#ifdef __FreeBSD__
 static void cxgb_async_intr(void *);
 static void cxgb_ext_intr_handler(void *, int);
+#endif
 static void cxgb_down(struct adapter *sc);
 static void cxgb_tick(void *);
 static void setup_rss(adapter_t *sc);
-
-#ifdef __NetBSD__
-int device_printf(device_t dev, const char *fmt, ...);
-
-int device_printf(device_t dev, const char *fmt, ...)
-{
-    return (0);
-}
-#endif
 
 /* Attachment glue for the PCI controller end of the device.  Each port of
  * the device is attached separately, as defined later.
@@ -147,19 +149,31 @@ static int cxgb_controller_probe(device_t);
 static int cxgb_controller_attach(device_t);
 static int cxgb_controller_detach(device_t);
 #endif
+#ifdef __NetBSD__
+static int cxgb_controller_match(device_t dev, struct cfdata *match, void *context);
+static void cxgb_controller_attach(device_t dev, device_t self, void *context);
+static int cxgb_controller_detach(device_t dev, int flags);
+#endif
 static void cxgb_free(struct adapter *);
 static __inline void reg_block_dump(struct adapter *ap, uint8_t *buf, unsigned int start,
     unsigned int end);
+#ifdef __FreeBSD__
 static void cxgb_get_regs(adapter_t *sc, struct ifconf_regs *regs, uint8_t *buf);
 static int cxgb_get_regs_len(void);
-#ifdef __FreeBSD__
 static int offload_open(struct port_info *pi);
 static int offload_close(struct toedev *tdev);
 #endif
 
+#if 0
 #ifdef __FreeBSD__
 static d_ioctl_t cxgb_extension_ioctl;
+#endif
+#ifdef __NetBSD__
+static int cxgb_extension_ioctl(dev_t dev, uint32_t cmd, void *data, int fflag, struct lwp *mylwp);
+#endif
+#endif
 
+#ifdef __FreeBSD__
 static device_method_t cxgb_controller_methods[] = {
 	DEVMETHOD(device_probe,		cxgb_controller_probe),
 	DEVMETHOD(device_attach,	cxgb_controller_attach),
@@ -180,15 +194,28 @@ static driver_t cxgb_controller_driver = {
 
 static devclass_t	cxgb_controller_devclass;
 DRIVER_MODULE(cxgbc, pci, cxgb_controller_driver, cxgb_controller_devclass, 0, 0);
+#endif
+
+#ifdef __NetBSD__
+CFATTACH_DECL(cxgbc, sizeof(struct adapter), cxgb_controller_match, cxgb_controller_attach, cxgb_controller_detach, NULL);
+#endif
 
 /*
  * Attachment glue for the ports.  Attachment is done directly to the
  * controller device.
  */
+#ifdef __FreeBSD__
 static int cxgb_port_probe(device_t);
 static int cxgb_port_attach(device_t);
 static int cxgb_port_detach(device_t);
+#endif
+#ifdef __NetBSD__
+static int cxgb_port_match(device_t dev, struct cfdata *match, void *context);
+static void cxgb_port_attach(device_t dev, device_t self, void *context);
+static int cxgb_port_detach(device_t dev, int flags);
+#endif
 
+#ifdef __FreeBSD__
 static device_method_t cxgb_port_methods[] = {
 	DEVMETHOD(device_probe,		cxgb_port_probe),
 	DEVMETHOD(device_attach,	cxgb_port_attach),
@@ -206,9 +233,15 @@ static devclass_t	cxgb_port_devclass;
 DRIVER_MODULE(cxgb, cxgbc, cxgb_port_driver, cxgb_port_devclass, 0, 0);
 #endif
 
+#ifdef __NetBSD__
+CFATTACH_DECL(cxgb, 0, cxgb_port_match, cxgb_port_attach, cxgb_port_detach, NULL);
+#endif
+
 #define SGE_MSIX_COUNT (SGE_QSETS + 1)
 
 extern int collapse_mbufs;
+
+#ifdef MSI_SUPPORTED
 /*
  * The driver uses the best interrupt scheme available on a platform in the
  * order MSI-X, MSI, legacy pin interrupts.  This parameter determines which
@@ -220,12 +253,13 @@ extern int collapse_mbufs;
  */
 static int msi_allowed = 2;
 
-#ifdef __FreeBSD__
 TUNABLE_INT("hw.cxgb.msi_allowed", &msi_allowed);
 SYSCTL_NODE(_hw, OID_AUTO, cxgb, CTLFLAG_RD, 0, "CXGB driver parameters");
 SYSCTL_UINT(_hw_cxgb, OID_AUTO, msi_allowed, CTLFLAG_RDTUN, &msi_allowed, 0,
     "MSI-X, MSI, INTx selector");
+#endif
 
+#ifdef __FreeBSD__
 /*
  * The driver enables offload as a default.
  * To disable it, use ofld_disable = 1.
@@ -243,6 +277,20 @@ static int singleq = 1;
 TUNABLE_INT("hw.cxgb.singleq", &singleq);
 SYSCTL_UINT(_hw_cxgb, OID_AUTO, singleq, CTLFLAG_RDTUN, &singleq, 0,
     "use a single queue-set per port");
+#endif
+
+#ifdef __NetBSD__
+/*
+ * The driver enables offload as a default.
+ * To disable it, use ofld_disable = 1.
+ */
+static int ofld_disable = 0;
+
+/*
+ * The driver uses an auto-queue algorithm by default.
+ * To disable it and force a single queue-set per port, use singleq = 1.
+ */
+static int singleq = 1;
 #endif
 
 enum {
@@ -341,6 +389,53 @@ cxgb_controller_probe(device_t dev)
 }
 #endif
 
+#ifdef __NetBSD__
+static struct cxgb_ident *cxgb_get_ident(struct pci_attach_args *pa)
+{
+	struct cxgb_ident *id;
+	int vendorid, deviceid;
+
+	vendorid = PCI_VENDOR(pci_conf_read(pa->pa_pc, pa->pa_tag, PCI_ID_REG));
+	deviceid = PCI_PRODUCT(pci_conf_read(pa->pa_pc, pa->pa_tag, PCI_ID_REG));
+
+	for (id = cxgb_identifiers; id->desc != NULL; id++) {
+		if ((id->vendor == vendorid) &&
+		    (id->device == deviceid)) {
+			return (id);
+		}
+	}
+	return (NULL);
+}
+
+static const struct adapter_info *cxgb_get_adapter_info(struct pci_attach_args *pa)
+{
+	struct cxgb_ident *id;
+	const struct adapter_info *ai;
+      
+	id = cxgb_get_ident(pa);
+	if (id == NULL)
+		return (NULL);
+
+	ai = t3_get_adapter_info(id->index);
+
+	return (ai);
+}
+
+static int cxgb_controller_match(device_t dev, struct cfdata *match, void *context)
+{
+	struct pci_attach_args *pa = context;
+	const struct adapter_info *ai;
+
+	ai = cxgb_get_adapter_info(pa);
+	if (ai == NULL)
+		return (0);
+
+	printf("%s, %d port(s)\n", ai->desc, ai->nports);
+
+	return (100); // we ARE the best driver for this card!!
+}
+#endif
+
 #ifdef __FreeBSD__
 static int
 upgrade_fw(adapter_t *sc)
@@ -371,70 +466,142 @@ upgrade_fw(adapter_t *sc)
 }
 #endif
 
+#ifdef __NetBSD__
+int cxgb_cfprint(void *aux, const char *info);
+int cxgb_cfprint(void *aux, const char *info)
+{
+	struct cxgb_attach_args *cxgb_args = aux;
+
+	printf("cxgb_cfprint - port = %d\n", cxgb_args->port);
+
+	if (info)
+		printf("cxgb_cfprint(%p, \"%s\")\n", aux, info);
+	else
+		printf("cxgb_cfprint(%p, NULL)\n", aux);
+
+	return (QUIET);
+}
+#endif
+
 #ifdef __FreeBSD__
 static int
 cxgb_controller_attach(device_t dev)
+#endif
+#ifdef __NetBSD__
+static void 
+cxgb_controller_attach(device_t dev, device_t self, void *context)
+#endif
 {
 	device_t child;
 	const struct adapter_info *ai;
-	struct adapter *sc;
-	int i, reg, msi_needed, error = 0;
+#ifdef __FreeBSD__
+	struct adapter *sc = device_get_softc(dev);
+#endif
+#ifdef __NetBSD__
+	struct adapter *sc = (struct adapter *)self;  // device is first thing in adapter
+	struct pci_attach_args *pa = context;
+	struct cxgb_attach_args cxgb_args;
+#endif
+	int i, error = 0;
+#ifdef MSI_SUPPORTED
+	int msi_needed;
+#endif
+	int reg;
 	uint32_t vers;
 	int port_qsets = 1;
-	    
-	sc = device_get_softc(dev);
+
+	MARK;
+	printf("dev=%p, sc=%p\n", dev, sc);
+
 	sc->dev = dev;
+#ifdef __NetBSD__
+	sc->chip = pa->pa_pc;
+	sc->tag = pa->pa_tag;
+#endif
 	sc->msi_count = 0;
 	
 	/* find the PCIe link width and set max read request to 4KB*/
-	if (pci_find_extcap(dev, PCIY_EXPRESS, &reg) == 0) {
+#ifdef __FreeBSD__
+	reg = t3_os_find_pci_capability(sc, PCIY_EXPRESS);
+#endif
+#ifdef __NetBSD__
+	reg = t3_os_find_pci_capability(sc, PCI_CAP_PCIEXPRESS);
+#endif
+	if (reg) {
 		uint16_t lnk, pectl;
-		lnk = pci_read_config(dev, reg + 0x12, 2);
+		printf("PCI express card\n");
+		t3_os_pci_read_config_2(sc, reg + 0x12, &lnk);
 		sc->link_width = (lnk >> 4) & 0x3f;
 		
-		pectl = pci_read_config(dev, reg + 0x8, 2);
+		t3_os_pci_read_config_2(sc, reg + 0x8, &pectl);
 		pectl = (pectl & ~0x7000) | (5 << 12);
-		pci_write_config(dev, reg + 0x8, pectl, 2);
+		t3_os_pci_write_config_2(sc, reg + 0x8, pectl);
 	}
 	if (sc->link_width != 0 && sc->link_width <= 4) {
 		device_printf(sc->dev,
 		    "PCIe x%d Link, expect reduced performance\n",
 		    sc->link_width);
 	}
-	
+
+#ifdef __FreeBSD__
 	pci_enable_busmaster(dev);
+#endif
+#ifdef __NetBSD__
+	t3_os_pci_read_config_4(sc, PCI_COMMAND_STATUS_REG, &reg);
+	reg |= PCI_COMMAND_MASTER_ENABLE;
+	t3_os_pci_write_config_4(sc, PCI_COMMAND_STATUS_REG, reg);
+#endif
 
 	/*
 	 * Allocate the registers and make them available to the driver.
 	 * The registers that we care about for NIC mode are in BAR 0
 	 */
+#ifdef __FreeBSD__
 	sc->regs_rid = PCIR_BAR(0);
 	if ((sc->regs_res = bus_alloc_resource_any(dev, SYS_RES_MEMORY,
 	    &sc->regs_rid, RF_ACTIVE)) == NULL) {
 		device_printf(dev, "Cannot allocate BAR\n");
 		return (ENXIO);
 	}
+#endif
+#ifdef __NetBSD__
+	sc->regs_rid = PCI_MAPREG_START;
+	t3_os_pci_read_config_4(sc, PCI_MAPREG_START, &reg);
+	printf("BAR0 = %08x\n", reg);
+
+	// call bus_space_map
+#endif
 
 	mtx_init(&sc->sge.reg_lock, "SGE reg lock", NULL, MTX_DEF);
 	mtx_init(&sc->lock, "cxgb controller lock", NULL, MTX_DEF);
 	mtx_init(&sc->mdio_lock, "cxgb mdio", NULL, MTX_DEF);
 	
+#ifdef __FreeBSD__
 	sc->bt = rman_get_bustag(sc->regs_res);
 	sc->bh = rman_get_bushandle(sc->regs_res);
 	sc->mmio_len = rman_get_size(sc->regs_res);
+#endif
 
+#ifdef __FreeBSD__
 	ai = cxgb_get_adapter_info(dev);
+#endif
+#ifdef __NetBSD__
+	ai = cxgb_get_adapter_info(pa);
+#endif
+	MARK;
 	if (t3_prep_adapter(sc, ai, 1) < 0) {
+		MARK;
 		error = ENODEV;
 		goto out;
 	}
-	
+	MARK;
+
+#ifdef MSI_SUPPORTED
 	/* Allocate the BAR for doing MSI-X.  If it succeeds, try to allocate
 	 * enough messages for the queue sets.  If that fails, try falling
 	 * back to MSI.  If that fails, then try falling back to the legacy
 	 * interrupt pin model.
 	 */
-#ifdef MSI_SUPPORTED
 
 	sc->msix_regs_rid = 0x20;
 	if ((msi_allowed >= 2) &&
@@ -477,7 +644,7 @@ cxgb_controller_attach(device_t dev)
 		sc->irq_rid = 0;
 		sc->cxgb_intr = t3b_intr;
 	}
-
+	MARK;
 
 #ifdef __FreeBSD__
 	/* Create a private taskqueue thread for handling driver events */
@@ -499,9 +666,17 @@ cxgb_controller_attach(device_t dev)
 #endif
 	
 	/* Create a periodic callout for checking adapter status */
+#ifdef __FreeBSD__
 	callout_init_mtx(&sc->cxgb_tick_ch, &sc->lock, CALLOUT_RETURNUNLOCKED);
+#endif
+#ifdef __NetBSD__
+	callout_init(&sc->cxgb_tick_ch, 0);
+#endif
 	
+	MARK;
 	if (t3_check_fw_version(sc) != 0) {
+		MARK;
+
 		/*
 		 * Warn user that a firmware update will be attempted in init.
 		 */
@@ -513,35 +688,57 @@ cxgb_controller_attach(device_t dev)
 	}
 	
 	if ((sc->flags & USING_MSIX) && !singleq)
+#ifdef __FreeBSD__
 		port_qsets = min((SGE_QSETS/(sc)->params.nports), mp_ncpus);
+#endif
+#ifdef __NetBSD__
+		port_qsets = (SGE_QSETS/(sc)->params.nports);
+#endif
 
 	/*
 	 * Create a child device for each MAC.  The ethernet attachment
 	 * will be done in these children.
 	 */	
+	printf("nports=%d\n", (sc)->params.nports);
 	for (i = 0; i < (sc)->params.nports; i++) {
+#ifdef __FreeBSD__
 		if ((child = device_add_child(dev, "cxgb", -1)) == NULL) {
 			device_printf(dev, "failed to add child port\n");
 			error = EINVAL;
 			goto out;
 		}
+#endif
+#ifdef __NetBSD__
+		// XXXXXXXXXXXXXXXXXXXXXXXXXX
+		cxgb_args.port = i;
+		child = config_found_sm_loc(self, NULL, NULL, &cxgb_args, cxgb_cfprint, NULL);
+#endif
 		sc->portdev[i] = child;
 		sc->port[i].adapter = sc;
 		sc->port[i].nqsets = port_qsets;
 		sc->port[i].first_qset = i*port_qsets;
 		sc->port[i].port = i;
+#ifdef __FreeBSD__
 		device_set_softc(child, &sc->port[i]);
+#endif
 	}
+#ifdef __FreeBSD__
 	if ((error = bus_generic_attach(dev)) != 0)
 		goto out;
+#endif
+#ifdef __NetBSD__
+	// XXXXXXXXXXXXXXXXXXXXXXXXX
+#endif
 
 	/*
 	 * XXX need to poll for link status
 	 */
 	sc->params.stats_update_period = 1;
 
+	MARK;
 	/* initialize sge private state */
 	t3_sge_init_sw(sc);
+	MARK;
 
 	t3_led_ready(sc);
 	
@@ -558,26 +755,40 @@ cxgb_controller_attach(device_t dev)
 	    G_FW_VERSION_MAJOR(vers), G_FW_VERSION_MINOR(vers),
 	    G_FW_VERSION_MICRO(vers));
 
+#if 0
 	t3_add_sysctls(sc);
+#endif
 out:
+	MARK;
 	if (error)
 		cxgb_free(sc);
-
+	MARK;
+#ifdef __FreeBSD__
 	return (error);
+#endif
 }
 
+#ifdef __FreeBSD__
 static int
 cxgb_controller_detach(device_t dev)
+#endif
+#ifdef __NetBSD__
+static int cxgb_controller_detach(device_t dev, int flags)
+#endif
 {
-	struct adapter *sc;
+#ifdef __FreeBSD__
+	struct adapter *sc = device_get_softc(dev);
+#endif
+#ifdef __NetBSD__
+	struct adapter *sc = (struct adapter *)dev;  // device is first thing in adapter
+#endif
 
-	sc = device_get_softc(dev);
-
+	MARK;
+	printf("dev=%p, sc=%p\n", dev, sc);
 	cxgb_free(sc);
 
 	return (0);
 }
-#endif
 
 static void
 cxgb_free(struct adapter *sc)
@@ -601,12 +812,17 @@ cxgb_free(struct adapter *sc)
 		bus_release_resource(sc->dev, SYS_RES_MEMORY, sc->msix_regs_rid,
 		    sc->msix_regs_res);
 	}
+#endif
 	
 	/*
 	 * XXX need to drain the ifq by hand until
 	 * it is taught about mbuf iovecs
 	 */ 
+#ifdef __FreeBSD__
 	callout_drain(&sc->cxgb_tick_ch);
+#endif
+#ifdef __NetBSD__
+	callout_stop(&sc->cxgb_tick_ch);
 #endif
 
 	t3_sge_deinit_sw(sc);
@@ -688,6 +904,7 @@ setup_sge_qsets(adapter_t *sc)
 	return (0);
 }
 
+#ifdef __FreeBSD__
 static int
 cxgb_setup_msix(adapter_t *sc, int msix_count)
 {
@@ -720,7 +937,7 @@ cxgb_setup_msix(adapter_t *sc, int msix_count)
 			    
 			rid = k + 2;
 			if (cxgb_debug)
-				printf("rid=%d ", rid);
+				printf("rid=%d\n", rid);
 #ifdef __FreeBSD__
 			if ((sc->msix_irq_res[k] = bus_alloc_resource_any(
 			    sc->dev, SYS_RES_IRQ, &rid,
@@ -751,21 +968,35 @@ cxgb_setup_msix(adapter_t *sc, int msix_count)
 static int
 cxgb_port_probe(device_t dev)
 {
-#ifdef __FreeBSD__
-	struct port_info *p;
+	struct port_info *p = device_get_softc(dev);
 	char buf[80];
-
-	p = device_get_softc(dev);
 
 	snprintf(buf, sizeof(buf), "Port %d %s", p->port, p->port_type->desc);
 	device_set_desc_copy(dev, buf);
-#endif
-#ifdef __NetBSD__
-	printf("Huh?!?\n");
-#endif
+
 	return (0);
 }
+#endif
 
+#ifdef __NetBSD__
+static int cxgb_port_match(device_t dev, struct cfdata *match, void *context)
+{
+	struct port_info *p = (struct port_info *)dev;  // device is first thing in adapter
+	char buf[80];
+	struct cxgb_attach_args *cxgb_args = context;
+
+	printf("cxgb_port_match(%p, %p, %p)\n", dev, match, context);
+
+	printf("port = %d\n", cxgb_args->port);
+	return (0);
+
+	printf("==> port %d %s\n", p->port, p->port_type->desc);
+	snprintf(buf, sizeof(buf), "Port %d %s", p->port, p->port_type->desc);
+//	device_set_desc_copy(dev, buf);
+
+	return (0);
+}
+#endif
 
 #ifdef __FreeBSD__
 static int
@@ -776,8 +1007,10 @@ cxgb_makedev(struct port_info *pi)
 	if ((cxgb_cdevsw = malloc(sizeof(struct cdevsw), M_DEVBUF, M_NOWAIT|M_ZERO)) == NULL)
 		return (ENOMEM);
 	
+#ifdef __FreeBSD__
 	cxgb_cdevsw->d_version = D_VERSION;
 	cxgb_cdevsw->d_name = strdup(pi->ifp->if_xname, M_DEVBUF);
+#endif
 	cxgb_cdevsw->d_ioctl = cxgb_extension_ioctl;	
 	
 	pi->port_cdev = make_dev(cxgb_cdevsw, 0, UID_ROOT, GID_WHEEL, 0600,
@@ -792,7 +1025,7 @@ cxgb_makedev(struct port_info *pi)
 }
 #endif
 
-
+#ifdef __FreeBSD__
 #ifdef TSO_SUPPORTED
 #define CXGB_CAP (IFCAP_VLAN_HWTAGGING | IFCAP_VLAN_MTU | IFCAP_HWCSUM | IFCAP_VLAN_HWCSUM | IFCAP_TSO | IFCAP_JUMBO_MTU)
 /* Don't enable TSO6 yet */
@@ -804,34 +1037,76 @@ cxgb_makedev(struct port_info *pi)
 #define IFCAP_TSO4 0x0
 #define CSUM_TSO   0x0
 #endif
+#endif
 
+#ifdef __NetBSD__
+#define IFCAP_HWCSUM (IFCAP_CSUM_IPv4_Rx | IFCAP_CSUM_IPv4_Tx)
+#define IFCAP_RXCSUM IFCAP_CSUM_IPv4_Rx
+#define IFCAP_TXCSUM IFCAP_CSUM_IPv4_Tx
+#ifdef TSO_SUPPORTED
+#define CXGB_CAP (IFCAP_HWCSUM | IFCAP_TSO)
+/* Don't enable TSO6 yet */
+#define CXGB_CAP_ENABLE (IFCAP_HWCSUM | IFCAP_TSO4)
+#else
+#define CXGB_CAP (IFCAP_HWCSUM)
+/* Don't enable TSO6 yet */
+#define CXGB_CAP_ENABLE (IFCAP_HWCSUM)
+#define IFCAP_TSO4 0x0
+#define CSUM_TSO   0x0
+#endif
+#endif
 
 #ifdef __FreeBSD__
-static int
-cxgb_port_attach(device_t dev)
+static int cxgb_port_attach(device_t dev)
+#endif
+#ifdef __NetBSD__
+static void cxgb_port_attach(device_t dev, device_t self, void *context)
+#endif
 {
-	struct port_info *p;
+#ifdef __FreeBSD__
+	struct port_info *p = device_get_softc(dev);
+	int err;
+#endif
+#ifdef __NetBSD__
+	struct port_info *p = (struct port_info *)dev;  // device is first thing in adapter
+#endif
 	struct ifnet *ifp;
 	int media_flags;
-	int err;
 	char buf[64];
 	
-	p = device_get_softc(dev);
-
 	snprintf(buf, sizeof(buf), "cxgb port %d", p->port);  	
 	mtx_init(&p->lock, buf, 0, MTX_DEF);
 
 	/* Allocate an ifnet object and set it up */
+#ifdef __FreeBSD__
 	ifp = p->ifp = if_alloc(IFT_ETHER);
+#endif
+#ifdef __NetBSD__
+	ifp = p->ifp = (void *)malloc(sizeof (struct ifnet), M_IFADDR, M_WAITOK);
+#endif
 	if (ifp == NULL) {
 		device_printf(dev, "Cannot allocate ifnet\n");
+#ifdef __FreeBSD__
 		return (ENOMEM);
+#endif
+#ifdef __NetBSD__
+		return;
+#endif
 	}
+#ifdef __NetBSD__
+	memset(ifp, 0, sizeof(struct ifnet));
+#endif
 	
 	/*
 	 * Note that there is currently no watchdog timer.
 	 */
+#ifdef __FreeBSD__
 	if_initname(ifp, device_get_name(dev), device_get_unit(dev));
+#endif
+#ifdef __NetBSD__
+	snprintf(buf, sizeof(buf), "cxgb%d", p->port);  	
+	strcpy(ifp->if_xname, buf);
+#endif
 	ifp->if_init = cxgb_init;
 	ifp->if_softc = p;
 	ifp->if_flags = IFF_BROADCAST | IFF_SIMPLEX | IFF_MULTICAST;
@@ -839,25 +1114,39 @@ cxgb_port_attach(device_t dev)
 	ifp->if_start = cxgb_start;
 	ifp->if_timer = 0;	/* Disable ifnet watchdog */
 	ifp->if_watchdog = NULL;
-
+#ifdef __FreeBSD__
 	ifp->if_snd.ifq_drv_maxlen = TX_ETH_Q_SIZE;
 	IFQ_SET_MAXLEN(&ifp->if_snd, ifp->if_snd.ifq_drv_maxlen);
+#endif
+#ifdef __NetBSD__
+	ifp->if_snd.ifq_maxlen = TX_ETH_Q_SIZE;
+	IFQ_SET_MAXLEN(&ifp->if_snd, ifp->if_snd.ifq_maxlen);
+#endif
 	IFQ_SET_READY(&ifp->if_snd);
 
+#ifdef __FreeBSD__
 	ifp->if_hwassist = ifp->if_capabilities = ifp->if_capenable = 0;
+#endif
+#ifdef __NetBSD__
+	ifp->if_capabilities = ifp->if_capenable = 0;
+#endif
 	ifp->if_capabilities |= CXGB_CAP;
 	ifp->if_capenable |= CXGB_CAP_ENABLE;
+#ifdef __FreeBSD__
 	ifp->if_hwassist |= (CSUM_TCP | CSUM_UDP | CSUM_IP | CSUM_TSO);
-	ifp->if_baudrate = 100000000;
+#endif
+	ifp->if_baudrate = 10000000000;
 	
 	ether_ifattach(ifp, p->hw_addr);
 #ifdef DEFAULT_JUMBO
 	ifp->if_mtu = 9000;
 #endif	
+#ifdef __FreeBSD__
 	if ((err = cxgb_makedev(p)) != 0) {
 		printf("makedev failed %d\n", err);
 		return (err);
 	}
+#endif
 	ifmedia_init(&p->media, IFM_IMASK, cxgb_media_change,
 	    cxgb_media_status);
 
@@ -869,7 +1158,12 @@ cxgb_port_attach(device_t dev)
 	        media_flags = IFM_ETHER | IFM_10G_LR;
 	else {
 	        printf("unsupported media type %s\n", p->port_type->desc);
+#ifdef __FreeBSD__
 		return (ENXIO);
+#endif
+#ifdef __NetBSD__
+		return;
+#endif
 	}
 		
 	ifmedia_add(&p->media, media_flags, 0, NULL);
@@ -891,22 +1185,37 @@ cxgb_port_attach(device_t dev)
 	
 	if (p->tq == NULL) {
 		device_printf(dev, "failed to allocate port task queue\n");
+#ifdef __FreeBSD__
 		return (ENOMEM);
+#endif
+#ifdef __NetBSD__
+		return;
+#endif
 	}	
 	taskqueue_start_threads(&p->tq, 1, PI_NET, "%s taskq",
 	    device_get_nameunit(dev));
 	TASK_INIT(&p->start_task, 0, cxgb_start_proc, ifp);
 #endif
 	
+#ifdef __FreeBSD__
 	return (0);
+#endif
 }
 
 static int
+#ifdef __FreeBSD__
 cxgb_port_detach(device_t dev)
+#endif
+#ifdef __NetBSD__
+cxgb_port_detach(device_t dev, int flags)
+#endif
 {
-	struct port_info *p;
-
-	p = device_get_softc(dev);
+#ifdef __FreeBSD__
+	struct port_info *p = device_get_softc(dev);
+#endif
+#ifdef __NetBSD__
+	struct port_info *p = (struct port_info *)dev;  // device is first thing in adapter
+#endif
 
 	PORT_LOCK(p);
 	cxgb_stop_locked(p);
@@ -922,14 +1231,15 @@ cxgb_port_detach(device_t dev)
 #endif
 	
 	ether_ifdetach(p->ifp);
+#ifdef __FreeBSD__
 	if_free(p->ifp);
-	
 	destroy_dev(p->port_cdev);
-
-
+#endif
+#ifdef __NetBSD__
+	if_detach(p->ifp);
+#endif
 	return (0);
 }
-#endif
 
 void
 t3_fatal_err(struct adapter *sc)
@@ -942,11 +1252,11 @@ t3_fatal_err(struct adapter *sc)
 		    fw_status[0], fw_status[1], fw_status[2], fw_status[3]);
 }
 
-#ifdef __FreeBSD__
 int
 t3_os_find_pci_capability(adapter_t *sc, int cap)
 {
 	device_t dev;
+#ifdef __FreeBSD__
 	struct pci_devinfo *dinfo;
 	pcicfgregs *cfg;
 	uint32_t status;
@@ -979,13 +1289,51 @@ t3_os_find_pci_capability(adapter_t *sc, int cap)
 			return (ptr);
 		ptr = pci_read_config(dev, ptr + PCICAP_NEXTPTR, 1);
 	}
+#endif
+#ifdef __NetBSD__
+	uint32_t status;
+	uint32_t bhlc;
+	uint32_t temp;
+	uint8_t ptr;
 
+	dev = sc->dev;
+
+	status = pci_conf_read(sc->chip, sc->tag, PCI_COMMAND_STATUS_REG);
+	if (!(status&PCI_STATUS_CAPLIST_SUPPORT))
+		return (0);
+
+	bhlc = pci_conf_read(sc->chip, sc->tag, PCI_BHLC_REG);
+	switch (PCI_HDRTYPE(bhlc))
+	{
+	case 0:
+	case 1:
+		ptr = PCI_CAPLISTPTR_REG;
+		break;
+	case 2:
+		ptr = PCI_CARDBUS_CAPLISTPTR_REG;
+		break;
+	default:
+		return (0);
+	}
+
+	temp = pci_conf_read(sc->chip, sc->tag, ptr);
+	ptr = PCI_CAPLIST_PTR(temp);
+
+	while (ptr != 0) {
+		temp = pci_conf_read(sc->chip, sc->tag, ptr);
+		if (PCI_CAPLIST_CAP(temp) == cap)
+			return (ptr);
+
+		ptr = PCI_CAPLIST_NEXT(temp);
+	}
+#endif
 	return (0);
 }
 
 int
 t3_os_pci_save_state(struct adapter *sc)
 {
+#if 0
 	device_t dev;
 	struct pci_devinfo *dinfo;
 
@@ -993,12 +1341,14 @@ t3_os_pci_save_state(struct adapter *sc)
 	dinfo = device_get_ivars(dev);
 
 	pci_cfg_save(dev, dinfo, 0);
+#endif
 	return (0);
 }
 
 int
 t3_os_pci_restore_state(struct adapter *sc)
 {
+#if 0
 	device_t dev;
 	struct pci_devinfo *dinfo;
 
@@ -1006,9 +1356,9 @@ t3_os_pci_restore_state(struct adapter *sc)
 	dinfo = device_get_ivars(dev);
 
 	pci_cfg_restore(dev, dinfo);
+#endif
 	return (0);
 }
-#endif
 
 /**
  *	t3_os_link_changed - handle link status changes
@@ -1158,6 +1508,7 @@ offload_tx(struct toedev *tdev, struct mbuf *m)
 	return ret;
 }
 
+#ifdef __FreeBSD__
 static int
 write_smt_entry(struct adapter *adapter, int idx)
 {
@@ -1202,6 +1553,7 @@ init_port_mtus(adapter_t *adapter)
 		mtus |= adapter->port[1].ifp->if_mtu << 16;
 	t3_write_reg(adapter, A_TP_MTU_PORT_TABLE, mtus);
 }
+#endif
 
 static void
 send_pktsched_cmd(struct adapter *adap, int sched, int qidx, int lo,
@@ -1257,12 +1609,13 @@ cxgb_up(struct adapter *sc)
 	int err = 0;
 
 	if ((sc->flags & FULL_INIT_DONE) == 0) {
-
+#ifdef __FreeBSD__
 		if ((sc->flags & FW_UPTODATE) == 0)
 			err = upgrade_fw(sc);
 
 		if (err)
 			goto out;
+#endif
 
 		err = t3_init_hw(sc, 0);
 		if (err)
@@ -1280,6 +1633,7 @@ cxgb_up(struct adapter *sc)
 
 	t3_intr_clear(sc);
 
+#ifdef __FreeBSD__  // XXXXXXXXXXXXXXXXXXXXXXXXXXX
 	/* If it's MSI or INTx, allocate a single interrupt for everything */
 	if ((sc->flags & USING_MSIX) == 0) {
 		if ((sc->irq_res = bus_alloc_resource_any(sc->dev, SYS_RES_IRQ,
@@ -1302,6 +1656,7 @@ cxgb_up(struct adapter *sc)
 	} else {
 		cxgb_setup_msix(sc, sc->msi_count);
 	}
+#endif
 
 	t3_sge_start(sc);
 	t3_intr_enable(sc);
@@ -1311,7 +1666,9 @@ cxgb_up(struct adapter *sc)
 	sc->flags |= QUEUES_BOUND;
 out:
 	return (err);
+#ifdef __FreeBSD__
 irq_err:
+#endif
 	CH_ERR(sc, "request_irq failed, err %d\n", err);
 	goto out;
 }
@@ -1330,40 +1687,51 @@ cxgb_down(struct adapter *sc)
 
 	for (i = 0; i < SGE_QSETS; i++) {
 		if (sc->msix_intr_tag[i] != NULL) {
+#ifdef __FreeBSD__ // XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 			bus_teardown_intr(sc->dev, sc->msix_irq_res[i],
 			    sc->msix_intr_tag[i]);
+#endif
 			sc->msix_intr_tag[i] = NULL;
 		}
 		if (sc->msix_irq_res[i] != NULL) {
+#ifdef __FreeBSD__ // XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 			bus_release_resource(sc->dev, SYS_RES_IRQ,
 			    sc->msix_irq_rid[i], sc->msix_irq_res[i]);
+#endif
 			sc->msix_irq_res[i] = NULL;
 		}
 	}
 
 	if (sc->intr_tag != NULL) {
+#ifdef __FreeBSD__ // XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 		bus_teardown_intr(sc->dev, sc->irq_res, sc->intr_tag);
+#endif
 		sc->intr_tag = NULL;
 	}
 	if (sc->irq_res != NULL) {
 		device_printf(sc->dev, "de-allocating interrupt irq_rid=%d irq_res=%p\n",
 		    sc->irq_rid, sc->irq_res);
+#ifdef __FreeBSD__ // XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 		bus_release_resource(sc->dev, SYS_RES_IRQ, sc->irq_rid,
 		    sc->irq_res);
+#endif
 		sc->irq_res = NULL;
 	}
 
-	callout_drain(&sc->sge_timer_ch);
 #ifdef __FreeBSD__
+	callout_drain(&sc->sge_timer_ch);
 	taskqueue_drain(sc->tq, &sc->slow_intr_task);
 	taskqueue_drain(sc->tq, &sc->timer_reclaim_task);
 #endif
+#ifdef __NetBSD__
+	callout_stop(&sc->sge_timer_ch);
+#endif
 }
 
-#ifdef __FreeBSD__
 static int
 offload_open(struct port_info *pi)
 {
+#ifdef __FreeBSD__
 	struct adapter *adapter = pi->adapter;
 	struct toedev *tdev = TOEDEV(pi->ifp);
 	int adap_up = adapter->open_device_map & PORT_MASK;
@@ -1405,8 +1773,13 @@ out:
 		cxgb_set_dummy_ops(tdev);
 	}
 	return (err);
+#endif
+#ifdef __NetBSD__
+	return (0);
+#endif
 }
 
+#ifdef __FreeBSD__
 static int
 offload_close(struct toedev *tdev)
 {
@@ -1432,14 +1805,29 @@ offload_close(struct toedev *tdev)
 }
 #endif
 
+#ifdef __FreeBSD__
 static void
 cxgb_init(void *arg)
+#endif
+#ifdef __NetBSD__
+static int
+cxgb_init(struct ifnet *ifp)
+#endif
 {
+#ifdef __FreeBSD__
 	struct port_info *p = arg;
+#endif
+#ifdef __NetBSD__
+	struct port_info *p = ifp->if_softc;
+#endif
 
 	PORT_LOCK(p);
 	cxgb_init_locked(p);
 	PORT_UNLOCK(p);
+
+#ifdef __NetBSD__
+	return (0); // ???????????
+#endif
 }
 
 static void
@@ -1521,8 +1909,14 @@ cxgb_stop_locked(struct port_info *p)
 	ADAPTER_UNLOCK(p->adapter);
 }
 
+#ifdef __FreeBSD__
 static int
 cxgb_ioctl(struct ifnet *ifp, unsigned long command, caddr_t data)
+#endif
+#ifdef __NetBSD__
+static int
+cxgb_ioctl(struct ifnet *ifp, unsigned long command, void *data)
+#endif
 {
 	struct port_info *p = ifp->if_softc;
 	struct ifaddr *ifa = (struct ifaddr *)data;
@@ -1549,8 +1943,14 @@ cxgb_ioctl(struct ifnet *ifp, unsigned long command, caddr_t data)
 	case SIOCGIFADDR:
 		if (ifa->ifa_addr->sa_family == AF_INET) {
 			ifp->if_flags |= IFF_UP;
-			if (!(ifp->if_drv_flags & IFF_DRV_RUNNING)) {
+			if (!(ifp->if_drv_flags & IFF_DRV_RUNNING)) 
+			{
+#ifdef __FreeBSD__
 				cxgb_init(p);
+#endif
+#ifdef __NetBSD__
+				cxgb_init(ifp);
+#endif
 			}
 			arp_ifinit(ifp, ifa);
 		} else
@@ -1559,7 +1959,8 @@ cxgb_ioctl(struct ifnet *ifp, unsigned long command, caddr_t data)
 	case SIOCSIFFLAGS:
 		if (ifp->if_flags & IFF_UP) {
 			PORT_LOCK(p);			
-			if (ifp->if_drv_flags & IFF_DRV_RUNNING) {
+			if (ifp->if_drv_flags & IFF_DRV_RUNNING)
+			{
 				flags = p->if_flags;
 				if (((ifp->if_flags ^ flags) & IFF_PROMISC) ||
 				    ((ifp->if_flags ^ flags) & IFF_ALLMULTI))
@@ -1570,9 +1971,15 @@ cxgb_ioctl(struct ifnet *ifp, unsigned long command, caddr_t data)
 			p->if_flags = ifp->if_flags;
 			PORT_UNLOCK(p);
 		} else {
+#ifdef __FreeBSD__
 			callout_drain(&p->adapter->cxgb_tick_ch);
+#endif
+#ifdef __NetBSD__
+			callout_stop(&p->adapter->cxgb_tick_ch);
+#endif
 			PORT_LOCK(p);
-			if (ifp->if_drv_flags & IFF_DRV_RUNNING) {
+			if (ifp->if_drv_flags & IFF_DRV_RUNNING)
+			{
 				cxgb_stop_locked(p);
 			} else {
 				adapter_t *sc = p->adapter;
@@ -1591,15 +1998,24 @@ cxgb_ioctl(struct ifnet *ifp, unsigned long command, caddr_t data)
 		break;
 	case SIOCSIFCAP:
 		PORT_LOCK(p);
+#ifdef __FreeBSD__
 		mask = ifr->ifr_reqcap ^ ifp->if_capenable;
+#endif
+#ifdef __NetBSD__
+		mask = ifp->if_capenable;
+#endif
 		if (mask & IFCAP_TXCSUM) {
 			if (IFCAP_TXCSUM & ifp->if_capenable) {
 				ifp->if_capenable &= ~(IFCAP_TXCSUM|IFCAP_TSO4);
+#ifdef __FreeBSD__
 				ifp->if_hwassist &= ~(CSUM_TCP | CSUM_UDP
 				    | CSUM_TSO);
+#endif
 			} else {
 				ifp->if_capenable |= IFCAP_TXCSUM;
+#ifdef __FreeBSD__
 				ifp->if_hwassist |= (CSUM_TCP | CSUM_UDP);
+#endif
 			}
 		} else if (mask & IFCAP_RXCSUM) {
 			if (IFCAP_RXCSUM & ifp->if_capenable) {
@@ -1611,10 +2027,14 @@ cxgb_ioctl(struct ifnet *ifp, unsigned long command, caddr_t data)
 		if (mask & IFCAP_TSO4) {
 			if (IFCAP_TSO4 & ifp->if_capenable) {
 				ifp->if_capenable &= ~IFCAP_TSO4;
+#ifdef __FreeBSD__
 				ifp->if_hwassist &= ~CSUM_TSO;
+#endif
 			} else if (IFCAP_TXCSUM & ifp->if_capenable) {
 				ifp->if_capenable |= IFCAP_TSO4;
+#ifdef __FreeBSD__
 				ifp->if_hwassist |= CSUM_TSO;
+#endif
 			} else {
 				if (cxgb_debug)
 					printf("cxgb requires tx checksum offload"
@@ -1644,7 +2064,12 @@ cxgb_start_tx(struct ifnet *ifp, uint32_t txmax)
 	if (!p->link_config.link_ok)
 		return (ENXIO);
 
+#ifdef __FreeBSD__
 	if (IFQ_DRV_IS_EMPTY(&ifp->if_snd))
+#endif
+#ifdef __NetBSD__
+	if (IFQ_IS_EMPTY(&ifp->if_snd))
+#endif
 		return (ENOBUFS);
 
 	qs = &p->adapter->sge.qs[p->first_qset];
@@ -1655,13 +2080,23 @@ cxgb_start_tx(struct ifnet *ifp, uint32_t txmax)
 	in_use_init = txq->in_use;
 	while ((txq->in_use - in_use_init < txmax) &&
 	    (txq->size > txq->in_use + TX_MAX_DESC)) {
+#ifdef __FreeBSD__
 		IFQ_DRV_DEQUEUE(&ifp->if_snd, m);
+#endif
+#ifdef __NetBSD__
+		IFQ_DEQUEUE(&ifp->if_snd, m);
+#endif
 		if (m == NULL)
 			break;
 		/*
 		 * Convert chain to M_IOVEC
 		 */
+#ifdef __FreeBSD__
 		KASSERT((m->m_flags & M_IOVEC) == 0, ("IOVEC set too early"));
+#endif
+#ifdef __NetBSD__
+		KASSERT((m->m_flags & M_IOVEC) == 0);
+#endif
 		m0 = m;
 #ifdef INVARIANTS
 		/*
@@ -1676,6 +2111,7 @@ cxgb_start_tx(struct ifnet *ifp, uint32_t txmax)
 		m_sanity(m0, 0);
 		m0 = m;
 #endif
+#ifdef __FreeBSD__
 		if (collapse_mbufs && m->m_pkthdr.len > MCLBYTES &&
 		    m_collapse(m, TX_MAX_SEGS, &m0) == EFBIG) {
 			if ((m0 = m_defrag(m, M_NOWAIT)) != NULL) {
@@ -1684,19 +2120,30 @@ cxgb_start_tx(struct ifnet *ifp, uint32_t txmax)
 			} else
 				break;	
 		}
+#endif
 		m = m0;
 		if ((err = t3_encap(p, &m)) != 0)
 			break;
+#ifdef __FreeBSD__
 		BPF_MTAP(ifp, m);
+#endif
+#ifdef __NetBSD__
+		bpf_mtap((ifp)->if_bpf, (m));
+#endif
 	}
 	mtx_unlock(&txq->lock);
 
 	if (__predict_false(err)) {
 		if (err == ENOMEM) {
 			ifp->if_drv_flags |= IFF_DRV_OACTIVE;
+#ifdef __FreeBSD__
 			IFQ_LOCK(&ifp->if_snd);
 			IFQ_DRV_PREPEND(&ifp->if_snd, m);
 			IFQ_UNLOCK(&ifp->if_snd);
+#endif
+#ifdef __NetBSD__
+			IF_PREPEND(&ifp->if_snd, m);
+#endif
 		}
 	}
 	if (err == 0 && m == NULL) {
@@ -1710,6 +2157,7 @@ cxgb_start_tx(struct ifnet *ifp, uint32_t txmax)
 	return (err);
 }
 
+#ifdef __FreeBSD__
 static void
 cxgb_start_proc(void *arg, int ncount)
 {
@@ -1732,6 +2180,7 @@ cxgb_start_proc(void *arg, int ncount)
 		error = cxgb_start_tx(ifp, TX_START_MAX_DESC);
 	}
 }
+#endif
 
 static void
 cxgb_start(struct ifnet *ifp)
@@ -1762,7 +2211,9 @@ cxgb_start(struct ifnet *ifp)
 static int
 cxgb_media_change(struct ifnet *ifp)
 {
+#ifdef __FreeBSD__
 	if_printf(ifp, "media change not supported\n");
+#endif
 	return (ENXIO);
 }
 
@@ -1785,6 +2236,7 @@ cxgb_media_status(struct ifnet *ifp, struct ifmediareq *ifmr)
 		ifmr->ifm_active |= IFM_HDX;
 }
 
+#ifdef __FreeBSD__
 static void
 cxgb_async_intr(void *data)
 {
@@ -1797,6 +2249,7 @@ cxgb_async_intr(void *data)
 
 }
 
+#ifdef __FreeBSD__
 static void
 cxgb_ext_intr_handler(void *arg, int count)
 {
@@ -1816,6 +2269,8 @@ cxgb_ext_intr_handler(void *arg, int count)
 	}
 	ADAPTER_UNLOCK(sc);
 }
+#endif
+#endif
 
 static void
 check_link_status(adapter_t *sc)
@@ -1885,18 +2340,25 @@ cxgb_tick(void *arg)
 
 }
 
+#if 0
 static int
 in_range(int val, int lo, int hi)
 {
 	return val < 0 || (val <= hi && val >= lo);
 }
 
+#ifdef __FreeBSD__
 static int
 cxgb_extension_ioctl(struct cdev *dev, unsigned long cmd, caddr_t data,
     int fflag, struct thread *td)
+#endif
+#ifdef __NetBSD__
+static int
+cxgb_extension_ioctl(dev_t dev, uint32_t cmd, void *data, int fflag, struct lwp *mylwp)
+#endif
 {
 	int mmd, error = 0;
-	struct port_info *pi = dev->si_drv1;
+	struct port_info *pi = (struct port_info *)&dev->si_drv1;
 	adapter_t *sc = pi->adapter;
 
 #ifdef PRIV_SUPPORTED	
@@ -1906,7 +2368,12 @@ cxgb_extension_ioctl(struct cdev *dev, unsigned long cmd, caddr_t data,
 		return (EPERM);
 	}
 #else
+#ifdef __FreeBSD__
 	if (suser(td)) {
+#endif
+#ifdef __NetBSD__
+	if (kauth_authorize_generic(mylwp->l_cred, KAUTH_GENERIC_ISSUSER, NULL)) {
+#endif
 		if (cxgb_debug)
 			printf("user does not have access to privileged ioctls\n");
 		return (EPERM);
@@ -2289,6 +2756,7 @@ cxgb_extension_ioctl(struct cdev *dev, unsigned long cmd, caddr_t data,
 
 	return (error);
 }
+#endif
 
 static __inline void
 reg_block_dump(struct adapter *ap, uint8_t *buf, unsigned int start,
@@ -2300,6 +2768,7 @@ reg_block_dump(struct adapter *ap, uint8_t *buf, unsigned int start,
 		*p++ = t3_read_reg(ap, start);
 }
 
+#ifdef __FreeBSD__
 #define T3_REGMAP_SIZE (3 * 1024)
 static int
 cxgb_get_regs_len(void)
@@ -2336,3 +2805,5 @@ cxgb_get_regs(adapter_t *sc, struct ifconf_regs *regs, uint8_t *buf)
 	reg_block_dump(sc, buf, XGM_REG(A_XGM_SERDES_STATUS0, 1),
 		       XGM_REG(A_XGM_RX_SPI4_SOP_EOP_CNT, 1));
 }
+#endif
+

@@ -1,4 +1,4 @@
-/*	$NetBSD: sysvbfs_vfsops.c,v 1.11 2007/06/30 09:37:57 pooka Exp $	*/
+/*	$NetBSD: sysvbfs_vfsops.c,v 1.16 2007/09/08 19:19:37 rumble Exp $	*/
 
 /*-
  * Copyright (c) 2004 The NetBSD Foundation, Inc.
@@ -37,13 +37,12 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: sysvbfs_vfsops.c,v 1.11 2007/06/30 09:37:57 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: sysvbfs_vfsops.c,v 1.16 2007/09/08 19:19:37 rumble Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/pool.h>
-
 #include <sys/time.h>
 #include <sys/ucred.h>
 #include <sys/mount.h>
@@ -51,6 +50,7 @@ __KERNEL_RCSID(0, "$NetBSD: sysvbfs_vfsops.c,v 1.11 2007/06/30 09:37:57 pooka Ex
 #include <sys/fcntl.h>
 #include <sys/malloc.h>
 #include <sys/kauth.h>
+#include <sys/proc.h>
 
 /* v-node */
 #include <sys/namei.h>
@@ -74,10 +74,11 @@ struct pool sysvbfs_node_pool;
 int sysvbfs_mountfs(struct vnode *, struct mount *, struct lwp *);
 
 int
-sysvbfs_mount(struct mount *mp, const char *path, void *data,
-    struct nameidata *ndp, struct lwp *l)
+sysvbfs_mount(struct mount *mp, const char *path, void *data, size_t *data_len,
+    struct lwp *l)
 {
-	struct sysvbfs_args args;
+	struct nameidata nd;
+	struct sysvbfs_args *args = data;
 	struct sysvbfs_mount *bmp = NULL;
 	struct vnode *devvp = NULL;
 	int error;
@@ -85,29 +86,31 @@ sysvbfs_mount(struct mount *mp, const char *path, void *data,
 
 	DPRINTF("%s: mnt_flag=%x\n", __FUNCTION__, mp->mnt_flag);
 
+	if (*data_len < sizeof *args)
+		return EINVAL;
+
 	if (mp->mnt_flag & MNT_GETARGS) {
 		if ((bmp = (void *)mp->mnt_data) == NULL)
 			return EIO;
-		args.fspec = NULL;
-		return copyout(&args, data, sizeof(args));
+		args->fspec = NULL;
+		*data_len = sizeof *args;
+		return 0;
 	}
 
-	if ((error = copyin(data, &args, sizeof(args))) != 0)
-		return error;
 
-	DPRINTF("%s: args.fspec=%s\n", __FUNCTION__, args.fspec);
+	DPRINTF("%s: args->fspec=%s\n", __FUNCTION__, args->fspec);
 	update = mp->mnt_flag & MNT_UPDATE;
-	if (args.fspec == NULL) {
+	if (args->fspec == NULL) {
 		/* nothing to do. */
 		return EINVAL;
 	}
 
-	if (args.fspec != NULL) {
+	if (args->fspec != NULL) {
 		/* Look up the name and verify that it's sane. */
-		NDINIT(ndp, LOOKUP, FOLLOW, UIO_USERSPACE, args.fspec, l);
-		if ((error = namei(ndp)) != 0)
+		NDINIT(&nd, LOOKUP, FOLLOW, UIO_USERSPACE, args->fspec, l);
+		if ((error = namei(&nd)) != 0)
 			return (error);
-		devvp = ndp->ni_vp;
+		devvp = nd.ni_vp;
 
 		if (!update) {
 			/*
@@ -158,8 +161,8 @@ sysvbfs_mount(struct mount *mp, const char *path, void *data,
 		/* XXX: r/w -> read only */
 	}
 
-	return set_statvfs_info(path, UIO_USERSPACE, args.fspec, UIO_USERSPACE,
-	    mp, l);
+	return set_statvfs_info(path, UIO_USERSPACE, args->fspec, UIO_USERSPACE,
+	    mp->mnt_op->vfs_name, mp, l);
 }
 
 int
@@ -384,10 +387,9 @@ sysvbfs_vget(struct mount *mp, ino_t ino, struct vnode **vpp)
 	} else {
 		vp->v_type = VREG;
 	}
-	vp->v_size = bfs_file_size(inode);
 
 	genfs_node_init(vp, &sysvbfs_genfsops);
-	uvm_vnp_setsize(vp, vp->v_size);
+	uvm_vnp_setsize(vp, bfs_file_size(inode));
 	*vpp = vp;
 
 	return 0;

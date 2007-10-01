@@ -1,4 +1,4 @@
-/*	$NetBSD: rrunner.c,v 1.61 2007/03/04 06:02:00 christos Exp $	*/
+/*	$NetBSD: rrunner.c,v 1.63 2007/07/29 12:50:20 ad Exp $	*/
 
 /*
  * Copyright (c) 1997, 1998 The NetBSD Foundation, Inc.
@@ -42,7 +42,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: rrunner.c,v 1.61 2007/03/04 06:02:00 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: rrunner.c,v 1.63 2007/07/29 12:50:20 ad Exp $");
 
 #include "opt_inet.h"
 
@@ -1037,7 +1037,7 @@ esh_fpread(dev_t dev, struct uio *uio, int ioflag)
 		}
 	}
 
-	PHOLD(l);	/* Lock process info into memory */
+	uvm_lwp_hold(l);	/* Lock process info into memory */
 
 	/* Lock down the pages */
 	for (i = 0; i < uio->uio_iovcnt; i++) {
@@ -1141,7 +1141,7 @@ esh_fpread(dev_t dev, struct uio *uio, int ioflag)
 		uvm_vsunlock(p->p_vmspace, iovp->iov_base, iovp->iov_len);
 	}
 
-	PRELE(l);	/* Release process info */
+	uvm_lwp_rele(l);	/* Release process info */
 	esh_free_dmainfo(sc, di);
 
 fpread_done:
@@ -1195,7 +1195,7 @@ esh_fpwrite(dev_t dev, struct uio *uio, int ioflag)
 		}
 	}
 
-	PHOLD(l);	/* Lock process info into memory */
+	uvm_lwp_hold(l);	/* Lock process info into memory */
 
 	/* Lock down the pages */
 	for (i = 0; i < uio->uio_iovcnt; i++) {
@@ -1295,7 +1295,7 @@ esh_fpwrite(dev_t dev, struct uio *uio, int ioflag)
 		uvm_vsunlock(p->p_vmspace, iovp->iov_base, iovp->iov_len);
 	}
 
-	PRELE(l);	/* Release process info */
+	uvm_lwp_rele(l);	/* Release process info */
 	esh_free_dmainfo(sc, di);
 
 fpwrite_done:
@@ -1326,7 +1326,6 @@ esh_fpstrategy(bp)
 	s = splnet();
 	if (sc == NULL || ulp == HIPPI_ULP_802) {
 		bp->b_error = ENXIO;
-		bp->b_flags |= B_ERROR;
 		goto done;
 	}
 
@@ -1337,7 +1336,6 @@ esh_fpstrategy(bp)
 
 	if ((sc->sc_flags & UP_FLAGS) != UP_FLAGS) {
 		bp->b_error = EBUSY;
-		bp->b_flags |= B_ERROR;
 		goto done;
 	}
 #undef UP_FLAGS
@@ -1353,7 +1351,6 @@ esh_fpstrategy(bp)
 
 		if (di == NULL) {
 			bp->b_error = ENOMEM;
-			bp->b_flags |= B_ERROR;
 			goto done;
 		}
 		di->ed_buf = bp;
@@ -1367,7 +1364,6 @@ esh_fpstrategy(bp)
 			       "failed\terror code %d\n",
 			       sc->sc_dev.dv_xname, error);
 			bp->b_error = ENOBUFS;
-			bp->b_flags |= B_ERROR;
 			esh_free_dmainfo(sc, di);
 			goto done;
 		}
@@ -2715,7 +2711,6 @@ esh_read_fp_ring(sc, consumer, error, ulp)
 						di->ed_buf->b_resid =
 							di->ed_buf->b_bcount;
 						di->ed_buf->b_error = EIO;
-						di->ed_buf->b_flags |= B_ERROR;
 					} else {
 						di->ed_error = EIO;
 						recv->ec_error = 0;
@@ -3380,7 +3375,6 @@ eshstop(sc)
 
 		bp->b_resid = bp->b_bcount;
 		bp->b_error = EIO;
-		bp->b_flags |= B_ERROR;
 		biodone(bp);
 	} else if (sc->sc_send.ec_cur_dmainfo) {
 		struct esh_dmainfo *di = sc->sc_send.ec_cur_dmainfo;

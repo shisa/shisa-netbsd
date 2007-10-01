@@ -1,4 +1,4 @@
-/*	$NetBSD: lfs_bio.c,v 1.101 2007/05/16 19:11:37 perseant Exp $	*/
+/*	$NetBSD: lfs_bio.c,v 1.103 2007/07/29 13:31:14 ad Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2000, 2001, 2002, 2003 The NetBSD Foundation, Inc.
@@ -67,7 +67,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: lfs_bio.c,v 1.101 2007/05/16 19:11:37 perseant Exp $");
+__KERNEL_RCSID(0, "$NetBSD: lfs_bio.c,v 1.103 2007/07/29 13:31:14 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -458,7 +458,8 @@ lfs_bwrite_ext(struct buf *bp, int flags)
 	 * In particular the cleaner can't write blocks either.
 	 */
 	if (fs->lfs_ronly || (fs->lfs_pflags & LFS_PF_CLEAN)) {
-		bp->b_flags &= ~(B_DELWRI | B_READ | B_ERROR);
+		bp->b_flags &= ~(B_DELWRI | B_READ);
+		bp->b_error = 0;
 		LFS_UNLOCK_BUF(bp);
 		if (LFS_IS_MALLOC_BUF(bp))
 			bp->b_flags &= ~B_BUSY;
@@ -494,7 +495,8 @@ lfs_bwrite_ext(struct buf *bp, int flags)
 		bp->b_flags |= B_DELWRI;
 
 		LFS_LOCK_BUF(bp);
-		bp->b_flags &= ~(B_READ | B_DONE | B_ERROR);
+		bp->b_flags &= ~(B_READ | B_DONE);
+		bp->b_error = 0;
 		s = splbio();
 		reassignbuf(bp, bp->b_vp);
 		splx(s);
@@ -587,8 +589,8 @@ lfs_flush(struct lfs *fs, int flags, int only_onefs)
 				nmp = CIRCLEQ_NEXT(mp, mnt_list);
 				continue;
 			}
-			if (strncmp(&mp->mnt_stat.f_fstypename[0], MOUNT_LFS,
-			    MFSNAMELEN) == 0) {
+			if (strncmp(mp->mnt_stat.f_fstypename, MOUNT_LFS,
+			    sizeof(mp->mnt_stat.f_fstypename)) == 0) {
 				tfs = VFSTOUFS(mp)->um_lfs;
 				simple_lock(&tfs->lfs_interlock);
 				lfs_flush_fs(tfs, flags);

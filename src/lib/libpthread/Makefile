@@ -1,10 +1,7 @@
-#	$NetBSD: Makefile,v 1.40 2007/03/02 18:53:51 ad Exp $
+#	$NetBSD: Makefile,v 1.43 2007/09/07 14:09:27 ad Exp $
 #
 
 WARNS=	4
-
-# Define PT_FIXEDSTACKSIZE_LG to set a fixed stacksize
-#CPPFLAGS+=-DPT_FIXEDSTACKSIZE_LG=18
 
 .include <bsd.own.mk>
 
@@ -57,9 +54,11 @@ SRCS+=	pthread_cond.c
 SRCS+=	pthread_lock.c 
 SRCS+=	pthread_misc.c
 SRCS+=	pthread_mutex.c
+SRCS+=	pthread_mutex2.c
 SRCS+=	pthread_rwlock.c
+SRCS+=	pthread_rwlock2.c
 SRCS+=	pthread_specific.c
-SRCS+=  pthread_stack.c
+SRCS+=	pthread_spin.c
 SRCS+=	pthread_tsd.c
 SRCS+=  pthread_debug.c
 SRCS+=	res_state.c
@@ -76,6 +75,13 @@ SRCS+= pthread_md.c
 pthread_specific.po: pthread_specific.o
 	${_MKTARGET_CREATE}
 	cp pthread_specific.o pthread_specific.po
+
+# Internal spinlock routines are performance critical.  Don't profile them,
+# it's incompatibile with -fomit-frame-pointer.
+COPTS.pthread_lock.c+=	-fomit-frame-pointer -falign-functions=32
+pthread_lock.po: pthread_lock.o
+	${_MKTARGET_CREATE}
+	cp pthread_lock.o pthread_lock.po
 
 _context_u.po: _context_u.o
 	${_MKTARGET_CREATE}

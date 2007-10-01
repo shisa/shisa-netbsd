@@ -1,4 +1,4 @@
-/*	$NetBSD: lfs_extern.h,v 1.89 2007/04/17 01:16:46 perseant Exp $	*/
+/*	$NetBSD: lfs_extern.h,v 1.91 2007/07/31 21:14:20 pooka Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2000, 2001, 2002, 2003 The NetBSD Foundation, Inc.
@@ -228,7 +228,8 @@ void lfs_init(void);
 void lfs_reinit(void);
 void lfs_done(void);
 int lfs_mountroot(void);
-int lfs_mount(struct mount *, const char *, void *, struct nameidata *, struct lwp *);
+int lfs_mount(struct mount *, const char *, void *, size_t *,
+		struct lwp *);
 int lfs_unmount(struct mount *, int, struct lwp *);
 int lfs_statvfs(struct mount *, struct statvfs *, struct lwp *);
 int lfs_sync(struct mount *, int, kauth_cred_t, struct lwp *);

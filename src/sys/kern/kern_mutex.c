@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_mutex.c,v 1.14 2007/05/17 14:51:40 yamt Exp $	*/
+/*	$NetBSD: kern_mutex.c,v 1.18 2007/09/21 19:14:12 dsl Exp $	*/
 
 /*-
  * Copyright (c) 2002, 2006, 2007 The NetBSD Foundation, Inc.
@@ -44,12 +44,12 @@
  *	    Richard McDougall.
  */
 
-#include "opt_multiprocessor.h"
-
 #define	__MUTEX_PRIVATE
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_mutex.c,v 1.14 2007/05/17 14:51:40 yamt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_mutex.c,v 1.18 2007/09/21 19:14:12 dsl Exp $");
+
+#include "opt_multiprocessor.h"
 
 #include <sys/param.h>
 #include <sys/proc.h>
@@ -87,7 +87,7 @@ __KERNEL_RCSID(0, "$NetBSD: kern_mutex.c,v 1.14 2007/05/17 14:51:40 yamt Exp $")
     LOCKDEBUG_UNLOCKED(MUTEX_GETID(mtx),			\
         (uintptr_t)__builtin_return_address(0), 0)
 #define	MUTEX_ABORT(mtx, msg)					\
-    mutex_abort(mtx, __FUNCTION__, msg)
+    mutex_abort(mtx, __func__, msg)
 
 #if defined(LOCKDEBUG)
 
@@ -312,18 +312,25 @@ mutex_init(kmutex_t *mtx, kmutex_type_t type, int ipl)
 
 	memset(mtx, 0, sizeof(*mtx));
 
-	if (type == MUTEX_DRIVER)
-		type = (ipl == IPL_NONE ? MUTEX_ADAPTIVE : MUTEX_SPIN);
-
 	switch (type) {
-	case MUTEX_NODEBUG:
-		KASSERT(ipl == IPL_NONE);
-		id = LOCKDEBUG_ALLOC(mtx, NULL);
-		MUTEX_INITIALIZE_ADAPTIVE(mtx, id);
-		break;
 	case MUTEX_ADAPTIVE:
 	case MUTEX_DEFAULT:
 		KASSERT(ipl == IPL_NONE);
+		break;
+	case MUTEX_DRIVER:
+		type = (ipl == IPL_NONE ? MUTEX_ADAPTIVE : MUTEX_SPIN);
+		break;
+	default:
+		break;
+	}
+
+	switch (type) {
+	case MUTEX_NODEBUG:
+		id = LOCKDEBUG_ALLOC(mtx, NULL);
+		MUTEX_INITIALIZE_SPIN(mtx, id, ipl);
+		break;
+	case MUTEX_ADAPTIVE:
+	case MUTEX_DEFAULT:
 		id = LOCKDEBUG_ALLOC(mtx, &mutex_adaptive_lockops);
 		MUTEX_INITIALIZE_ADAPTIVE(mtx, id);
 		break;
@@ -350,7 +357,7 @@ mutex_destroy(kmutex_t *mtx)
 		MUTEX_ASSERT(mtx, !MUTEX_OWNED(mtx->mtx_owner) &&
 		    !MUTEX_HAS_WAITERS(mtx));
 	} else {
-		MUTEX_ASSERT(mtx, mtx->mtx_lock != __SIMPLELOCK_LOCKED);
+		MUTEX_ASSERT(mtx, !__SIMPLELOCK_LOCKED_P(&mtx->mtx_lock));
 	}
 
 	LOCKDEBUG_FREE(mtx, MUTEX_GETID(mtx));
@@ -362,15 +369,11 @@ mutex_destroy(kmutex_t *mtx)
  *
  *	Return true if an adaptive mutex owner is running on a CPU in the
  *	system.  If the target is waiting on the kernel big lock, then we
- *	return false immediately.  This is necessary to avoid deadlock
- *	against the big lock.
+ *	must release it.  This is necessary to avoid deadlock.
  *
  *	Note that we can't use the mutex owner field as an LWP pointer.  We
  *	don't have full control over the timing of our execution, and so the
  *	pointer could be completely invalid by the time we dereference it.
- *
- *	XXX This should be optimised further to reduce potential cache line
- *	ping-ponging and skewing of the spin time while busy waiting.
  */
 #ifdef MULTIPROCESSOR
 int
@@ -384,20 +387,23 @@ mutex_onproc(uintptr_t owner, struct cpu_info **cip)
 		return 0;
 	l = (struct lwp *)MUTEX_OWNER(owner);
 
+	/* See if the target is running on a CPU somewhere. */
 	if ((ci = *cip) != NULL && ci->ci_curlwp == l)
-		return ci->ci_biglock_wanted != l;
+		goto run;
+	for (CPU_INFO_FOREACH(cii, ci))
+		if (ci->ci_curlwp == l)
+			goto run;
 
-	for (CPU_INFO_FOREACH(cii, ci)) {
-		if (ci->ci_curlwp == l) {
-			*cip = ci;
-			return ci->ci_biglock_wanted != l;
-		}
-	}
-
+	/* No: it may be safe to block now. */
 	*cip = NULL;
 	return 0;
+
+ run:
+ 	/* Target is running; do we need to block? */
+ 	*cip = ci;
+	return ci->ci_biglock_wanted != l;
 }
-#endif
+#endif	/* MULTIPROCESSOR */
 
 /*
  * mutex_vector_enter:
@@ -451,7 +457,7 @@ mutex_vector_enter(kmutex_t *mtx)
 		do {
 			if (panicstr != NULL)
 				break;
-			while (mtx->mtx_lock == __SIMPLELOCK_LOCKED) {
+			while (__SIMPLELOCK_LOCKED_P(&mtx->mtx_lock)) {
 				SPINLOCK_BACKOFF(count); 
 #ifdef LOCKDEBUG
 				if (SPINLOCK_SPINOUT(spins))
@@ -684,7 +690,7 @@ mutex_vector_exit(kmutex_t *mtx)
 
 	if (MUTEX_SPIN_P(mtx)) {
 #ifdef FULL
-		if (mtx->mtx_lock != __SIMPLELOCK_LOCKED)
+		if (!__SIMPLELOCK_LOCKED_P(&mtx->mtx_lock))
 			MUTEX_ABORT(mtx, "exiting unheld spin mutex");
 		MUTEX_UNLOCKED(mtx);
 		__cpu_simple_unlock(&mtx->mtx_lock);
@@ -703,6 +709,23 @@ mutex_vector_exit(kmutex_t *mtx)
 	MUTEX_DASSERT(mtx, curthread != 0);
 	MUTEX_ASSERT(mtx, MUTEX_OWNER(mtx->mtx_owner) == curthread);
 	MUTEX_UNLOCKED(mtx);
+
+#ifdef LOCKDEBUG
+	/*
+	 * Avoid having to take the turnstile chain lock every time
+	 * around.  Raise the priority level to splhigh() in order
+	 * to disable preemption and so make the following atomic.
+	 */
+	{
+		int s = splhigh();
+		if (!MUTEX_HAS_WAITERS(mtx)) {
+			MUTEX_RELEASE(mtx);
+			splx(s);
+			return;
+		}
+		splx(s);
+	}
+#endif
 
 	/*
 	 * Get this lock's turnstile.  This gets the interlock on
@@ -758,7 +781,7 @@ mutex_owned(kmutex_t *mtx)
 	if (MUTEX_ADAPTIVE_P(mtx))
 		return MUTEX_OWNER(mtx->mtx_owner) == (uintptr_t)curlwp;
 #ifdef FULL
-	return mtx->mtx_lock == __SIMPLELOCK_LOCKED;
+	return __SIMPLELOCK_LOCKED_P(&mtx->mtx_lock);
 #else
 	return 1;
 #endif
@@ -852,7 +875,7 @@ mutex_spin_retry(kmutex_t *mtx)
 	do {
 		if (panicstr != NULL)
 			break;
-		while (mtx->mtx_lock == __SIMPLELOCK_LOCKED) {
+		while (__SIMPLELOCK_LOCKED_P(&mtx->mtx_lock)) {
 			SPINLOCK_BACKOFF(count); 
 #ifdef LOCKDEBUG
 			if (SPINLOCK_SPINOUT(spins))

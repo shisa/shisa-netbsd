@@ -1,4 +1,4 @@
-/*	$NetBSD: dtfs_vnops.c,v 1.32 2007/07/01 22:59:10 pooka Exp $	*/
+/*	$NetBSD: dtfs_vnops.c,v 1.38 2007/08/15 14:19:19 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006  Antti Kantee.  All Rights Reserved.
@@ -48,8 +48,6 @@ dtfs_node_lookup(struct puffs_cc *pcc, void *opc, struct puffs_newinfo *pni,
 	struct dtfs_dirent *dfd;
 	int rv;
 
-	printf("%s\n", pcn->pcn_name);
-
 	/* parent dir? */
 	if (PCNISDOTDOT(pcn)) {
 		assert(df->df_dotdot->pn_va.va_type == VDIR);
@@ -68,9 +66,9 @@ dtfs_node_lookup(struct puffs_cc *pcc, void *opc, struct puffs_newinfo *pni,
 		return 0;
 	}
 
-	if ((pcn->pcn_flags & PUFFSLOOKUP_ISLASTCN)
-	    && (pcn->pcn_nameiop == PUFFSLOOKUP_CREATE ||
-	      pcn->pcn_nameiop == PUFFSLOOKUP_RENAME)) {
+	if ((pcn->pcn_flags & NAMEI_ISLASTCN)
+	    && (pcn->pcn_nameiop == NAMEI_CREATE ||
+	      pcn->pcn_nameiop == NAMEI_RENAME)) {
 		rv = puffs_access(VDIR, pn_dir->pn_va.va_mode,
 		    pn_dir->pn_va.va_uid, pn_dir->pn_va.va_gid,
 		    PUFFS_VWRITE, pcn->pcn_cred);
@@ -248,8 +246,8 @@ dtfs_node_readdir(struct puffs_cc *pcc, void *opc,
  again:
 	if (*readoff == DENT_DOT || *readoff == DENT_DOTDOT) {
 		puffs_gendotdent(&dent, pn->pn_va.va_fileid, *readoff, reslen);
-		PUFFS_STORE_DCOOKIE(cookies, ncookies, *readoff);
 		(*readoff)++;
+		PUFFS_STORE_DCOOKIE(cookies, ncookies, *readoff);
 		goto again;
 	}
 
@@ -267,8 +265,8 @@ dtfs_node_readdir(struct puffs_cc *pcc, void *opc,
 		    reslen))
 			break;
 
-		PUFFS_STORE_DCOOKIE(cookies, ncookies, *readoff);
 		(*readoff)++;
+		PUFFS_STORE_DCOOKIE(cookies, ncookies, *readoff);
 	}
 
 	return 0;
@@ -292,6 +290,18 @@ dtfs_node_poll(struct puffs_cc *pcc, void *opc, int *events,
 	puffs_cc_yield(pcc);
 
 	*events = *events & (POLLIN | POLLOUT | POLLRDNORM | POLLWRNORM);
+	return 0;
+}
+
+int
+dtfs_node_mmap(struct puffs_cc *pcc, void *opc, vm_prot_t prot,
+	const struct puffs_cred *pcr, const struct puffs_cid *pcid)
+{
+	struct dtfs_mount *dtm = puffs_cc_getspecific(pcc);
+
+	if ((dtm->dtm_allowprot & prot) != prot)
+		return EACCES;
+
 	return 0;
 }
 
@@ -329,6 +339,7 @@ dtfs_node_rename(struct puffs_cc *pcc, void *opc, void *src,
 	/* update name */
 	free(dfd_src->dfd_name);
 	dfd_src->dfd_name = estrndup(pcn_targ->pcn_name,pcn_targ->pcn_namelen);
+	dfd_src->dfd_namelen = strlen(dfd_src->dfd_name);
 
 	dtfs_updatetimes(src, 0, 1, 0);
 
@@ -345,6 +356,7 @@ dtfs_node_link(struct puffs_cc *pcc, void *opc, void *targ,
 	dfd = emalloc(sizeof(struct dtfs_dirent));
 	dfd->dfd_node = targ;
 	dfd->dfd_name = estrndup(pcn->pcn_name, pcn->pcn_namelen);
+	dfd->dfd_namelen = strlen(dfd->dfd_name);
 	dtfs_adddent(pn_dir, dfd);
 
 	dtfs_updatetimes(targ, 0, 1, 0);

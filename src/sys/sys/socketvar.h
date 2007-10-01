@@ -1,4 +1,4 @@
-/*	$NetBSD: socketvar.h,v 1.97 2007/07/05 19:45:54 christos Exp $	*/
+/*	$NetBSD: socketvar.h,v 1.99 2007/09/19 04:33:45 dyoung Exp $	*/
 
 /*-
  * Copyright (c) 1982, 1986, 1990, 1993
@@ -81,6 +81,7 @@ struct sockbuf {
 #define	SB_NOINTR	0x40		/* operations not interruptible */
     	/* XXXLUKEM: 0x80 left for FreeBSD's SB_AIO */
 #define	SB_KNOTE	0x100		/* kernel note attached */
+#define	SB_AUTOSIZE	0x800		/* automatically size socket buffer */
 
 /*
  * Kernel structure per socket.
@@ -269,6 +270,9 @@ struct msghdr;
 struct stat;
 struct knote;
 
+struct	mbuf *m_intopt(struct socket *, int);
+struct	mbuf *getsombuf(struct socket *);
+
 /*
  * File operations on sockets.
  */
@@ -311,6 +315,7 @@ int	soclose(struct socket *);
 int	soconnect(struct socket *, struct mbuf *, struct lwp *);
 int	soconnect2(struct socket *, struct socket *);
 int	socreate(int, struct socket **, int, int, struct lwp *);
+int	fsocreate(int, struct socket **, int, int, struct lwp *, int *);
 int	sodisconnect(struct socket *);
 void	sofree(struct socket *);
 int	sogetopt(struct socket *, int, int, struct mbuf **);

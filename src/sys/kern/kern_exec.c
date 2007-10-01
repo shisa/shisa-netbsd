@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_exec.c,v 1.245 2007/05/17 14:51:38 yamt Exp $	*/
+/*	$NetBSD: kern_exec.c,v 1.248 2007/09/20 20:51:38 christos Exp $	*/
 
 /*-
  * Copyright (C) 1993, 1994, 1996 Christopher G. Demetriou
@@ -33,7 +33,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_exec.c,v 1.245 2007/05/17 14:51:38 yamt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_exec.c,v 1.248 2007/09/20 20:51:38 christos Exp $");
 
 #include "opt_ktrace.h"
 #include "opt_syscall_debug.h"
@@ -290,7 +290,6 @@ check_exec(struct lwp *l, struct exec_package *epp)
 #endif /* PAX_SEGVGUARD */
 
 	/* now we have the file, get the exec header */
-	uvn_attach(vp, VM_PROT_READ);
 	error = vn_rdwr(UIO_READ, vp, epp->ep_hdr, epp->ep_hdrlen, 0,
 			UIO_SYSSPACE, 0, l->l_cred, &resid, NULL);
 	if (error)
@@ -412,7 +411,6 @@ execve1(struct lwp *l, const char *path, char * const *args,
     char * const *envs, execve_fetch_element_t fetch_element)
 {
 	int			error;
-	u_int			i;
 	struct exec_package	pack;
 	struct nameidata	nid;
 	struct vattr		attr;
@@ -420,7 +418,7 @@ execve1(struct lwp *l, const char *path, char * const *args,
 	char			*argp;
 	char			*dp, *sp;
 	long			argc, envc;
-	size_t			len;
+	size_t			i, len;
 	char			*stack;
 	struct ps_strings	arginfo;
 	struct ps_strings	*aip = &arginfo;
@@ -460,10 +458,11 @@ execve1(struct lwp *l, const char *path, char * const *args,
 	if (ISSET(p->p_flag, PK_SYSTRACE))
 		systrace_execve0(p);
 
-	error = copyinstr(path, pathbuf, sizeof(pathbuf),
-			  &pathbuflen);
-	if (error)
+	error = copyinstr(path, pathbuf, sizeof(pathbuf), &pathbuflen);
+	if (error) {
+		DPRINTF(("execve: copyinstr path %d", error));
 		goto clrflg;
+	}
 
 	NDINIT(&nid, LOOKUP, NOFOLLOW | TRYEMULROOT, UIO_SYSSPACE, pathbuf, l);
 #else
@@ -496,8 +495,10 @@ execve1(struct lwp *l, const char *path, char * const *args,
 #endif
 
 	/* see if we can run it. */
-        if ((error = check_exec(l, &pack)) != 0)
+	if ((error = check_exec(l, &pack)) != 0) {
+		DPRINTF(("execve: check exec failed %d\n", error));
 		goto freehdr;
+	}
 
 	/* XXX -- THE FOLLOWING SECTION NEEDS MAJOR CLEANUP */
 
@@ -531,6 +532,7 @@ execve1(struct lwp *l, const char *path, char * const *args,
 
 	/* Now get argv & environment */
 	if (args == NULL) {
+		DPRINTF(("execve: null args\n"));
 		error = EINVAL;
 		goto bad;
 	}
@@ -541,19 +543,19 @@ execve1(struct lwp *l, const char *path, char * const *args,
 
 	while (1) {
 		len = argp + ARG_MAX - dp;
-		if ((error = (*fetch_element)(args, i, &sp)) != 0)
+		if ((error = (*fetch_element)(args, i, &sp)) != 0) {
+			DPRINTF(("execve: fetch_element args %d\n", error));
 			goto bad;
+		}
 		if (!sp)
 			break;
 		if ((error = copyinstr(sp, dp, len, &len)) != 0) {
+			DPRINTF(("execve: copyinstr args %d\n", error));
 			if (error == ENAMETOOLONG)
 				error = E2BIG;
 			goto bad;
 		}
-#ifdef KTRACE
-		if (KTRPOINT(p, KTR_EXEC_ARG))
-			ktrkmem(l, KTR_EXEC_ARG, dp, len - 1);
-#endif
+		ktrexecarg(dp, len - 1);
 		dp += len;
 		i++;
 		argc++;
@@ -565,19 +567,19 @@ execve1(struct lwp *l, const char *path, char * const *args,
 		i = 0;
 		while (1) {
 			len = argp + ARG_MAX - dp;
-			if ((error = (*fetch_element)(envs, i, &sp)) != 0)
+			if ((error = (*fetch_element)(envs, i, &sp)) != 0) {
+				DPRINTF(("execve: fetch_element env %d\n", error));
 				goto bad;
+			}
 			if (!sp)
 				break;
 			if ((error = copyinstr(sp, dp, len, &len)) != 0) {
+				DPRINTF(("execve: copyinstr env %d\n", error));
 				if (error == ENAMETOOLONG)
 					error = E2BIG;
 				goto bad;
 			}
-#ifdef KTRACE
-			if (KTRPOINT(p, KTR_EXEC_ENV))
-				ktrkmem(l, KTR_EXEC_ENV, dp, len - 1);
-#endif
+			ktrexecenv(dp, len - 1);
 			dp += len;
 			i++;
 			envc++;
@@ -608,6 +610,7 @@ execve1(struct lwp *l, const char *path, char * const *args,
 #endif
 
 	if (len > pack.ep_ssize) { /* in effect, compare to initial limit */
+		DPRINTF(("execve: stack limit exceeded %zu\n", len));
 		error = ENOMEM;
 		goto bad;
 	}
@@ -674,11 +677,11 @@ execve1(struct lwp *l, const char *path, char * const *args,
 		error = (*vcp->ev_proc)(l, vcp);
 #ifdef DEBUG_EXEC
 		if (error) {
-			int j;
+			size_t j;
 			struct exec_vmcmd *vp = &pack.ep_vmcmds.evs_cmds[0];
 			for (j = 0; j <= i; j++)
 				uprintf(
-			    "vmcmd[%d] = %#lx/%#lx fd@%#lx prot=0%o flags=%d\n",
+			"vmcmd[%zu] = %#lx/%#lx fd@%#lx prot=0%o flags=%d\n",
 				    j, vp[j].ev_addr, vp[j].ev_len,
 				    vp[j].ev_offset, vp[j].ev_prot,
 				    vp[j].ev_flags);
@@ -697,7 +700,7 @@ execve1(struct lwp *l, const char *path, char * const *args,
 
 	/* if an error happened, deallocate and punt */
 	if (error) {
-		DPRINTF(("execve: vmcmd %i failed: %d\n", i - 1, error));
+		DPRINTF(("execve: vmcmd %zu failed: %d\n", i - 1, error));
 		goto exec_abort;
 	}
 
@@ -767,9 +770,9 @@ execve1(struct lwp *l, const char *path, char * const *args,
 	l->l_ctxlink = NULL;	/* reset ucontext link */
 
 	/* set command name & other accounting info */
-	len = min(nid.ni_cnd.cn_namelen, MAXCOMLEN);
-	memcpy(p->p_comm, nid.ni_cnd.cn_nameptr, len);
-	p->p_comm[len] = 0;
+	i = min(nid.ni_cnd.cn_namelen, MAXCOMLEN);
+	memcpy(p->p_comm, nid.ni_cnd.cn_nameptr, i);
+	p->p_comm[i] = '\0';
 	p->p_acflag &= ~AFORK;
 
 	p->p_flag |= PK_EXEC;
@@ -832,10 +835,10 @@ execve1(struct lwp *l, const char *path, char * const *args,
 		 * root set it.
 		 */
 		if (p->p_tracep) {
-			mutex_enter(&ktrace_mutex);
+			mutex_enter(&ktrace_lock);
 			if (!(p->p_traceflag & KTRFAC_ROOT))
 				ktrderef(p);
-			mutex_exit(&ktrace_mutex);
+			mutex_exit(&ktrace_lock);
 		}
 #endif
 		if (attr.va_mode & S_ISUID)
@@ -944,10 +947,7 @@ execve1(struct lwp *l, const char *path, char * const *args,
 #ifdef __HAVE_SYSCALL_INTERN
 	(*p->p_emul->e_syscall_intern)(p);
 #endif
-#ifdef KTRACE
-	if (KTRPOINT(p, KTR_EMUL))
-		ktremul(l);
-#endif
+	ktremul();
 
 #ifdef LKM
 	rw_exit(&exec_lock);

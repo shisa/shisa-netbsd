@@ -1,4 +1,4 @@
-/*	$NetBSD: if_strip.c,v 1.74 2007/03/04 06:03:17 christos Exp $	*/
+/*	$NetBSD: if_strip.c,v 1.81 2007/09/01 04:32:51 dyoung Exp $	*/
 /*	from: NetBSD: if_sl.c,v 1.38 1996/02/13 22:00:23 christos Exp $	*/
 
 /*
@@ -87,7 +87,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_strip.c,v 1.74 2007/03/04 06:03:17 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_strip.c,v 1.81 2007/09/01 04:32:51 dyoung Exp $");
 
 #include "opt_inet.h"
 #include "bpfilter.h"
@@ -221,9 +221,6 @@ struct if_clone strip_cloner =
 
 #define STRIP_FRAME_END		0x0D		/* carriage return */
 
-#ifndef __HAVE_GENERIC_SOFT_INTERRUPTS
-void	stripnetisr(void);
-#endif
 static void	stripintr(void *);
 
 static int	stripinit(struct strip_softc *);
@@ -371,7 +368,7 @@ strip_clone_create(struct if_clone *ifc, int unit)
 	sc->sc_unit = unit;
 	(void)snprintf(sc->sc_if.if_xname, sizeof(sc->sc_if.if_xname),
 	    "%s%d", ifc->ifc_name, unit);
-	callout_init(&sc->sc_timo_ch);
+	callout_init(&sc->sc_timo_ch, 0);
 	sc->sc_if.if_softc = sc;
 	sc->sc_if.if_mtu = SLMTU;
 	sc->sc_if.if_flags = 0;
@@ -491,14 +488,10 @@ stripopen(dev_t dev, struct tty *tp)
 
 	LIST_FOREACH(sc, &strip_softc_list, sc_iflist) {
 		if (sc->sc_ttyp == NULL) {
-#ifdef __HAVE_GENERIC_SOFT_INTERRUPTS
 			sc->sc_si = softintr_establish(IPL_SOFTNET,
 			    stripintr, sc);
-#endif
 			if (stripinit(sc) == 0) {
-#ifdef __HAVE_GENERIC_SOFT_INTERRUPTS
 				softintr_disestablish(sc->sc_si);
-#endif
 				return (ENOBUFS);
 			}
 			tp->t_sc = (void *)sc;
@@ -523,9 +516,7 @@ stripopen(dev_t dev, struct tty *tp)
 				error = clalloc(&tp->t_outq, 3*SLMTU, 0);
 				if (error) {
 					splx(s);
-#ifdef __HAVE_GENERIC_SOFT_INTERRUPTS
 					softintr_disestablish(sc->sc_si);
-#endif
 					/*
 					 * clalloc() might return -1 which
 					 * is no good, so we need to return
@@ -567,9 +558,7 @@ stripclose(struct tty *tp, int flag)
 	sc = tp->t_sc;
 
 	if (sc != NULL) {
-#ifdef __HAVE_GENERIC_SOFT_INTERRUPTS
 		softintr_disestablish(sc->sc_si);
-#endif
 		s = splnet();
 		/*
 		 * Cancel watchdog timer, which stops the "probe-for-death"/
@@ -767,15 +756,13 @@ stripoutput(struct ifnet *ifp, struct mbuf *m, const struct sockaddr *dst,
 		return (EHOSTUNREACH);
 	}
 
-#define SDL(__a)          ((const struct sockaddr_dl *)(__a))
-
 #ifdef DEBUG
 	if (rt) {
 	   	printf("stripout, rt: dst af%d gw af%d",
-		    rt_key(rt)->sa_family, rt->rt_gateway->sa_family);
-		if (rt_key(rt)->sa_family == AF_INET)
+		    rt_getkey(rt)->sa_family, rt->rt_gateway->sa_family);
+		if (rt_getkey(rt)->sa_family == AF_INET)
 		  printf(" dst %x",
-		      satocsin(rt_key(rt))->sin_addr.s_addr);
+		      satocsin(rt_getkey(rt))->sin_addr.s_addr);
 		printf("\n");
 	}
 #endif
@@ -786,19 +773,17 @@ stripoutput(struct ifnet *ifp, struct mbuf *m, const struct sockaddr *dst,
 
                 /* assume rt is never NULL */
                 if (rt == NULL || rt->rt_gateway->sa_family != AF_LINK
-                    || SDL(rt->rt_gateway)->sdl_alen != ifp->if_addrlen) {
+                    || satocsdl(rt->rt_gateway)->sdl_alen != ifp->if_addrlen) {
 		  	DPRINTF(("strip: could not arp starmode addr %x\n",
 			 satocsin(dst)->sin_addr.s_addr));
 			m_freem(m);
 			return (EHOSTUNREACH);
 		}
-		/*bcopy(LLADDR(SDL(rt->rt_gateway)), dldst, ifp->if_addrlen);*/
-                dldst = CLLADDR(SDL(rt->rt_gateway));
+                dldst = CLLADDR(satocsdl(rt->rt_gateway));
                 break;
 
 	case AF_LINK:
-		/*bcopy(LLADDR(SDL(rt->rt_gateway)), dldst, ifp->if_addrlen);*/
-		dldst = CLLADDR(SDL(dst));
+		dldst = CLLADDR(satocsdl(dst));
 		break;
 
 	default:
@@ -926,15 +911,7 @@ stripstart(struct tty *tp)
 	 */
 	if (sc == NULL)
 		return (0);
-#ifdef __HAVE_GENERIC_SOFT_INTERRUPTS
 	softintr_schedule(sc->sc_si);
-#else
-    {
-	int s = splhigh();
-	schednetisr(NETISR_STRIP);
-	splx(s);
-    }
-#endif
 	return (0);
 }
 
@@ -1065,15 +1042,7 @@ stripinput(int c, struct tty *tp)
 		goto error;
 
 	IF_ENQUEUE(&sc->sc_inq, m);
-#ifdef __HAVE_GENERIC_SOFT_INTERRUPTS
 	softintr_schedule(sc->sc_si);
-#else
-    {
-	int s = splhigh();
-	schednetisr(NETISR_STRIP);
-	splx(s);
-    }
-#endif
 	goto newpack;
 
 error:
@@ -1085,20 +1054,6 @@ newpack:
 
 	return (0);
 }
-
-#ifndef __HAVE_GENERIC_SOFT_INTERRUPTS
-void
-stripnetisr(void)
-{
-	struct strip_softc *sc;
-
-	LIST_FOREACH(sc, &strip_softc_list, sc_iflist) {
-		if (sc->sc_ttyp == NULL)
-			continue;
-		stripintr(sc);
-	}
-}
-#endif
 
 static void
 stripintr(void *arg)
@@ -1346,7 +1301,7 @@ stripioctl(struct ifnet *ifp, u_long cmd, void *data)
 			error = EAFNOSUPPORT;		/* XXX */
 			break;
 		}
-		switch (ifr->ifr_addr.sa_family) {
+		switch (ifreq_getaddr(cmd, ifr)->sa_family) {
 
 #ifdef INET
 		case AF_INET:

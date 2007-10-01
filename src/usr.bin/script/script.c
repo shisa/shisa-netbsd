@@ -1,4 +1,4 @@
-/*	$NetBSD: script.c,v 1.12 2006/06/14 16:05:38 liamjfoy Exp $	*/
+/*	$NetBSD: script.c,v 1.15 2007/09/09 12:20:27 christos Exp $	*/
 
 /*
  * Copyright (c) 1980, 1992, 1993
@@ -39,7 +39,7 @@ __COPYRIGHT("@(#) Copyright (c) 1980, 1992, 1993\n\
 #if 0
 static char sccsid[] = "@(#)script.c	8.1 (Berkeley) 6/6/93";
 #endif
-__RCSID("$NetBSD: script.c,v 1.12 2006/06/14 16:05:38 liamjfoy Exp $");
+__RCSID("$NetBSD: script.c,v 1.15 2007/09/09 12:20:27 christos Exp $");
 #endif /* not lint */
 
 #include <sys/types.h>
@@ -90,6 +90,7 @@ void	finish(int);
 int	main(int, char **);
 void	scriptflush(int);
 void	record(FILE *, char *, size_t, int);
+void	consume(FILE *, off_t, char *, int);
 void	playback(FILE *);
 
 int
@@ -303,6 +304,25 @@ record(FILE *fscript, char *buf, size_t cc, int direction)
 		err(1, "writev");
 }
 
+void
+consume(FILE *fscript, off_t len, char *buf, int reg)
+{
+	size_t l;
+
+	if (reg) {
+		if (fseeko(fscript, len, SEEK_CUR) == -1)
+			err(1, NULL);
+	}
+	else {
+		while (len > 0) {
+			l = MIN(DEF_BUF, len);
+			if (fread(buf, sizeof(char), l, fscript) != l)
+				err(1, "cannot read buffer");
+			len -= l;
+		}
+	}
+}
+
 #define swapstamp(stamp) do { \
 	if (stamp.scr_direction > 0xff) { \
 		stamp.scr_len = bswap64(stamp.scr_len); \
@@ -317,23 +337,30 @@ playback(FILE *fscript)
 {
 	struct timespec tsi, tso;
 	struct stamp stamp;
-	struct stat playback_stat;
+	struct stat pst;
 	char buf[DEF_BUF];
 	off_t nread, save_len;
 	size_t l;
 	time_t clock;
+	int reg;
 
-	if (fstat(fileno(fscript), &playback_stat) == -1)
+	if (fstat(fileno(fscript), &pst) == -1)
 		err(1, "fstat failed");	
 
-	for (nread = 0; nread < playback_stat.st_size; nread += save_len) {
-		if (fread(&stamp, sizeof(stamp), 1, fscript) != 1)
-			err(1, "reading playback header");
+	reg = S_ISREG(pst.st_mode);
+
+	for (nread = 0; !reg || nread < pst.st_size; nread += save_len) {
+		if (fread(&stamp, sizeof(stamp), 1, fscript) != 1) {
+			if (reg)
+				err(1, "reading playback header");
+			else
+				break;
+		}
 		swapstamp(stamp);
 		save_len = sizeof(stamp);
 
-		if (stamp.scr_len >
-		    (uint64_t)(playback_stat.st_size - save_len) - nread)
+		if (reg && stamp.scr_len >
+		    (uint64_t)(pst.st_size - save_len) - nread)
 			err(1, "invalid stamp");
 
 		save_len += stamp.scr_len;
@@ -345,15 +372,15 @@ playback(FILE *fscript)
 		case 's':
 			(void)printf("Script started on %s", ctime(&clock));
 			tsi = tso;
-			fseek(fscript, stamp.scr_len, SEEK_CUR);
+			(void)consume(fscript, stamp.scr_len, buf, reg);
 			break;
 		case 'e':
 			(void)printf("\nScript done on %s", ctime(&clock));
-			fseek(fscript, stamp.scr_len, SEEK_CUR);
+			(void)consume(fscript, stamp.scr_len, buf, reg);
 			break;
 		case 'i':
 			/* throw input away */
-			fseek(fscript, stamp.scr_len, SEEK_CUR);
+			(void)consume(fscript, stamp.scr_len, buf, reg);
 			break;
 		case 'o':
 			tsi.tv_sec = tso.tv_sec - tsi.tv_sec;

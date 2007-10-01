@@ -1,4 +1,4 @@
-/* $NetBSD: udf_vfsops.c,v 1.25 2007/06/30 09:37:57 pooka Exp $ */
+/* $NetBSD: udf_vfsops.c,v 1.29 2007/07/31 21:14:19 pooka Exp $ */
 
 /*
  * Copyright (c) 2006 Reinoud Zandijk
@@ -36,7 +36,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: udf_vfsops.c,v 1.25 2007/06/30 09:37:57 pooka Exp $");
+__RCSID("$NetBSD: udf_vfsops.c,v 1.29 2007/07/31 21:14:19 pooka Exp $");
 #endif /* not lint */
 
 
@@ -83,23 +83,7 @@ MALLOC_JUSTDEFINE(M_UDFTEMP,  "UDF temp",	"UDF scrap space");
 struct pool udf_node_pool;
 
 /* supported functions predefined */
-int udf_mountroot(void);
-int udf_mount(struct mount *, const char *, void *, struct nameidata *, struct lwp *);
-int udf_start(struct mount *, int, struct lwp *);
-int udf_unmount(struct mount *, int, struct lwp *);
-int udf_root(struct mount *, struct vnode **);
-int udf_quotactl(struct mount *, int, uid_t, void *, struct lwp *);
-int udf_statvfs(struct mount *, struct statvfs *, struct lwp *);
-int udf_sync(struct mount *, int, kauth_cred_t, struct lwp *);
-int udf_vget(struct mount *, ino_t, struct vnode **);
-int udf_fhtovp(struct mount *, struct fid *, struct vnode **);
-int udf_checkexp(struct mount *, struct mbuf *, int *, kauth_cred_t *);
-int udf_vptofh(struct vnode *, struct fid *, size_t *);
-int udf_snapshot(struct mount *, struct vnode *, struct timespec *);
-
-void udf_init(void);
-void udf_reinit(void);
-void udf_done(void);
+VFS_PROTOS(udf);
 
 
 /* internal functions */
@@ -127,6 +111,7 @@ const struct vnodeopv_desc * const udf_vnodeopv_descs[] = {
 /* vfsops descriptor linked in as anchor point for the filingsystem */
 struct vfsops udf_vfsops = {
 	MOUNT_UDF,			/* vfs_name */
+	sizeof (struct udf_args),
 	udf_mount,
 	udf_start,
 	udf_unmount,
@@ -143,7 +128,7 @@ struct vfsops udf_vfsops = {
 	udf_mountroot,
 	udf_snapshot,
 	vfs_stdextattrctl,
-	vfs_stdsuspendctl,
+	(void *)eopnotsupp,		/* vfs_suspendctl */
 	udf_vnodeopv_descs,
 	0, /* int vfs_refcount   */
 	{ NULL, NULL, }, /* LIST_ENTRY(vfsops) */
@@ -254,21 +239,27 @@ free_udf_mountinfo(struct mount *mp)
 
 int
 udf_mount(struct mount *mp, const char *path,
-	  void *data, struct nameidata *ndp, struct lwp *l)
+	  void *data, size_t *data_len, struct lwp *l)
 {
-	struct udf_args args;
+	struct nameidata nd;
+	struct udf_args *args = data;
 	struct udf_mount *ump;
 	struct vnode *devvp;
 	int openflags, accessmode, error;
 
 	DPRINTF(CALL, ("udf_mount called\n"));
 
+	if (*data_len < sizeof *args)
+		return EINVAL;
+
 	if (mp->mnt_flag & MNT_GETARGS) {
 		/* request for the mount arguments */
 		ump = VFSTOUDF(mp);
 		if (ump == NULL)
 			return EINVAL;
-		return copyout(&ump->mount_args, data, sizeof(args));
+		*args = ump->mount_args;
+		*data_len = sizeof *args;
+		return 0;
 	}
 
 	/* handle request for updating mount parameters */
@@ -278,23 +269,20 @@ udf_mount(struct mount *mp, const char *path,
 	}
 
 	/* OK, so we are asked to mount the device */
-	error = copyin(data, &args, sizeof(struct udf_args));
-	if (error)
-		return error;
 
 	/* check/translate struct version */
 	/* TODO sanity checking other mount arguments */
-	if (args.version != 1) {
+	if (args->version != 1) {
 		printf("mount_udf: unrecognized argument structure version\n");
 		return EINVAL;
 	}
 
 	/* lookup name to get its vnode */
-	NDINIT(ndp, LOOKUP, FOLLOW, UIO_USERSPACE, args.fspec, l);
-	error = namei(ndp);
+	NDINIT(&nd, LOOKUP, FOLLOW, UIO_USERSPACE, args->fspec, l);
+	error = namei(&nd);
 	if (error)
 		return error;
-	devvp = ndp->ni_vp;
+	devvp = nd.ni_vp;
 
 #ifdef DEBUG
 	if (udf_verbose & UDF_DEBUG_VOLUMES)
@@ -357,7 +345,7 @@ udf_mount(struct mount *mp, const char *path,
 	error = VOP_OPEN(devvp, openflags, FSCRED, l);
 	if (error == 0) {
 		/* opened ok, try mounting */
-		error = udf_mountfs(devvp, mp, l, &args);
+		error = udf_mountfs(devvp, mp, l, args);
 		if (error) {
 			free_udf_mountinfo(mp);
 			vn_lock(devvp, LK_EXCLUSIVE | LK_RETRY);
@@ -377,8 +365,8 @@ udf_mount(struct mount *mp, const char *path,
 	/* successfully mounted */
 	DPRINTF(VOLUMES, ("udf_mount() successfull\n"));
 
-	return set_statvfs_info(path, UIO_USERSPACE, args.fspec, UIO_USERSPACE,
-			mp, l);
+	return set_statvfs_info(path, UIO_USERSPACE, args->fspec, UIO_USERSPACE,
+			mp->mnt_op->vfs_name, mp, l);
 }
 
 /* --------------------------------------------------------------------- */

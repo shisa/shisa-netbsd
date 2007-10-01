@@ -1,4 +1,4 @@
-/*	$NetBSD: psshfs.c,v 1.30 2007/06/26 13:20:34 pooka Exp $	*/
+/*	$NetBSD: psshfs.c,v 1.35 2007/09/01 16:43:11 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006  Antti Kantee.  All Rights Reserved.
@@ -41,7 +41,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: psshfs.c,v 1.30 2007/06/26 13:20:34 pooka Exp $");
+__RCSID("$NetBSD: psshfs.c,v 1.35 2007/09/01 16:43:11 pooka Exp $");
 #endif /* !lint */
 
 #include <sys/types.h>
@@ -157,6 +157,8 @@ main(int argc, char *argv[])
 	PUFFSOP_SET(pops, psshfs, node, lookup);
 	PUFFSOP_SET(pops, psshfs, node, create);
 	PUFFSOP_SET(pops, psshfs, node, open);
+	PUFFSOP_SET(pops, psshfs, node, close);
+	PUFFSOP_SET(pops, psshfs, node, mmap);
 	PUFFSOP_SET(pops, psshfs, node, inactive);
 	PUFFSOP_SET(pops, psshfs, node, readdir);
 	PUFFSOP_SET(pops, psshfs, node, getattr);
@@ -170,6 +172,10 @@ main(int argc, char *argv[])
 	PUFFSOP_SET(pops, psshfs, node, read);
 	PUFFSOP_SET(pops, psshfs, node, write);
 	PUFFSOP_SET(pops, psshfs, node, reclaim);
+
+	pu = puffs_init(pops, argv[0], "psshfs", &pctx, pflags);
+	if (pu == NULL)
+		err(1, "puffs_init");
 
 	memset(&pctx, 0, sizeof(pctx));
 	pctx.mounttime = time(NULL);
@@ -185,10 +191,6 @@ main(int argc, char *argv[])
 	add_ssharg(&sshargs, &nargs, argv[0]);
 	add_ssharg(&sshargs, &nargs, "sftp");
 
-	pu = puffs_init(pops, "ppshfs", &pctx, pflags);
-	if (pu == NULL)
-		err(1, "puffs_init");
-
 	pssh_connect(&pctx, sshargs);
 
 	if (puffs_setblockingmode(pu, PUFFSDEV_NONBLOCK) == -1)
@@ -203,9 +205,10 @@ main(int argc, char *argv[])
 	if (ioctl(pctx.sshfd, FIONBIO, &x) == -1)
 		err(1, "nonblocking descriptor");
 
-	puffs_framev_init(pu, psbuf_read, psbuf_write, psbuf_cmp,
+	puffs_framev_init(pu, psbuf_read, psbuf_write, psbuf_cmp, NULL,
 	    puffs_framev_unmountonclose);
-	if (puffs_framev_addfd(pu, pctx.sshfd) == -1)
+	if (puffs_framev_addfd(pu, pctx.sshfd,
+	    PUFFS_FBIO_READ | PUFFS_FBIO_WRITE) == -1)
 		err(1, "framebuf addfd");
 
 	if (puffs_mount(pu, argv[1], mntflags, puffs_getroot(pu)) == -1)

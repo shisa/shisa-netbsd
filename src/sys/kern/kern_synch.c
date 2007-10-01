@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_synch.c,v 1.189 2007/05/31 22:06:09 ad Exp $	*/
+/*	$NetBSD: kern_synch.c,v 1.195 2007/09/25 21:38:57 ad Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2000, 2004, 2006, 2007 The NetBSD Foundation, Inc.
@@ -75,7 +75,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_synch.c,v 1.189 2007/05/31 22:06:09 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_synch.c,v 1.195 2007/09/25 21:38:57 ad Exp $");
 
 #include "opt_kstack.h"
 #include "opt_lockdebug.h"
@@ -97,13 +97,14 @@ __KERNEL_RCSID(0, "$NetBSD: kern_synch.c,v 1.189 2007/05/31 22:06:09 ad Exp $");
 #include <sys/syscall_stats.h>
 #include <sys/sleepq.h>
 #include <sys/lockdebug.h>
+#include <sys/evcnt.h>
 
 #include <uvm/uvm_extern.h>
 
-struct callout sched_pstats_ch = CALLOUT_INITIALIZER_SETFUNC(sched_pstats, NULL);
+callout_t sched_pstats_ch;
 unsigned int sched_pstats_ticks;
 
-int	lbolt;			/* once a second sleep address */
+kcondvar_t	lbolt;			/* once a second sleep address */
 
 static void	sched_unsleep(struct lwp *);
 static void	sched_changepri(struct lwp *, pri_t);
@@ -358,10 +359,6 @@ mi_switch(struct lwp *l)
 	KASSERT(lwp_locked(l, NULL));
 	LOCKDEBUG_BARRIER(l->l_mutex, 1);
 
-#ifdef LOCKDEBUG
-	spinlock_switchcheck();
-	simple_lock_switchcheck();
-#endif
 #ifdef KSTACK_CHECK_MAGIC
 	kstack_check_magic(l);
 #endif
@@ -373,29 +370,37 @@ mi_switch(struct lwp *l)
 	 */
 	KDASSERT(l->l_cpu == curcpu());
 
+	/*
+	 * Process is about to yield the CPU; clear the appropriate
+	 * scheduling flags.
+	 */
+	spc = &l->l_cpu->ci_schedstate;
+	newl = NULL;
+
+	if (l->l_switchto != NULL) {
+		newl = l->l_switchto;
+		l->l_switchto = NULL;
+	}
+
 	/* Count time spent in current system call */
 	SYSCALL_TIME_SLEEP(l);
 
 	/*
-	 * XXXSMP If we are using h/w performance counters, save context.
+	 * XXXSMP If we are using h/w performance counters,
+	 * save context.
 	 */
 #if PERFCTRS
 	if (PMC_ENABLED(l->l_proc)) {
 		pmc_save_context(l->l_proc);
 	}
 #endif
-	/*
-	 * Process is about to yield the CPU; clear the appropriate
-	 * scheduling flags.
-	 */
-	spc = &l->l_cpu->ci_schedstate;
-	spc->spc_flags &= ~SPCF_SWITCHCLEAR;
 	updatertime(l, spc);
 
 	/*
 	 * If on the CPU and we have gotten this far, then we must yield.
 	 */
 	mutex_spin_enter(spc->spc_mutex);
+	spc->spc_flags &= ~SPCF_SWITCHCLEAR;
 	KASSERT(l->l_stat != LSRUN);
 	if (l->l_stat == LSONPROC) {
 		KASSERT(lwp_locked(l, &spc->spc_lwplock));
@@ -411,21 +416,24 @@ mi_switch(struct lwp *l)
 	 * Let sched_nextlwp() select the LWP to run the CPU next. 
 	 * If no LWP is runnable, switch to the idle LWP.
 	 */
-	newl = sched_nextlwp();
-	if (newl) {
-		sched_dequeue(newl);
-		KASSERT(lwp_locked(newl, spc->spc_mutex));
-		newl->l_stat = LSONPROC;
-		newl->l_cpu = l->l_cpu;
-		newl->l_flag |= LW_RUNNING;
-		lwp_setlock(newl, &spc->spc_lwplock);
-	} else {
-		newl = l->l_cpu->ci_data.cpu_idlelwp;
-		newl->l_stat = LSONPROC;
-		newl->l_flag |= LW_RUNNING;
+	if (newl == NULL) {
+		newl = sched_nextlwp();
+		if (newl != NULL) {
+			sched_dequeue(newl);
+			KASSERT(lwp_locked(newl, spc->spc_mutex));
+			newl->l_stat = LSONPROC;
+			newl->l_cpu = l->l_cpu;
+			newl->l_flag |= LW_RUNNING;
+			lwp_setlock(newl, &spc->spc_lwplock);
+		} else {
+			newl = l->l_cpu->ci_data.cpu_idlelwp;
+			newl->l_stat = LSONPROC;
+			newl->l_flag |= LW_RUNNING;
+		}
+		spc->spc_curpriority = newl->l_usrpri;
+		newl->l_priority = newl->l_usrpri;
+		cpu_did_resched();
 	}
-	spc->spc_curpriority = newl->l_usrpri;
-	cpu_did_resched();
 
 	if (l != newl) {
 		struct lwp *prevlwp;
@@ -460,7 +468,6 @@ mi_switch(struct lwp *l)
 		 * .. we have switched away and are now back so we must
 		 * be the new curlwp.  prevlwp is who we replaced.
 		 */
-		curlwp = l;
 		if (prevlwp != NULL) {
 			curcpu()->ci_mtx_oldspl = oldspl;
 			lwp_unlock(prevlwp);
@@ -496,6 +503,7 @@ mi_switch(struct lwp *l)
 	 * schedstate_percpu pointer.
 	 */
 	SYSCALL_TIME_WAKEUP(l);
+	KASSERT(curlwp == l);
 	KDASSERT(l->l_cpu == curcpu());
 	LOCKDEBUG_BARRIER(NULL, 1);
 
@@ -537,6 +545,7 @@ setrunnable(struct lwp *l)
 	case LSSUSPENDED:
 		l->l_flag &= ~LW_WSUSPEND;
 		p->p_nrlwps++;
+		cv_broadcast(&p->p_lwpcv);
 		break;
 	case LSSLEEP:
 		KASSERT(l->l_wchan != NULL);
@@ -598,10 +607,8 @@ setrunnable(struct lwp *l)
 void
 suspendsched(void)
 {
-#ifdef MULTIPROCESSOR
 	CPU_INFO_ITERATOR cii;
 	struct cpu_info *ci;
-#endif
 	struct lwp *l;
 	struct proc *p;
 
@@ -652,12 +659,8 @@ suspendsched(void)
 	 * Kick all CPUs to make them preempt any LWPs running in user mode. 
 	 * They'll trap into the kernel and suspend themselves in userret().
 	 */
-#ifdef MULTIPROCESSOR
 	for (CPU_INFO_FOREACH(cii, ci))
 		cpu_need_resched(ci, 0);
-#else
-	cpu_need_resched(curcpu(), 0);
-#endif
 }
 
 /*
@@ -900,6 +903,17 @@ sched_pstats(void *arg)
 	}
 	mutex_exit(&proclist_mutex);
 	uvm_meter();
-	wakeup(&lbolt);
+	cv_wakeup(&lbolt);
 	callout_schedule(&sched_pstats_ch, hz);
+}
+
+void
+sched_init(void)
+{
+
+	cv_init(&lbolt, "lbolt");
+	callout_init(&sched_pstats_ch, 0);
+	callout_setfunc(&sched_pstats_ch, sched_pstats, NULL);
+	sched_setup();
+	sched_pstats(NULL);
 }

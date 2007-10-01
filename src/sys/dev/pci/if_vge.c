@@ -1,4 +1,4 @@
-/* $NetBSD: if_vge.c,v 1.35 2007/06/12 14:32:36 tsutsui Exp $ */
+/* $NetBSD: if_vge.c,v 1.37 2007/09/01 07:32:30 dyoung Exp $ */
 
 /*-
  * Copyright (c) 2004
@@ -35,7 +35,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_vge.c,v 1.35 2007/06/12 14:32:36 tsutsui Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_vge.c,v 1.37 2007/09/01 07:32:30 dyoung Exp $");
 
 /*
  * VIA Networking Technologies VT612x PCI gigabit ethernet NIC driver.
@@ -207,7 +207,7 @@ struct vge_softc {
 	int			sc_if_flags;
 	int			sc_link;
 	int			sc_camidx;
-	struct callout		sc_timeout;
+	callout_t		sc_timeout;
 
 	bus_dmamap_t		sc_cddmamap;
 #define sc_cddma		sc_cddmamap->dm_segs[0].ds_addr
@@ -1069,7 +1069,7 @@ vge_attach(struct device *parent, struct device *self, void *aux)
 	if_attach(ifp);
 	ether_ifattach(ifp, eaddr);
 
-	callout_init(&sc->sc_timeout);
+	callout_init(&sc->sc_timeout, 0);
 	callout_setfunc(&sc->sc_timeout, vge_tick, sc);
 
 	/*
@@ -2085,11 +2085,7 @@ vge_ioctl(struct ifnet *ifp, u_long command, void *data)
 		break;
 	case SIOCADDMULTI:
 	case SIOCDELMULTI:
-		error = (command == SIOCADDMULTI) ?
-		    ether_addmulti(ifr, &sc->sc_ethercom) :
-		    ether_delmulti(ifr, &sc->sc_ethercom);
-
-		if (error == ENETRESET) {
+		if ((error = ether_ioctl(ifp, command, data)) == ENETRESET) {
 			/*
 			 * Multicast list has changed; set the hardware filter
 			 * accordingly.

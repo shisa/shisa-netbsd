@@ -1,4 +1,4 @@
-/*	$NetBSD: lfs_vnops.c,v 1.206 2007/04/24 22:47:56 perseant Exp $	*/
+/*	$NetBSD: lfs_vnops.c,v 1.210 2007/07/29 13:31:15 ad Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2000, 2001, 2002, 2003 The NetBSD Foundation, Inc.
@@ -67,7 +67,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: lfs_vnops.c,v 1.206 2007/04/24 22:47:56 perseant Exp $");
+__KERNEL_RCSID(0, "$NetBSD: lfs_vnops.c,v 1.210 2007/07/29 13:31:15 ad Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_compat_netbsd.h"
@@ -1176,7 +1176,6 @@ lfs_strategy(void *v)
 				 NULL);
 		if (error) {
 			bp->b_error = error;
-			bp->b_flags |= B_ERROR;
 			biodone(bp);
 			return (error);
 		}
@@ -1818,7 +1817,7 @@ check_dirty(struct lfs *fs, struct vnode *vp,
 	int dirty;	/* number of dirty pages in a block */
 	int tdirty;
 	int pages_per_block = fs->lfs_bsize >> PAGE_SHIFT;
-	int pagedaemon = (curproc == uvm.pagedaemon_proc);
+	int pagedaemon = (curlwp == uvm.pagedaemon_lwp);
 
 	ASSERT_MAYBE_SEGLOCK(fs);
   top:
@@ -2026,7 +2025,7 @@ lfs_putpages(void *v)
 	ip = VTOI(vp);
 	fs = ip->i_lfs;
 	sync = (ap->a_flags & PGO_SYNCIO) != 0;
-	pagedaemon = (curproc == uvm.pagedaemon_proc);
+	pagedaemon = (curlwp == uvm.pagedaemon_lwp);
 
 	/* Putpages does nothing for metadata. */
 	if (vp == fs->lfs_ivnode || vp->v_type != VREG) {
@@ -2285,7 +2284,6 @@ lfs_putpages(void *v)
 		if (check_dirty(fs, vp, startoffset, endoffset, blkeof,
 				ap->a_flags, 0, &busypg) < 0) {
 			simple_unlock(&vp->v_interlock);
-			sp->vp = NULL;
 
 			simple_lock(&vp->v_interlock);
 			write_and_wait(fs, vp, busypg, seglocked, NULL);
@@ -2293,6 +2291,7 @@ lfs_putpages(void *v)
 				lfs_release_finfo(fs);
 				lfs_segunlock(fs);
 			}
+			sp->vp = NULL;
 			goto get_seglock;
 		}
 	
@@ -2439,7 +2438,7 @@ lfs_mmap(void *v)
 	struct vop_mmap_args /* {
 		const struct vnodeop_desc *a_desc;
 		struct vnode *a_vp;
-		int a_fflags;
+		vm_prot_t a_prot;
 		kauth_cred_t a_cred;
 		struct lwp *a_l;
 	} */ *ap = v;

@@ -1,4 +1,4 @@
-/*	$NetBSD: init_sysctl.c,v 1.102 2007/06/30 13:32:14 dsl Exp $ */
+/*	$NetBSD: init_sysctl.c,v 1.105 2007/08/15 12:07:32 ad Exp $ */
 
 /*-
  * Copyright (c) 2003 The NetBSD Foundation, Inc.
@@ -37,19 +37,19 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: init_sysctl.c,v 1.102 2007/06/30 13:32:14 dsl Exp $");
+__KERNEL_RCSID(0, "$NetBSD: init_sysctl.c,v 1.105 2007/08/15 12:07:32 ad Exp $");
 
 #include "opt_sysv.h"
 #include "opt_multiprocessor.h"
 #include "opt_posix.h"
 #include "opt_compat_netbsd32.h"
-#include "opt_ktrace.h"
 #include "pty.h"
 #include "rnd.h"
 
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/sysctl.h>
+#include <sys/cpu.h>
 #include <sys/errno.h>
 #include <sys/systm.h>
 #include <sys/kernel.h>
@@ -73,9 +73,7 @@ __KERNEL_RCSID(0, "$NetBSD: init_sysctl.c,v 1.102 2007/06/30 13:32:14 dsl Exp $"
 #include <sys/device.h>
 #include <sys/stat.h>
 #include <sys/kauth.h>
-#ifdef KTRACE
 #include <sys/ktrace.h>
-#endif
 
 #ifdef COMPAT_NETBSD32
 #include <compat/netbsd32/netbsd32.h>
@@ -134,7 +132,6 @@ static const u_int sysctl_stflagmap[] = {
 
 static const u_int sysctl_lwpflagmap[] = {
 	LW_INMEM, P_INMEM,
-	LW_SELECT, P_SELECT,
 	LW_SINTR, P_SINTR,
 	LW_SYSTEM, P_SYSTEM,
 	0
@@ -152,10 +149,9 @@ static const u_int sysctl_lwpprflagmap[] = {
 #define KERN_PROCSLOP	(5 * sizeof(struct kinfo_proc))
 #define KERN_LWPSLOP	(5 * sizeof(struct kinfo_lwp))
 
-#ifdef KTRACE
-int dcopyout(struct lwp *, const void *, void *, size_t);
+static int dcopyout(struct lwp *, const void *, void *, size_t);
 
-int
+static int
 dcopyout(l, kaddr, uaddr, len)
 	struct lwp *l;
 	const void *kaddr;
@@ -165,23 +161,10 @@ dcopyout(l, kaddr, uaddr, len)
 	int error;
 
 	error = copyout(kaddr, uaddr, len);
-	if (!error && KTRPOINT(l->l_proc, KTR_MIB)) {
-		struct iovec iov;
+	ktrmibio(-1, UIO_READ, uaddr, len, error);
 
-		iov.iov_base = uaddr;
-		iov.iov_len = len;
-		ktrgenio(l, -1, UIO_READ, &iov, len, 0);
-	}
 	return error;
 }
-#else /* !KTRACE */
-#define dcopyout(l, kaddr, uaddr, len) copyout(kaddr, uaddr, len)
-#endif /* KTRACE */
-
-#ifndef CPU_INFO_FOREACH
-#define CPU_INFO_ITERATOR int
-#define CPU_INFO_FOREACH(cii, ci) cii = 0, ci = curcpu(); ci != NULL; ci = NULL
-#endif
 
 #ifdef DIAGNOSTIC
 static int sysctl_kern_trigger_panic(SYSCTLFN_PROTO);

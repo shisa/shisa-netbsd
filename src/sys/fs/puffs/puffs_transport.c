@@ -1,4 +1,4 @@
-/* $NetBSD: puffs_transport.c,v 1.20 2007/06/21 14:54:49 pooka Exp $ */
+/* $NetBSD: puffs_transport.c,v 1.24 2007/09/27 21:44:12 pooka Exp $ */
 
 /*
  * Copyright (c) 2006  Antti Kantee.  All Rights Reserved.
@@ -29,7 +29,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: puffs_transport.c,v 1.20 2007/06/21 14:54:49 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: puffs_transport.c,v 1.24 2007/09/27 21:44:12 pooka Exp $");
 
 #include <sys/param.h>
 #include <sys/conf.h>
@@ -346,9 +346,12 @@ puffs_flush(struct puffs_mount *pmp, struct puffs_flush *pf)
 	 * reason we need to eventually bump locking to userspace, as we
 	 * will need to lock the node if we wish to do flushes.
 	 */
-	rv = puffs_pnode2vnode(pmp, pf->pf_cookie, 0, &vp);
-	if (rv)
+	rv = puffs_cookie2vnode(pmp, pf->pf_cookie, 0, 0, &vp);
+	if (rv) {
+		if (rv == PUFFS_NOSUCHCOOKIE)
+			return ENOENT;
 		return rv;
+	}
 
 	switch (pf->pf_op) {
 #if 0
@@ -485,8 +488,18 @@ puffs_fop_ioctl(struct file *fp, u_long cmd, void *data, struct lwp *l)
 		mutex_exit(&pmp->pmp_lock);
 		if (rv)
 			break;
-		rv = kthread_create1(dosuspendresume, pmp, NULL, "puffsusp");
+		rv = kthread_create(PRI_NONE, 0, NULL, dosuspendresume,
+		    pmp, NULL, "puffsusp");
 		break;
+
+	case PUFFSREQSIZEOP:
+		{
+			size_t *rlenp = data;
+
+			*rlenp = pmp->pmp_req_maxsize;
+			rv = 0;
+			break;
+		}
 
 	default:
 		rv = EINVAL;

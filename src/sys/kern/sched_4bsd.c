@@ -1,4 +1,4 @@
-/*	$NetBSD: sched_4bsd.c,v 1.2 2007/05/17 14:51:41 yamt Exp $	*/
+/*	$NetBSD: sched_4bsd.c,v 1.4 2007/08/04 11:03:02 ad Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2000, 2004, 2006, 2007 The NetBSD Foundation, Inc.
@@ -75,7 +75,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: sched_4bsd.c,v 1.2 2007/05/17 14:51:41 yamt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: sched_4bsd.c,v 1.4 2007/08/04 11:03:02 ad Exp $");
 
 #include "opt_ddb.h"
 #include "opt_lockdebug.h"
@@ -145,6 +145,7 @@ sched_tick(struct cpu_info *ci)
 
 	spc->spc_ticks = rrticks;
 
+	spc_lock(ci);
 	if (!CURCPU_IDLE_P()) {
 		if (spc->spc_flags & SPCF_SEENRR) {
 			/*
@@ -157,6 +158,7 @@ sched_tick(struct cpu_info *ci)
 			spc->spc_flags |= SPCF_SEENRR;
 	}
 	cpu_need_resched(curcpu(), 0);
+	spc_unlock(ci);
 }
 
 #define	NICE_WEIGHT 2			/* priorities per nice level */
@@ -312,7 +314,7 @@ updatepri(struct lwp *l)
 	struct proc *p = l->l_proc;
 	fixpt_t loadfac;
 
-	LOCK_ASSERT(lwp_locked(l, NULL));
+	KASSERT(lwp_locked(l, NULL));
 	KASSERT(l->l_slptime > 1);
 
 	loadfac = loadfactor(averunnable.ldavg[0]);
@@ -501,7 +503,6 @@ sched_setup()
 {
 
 	rrticks = hz / 10;
-	sched_pstats(NULL);
 }
 
 void
@@ -515,9 +516,15 @@ sched_setrunnable(struct lwp *l)
 bool
 sched_curcpu_runnable_p(void)
 {
-	runqueue_t *rq = curcpu()->ci_schedstate.spc_sched_info;
+	struct schedstate_percpu *spc;
+	runqueue_t *rq;
 
-	return (global_queue.rq_bitmap | rq->rq_bitmap) != 0;
+	spc = &curcpu()->ci_schedstate;
+	rq = spc->spc_sched_info;
+
+	if (__predict_true((spc->spc_flags & SPCF_OFFLINE) == 0))
+		return (global_queue.rq_bitmap | rq->rq_bitmap) != 0;
+	return rq->rq_bitmap != 0;
 }
 
 void
@@ -559,7 +566,7 @@ resetprocpriority(struct proc *p)
 {
 	struct lwp *l;
 
-	LOCK_ASSERT(mutex_owned(&p->p_stmutex));
+	KASSERT(mutex_owned(&p->p_stmutex));
 
 	LIST_FOREACH(l, &p->p_lwps, l_sibling) {
 		lwp_lock(l);
@@ -608,7 +615,7 @@ void
 sched_proc_fork(struct proc *parent, struct proc *child)
 {
 
-	LOCK_ASSERT(mutex_owned(&parent->p_smutex));
+	KASSERT(mutex_owned(&parent->p_smutex));
 
 	child->p_estcpu = child->p_estcpu_inherited = parent->p_estcpu;
 	child->p_forktime = sched_pstats_ticks;
@@ -665,10 +672,15 @@ sched_dequeue(struct lwp *l)
 struct lwp *
 sched_nextlwp(void)
 {
+	struct schedstate_percpu *spc;
 	lwp_t *l1, *l2;
 
+	spc = &curcpu()->ci_schedstate;
+
 	/* For now, just pick the highest priority LWP. */
-	l1 = runqueue_nextlwp(curcpu()->ci_schedstate.spc_sched_info);
+	l1 = runqueue_nextlwp(spc->spc_sched_info);
+	if (__predict_false((spc->spc_flags & SPCF_OFFLINE) != 0))
+		return l1;
 	l2 = runqueue_nextlwp(&global_queue);
 
 	if (l1 == NULL)

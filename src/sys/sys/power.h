@@ -1,4 +1,4 @@
-/*	$NetBSD: power.h,v 1.6 2007/07/02 15:18:30 xtraeme Exp $	*/
+/*	$NetBSD: power.h,v 1.8 2007/09/04 16:54:02 xtraeme Exp $	*/
 
 /*
  * Copyright (c) 2003 Wasabi Systems, Inc.
@@ -121,7 +121,7 @@ struct pswitch_state {
  *
  *	sensor drive		To handle drive sensors.
  *
- * 	sensor indicator	To handle indicator sensors.
+ * 	sensor indicator	To handle indicator/integer sensors.
  */
 
 #define PENVSYS_TYPE_TEMP		10
@@ -178,12 +178,12 @@ struct pswitch_state {
 #define PENVSYS_EVENT_BATT_USERCAP	170
 
 /*
- * The following events apply for drive sensors:
+ * The following event apply for battery state and drive sensors:
  *
- * 	PENVSYS_EVENT_DRIVE_STCHANGED	Drive state changed.
+ * 	PENVSYS_EVENT_STATE_CHANGED	State has changed.
  *
  */
-#define PENVSYS_EVENT_DRIVE_STCHANGED	180
+#define PENVSYS_EVENT_STATE_CHANGED	180
 
 
 /*

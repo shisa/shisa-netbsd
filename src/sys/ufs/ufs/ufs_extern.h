@@ -1,4 +1,4 @@
-/*	$NetBSD: ufs_extern.h,v 1.52 2007/03/04 06:03:47 christos Exp $	*/
+/*	$NetBSD: ufs_extern.h,v 1.54 2007/08/09 09:22:34 hannken Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993, 1994
@@ -66,10 +66,10 @@ int	ufs_getattr(void *);
 int	ufs_inactive(void *);
 #define	ufs_fcntl	genfs_fcntl
 #define	ufs_ioctl	genfs_enoioctl
-int	ufs_islocked(void *);
+#define	ufs_islocked	genfs_islocked
 #define	ufs_lease_check genfs_lease_check
 int	ufs_link(void *);
-int	ufs_lock(void *);
+#define	ufs_lock	genfs_lock
 int	ufs_lookup(void *);
 int	ufs_mkdir(void *);
 int	ufs_mknod(void *);
@@ -88,7 +88,7 @@ int	ufs_rmdir(void *);
 int	ufs_setattr(void *);
 int	ufs_strategy(void *);
 int	ufs_symlink(void *);
-int	ufs_unlock(void *);
+#define	ufs_unlock	genfs_unlock
 int	ufs_whiteout(void *);
 int	ufsspec_close(void *);
 int	ufsspec_read(void *);
@@ -132,23 +132,21 @@ int	ufs_checkpath(struct inode *, struct inode *, kauth_cred_t);
 int	ufs_blkatoff(struct vnode *, off_t, char **, struct buf **);
 
 /* ufs_quota.c */
+/*
+ * Flags to chkdq() and chkiq()
+ */
+#define	FORCE	0x01	/* force usage changes independent of limits */
+void	ufsquota_init(struct inode *);
+void	ufsquota_free(struct inode *);
 int	getinoquota(struct inode *);
 int	chkdq(struct inode *, int64_t, kauth_cred_t, int);
-int	chkdqchg(struct inode *, int64_t, kauth_cred_t, int);
 int	chkiq(struct inode *, int32_t, kauth_cred_t, int);
-int	chkiqchg(struct inode *, int32_t, kauth_cred_t, int);
-void	chkdquot(struct inode *);
 int	quotaon(struct lwp *, struct mount *, int, void *);
 int	quotaoff(struct lwp *, struct mount *, int);
 int	getquota(struct mount *, u_long, int, void *);
 int	setquota(struct mount *, u_long, int, void *);
 int	setuse(struct mount *, u_long, int, void *);
 int	qsync(struct mount *);
-int	dqget(struct vnode *, u_long, struct ufsmount *, int, struct dquot **);
-void	dqref(struct dquot *);
-void	dqrele(struct vnode *, struct dquot *);
-int	dqsync(struct vnode *, struct dquot *);
-void	dqflush(struct vnode *);
 
 /* ufs_vfsops.c */
 void	ufs_init(void);

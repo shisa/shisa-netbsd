@@ -1,4 +1,4 @@
-/*	$NetBSD: elink3.c,v 1.121 2007/03/04 06:01:54 christos Exp $	*/
+/*	$NetBSD: elink3.c,v 1.123 2007/08/27 14:48:54 dyoung Exp $	*/
 
 /*-
  * Copyright (c) 1998, 2001 The NetBSD Foundation, Inc.
@@ -69,7 +69,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: elink3.c,v 1.121 2007/03/04 06:01:54 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: elink3.c,v 1.123 2007/08/27 14:48:54 dyoung Exp $");
 
 #include "opt_inet.h"
 #include "bpfilter.h"
@@ -348,8 +348,8 @@ epconfig(sc, chipset, enaddr)
 	u_int16_t i;
 	u_int8_t myla[ETHER_ADDR_LEN];
 
-	callout_init(&sc->sc_mii_callout);
-	callout_init(&sc->sc_mbuf_callout);
+	callout_init(&sc->sc_mii_callout, 0);
+	callout_init(&sc->sc_mbuf_callout, 0);
 
 	sc->ep_chipset = chipset;
 
@@ -566,7 +566,7 @@ ep_internalconfig(sc)
 
 	aprint_normal("%s: address %s, %dKB %s-wide FIFO, %s Rx:Tx split\n",
 	       sc->sc_dev.dv_xname,
-	       ether_sprintf(LLADDR(sc->sc_ethercom.ec_if.if_sadl)),
+	       ether_sprintf(CLLADDR(sc->sc_ethercom.ec_if.if_sadl)),
 	       8 << ram_size,
 	       (ram_width) ? "word" : "byte",
 	       onboard_ram_config[ram_split]);
@@ -754,7 +754,7 @@ epinit(ifp)
 	bus_space_tag_t iot = sc->sc_iot;
 	bus_space_handle_t ioh = sc->sc_ioh;
 	int i, error;
-	u_int8_t *addr;
+	const u_int8_t *addr;
 
 	if (!sc->enabled && (error = epenable(sc)) != 0)
 		return (error);
@@ -781,7 +781,7 @@ epinit(ifp)
 
 	GO_WINDOW(2);
 	/* Reload the ether_addr. */
-	addr = LLADDR(ifp->if_sadl);
+	addr = CLLADDR(ifp->if_sadl);
 	for (i = 0; i < 6; i += 2)
 		bus_space_write_2(iot, ioh, ELINK_W2_ADDR_0 + i,
 		    (addr[i] << 0) | (addr[i + 1] << 8));

@@ -1,4 +1,4 @@
-/*	$NetBSD: efs_vnops.c,v 1.3 2007/07/04 19:24:09 rumble Exp $	*/
+/*	$NetBSD: efs_vnops.c,v 1.9 2007/09/24 00:42:12 rumble Exp $	*/
 
 /*
  * Copyright (c) 2006 Stephen M. Rumble <rumble@ephemeral.org>
@@ -17,7 +17,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: efs_vnops.c,v 1.3 2007/07/04 19:24:09 rumble Exp $");
+__KERNEL_RCSID(0, "$NetBSD: efs_vnops.c,v 1.9 2007/09/24 00:42:12 rumble Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -104,8 +104,8 @@ efs_lookup(void *v)
 				cache_enter(ap->a_dvp, NULL, cnp);
 			if (err == ENOENT && (nameiop == CREATE ||
 			    nameiop == RENAME)) {
-				err = VOP_ACCESS(vp, VWRITE, cnp->cn_cred,
-				    cnp->cn_lwp);
+				err = VOP_ACCESS(ap->a_dvp, VWRITE,
+				    cnp->cn_cred, cnp->cn_lwp);
 				if (err)
 					return (err);
 				cnp->cn_flags |= SAVENAME;
@@ -296,25 +296,35 @@ efs_readdir(void *v)
 		off_t **a_cookies;
 		int *a_ncookies;
 	} */ *ap = v;
+	struct dirent *dp;
 	struct efs_dinode edi;
 	struct efs_extent ex;
 	struct efs_extent_iterator exi;
 	struct buf *bp;
-	struct dirent *dp;
 	struct efs_dirent *de;
 	struct efs_dirblk *db;
 	struct uio *uio = ap->a_uio;
 	struct efs_inode *ei = EFS_VTOI(ap->a_vp);
+	off_t *cookies = NULL;
 	off_t offset;
-	int i, j, err, ret, s, slot;
-
-	/* XXX - ncookies, cookies for NFS */
+	int i, j, err, ret, s, slot, ncookies, maxcookies = 0;
 
 	if (ap->a_vp->v_type != VDIR)
 		return (ENOTDIR);
 
-	offset = 0;
+	if (ap->a_eofflag != NULL)
+		*ap->a_eofflag = false;
 
+	if (ap->a_ncookies != NULL) {
+		ncookies = 0;
+		maxcookies =
+		    uio->uio_resid / _DIRENT_MINSIZE((struct dirent *)0);
+		cookies = malloc(maxcookies * sizeof(off_t), M_TEMP, M_WAITOK);
+ 	}
+
+	dp = malloc(sizeof(struct dirent), M_EFSTMP, M_WAITOK | M_ZERO);
+
+	offset = 0;
 	efs_extent_iterator_init(&exi, ei, 0);
 	while ((ret = efs_extent_iterator_next(&exi, &ex)) == 0) {
 		for (i = 0; i < ex.ex_length; i++) {
@@ -322,7 +332,7 @@ efs_readdir(void *v)
 			    ex.ex_bn + i, NULL, &bp);
 			if (err) {
 				brelse(bp);
-				return (err);
+				goto exit_err;
 			}
 
 			db = (struct efs_dirblk *)bp->b_data;
@@ -351,18 +361,15 @@ efs_readdir(void *v)
 					continue;
 				}
 
-				if (offset > uio->uio_offset) {
-					/* XXX - shouldn't happen, right? */
+				/* XXX - latter shouldn't happen, right? */
+				if (s > uio->uio_resid ||
+				    offset > uio->uio_offset) {
 					brelse(bp);
-					return (0);
+					goto exit_ok;
 				}
 
-				if (s > uio->uio_resid) {
-					brelse(bp);
-					return (0);
-				}
-
-				dp = malloc(s, M_EFSTMP, M_ZERO | M_WAITOK);
+				/* de_namelen is uint8_t, d.d_name is 512b */
+				KASSERT(sizeof(dp->d_name)-de->de_namelen > 0);
 				dp->d_fileno = be32toh(de->de_inumber);
 				dp->d_reclen = s;
 				dp->d_namlen = de->de_namelen;
@@ -376,8 +383,7 @@ efs_readdir(void *v)
 				    dp->d_fileno, NULL, &edi);
 				if (err) {
 					brelse(bp);
-					free(dp, M_EFSTMP);
-					return (err);
+					goto exit_err;
 				}
 
 				switch (be16toh(edi.di_mode) & EFS_IFMT) {
@@ -408,26 +414,53 @@ efs_readdir(void *v)
 				}
 
 				err = uiomove(dp, s, uio);
-				free(dp, M_EFSTMP);
 				if (err) {
 					brelse(bp);
-					return (err);	
+					goto exit_err;
 				}
 
 				offset += s;
+
+				if (cookies != NULL && maxcookies != 0) {
+					cookies[ncookies++] = offset;
+					if (ncookies == maxcookies) {
+						brelse(bp);
+						goto exit_ok;
+					}
+				}
 			}
 
 			brelse(bp);
 		}
 	}
 
-	if (ret != -1)
-		return (ret);
+	if (ret != -1) {
+		err = ret;
+		goto exit_err;
+	}
 
 	if (ap->a_eofflag != NULL)
 		*ap->a_eofflag = true;
 
+ exit_ok:
+	if (cookies != NULL) {
+		*ap->a_cookies = cookies;
+		*ap->a_ncookies = ncookies;
+	}
+
+	uio->uio_offset = offset;
+
+	free(dp, M_EFSTMP);
+
 	return (0);
+
+ exit_err:
+	if (cookies != NULL)
+		free(cookies, M_TEMP);
+
+	free(dp, M_EFSTMP);
+	
+	return (err);
 }
 
 static int
@@ -629,7 +662,7 @@ efs_strategy(void *v)
 	int error;
 
 	if (vp == NULL) {
-		bp->b_flags |= B_ERROR;
+		bp->b_error = EIO;
 		biodone(bp);
 		return (EIO);
 	}
@@ -637,7 +670,7 @@ efs_strategy(void *v)
 	if (bp->b_blkno == bp->b_lblkno) {
 		error = VOP_BMAP(vp, bp->b_lblkno, NULL, &bp->b_blkno, NULL);
 		if (error) {
-			bp->b_flags |= B_ERROR;
+			bp->b_error = error;
 			biodone(bp);
 			return (error);
 		}

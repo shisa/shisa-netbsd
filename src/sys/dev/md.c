@@ -1,4 +1,4 @@
-/*	$NetBSD: md.c,v 1.48 2007/03/04 06:01:42 christos Exp $	*/
+/*	$NetBSD: md.c,v 1.50 2007/07/29 12:50:18 ad Exp $	*/
 
 /*
  * Copyright (c) 1995 Gordon W. Ross, Leo Weppelman.
@@ -46,7 +46,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: md.c,v 1.48 2007/03/04 06:01:42 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: md.c,v 1.50 2007/07/29 12:50:18 ad Exp $");
 
 #include "opt_md.h"
 
@@ -67,11 +67,11 @@ __KERNEL_RCSID(0, "$NetBSD: md.c,v 1.48 2007/03/04 06:01:42 christos Exp $");
 #include <dev/md.h>
 
 /*
- * By default, include the user-space functionality.
+ * The user-space functionality is included by default.
  * Use  `options MEMORY_DISK_SERVER=0' to turn it off.
  */
 #ifndef MEMORY_DISK_SERVER
-#define	MEMORY_DISK_SERVER 1
+#error MEMORY_DISK_SERVER should be defined by opt_md.h
 #endif	/* MEMORY_DISK_SERVER */
 
 /*
@@ -319,7 +319,6 @@ mdstrategy(struct buf *bp)
 
 	if (sc->sc_type == MD_UNCONFIGURED) {
 		bp->b_error = ENXIO;
-		bp->b_flags |= B_ERROR;
 		goto done;
 	}
 
@@ -359,7 +358,6 @@ mdstrategy(struct buf *bp)
 		bp->b_resid = bp->b_bcount;
 	set_eio:
 		bp->b_error = EIO;
-		bp->b_flags |= B_ERROR;
 		break;
 	}
  done:
@@ -508,7 +506,6 @@ md_server_loop(struct md_softc *sc)
 	done:
 		if (error) {
 			bp->b_error = error;
-			bp->b_flags |= B_ERROR;
 		}
 		biodone(bp);
 	}

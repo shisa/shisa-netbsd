@@ -1,4 +1,4 @@
-/*	$NetBSD: ip_carp.c,v 1.12 2007/03/04 06:03:20 christos Exp $	*/
+/*	$NetBSD: ip_carp.c,v 1.17 2007/09/19 05:25:33 dyoung Exp $	*/
 /*	$OpenBSD: ip_carp.c,v 1.113 2005/11/04 08:11:54 mcbride Exp $	*/
 
 /*
@@ -344,11 +344,7 @@ carp_setroute(struct carp_softc *sc, int cmd)
 		switch (ifa->ifa_addr->sa_family) {
 		case AF_INET: {
 			int count = 0;
-			struct sockaddr sa;
 			struct rtentry *rt;
-			struct radix_node_head *rnh =
-			    rt_tables[ifa->ifa_addr->sa_family];
-			struct radix_node *rn;
 			int hr_otherif, nr_ourif;
 
 			/*
@@ -371,18 +367,21 @@ carp_setroute(struct carp_softc *sc, int cmd)
 			    ifa->ifa_addr, ifa->ifa_netmask,
 			    RTF_HOST, NULL);
 
-			/* Check for our address on another interface */
-			rn = rnh->rnh_matchaddr(ifa->ifa_addr, rnh);
-			rt = (struct rtentry *)rn;
+			rt = NULL;
+			(void)rtrequest(RTM_GET, ifa->ifa_addr, ifa->ifa_addr,
+			    ifa->ifa_netmask, RTF_HOST, &rt);
 			hr_otherif = (rt && rt->rt_ifp != &sc->sc_if &&
 			    rt->rt_flags & (RTF_CLONING|RTF_CLONED));
+			if (rt != NULL) {
+				RTFREE(rt);
+				rt = NULL;
+			}
 
 			/* Check for a network route on our interface */
-			bcopy(ifa->ifa_addr, &sa, sizeof(sa));
-			satosin(&sa)->sin_addr.s_addr = satosin(ifa->ifa_netmask
-			    )->sin_addr.s_addr & satosin(&sa)->sin_addr.s_addr;
-			rn = rnh->rnh_lookup(&sa, ifa->ifa_netmask, rnh);
-			rt = (struct rtentry *)rn;
+
+			rt = NULL;
+			(void)rtrequest(RTM_GET, ifa->ifa_addr, ifa->ifa_addr,
+			    ifa->ifa_netmask, 0, &rt);
 			nr_ourif = (rt && rt->rt_ifp == &sc->sc_if);
 
 			switch (cmd) {
@@ -398,7 +397,8 @@ carp_setroute(struct carp_softc *sc, int cmd)
 				if (!hr_otherif || nr_ourif || !rt) {
 					if (nr_ourif && !(rt->rt_flags &
 					    RTF_CLONING))
-						rtrequest(RTM_DELETE, &sa,
+						rtrequest(RTM_DELETE,
+						    ifa->ifa_addr,
 						    ifa->ifa_addr,
 						    ifa->ifa_netmask, 0, NULL);
 
@@ -415,6 +415,10 @@ carp_setroute(struct carp_softc *sc, int cmd)
 				break;
 			default:
 				break;
+			}
+			if (rt != NULL) {
+				RTFREE(rt);
+				rt = NULL;
 			}
 			break;
 		}
@@ -756,9 +760,9 @@ carp_clone_create(struct if_clone *ifc, int unit)
 	sc->sc_im6o.im6o_multicast_hlim = CARP_DFLTTL;
 #endif /* INET6 */
 
-	callout_init(&sc->sc_ad_tmo);
-	callout_init(&sc->sc_md_tmo);
-	callout_init(&sc->sc_md6_tmo);
+	callout_init(&sc->sc_ad_tmo, 0);
+	callout_init(&sc->sc_md_tmo, 0);
+	callout_init(&sc->sc_md6_tmo, 0);
 
 	callout_setfunc(&sc->sc_ad_tmo, carp_send_ad, sc);
 	callout_setfunc(&sc->sc_md_tmo, carp_master_down, sc);
@@ -794,9 +798,14 @@ carp_clone_create(struct if_clone *ifc, int unit)
 int
 carp_clone_destroy(struct ifnet *ifp)
 {
+	struct carp_softc *sc = ifp->if_softc;
+
 	carpdetach(ifp->if_softc);
 	ether_ifdetach(ifp);
 	if_detach(ifp);
+	callout_destroy(&sc->sc_ad_tmo);
+	callout_destroy(&sc->sc_md_tmo);
+	callout_destroy(&sc->sc_md6_tmo);
 	free(ifp->if_softc, M_DEVBUF);
 
 	return (0);
@@ -1123,7 +1132,7 @@ carp_send_arp(struct carp_softc *sc)
 			continue;
 
 		in = &ifatoia(ifa)->ia_addr.sin_addr;
-		arprequest(sc->sc_carpdev, in, in, LLADDR(sc->sc_if.if_sadl));
+		arprequest(sc->sc_carpdev, in, in, CLLADDR(sc->sc_if.if_sadl));
 		DELAY(1000);	/* XXX */
 	}
 	splx(s);
@@ -1299,7 +1308,7 @@ carp_ourether(void *v, struct ether_header *eh, u_char iftype, int src)
 	TAILQ_FOREACH(vh, &cif->vhif_vrs, sc_list)
 		if ((vh->sc_if.if_flags & (IFF_UP|IFF_RUNNING)) ==
 		    (IFF_UP|IFF_RUNNING) && vh->sc_state == MASTER &&
-		    !bcmp(ena, LLADDR(vh->sc_if.if_sadl),
+		    !bcmp(ena, CLLADDR(vh->sc_if.if_sadl),
 		    ETHER_ADDR_LEN)) {
 			return (&vh->sc_if);
 		    }
@@ -1570,21 +1579,24 @@ carp_set_ifp(struct carp_softc *sc, struct ifnet *ifp)
 void
 carp_set_enaddr(struct carp_softc *sc)
 {
+	uint8_t enaddr[ETHER_ADDR_LEN];
 	if (sc->sc_carpdev && sc->sc_carpdev->if_type == IFT_ISO88025) {
-		LLADDR(sc->sc_if.if_sadl)[0] = 3;
-		LLADDR(sc->sc_if.if_sadl)[1] = 0;
-		LLADDR(sc->sc_if.if_sadl)[2] = 0x40 >> (sc->sc_vhid - 1);
-		LLADDR(sc->sc_if.if_sadl)[3] = 0x40000 >> (sc->sc_vhid - 1);
-		LLADDR(sc->sc_if.if_sadl)[4] = 0;
-		LLADDR(sc->sc_if.if_sadl)[5] = 0;
+		enaddr[0] = 3;
+		enaddr[1] = 0;
+		enaddr[2] = 0x40 >> (sc->sc_vhid - 1);
+		enaddr[3] = 0x40000 >> (sc->sc_vhid - 1);
+		enaddr[4] = 0;
+		enaddr[5] = 0;
 	} else {
-		LLADDR(sc->sc_if.if_sadl)[0] = 0;
-		LLADDR(sc->sc_if.if_sadl)[1] = 0;
-		LLADDR(sc->sc_if.if_sadl)[2] = 0x5e;
-		LLADDR(sc->sc_if.if_sadl)[3] = 0;
-		LLADDR(sc->sc_if.if_sadl)[4] = 1;
-		LLADDR(sc->sc_if.if_sadl)[5] = sc->sc_vhid;
+		enaddr[0] = 0;
+		enaddr[1] = 0;
+		enaddr[2] = 0x5e;
+		enaddr[3] = 0;
+		enaddr[4] = 1;
+		enaddr[5] = sc->sc_vhid;
 	}
+	(void)sockaddr_dl_setaddr(sc->sc_if.if_sadl, sc->sc_if.if_sadl->sdl_len,
+	    enaddr, sizeof(enaddr));
 }
 
 void
@@ -2086,6 +2098,7 @@ carp_carpdev_state(void *v)
 int
 carp_ether_addmulti(struct carp_softc *sc, struct ifreq *ifr)
 {
+	const struct sockaddr *sa = ifreq_getaddr(SIOCADDMULTI, ifr);
 	struct ifnet *ifp;
 	struct carp_mc_entry *mc;
 	u_int8_t addrlo[ETHER_ADDR_LEN], addrhi[ETHER_ADDR_LEN];
@@ -2095,7 +2108,7 @@ carp_ether_addmulti(struct carp_softc *sc, struct ifreq *ifr)
 	if (ifp == NULL)
 		return (EINVAL);
 
-	error = ether_addmulti(ifr, &sc->sc_ac);
+	error = ether_addmulti(sa, &sc->sc_ac);
 	if (error != ENETRESET)
 		return (error);
 
@@ -2115,9 +2128,9 @@ carp_ether_addmulti(struct carp_softc *sc, struct ifreq *ifr)
 	 * As ether_addmulti() returns ENETRESET, following two
 	 * statement shouldn't fail.
 	 */
-	(void)ether_multiaddr(&ifr->ifr_addr, addrlo, addrhi);
+	(void)ether_multiaddr(sa, addrlo, addrhi);
 	ETHER_LOOKUP_MULTI(addrlo, addrhi, &sc->sc_ac, mc->mc_enm);
-	memcpy(&mc->mc_addr, &ifr->ifr_addr, ifr->ifr_addr.sa_len);
+	memcpy(&mc->mc_addr, sa, sa->sa_len);
 	LIST_INSERT_HEAD(&sc->carp_mc_listhead, mc, mc_entries);
 
 	error = (*ifp->if_ioctl)(ifp, SIOCADDMULTI, (void *)ifr);
@@ -2130,7 +2143,7 @@ carp_ether_addmulti(struct carp_softc *sc, struct ifreq *ifr)
 	LIST_REMOVE(mc, mc_entries);
 	FREE(mc, M_DEVBUF);
  alloc_failed:
-	(void)ether_delmulti(ifr, &sc->sc_ac);
+	(void)ether_delmulti(sa, &sc->sc_ac);
 
 	return (error);
 }
@@ -2138,6 +2151,7 @@ carp_ether_addmulti(struct carp_softc *sc, struct ifreq *ifr)
 int
 carp_ether_delmulti(struct carp_softc *sc, struct ifreq *ifr)
 {
+	const struct sockaddr *sa = ifreq_getaddr(SIOCDELMULTI, ifr);
 	struct ifnet *ifp;
 	struct ether_multi *enm;
 	struct carp_mc_entry *mc;
@@ -2152,7 +2166,7 @@ carp_ether_delmulti(struct carp_softc *sc, struct ifreq *ifr)
 	 * Find a key to lookup carp_mc_entry.  We have to do this
 	 * before calling ether_delmulti for obvious reason.
 	 */
-	if ((error = ether_multiaddr(&ifr->ifr_addr, addrlo, addrhi)) != 0)
+	if ((error = ether_multiaddr(sa, addrlo, addrhi)) != 0)
 		return (error);
 	ETHER_LOOKUP_MULTI(addrlo, addrhi, &sc->sc_ac, enm);
 	if (enm == NULL)
@@ -2166,7 +2180,7 @@ carp_ether_delmulti(struct carp_softc *sc, struct ifreq *ifr)
 	if (mc == NULL)
 		return (EINVAL);
 
-	error = ether_delmulti(ifr, &sc->sc_ac);
+	error = ether_delmulti(sa, &sc->sc_ac);
 	if (error != ENETRESET)
 		return (error);
 
@@ -2177,7 +2191,7 @@ carp_ether_delmulti(struct carp_softc *sc, struct ifreq *ifr)
 		LIST_REMOVE(mc, mc_entries);
 		FREE(mc, M_DEVBUF);
 	} else
-		(void)ether_addmulti(ifr, &sc->sc_ac);
+		(void)ether_addmulti(sa, &sc->sc_ac);
 	return (error);
 }
 

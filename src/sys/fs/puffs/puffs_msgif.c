@@ -1,4 +1,4 @@
-/*	$NetBSD: puffs_msgif.c,v 1.38 2007/06/06 01:54:59 pooka Exp $	*/
+/*	$NetBSD: puffs_msgif.c,v 1.41 2007/09/27 21:14:49 pooka Exp $	*/
 
 /*
  * Copyright (c) 2005, 2006, 2007  Antti Kantee.  All Rights Reserved.
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: puffs_msgif.c,v 1.38 2007/06/06 01:54:59 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: puffs_msgif.c,v 1.41 2007/09/27 21:14:49 pooka Exp $");
 
 #include <sys/param.h>
 #include <sys/fstrans.h>
@@ -38,6 +38,7 @@ __KERNEL_RCSID(0, "$NetBSD: puffs_msgif.c,v 1.38 2007/06/06 01:54:59 pooka Exp $
 #include <sys/mount.h>
 #include <sys/vnode.h>
 #include <sys/lock.h>
+#include <sys/proc.h>
 
 #include <fs/puffs/puffs_msgif.h>
 #include <fs/puffs/puffs_sys.h>
@@ -414,6 +415,29 @@ puffs_cacheop(struct puffs_mount *pmp, struct puffs_park *park,
 	park->park_flags = 0;
 
 	(void)touser(pmp, park, 0); 
+}
+
+void
+puffs_errnotify(struct puffs_mount *pmp, uint8_t type, int error, void *cookie)
+{
+	struct puffs_park *park;
+	struct puffs_error *perr;
+
+	park = puffs_park_alloc(1);
+	MALLOC(perr, struct puffs_error *, sizeof(struct puffs_error),
+	    M_PUFFS, M_ZERO | M_WAITOK);
+
+	perr->perr_error = error;
+
+	park->park_preq = (struct puffs_req *)perr;
+	park->park_preq->preq_opclass = PUFFSOP_ERROR | PUFFSOPFLAG_FAF;
+	park->park_preq->preq_optype = type;
+	park->park_preq->preq_cookie = cookie;
+
+	park->park_maxlen = park->park_copylen = sizeof(struct puffs_error);
+	park->park_flags = 0;
+
+	(void)touser(pmp, park, 0);
 }
 
 /*
@@ -810,6 +834,8 @@ puffs_putop(struct puffs_mount *pmp, struct puffs_reqh_put *php)
 			park->park_preq->preq_rv = error;
 
 		if (park->park_flags & PARKFLAG_CALL) {
+			DPRINTF(("puffsputopt: call for %p, arg %p\n",
+			    park->park_preq, park->park_donearg));
 			park->park_done(park->park_preq, park->park_donearg);
 			release = 1;
 		}

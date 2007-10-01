@@ -1,4 +1,4 @@
-/*	$NetBSD: refuse.c,v 1.71 2007/07/01 18:40:16 pooka Exp $	*/
+/*	$NetBSD: refuse.c,v 1.75 2007/08/25 12:03:59 pooka Exp $	*/
 
 /*
  * Copyright © 2007 Alistair Crooks.  All rights reserved.
@@ -30,13 +30,14 @@
 
 #include <sys/cdefs.h>
 #if !defined(lint)
-__RCSID("$NetBSD: refuse.c,v 1.71 2007/07/01 18:40:16 pooka Exp $");
+__RCSID("$NetBSD: refuse.c,v 1.75 2007/08/25 12:03:59 pooka Exp $");
 #endif /* !lint */
 
 #include <assert.h>
 #include <err.h>
 #include <errno.h>
 #include <fuse.h>
+#include <paths.h>
 #include <unistd.h>
 #ifdef MULTITHREADED_REFUSE
 #include <pthread.h>
@@ -417,9 +418,12 @@ fuse_getattr(struct fuse *fuse, struct puffs_node *pn, const char *path,
 	}
 
 	/* wrap up return code */
+	memset(&st, 0, sizeof(st));
 	ret = (*fuse->op.getattr)(path, &st);
 
 	if (ret == 0) {
+		if (st.st_blksize == 0)
+			st.st_blksize = DEV_BSIZE;
 		puffs_stat2vattr(va, &st);
 	}
 
@@ -1334,10 +1338,9 @@ fuse_new(struct fuse_chan *fc, struct fuse_args *args,
 	set_refuse_mount_name(&argv0, name, sizeof(name));
 
 	puffs_fakecc = 1; /* XXX */
-	pu = puffs_init(pops, name, fuse,
+	pu = puffs_init(pops, _PATH_PUFFS, name, fuse,
 			 PUFFS_FLAG_BUILDPATH
 			   | PUFFS_FLAG_HASHPATH
-			   | PUFFS_FLAG_OPDUMP
 			   | PUFFS_KFLAG_NOCACHE);
 	if (pu == NULL) {
 		err(EXIT_FAILURE, "puffs_init");
@@ -1379,7 +1382,7 @@ int
 fuse_loop(struct fuse *fuse)
 {
 
-	return puffs_mainloop(fuse->fc->pu, PUFFSLOOP_NODAEMON);
+	return puffs_mainloop(fuse->fc->pu, 0);
 }
 
 void

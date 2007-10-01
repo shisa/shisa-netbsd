@@ -1,4 +1,4 @@
-/*	$NetBSD: umount.c,v 1.38 2005/06/27 01:00:07 christos Exp $	*/
+/*	$NetBSD: umount.c,v 1.40 2007/07/17 20:17:52 christos Exp $	*/
 
 /*-
  * Copyright (c) 1980, 1989, 1993
@@ -39,7 +39,7 @@ __COPYRIGHT("@(#) Copyright (c) 1980, 1989, 1993\n\
 #if 0
 static char sccsid[] = "@(#)umount.c	8.8 (Berkeley) 5/8/95";
 #else
-__RCSID("$NetBSD: umount.c,v 1.38 2005/06/27 01:00:07 christos Exp $");
+__RCSID("$NetBSD: umount.c,v 1.40 2007/07/17 20:17:52 christos Exp $");
 #endif
 #endif /* not lint */
 
@@ -238,7 +238,8 @@ umountfs(const char *name, const char **typelist, int raw)
 			return 1;
 
 		(void)memset(&hints, 0, sizeof hints);
-		if (!strncmp(type, MOUNT_NFS, MFSNAMELEN)) {
+		if (!strncmp(type, MOUNT_NFS,
+		    sizeof(((struct statvfs *)NULL)->f_fstypename))) {
 			char *delimp;
 			/* look for host:mountpoint */
 			if ((delimp = strrchr(name, ':')) != NULL) {
@@ -265,7 +266,7 @@ umountfs(const char *name, const char **typelist, int raw)
 		return 0;
 #endif /* ! SMALL */
 
-	if (unmount(mntpt, fflag) < 0) {
+	if (unmount(mntpt, fflag) == -1) {
 		warn("%s", mntpt);
 		return 1;
 	}

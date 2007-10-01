@@ -1,4 +1,4 @@
-/*	$NetBSD: ufs_lookup.c,v 1.89 2007/05/17 07:26:22 hannken Exp $	*/
+/*	$NetBSD: ufs_lookup.c,v 1.92 2007/09/25 15:13:14 pooka Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ufs_lookup.c,v 1.89 2007/05/17 07:26:22 hannken Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ufs_lookup.c,v 1.92 2007/09/25 15:13:14 pooka Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_ffs.h"
@@ -54,6 +54,8 @@ __KERNEL_RCSID(0, "$NetBSD: ufs_lookup.c,v 1.89 2007/05/17 07:26:22 hannken Exp 
 #include <sys/kernel.h>
 #include <sys/kauth.h>
 #include <sys/fstrans.h>
+#include <sys/lwp.h>
+#include <sys/kmem.h>
 
 #include <ufs/ufs/inode.h>
 #include <ufs/ufs/dir.h>
@@ -272,7 +274,7 @@ searchloop:
 			entryoffsetinblock = 0;
 		}
 		/*
-		 * If still looking for a slot, and at a DIRBLKSIZE
+		 * If still looking for a slot, and at a DIRBLKSIZ
 		 * boundary, have to start looking for free space again.
 		 */
 		if (slotstatus == NONE &&
@@ -871,7 +873,7 @@ ufs_direnter(struct vnode *dvp, struct vnode *tvp, struct direct *dirp,
 	/*
 	 * Increase size of directory if entry eats into new space.
 	 * This should never push the size past a new multiple of
-	 * DIRBLKSIZE.
+	 * DIRBLKSIZ.
 	 *
 	 * N.B. - THIS IS AN ARTIFACT OF 4.2 AND SHOULD NEVER HAPPEN.
 	 */
@@ -1319,20 +1321,22 @@ ufs_blkatoff(struct vnode *vp, off_t offset, char **res, struct buf **bpp)
 	struct inode *ip;
 	struct buf *bp;
 	daddr_t lbn;
-	int error;
 	const int dirrablks = ufs_dirrablks;
-	daddr_t blks[1 + dirrablks];
-	int blksizes[1 + dirrablks];
-	int run;
+	daddr_t *blks;
+	int *blksizes;
+	int run, error;
 	struct mount *mp = vp->v_mount;
 	const int bshift = mp->mnt_fs_bshift;
 	const int bsize = 1 << bshift;
 	off_t eof;
 
+	blks = kmem_alloc((1+dirrablks) * sizeof(daddr_t), KM_SLEEP);
+	blksizes = kmem_alloc((1+dirrablks) * sizeof(int), KM_SLEEP);
 	ip = VTOI(vp);
 	KASSERT(vp->v_size == ip->i_size);
 	GOP_SIZE(vp, vp->v_size, &eof, 0);
 	lbn = offset >> bshift;
+
 	for (run = 0; run <= dirrablks;) {
 		const off_t curoff = lbn << bshift;
 		const int size = MIN(eof - curoff, bsize);
@@ -1355,11 +1359,15 @@ ufs_blkatoff(struct vnode *vp, off_t offset, char **res, struct buf **bpp)
 	if (error != 0) {
 		brelse(bp);
 		*bpp = NULL;
-		return error;
+		goto out;
 	}
 	if (res) {
 		*res = (char *)bp->b_data + (offset & (bsize - 1));
 	}
 	*bpp = bp;
-	return 0;
+
+ out:
+	kmem_free(blks, (1+dirrablks) * sizeof(daddr_t));
+	kmem_free(blksizes, (1+dirrablks) * sizeof(int));
+	return error;
 }

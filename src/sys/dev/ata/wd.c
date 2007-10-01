@@ -1,4 +1,4 @@
-/*	$NetBSD: wd.c,v 1.339 2007/07/01 09:48:37 dsl Exp $ */
+/*	$NetBSD: wd.c,v 1.345 2007/09/16 18:41:47 bouyer Exp $ */
 
 /*
  * Copyright (c) 1998, 2001 Manuel Bouyer.  All rights reserved.
@@ -66,7 +66,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: wd.c,v 1.339 2007/07/01 09:48:37 dsl Exp $");
+__KERNEL_RCSID(0, "$NetBSD: wd.c,v 1.345 2007/09/16 18:41:47 bouyer Exp $");
 
 #include "opt_ata.h"
 
@@ -301,7 +301,7 @@ wdattach(struct device *parent, struct device *self, void *aux)
 	const struct wd_quirk *wdq;
 	ATADEBUG_PRINT(("wdattach\n"), DEBUG_FUNCS | DEBUG_PROBE);
 
-	callout_init(&wd->sc_restart_ch);
+	callout_init(&wd->sc_restart_ch, 0);
 	bufq_alloc(&wd->sc_q, BUFQ_DISK_DEFAULT_STRAT, BUFQ_SORT_RAWBLOCK);
 #ifdef WD_SOFTBADSECT
 	SLIST_INIT(&wd->sc_bslist);
@@ -522,13 +522,13 @@ wdstrategy(struct buf *bp)
 	    (bp->b_bcount % lp->d_secsize) != 0 ||
 	    (bp->b_bcount / lp->d_secsize) >= (1 << NBBY)) {
 		bp->b_error = EINVAL;
-		goto bad;
+		goto done;
 	}
 
 	/* If device invalidated (e.g. media change, door open), error. */
 	if ((wd->sc_flags & WDF_LOADED) == 0) {
 		bp->b_error = EIO;
-		goto bad;
+		goto done;
 	}
 
 	/* If it's a null transfer, return immediately. */
@@ -580,7 +580,7 @@ wdstrategy(struct buf *bp)
 			if ((dbs->dbs_min <= blkno && blkno <= dbs->dbs_max) ||
 			    (dbs->dbs_min <= maxblk && maxblk <= dbs->dbs_max)){
 				bp->b_error = EIO;
-				goto bad;
+				goto done;
 			}
 	}
 #endif
@@ -591,8 +591,6 @@ wdstrategy(struct buf *bp)
 	wdstart(wd);
 	splx(s);
 	return;
-bad:
-	bp->b_flags |= B_ERROR;
 done:
 	/* Toss transfer; we're done early. */
 	bp->b_resid = bp->b_bcount;
@@ -632,7 +630,7 @@ wd_split_mod15_write(struct buf *bp)
 	struct buf *obp = bp->b_private;
 	struct wd_softc *sc = wd_cd.cd_devs[DISKUNIT(obp->b_dev)];
 
-	if (__predict_false(bp->b_flags & B_ERROR) != 0) {
+	if (__predict_false(bp->b_error != 0)) {
 		/*
 		 * Propagate the error.  If this was the first half of
 		 * the original transfer, make sure to account for that
@@ -661,7 +659,6 @@ wd_split_mod15_write(struct buf *bp)
 	return;
 
  done:
-	obp->b_flags |= bp->b_flags & B_ERROR;
 	obp->b_error = bp->b_error;
 	obp->b_resid = bp->b_resid;
 	putiobuf(bp);
@@ -693,7 +690,6 @@ __wdstart(struct wd_softc *wd, struct buf *bp)
 		if (__predict_false(nbp == NULL)) {
 			/* No memory -- fail the iop. */
 			bp->b_error = ENOMEM;
-			bp->b_flags |= B_ERROR;
 			bp->b_resid = bp->b_bcount;
 			biodone(bp);
 			wd->openings++;
@@ -768,6 +764,7 @@ wddone(void *v)
 	int do_perror = 0;
 	ATADEBUG_PRINT(("wddone %s\n", wd->sc_dev.dv_xname),
 	    DEBUG_XFERS);
+	int nblks;
 
 	if (bp == NULL)
 		return;
@@ -792,13 +789,33 @@ wddone(void *v)
 			goto noerror;
 		errmsg = "error";
 		do_perror = 1;
+		if (wd->sc_wdc_bio.r_error & WDCE_IDNF &&
+		    (wd->sc_quirks & WD_QUIRK_FORCE_LBA48) == 0) {
+			nblks = wd->sc_wdc_bio.bcount /
+			    wd->sc_dk.dk_label->d_secsize;
+			/*
+			 * If we get a "id not found" when crossing the
+			 * LBA48_THRESHOLD, and the drive is larger than
+			 * 128GB, then we can assume the drive has the
+			 * LBA48 bug and we switch to LBA48.
+			 */
+			if (wd->sc_wdc_bio.blkno <= LBA48_THRESHOLD &&
+			    wd->sc_wdc_bio.blkno + nblks > LBA48_THRESHOLD &&
+			    wd->sc_capacity > LBA48_THRESHOLD + 1) {
+				errmsg = "LBA48 bug";
+				wd->sc_quirks |= WD_QUIRK_FORCE_LBA48;
+				do_perror = 0;
+				goto retry2;
+			}
+		}
 retry:		/* Just reset and retry. Can we do more ? */
 		(*wd->atabus->ata_reset_drive)(wd->drvp, AT_RST_NOCMD);
 retry2:
 		diskerr(bp, "wd", errmsg, LOG_PRINTF,
 		    wd->sc_wdc_bio.blkdone, wd->sc_dk.dk_label);
 		if (wd->retries < WDIORETRIES)
-			printf(", retrying\n");
+			printf(", retrying");
+		printf("\n");
 		if (do_perror)
 			wdperror(wd);
 		if (wd->retries < WDIORETRIES) {
@@ -807,7 +824,6 @@ retry2:
 			    wdrestart, wd);
 			return;
 		}
-		printf("\n");
 
 #ifdef WD_SOFTBADSECT
 		/*
@@ -829,7 +845,6 @@ retry2:
 			wd->sc_bscount++;
 		}
 #endif
-		bp->b_flags |= B_ERROR;
 		bp->b_error = EIO;
 		break;
 	case NOERROR:
@@ -838,7 +853,6 @@ noerror:	if ((wd->sc_wdc_bio.flags & ATA_CORR) || wd->retries > 0)
 			    wd->sc_dev.dv_xname);
 		break;
 	case ERR_NODEV:
-		bp->b_flags |= B_ERROR;
 		bp->b_error = EIO;
 		break;
 	}
@@ -904,8 +918,7 @@ wdopen(dev_t dev, int flag, int fmt, struct lwp *l)
 
 	part = WDPART(dev);
 
-	if ((error = lockmgr(&wd->sc_dk.dk_openlock, LK_EXCLUSIVE, NULL)) != 0)
-		return (error);
+	mutex_enter(&wd->sc_dk.dk_openlock);
 
 	/*
 	 * If there are wedges, and this is not RAW_PART, then we
@@ -965,14 +978,14 @@ wdopen(dev_t dev, int flag, int fmt, struct lwp *l)
 	wd->sc_dk.dk_openmask =
 	    wd->sc_dk.dk_copenmask | wd->sc_dk.dk_bopenmask;
 
-	(void) lockmgr(&wd->sc_dk.dk_openlock, LK_RELEASE, NULL);
+	mutex_exit(&wd->sc_dk.dk_openlock);
 	return 0;
 
  bad2:
 	if (wd->sc_dk.dk_openmask == 0)
 		wd->atabus->ata_delref(wd->drvp);
  bad1:
-	(void) lockmgr(&wd->sc_dk.dk_openlock, LK_RELEASE, NULL);
+	mutex_exit(&wd->sc_dk.dk_openlock);
 	return error;
 }
 
@@ -981,12 +994,10 @@ wdclose(dev_t dev, int flag, int fmt, struct lwp *l)
 {
 	struct wd_softc *wd = device_lookup(&wd_cd, WDUNIT(dev));
 	int part = WDPART(dev);
-	int error;
 
 	ATADEBUG_PRINT(("wdclose\n"), DEBUG_FUNCS);
 
-	if ((error = lockmgr(&wd->sc_dk.dk_openlock, LK_EXCLUSIVE, NULL)) != 0)
-		return error;
+	mutex_enter(&wd->sc_dk.dk_openlock);
 
 	switch (fmt) {
 	case S_IFCHR:
@@ -1008,7 +1019,7 @@ wdclose(dev_t dev, int flag, int fmt, struct lwp *l)
 		wd->atabus->ata_delref(wd->drvp);
 	}
 
-	(void) lockmgr(&wd->sc_dk.dk_openlock, LK_RELEASE, NULL);
+	mutex_exit(&wd->sc_dk.dk_openlock);
 	return 0;
 }
 
@@ -1184,14 +1195,14 @@ wdioctl(dev_t dev, u_long xfer, void *addr, int flag, struct lwp *l)
 		struct disk_badsecinfo dbsi;
 		struct disk_badsectors *dbs;
 		size_t available;
-		void *laddr;
+		uint8_t *laddr;
 
 		dbsi = *(struct disk_badsecinfo *)addr;
 		missing = wd->sc_bscount;
 		count = 0;
 		available = dbsi.dbsi_bufsize;
 		skip = dbsi.dbsi_skip;
-		laddr = dbsi.dbsi_buffer;
+		laddr = (uint8_t *)dbsi.dbsi_buffer;
 
 		/*
 		 * We start this loop with the expectation that all of the
@@ -1279,9 +1290,7 @@ wdioctl(dev_t dev, u_long xfer, void *addr, int flag, struct lwp *l)
 #endif
 		lp = (struct disklabel *)addr;
 
-		if ((error = lockmgr(&wd->sc_dk.dk_openlock, LK_EXCLUSIVE,
-				     NULL)) != 0)
-			goto bad;
+		mutex_enter(&wd->sc_dk.dk_openlock);
 		wd->sc_flags |= WDF_LABELLING;
 
 		error = setdisklabel(wd->sc_dk.dk_label,
@@ -1304,8 +1313,7 @@ wdioctl(dev_t dev, u_long xfer, void *addr, int flag, struct lwp *l)
 		}
 
 		wd->sc_flags &= ~WDF_LABELLING;
-		(void) lockmgr(&wd->sc_dk.dk_openlock, LK_RELEASE, NULL);
-bad:
+		mutex_exit(&wd->sc_dk.dk_openlock);
 #ifdef __HAVE_OLD_DISKLABEL
 		if (newlabel != NULL)
 			free(newlabel, M_TEMP);
@@ -2011,7 +2019,7 @@ wdioctlstrategy(struct buf *bp)
 		printf("wdioctlstrategy: "
 		    "No matching ioctl request found in queue\n");
 		error = EINVAL;
-		goto bad;
+		goto done;
 	}
 
 	memset(&ata_c, 0, sizeof(ata_c));
@@ -2023,7 +2031,7 @@ wdioctlstrategy(struct buf *bp)
 	if (bp->b_bcount != wi->wi_atareq.datalen) {
 		printf("physio split wd ioctl request... cannot proceed\n");
 		error = EIO;
-		goto bad;
+		goto done;
 	}
 
 	/*
@@ -2035,7 +2043,7 @@ wdioctlstrategy(struct buf *bp)
 	    (bp->b_bcount / wi->wi_softc->sc_dk.dk_label->d_secsize) >=
 	     (1 << NBBY)) {
 		error = EINVAL;
-		goto bad;
+		goto done;
 	}
 
 	/*
@@ -2044,7 +2052,7 @@ wdioctlstrategy(struct buf *bp)
 
 	if (wi->wi_atareq.timeout == 0) {
 		error = EINVAL;
-		goto bad;
+		goto done;
 	}
 
 	if (wi->wi_atareq.flags & ATACMD_READ)
@@ -2072,7 +2080,8 @@ wdioctlstrategy(struct buf *bp)
 	if (wi->wi_softc->atabus->ata_exec_command(wi->wi_softc->drvp, &ata_c)
 	    != ATACMD_COMPLETE) {
 		wi->wi_atareq.retsts = ATACMD_ERROR;
-		goto bad;
+		error = EIO;
+		goto done;
 	}
 
 	if (ata_c.flags & (AT_ERROR | AT_TIMEOU | AT_DF)) {
@@ -2095,11 +2104,7 @@ wdioctlstrategy(struct buf *bp)
 		}
 	}
 
-	bp->b_error = 0;
-	biodone(bp);
-	return;
-bad:
-	bp->b_flags |= B_ERROR;
+done:
 	bp->b_error = error;
 	biodone(bp);
 }

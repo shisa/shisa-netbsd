@@ -1,4 +1,4 @@
-/*	$NetBSD: uipc_syscalls.c,v 1.114 2007/07/01 18:38:11 dsl Exp $	*/
+/*	$NetBSD: uipc_syscalls.c,v 1.121 2007/09/19 19:28:25 christos Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1989, 1990, 1993
@@ -32,9 +32,8 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: uipc_syscalls.c,v 1.114 2007/07/01 18:38:11 dsl Exp $");
+__KERNEL_RCSID(0, "$NetBSD: uipc_syscalls.c,v 1.121 2007/09/19 19:28:25 christos Exp $");
 
-#include "opt_ktrace.h"
 #include "opt_pipe.h"
 
 #include <sys/param.h>
@@ -50,9 +49,7 @@ __KERNEL_RCSID(0, "$NetBSD: uipc_syscalls.c,v 1.114 2007/07/01 18:38:11 dsl Exp 
 #include <sys/socketvar.h>
 #include <sys/signalvar.h>
 #include <sys/un.h>
-#ifdef KTRACE
 #include <sys/ktrace.h>
-#endif
 #include <sys/event.h>
 
 #include <sys/mount.h>
@@ -73,32 +70,13 @@ sys___socket30(struct lwp *l, void *v, register_t *retval)
 		syscallarg(int)	type;
 		syscallarg(int)	protocol;
 	} */ *uap = v;
-
-	struct filedesc	*fdp;
-	struct socket	*so;
-	struct file	*fp;
 	int		fd, error;
 
-	fdp = l->l_proc->p_fd;
-	/* falloc() will use the desciptor for us */
-	if ((error = falloc(l, &fp, &fd)) != 0)
-		return (error);
-	fp->f_flag = FREAD|FWRITE;
-	fp->f_type = DTYPE_SOCKET;
-	fp->f_ops = &socketops;
-	error = socreate(SCARG(uap, domain), &so, SCARG(uap, type),
-			 SCARG(uap, protocol), l);
-	if (error) {
-		FILE_UNUSE(fp, l);
-		fdremove(fdp, fd);
-		ffree(fp);
-	} else {
-		fp->f_data = so;
-		FILE_SET_MATURE(fp);
-		FILE_UNUSE(fp, l);
+	error = fsocreate(SCARG(uap, domain), NULL, SCARG(uap, type),
+			 SCARG(uap, protocol), l, &fd);
+	if (error == 0)
 		*retval = fd;
-	}
-	return (error);
+	return error;
 }
 
 /* ARGSUSED */
@@ -425,7 +403,7 @@ sys_sendto(struct lwp *l, void *v, register_t *retval)
 	msg.msg_namelen = SCARG(uap, tolen);
 	msg.msg_iov = &aiov;
 	msg.msg_iovlen = 1;
-	msg.msg_control = 0;
+	msg.msg_control = NULL;
 	msg.msg_flags = 0;
 	aiov.iov_base = __UNCONST(SCARG(uap, buf)); /* XXXUNCONST kills const */
 	aiov.iov_len = SCARG(uap, len);
@@ -457,14 +435,14 @@ do_sys_sendmsg(struct lwp *l, int s, struct msghdr *mp, int flags,
 {
 	struct file	*fp;
 	struct uio	auio;
-	int		i, len, error;
+	int		i, len, error, iovlen;
 	struct mbuf	*to, *control;
 	struct socket	*so;
 	struct iovec	*tiov;
 	struct iovec	aiov[UIO_SMALLIOV], *iov = aiov;
-#ifdef KTRACE
-	struct iovec	*ktriov;
-#endif
+	struct iovec	*ktriov = NULL;
+
+	ktrkuser("msghdr", mp, sizeof *mp);
 
 	/* If the caller passed us stuff in mbufs, we must free them */
 	if (mp->msg_flags & MSG_NAMEMBUF)
@@ -494,10 +472,6 @@ do_sys_sendmsg(struct lwp *l, int s, struct msghdr *mp, int flags,
 		}
 		mp->msg_iov = iov;
 	}
-
-#ifdef KTRACE
-	ktriov = NULL;
-#endif
 
 	auio.uio_iov = mp->msg_iov;
 	auio.uio_iovcnt = mp->msg_iovlen;
@@ -547,14 +521,11 @@ do_sys_sendmsg(struct lwp *l, int s, struct msghdr *mp, int flags,
 		}
 	}
 
-#ifdef KTRACE
-	if (KTRPOINT(l->l_proc, KTR_GENIO)) {
-		int iovlen = auio.uio_iovcnt * sizeof(struct iovec);
-
+	if (ktrpoint(KTR_GENIO)) {
+		iovlen = auio.uio_iovcnt * sizeof(struct iovec);
 		ktriov = malloc(iovlen, M_TEMP, M_WAITOK);
 		memcpy(ktriov, auio.uio_iov, iovlen);
 	}
-#endif
 
 	/* getsock() will use the descriptor for us */
 	if ((error = getsock(l->l_proc->p_fd, s, &fp)) != 0)
@@ -586,20 +557,17 @@ do_sys_sendmsg(struct lwp *l, int s, struct msghdr *mp, int flags,
 	if (error == 0)
 		*retsize = len - auio.uio_resid;
 
-#ifdef KTRACE
+bad:
 	if (ktriov != NULL) {
-		if (error == 0)
-			ktrgenio(l, s, UIO_WRITE, ktriov, *retsize, error);
+		ktrgeniov(s, UIO_WRITE, ktriov, *retsize, error);
 		free(ktriov, M_TEMP);
 	}
-#endif
 
- bad:
-	if (iov != aiov)
+ 	if (iov != aiov)
 		free(iov, M_IOV);
 	if (to)
 		m_freem(to);
-	if (control != NULL)
+	if (control)
 		m_freem(control);
 
 	return (error);
@@ -621,7 +589,7 @@ sys_recvfrom(struct lwp *l, void *v, register_t *retval)
 	int		error;
 	struct mbuf	*from;
 
-	msg.msg_name = NULL;;
+	msg.msg_name = NULL;
 	msg.msg_iov = &aiov;
 	msg.msg_iovlen = 1;
 	aiov.iov_base = SCARG(uap, buf);
@@ -671,8 +639,10 @@ sys_recvmsg(struct lwp *l, void *v, register_t *retval)
 			from);
 	if (from != NULL)
 		m_free(from);
-	if (error == 0)
+	if (error == 0) {
+		ktrkuser("msghdr", &msg, sizeof msg);
 		error = copyout(&msg, SCARG(uap, msg), sizeof(msg));
+	}
 
 	return (error);
 }
@@ -747,6 +717,7 @@ copyout_msg_control(struct lwp *l, struct msghdr *mp, struct mbuf *control)
 			i = len;
 		}
 		error = copyout(mtod(m, void *), q, i);
+		ktrkuser("msgcontrol", mtod(m, void *), i);
 		if (error != 0) {
 			/* We must free all the SCM_RIGHTS */
 			m = control;
@@ -775,18 +746,15 @@ do_sys_recvmsg(struct lwp *l, int s, struct msghdr *mp, struct mbuf **from,
 	struct uio	auio;
 	struct iovec	aiov[UIO_SMALLIOV], *iov = aiov;
 	struct iovec	*tiov;
-	int		i, len, error;
+	int		i, len, error, iovlen;
 	struct socket	*so;
-#ifdef KTRACE
 	struct iovec	*ktriov;
-#endif
+
+	ktrkuser("msghdr", mp, sizeof *mp);
 
 	*from = NULL;
 	if (control != NULL)
 		*control = NULL;
-#ifdef KTRACE
-	ktriov = NULL;
-#endif
 
 	/* getsock() will use the descriptor for us */
 	if ((error = getsock(l->l_proc->p_fd, s, &fp)) != 0)
@@ -838,16 +806,16 @@ do_sys_recvmsg(struct lwp *l, int s, struct msghdr *mp, struct mbuf **from,
 			goto out;
 		}
 	}
-#ifdef KTRACE
-	if (KTRPOINT(l->l_proc, KTR_GENIO)) {
-		int iovlen = auio.uio_iovcnt * sizeof(struct iovec);
 
+	ktriov = NULL;
+	if (ktrpoint(KTR_GENIO)) {
+		iovlen = auio.uio_iovcnt * sizeof(struct iovec);
 		ktriov = malloc(iovlen, M_TEMP, M_WAITOK);
 		memcpy(ktriov, auio.uio_iov, iovlen);
 	}
-#endif
 
 	len = auio.uio_resid;
+	mp->msg_flags &= MSG_USERFLAGS;
 	error = (*so->so_receive)(so, from, &auio, NULL, control,
 			  &mp->msg_flags);
 	len -= auio.uio_resid;
@@ -856,13 +824,12 @@ do_sys_recvmsg(struct lwp *l, int s, struct msghdr *mp, struct mbuf **from,
 	    && (error == ERESTART || error == EINTR || error == EWOULDBLOCK))
 		/* Some data transferred */
 		error = 0;
-#ifdef KTRACE
+
 	if (ktriov != NULL) {
-		if (error == 0)
-			ktrgenio(l, s, UIO_READ, ktriov, len, 0);
+		ktrgeniov(s, UIO_READ, ktriov, len, error);
 		free(ktriov, M_TEMP);
 	}
-#endif
+
 	if (error != 0) {
 		m_freem(*from);
 		*from = NULL;
@@ -1105,7 +1072,7 @@ copyout_sockname(struct sockaddr *asa, unsigned int *alen, int flags,
 			return error;
 	} else
 		len = *alen;
-	if (len <= 0)
+	if (len < 0)
 		return EINVAL;
 
 	if (addr == NULL) {
@@ -1115,6 +1082,7 @@ copyout_sockname(struct sockaddr *asa, unsigned int *alen, int flags,
 		if (len > addr->m_len)
 			len = addr->m_len;
 		/* Maybe this ought to copy a chain ? */
+		ktrkuser("sockname", mtod(addr, void *), len);
 		error = copyout(mtod(addr, void *), asa, len);
 	}
 
@@ -1215,6 +1183,7 @@ sockargs(struct mbuf **mp, const void *bf, size_t buflen, int type)
 		(void) m_free(m);
 		return (error);
 	}
+	ktrkuser("sockargs", mtod(m, void *), buflen);
 	*mp = m;
 	if (type == MT_SONAME) {
 		sa = mtod(m, struct sockaddr *);

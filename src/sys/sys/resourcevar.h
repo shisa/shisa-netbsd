@@ -1,4 +1,4 @@
-/*	$NetBSD: resourcevar.h,v 1.36 2007/04/30 16:30:56 dsl Exp $	*/
+/*	$NetBSD: resourcevar.h,v 1.39 2007/09/21 19:19:20 dsl Exp $	*/
 
 /*
  * Copyright (c) 1991, 1993
@@ -34,7 +34,7 @@
 #ifndef	_SYS_RESOURCEVAR_H_
 #define	_SYS_RESOURCEVAR_H_
 
-#include <sys/lock.h>
+#include <sys/mutex.h>
 
 /*
  * Kernel per-process accounting / statistics
@@ -72,9 +72,9 @@ struct plimit {
 	struct	rlimit pl_rlimit[RLIM_NLIMITS];
 	char	*pl_corename;
 #define	PL_SHAREMOD	0x01		/* modifications are shared */
-	int	p_lflags;
-	int	p_refcnt;		/* number of references */
-	struct simplelock p_slock;	/* mutex for p_refcnt */
+	int	pl_flags;
+	int	pl_refcnt;		/* number of references */
+	kmutex_t pl_lock;		/* mutex for pl_refcnt */
 };
 
 /* add user profiling from AST XXXSMP */
@@ -97,26 +97,17 @@ struct uidinfo {
 	long	ui_proccnt;	/* Number of processes */
 	long	ui_lockcnt;	/* Number of locks */
 	rlim_t	ui_sbsize;	/* socket buffer size */
-	struct simplelock ui_slock; /* mutex for everything */
+	kmutex_t ui_lock;	/* mutex for everything */
 
 };
 #define	UIHASH(uid)	(&uihashtbl[(uid) & uihash])
-#define UILOCK(uip, s) \
-    do { \
-	s = splsoftnet(); \
-	simple_lock(&uip->ui_slock); \
-    } while (/*CONSTCOND*/0)
-#define UIUNLOCK(uip, s) \
-    do { \
-	simple_unlock(&uip->ui_slock); \
-	splx(s); \
-    } while (/*CONSTCOND*/0)
 
 extern LIST_HEAD(uihashhead, uidinfo) *uihashtbl;
 extern u_long uihash;		/* size of hash table - 1 */
 int       chgproccnt(uid_t, int);
 int       chgsbsize(struct uidinfo *, u_long *, u_long, rlim_t);
 struct uidinfo *uid_find(uid_t);
+void	uid_init(void);
 
 extern char defcorename[];
 

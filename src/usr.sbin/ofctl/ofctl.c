@@ -1,7 +1,7 @@
-/*	$NetBSD: ofctl.c,v 1.5 2007/06/06 23:43:56 rjs Exp $	*/
+/*	$NetBSD: ofctl.c,v 1.7 2007/08/05 13:52:44 jmmv Exp $	*/
 
 /*-
- * Copyright (c) 2006 The NetBSD Foundation, Inc.
+ * Copyright (c) 2006, 2007 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
  * This code is derived from software contributed to The NetBSD Foundation
@@ -31,6 +31,14 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+
+#include <sys/cdefs.h>
+
+#ifndef lint
+__COPYRIGHT("@(#) Copyright (c) 2006, 2007\n"
+"The NetBSD Foundation, Inc.  All rights reserved.\n");
+__RCSID("$NetBSD: ofctl.c,v 1.7 2007/08/05 13:52:44 jmmv Exp $");
+#endif /* not lint */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -497,7 +505,7 @@ main(int argc, char **argv)
 		}
 	}
 	if (errflag)
-		errx(1, "usage: ofctl [-pl] [-f file] [-r propfile] [-w propfile] [node...]\n");
+		errx(1, "usage: ofctl [-pl] [-f file] [-r propfile] [-w propfile] [node...]");
 
 	if (propfilein != NULL) {
 		of_proplib = prop_dictionary_internalize_from_file(propfilein);

@@ -1,4 +1,4 @@
-/*	$NetBSD: ip_fil_netbsd.c,v 1.39 2007/06/17 09:32:34 martin Exp $	*/
+/*	$NetBSD: ip_fil_netbsd.c,v 1.41 2007/09/17 06:25:23 martti Exp $	*/
 
 /*
  * Copyright (C) 1993-2003 by Darren Reed.
@@ -406,7 +406,7 @@ int ipfattach()
 	SPL_X(s);
 
 #if (__NetBSD_Version__ >= 104010000)
-	callout_init(&fr_slowtimer_ch);
+	callout_init(&fr_slowtimer_ch, 0);
 	callout_reset(&fr_slowtimer_ch, (hz / IPF_HZ_DIVIDE) * IPF_HZ_MULT,
 		     fr_slowtimer, NULL);
 #else
@@ -1899,11 +1899,16 @@ int len;
 			m = m_pullup(m, len);
 		}
 		*fin->fin_mp = m;
-		fin->fin_m = m;
 		if (m == NULL) {
+			fin->fin_m = NULL;
 			ATOMIC_INCL(frstats[out].fr_pull[1]);
 			return NULL;
 		}
+
+		while (M_LEN(m) == 0) {
+			m = m->m_next;
+		}
+		fin->fin_m = m;
 		ip = MTOD(m, char *) + ipoff;
 	}
 

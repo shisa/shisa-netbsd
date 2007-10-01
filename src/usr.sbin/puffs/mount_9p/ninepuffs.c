@@ -1,4 +1,4 @@
-/*	$NetBSD: ninepuffs.c,v 1.12 2007/05/19 10:38:23 pooka Exp $	*/
+/*	$NetBSD: ninepuffs.c,v 1.17 2007/09/01 16:43:10 pooka Exp $	*/
 
 /*
  * Copyright (c) 2007  Antti Kantee.  All Rights Reserved.
@@ -31,7 +31,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: ninepuffs.c,v 1.12 2007/05/19 10:38:23 pooka Exp $");
+__RCSID("$NetBSD: ninepuffs.c,v 1.17 2007/09/01 16:43:10 pooka Exp $");
 #endif /* !lint */
 
 #include <sys/types.h>
@@ -43,6 +43,7 @@ __RCSID("$NetBSD: ninepuffs.c,v 1.12 2007/05/19 10:38:23 pooka Exp $");
 #include <assert.h>
 #include <err.h>
 #include <netdb.h>
+#include <pwd.h>
 #include <puffs.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -56,7 +57,8 @@ static void
 usage(void)
 {
 
-	errx(1, "usage: %s user server mountpoint", getprogname());
+	errx(1, "usage: %s [-o mntopts] [-p port] [-u user] [-s] server mount",
+	    getprogname());
 }
 
 /*
@@ -99,15 +101,15 @@ main(int argc, char *argv[])
 	struct puffs_ops *pops;
 	struct puffs_node *pn_root;
 	mntoptparse_t mp;
-	char *srvhost;
-	char *user;
+	const char *user, *srvhost, *srvpath;
+	char *p;
 	unsigned short port;
 	int mntflags, pflags, lflags, ch;
 	int detach;
 
 	setprogname(argv[0]);
 
-	if (argc < 3)
+	if (argc < 2)
 		usage();
 
 	mntflags = pflags = lflags = 0;
@@ -136,11 +138,8 @@ main(int argc, char *argv[])
 	argc -= optind;
 	argv += optind;
 
-	if (argc != 3)
+	if (argc != 2)
 		usage();
-
-	user = argv[0];
-	srvhost = argv[1];
 
 	if (pflags & PUFFS_FLAG_OPDUMP)
 		lflags |= PUFFSLOOP_NODAEMON;
@@ -170,16 +169,41 @@ main(int argc, char *argv[])
 	PUFFSOP_SET(pops, puffs9p, node, mknod);
 #endif
 
+	pu = puffs_init(pops, argv[0], "9p", &p9p, pflags);
+	if (pu == NULL)
+		err(1, "puffs_init");
+
 	memset(&p9p, 0, sizeof(p9p));
 	p9p.maxreq = P9P_DEFREQLEN;
 	p9p.nextfid = 1;
 
-	p9p.servsock = serverconnect(srvhost, port);
-	pu = puffs_init(pops, "9P", &p9p, pflags);
-	if (pu == NULL)
-		err(1, "puffs_init");
+	/* user@ */
+	if ((p = strchr(argv[0], '@')) != NULL) {
+		*p = '\0';
+		srvhost = p+1;
+		user = argv[0];
+	} else {
+		struct passwd *pw;
 
-	if ((pn_root = p9p_handshake(pu, user)) == NULL) {
+		srvhost = argv[0];
+		pw = getpwuid(getuid());
+		if (pw == NULL)
+			err(1, "getpwuid");
+		user = pw->pw_name;
+	}
+
+	/* :/mountpath */
+	if ((p = strchr(srvhost, ':')) != NULL) {
+		*p = '\0';
+		srvpath = p+1;
+		if (*srvpath != '/')
+			errx(1, "%s is not an absolute path", srvpath);
+	} else {
+		srvpath = "/";
+	}
+
+	p9p.servsock = serverconnect(srvhost, port);
+	if ((pn_root = p9p_handshake(pu, user, srvpath)) == NULL) {
 		puffs_exit(pu, 1);
 		exit(1);
 	}
@@ -187,12 +211,13 @@ main(int argc, char *argv[])
 	if (puffs_setblockingmode(pu, PUFFSDEV_NONBLOCK) == -1)
 		err(1, "setblockingmode");
 
-	puffs_framev_init(pu, p9pbuf_read, p9pbuf_write, p9pbuf_cmp,
+	puffs_framev_init(pu, p9pbuf_read, p9pbuf_write, p9pbuf_cmp, NULL,
 	    puffs_framev_unmountonclose);
-	if (puffs_framev_addfd(pu, p9p.servsock) == -1)
+	if (puffs_framev_addfd(pu, p9p.servsock,
+	    PUFFS_FBIO_READ | PUFFS_FBIO_WRITE) == -1)
 		err(1, "puffs_framebuf_addfd");
 
-	if (puffs_mount(pu, argv[2], mntflags, pn_root) == -1)
+	if (puffs_mount(pu, argv[1], mntflags, pn_root) == -1)
 		err(1, "puffs_mount");
 
 	return puffs_mainloop(pu, lflags);

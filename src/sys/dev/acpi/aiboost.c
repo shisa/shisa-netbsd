@@ -1,4 +1,4 @@
-/* $NetBSD: aiboost.c,v 1.9 2007/07/02 10:27:12 xtraeme Exp $ */
+/* $NetBSD: aiboost.c,v 1.13 2007/08/30 18:29:11 xtraeme Exp $ */
 
 /*-
  * Copyright (c) 2007 Juan Romero Pardines
@@ -28,12 +28,13 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: aiboost.c,v 1.9 2007/07/02 10:27:12 xtraeme Exp $");
+__KERNEL_RCSID(0, "$NetBSD: aiboost.c,v 1.13 2007/08/30 18:29:11 xtraeme Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/device.h>
 #include <sys/malloc.h>
+#include <sys/rwlock.h>
 
 #include <dev/acpi/acpica.h>
 #include <dev/acpi/acpireg.h>
@@ -66,6 +67,7 @@ struct aiboost_softc {
 	struct aiboost_comp *sc_aitemp, *sc_aivolt, *sc_aifan;
 	struct sysmon_envsys sc_sme;
 	struct envsys_data sc_data[AIBOOST_MAX_SENSORS];
+	krwlock_t sc_rwlock;
 };
 
 static ACPI_STATUS aiboost_getcomp(ACPI_HANDLE *,
@@ -73,7 +75,7 @@ static ACPI_STATUS aiboost_getcomp(ACPI_HANDLE *,
 				   struct aiboost_comp **);
 static int	aiboost_get_value(ACPI_HANDLE, const char *, UINT32);
 
-/* envsys(9) glue */
+/* sysmon_envsys(9) glue */
 static void	aiboost_setup_sensors(struct aiboost_softc *);
 static int	aiboost_gtredata(struct sysmon_envsys *, envsys_data_t *);
 static void	aiboost_refresh_sensors(struct aiboost_softc *,
@@ -132,6 +134,7 @@ aiboost_acpi_attach(struct device *parent, struct device *self, void *aux)
 	if (ACPI_FAILURE(aiboost_getcomp(handl, "FSIF", &sc->sc_aifan)))
 		return;
 
+	rw_init(&sc->sc_rwlock);
 	/* Initialize sensors */
 	maxsens = sc->sc_aivolt->num + sc->sc_aitemp->num + sc->sc_aifan->num;
 	DPRINTF(("%s: maxsens=%d\n", __func__, maxsens));
@@ -205,16 +208,24 @@ aiboost_refresh_sensors(struct aiboost_softc *sc, envsys_data_t *edata)
 	ACPI_HANDLE *h = sc->sc_node->ad_handle;
 	int i, j, val;
 
+	rw_enter(&sc->sc_rwlock, RW_READER);
 	j = 0;
 	i = edata->sensor; /* sensor number */
+
+#define AIBOOST_INVALIDATE_SENSOR()					\
+	do {								\
+		if (val == -1 || val == 0) {				\
+			edata->state = ENVSYS_SINVALID;			\
+			goto out;					\
+		}							\
+	} while (/* CONSTCOND */ 0)
 
 	switch (edata->units) {
 	case ENVSYS_STEMP:
 		/* Temperatures */
 		val = aiboost_get_value(h, "RTMP", sc->sc_aitemp->elem[i].id);
-		if (val == -1)
-			edata->state = ENVSYS_SINVALID;
-		/* envsys(9) wants mK... convert from Celsius. */
+		AIBOOST_INVALIDATE_SENSOR();
+		/* envsys(4) wants mK... convert from Celsius. */
 		edata->value_cur = val * 100000 + 273150000;
 		DPRINTF(("%s: temp[%d] value_cur=%d val=%d j=%d\n", __func__,
 		    i, edata->value_cur, val, j));
@@ -223,8 +234,7 @@ aiboost_refresh_sensors(struct aiboost_softc *sc, envsys_data_t *edata)
 		/* Voltages */
 		j = i - sc->sc_aitemp->num;
 		val = aiboost_get_value(h, "RVLT", sc->sc_aivolt->elem[j].id);
-		if (val == -1)
-			edata->state = ENVSYS_SINVALID;
+		AIBOOST_INVALIDATE_SENSOR();
 		/* envsys(4) wants mV... */
 		edata->value_cur = val * 10000;
 		edata->value_cur /= 10;
@@ -235,12 +245,15 @@ aiboost_refresh_sensors(struct aiboost_softc *sc, envsys_data_t *edata)
 		/* Fans */
 		j = i - (sc->sc_aitemp->num + sc->sc_aivolt->num);
 		val = aiboost_get_value(h, "RFAN", sc->sc_aifan->elem[j].id);
-		if (val == -1)
-			edata->state = ENVSYS_SINVALID;
+		AIBOOST_INVALIDATE_SENSOR();
 		edata->value_cur = val;
 		DPRINTF(("%s: fan[%d] val=%d j=%d\n", __func__, i, val, j));
 		break;
 	}
+
+	edata->state = ENVSYS_SVALID;
+out:
+	rw_exit(&sc->sc_rwlock);
 }
 
 static int

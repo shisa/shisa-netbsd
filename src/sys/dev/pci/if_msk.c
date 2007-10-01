@@ -1,4 +1,4 @@
-/* $NetBSD: if_msk.c,v 1.8 2007/03/04 06:02:21 christos Exp $ */
+/* $NetBSD: if_msk.c,v 1.10 2007/07/19 22:04:22 dsl Exp $ */
 /*	$OpenBSD: if_msk.c,v 1.42 2007/01/17 02:43:02 krw Exp $	*/
 
 /*
@@ -50,6 +50,8 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
+
+#include <sys/cdefs.h>
 
 #include "bpfilter.h"
 #include "rnd.h"
@@ -1114,7 +1116,7 @@ msk_attach(struct device *parent, struct device *self, void *aux)
 	} else
 		ifmedia_set(&sc_if->sk_mii.mii_media, IFM_ETHER|IFM_AUTO);
 
-	callout_init(&sc_if->sk_tick_ch);
+	callout_init(&sc_if->sk_tick_ch, 0);
 	callout_setfunc(&sc_if->sk_tick_ch, msk_tick, sc_if);
 	callout_schedule(&sc_if->sk_tick_ch, hz);
 

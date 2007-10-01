@@ -1,4 +1,4 @@
-/*	$NetBSD: veriexecctl.c,v 1.28 2007/05/15 22:01:19 oster Exp $	*/
+/*	$NetBSD: veriexecctl.c,v 1.30 2007/09/06 03:01:55 xtraeme Exp $	*/
 
 /*-
  * Copyright 2005 Elad Efrat <elad@NetBSD.org>
@@ -36,6 +36,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -193,12 +194,13 @@ print_entry(prop_dictionary_t entry)
 	file = escape(dict_gets(entry, "file"));
 	printf("%s %s %s %s\n", file, dict_gets(entry, "fp-type"), fp, flags);
 	free(file);
+	free(fp);
 }
 
 int
 main(int argc, char **argv)
 {
-	extern boolean_t keep_filename, eval_on_load;
+	extern bool keep_filename, eval_on_load;
 	int c;
 
 	setprogname(argv[0]);
@@ -206,11 +208,11 @@ main(int argc, char **argv)
 	while ((c = getopt(argc, argv, "ekv")) != -1)
 		switch (c) {
 		case 'e':
-			eval_on_load = TRUE;
+			eval_on_load = true;
 			break;
 
 		case 'k':
-			keep_filename = TRUE;
+			keep_filename = true;
 			break;
 
 		case 'v':

@@ -1,4 +1,4 @@
-/*	$NetBSD: lfs_vfsops.c,v 1.236 2007/06/30 09:37:54 pooka Exp $	*/
+/*	$NetBSD: lfs_vfsops.c,v 1.244 2007/07/31 21:14:20 pooka Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2000, 2001, 2002, 2003, 2007 The NetBSD Foundation, Inc.
@@ -67,7 +67,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: lfs_vfsops.c,v 1.236 2007/06/30 09:37:54 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: lfs_vfsops.c,v 1.244 2007/07/31 21:14:20 pooka Exp $");
 
 #if defined(_KERNEL_OPT)
 #include "opt_quota.h"
@@ -140,6 +140,7 @@ const struct vnodeopv_desc * const lfs_vnodeopv_descs[] = {
 
 struct vfsops lfs_vfsops = {
 	MOUNT_LFS,
+	sizeof (struct ufs_args),
 	lfs_mount,
 	ufs_start,
 	lfs_unmount,
@@ -156,7 +157,7 @@ struct vfsops lfs_vfsops = {
 	lfs_mountroot,
 	(int (*)(struct mount *, struct vnode *, struct timespec *)) eopnotsupp,
 	vfs_stdextattrctl,
-	vfs_stdsuspendctl,
+	(void *)eopnotsupp,	/* vfs_suspendctl */
 	lfs_vnodeopv_descs,
 	0,
 	{ NULL, NULL },
@@ -218,8 +219,8 @@ lfs_writerd(void *arg)
 				nmp = CIRCLEQ_NEXT(mp, mnt_list);
 				continue;
 			}
-			if (strncmp(&mp->mnt_stat.f_fstypename[0], MOUNT_LFS,
-				    MFSNAMELEN) == 0) {
+			if (strncmp(mp->mnt_stat.f_fstypename, MOUNT_LFS,
+			    sizeof(mp->mnt_stat.f_fstypename)) == 0) {
 				fs = VFSTOUFS(mp)->um_lfs;
 				simple_lock(&fs->lfs_interlock);
 				fsflags = 0;
@@ -363,37 +364,40 @@ lfs_mountroot()
  * mount system call
  */
 int
-lfs_mount(struct mount *mp, const char *path, void *data, struct nameidata *ndp, struct lwp *l)
+lfs_mount(struct mount *mp, const char *path, void *data, size_t *data_len,
+    struct lwp *l)
 {
+	struct nameidata nd;
 	struct vnode *devvp;
-	struct ufs_args args;
+	struct ufs_args *args = data;
 	struct ufsmount *ump = NULL;
 	struct lfs *fs = NULL;				/* LFS */
-	int error, update;
+	int error = 0, update;
 	mode_t accessmode;
+
+	if (*data_len < sizeof *args)
+		return EINVAL;
 
 	if (mp->mnt_flag & MNT_GETARGS) {
 		ump = VFSTOUFS(mp);
 		if (ump == NULL)
 			return EIO;
-		args.fspec = NULL;
-		return copyout(&args, data, sizeof(args));
+		args->fspec = NULL;
+		*data_len = sizeof *args;
+		return 0;
 	}
-	error = copyin(data, &args, sizeof (struct ufs_args));
-	if (error)
-		return (error);
 
 	update = mp->mnt_flag & MNT_UPDATE;
 
 	/* Check arguments */
-	if (args.fspec != NULL) {
+	if (args->fspec != NULL) {
 		/*
 		 * Look up the name and verify that it's sane.
 		 */
-		NDINIT(ndp, LOOKUP, FOLLOW, UIO_USERSPACE, args.fspec, l);
-		if ((error = namei(ndp)) != 0)
+		NDINIT(&nd, LOOKUP, FOLLOW, UIO_USERSPACE, args->fspec, l);
+		if ((error = namei(&nd)) != 0)
 			return (error);
-		devvp = ndp->ni_vp;
+		devvp = nd.ni_vp;
 
 		if (!update) {
 			/*
@@ -505,12 +509,12 @@ lfs_mount(struct mount *mp, const char *path, void *data, struct nameidata *ndp,
 				lfs_writesuper(fs, fs->lfs_sboffs[1]);
 			}
 		}
-		if (args.fspec == NULL)
+		if (args->fspec == NULL)
 			return EINVAL;
 	}
 
-	error = set_statvfs_info(path, UIO_USERSPACE, args.fspec,
-	    UIO_USERSPACE, mp, l);
+	error = set_statvfs_info(path, UIO_USERSPACE, args->fspec,
+	    UIO_USERSPACE, mp->mnt_op->vfs_name, mp, l);
 	if (error == 0)
 		(void)strncpy(fs->lfs_fsmnt, mp->mnt_stat.f_mntonname,
 			      sizeof(fs->lfs_fsmnt));
@@ -866,7 +870,8 @@ lfs_mountfs(struct vnode *devvp, struct mount *mp, struct lwp *l)
 
 	/* Start the pagedaemon-anticipating daemon */
 	if (lfs_writer_daemon == 0 &&
-	    kthread_create1(lfs_writerd, NULL, NULL, "lfs_writer") != 0)
+	    kthread_create(PRI_NONE, 0, NULL, lfs_writerd, NULL, NULL,
+	    "lfs_writer") != 0)
 		panic("fork lfs_writer");
 
 	return (0);
@@ -1108,6 +1113,7 @@ lfs_vget(struct mount *mp, ino_t ino, struct vnode **vpp)
 			&fs->lfs_interlock);
 	simple_unlock(&fs->lfs_interlock);
 
+retry:
 	if ((*vpp = ufs_ihashget(dev, ino, LK_EXCLUSIVE)) != NULL)
 		return (0);
 
@@ -1117,10 +1123,10 @@ lfs_vget(struct mount *mp, ino_t ino, struct vnode **vpp)
 	}
 
 	mutex_enter(&ufs_hashlock);
-	if ((*vpp = ufs_ihashget(dev, ino, LK_EXCLUSIVE)) != NULL) {
+	if (ufs_ihashget(dev, ino, 0) != NULL) {
 		mutex_exit(&ufs_hashlock);
 		ungetnewvnode(vp);
-		return (0);
+		goto retry;
 	}
 
 	/* Translate the inode number to a disk address. */
@@ -1751,7 +1757,6 @@ lfs_gop_write(struct vnode *vp, struct vm_page **pgs, int npages,
 		UVMHIST_LOG(ubchist, "skipbytes %d", skipbytes, 0,0,0);
 		s = splbio();
 		if (error) {
-			mbp->b_flags |= B_ERROR;
 			mbp->b_error = error;
 		}
 		mbp->b_resid -= skipbytes;

@@ -1,4 +1,4 @@
-/*	$NetBSD: owtemp.c,v 1.9 2007/07/04 19:12:42 xtraeme Exp $ */
+/*	$NetBSD: owtemp.c,v 1.11 2007/09/05 15:24:07 xtraeme Exp $ */
 /*	$OpenBSD: owtemp.c,v 1.1 2006/03/04 16:27:03 grange Exp $	*/
 
 /*
@@ -22,7 +22,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: owtemp.c,v 1.9 2007/07/04 19:12:42 xtraeme Exp $");
+__KERNEL_RCSID(0, "$NetBSD: owtemp.c,v 1.11 2007/09/05 15:24:07 xtraeme Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -106,6 +106,8 @@ owtemp_attach(struct device *parent, struct device *self, void *aux)
 	sc->sc_sensor[0].sensor = 0;
 	sc->sc_sensor[0].state = ENVSYS_SVALID;
 	sc->sc_sensor[0].units = ENVSYS_STEMP;
+	(void)strlcpy(sc->sc_sensor[0].desc,
+	    sc->sc_dev.dv_xname, sizeof(sc->sc_sensor[0].desc));
 
 	/* Hook into system monitor. */
 	sc->sc_sysmon.sme_name = sc->sc_dev.dv_xname;
@@ -153,7 +155,7 @@ owtemp_update(void *arg)
 	struct owtemp_softc *sc = arg;
 	u_int8_t data[9];
 
-	onewire_lock(sc->sc_onewire, 0);
+	onewire_lock(sc->sc_onewire);
 	if (onewire_reset(sc->sc_onewire) != 0)
 		goto done;
 	onewire_matchrom(sc->sc_onewire, sc->sc_rom);

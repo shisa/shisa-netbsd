@@ -1,4 +1,4 @@
-/*	$NetBSD: it.c,v 1.11 2007/07/05 15:20:30 xtraeme Exp $	*/
+/*	$NetBSD: it.c,v 1.14 2007/09/09 05:08:11 xtraeme Exp $	*/
 /*	$OpenBSD: it.c,v 1.19 2006/04/10 00:57:54 deraadt Exp $	*/
 
 /*
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: it.c,v 1.11 2007/07/05 15:20:30 xtraeme Exp $");
+__KERNEL_RCSID(0, "$NetBSD: it.c,v 1.14 2007/09/09 05:08:11 xtraeme Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -77,9 +77,10 @@ __KERNEL_RCSID(0, "$NetBSD: it.c,v 1.11 2007/07/05 15:20:30 xtraeme Exp $");
 /* autoconf(9) functions */
 static int  it_isa_match(struct device *, struct cfdata *, void *);
 static void it_isa_attach(struct device *, struct device *, void *);
+static int  it_isa_detach(struct device *, int);
 
 CFATTACH_DECL(it_isa, sizeof(struct it_softc),
-    it_isa_match, it_isa_attach, NULL, NULL);
+    it_isa_match, it_isa_attach, it_isa_detach, NULL);
 
 /* driver functions */
 static int it_check(bus_space_tag_t, int);
@@ -200,6 +201,16 @@ it_isa_attach(struct device *parent, struct device *self, void *aux)
 }
 
 static int
+it_isa_detach(struct device *self, int flags)
+{
+	struct it_softc *sc = device_private(self);
+
+	sysmon_envsys_unregister(&sc->sc_sysmon);
+	bus_space_unmap(sc->sc_iot, sc->sc_ioh, 8);
+	return 0;
+}
+
+static int
 it_check(bus_space_tag_t iot, int base)
 {
 	bus_space_handle_t ioh;
@@ -254,8 +265,10 @@ it_setup_sensors(struct it_softc *sc)
 	COPYDESCR(sc->sc_data[2].desc, "Aux Temp");
 
 	/* voltages */
-	for (i = IT_VOLTSTART_IDX; i < IT_FANSTART_IDX; i++)
+	for (i = IT_VOLTSTART_IDX; i < IT_FANSTART_IDX; i++) {
 		sc->sc_data[i].units = ENVSYS_SVOLTS_DC;
+		sc->sc_data[i].flags = ENVSYS_FCHANGERFACT;
+	}
 
 	COPYDESCR(sc->sc_data[3].desc, "VCORE_A");
 	COPYDESCR(sc->sc_data[4].desc, "VCORE_B");
@@ -326,11 +339,7 @@ it_refresh_volts(struct it_softc *sc, envsys_data_t *edata)
 	edata->value_cur = (sdata << 4);
 	/* rfact is (factor * 10^4) */
 	edata->value_cur *= it_vrfact[i];
-	/*
-	 * Enable ENVSYS_FCHANGERFACT to be able to specify a different
-	 * rfact value from userland.
-	 */
-	edata->flags |= ENVSYS_FCHANGERFACT;
+
 	if (edata->rfact)
 		edata->value_cur += edata->rfact;
 	else

@@ -1,4 +1,4 @@
-/*	$NetBSD: uipc_domain.c,v 1.65 2007/05/06 02:56:37 dyoung Exp $	*/
+/*	$NetBSD: uipc_domain.c,v 1.71 2007/09/19 04:33:42 dyoung Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1993
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: uipc_domain.c,v 1.65 2007/05/06 02:56:37 dyoung Exp $");
+__KERNEL_RCSID(0, "$NetBSD: uipc_domain.c,v 1.71 2007/09/19 04:33:42 dyoung Exp $");
 
 #include <sys/param.h>
 #include <sys/socket.h>
@@ -52,13 +52,17 @@ __KERNEL_RCSID(0, "$NetBSD: uipc_domain.c,v 1.65 2007/05/06 02:56:37 dyoung Exp 
 #include <sys/file.h>
 #include <sys/kauth.h>
 
+MALLOC_DECLARE(M_SOCKADDR);
+
+MALLOC_DEFINE(M_SOCKADDR, "sockaddr", "socket endpoints");
+
 void	pffasttimo(void *);
 void	pfslowtimo(void *);
 
 struct domainhead domains = STAILQ_HEAD_INITIALIZER(domains);
 static struct domain *domain_array[AF_MAX];
 
-struct callout pffasttimo_ch, pfslowtimo_ch;
+callout_t pffasttimo_ch, pfslowtimo_ch;
 
 /*
  * Current time values for fast and slow timeouts.  We can use u_int
@@ -88,8 +92,8 @@ domaininit(void)
 	if (rt_domain)
 		domain_attach(rt_domain);
 
-	callout_init(&pffasttimo_ch);
-	callout_init(&pfslowtimo_ch);
+	callout_init(&pffasttimo_ch, 0);
+	callout_init(&pfslowtimo_ch, 0);
 
 	callout_reset(&pffasttimo_ch, 1, pffasttimo, NULL);
 	callout_reset(&pfslowtimo_ch, 1, pfslowtimo, NULL);
@@ -181,29 +185,75 @@ pffindproto(int family, int protocol, int type)
 	return (maybe);
 }
 
-struct sockaddr *
-sockaddr_alloc(sa_family_t af, int flags)
+void *
+sockaddr_addr(struct sockaddr *sa, socklen_t *slenp)
 {
 	const struct domain *dom;
-	struct sockaddr *sa;
 
-	if ((dom = pffinddomain(af)) == NULL)
+	if ((dom = pffinddomain(sa->sa_family)) == NULL ||
+	    dom->dom_sockaddr_addr == NULL)
 		return NULL;
 
-	if ((sa = pool_get(dom->dom_sa_pool, flags)) == NULL)
+	return (*dom->dom_sockaddr_addr)(sa, slenp);
+}
+
+const void *
+sockaddr_const_addr(const struct sockaddr *sa, socklen_t *slenp)
+{
+	const struct domain *dom;
+	
+	if ((dom = pffinddomain(sa->sa_family)) == NULL ||
+	    dom->dom_sockaddr_const_addr == NULL)
+		return NULL;
+
+	return (*dom->dom_sockaddr_const_addr)(sa, slenp);
+}
+
+const struct sockaddr *
+sockaddr_any(const struct sockaddr *sa)
+{
+	const struct domain *dom;
+	
+	if ((dom = pffinddomain(sa->sa_family)) == NULL)
+		return NULL;
+
+	return dom->dom_sa_any;
+}
+
+const void *
+sockaddr_anyaddr(const struct sockaddr *sa, socklen_t *slenp)
+{
+	const struct sockaddr *any;
+
+	if ((any = sockaddr_any(sa)) == NULL)
+		return NULL;
+
+	return sockaddr_const_addr(any, slenp);
+}
+
+struct sockaddr *
+sockaddr_alloc(sa_family_t af, socklen_t socklen, int flags)
+{
+	struct sockaddr *sa;
+	socklen_t reallen = MAX(socklen, offsetof(struct sockaddr, sa_data[0]));
+
+	if ((sa = malloc(reallen, M_SOCKADDR, flags)) == NULL)
 		return NULL;
 
 	sa->sa_family = af;
-	sa->sa_len = dom->dom_sa_len;
+	sa->sa_len = reallen;
 	return sa;
 }
 
 struct sockaddr *
-sockaddr_copy(struct sockaddr *dst, const struct sockaddr *src)
+sockaddr_copy(struct sockaddr *dst, socklen_t socklen,
+    const struct sockaddr *src)
 {
-	KASSERT(dst->sa_family == src->sa_family);
-	memcpy(dst, src, src->sa_len);
-	return dst;
+	if (__predict_false(socklen < src->sa_len)) {
+		panic("%s: source too long, %d < %d bytes", __func__, socklen,
+		    src->sa_len);
+	}
+	return memcpy(dst, src, src->sa_len);
 }
 
 int
@@ -243,23 +293,16 @@ sockaddr_dup(const struct sockaddr *src, int flags)
 {
 	struct sockaddr *dst;
 
-	if ((dst = sockaddr_alloc(src->sa_family, flags)) == NULL)
+	if ((dst = sockaddr_alloc(src->sa_family, src->sa_len, flags)) == NULL)
 		return NULL;
 
-	KASSERT(dst->sa_len >= src->sa_len);
-
-	return sockaddr_copy(dst, src);
+	return sockaddr_copy(dst, dst->sa_len, src);
 }
 
 void
 sockaddr_free(struct sockaddr *sa)
 {
-	const struct domain *dom;
-
-	if ((dom = pffinddomain(sa->sa_family)) == NULL)
-		panic("%s: no such domain %d\n", __func__, sa->sa_family);
-
-	pool_put(dom->dom_sa_pool, sa);
+	free(sa, M_SOCKADDR);
 }
 
 /*

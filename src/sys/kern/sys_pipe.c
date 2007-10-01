@@ -1,4 +1,4 @@
-/*	$NetBSD: sys_pipe.c,v 1.84 2007/03/26 22:52:44 hubertf Exp $	*/
+/*	$NetBSD: sys_pipe.c,v 1.86 2007/09/25 13:53:31 ad Exp $	*/
 
 /*-
  * Copyright (c) 2003, 2007 The NetBSD Foundation, Inc.
@@ -83,7 +83,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: sys_pipe.c,v 1.84 2007/03/26 22:52:44 hubertf Exp $");
+__KERNEL_RCSID(0, "$NetBSD: sys_pipe.c,v 1.86 2007/09/25 13:53:31 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -316,6 +316,7 @@ pipe_create(struct pipe **pipep, int allockva)
 	mutex_init(&pipe->pipe_lock, MUTEX_DEFAULT, IPL_NONE);
 	cv_init(&pipe->pipe_cv, "pipe");
 	cv_init(&pipe->pipe_lkcv, "pipelk");
+	selinit(&pipe->pipe_sel);
 
 	if (allockva && (error = pipespace(pipe, PIPE_SIZE)))
 		return (error);
@@ -461,14 +462,21 @@ again:
 				bp->out = 0;
 			}
 			nread += size;
+			continue;
+		}
+
+		/* Lock to see up-to-date value of pipe_status. */
+		mutex_enter(&rpipe->pipe_lock);
+
 #ifndef PIPE_NODIRECT
-		} else if ((rpipe->pipe_state & PIPE_DIRECTR) != 0) {
+		if ((rpipe->pipe_state & PIPE_DIRECTR) != 0) {
 			/*
 			 * Direct copy, bypassing a kernel buffer.
 			 */
 			void *	va;
 
 			KASSERT(rpipe->pipe_state & PIPE_DIRECTW);
+			mutex_exit(&rpipe->pipe_lock);
 
 			size = rpipe->pipe_map.cnt;
 			if (size > uio->uio_resid)
@@ -487,70 +495,67 @@ again:
 				cv_broadcast(&rpipe->pipe_cv);
 				mutex_exit(&rpipe->pipe_lock);
 			}
-#endif
-		} else {
-			/*
-			 * Break if some data was read.
-			 */
-			if (nread > 0)
-				break;
-
-			mutex_enter(&rpipe->pipe_lock);
-
-			/*
-			 * detect EOF condition
-			 * read returns 0 on EOF, no need to set error
-			 */
-			if (rpipe->pipe_state & PIPE_EOF) {
-				mutex_exit(&rpipe->pipe_lock);
-				break;
-			}
-
-			/*
-			 * don't block on non-blocking I/O
-			 */
-			if (fp->f_flag & FNONBLOCK) {
-				mutex_exit(&rpipe->pipe_lock);
-				error = EAGAIN;
-				break;
-			}
-
-			/*
-			 * Unlock the pipe buffer for our remaining processing.
-			 * We will either break out with an error or we will
-			 * sleep and relock to loop.
-			 */
-			pipeunlock(rpipe);
-
-			/*
-			 * The PIPE_DIRECTR flag is not under the control
-			 * of the long-term lock (see pipe_direct_write()),
-			 * so re-check now while holding the spin lock.
-			 */
-			if ((rpipe->pipe_state & PIPE_DIRECTR) != 0)
-				goto again;
-
-			/*
-			 * We want to read more, wake up select/poll.
-			 */
-			pipeselwakeup(rpipe, rpipe->pipe_peer, POLL_IN);
-
-			/*
-			 * If the "write-side" is blocked, wake it up now.
-			 */
-			if (rpipe->pipe_state & PIPE_WANTW) {
-				rpipe->pipe_state &= ~PIPE_WANTW;
-				cv_broadcast(&rpipe->pipe_cv);
-			}
-
-			/* Now wait until the pipe is filled */
-			rpipe->pipe_state |= PIPE_WANTR;
-			error = cv_wait_sig(&rpipe->pipe_cv,
-			    &rpipe->pipe_lock);
-			if (error != 0)
-				goto unlocked_error;
-			goto again;
+			continue;
 		}
+#endif
+		/*
+		 * Break if some data was read.
+		 */
+		if (nread > 0) {
+			mutex_exit(&rpipe->pipe_lock);
+			break;
+		}
+
+		/*
+		 * detect EOF condition
+		 * read returns 0 on EOF, no need to set error
+		 */
+		if (rpipe->pipe_state & PIPE_EOF) {
+			mutex_exit(&rpipe->pipe_lock);
+			break;
+		}
+
+		/*
+		 * don't block on non-blocking I/O
+		 */
+		if (fp->f_flag & FNONBLOCK) {
+			mutex_exit(&rpipe->pipe_lock);
+			error = EAGAIN;
+			break;
+		}
+
+		/*
+		 * Unlock the pipe buffer for our remaining processing.
+		 * We will either break out with an error or we will
+		 * sleep and relock to loop.
+		 */
+		pipeunlock(rpipe);
+
+		/*
+		 * Re-check to see if more direct writes are pending.
+		 */
+		if ((rpipe->pipe_state & PIPE_DIRECTR) != 0)
+			goto again;
+
+		/*
+		 * We want to read more, wake up select/poll.
+		 */
+		pipeselwakeup(rpipe, rpipe->pipe_peer, POLL_IN);
+
+		/*
+		 * If the "write-side" is blocked, wake it up now.
+		 */
+		if (rpipe->pipe_state & PIPE_WANTW) {
+			rpipe->pipe_state &= ~PIPE_WANTW;
+			cv_broadcast(&rpipe->pipe_cv);
+		}
+
+		/* Now wait until the pipe is filled */
+		rpipe->pipe_state |= PIPE_WANTR;
+		error = cv_wait_sig(&rpipe->pipe_cv, &rpipe->pipe_lock);
+		if (error != 0)
+			goto unlocked_error;
+		goto again;
 	}
 
 	if (error == 0)
@@ -704,15 +709,14 @@ pipe_direct_write(struct file *fp, struct pipe *wpipe, struct uio *uio)
 	/* Now we can put the pipe in direct write mode */
 	wpipe->pipe_map.pos = bpos;
 	wpipe->pipe_map.cnt = bcnt;
-	wpipe->pipe_state |= PIPE_DIRECTW;
 
 	/*
-	 * But before we can let someone do a direct read,
-	 * we have to wait until the pipe is drained.
+	 * But before we can let someone do a direct read, we
+	 * have to wait until the pipe is drained.  Release the
+	 * pipe lock while we wait.
 	 */
-
-	/* Relase the pipe lock while we wait */
 	mutex_enter(&wpipe->pipe_lock);
+	wpipe->pipe_state |= PIPE_DIRECTW;
 	pipeunlock(wpipe);
 
 	while (error == 0 && wpipe->pipe_buffer.cnt > 0) {
@@ -747,6 +751,7 @@ pipe_direct_write(struct file *fp, struct pipe *wpipe, struct uio *uio)
 
 	/* Acquire the pipe lock and cleanup */
 	(void)pipelock(wpipe, 0);
+
 	if (pgs != NULL) {
 		pmap_kremove(wpipe->pipe_map.kva, blen);
 		uvm_unloan(pgs, npages, UVM_LOAN_TOPAGE);
@@ -810,6 +815,8 @@ retry:
 	else if (mutex_tryenter(&wpipe->pipe_lock) == 0) {
 		/* Deal with race for peer */
 		mutex_exit(&rpipe->pipe_lock);
+		/* XXX Might be about to deadlock w/kernel_lock. */
+		yield();
 		goto retry;
 	} else if ((wpipe->pipe_state & PIPE_EOF) != 0) {
 		mutex_exit(&wpipe->pipe_lock);
@@ -1157,6 +1164,8 @@ retry:
 	if (wpipe != NULL && mutex_tryenter(&wpipe->pipe_lock) == 0) {
 		/* Deal with race for peer */
 		mutex_exit(&rpipe->pipe_lock);
+		/* XXX Might be about to deadlock w/kernel_lock. */
+		yield();
 		goto retry;
 	}
 
@@ -1295,6 +1304,8 @@ pipeclose(struct file *fp, struct pipe *pipe)
 		}
 		if (!rw_tryenter(&pipe_peer_lock, RW_READER)) {
 			mutex_exit(&pipe->pipe_lock);
+			/* XXX Might be about to deadlock w/kernel_lock. */
+			yield();
 			goto retry;
 		}
 	}
@@ -1307,6 +1318,8 @@ pipeclose(struct file *fp, struct pipe *pipe)
 		if (mutex_tryenter(&ppipe->pipe_lock) == 0) {
 			mutex_exit(&pipe->pipe_lock);
 			rw_exit(&pipe_peer_lock);
+			/* XXX Might be about to deadlock w/kernel_lock. */
+			yield();
 			goto retry;
 		}
 		pipeselwakeup(ppipe, ppipe, POLL_HUP);
@@ -1329,6 +1342,7 @@ pipeclose(struct file *fp, struct pipe *pipe)
 	mutex_destroy(&pipe->pipe_lock);
 	cv_destroy(&pipe->pipe_cv);
 	cv_destroy(&pipe->pipe_lkcv);
+	seldestroy(&pipe->pipe_sel);
 	pool_put(&pipe_pool, pipe);
 }
 

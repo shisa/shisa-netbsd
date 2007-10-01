@@ -1,4 +1,4 @@
-/*	$NetBSD: ufsmount.h,v 1.28 2007/03/04 06:03:48 christos Exp $	*/
+/*	$NetBSD: ufsmount.h,v 1.32 2007/09/10 23:47:23 pooka Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1989, 1993
@@ -34,6 +34,8 @@
 #ifndef _UFS_UFS_UFSMOUNT_H_
 #define _UFS_UFS_UFSMOUNT_H_
 
+#include <sys/mount.h> /* struct export_args30 */
+
 /*
  * Arguments to mount UFS-based filesystems
  */
@@ -57,7 +59,10 @@ struct mfs_args {
 #include "opt_ffs.h"
 #endif
 
+#include <sys/mutex.h>
+
 #include <ufs/ufs/extattr.h>
+#include <ufs/ufs/quota.h>
 
 struct buf;
 struct inode;
@@ -92,12 +97,11 @@ struct ufsmount {
 	u_long	um_lognindir;			/* log2 of um_nindir */
 	u_long	um_bptrtodb;			/* indir ptr to disk block */
 	u_long	um_seqinc;			/* inc between seq blocks */
+	kmutex_t um_lock;			/* lock on global data */
 	time_t	um_btime[MAXQUOTAS];		/* block quota time limit */
 	time_t	um_itime[MAXQUOTAS];		/* inode quota time limit */
 	char	um_qflags[MAXQUOTAS];		/* quota specific flags */
 	void	*um_oldfscompat;		/* save 4.2 rotbl */
-	TAILQ_HEAD(inodelst, inode) um_snapshots; /* list of active snapshots */
-	daddr_t	*um_snapblklist;		/* snapshot block hints list */
 	int	um_maxsymlinklen;
 	int	um_dirblksiz;
 	u_int64_t um_maxfilesize;

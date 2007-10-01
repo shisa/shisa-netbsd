@@ -1,4 +1,4 @@
-/*	$NetBSD: if_bridge.c,v 1.51 2007/03/12 18:18:35 ad Exp $	*/
+/*	$NetBSD: if_bridge.c,v 1.54 2007/08/27 14:59:11 dyoung Exp $	*/
 
 /*
  * Copyright 2001 Wasabi Systems, Inc.
@@ -80,7 +80,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_bridge.c,v 1.51 2007/03/12 18:18:35 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_bridge.c,v 1.54 2007/08/27 14:59:11 dyoung Exp $");
 
 #include "opt_bridge_ipf.h"
 #include "opt_inet.h"
@@ -377,8 +377,8 @@ bridge_clone_create(struct if_clone *ifc, int unit)
 	/* Initialize our routing table. */
 	bridge_rtable_init(sc);
 
-	callout_init(&sc->sc_brcallout);
-	callout_init(&sc->sc_bstpcallout);
+	callout_init(&sc->sc_brcallout, 0);
+	callout_init(&sc->sc_bstpcallout, 0);
 
 	LIST_INIT(&sc->sc_iflist);
 
@@ -1514,7 +1514,7 @@ bridge_input(struct ifnet *ifp, struct mbuf *m)
 	 */
 	LIST_FOREACH(bif, &sc->sc_iflist, bif_next) {
 		/* It is destined for us. */
-		if (memcmp(LLADDR(bif->bif_ifp->if_sadl), eh->ether_dhost,
+		if (memcmp(CLLADDR(bif->bif_ifp->if_sadl), eh->ether_dhost,
 		    ETHER_ADDR_LEN) == 0
 #if NCARP > 0
 		    || (bif->bif_ifp->if_carp && carp_ourether(bif->bif_ifp->if_carp,
@@ -1529,7 +1529,7 @@ bridge_input(struct ifnet *ifp, struct mbuf *m)
 		}
 
 		/* We just received a packet that we sent out. */
-		if (memcmp(LLADDR(bif->bif_ifp->if_sadl), eh->ether_shost,
+		if (memcmp(CLLADDR(bif->bif_ifp->if_sadl), eh->ether_shost,
 		    ETHER_ADDR_LEN) == 0
 #if NCARP > 0
 		    || (bif->bif_ifp->if_carp && carp_ourether(bif->bif_ifp->if_carp,

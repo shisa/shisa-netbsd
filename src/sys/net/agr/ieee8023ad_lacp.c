@@ -1,4 +1,4 @@
-/*	$NetBSD: ieee8023ad_lacp.c,v 1.6 2007/05/20 07:57:03 yamt Exp $	*/
+/*	$NetBSD: ieee8023ad_lacp.c,v 1.8 2007/08/26 22:59:09 dyoung Exp $	*/
 
 /*-
  * Copyright (c)2005 YAMAMOTO Takashi,
@@ -27,7 +27,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ieee8023ad_lacp.c,v 1.6 2007/05/20 07:57:03 yamt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ieee8023ad_lacp.c,v 1.8 2007/08/26 22:59:09 dyoung Exp $");
 
 #include <sys/param.h>
 #include <sys/callout.h>
@@ -178,7 +178,7 @@ lacp_fill_actorinfo(struct agr_port *port, struct lacp_peerinfo *info)
 
 	info->lip_systemid.lsi_prio = htobe16(LACP_SYSTEM_PRIO);
 	memcpy(&info->lip_systemid.lsi_mac,
-	    LLADDR(port->port_ifp->if_sadl), ETHER_ADDR_LEN);
+	    CLLADDR(port->port_ifp->if_sadl), ETHER_ADDR_LEN);
 	info->lip_portid.lpi_prio = htobe16(LACP_PORT_PRIO);
 	info->lip_portid.lpi_portno = htobe16(port->port_ifp->if_index);
 	info->lip_state = lp->lp_state;
@@ -458,7 +458,7 @@ ieee8023ad_ctor(struct agr_softc *sc)
 
 	lsc->lsc_active_aggregator = NULL;
 	TAILQ_INIT(&lsc->lsc_aggregators);
-	callout_init(&lsc->lsc_transit_callout);
+	callout_init(&lsc->lsc_transit_callout, 0);
 	callout_setfunc(&lsc->lsc_transit_callout, lacp_transit_expire, sc);
 }
 

@@ -1,4 +1,4 @@
-/* $NetBSD: wskbd.c,v 1.103 2007/04/04 14:50:21 mishka Exp $ */
+/* $NetBSD: wskbd.c,v 1.105 2007/08/06 03:07:52 macallan Exp $ */
 
 /*
  * Copyright (c) 1996, 1997 Christopher G. Demetriou.  All rights reserved.
@@ -79,7 +79,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: wskbd.c,v 1.103 2007/04/04 14:50:21 mishka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: wskbd.c,v 1.105 2007/08/06 03:07:52 macallan Exp $");
 
 #include "opt_ddb.h"
 #include "opt_kgdb.h"
@@ -166,7 +166,7 @@ struct wskbd_softc {
 #endif
 
 	int	sc_repeating;		/* we've called timeout() */
-	struct callout sc_repeat_ch;
+	callout_t sc_repeat_ch;
 	u_int	sc_repeat_type;
 	int	sc_repeat_value;
 
@@ -414,7 +414,7 @@ wskbd_attach(struct device *parent, struct device *self, void *aux)
 		wskbd_update_layout(sc->id, ap->keymap->layout);
 	}
 
-	callout_init(&sc->sc_repeat_ch);
+	callout_init(&sc->sc_repeat_ch, 0);
 
 	sc->id->t_sc = sc;
 
@@ -720,14 +720,26 @@ wskbd_holdscreen(struct wskbd_softc *sc, int hold)
 	if (sc->sc_base.me_dispdv != NULL) {
 		wsdisplay_kbdholdscreen(sc->sc_base.me_dispdv, hold);
 		new_state = sc->sc_ledstate;
-		if (hold)
+		if (hold) {
+#ifdef WSDISPLAY_SCROLLSUPPORT
+			sc->sc_scroll_data.mode = WSKBD_SCROLL_MODE_HOLD;
+#endif
 			new_state |= WSKBD_LED_SCROLL;
-		else
+		} else {
+#ifdef WSDISPLAY_SCROLLSUPPORT
+			sc->sc_scroll_data.mode = WSKBD_SCROLL_MODE_NORMAL;
+#endif
 			new_state &= ~WSKBD_LED_SCROLL;
+		}
 		if (new_state != sc->sc_ledstate) {
 			(*sc->sc_accessops->set_leds)(sc->sc_accesscookie,
 						      new_state);
 			sc->sc_ledstate = new_state;
+#ifdef WSDISPLAY_SCROLLSUPPORT
+			if (!hold)
+				wsdisplay_scroll(sc->sc_base.me_dispdv,
+				    WSDISPLAY_SCROLL_RESET);
+#endif
 		}
 	}
 }
@@ -1581,7 +1593,7 @@ wskbd_translate(struct wskbd_internal *id, u_int type, int value)
 		update_leds(id);
 		return (0);
 	}
-
+	
 	if (sc != NULL) {
 		if (value < 0 || value >= sc->sc_maplen) {
 #ifdef DEBUG

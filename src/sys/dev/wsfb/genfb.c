@@ -1,4 +1,4 @@
-/*	$NetBSD: genfb.c,v 1.4 2007/04/14 19:56:05 macallan Exp $ */
+/*	$NetBSD: genfb.c,v 1.10 2007/08/30 15:40:41 jmmv Exp $ */
 
 /*-
  * Copyright (c) 2007 Michael Lorenz
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: genfb.c,v 1.4 2007/04/14 19:56:05 macallan Exp $");
+__KERNEL_RCSID(0, "$NetBSD: genfb.c,v 1.10 2007/08/30 15:40:41 jmmv Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -41,6 +41,7 @@ __KERNEL_RCSID(0, "$NetBSD: genfb.c,v 1.4 2007/04/14 19:56:05 macallan Exp $");
 #include <sys/ioctl.h>
 #include <sys/kernel.h>
 #include <sys/systm.h>
+#include <sys/malloc.h>
 
 #include <dev/wscons/wsconsio.h>
 #include <dev/wscons/wsdisplayvar.h>
@@ -102,7 +103,7 @@ genfb_init(struct genfb_softc *sc)
 
 	if (!prop_dictionary_get_uint32(dict, "linebytes", &sc->sc_stride))
 		sc->sc_stride = (sc->sc_width * sc->sc_depth) >> 3;
-	sc->sc_fbsize = sc->sc_width * sc->sc_stride;
+	sc->sc_fbsize = sc->sc_height * sc->sc_stride;
 
 	/* optional colour map callback */
 	sc->sc_cmcb = NULL;
@@ -119,8 +120,13 @@ genfb_attach(struct genfb_softc *sc, struct genfb_ops *ops)
 	prop_dictionary_t dict;
 	struct rasops_info *ri;
 	long defattr;
-	int console, i, j;
- 
+	int i, j;
+	bool console;
+
+	aprint_verbose("%s: framebuffer at %p, size %dx%d, depth %d, "
+	    "stride %d\n", sc->sc_dev.dv_xname, sc->sc_fbaddr,
+	    sc->sc_width, sc->sc_height, sc->sc_depth, sc->sc_stride);
+
 	sc->sc_defaultscreen_descr = (struct wsscreen_descr){
 		"default",
 		0, 0,
@@ -134,6 +140,8 @@ genfb_attach(struct genfb_softc *sc, struct genfb_ops *ops)
 	memcpy(&sc->sc_ops, ops, sizeof(struct genfb_ops));
 	sc->sc_mode = WSDISPLAYIO_MODE_EMUL;
 
+	sc->sc_shadowfb = malloc(sc->sc_fbsize, M_DEVBUF, M_WAITOK);
+
 	dict = device_properties(&sc->sc_dev);
 
 	prop_dictionary_get_bool(dict, "is_console", &console);
@@ -141,6 +149,9 @@ genfb_attach(struct genfb_softc *sc, struct genfb_ops *ops)
 	vcons_init(&sc->vd, sc, &sc->sc_defaultscreen_descr,
 	    &genfb_accessops);
 	sc->vd.init_screen = genfb_init_screen;
+
+	/* Do not print anything between this point and the screen
+	 * clear operation below.  Otherwise it will be lost. */
 
 	ri = &sc->sc_console_screen.scr_ri;
 
@@ -160,10 +171,14 @@ genfb_attach(struct genfb_softc *sc, struct genfb_ops *ops)
 		 * since we're not the console we can postpone the rest
 		 * until someone actually allocates a screen for us
 		 */
+		(*ri->ri_ops.allocattr)(ri, 0, 0, 0, &defattr);
 	}
 
+	/* Clear the whole screen to bring it to a known state. */
+	(*ri->ri_ops.eraserows)(ri, 0, ri->ri_rows, defattr);
+
 	j = 0;
-	for (i = 0; i < (1 << (sc->sc_depth - 1)); i++) {
+	for (i = 0; i < (1 << sc->sc_depth); i++) {
 
 		sc->sc_cmap_red[i] = rasops_cmap[j];
 		sc->sc_cmap_green[i] = rasops_cmap[j + 1];
@@ -195,6 +210,8 @@ genfb_ioctl(void *v, void *vs, u_long cmd, void *data, int flag,
 	switch (cmd) {
 
 		case WSDISPLAYIO_GINFO:
+			if (ms == NULL)
+				return ENODEV;
 			wdf = (void *)data;
 			wdf->height = ms->scr_ri.ri_height;
 			wdf->width = ms->scr_ri.ri_width;
@@ -259,7 +276,12 @@ genfb_init_screen(void *cookie, struct vcons_screen *scr,
 	ri->ri_stride = sc->sc_stride;
 	ri->ri_flg = RI_CENTER | RI_FULLCLEAR;
 
-	ri->ri_bits = (char *)sc->sc_fbaddr;
+	if (sc->sc_shadowfb != NULL) {
+
+		ri->ri_hwbits = (char *)sc->sc_fbaddr;
+		ri->ri_bits = (char *)sc->sc_shadowfb;
+	} else
+		ri->ri_bits = (char *)sc->sc_fbaddr;
 
 	if (existing) {
 		ri->ri_flg |= RI_CLEAR;
@@ -343,7 +365,7 @@ genfb_restore_palette(struct genfb_softc *sc)
 {
 	int i;
 
-	for (i = 0; i < (1 << (sc->sc_depth - 1)); i++) {
+	for (i = 0; i < (1 << sc->sc_depth); i++) {
 		genfb_putpalreg(sc, i, sc->sc_cmap_red[i],
 		    sc->sc_cmap_green[i], sc->sc_cmap_blue[i]);
 	}

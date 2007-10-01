@@ -1,4 +1,4 @@
-/*	$NetBSD: locore.S,v 1.26 2007/06/28 20:50:30 bouyer Exp $	*/
+/*	$NetBSD: locore.S,v 1.30 2007/09/27 21:14:04 bouyer Exp $	*/
 /*	NetBSD: locore.S,v 1.31 2004/08/26 10:12:33 junyoung Exp	*/
 
 /*
@@ -668,6 +668,9 @@ switch_skipsave:
 	movl	PCB_EBP(%ebx),%ebp
 	movl	PCB_ESP(%ebx),%esp
 
+	/* Set curlwp. */
+	movl	%edi,CPUVAR(CURLWP)
+
 	/*
 	 * Restore the rest of newlwp's context.
 	 *
@@ -680,7 +683,15 @@ switch_skipsave:
 	call	_C_LABEL(i386_switch_context)
 	addl	$4,%esp
 
-	movl	$0,CPUVAR(RESCHED)
+	STIC(%ebx)
+	jz 1f
+	call	_C_LABEL(stipending)
+	testl	%eax,%eax
+	jz 1f
+	pushl  CPUVAR(ILEVEL)
+	call	_C_LABEL(Xspllower) # process pending interrupts
+	addl    $4,%esp
+1:
 
 	/*
 	 *  Check for restartable atomic sequences (RAS)
@@ -691,14 +702,6 @@ switch_skipsave:
 	jne	check_ras
 
 switch_return:
-	STIC(%ebx)
-	jz 1f
-	call	_C_LABEL(stipending)
-	testl	%eax,%eax
-	jz 1f
-	pushl  CPUVAR(ILEVEL)
-	call	_C_LABEL(Xspllower) # process pending interrupts
-1:
 	movl	%esi,%eax	# return 'oldlwp'
 	popl	%edi
 	popl	%esi
@@ -706,14 +709,15 @@ switch_return:
 	ret
 
 check_ras:
-	movl	L_MD_REGS(%edi),%ebx
-	pushl	TF_EIP(%ebx)
-	pushl	L_PROC(%edi)
+	movl	L_MD_REGS(%edi),%ecx
+	pushl	TF_EIP(%ecx)
+	pushl	%eax
 	call	_C_LABEL(ras_lookup)
 	addl	$8,%esp
 	cmpl	$-1,%eax
 	je	switch_return
-	movl	%eax,TF_EIP(%ebx)
+	movl	L_MD_REGS(%edi),%ecx
+	movl	%eax,TF_EIP(%ecx)
 	jmp	switch_return
 
 /*

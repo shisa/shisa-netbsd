@@ -1,4 +1,4 @@
-/*	$NetBSD: dtfs_subr.c,v 1.18 2007/07/01 22:59:10 pooka Exp $	*/
+/*	$NetBSD: dtfs_subr.c,v 1.20 2007/07/22 13:19:38 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006  Antti Kantee.  All Rights Reserved.
@@ -111,6 +111,7 @@ dtfs_genfile(struct puffs_node *dir, const struct puffs_cn *pcn,
 	dfd = emalloc(sizeof(struct dtfs_dirent));
 	dfd->dfd_node = newpn;
 	dfd->dfd_name = estrndup(pcn->pcn_name, pcn->pcn_namelen);
+	dfd->dfd_namelen = strlen(dfd->dfd_name);
 	dfd->dfd_parent = dir;
 	dtfs_adddent(dir, dfd);
 
@@ -165,7 +166,8 @@ dtfs_dirgetbyname(struct dtfs_file *searchdir, const char *fname, size_t fnlen)
 	struct dtfs_dirent *dirent;
 
 	LIST_FOREACH(dirent, &searchdir->df_dirents, dfd_entries)
-		if (strncmp(dirent->dfd_name, fname, fnlen) == 0)
+		if (dirent->dfd_namelen == fnlen
+		    && strncmp(dirent->dfd_name, fname, fnlen) == 0)
 			return dirent;
 
 	return NULL;
@@ -255,9 +257,12 @@ dtfs_setsize(struct puffs_node *pn, off_t newsize)
 		 * if extended, set storage to zero
 		 * to match correct behaviour
 		 */ 
-		if (!shrinks)
-			for (i = df->df_numblocks; i < newblocks; i++)
+		if (!shrinks) {
+			for (i = df->df_numblocks; i < newblocks; i++) {
 				df->df_blocks[i] = emalloc(DTFS_BLOCKSIZE);
+				memset(df->df_blocks[i], 0, DTFS_BLOCKSIZE);
+			}
+		}
 
 		df->df_datalen = newsize;
 		df->df_numblocks = newblocks;

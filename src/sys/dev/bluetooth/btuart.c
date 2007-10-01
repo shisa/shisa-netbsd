@@ -1,4 +1,4 @@
-/*	$NetBSD: btuart.c,v 1.5 2007/03/13 19:26:06 plunky Exp $	*/
+/*	$NetBSD: btuart.c,v 1.8 2007/09/03 12:38:27 kiyohara Exp $	*/
 /*
  * Copyright (c) 2006, 2007 KIYOHARA Takashi
  * All rights reserved.
@@ -26,7 +26,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: btuart.c,v 1.5 2007/03/13 19:26:06 plunky Exp $");
+__KERNEL_RCSID(0, "$NetBSD: btuart.c,v 1.8 2007/09/03 12:38:27 kiyohara Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -55,7 +55,6 @@ __KERNEL_RCSID(0, "$NetBSD: btuart.c,v 1.5 2007/03/13 19:26:06 plunky Exp $");
 
 #include "ioconf.h"
 
-#define BTUART_DEBUG
 #ifdef BTUART_DEBUG
 int btuart_debug = 1;
 #endif
@@ -370,15 +369,11 @@ init_ericsson(struct btuart_softc *sc)
 		{      B0, 0xff }
 	};
 
-printf("sc_baud=%d, init_speed=%d\n", sc->sc_baud, sc->sc_bth4hci.init_baud);
 	for (i = 0; ericsson_baudtbl[i].baud != sc->sc_baud; i++)
 		if (ericsson_baudtbl[i].baud == B0)
 			return EINVAL;
 
 	m = m_gethdr(M_WAIT, MT_DATA);
-	if (m == NULL)
-		return ENOMEM;
-
 	p = mtod(m, hci_cmd_hdr_t *);
 	p->type = HCI_CMD_PKT;
 	p->opcode = opcode;
@@ -434,9 +429,6 @@ init_digi(struct btuart_softc *sc)
 	}
 
 	m = m_gethdr(M_WAIT, MT_DATA);
-	if (m == NULL)
-		return ENOMEM;
-
 	p = mtod(m, hci_cmd_hdr_t *);
 	p->type = HCI_CMD_PKT;
 #define HCI_CMD_DIGIANSWER_SET_UART_BAUD_RATE	0xfc07		/* XXXX */
@@ -516,9 +508,6 @@ init_csr(struct btuart_softc *sc)
 	} bccmd;
 
 	m = m_gethdr(M_WAIT, MT_DATA);
-	if (m == NULL)
-		return ENOMEM;
-
 	p = mtod(m, hci_cmd_hdr_t *);
 	p->type = HCI_CMD_PKT;
 	p->opcode = opcode;
@@ -588,9 +577,6 @@ init_swave(struct btuart_softc *sc)
 			return EINVAL;
 
 	m = m_gethdr(M_WAIT, MT_DATA);
-	if (m == NULL)
-		return ENOMEM;
-
 	/* first send 'param access set' command. */
 	p = mtod(m, hci_cmd_hdr_t *);
 	p->type = HCI_CMD_PKT;
@@ -673,9 +659,6 @@ init_st(struct btuart_softc *sc)
 			return EINVAL;
 
 	m = m_gethdr(M_WAIT, MT_DATA);
-	if (m == NULL)
-		return ENOMEM;
-
 	p = mtod(m, hci_cmd_hdr_t *);
 	p->type = HCI_CMD_PKT;
 #define HCI_CMD_ST_SET_UART_BAUD_RATE	0xfc46	/* XXXX */
@@ -708,8 +691,6 @@ firmload_stlc2500(struct btuart_softc *sc, int size, char *buf)
 	uint8_t seq;
 
 	m = m_gethdr(M_WAIT, MT_DATA);
-	if (m == NULL)
-		return ENOMEM;
 	seq = 0;
 	offset = 0;
 	error = 0;
@@ -762,9 +743,6 @@ init_stlc2500(struct btuart_softc *sc)
 	const char *suffix[] = { ".ptc", ".ssf", NULL };
 
 	m = m_gethdr(M_WAIT, MT_DATA);
-	if (m == NULL)
-		return ENOMEM;
-
 	p = mtod(m, hci_cmd_hdr_t *);
 	opcode = htole16(HCI_CMD_READ_LOCAL_VER);
 	p->type = HCI_CMD_PKT;
@@ -931,8 +909,6 @@ init_bcm2035(struct btuart_softc *sc)
 			return EINVAL;
 
 	m = m_gethdr(M_WAIT, MT_DATA);
-	if (m == NULL)
-		return ENOMEM;
 
 	/*
 	 * XXXX: Should we send some commands?

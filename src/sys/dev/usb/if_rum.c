@@ -1,5 +1,5 @@
 /*	$OpenBSD: if_rum.c,v 1.40 2006/09/18 16:20:20 damien Exp $	*/
-/*	$NetBSD: if_rum.c,v 1.12 2007/06/09 12:13:12 kiyohara Exp $	*/
+/*	$NetBSD: if_rum.c,v 1.15 2007/08/26 22:45:59 dyoung Exp $	*/
 
 /*-
  * Copyright (c) 2005, 2006 Damien Bergamini <damien.bergamini@free.fr>
@@ -24,7 +24,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_rum.c,v 1.12 2007/06/09 12:13:12 kiyohara Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_rum.c,v 1.15 2007/08/26 22:45:59 dyoung Exp $");
 
 #include "bpfilter.h"
 
@@ -477,6 +477,9 @@ USB_DETACH(rum)
 	struct ifnet *ifp = &sc->sc_if;
 	int s;
 
+	if (!ifp->if_softc)
+		return 0;
+
 	s = splusb();
 
 	rum_stop(ifp, 1);
@@ -498,9 +501,6 @@ USB_DETACH(rum)
 		usbd_abort_pipe(sc->sc_tx_pipeh);
 		usbd_close_pipe(sc->sc_tx_pipeh);
 	}
-
-	rum_free_rx_list(sc);
-	rum_free_tx_list(sc);
 
 #if NBPFILTER > 0
 	bpfdetach(ifp);
@@ -1982,7 +1982,7 @@ rum_init(struct ifnet *ifp)
 	/* clear STA registers */
 	rum_read_multi(sc, RT2573_STA_CSR0, sc->sta, sizeof sc->sta);
 
-	IEEE80211_ADDR_COPY(ic->ic_myaddr, LLADDR(ifp->if_sadl));
+	IEEE80211_ADDR_COPY(ic->ic_myaddr, CLLADDR(ifp->if_sadl));
 	rum_set_macaddr(sc, ic->ic_myaddr);
 
 	/* initialize ASIC */

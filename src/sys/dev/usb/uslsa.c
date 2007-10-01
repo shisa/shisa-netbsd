@@ -1,4 +1,4 @@
-/* $NetBSD: uslsa.c,v 1.3 2007/06/13 17:14:25 nathanw Exp $ */
+/* $NetBSD$ */
 
 /*
  * Copyright (c) 2007 The NetBSD Foundation, Inc.
@@ -41,7 +41,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: uslsa.c,v 1.3 2007/06/13 17:14:25 nathanw Exp $");
+__KERNEL_RCSID(0, "$NetBSD$");
 
 #include <sys/param.h>
 #include <sys/systm.h>

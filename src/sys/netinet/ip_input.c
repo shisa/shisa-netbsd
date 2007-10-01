@@ -1,4 +1,4 @@
-/*	$NetBSD: ip_input.c,v 1.249 2007/05/02 20:40:25 dyoung Exp $	*/
+/*	$NetBSD: ip_input.c,v 1.253 2007/09/11 14:18:09 degroote Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -98,7 +98,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ip_input.c,v 1.249 2007/05/02 20:40:25 dyoung Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ip_input.c,v 1.253 2007/09/11 14:18:09 degroote Exp $");
 
 #include "opt_inet.h"
 #include "opt_gateway.h"
@@ -904,9 +904,7 @@ ours:
 		 */
 		IPQ_LOCK();
 		hash = IPREASS_HASH(ip->ip_src.s_addr, ip->ip_id);
-		/* XXX LIST_FOREACH(fp, &ipq[hash], ipq_q) */
-		for (fp = LIST_FIRST(&ipq[hash]); fp != NULL;
-		     fp = LIST_NEXT(fp, ipq_q)) {
+		LIST_FOREACH(fp, &ipq[hash], ipq_q) {
 			if (ip->ip_id == fp->ipq_id &&
 			    in_hosteq(ip->ip_src, fp->ipq_src) &&
 			    in_hosteq(ip->ip_dst, fp->ipq_dst) &&
@@ -1015,7 +1013,6 @@ found:
 			/* XXX error stat??? */
 			error = EINVAL;
 DPRINTF(("ip_input: no SP, packet discarded\n"));/*XXX*/
-			goto bad;
 		}
 		splx(s);
 		if (error)
@@ -1895,7 +1892,7 @@ ip_forward(struct mbuf *m, int srcrt)
 	 */
 	if (rt->rt_ifp == m->m_pkthdr.rcvif &&
 	    (rt->rt_flags & (RTF_DYNAMIC|RTF_MODIFIED)) == 0 &&
-	    !in_nullhost(satosin(rt_key(rt))->sin_addr) &&
+	    !in_nullhost(satocsin(rt_getkey(rt))->sin_addr) &&
 	    ipsendredirects && !srcrt) {
 		if (rt->rt_ifa &&
 		    (ip->ip_src.s_addr & ifatoia(rt->rt_ifa)->ia_subnetmask) ==
@@ -2081,13 +2078,12 @@ ip_savecontrol(struct inpcb *inp, struct mbuf **mp, struct ip *ip,
 	if (inp->inp_flags & INP_RECVIF) {
 		struct sockaddr_dl sdl;
 
-		sdl.sdl_len = offsetof(struct sockaddr_dl, sdl_data[0]);
-		sdl.sdl_family = AF_LINK;
-		sdl.sdl_index = m->m_pkthdr.rcvif ?
-		    m->m_pkthdr.rcvif->if_index : 0;
-		sdl.sdl_nlen = sdl.sdl_alen = sdl.sdl_slen = 0;
-		*mp = sbcreatecontrol((void *) &sdl, sdl.sdl_len,
-		    IP_RECVIF, IPPROTO_IP);
+		sockaddr_dl_init(&sdl, sizeof(sdl),
+		    (m->m_pkthdr.rcvif != NULL)
+		        ?  m->m_pkthdr.rcvif->if_index
+			: 0,
+			0, NULL, 0, NULL, 0);
+		*mp = sbcreatecontrol(&sdl, sdl.sdl_len, IP_RECVIF, IPPROTO_IP);
 		if (*mp)
 			mp = &(*mp)->m_next;
 	}

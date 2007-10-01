@@ -1,4 +1,4 @@
-#       $NetBSD: Makefile,v 1.238 2007/07/03 12:14:24 yamt Exp $
+#       $NetBSD: Makefile,v 1.249 2007/09/24 20:44:23 wiz Exp $
 
 #	Makefile for section 9 (kernel function and variable) manual pages.
 
@@ -12,6 +12,7 @@ MAN=	altq.9 arc4random.9 arp.9 audio.9 autoconf.9 \
 	cpu_idle.9 cpu_initclocks.9 cpu_need_resched.9 \
 	cpu_number.9 cpu_reboot.9 cpu_rootconf.9 \
 	cpu_startup.9 cpu_swapout.9 cpu_switchto.9 \
+	csf.9 \
 	curproc.9 \
 	delay.9 disk.9 ddc.9 disklabel.9 dofileread.9 \
 	dopowerhooks.9 do_setresuid.9 doshutdownhooks.9 driver.9 \
@@ -24,14 +25,16 @@ MAN=	altq.9 arc4random.9 arp.9 audio.9 autoconf.9 \
 	ieee80211_radiotap.9 iic.9 imax.9 \
 	in_getifa.9 \
 	in4_cksum.9 inittodr.9 intro.9 ioasic.9 ioctl.9 ipkdb.9 isa.9 \
-	isapnp.9 itimerfix.9 kauth.9 kcopy.9 kcont.9 \
+	isapnp.9 itimerfix.9 kauth.9 kcopy.9 \
 	kmem_alloc.9 kmem_free.9 kmem_zalloc.9 \
+	kpause.9 \
 	kfilter_register.9 knote.9 \
 	kprintf.9 kthread.9 linedisc.9 lock.9 log.9 ltsleep.9 \
 	makeiplcookie.9 \
 	malloc.9 mb.9 mbuf.9 mca.9 memcmp.9 memcpy.9 memoryallocators.9 \
 	memmove.9 memset.9 \
-	microtime.9 microuptime.9 mstohz.9 mutex.9 m_tag.9 namecache.9 \
+	microtime.9 microuptime.9 mi_switch.9 \
+	mstohz.9 mutex.9 m_tag.9 namecache.9 \
 	namei.9 opencrypto.9 optstr.9 \
 	panic.9 pci.9 pci_configure_bus.9 pci_intr.9 pckbport.9 \
 	pcmcia.9 pfil.9 physio.9 pmap.9 pmatch.9 pmc.9 \
@@ -39,9 +42,9 @@ MAN=	altq.9 arc4random.9 arp.9 audio.9 autoconf.9 \
 	preempt.9 \
 	radio.9 ras.9 rasops.9 ratecheck.9 resettodr.9 rnd.9 rssadapt.9 \
 	rt_timer.9 rwlock.9 RUN_ONCE.9 \
-	SCHED_LOCK.9 scheduler.9 scsipi.9 \
+	sched_4bsd.9 scsipi.9 \
 	secmodel.9 secmodel_bsd44.9 secmodel_overlay.9 \
-	setjmp.9 setrunqueue.9 shutdownhook_establish.9 \
+	setjmp.9 shutdownhook_establish.9 \
 	signal.9 softintr.9 spl.9 splraiseipl.9 store.9 suspendsched.9 \
 	sysctl.9 sysmon_envsys.9 tc.9 tcp_congctl.9 timecounter.9 time_second.9 \
 	todr.9 uiomove.9 ucom.9 userret.9 \
@@ -143,8 +146,7 @@ MLINKS+=bus_dma.9 bus_dmamap_create.9 bus_dma.9 bus_dmamap_destroy.9 \
 MLINKS+=callout.9 callout_init.9 callout.9 callout_reset.9 \
 	callout.9 callout_schedule.9 callout.9 callout_setfunc.9 \
 	callout.9 callout_stop.9 callout.9 callout_pending.9 \
-	callout.9 CALLOUT_INITIALIZER.9 \
-	callout.9 CALLOUT_INITIALIZER_SETFUNC.9 \
+	callout.9 callout_destroy.9 \
 	callout.9 timeout.9 callout.9 untimeout.9
 MLINKS+=cardbus.9 cardbus_attach_card.9 \
 	cardbus.9 cardbus_detach_card.9 \
@@ -304,10 +306,16 @@ MLINKS+=kprintf.9 printf.9 kprintf.9 printf_nolog.9 kprintf.9 sprintf.9 \
 	kprintf.9 tprintf.9 kprintf.9 tprintf_open.9 kprintf.9 tprintf_close.9 \
 	kprintf.9 aprint_normal.9 kprintf.9 aprint_naive.9 \
 	kprintf.9 aprint_verbose.9 kprintf.9 aprint_debug.9 \
-	kprintf.9 aprint_error.9 kprintf.9 aprint_get_error_count.9
+	kprintf.9 aprint_error.9 \
+	kprintf.9 aprint_normal_dev.9 kprintf.9 aprint_naive_dev.9 \
+	kprintf.9 aprint_verbose_dev.9 kprintf.9 aprint_debug_dev.9 \
+	kprintf.9 aprint_error_dev.9 \
+	kprintf.9 aprint_normal_ifnet.9 kprintf.9 aprint_naive_ifnet.9 \
+	kprintf.9 aprint_verbose_ifnet.9 kprintf.9 aprint_debug_ifnet.9 \
+	kprintf.9 aprint_error_ifnet.9 kprintf.9 aprint_get_error_count.9
 MLINKS+=kthread.9 kthread_exit.9 \
 	kthread.9 kthread_create.9 \
-	kthread.9 kthread_create1.9
+	kthread.9 kthread_destroy.9
 MLINKS+=lock.9 simple_lock_init.9 lock.9 simple_lock.9 \
 	lock.9 simple_lock_try.9 lock.9 simple_unlock.9 \
 	lock.9 simple_lock_freecheck.9 lock.9 simple_lock_dump.9  \
@@ -490,15 +498,10 @@ MLINKS+=rwlock.9 rw.9 rwlock.9 rw_init.9 rwlock.9 rw_destroy.9 \
 	rwlock.9 rw_tryenter.9 rwlock.9 rw_tryupgrade.9 \
 	rwlock.9 rw_downgrade.9 rwlock.9 rw_read_held.9 \
 	rwlock.9 rw_write_held.9 rwlock.9 rw_lock_held.9
-MLINKS+=SCHED_LOCK.9 SCHED_UNLOCK.9 \
-	SCHED_LOCK.9 sched_lock_idle.9 \
-	SCHED_LOCK.9 sched_unlock_idle.9
 MAN+=	selrecord.9
 MLINKS+=selrecord.9 selwakeup.9 \
 	selrecord.9 selnotify.9
 MLINKS+=setjmp.9 longjmp.9
-MLINKS+=setrunqueue.9 remrunqueue.9 \
-	setrunqueue.9 nextrunqueue.9
 MLINKS+=shutdownhook_establish.9 shutdownhook_disestablish.9
 MLINKS+=signal.9 siginit.9 \
 	signal.9 sigactsinit.9 \

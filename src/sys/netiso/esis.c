@@ -1,4 +1,4 @@
-/*	$NetBSD: esis.c,v 1.45 2007/03/04 06:03:32 christos Exp $	*/
+/*	$NetBSD: esis.c,v 1.49 2007/08/29 22:53:35 dyoung Exp $	*/
 
 /*-
  * Copyright (c) 1991, 1993
@@ -59,7 +59,7 @@ SOFTWARE.
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: esis.c,v 1.45 2007/03/04 06:03:32 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: esis.c,v 1.49 2007/08/29 22:53:35 dyoung Exp $");
 
 #include "opt_iso.h"
 #ifdef ISO
@@ -145,8 +145,8 @@ esis_init(void)
 
 	LIST_INIT(&esis_pcb);
 
-	callout_init(&snpac_age_ch);
-	callout_init(&esis_config_ch);
+	callout_init(&snpac_age_ch, 0);
+	callout_init(&esis_config_ch, 0);
 
 	callout_reset(&snpac_age_ch, hz, snpac_age, NULL);
 	callout_reset(&esis_config_ch, hz, esis_config, NULL);
@@ -361,13 +361,13 @@ esis_rdoutput(
 	struct sockaddr_iso siso;
 	struct ifnet   *ifp = inbound_shp->snh_ifp;
 	struct sockaddr_dl *sdl;
-	struct iso_addr *rd_gwnsap;
+	const struct iso_addr *rd_gwnsap;
 
 	if (rt->rt_flags & RTF_GATEWAY) {
 		rd_gwnsap = &satosiso(rt->rt_gateway)->siso_addr;
 		rt = rtalloc1(rt->rt_gateway, 0);
 	} else
-		rd_gwnsap = &satosiso(rt_key(rt))->siso_addr;
+		rd_gwnsap = &satocsiso(rt_getkey(rt))->siso_addr;
 	if (rt == 0 || (sdl = (struct sockaddr_dl *) rt->rt_gateway) == 0 ||
 	    sdl->sdl_family != AF_LINK) {
 		/*
@@ -415,7 +415,7 @@ esis_rdoutput(
 
 	/* Insert the snpa of better next hop */
 	*cp++ = sdl->sdl_alen;
-	bcopy(LLADDR(sdl), cp, sdl->sdl_alen);
+	bcopy(CLLADDR(sdl), cp, sdl->sdl_alen);
 	cp += sdl->sdl_alen;
 	len += (sdl->sdl_alen + 1);
 
@@ -518,15 +518,14 @@ int
 esis_insert_addr(
 	void **bufv,		/* ptr to buffer to put address into */
 	int     *len,		/* ptr to length of buffer so far */
-	struct iso_addr *isoa,	/* ptr to address */
+	const struct iso_addr *isoa,	/* ptr to address */
 	struct mbuf *m,		/* determine if there remains space */
 	int     nsellen)
 {
 	char *buf = *bufv;
 	int    newlen, result = 0;
 
-	isoa->isoa_len -= nsellen;
-	newlen = isoa->isoa_len + 1;
+	newlen = isoa->isoa_len - nsellen + 1;
 	if (newlen <= M_TRAILINGSPACE(m)) {
 		memcpy(buf, isoa, newlen);
 		*len += newlen;
@@ -534,7 +533,6 @@ esis_insert_addr(
 		m->m_len += newlen;
 		result = 1;
 	}
-	isoa->isoa_len += nsellen;
 	*bufv = buf;
 	return (result);
 }
@@ -1136,7 +1134,8 @@ isis_output(struct mbuf *m, ...)
 	sn_len = sdl->sdl_alen;
 #ifdef ARGO_DEBUG
 	if (argo_debug[D_ISISOUTPUT]) {
-		u_char *cp = (u_char *) LLADDR(sdl), *cplim = cp + sn_len;
+		const u_char *cp = (const u_char *)CLLADDR(sdl),
+		             *cplim = cp + sn_len;
 		printf("isis_output: ifp %p (%s), to: ",
 		    ifp, ifp->if_xname);
 		while (cp < cplim) {
@@ -1154,7 +1153,7 @@ isis_output(struct mbuf *m, ...)
 	else {
 		siso.siso_data[0] = AFI_SNA;
 		siso.siso_nlen = sn_len + 1;
-		bcopy(LLADDR(sdl), siso.siso_data + 1, sn_len);
+		bcopy(CLLADDR(sdl), siso.siso_data + 1, sn_len);
 	}
 	error = (ifp->if_output) (ifp, m, sisotosa(&siso), 0);
 	if (error) {

@@ -1,4 +1,4 @@
-/*	$NetBSD: ufs_readwrite.c,v 1.79 2007/06/05 12:31:35 yamt Exp $	*/
+/*	$NetBSD: ufs_readwrite.c,v 1.82 2007/09/24 16:50:58 pooka Exp $	*/
 
 /*-
  * Copyright (c) 1993
@@ -32,10 +32,9 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(1, "$NetBSD: ufs_readwrite.c,v 1.79 2007/06/05 12:31:35 yamt Exp $");
+__KERNEL_RCSID(1, "$NetBSD: ufs_readwrite.c,v 1.82 2007/09/24 16:50:58 pooka Exp $");
 
 #ifdef LFS_READWRITE
-#define	BLKSIZE(a, b, c)	blksize(a, b, c)
 #define	FS			struct lfs
 #define	I_FS			i_lfs
 #define	READ			lfs_read
@@ -45,7 +44,6 @@ __KERNEL_RCSID(1, "$NetBSD: ufs_readwrite.c,v 1.79 2007/06/05 12:31:35 yamt Exp 
 #define	fs_bsize		lfs_bsize
 #define	fs_bmask		lfs_bmask
 #else
-#define	BLKSIZE(a, b, c)	blksize(a, b, c)
 #define	FS			struct fs
 #define	I_FS			i_fs
 #define	READ			ffs_read
@@ -73,12 +71,11 @@ READ(void *v)
 	struct ufsmount *ump;
 	struct buf *bp;
 	FS *fs;
-	void *win;
 	vsize_t bytelen;
 	daddr_t lbn, nextlbn;
 	off_t bytesinfile;
 	long size, xfersize, blkoffset;
-	int error, flags, ioflag;
+	int error, ioflag;
 	bool usepc = false;
 
 	vp = ap->a_vp;
@@ -126,12 +123,9 @@ READ(void *v)
 			    uio->uio_resid);
 			if (bytelen == 0)
 				break;
-
-			win = ubc_alloc(&vp->v_uobj, uio->uio_offset,
-			    &bytelen, advice, UBC_READ);
-			error = uiomove(win, bytelen, uio);
-			flags = UBC_WANT_UNMAP(vp) ? UBC_UNMAP : 0;
-			ubc_release(win, flags);
+			error = ubc_uiomove(&vp->v_uobj, uio, bytelen, advice,
+			    UBC_READ | UBC_PARTIALOK |
+			    (UBC_WANT_UNMAP(vp) ? UBC_UNMAP : 0));
 			if (error)
 				break;
 		}
@@ -144,7 +138,7 @@ READ(void *v)
 			break;
 		lbn = lblkno(fs, uio->uio_offset);
 		nextlbn = lbn + 1;
-		size = BLKSIZE(fs, ip, lbn);
+		size = blksize(fs, ip, lbn);
 		blkoffset = blkoff(fs, uio->uio_offset);
 		xfersize = MIN(MIN(fs->fs_bsize - blkoffset, uio->uio_resid),
 		    bytesinfile);
@@ -152,7 +146,7 @@ READ(void *v)
 		if (lblktosize(fs, nextlbn) >= ip->i_size)
 			error = bread(vp, lbn, size, NOCRED, &bp);
 		else {
-			int nextsize = BLKSIZE(fs, ip, nextlbn);
+			int nextsize = blksize(fs, ip, nextlbn);
 			error = breadn(vp, lbn,
 			    size, &nextlbn, &nextsize, 1, NOCRED, &bp);
 		}
@@ -386,7 +380,8 @@ WRITE(void *v)
 		 */
 
 		ubc_flags |= UBC_WANT_UNMAP(vp) ? UBC_UNMAP : 0;
-		error = ubc_uiomove(&vp->v_uobj, uio, bytelen, ubc_flags);
+		error = ubc_uiomove(&vp->v_uobj, uio, bytelen, UVM_ADV_RANDOM,
+		    ubc_flags);
 
 		/*
 		 * update UVM's notion of the size now that we've
@@ -458,7 +453,7 @@ WRITE(void *v)
 			uvm_vnp_setsize(vp, ip->i_size);
 			extended = 1;
 		}
-		size = BLKSIZE(fs, ip, lbn) - bp->b_resid;
+		size = blksize(fs, ip, lbn) - bp->b_resid;
 		if (xfersize > size)
 			xfersize = size;
 

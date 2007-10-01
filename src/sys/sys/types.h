@@ -1,4 +1,4 @@
-/*	$NetBSD: types.h,v 1.75 2007/05/17 14:51:43 yamt Exp $	*/
+/*	$NetBSD: types.h,v 1.77 2007/09/07 18:56:13 rmind Exp $	*/
 
 /*-
  * Copyright (c) 1982, 1986, 1991, 1993, 1994
@@ -196,6 +196,8 @@ typedef	__uid_t		uid_t;		/* user id */
 
 typedef	int32_t		dtime_t;	/* on-disk time_t */
 
+typedef int		mqd_t;
+
 #if defined(_KERNEL) || defined(_STANDALONE)
 /*
  * Boolean type definitions for the kernel environment.  User-space
@@ -310,7 +312,7 @@ typedef	_BSD_USECONDS_T_	useconds_t;
 
 typedef struct kauth_cred *kauth_cred_t;
 
-typedef unsigned int pri_t;
+typedef int pri_t;
 
 #endif
 
@@ -325,10 +327,13 @@ typedef struct lwp lwp_t;
 struct	user;
 struct	__ucontext;
 struct	proc;
+typedef struct proc proc_t;
 struct	pgrp;
 struct	rusage;
 struct	file;
+typedef struct file file_t;
 struct	buf;
+typedef struct buf buf_t;
 struct	tty;
 struct	uio;
 #endif

@@ -1,4 +1,4 @@
-/*	$NetBSD: nfs_subs.c,v 1.188 2007/06/06 09:23:55 yamt Exp $	*/
+/*	$NetBSD: nfs_subs.c,v 1.191 2007/07/27 10:03:58 yamt Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993
@@ -70,7 +70,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: nfs_subs.c,v 1.188 2007/06/06 09:23:55 yamt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: nfs_subs.c,v 1.191 2007/07/27 10:03:58 yamt Exp $");
 
 #include "fs_nfs.h"
 #include "opt_nfs.h"
@@ -1491,6 +1491,7 @@ nfs_invaldircache(vp, flags)
 static int
 nfs_init0(void)
 {
+
 	nfsrtt.pos = 0;
 	rpc_vers = txdr_unsigned(RPC_VER2);
 	rpc_call = txdr_unsigned(RPC_CALL);
@@ -1511,6 +1512,10 @@ nfs_init0(void)
 #ifdef NFSSERVER
 	nfsrv_init(0);			/* Init server data structures */
 	nfsrv_initcache();		/* Init the server request cache */
+	{
+		extern krwlock_t netexport_lock;	/* XXX */
+		rw_init(&netexport_lock);
+	}
 #endif /* NFSSERVER */
 
 #if defined(NFSSERVER) || (defined(NFS) && !defined(NFS_V2_ONLY))
@@ -1521,7 +1526,7 @@ nfs_init0(void)
 	 * Initialize reply list and start timer
 	 */
 	TAILQ_INIT(&nfs_reqq);
-	nfs_timer(NULL);
+	nfs_timer_init();
 	MOWNER_ATTACH(&nfs_mowner);
 
 #ifdef NFS

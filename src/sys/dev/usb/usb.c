@@ -1,4 +1,4 @@
-/*	$NetBSD: usb.c,v 1.96 2007/03/04 06:02:50 christos Exp $	*/
+/*	$NetBSD: usb.c,v 1.99 2007/08/15 04:00:34 kiyohara Exp $	*/
 
 /*
  * Copyright (c) 1998, 2002 The NetBSD Foundation, Inc.
@@ -44,7 +44,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: usb.c,v 1.96 2007/03/04 06:02:50 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: usb.c,v 1.99 2007/08/15 04:00:34 kiyohara Exp $");
 
 #include "opt_compat_netbsd.h"
 
@@ -102,14 +102,14 @@ struct usb_softc {
 	usbd_bus_handle sc_bus;		/* USB controller */
 	struct usbd_port sc_port;	/* dummy port for root hub */
 
-	struct proc	*sc_event_thread;
+	struct lwp	*sc_event_thread;
 
 	char		sc_dying;
 };
 
 struct usb_taskq {
 	TAILQ_HEAD(, usb_task) tasks;
-	struct proc *task_thread_proc;
+	struct lwp *task_thread_lwp;
 	const char *name;
 	int taskcreated;	/* task thread exists. */
 };
@@ -205,18 +205,14 @@ USB_ATTACH(usb)
 	usb_add_event(USB_EVENT_CTRLR_ATTACH, ue);
 
 #ifdef USB_USE_SOFTINTR
-#ifdef __HAVE_GENERIC_SOFT_INTERRUPTS
 	/* XXX we should have our own level */
-	sc->sc_bus->soft = softintr_establish(IPL_SOFTNET,
+	sc->sc_bus->soft = softintr_establish(IPL_SOFTUSB,
 	    sc->sc_bus->methods->soft_intr, sc->sc_bus);
 	if (sc->sc_bus->soft == NULL) {
 		printf("%s: can't register softintr\n", USBDEVNAME(sc->sc_dev));
 		sc->sc_dying = 1;
 		USB_ATTACH_ERROR_RETURN;
 	}
-#else
-	usb_callout_init(sc->sc_bus->softi);
-#endif
 #endif
 
 	err = usbd_new_device(USBDEV(sc->sc_dev), sc->sc_bus, 0, speed, 0,
@@ -263,8 +259,8 @@ usb_create_event_thread(void *arg)
 	struct usb_taskq *taskq;
 	int i;
 
-	if (usb_kthread_create1(usb_event_thread, sc, &sc->sc_event_thread,
-			   "%s", sc->sc_dev.dv_xname)) {
+	if (usb_kthread_create1(PRI_NONE, 0, NULL, usb_event_thread, sc,
+	    &sc->sc_event_thread, "%s", sc->sc_dev.dv_xname)) {
 		printf("%s: unable to create event thread for\n",
 		       sc->sc_dev.dv_xname);
 		panic("usb_create_event_thread");
@@ -278,8 +274,8 @@ usb_create_event_thread(void *arg)
 		TAILQ_INIT(&taskq->tasks);
 		taskq->taskcreated = 1;
 		taskq->name = taskq_names[i];
-		if (usb_kthread_create1(usb_task_thread, taskq,
-					&taskq->task_thread_proc, taskq->name)) {
+		if (usb_kthread_create1(PRI_NONE, 0, NULL, usb_task_thread,
+		    taskq, &taskq->task_thread_lwp, taskq->name)) {
 			printf("unable to create task thread: %s\n", taskq->name);
 			panic("usb_create_event_thread task");
 		}
@@ -879,13 +875,7 @@ usb_schedsoftintr(usbd_bus_handle bus)
 	if (bus->use_polling) {
 		bus->methods->soft_intr(bus);
 	} else {
-#ifdef __HAVE_GENERIC_SOFT_INTERRUPTS
 		softintr_schedule(bus->soft);
-#else
-		if (!callout_pending(&bus->softi))
-			callout_reset(&bus->softi, 0, bus->methods->soft_intr,
-			    bus);
-#endif /* __HAVE_GENERIC_SOFT_INTERRUPTS */
 	}
 #else
 	bus->methods->soft_intr(bus);
@@ -922,30 +912,22 @@ usb_detach(device_ptr_t self, int flags)
 
 	DPRINTF(("usb_detach: start\n"));
 
-	sc->sc_dying = 1;
+	/* Kill off event thread. */
+	while (sc->sc_event_thread != NULL) {
+		wakeup(&sc->sc_bus->needs_explore);
+		tsleep(sc, PWAIT, "usbdet", hz * 60);
+	}
+	DPRINTF(("usb_detach: event thread dead\n"));
 
 	/* Make all devices disconnect. */
 	if (sc->sc_port.device != NULL)
 		usb_disconnect_port(&sc->sc_port, self);
 
-	/* Kill off event thread. */
-	if (sc->sc_event_thread != NULL) {
-		wakeup(&sc->sc_bus->needs_explore);
-		if (tsleep(sc, PWAIT, "usbdet", hz * 60))
-			printf("%s: event thread didn't die\n",
-			       USBDEVNAME(sc->sc_dev));
-		DPRINTF(("usb_detach: event thread dead\n"));
-	}
-
 #ifdef USB_USE_SOFTINTR
-#ifdef __HAVE_GENERIC_SOFT_INTERRUPTS
 	if (sc->sc_bus->soft != NULL) {
 		softintr_disestablish(sc->sc_bus->soft);
 		sc->sc_bus->soft = NULL;
 	}
-#else
-	callout_stop(&sc->sc_bus->softi);
-#endif
 #endif
 
 	ue = usb_alloc_event();

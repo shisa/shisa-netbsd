@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_clock.c,v 1.108 2007/05/17 14:51:38 yamt Exp $	*/
+/*	$NetBSD: kern_clock.c,v 1.110 2007/08/09 07:36:18 pooka Exp $	*/
 
 /*-
  * Copyright (c) 2000, 2004, 2006, 2007 The NetBSD Foundation, Inc.
@@ -76,7 +76,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_clock.c,v 1.108 2007/05/17 14:51:38 yamt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_clock.c,v 1.110 2007/08/09 07:36:18 pooka Exp $");
 
 #include "opt_ntp.h"
 #include "opt_multiprocessor.h"
@@ -94,9 +94,7 @@ __KERNEL_RCSID(0, "$NetBSD: kern_clock.c,v 1.108 2007/05/17 14:51:38 yamt Exp $"
 #include <sys/sched.h>
 #include <sys/time.h>
 #include <sys/timetc.h>
-
-#include <machine/cpu.h>
-#include <machine/intr.h>
+#include <sys/cpu.h>
 
 #ifdef GPROF
 #include <sys/gmon.h>
@@ -350,8 +348,6 @@ volatile struct	timeval time  __attribute__((__aligned__(__alignof__(quad_t))));
 volatile struct	timeval mono_time;
 #endif /* !__HAVE_TIMECOUNTER */
 
-void	*softclock_si;
-
 #ifdef __HAVE_TIMECOUNTER
 static u_int get_intr_timecount(struct timecounter *);
 
@@ -381,10 +377,6 @@ void
 initclocks(void)
 {
 	int i;
-
-	softclock_si = softintr_establish(IPL_SOFTCLOCK, softclock, NULL);
-	if (softclock_si == NULL)
-		panic("initclocks: unable to register softclock intr");
 
 	/*
 	 * Set divisors to 1 (normal case) and let the machine-specific
@@ -875,165 +867,7 @@ hardclock(struct clockframe *frame)
 	 * very low CPU priority, so we don't keep the relatively high
 	 * clock interrupt priority any longer than necessary.
 	 */
-	if (callout_hardclock())
-		softintr_schedule(softclock_si);
-}
-
-#ifdef __HAVE_TIMECOUNTER
-/*
- * Compute number of hz until specified time.  Used to compute second
- * argument to callout_reset() from an absolute time.
- */
-int
-hzto(struct timeval *tvp)
-{
-	struct timeval now, tv;
-
-	tv = *tvp;	/* Don't modify original tvp. */
-	getmicrotime(&now);
-	timersub(&tv, &now, &tv);
-	return tvtohz(&tv);
-}
-#endif /* __HAVE_TIMECOUNTER */
-
-/*
- * Compute number of ticks in the specified amount of time.
- */
-int
-tvtohz(struct timeval *tv)
-{
-	unsigned long ticks;
-	long sec, usec;
-
-	/*
-	 * If the number of usecs in the whole seconds part of the time
-	 * difference fits in a long, then the total number of usecs will
-	 * fit in an unsigned long.  Compute the total and convert it to
-	 * ticks, rounding up and adding 1 to allow for the current tick
-	 * to expire.  Rounding also depends on unsigned long arithmetic
-	 * to avoid overflow.
-	 *
-	 * Otherwise, if the number of ticks in the whole seconds part of
-	 * the time difference fits in a long, then convert the parts to
-	 * ticks separately and add, using similar rounding methods and
-	 * overflow avoidance.  This method would work in the previous
-	 * case, but it is slightly slower and assumes that hz is integral.
-	 *
-	 * Otherwise, round the time difference down to the maximum
-	 * representable value.
-	 *
-	 * If ints are 32-bit, then the maximum value for any timeout in
-	 * 10ms ticks is 248 days.
-	 */
-	sec = tv->tv_sec;
-	usec = tv->tv_usec;
-
-	if (usec < 0) {
-		sec--;
-		usec += 1000000;
-	}
-
-	if (sec < 0 || (sec == 0 && usec <= 0)) {
-		/*
-		 * Would expire now or in the past.  Return 0 ticks.
-		 * This is different from the legacy hzto() interface,
-		 * and callers need to check for it.
-		 */
-		ticks = 0;
-	} else if (sec <= (LONG_MAX / 1000000))
-		ticks = (((sec * 1000000) + (unsigned long)usec + (tick - 1))
-		    / tick) + 1;
-	else if (sec <= (LONG_MAX / hz))
-		ticks = (sec * hz) +
-		    (((unsigned long)usec + (tick - 1)) / tick) + 1;
-	else
-		ticks = LONG_MAX;
-
-	if (ticks > INT_MAX)
-		ticks = INT_MAX;
-
-	return ((int)ticks);
-}
-
-#ifndef __HAVE_TIMECOUNTER
-/*
- * Compute number of hz until specified time.  Used to compute second
- * argument to callout_reset() from an absolute time.
- */
-int
-hzto(struct timeval *tv)
-{
-	unsigned long ticks;
-	long sec, usec;
-	int s;
-
-	/*
-	 * If the number of usecs in the whole seconds part of the time
-	 * difference fits in a long, then the total number of usecs will
-	 * fit in an unsigned long.  Compute the total and convert it to
-	 * ticks, rounding up and adding 1 to allow for the current tick
-	 * to expire.  Rounding also depends on unsigned long arithmetic
-	 * to avoid overflow.
-	 *
-	 * Otherwise, if the number of ticks in the whole seconds part of
-	 * the time difference fits in a long, then convert the parts to
-	 * ticks separately and add, using similar rounding methods and
-	 * overflow avoidance.  This method would work in the previous
-	 * case, but it is slightly slower and assume that hz is integral.
-	 *
-	 * Otherwise, round the time difference down to the maximum
-	 * representable value.
-	 *
-	 * If ints are 32-bit, then the maximum value for any timeout in
-	 * 10ms ticks is 248 days.
-	 */
-	s = splclock();
-	sec = tv->tv_sec - time.tv_sec;
-	usec = tv->tv_usec - time.tv_usec;
-	splx(s);
-
-	if (usec < 0) {
-		sec--;
-		usec += 1000000;
-	}
-
-	if (sec < 0 || (sec == 0 && usec <= 0)) {
-		/*
-		 * Would expire now or in the past.  Return 0 ticks.
-		 * This is different from the legacy hzto() interface,
-		 * and callers need to check for it.
-		 */
-		ticks = 0;
-	} else if (sec <= (LONG_MAX / 1000000))
-		ticks = (((sec * 1000000) + (unsigned long)usec + (tick - 1))
-		    / tick) + 1;
-	else if (sec <= (LONG_MAX / hz))
-		ticks = (sec * hz) +
-		    (((unsigned long)usec + (tick - 1)) / tick) + 1;
-	else
-		ticks = LONG_MAX;
-
-	if (ticks > INT_MAX)
-		ticks = INT_MAX;
-
-	return ((int)ticks);
-}
-#endif /* !__HAVE_TIMECOUNTER */
-
-/*
- * Compute number of ticks in the specified amount of time.
- */
-int
-tstohz(struct timespec *ts)
-{
-	struct timeval tv;
-
-	/*
-	 * usec has great enough resolution for hz, so convert to a
-	 * timeval and use tvtohz() above.
-	 */
-	TIMESPEC_TO_TIMEVAL(&tv, ts);
-	return tvtohz(&tv);
+	callout_hardclock();
 }
 
 /*
@@ -1046,7 +880,7 @@ void
 startprofclock(struct proc *p)
 {
 
-	LOCK_ASSERT(mutex_owned(&p->p_stmutex));
+	KASSERT(mutex_owned(&p->p_stmutex));
 
 	if ((p->p_stflag & PST_PROFIL) == 0) {
 		p->p_stflag |= PST_PROFIL;
@@ -1066,7 +900,7 @@ void
 stopprofclock(struct proc *p)
 {
 
-	LOCK_ASSERT(mutex_owned(&p->p_stmutex));
+	KASSERT(mutex_owned(&p->p_stmutex));
 
 	if (p->p_stflag & PST_PROFIL) {
 		p->p_stflag &= ~PST_PROFIL;
@@ -1229,7 +1063,7 @@ statclock(struct clockframe *frame)
 		 * so that we know how much of its real time was spent
 		 * in ``non-process'' (i.e., interrupt) work.
 		 */
-		if (CLKF_INTR(frame)) {
+		if (CLKF_INTR(frame) || (l->l_flag & LW_INTR) != 0) {
 			if (p != NULL) {
 				p->p_iticks++;
 			}

@@ -1,4 +1,4 @@
-/*	$NetBSD: puffs.c,v 1.55 2007/07/05 12:27:39 pooka Exp $	*/
+/*	$NetBSD: puffs.c,v 1.64 2007/09/27 23:11:41 pooka Exp $	*/
 
 /*
  * Copyright (c) 2005, 2006, 2007  Antti Kantee.  All Rights Reserved.
@@ -31,7 +31,7 @@
 
 #include <sys/cdefs.h>
 #if !defined(lint)
-__RCSID("$NetBSD: puffs.c,v 1.55 2007/07/05 12:27:39 pooka Exp $");
+__RCSID("$NetBSD: puffs.c,v 1.64 2007/09/27 23:11:41 pooka Exp $");
 #endif /* !lint */
 
 #include <sys/param.h>
@@ -42,6 +42,7 @@ __RCSID("$NetBSD: puffs.c,v 1.55 2007/07/05 12:27:39 pooka Exp $");
 #include <errno.h>
 #include <fcntl.h>
 #include <mntopts.h>
+#include <paths.h>
 #include <puffs.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -101,11 +102,20 @@ fillvnopmask(struct puffs_ops *pops, uint8_t *opmask)
 }
 #undef FILLOP
 
+/*ARGSUSED*/
+static void
+puffs_defaulterror(struct puffs_usermount *pu, uint8_t type,
+	int error, void *cookie)
+{
+
+	abort();
+}
+
 int
 puffs_getselectable(struct puffs_usermount *pu)
 {
 
-	return pu->pu_kargs.pa_fd;
+	return pu->pu_fd;
 }
 
 int
@@ -119,7 +129,7 @@ puffs_setblockingmode(struct puffs_usermount *pu, int mode)
 	}
 
 	x = mode;
-	rv = ioctl(pu->pu_kargs.pa_fd, FIONBIO, &x);
+	rv = ioctl(pu->pu_fd, FIONBIO, &x);
 
 	if (rv == 0) {
 		if (mode == PUFFSDEV_BLOCK)
@@ -177,11 +187,13 @@ void
 puffs_setrootinfo(struct puffs_usermount *pu, enum vtype vt,
 	vsize_t vsize, dev_t rdev)
 {
-	struct puffs_kargs *pargs = &pu->pu_kargs;
+	struct puffs_kargs *pargs = pu->pu_kargp;
 
-	if (puffs_getstate(pu) != PUFFS_STATE_BEFOREMOUNT)
+	if (puffs_getstate(pu) != PUFFS_STATE_BEFOREMOUNT) {
 		warnx("puffs_setrootinfo: call has effect only "
 		    "before mount\n");
+		return;
+	}
 
 	pargs->pa_root_vtype = vt;
 	pargs->pa_root_vsize = vsize;
@@ -199,7 +211,7 @@ size_t
 puffs_getmaxreqlen(struct puffs_usermount *pu)
 {
 
-	return pu->pu_kargs.pa_maxreqlen;
+	return pu->pu_maxreqlen;
 }
 
 void
@@ -210,7 +222,7 @@ puffs_setmaxreqlen(struct puffs_usermount *pu, size_t reqlen)
 		warnx("puffs_setmaxreqlen: call has effect only "
 		    "before mount\n");
 
-	pu->pu_kargs.pa_maxreqlen = reqlen;
+	pu->pu_kargp->pa_maxreqlen = reqlen;
 }
 
 void
@@ -220,8 +232,8 @@ puffs_setfhsize(struct puffs_usermount *pu, size_t fhsize, int flags)
 	if (puffs_getstate(pu) != PUFFS_STATE_BEFOREMOUNT)
 		warnx("puffs_setfhsize: call has effect only before mount\n");
 
-	pu->pu_kargs.pa_fhsize = fhsize;
-	pu->pu_kargs.pa_fhflags = flags;
+	pu->pu_kargp->pa_fhsize = fhsize;
+	pu->pu_kargp->pa_fhflags = flags;
 }
 
 void
@@ -231,7 +243,7 @@ puffs_setncookiehash(struct puffs_usermount *pu, int nhash)
 	if (puffs_getstate(pu) != PUFFS_STATE_BEFOREMOUNT)
 		warnx("puffs_setfhsize: call has effect only before mount\n");
 
-	pu->pu_kargs.pa_nhashbuckets = nhash;
+	pu->pu_kargp->pa_nhashbuckets = nhash;
 }
 
 void
@@ -267,6 +279,13 @@ puffs_set_namemod(struct puffs_usermount *pu, pu_namemod_fn fn)
 {
 
 	pu->pu_namemod = fn;
+}
+
+void
+puffs_set_errnotify(struct puffs_usermount *pu, pu_errnotify_fn fn)
+{
+
+	pu->pu_errnotify = fn;
 }
 
 void
@@ -307,6 +326,8 @@ int
 puffs_mount(struct puffs_usermount *pu, const char *dir, int mntflags,
 	void *cookie)
 {
+	char rp[MAXPATHLEN];
+	int rv;
 
 #if 1
 	/* XXXkludgehere */
@@ -315,21 +336,36 @@ puffs_mount(struct puffs_usermount *pu, const char *dir, int mntflags,
 		mntflags |= MNT_NOSUID | MNT_NODEV;
 #endif
 
-	pu->pu_kargs.pa_root_cookie = cookie;
-	if (mount(MOUNT_PUFFS, dir, mntflags, &pu->pu_kargs) == -1)
+	if (realpath(dir, rp) == NULL)
 		return -1;
+
+	if (strcmp(dir, rp) != 0) {
+		warnx("puffs_mount: \"%s\" is a relative path.", dir);
+		warnx("puffs_mount: using \"%s\" instead.", rp);
+	}
+
+	pu->pu_kargp->pa_root_cookie = cookie;
+	if ((rv = mount(MOUNT_PUFFS, rp, mntflags,
+	    pu->pu_kargp, sizeof(struct puffs_kargs))) == -1)
+		goto out;
+	if ((rv = ioctl(pu->pu_fd, PUFFSREQSIZEOP, &pu->pu_maxreqlen)) == -1)
+		goto out;
 	PU_SETSTATE(pu, PUFFS_STATE_RUNNING);
 
-	return 0;
+ out:
+	free(pu->pu_kargp);
+	pu->pu_kargp = NULL;
+
+	return rv;
 }
 
 struct puffs_usermount *
-_puffs_init(int develv, struct puffs_ops *pops, const char *puffsname,
-	void *priv, uint32_t pflags)
+_puffs_init(int develv, struct puffs_ops *pops, const char *mntfromname,
+	const char *puffsname, void *priv, uint32_t pflags)
 {
 	struct puffs_usermount *pu;
 	struct puffs_kargs *pargs;
-	int fd;
+	int sverrno, fd;
 
 	if (develv != PUFFS_DEVEL_LIBVERSION) {
 		warnx("puffs_init: mounting with lib version %d, need %d",
@@ -338,9 +374,9 @@ _puffs_init(int develv, struct puffs_ops *pops, const char *puffsname,
 		return NULL;
 	}
 
-	fd = open("/dev/puffs", O_RDONLY);
+	fd = open(_PATH_PUFFS, O_RDONLY);
 	if (fd == -1) {
-		warnx("puffs_init: cannot open /dev/puffs");
+		warnx("puffs_init: cannot open %s", _PATH_PUFFS);
 		return NULL;
 	}
 	if (fd <= 2)
@@ -352,18 +388,26 @@ _puffs_init(int develv, struct puffs_ops *pops, const char *puffsname,
 		goto failfree;
 	memset(pu, 0, sizeof(struct puffs_usermount));
 
-	pargs = &pu->pu_kargs;
+	pargs = pu->pu_kargp = malloc(sizeof(struct puffs_kargs));
+	if (pargs == NULL)
+		goto failfree;
+	memset(pargs, 0, sizeof(struct puffs_kargs));
+
 	pargs->pa_vers = PUFFSDEVELVERS | PUFFSVERSION;
 	pargs->pa_flags = PUFFS_FLAG_KERN(pflags);
-	pargs->pa_fd = fd;
+	pargs->pa_fd = pu->pu_fd = fd;
 	fillvnopmask(pops, pargs->pa_vnopmask);
-	(void)strlcpy(pargs->pa_name, puffsname, sizeof(pargs->pa_name));
+	(void)strlcpy(pargs->pa_typename, puffsname,
+	    sizeof(pargs->pa_typename));
+	(void)strlcpy(pargs->pa_mntfromname, mntfromname,
+	    sizeof(pargs->pa_mntfromname));
 
 	puffs_zerostatvfs(&pargs->pa_svfsb);
 	pargs->pa_root_cookie = NULL;
 	pargs->pa_root_vtype = VDIR;
 	pargs->pa_root_vsize = 0;
 	pargs->pa_root_rdev = 0;
+	pargs->pa_maxreqlen = 0;
 
 	pu->pu_flags = pflags;
 	pu->pu_ops = *pops;
@@ -384,14 +428,18 @@ _puffs_init(int develv, struct puffs_ops *pops, const char *puffsname,
 	pu->pu_pathtransform = NULL;
 	pu->pu_namemod = NULL;
 
+	pu->pu_errnotify = puffs_defaulterror;
+
 	PU_SETSTATE(pu, PUFFS_STATE_BEFOREMOUNT);
 
 	return pu;
 
  failfree:
 	/* can't unmount() from here for obvious reasons */
+	sverrno = errno;
 	close(fd);
 	free(pu);
+	errno = sverrno;
 	return NULL;
 }
 
@@ -407,8 +455,8 @@ puffs_exit(struct puffs_usermount *pu, int force)
 
 	force = 1; /* currently */
 
-	if (pu->pu_kargs.pa_fd)
-		close(pu->pu_kargs.pa_fd);
+	if (pu->pu_fd)
+		close(pu->pu_fd);
 
 	while ((pn = LIST_FIRST(&pu->pu_pnodelst)) != NULL)
 		puffs_pn_put(pn);
@@ -511,7 +559,7 @@ puffs_mainloop(struct puffs_usermount *pu, int flags)
 			 * case is that we can fit everything into the
 			 * socket buffer.
 			 */
-			if (puffs_framev_output(pu, pfctrl, fio)) {
+			if (puffs_framev_output(pu, pfctrl, fio, ppr)) {
 				/* need kernel notify? (error condition) */
 				if (puffs_req_putput(ppr) == -1)
 					goto out;
@@ -553,6 +601,8 @@ puffs_mainloop(struct puffs_usermount *pu, int flags)
 
 		/* iterate over the results */
 		for (curev = pfctrl->evs; ndone--; curev++) {
+			int what;
+
 			/* get & possibly dispatch events from kernel */
 			if (curev->ident == puffsfd) {
 				if (puffs_req_handle(pgr, ppr, 0) == -1)
@@ -568,24 +618,22 @@ puffs_mainloop(struct puffs_usermount *pu, int flags)
 				/* XXX: how to know if it's a transient error */
 				puffs_framev_writeclose(pu, fio,
 				    (int)curev->data);
+				puffs_framev_notify(fio, PUFFS_FBIO_ERROR);
 				continue;
 			}
 
+			what = 0;
 			if (curev->filter == EVFILT_READ) {
-				if (curev->flags & EV_EOF && curev->data == 0)
-					puffs_framev_readclose(pu, fio,
-					    ECONNRESET);
-				else
-					puffs_framev_input(pu, pfctrl,
-					    fio, ppr);
-
-			} else if (curev->filter == EVFILT_WRITE) {
-				if (curev->flags & EV_EOF)
-					puffs_framev_writeclose(pu, fio,
-					    ECONNRESET);
-				else
-					puffs_framev_output(pu, pfctrl, fio);
+				puffs_framev_input(pu, pfctrl, fio, ppr);
+				what |= PUFFS_FBIO_READ;
 			}
+
+			else if (curev->filter == EVFILT_WRITE) {
+				puffs_framev_output(pu, pfctrl, fio, ppr);
+				what |= PUFFS_FBIO_WRITE;
+			}
+			if (what)
+				puffs_framev_notify(fio, what);
 		}
 
 		/*

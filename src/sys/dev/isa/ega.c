@@ -1,4 +1,4 @@
-/* $NetBSD: ega.c,v 1.21 2007/03/04 06:02:10 christos Exp $ */
+/* $NetBSD: ega.c,v 1.23 2007/07/28 20:28:57 mjf Exp $ */
 
 /*
  * Copyright (c) 1999
@@ -27,7 +27,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ega.c,v 1.21 2007/03/04 06:02:10 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ega.c,v 1.23 2007/07/28 20:28:57 mjf Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -86,7 +86,7 @@ struct ega_config {
 	void (*switchcb)(void *, int, int);
 	void *switchcbarg;
 
-	struct callout switch_callout;
+	callout_t switch_callout;
 };
 
 struct ega_softc {
@@ -431,7 +431,7 @@ ega_init(vc, iot, memt, mono)
 	LIST_INIT(&vc->screens);
 	vc->active = NULL;
 	vc->currenttype = vh->vh_mono ? &ega_stdscreen_mono : &ega_stdscreen;
-	callout_init(&vc->switch_callout);
+	callout_init(&vc->switch_callout, 0);
 
 	vc->vc_fonts[0] = &ega_builtinfont;
 	for (i = 1; i < 4; i++)
@@ -850,6 +850,10 @@ ega_allocattr(id, fg, bg, flags, attrp)
 {
 	struct egascreen *scr = id;
 	struct ega_config *vc = scr->cfg;
+
+	if (__predict_false((unsigned int)fg >= sizeof(fgansitopc) ||
+	    (unsigned int)bg >= sizeof(bgansitopc)))
+		return (EINVAL);
 
 	if (vc->hdl.vh_mono) {
 		if (flags & WSATTR_WSCOLORS)

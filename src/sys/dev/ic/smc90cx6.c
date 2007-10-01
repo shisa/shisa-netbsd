@@ -1,4 +1,4 @@
-/*	$NetBSD: smc90cx6.c,v 1.47 2007/03/04 06:02:02 christos Exp $ */
+/*	$NetBSD: smc90cx6.c,v 1.50 2007/09/03 11:32:07 he Exp $ */
 
 /*-
  * Copyright (c) 1994, 1995, 1998 The NetBSD Foundation, Inc.
@@ -42,7 +42,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: smc90cx6.c,v 1.47 2007/03/04 06:02:02 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: smc90cx6.c,v 1.50 2007/09/03 11:32:07 he Exp $");
 
 /* #define BAHSOFTCOPY */
 #define BAHRETRANSMIT /**/
@@ -220,7 +220,7 @@ bah_attach_subr(sc)
 		(void (*)(void *))bah_start, ifp);
 #endif
 
-	callout_init(&sc->sc_recon_ch);
+	callout_init(&sc->sc_recon_ch, 0);
 }
 
 /*
@@ -907,9 +907,9 @@ bah_reconwatch(arg)
  * This code needs some work - it looks pretty ugly.
  */
 int
-bah_ioctl(ifp, command, data)
+bah_ioctl(ifp, cmd, data)
 	struct ifnet *ifp;
-	u_long command;
+	u_long cmd;
 	void *data;
 {
 	struct bah_softc *sc;
@@ -925,10 +925,10 @@ bah_ioctl(ifp, command, data)
 
 #if defined(BAH_DEBUG) && (BAH_DEBUG > 2)
 	printf("%s: ioctl() called, cmd = 0x%x\n",
-	    sc->sc_dev.dv_xname, command);
+	    sc->sc_dev.dv_xname, cmd);
 #endif
 
-	switch (command) {
+	switch (cmd) {
 	case SIOCSIFADDR:
 		ifp->if_flags |= IFF_UP;
 		switch (ifa->ifa_addr->sa_family) {
@@ -964,7 +964,7 @@ bah_ioctl(ifp, command, data)
 
 	case SIOCADDMULTI:
 	case SIOCDELMULTI:
-		switch (ifr->ifr_addr.sa_family) {
+		switch (ifreq_getaddr(cmd, ifr)->sa_family) {
 		case AF_INET:
 		case AF_INET6:
 			error = 0;

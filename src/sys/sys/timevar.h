@@ -1,11 +1,8 @@
-/*	$NetBSD: timevar.h,v 1.11 2007/05/13 14:43:52 dsl Exp $	*/
+/*	$NetBSD: timevar.h,v 1.14 2007/09/10 10:35:55 cube Exp $	*/
 
 /*
  *  Copyright (c) 2005 The NetBSD Foundation.
  *  All rights reserved.
- *
- *  This code is derived from software contributed to the NetBSD Foundation
- *   by Quentin Garnier.
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions
@@ -15,11 +12,7 @@
  *  2. Redistributions in binary form must reproduce the above copyright
  *     notice, this list of conditions and the following disclaimer in the
  *     documentation and/or other materials provided with the distribution.
- *  3. All advertising materials mentioning features or use of this software
- *     must display the following acknowledgement:
- *         This product includes software developed by the NetBSD
- *         Foundation, Inc. and its contributors.
- *  4. Neither the name of The NetBSD Foundation nor the names of its
+ *  3. Neither the name of The NetBSD Foundation nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -80,7 +73,7 @@
  */
 struct 	ptimer {
 	union {
-		struct	callout	pt_ch;
+		callout_t	pt_ch;
 		struct {
 			LIST_ENTRY(ptimer)	pt_list;
 			int	pt_active;
@@ -177,7 +170,8 @@ int	hzto(struct timeval *);
 void	inittimecounter(void);
 int	itimerdecr(struct ptimer *, int);
 void	itimerfire(struct ptimer *);
-int	itimerfix(struct timeval *tv);
+int	itimerfix(struct timeval *);
+int	itimespecfix(struct timespec *);
 int	ppsratecheck(struct timeval *, int *, int);
 int	ratecheck(struct timeval *, const struct timeval *);
 void	realtimerexpire(void *);

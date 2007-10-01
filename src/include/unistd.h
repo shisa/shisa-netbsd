@@ -1,4 +1,4 @@
-/*	$NetBSD: unistd.h,v 1.111 2007/05/30 21:14:37 tls Exp $	*/
+/*	$NetBSD: unistd.h,v 1.113 2007/08/09 15:23:02 he Exp $	*/
 
 /*-
  * Copyright (c) 1998, 1999 The NetBSD Foundation, Inc.
@@ -312,6 +312,7 @@ int	 getdomainname(char *, size_t);
 int	 getgrouplist(const char *, gid_t, gid_t *, int *);
 int	 getgroupmembership(const char *, gid_t, gid_t *, int, int *);
 mode_t	 getmode(const void *, mode_t);
+int	 getpeereid(int, uid_t *, gid_t *);
 int	 getsubopt(char **, char * const *, char **);
 __aconst char *getusershell(void);
 int	 initgroups(const char *, gid_t);
@@ -364,5 +365,7 @@ extern	 char *suboptarg;	/* getsubopt(3) external variable */
 
 __END_DECLS
 
+#if _FORTIFY_SOURCE > 0
 #include <ssp/unistd.h>
+#endif
 #endif /* !_UNISTD_H_ */

@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# $NetBSD: postinstall,v 1.43 2007/07/01 08:30:09 xtraeme Exp $
+# $NetBSD: postinstall,v 1.49 2007/07/29 13:17:38 plunky Exp $
 #
 # Copyright (c) 2002-2006 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -447,7 +447,7 @@ obsolete_paths()
 #
 obsolete_libs()
 {
-	[ $# -eq 1 ] || err 2 "USAGE: obsolete_paths dir"
+	[ $# -eq 1 ] || err 2 "USAGE: obsolete_libs dir"
 	dir=$1
 
 	(
@@ -613,6 +613,28 @@ do_defaults()
 	    || return 1
 			# ${dir} is set by find_file_in_dirlist()
 	compare_dir $op ${dir} ${DEST_DIR}/etc/defaults 444 pf.boot.conf
+	failed=$(( ${failed} + $? ))
+
+	return ${failed}
+}
+
+#
+#	envsys
+#
+additem envsys "envsys configuration is up to date"
+do_envsys()
+{
+	[ -n "$1" ] || err 2 "USAGE: do_envsys fix|check"
+	op=$1
+	failed=0
+
+	populate_dir $op true ${SRC_DIR}/etc ${DEST_DIR}/etc 644 envsys.conf
+	failed=$(( ${failed} + $? ))
+
+	populate_dir $op true ${SRC_DIR}/etc/powerd/scripts \
+		${DEST_DIR}/etc/powerd/scripts 555 sensor_battery \
+		sensor_drive sensor_fan sensor_indicator sensor_power \
+		sensor_resistance sensor_temperature sensor_voltage
 	failed=$(( ${failed} + $? ))
 
 	return ${failed}
@@ -844,10 +866,10 @@ do_rc()
 	compare_dir ${op} ${SRC_DIR}/etc/rc.d ${DEST_DIR}/etc/rc.d 555 \
 		DAEMON LOGIN NETWORKING SERVERS \
 		accounting altqd amd apmd \
-		bootconf.sh bootparams btconfig btdevctl bthcid \
+		bootconf.sh bootparams btconfig btdevctl bthcid btuartd \
 		ccd cgd cleartmp cron \
 		dhclient dhcpd dhcrelay dmesg downinterfaces envsys \
-		fixsb fsck ftpd \
+		fsck ftpd \
 		hostapd \
 		identd ifwatchd inetd ipfilter ipfs ipmon ipnat ipsec \
 		irdaattach iscsi_target isdnd \
@@ -869,8 +891,8 @@ do_rc()
 	failed=$(( ${failed} + $? ))
 
 		# check for obsolete rc.d files
-	for f in NETWORK btcontrol fsck.sh kerberos nfsiod servers systemfs \
-	    daemon gated login portmap sunndd xntpd; do
+	for f in NETWORK btcontrol fsck.sh kerberos nfsiod servers \
+	    systemfs daemon gated login portmap sunndd xntpd; do
 		fd=/etc/rc.d/${f}
 		[ -e "${DEST_DIR}${fd}" ] && echo "${fd}"
 	done | obsolete_paths ${op}

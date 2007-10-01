@@ -1,4 +1,4 @@
-/*	$NetBSD: cd9660_vfsops.c,v 1.41 2007/06/30 09:37:55 pooka Exp $	*/
+/*	$NetBSD: cd9660_vfsops.c,v 1.47 2007/07/31 21:14:17 pooka Exp $	*/
 
 /*-
  * Copyright (c) 1994
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: cd9660_vfsops.c,v 1.41 2007/06/30 09:37:55 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: cd9660_vfsops.c,v 1.47 2007/07/31 21:14:17 pooka Exp $");
 
 #if defined(_KERNEL_OPT)
 #include "opt_compat_netbsd.h"
@@ -87,6 +87,7 @@ const struct vnodeopv_desc * const cd9660_vnodeopv_descs[] = {
 
 struct vfsops cd9660_vfsops = {
 	MOUNT_CD9660,
+	sizeof (struct iso_args),
 	cd9660_mount,
 	cd9660_start,
 	cd9660_unmount,
@@ -103,7 +104,7 @@ struct vfsops cd9660_vfsops = {
 	cd9660_mountroot,
 	(int (*)(struct mount *, struct vnode *, struct timespec *)) eopnotsupp,
 	vfs_stdextattrctl,
-	vfs_stdsuspendctl,
+	(void *)eopnotsupp,		/* vfs_suspendctl */
 	cd9660_vnodeopv_descs,
 	0,	/* refcount */
 	{ NULL, NULL } /* list */
@@ -163,43 +164,45 @@ cd9660_mountroot()
  * mount system call
  */
 int
-cd9660_mount(mp, path, data, ndp, l)
+cd9660_mount(mp, path, data, data_len, l)
 	struct mount *mp;
 	const char *path;
 	void *data;
-	struct nameidata *ndp;
+	size_t *data_len;
 	struct lwp *l;
 {
+	struct nameidata nd;
 	struct vnode *devvp;
-	struct iso_args args;
+	struct iso_args *args = data;
 	int error;
 	struct iso_mnt *imp = VFSTOISOFS(mp);
+
+	if (*data_len < sizeof *args)
+		return EINVAL;
 
 	if (mp->mnt_flag & MNT_GETARGS) {
 		if (imp == NULL)
 			return EIO;
-		args.fspec = NULL;
-		args.flags = imp->im_flags;
-		return copyout(&args, data, sizeof(args));
+		args->fspec = NULL;
+		args->flags = imp->im_flags;
+		*data_len = sizeof (*args);
+		return 0;
 	}
-	error = copyin(data, &args, sizeof (struct iso_args));
-	if (error)
-		return (error);
 
 	if ((mp->mnt_flag & MNT_RDONLY) == 0)
 		return (EROFS);
 
-	if ((mp->mnt_flag & MNT_UPDATE) && args.fspec == NULL)
+	if ((mp->mnt_flag & MNT_UPDATE) && args->fspec == NULL)
 		return EINVAL;
 
 	/*
 	 * Not an update, or updating the name: look up the name
 	 * and verify that it refers to a sensible block device.
 	 */
-	NDINIT(ndp, LOOKUP, FOLLOW, UIO_USERSPACE, args.fspec, l);
-	if ((error = namei(ndp)) != 0)
+	NDINIT(&nd, LOOKUP, FOLLOW, UIO_USERSPACE, args->fspec, l);
+	if ((error = namei(&nd)) != 0)
 		return (error);
-	devvp = ndp->ni_vp;
+	devvp = nd.ni_vp;
 
 	if (devvp->v_type != VBLK) {
 		vrele(devvp);
@@ -239,7 +242,7 @@ cd9660_mount(mp, path, data, ndp, l)
 		error = VOP_OPEN(devvp, FREAD, FSCRED, l);
 		if (error)
 			goto fail;
-		error = iso_mountfs(devvp, mp, l, &args);
+		error = iso_mountfs(devvp, mp, l, args);
 		if (error) {
 			vn_lock(devvp, LK_EXCLUSIVE | LK_RETRY);
 			(void)VOP_CLOSE(devvp, FREAD, NOCRED, l);
@@ -251,8 +254,8 @@ cd9660_mount(mp, path, data, ndp, l)
 		if (devvp != imp->im_devvp)
 			return (EINVAL);	/* needs translation */
 	}
-	return set_statvfs_info(path, UIO_USERSPACE, args.fspec, UIO_USERSPACE,
-	    mp, l);
+	return set_statvfs_info(path, UIO_USERSPACE, args->fspec, UIO_USERSPACE,
+	    mp->mnt_op->vfs_name, mp, l);
 
 fail:
 	vrele(devvp);
@@ -535,11 +538,6 @@ cd9660_unmount(mp, mntflags, l)
 
 	if (mntflags & MNT_FORCE)
 		flags |= FORCECLOSE;
-#if 0
-	mntflushbuf(mp, 0);
-	if (mntinvalbuf(mp))
-		return EBUSY;
-#endif
 	if ((error = vflush(mp, NULLVP, flags)) != 0)
 		return (error);
 
@@ -910,6 +908,9 @@ cd9660_vget_internal(mp, ino, vpp, relocated, isodir)
 		uvm_vnp_setsize(vp, ip->i_size);
 		break;
 	}
+
+	if (vp->v_type != VREG)
+		uvm_vnp_setsize(vp, 0);
 
 	if (ip->iso_extent == imp->root_extent)
 		vp->v_flag |= VROOT;

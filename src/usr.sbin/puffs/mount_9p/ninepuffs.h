@@ -1,4 +1,4 @@
-/*	$NetBSD: ninepuffs.h,v 1.8 2007/05/16 09:57:21 pooka Exp $	*/
+/*	$NetBSD: ninepuffs.h,v 1.11 2007/09/06 16:09:10 pooka Exp $	*/
 
 /*
  * Copyright (c) 2007  Antti Kantee.  All Rights Reserved.
@@ -73,7 +73,7 @@ typedef uint32_t p9pfid_t;
 
 #define GETRESPONSE(pb)							\
 do {									\
-	if (puffs_framev_enqueue_cc(pcc, p9p->servsock, pb) == -1) {	\
+	if (puffs_framev_enqueue_cc(pcc, p9p->servsock, pb, 0) == -1) {	\
 		rv = errno;						\
 		goto out;						\
 	}								\
@@ -81,7 +81,7 @@ do {									\
 
 #define JUSTSEND(pb)							\
 do {									\
-	if (puffs_framev_enqueue_justsend(pu,p9p->servsock,pb,1) == -1){\
+	if (puffs_framev_enqueue_justsend(pu,p9p->servsock,pb,1,0)==-1){\
 		rv = errno;						\
 		goto out;						\
 	}								\
@@ -89,7 +89,7 @@ do {									\
 
 #define SENDCB(pb, f, a)						\
 do {									\
-	if (puffs_framev_enqueue_cb(pu, p9p->servsock, pb, f,a) == -1) {\
+	if (puffs_framev_enqueue_cb(pu, p9p->servsock,pb,f,a,0) == -1) {\
 		rv = errno;						\
 		goto out;						\
 	}								\
@@ -124,7 +124,7 @@ void			p9pbuf_recycleout(struct puffs_framebuf *);
 int	p9pbuf_read(struct puffs_usermount *, struct puffs_framebuf *,int,int*);
 int	p9pbuf_write(struct puffs_usermount *, struct puffs_framebuf*,int,int*);
 int	p9pbuf_cmp(struct puffs_usermount *,
-		   struct puffs_framebuf *, struct puffs_framebuf *);
+		   struct puffs_framebuf *, struct puffs_framebuf *, int *);
 
 void	p9pbuf_put_1(struct puffs_framebuf *, uint8_t);
 void	p9pbuf_put_2(struct puffs_framebuf *, uint16_t);
@@ -159,7 +159,8 @@ int	proto_cc_open(struct puffs_cc *, p9pfid_t, p9pfid_t, int);
 void	proto_make_stat(struct puffs_framebuf *, const struct vattr *,
 			const char *, enum vtype);
 
-struct puffs_node	*p9p_handshake(struct puffs_usermount *, const char *);
+struct puffs_node	*p9p_handshake(struct puffs_usermount *,
+				       const char *, const char *);
 
 void			qid2vattr(struct vattr *, const struct qid9p *);
 struct puffs_node	*newp9pnode_va(struct puffs_usermount *,

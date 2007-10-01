@@ -1,4 +1,4 @@
-/*	$NetBSD: at.c,v 1.22 2006/03/21 21:59:56 phil Exp $	*/
+/*	$NetBSD: at.c,v 1.24 2007/07/18 01:13:42 lukem Exp $	*/
 
 /*
  *  at.c : Put file into atrun queue
@@ -70,7 +70,7 @@ enum { ATQ, ATRM, AT, BATCH, CAT };	/* what program we want to run */
 #if 0
 static char rcsid[] = "$OpenBSD: at.c,v 1.15 1998/06/03 16:20:26 deraadt Exp $";
 #else
-__RCSID("$NetBSD: at.c,v 1.22 2006/03/21 21:59:56 phil Exp $");
+__RCSID("$NetBSD: at.c,v 1.24 2007/07/18 01:13:42 lukem Exp $");
 #endif
 #endif
 
@@ -84,7 +84,6 @@ static int send_mail = 0;
 
 extern char **environ;
 int fcreated;
-char *namep;
 char atfile[FILENAME_MAX];
 
 char *atinput = (char *)0;	/* where to get input from */
@@ -107,13 +106,22 @@ static void process_jobs (int, char **, int);
 static void 
 sigc(int signo)
 {
-	/* If the user presses ^C, remove the spool file and exit. */
+	struct sigaction act;
+
+	/* If a signal interrupts us, remove the spool file and exit. */
 	if (fcreated) {
 		PRIV_START
 		(void)unlink(atfile);
 		PRIV_END
 	}
-
+	/* Raise the default signal handler for the signal that was invoked. */
+	memset(&act, 0, sizeof act);
+	act.sa_handler = SIG_DFL;
+	sigemptyset(&(act.sa_mask));
+	act.sa_flags = 0;
+	sigaction(signo, &act, NULL);
+	raise(signo);
+	/* Fall-back to exit */
 	exit(EXIT_FAILURE);
 }
 
@@ -122,7 +130,8 @@ static void
 alarmc(int signo)
 {
 	/* Time out after some seconds. */
-	panic("File locking timed out");
+	warnx("File locking timed out");
+	sigc(signo);
 }
 
 /* Local functions */
@@ -581,8 +590,6 @@ main(int argc, char **argv)
 	else
 		pgm++;
 
-	namep = pgm;
-
 	/* find out what this program is supposed to do */
 	if (strcmp(pgm, "atq") == 0) {
 		program = ATQ;
@@ -667,10 +674,10 @@ main(int argc, char **argv)
 	/* end of options eating */
 
 	if (disp_version)
-		(void)fprintf(stderr, "%s version %.1f\n", namep, AT_VERSION);
+		(void)fprintf(stderr, "%s version %.1f\n", pgm, AT_VERSION);
 
 	if (!check_permission()) {
-		errx(EXIT_FAILURE, "You do not have permission to use %s.", namep);
+		errx(EXIT_FAILURE, "You do not have permission to use %s.", pgm);
 	}
 
 	/* select our program */

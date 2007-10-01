@@ -1,4 +1,4 @@
-/*	$NetBSD: if.c,v 1.192 2007/06/09 03:07:21 dyoung Exp $	*/
+/*	$NetBSD: if.c,v 1.201 2007/09/13 18:54:57 gdt Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2000, 2001 The NetBSD Foundation, Inc.
@@ -97,7 +97,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if.c,v 1.192 2007/06/09 03:07:21 dyoung Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if.c,v 1.201 2007/09/13 18:54:57 gdt Exp $");
 
 #include "opt_inet.h"
 
@@ -154,7 +154,7 @@ MALLOC_DEFINE(M_IFADDR, "ifaddr", "interface address");
 MALLOC_DEFINE(M_IFMADDR, "ether_multi", "link-level multicast address");
 
 int	ifqmaxlen = IFQ_MAXLEN;
-struct	callout if_slowtimo_ch;
+callout_t if_slowtimo_ch;
 
 int netisr;			/* scheduling bits for network */
 
@@ -182,7 +182,7 @@ void
 ifinit(void)
 {
 
-	callout_init(&if_slowtimo_ch);
+	callout_init(&if_slowtimo_ch, 0);
 	if_slowtimo(NULL);
 #ifdef PFIL_HOOKS
 	if_pfil.ph_type = PFIL_TYPE_IFNET;
@@ -271,8 +271,8 @@ void
 if_alloc_sadl(struct ifnet *ifp)
 {
 	unsigned socksize, ifasize;
-	int namelen, masklen;
-	struct sockaddr_dl *sdl;
+	int addrlen, namelen;
+	struct sockaddr_dl *mask, *sdl;
 	struct ifaddr *ifa;
 
 	/*
@@ -284,23 +284,20 @@ if_alloc_sadl(struct ifnet *ifp)
 		if_free_sadl(ifp);
 
 	namelen = strlen(ifp->if_xname);
-	masklen = offsetof(struct sockaddr_dl, sdl_data[0]) + namelen;
-	socksize = masklen + ifp->if_addrlen;
-#define ROUNDUP(a) (1 + (((a) - 1) | (sizeof(long) - 1)))
-	if (socksize < sizeof(*sdl))
-		socksize = sizeof(*sdl);
-	socksize = ROUNDUP(socksize);
+	addrlen = ifp->if_addrlen;
+	socksize = roundup(sockaddr_dl_measure(namelen, addrlen), sizeof(long));
 	ifasize = sizeof(*ifa) + 2 * socksize;
 	ifa = (struct ifaddr *)malloc(ifasize, M_IFADDR, M_WAITOK);
-	memset((void *)ifa, 0, ifasize);
+	memset(ifa, 0, ifasize);
+
 	sdl = (struct sockaddr_dl *)(ifa + 1);
-	sdl->sdl_len = socksize;
-	sdl->sdl_family = AF_LINK;
-	memcpy(sdl->sdl_data, ifp->if_xname, namelen);
-	sdl->sdl_nlen = namelen;
-	sdl->sdl_alen = ifp->if_addrlen;
-	sdl->sdl_index = ifp->if_index;
-	sdl->sdl_type = ifp->if_type;
+	mask = (struct sockaddr_dl *)(socksize + (char *)sdl);
+
+	sockaddr_dl_init(sdl, socksize, ifp->if_index, ifp->if_type,
+	    ifp->if_xname, namelen, NULL, addrlen);
+	mask->sdl_len = sockaddr_dl_measure(namelen, 0);
+	memset(&mask->sdl_data[0], 0xff, namelen);
+
 	ifnet_addrs[ifp->if_index] = ifa;
 	IFAREF(ifa);
 	ifa->ifa_ifp = ifp;
@@ -309,11 +306,7 @@ if_alloc_sadl(struct ifnet *ifp)
 	IFAREF(ifa);
 	ifa->ifa_addr = (struct sockaddr *)sdl;
 	ifp->if_sadl = sdl;
-	sdl = (struct sockaddr_dl *)(socksize + (char *)sdl);
-	ifa->ifa_netmask = (struct sockaddr *)sdl;
-	sdl->sdl_len = masklen;
-	while (namelen != 0)
-		sdl->sdl_data[--namelen] = 0xff;
+	ifa->ifa_netmask = (struct sockaddr *)mask;
 }
 
 /*
@@ -745,7 +738,7 @@ if_rt_walktree(struct rtentry *rt, void *v)
 
 	/* Delete the entry. */
 	++rt->rt_refcnt;
-	error = rtrequest(RTM_DELETE, rt_key(rt), rt->rt_gateway,
+	error = rtrequest(RTM_DELETE, rt_getkey(rt), rt->rt_gateway,
 	    rt_mask(rt), rt->rt_flags, NULL);
 	KASSERT((rt->rt_flags & RTF_UP) == 0);
 	rt->rt_ifp = NULL;
@@ -897,6 +890,12 @@ if_clone_list(struct if_clonereq *ifcr)
 	return error;
 }
 
+static inline int
+equal(const struct sockaddr *sa1, const struct sockaddr *sa2)
+{
+	return sockaddr_cmp(sa1, sa2) == 0;
+}
+
 /*
  * Locate an interface based on a complete address.
  */
@@ -906,9 +905,6 @@ ifa_ifwithaddr(const struct sockaddr *addr)
 {
 	struct ifnet *ifp;
 	struct ifaddr *ifa;
-
-#define	equal(a1, a2) \
-  (memcmp((a1), (a2), ((const struct sockaddr *)(a1))->sa_len) == 0)
 
 	IFNET_FOREACH(ifp) {
 		if (ifp->if_output == if_nulloutput)
@@ -970,7 +966,7 @@ ifa_ifwithnet(const struct sockaddr *addr)
 	const char *addr_data = addr->sa_data, *cplim;
 
 	if (af == AF_LINK) {
-		sdl = (const struct sockaddr_dl *)addr;
+		sdl = satocsdl(addr);
 		if (sdl->sdl_index && sdl->sdl_index < if_indexlim &&
 		    ifindex2ifnet[sdl->sdl_index] &&
 		    ifindex2ifnet[sdl->sdl_index]->if_output != if_nulloutput)
@@ -1113,11 +1109,11 @@ void
 link_rtrequest(int cmd, struct rtentry *rt, struct rt_addrinfo *info)
 {
 	struct ifaddr *ifa;
-	struct sockaddr *dst;
+	const struct sockaddr *dst;
 	struct ifnet *ifp;
 
 	if (cmd != RTM_ADD || ((ifa = rt->rt_ifa) == NULL) ||
-	    ((ifp = ifa->ifa_ifp) == NULL) || ((dst = rt_key(rt)) == NULL))
+	    ((ifp = ifa->ifa_ifp) == NULL) || ((dst = rt_getkey(rt)) == NULL))
 		return;
 	if ((ifa = ifaof_ifpforaddr(dst, ifp)) != NULL) {
 		rt_replace_ifa(rt, ifa);
@@ -1336,7 +1332,7 @@ ifioctl(struct socket *so, u_long cmd, void *data, struct lwp *l)
 	}
 
 #ifdef COMPAT_OIFREQ
-	cmd = cvtcmd(cmd);
+	cmd = compat_cvtcmd(cmd);
 	if (cmd != ocmd) {
 		oifr = data;
 		data = ifr = &ifrb;
@@ -1387,6 +1383,8 @@ ifioctl(struct socket *so, u_long cmd, void *data, struct lwp *l)
 	case SIOCDELMULTI:
 	case SIOCSIFMEDIA:
 	case SIOCSDRVSPEC:
+	case SIOCG80211:
+	case SIOCS80211:
 	case SIOCS80211NWID:
 	case SIOCS80211NWKEY:
 	case SIOCS80211POWER:
@@ -1556,17 +1554,19 @@ ifioctl(struct socket *so, u_long cmd, void *data, struct lwp *l)
 	case SIOCGIFPDSTADDR:
 	case SIOCGLIFPHYADDR:
 	case SIOCGIFMEDIA:
+	case SIOCG80211:
+	case SIOCS80211:
+	case SIOCS80211NWID:
+	case SIOCS80211NWKEY:
+	case SIOCS80211POWER:
+	case SIOCS80211BSSID:
+	case SIOCS80211CHANNEL:
 		if (ifp->if_ioctl == NULL)
 			return EOPNOTSUPP;
 		error = (*ifp->if_ioctl)(ifp, cmd, data);
 		break;
 
 	case SIOCSDRVSPEC:
-	case SIOCS80211NWID:
-	case SIOCS80211NWKEY:
-	case SIOCS80211POWER:
-	case SIOCS80211BSSID:
-	case SIOCS80211CHANNEL:
 	default:
 		if (so->so_proto == NULL)
 			return EOPNOTSUPP;
@@ -1602,6 +1602,28 @@ ifioctl(struct socket *so, u_long cmd, void *data, struct lwp *l)
  * of system.  List may be used
  * in later ioctl's (above) to get
  * other information.
+ *
+ * Each record is a struct ifreq.  Before the addition of
+ * sockaddr_storage, the API rule was that sockaddr flavors that did
+ * not fit would extend beyond the struct ifreq, with the next struct
+ * ifreq starting sa_len beyond the struct sockaddr.  Because the
+ * union in struct ifreq includes struct sockaddr_storage, every kind
+ * of sockaddr must fit.  Thus, there are no longer any overlength
+ * records.
+ *
+ * Records are added to the user buffer if they fit, and ifc_len is
+ * adjusted to the length that was written.  Thus, the user is only
+ * assured of getting the complete list if ifc_len on return is at
+ * least sizeof(struct ifreq) less than it was on entry.
+ *
+ * If the user buffer pointer is NULL, this routine copies no data and
+ * returns the amount of space that would be needed.
+ *
+ * Invariants:
+ * ifrp points to the next part of the user's buffer to be used.  If
+ * ifrp != NULL, space holds the number of bytes remaining that we may
+ * write at ifrp.  Otherwise, space holds the number of bytes that
+ * would have been written had there been adequate space.
  */
 /*ARGSUSED*/
 int
@@ -1612,8 +1634,7 @@ ifconf(u_long cmd, void *data)
 	struct ifaddr *ifa;
 	struct ifreq ifr, *ifrp;
 	int space, error = 0;
-	const int sz = offsetof(struct ifreq, ifr_ifru) +
-	    sizeof(struct sockaddr);
+	const int sz = (int)sizeof(struct ifreq);
 
 	if ((ifrp = ifc->ifc_req) == NULL)
 		space = 0;
@@ -1625,47 +1646,75 @@ ifconf(u_long cmd, void *data)
 		if (ifr.ifr_name[sizeof(ifr.ifr_name) - 1] != '\0')
 			return ENAMETOOLONG;
 		if (TAILQ_EMPTY(&ifp->if_addrlist)) {
+			/* Interface with no addresses - send zero sockaddr. */
 			memset(&ifr.ifr_addr, 0, sizeof(ifr.ifr_addr));
-			if (space >= sz) {
-				error = copyout(&ifr, ifrp, sz);
-				if (error != 0)
-					return (error);
-				ifrp++;
+			if (ifrp != NULL)
+			{
+				if (space >= sz) {
+					error = copyout(&ifr, ifrp, sz);
+					if (error != 0)
+						return (error);
+					ifrp++; space -= sz;
+				}
 			}
-			space -= sizeof(struct ifreq);
+			else
+				space += sz;
 			continue;
 		}
 
 		TAILQ_FOREACH(ifa, &ifp->if_addrlist, ifa_list) {
 			struct sockaddr *sa = ifa->ifa_addr;
-			if (sa->sa_len <= sizeof(*sa)) {
-				ifr.ifr_addr = *sa;
+			/* all sockaddrs must fit in sockaddr_storage */
+			KASSERT(sa->sa_len <= sizeof(ifr.ifr_ifru));
+
+			if (ifrp != NULL)
+			{
+				memcpy(&ifr.ifr_space, sa, sa->sa_len);
 				if (space >= sz) {
 					error = copyout(&ifr, ifrp, sz);
-					ifrp++;
+					if (error != 0)
+						return (error);
+					ifrp++; space -= sz;
 				}
-				space -= sizeof(struct ifreq);
-			} else {
-				space -= sa->sa_len - sizeof(*sa) + sz;
-				if (space < 0)
-					continue;
-				error = copyout(&ifr, ifrp,
-				    sizeof(ifr.ifr_name));
-				if (error == 0)
-					error = copyout(sa,
-					    &ifrp->ifr_addr, sa->sa_len);
-				ifrp = (struct ifreq *)
-				    (sa->sa_len + (char *)&ifrp->ifr_addr);
 			}
-			if (error != 0)
-				return (error);
+			else
+				space += sz;
 		}
 	}
 	if (ifrp != NULL)
+	{
+		KASSERT(0 <= space && space <= ifc->ifc_len);
 		ifc->ifc_len -= space;
+	}
 	else
-		ifc->ifc_len = -space;
+	{
+		KASSERT(space >= 0);
+		ifc->ifc_len = space;
+	}
 	return (0);
+}
+
+int
+ifreq_setaddr(const u_long cmd, struct ifreq *ifr, const struct sockaddr *sa)
+{
+	uint8_t len;
+	u_long ncmd;
+	const uint8_t osockspace = sizeof(ifr->ifr_addr);
+	const uint8_t sockspace = sizeof(ifr->ifr_ifru.ifru_space);
+
+#ifdef INET6
+	if (cmd == SIOCGIFPSRCADDR_IN6 || cmd == SIOCGIFPDSTADDR_IN6)
+		len = MIN(sizeof(struct sockaddr_in6), sa->sa_len);
+	else
+#endif /* INET6 */
+	if ((ncmd = compat_cvtcmd(cmd)) != cmd)
+		len = MIN(sockspace, sa->sa_len);
+	else
+		len = MIN(osockspace, sa->sa_len);
+	sockaddr_copy(&ifr->ifr_addr, len, sa);
+	if (len < sa->sa_len)
+		return EFBIG;
+	return 0;
 }
 
 /*

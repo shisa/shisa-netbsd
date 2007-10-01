@@ -1,4 +1,4 @@
-/*	$NetBSD: systm.h,v 1.196 2007/03/04 06:03:42 christos Exp $	*/
+/*	$NetBSD: systm.h,v 1.198 2007/09/24 20:01:03 joerg Exp $	*/
 
 /*-
  * Copyright (c) 1982, 1988, 1991, 1993
@@ -172,6 +172,32 @@ void	aprint_verbose(const char *, ...)
 void	aprint_debug(const char *, ...)
     __attribute__((__format__(__printf__,1,2)));
 
+struct device;
+
+void	aprint_normal_dev(struct device *, const char *, ...)
+    __attribute__((__format__(__printf__,2,3)));
+void	aprint_error_dev(struct device *, const char *, ...)
+    __attribute__((__format__(__printf__,2,3)));
+void	aprint_naive_dev(struct device *, const char *, ...)
+    __attribute__((__format__(__printf__,2,3)));
+void	aprint_verbose_dev(struct device *, const char *, ...)
+    __attribute__((__format__(__printf__,2,3)));
+void	aprint_debug_dev(struct device *, const char *, ...)
+    __attribute__((__format__(__printf__,2,3)));
+
+struct ifnet;
+
+void	aprint_normal_ifnet(struct ifnet *, const char *, ...)
+    __attribute__((__format__(__printf__,2,3)));
+void	aprint_error_ifnet(struct ifnet *, const char *, ...)
+    __attribute__((__format__(__printf__,2,3)));
+void	aprint_naive_ifnet(struct ifnet *, const char *, ...)
+    __attribute__((__format__(__printf__,2,3)));
+void	aprint_verbose_ifnet(struct ifnet *, const char *, ...)
+    __attribute__((__format__(__printf__,2,3)));
+void	aprint_debug_ifnet(struct ifnet *, const char *, ...)
+    __attribute__((__format__(__printf__,2,3)));
+
 int	aprint_get_error_count(void);
 
 void	printf_nolog(const char *, ...)
@@ -304,6 +330,13 @@ void	dopowerhooks(int);
 #define PWR_SOFTRESUME	3
 #define PWR_SOFTSUSPEND	4
 #define PWR_SOFTSTANDBY	5
+#define PWR_NAMES \
+	"resume",	/* 0 */ \
+	"suspend",	/* 1 */ \
+	"standby",	/* 2 */ \
+	"softresume",	/* 3 */ \
+	"softsuspend",	/* 4 */ \
+	"softstandby"	/* 5 */
 
 /*
  * Mountroot hooks (and mountroot declaration).  Device drivers establish

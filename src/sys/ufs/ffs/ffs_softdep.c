@@ -1,4 +1,4 @@
-/*	$NetBSD: ffs_softdep.c,v 1.91 2007/06/30 09:37:53 pooka Exp $	*/
+/*	$NetBSD: ffs_softdep.c,v 1.97 2007/09/01 23:40:26 pooka Exp $	*/
 
 /*
  * Copyright 1998 Marshall Kirk McKusick. All Rights Reserved.
@@ -33,7 +33,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ffs_softdep.c,v 1.91 2007/06/30 09:37:53 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ffs_softdep.c,v 1.97 2007/09/01 23:40:26 pooka Exp $");
 
 #include <sys/param.h>
 #include <sys/buf.h>
@@ -115,11 +115,7 @@ const char *softdep_typenames[] = {
 };
 #define TYPENAME(type) \
 	((unsigned)(type) <= D_LAST ? softdep_typenames[type] : "???")
-/*
- * Finding the current process.
- */
-#define CURPROC curproc
-#define CURPROC_PID (curproc ? curproc->p_pid : 0)
+
 /*
  * End system adaptation definitions.
  */
@@ -213,7 +209,7 @@ static	int softdep_process_worklist(struct mount *);
 static	void softdep_move_dependencies(struct buf *, struct buf *);
 static	int softdep_count_dependencies(struct buf *bp, int);
 
-struct bio_ops bioops = {
+static struct bio_ops bioops_softdep = {
 	softdep_disk_io_initiation,		/* io_start */
 	softdep_disk_write_complete,		/* io_complete */
 	softdep_deallocate_dependencies,	/* io_deallocate */
@@ -251,8 +247,8 @@ static struct lockit {
 #else /* DEBUG */
 static struct lockit {
 	int	lkt_spl;
-	volatile pid_t	lkt_held;
-} lk = { 0, -1 };
+	lwp_t	*lkt_held;
+} lk = { 0, NULL };
 static int lockcnt;
 
 static	void acquire_lock(struct lockit *);
@@ -269,14 +265,14 @@ static void
 acquire_lock(lkp)
 	struct lockit *lkp;
 {
-	if (lkp->lkt_held != -1) {
-		if (lkp->lkt_held == CURPROC_PID)
+	if (lkp->lkt_held != NULL) {
+		if (lkp->lkt_held == curlwp)
 			panic("softdep_lock: locking against myself");
 		else
-			panic("softdep_lock: lock held by %d", lkp->lkt_held);
+			panic("softdep_lock: lock held by %p", lkp->lkt_held);
 	}
 	lkp->lkt_spl = splbio();
-	lkp->lkt_held = CURPROC_PID;
+	lkp->lkt_held = curlwp;
 	lockcnt++;
 }
 
@@ -285,9 +281,9 @@ free_lock(lkp)
 	struct lockit *lkp;
 {
 
-	if (lkp->lkt_held == -1)
+	if (lkp->lkt_held == NULL)
 		panic("softdep_unlock: lock not held");
-	lkp->lkt_held = -1;
+	lkp->lkt_held = NULL;
 	splx(lkp->lkt_spl);
 }
 
@@ -296,15 +292,15 @@ acquire_lock_interlocked(lkp, s)
 	struct lockit *lkp;
 	int s;
 {
-	if (lkp->lkt_held != -1) {
-		if (lkp->lkt_held == CURPROC_PID)
+	if (lkp->lkt_held != NULL) {
+		if (lkp->lkt_held == curlwp)
 			panic("softdep_lock_interlocked: locking against self");
 		else
-			panic("softdep_lock_interlocked: lock held by %d",
+			panic("softdep_lock_interlocked: lock held by %p",
 			    lkp->lkt_held);
 	}
 	lkp->lkt_spl = s;
-	lkp->lkt_held = CURPROC_PID;
+	lkp->lkt_held = curlwp;
 	lockcnt++;
 }
 
@@ -312,9 +308,9 @@ static int
 free_lock_interlocked(lkp)
 	struct lockit *lkp;
 {
-	if (lkp->lkt_held == -1)
+	if (lkp->lkt_held == NULL)
 		panic("softdep_unlock_interlocked: lock not held");
-	lkp->lkt_held = -1;
+	lkp->lkt_held = NULL;
 	return lkp->lkt_spl;
 }
 #endif /* DEBUG */
@@ -323,9 +319,9 @@ free_lock_interlocked(lkp)
  * Place holder for real semaphores.
  */
 struct sema {
-	int	value;
-	pid_t	holder;
+	lwp_t	*holder;
 	const char *name;
+	int	value;
 	int	prio;
 	int	timo;
 };
@@ -340,7 +336,7 @@ sema_init(semap, name, prio, timo)
 	int prio, timo;
 {
 
-	semap->holder = -1;
+	semap->holder = NULL;
 	semap->value = 0;
 	semap->name = name;
 	semap->prio = prio;
@@ -364,7 +360,7 @@ sema_get(semap, interlock)
 		}
 		return (0);
 	}
-	semap->holder = CURPROC_PID;
+	semap->holder = curlwp;
 	if (interlock != NULL)
 		FREE_LOCK(interlock);
 	return (1);
@@ -375,13 +371,13 @@ sema_release(semap)
 	struct sema *semap;
 {
 
-	if (semap->value <= 0 || semap->holder != CURPROC_PID)
+	if (semap->value <= 0 || semap->holder != curlwp)
 		panic("sema_release: not held");
 	if (--semap->value > 0) {
 		semap->value = 0;
 		wakeup(semap);
 	}
-	semap->holder = -1;
+	semap->holder = NULL;
 }
 
 /*
@@ -503,7 +499,7 @@ inodedep_allocdino(struct inodedep *inodedep, const struct buf *origbp,
 
 	KASSERT(inodedep->id_savedino1 == NULL);
 
-	if (curproc != uvm.pagedaemon_proc)
+	if (curlwp != uvm.pagedaemon_lwp)
 		return malloc(size, M_INODEDEP, M_WAITOK);
 
 	vp = malloc(size, M_INODEDEP, M_NOWAIT);
@@ -589,7 +585,7 @@ worklist_insert(head, item)
 	struct worklist *item;
 {
 
-	if (lk.lkt_held == -1)
+	if (lk.lkt_held == NULL)
 		panic("worklist_insert: lock not held");
 	if (item->wk_state & ONWORKLIST)
 		panic("worklist_insert: already on list");
@@ -602,7 +598,7 @@ worklist_remove(item)
 	struct worklist *item;
 {
 
-	if (lk.lkt_held == -1)
+	if (lk.lkt_held == NULL)
 		panic("worklist_remove: lock not held");
 	if ((item->wk_state & ONWORKLIST) == 0)
 		panic("worklist_remove: not on list");
@@ -630,8 +626,8 @@ static int softdep_worklist_req; /* serialized waiters */
 static int max_softdeps;	/* maximum number of structs before slowdown */
 static int tickdelay = 2;	/* number of ticks to pause during slowdown */
 static int proc_waiting;	/* tracks whether we have a timeout posted */
-static struct callout pause_timer_ch = CALLOUT_INITIALIZER;
-static struct proc *filesys_syncer; /* proc of filesystem syncer process */
+static callout_t pause_timer_ch;
+static lwp_t *filesys_syncer;	/* filesystem syncer thread */
 static int req_clear_inodedeps;	/* syncer process flush some inodedeps */
 #define FLUSH_INODES	1
 static int req_clear_remove;	/* syncer process flush some freeblks */
@@ -715,7 +711,7 @@ softdep_process_worklist(matchmnt)
 	 * Record the process identifier of our caller so that we can give
 	 * this process preferential treatment in request_cleanup below.
 	 */
-	filesys_syncer = l->l_proc;
+	filesys_syncer = l;
 	matchcnt = 0;
 	/*
 	 * There is no danger of having multiple processes run this
@@ -1004,7 +1000,7 @@ pagedep_lookup(ip, lbn, flags, pagedeppp)
 	int i;
 
 #ifdef DEBUG
-	if (lk.lkt_held == -1)
+	if (lk.lkt_held == NULL)
 		panic("pagedep_lookup: lock not held");
 #endif
 	mp = ITOV(ip)->v_mount;
@@ -1076,7 +1072,7 @@ inodedep_lookup(fs, inum, flags, inodedeppp)
 	int firsttry;
 
 #ifdef DEBUG
-	if (lk.lkt_held == -1)
+	if (lk.lkt_held == NULL)
 		panic("inodedep_lookup: lock not held");
 #endif
 	firsttry = 1;
@@ -1188,9 +1184,12 @@ softdep_initialize()
 {
 	int i;
 
+	bioopsp = &bioops_softdep;
+
 	malloc_type_attach(M_PAGEDEP);
 	malloc_type_attach(M_INODEDEP);
 	malloc_type_attach(M_NEWBLK);
+	callout_init(&pause_timer_ch, CALLOUT_MPSAFE);
 
 	pool_init(&sdpcpool, sizeof(struct buf), 0, 0, 0, "sdpcpool",
 	    &pool_allocator_nointr, IPL_NONE);
@@ -1445,7 +1444,7 @@ bmsafemap_lookup(bp)
 	struct worklist *wk;
 
 #ifdef DEBUG
-	if (lk.lkt_held == -1)
+	if (lk.lkt_held == NULL)
 		panic("bmsafemap_lookup: lock not held");
 #endif
 	for (wk = LIST_FIRST(&bp->b_dep); wk; wk = LIST_NEXT(wk, wk_list))
@@ -1626,7 +1625,7 @@ allocdirect_merge(adphead, newadp, oldadp)
 	struct newdirblk *newdirblk;
 
 #ifdef DEBUG
-	if (lk.lkt_held == -1)
+	if (lk.lkt_held == NULL)
 		panic("allocdirect_merge: lock not held");
 #endif
 	if (newadp->ad_oldblkno != oldadp->ad_newblkno ||
@@ -2262,7 +2261,7 @@ free_allocdirect(adphead, adp, delayx)
 	struct worklist *wk;
 
 #ifdef DEBUG
-	if (lk.lkt_held == -1)
+	if (lk.lkt_held == NULL)
 		panic("free_allocdirect: lock not held");
 #endif
 	if ((adp->ad_state & DEPCOMPLETE) == 0)
@@ -2304,7 +2303,7 @@ free_newdirblk(newdirblk)
 	int i;
 
 #ifdef DEBUG
-	if (lk.lkt_held == -1)
+	if (lk.lkt_held == NULL)
 		panic("free_newdirblk: lock not held");
 #endif
 	/*
@@ -2619,7 +2618,7 @@ free_allocindir(aip, inodedep)
 	struct freefrag *freefrag;
 
 #ifdef DEBUG
-	if (lk.lkt_held == -1)
+	if (lk.lkt_held == NULL)
 		panic("free_allocindir: lock not held");
 #endif
 	if ((aip->ai_state & DEPCOMPLETE) == 0)
@@ -2874,7 +2873,7 @@ free_diradd(dap)
 	struct mkdir *mkdir, *nextmd;
 
 #ifdef DEBUG
-	if (lk.lkt_held == -1)
+	if (lk.lkt_held == NULL)
 		panic("free_diradd: lock not held");
 #endif
 	WORKLIST_REMOVE(&dap->da_list);
@@ -3927,13 +3926,13 @@ softdep_disk_write_complete(bp)
 	 * If an error occurred while doing the write, then the data
 	 * has not hit the disk and the dependencies cannot be unrolled.
 	 */
-	if ((bp->b_flags & B_ERROR) != 0 && (bp->b_flags & B_INVAL) == 0)
+	if (bp->b_error != 0 && (bp->b_flags & B_INVAL) == 0)
 		return;
 
 #ifdef DEBUG
-	if (lk.lkt_held != -1)
+	if (lk.lkt_held != NULL)
 		panic("softdep_disk_write_complete: lock is held");
-	lk.lkt_held = -2;
+	lk.lkt_held = (struct lwp *)1;
 #endif
 	LIST_INIT(&reattach);
 	while ((wk = LIST_FIRST(&bp->b_dep)) != NULL) {
@@ -4029,9 +4028,9 @@ softdep_disk_write_complete(bp)
 		WORKLIST_INSERT(&bp->b_dep, wk);
 	}
 #ifdef DEBUG
-	if (lk.lkt_held != -2)
+	if (lk.lkt_held != (struct lwp *)1)
 		panic("softdep_disk_write_complete: lock lost");
-	lk.lkt_held = -1;
+	lk.lkt_held = NULL;
 #endif
 }
 
@@ -5389,13 +5388,13 @@ request_cleanup(resource, islocked)
 	int resource;
 	int islocked;
 {
-	struct proc *p = CURPROC;
+	lwp_t *l = curlwp;
 	int s;
 
 	/*
 	 * We never hold up the filesystem syncer process.
 	 */
-	if (p == filesys_syncer)
+	if (l == filesys_syncer)
 		return (0);
 	/*
 	 * If we are resource constrained on inode dependencies, try
@@ -5753,7 +5752,7 @@ softdep_deallocate_dependencies(bp)
 	struct buf *bp;
 {
 
-	if ((bp->b_flags & B_ERROR) == 0)
+	if (bp->b_error == 0)
 		panic("softdep_deallocate_dependencies: dangling deps");
 	softdep_error(bp->b_vp->v_mount->mnt_stat.f_mntonname, bp->b_error);
 	panic("softdep_deallocate_dependencies: unrecovered I/O error");

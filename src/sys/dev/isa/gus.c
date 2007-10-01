@@ -1,4 +1,4 @@
-/*	$NetBSD: gus.c,v 1.97 2007/03/04 06:02:11 christos Exp $	*/
+/*	$NetBSD: gus.c,v 1.99 2007/09/25 23:11:24 ad Exp $	*/
 
 /*-
  * Copyright (c) 1996, 1999 The NetBSD Foundation, Inc.
@@ -95,7 +95,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: gus.c,v 1.97 2007/03/04 06:02:11 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: gus.c,v 1.99 2007/09/25 23:11:24 ad Exp $");
 
 #include "gus.h"
 #if NGUS > 0
@@ -116,7 +116,7 @@ __KERNEL_RCSID(0, "$NetBSD: gus.c,v 1.97 2007/03/04 06:02:11 christos Exp $");
 #include <machine/cpu.h>
 #include <machine/intr.h>
 #include <machine/bus.h>
-#include <machine/cpufunc.h>
+
 #include <sys/audioio.h>
 #include <dev/audio_if.h>
 #include <dev/mulaw.h>
@@ -188,7 +188,7 @@ struct gus_softc {
 	bus_space_handle_t sc_ioh3;	/* ICS2101 handle */
 	bus_space_handle_t sc_ioh4;	/* MIDI handle */
 
-	struct callout sc_dmaout_ch;
+	callout_t sc_dmaout_ch;
 
 	int sc_iobase;			/* I/O base address */
 	int sc_irq;			/* IRQ used */
@@ -829,12 +829,12 @@ gusattach(struct device *parent, struct device *self, void *aux)
 	bus_space_handle_t ioh1, ioh2, ioh3, ioh4;
 	int		iobase, i;
 	unsigned char	c, m;
-	int d = -1;
+	int d = -1, s;
 	const struct audio_hw_if *hwif;
 
 	sc = (void *) self;
 	ia = aux;
-	callout_init(&sc->sc_dmaout_ch);
+	callout_init(&sc->sc_dmaout_ch, 0);
 
 	sc->sc_iot = iot = ia->ia_iot;
 	sc->sc_ic = ia->ia_ic;
@@ -918,7 +918,7 @@ gusattach(struct device *parent, struct device *self, void *aux)
 	 * The order of these operations is very magical.
 	 */
 
-	disable_intr();		/* XXX needed? */
+	s = splhigh();		/* XXX needed? */
 
 	bus_space_write_1(iot, ioh1, GUS_REG_CONTROL, GUS_REG_IRQCTL);
 	bus_space_write_1(iot, ioh1, GUS_MIX_CONTROL, m);
@@ -944,7 +944,7 @@ gusattach(struct device *parent, struct device *self, void *aux)
 	     (m | GUSMASK_LATCHES) & ~(GUSMASK_LINE_OUT|GUSMASK_LINE_IN));
 	bus_space_write_1(iot, ioh2, GUS_VOICE_SELECT, 0x00);
 
-	enable_intr();
+	splx(s);
 
 	sc->sc_mixcontrol =
 		(m | GUSMASK_LATCHES) & ~(GUSMASK_LINE_OUT|GUSMASK_LINE_IN);

@@ -1,4 +1,4 @@
-/*	$NetBSD: ipmi.c,v 1.10 2007/07/04 17:36:17 bouyer Exp $ */
+/*	$NetBSD: ipmi.c,v 1.13 2007/09/23 19:17:51 bouyer Exp $ */
 /*
  * Copyright (c) 2006 Manuel Bouyer.
  *
@@ -56,7 +56,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ipmi.c,v 1.10 2007/07/04 17:36:17 bouyer Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ipmi.c,v 1.13 2007/09/23 19:17:51 bouyer Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -1488,12 +1488,26 @@ add_sdr_sensor(struct ipmi_softc *sc, u_int8_t *psdr)
 	return rc;
 }
 
+static int
+ipmi_is_dupname(char *name)
+{
+	struct ipmi_sensor *ipmi_s;
+
+	SLIST_FOREACH(ipmi_s, &ipmi_sensor_list, i_list) {
+		if (strcmp(ipmi_s->i_envdesc, name) == 0) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
 int
 add_child_sensors(struct ipmi_softc *sc, u_int8_t *psdr, int count,
     int sensor_num, int sensor_type, int ext_type, int sensor_base,
     int entity, const char *name)
 {
-	int			typ, idx;
+	int			typ, idx, dupcnt, c;
+	char			*e;
 	struct ipmi_sensor	*psensor;
 	struct sdrtype1		*s1 = (struct sdrtype1 *)psdr;
 
@@ -1503,6 +1517,7 @@ add_child_sensors(struct ipmi_softc *sc, u_int8_t *psdr, int count,
 		    "name:%s\n", sensor_type, ext_type, sensor_num, name);
 		return 0;
 	}
+	dupcnt = 0;
 	sc->sc_nsensors += count;
 	sc->sc_nsensors_typ[typ] += count;
 	for (idx = 0; idx < count; idx++) {
@@ -1526,6 +1541,32 @@ add_child_sensors(struct ipmi_softc *sc, u_int8_t *psdr, int count,
 		else
 			strlcpy(psensor->i_envdesc, name,
 			    sizeof(psensor->i_envdesc));
+
+		/*
+		 * Check for duplicates.  If there are duplicates,
+		 * make sure there is space in the name (if not,
+		 * truncate to make space) for a count (1-99) to
+		 * add to make the name unique.  If we run the
+		 * counter out, just accept the duplicate (@name99)
+		 * for now.
+		 */
+		if (ipmi_is_dupname(psensor->i_envdesc)) {
+			if (strlen(psensor->i_envdesc) >=
+			    sizeof(psensor->i_envdesc) - 3) {
+				e = psensor->i_envdesc +
+				    sizeof(psensor->i_envdesc) - 3;
+			} else {
+				e = psensor->i_envdesc +
+				    strlen(psensor->i_envdesc);
+			}
+			c = psensor->i_envdesc +
+			    sizeof(psensor->i_envdesc) - e;
+			do {
+				dupcnt++;
+				snprintf(e, c, "%d", dupcnt);
+			} while (dupcnt < 100 &&
+			         ipmi_is_dupname(psensor->i_envdesc));
+		}
 
 		dbg_printf(5, "add sensor:%.4x %.2x:%d ent:%.2x:%.2x %s\n",
 		    s1->sdrhdr.record_id, s1->sensor_type,
@@ -1622,19 +1663,6 @@ ipmi_poll_thread(void *arg)
 	kthread_exit(0);
 }
 
-void
-ipmi_create_thread(void *arg)
-{
-	struct ipmi_softc *sc = arg;
-
-	if (kthread_create1(ipmi_poll_thread, sc, &sc->sc_kthread,
-	    DEVNAME(sc)) != 0) {
-		printf("%s: unable to create polling thread, ipmi disabled\n",
-		    DEVNAME(sc));
-		return;
-	}
-}
-
 int
 ipmi_probe(struct ipmi_attach_args *ia)
 {
@@ -1689,8 +1717,8 @@ ipmi_match(struct device *parent, struct cfdata *cf,
 		}
 
 		dbg_dump(1, "bmc data", len, cmd);
-unmap:
 		rv = 1; /* GETID worked, we got IPMI */
+unmap:
 		ipmi_unmap_regs(&sc, ia);
 	}
 
@@ -1767,9 +1795,6 @@ ipmi_attach(struct device *parent, struct device *self, void *aux)
 	if (!SLIST_EMPTY(&ipmi_sensor_list))
 		sc->current_sensor = SLIST_FIRST(&ipmi_sensor_list);
 
-	/* Setup threads */
-	kthread_create(ipmi_create_thread, sc);
-
 	aprint_normal(": version %d.%d interface %s %sbase 0x%x/%x spacing %d",
 	    ia->iaa_if_rev >> 4, ia->iaa_if_rev & 0xF, sc->sc_if->name,
 	    ia->iaa_if_iotype == 'i' ? "io" : "mem", ia->iaa_if_iobase,
@@ -1795,8 +1820,15 @@ ipmi_attach(struct device *parent, struct device *self, void *aux)
 	sc->sc_retries = 0;
 	sc->sc_wakeup = 0;
 	sc->sc_max_retries = 50; /* 50 * 1/100 = 0.5 seconds max */
-	callout_init(&sc->sc_callout);
+	callout_init(&sc->sc_callout, 0);
 	callout_setfunc(&sc->sc_callout, _bmc_io_wait, sc);
+
+	if (kthread_create(PRI_NONE, 0, NULL, ipmi_poll_thread, sc,
+	    &sc->sc_kthread, DEVNAME(sc)) != 0) {
+		printf("%s: unable to create polling thread, ipmi disabled\n",
+		    DEVNAME(sc));
+		return;
+	}
 }
 
 int

@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_exit.c,v 1.182 2007/06/15 18:29:53 ad Exp $	*/
+/*	$NetBSD: kern_exit.c,v 1.187 2007/09/06 23:58:56 ad Exp $	*/
 
 /*-
  * Copyright (c) 1998, 1999, 2006, 2007 The NetBSD Foundation, Inc.
@@ -74,7 +74,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_exit.c,v 1.182 2007/06/15 18:29:53 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_exit.c,v 1.187 2007/09/06 23:58:56 ad Exp $");
 
 #include "opt_ktrace.h"
 #include "opt_perfctrs.h"
@@ -291,9 +291,9 @@ exit1(struct lwp *l, int rv)
 	 * Release trace file.
 	 */
 	if (p->p_tracep != NULL) {
-		mutex_enter(&ktrace_mutex);
+		mutex_enter(&ktrace_lock);
 		ktrderef(p);
-		mutex_exit(&ktrace_mutex);
+		mutex_exit(&ktrace_lock);
 	}
 #endif
 #ifdef SYSTRACE
@@ -324,6 +324,14 @@ exit1(struct lwp *l, int rv)
 	uvm_proc_exit(p);
 
 	/*
+	 * While we can still block, and mark the LWP as unswappable to
+	 * prevent conflicts with the with the swapper.  We also shouldn't
+	 * be swapped out, because we are about to exit and will release
+	 * memory.
+	 */
+	uvm_lwp_hold(l);
+
+	/*
 	 * Stop profiling.
 	 */
 	if ((p->p_stflag & PST_PROFIL) != 0) {
@@ -342,7 +350,7 @@ exit1(struct lwp *l, int rv)
 	mutex_enter(&p->p_smutex);
 	if (p->p_sflag & PS_PPWAIT) {
 		p->p_sflag &= ~PS_PPWAIT;
-		cv_signal(&p->p_pptr->p_waitcv);
+		cv_broadcast(&p->p_pptr->p_waitcv);
 	}
 	mutex_exit(&p->p_smutex);
 
@@ -518,7 +526,7 @@ exit1(struct lwp *l, int rv)
 		 * continue.
 		 */
 		if (LIST_FIRST(&q->p_children) == NULL)
-			cv_signal(&q->p_waitcv);
+			cv_broadcast(&q->p_waitcv);
 	}
 	mutex_exit(&q->p_mutex);
 
@@ -537,7 +545,9 @@ exit1(struct lwp *l, int rv)
 	    NULL, NULL);
 
 	if (wakeinit)
-		cv_signal(&initproc->p_waitcv);
+		cv_broadcast(&initproc->p_waitcv);
+
+	callout_destroy(&l->l_timeout_ch);
 
 	/*
 	 * Remaining lwp resources will be freed in lwp_exit2() once we've
@@ -564,7 +574,7 @@ exit1(struct lwp *l, int rv)
 	/*
 	 * Signal the parent to collect us, and drop the proclist lock.
 	 */
-	cv_signal(&p->p_pptr->p_waitcv);
+	cv_broadcast(&p->p_pptr->p_waitcv);
 	mutex_exit(&proclist_lock);
 
 	/* Verify that we hold no locks other than the kernel lock. */
@@ -902,7 +912,7 @@ proc_free(struct proc *p, struct rusage *ru)
 				kpsignal(parent, &ksi, NULL);
 				mutex_exit(&proclist_mutex);
 			}
-			cv_signal(&parent->p_waitcv);
+			cv_broadcast(&parent->p_waitcv);
 			mutex_exit(&proclist_lock);
 			return;
 		}
@@ -946,14 +956,6 @@ proc_free(struct proc *p, struct rusage *ru)
 
 	l = LIST_FIRST(&p->p_lwps);
 
-	mutex_destroy(&p->p_rasmutex);
-	mutex_destroy(&p->p_mutex);
-	mutex_destroy(&p->p_stmutex);
-	mutex_destroy(&p->p_smutex);
-	cv_destroy(&p->p_waitcv);
-	cv_destroy(&p->p_lwpcv);
-	cv_destroy(&p->p_refcv);
-
 	/*
 	 * Delay release until after dropping the proclist lock.
 	 */
@@ -962,9 +964,21 @@ proc_free(struct proc *p, struct rusage *ru)
 	cred2 = l->l_cred;
 
 	/*
-	 * Free the last LWP's resources.
+	 * Free the last LWP's resources.  On a multiprocessor system,
+	 * this may spin waiting for the LWP to come off the CPU.
 	 */
 	lwp_free(l, false, true);
+
+	/*
+	 * Now that it's off the CPU, destroy locks.
+	 */
+	mutex_destroy(&p->p_rasmutex);
+	mutex_destroy(&p->p_mutex);
+	mutex_destroy(&p->p_stmutex);
+	mutex_destroy(&p->p_smutex);
+	cv_destroy(&p->p_waitcv);
+	cv_destroy(&p->p_lwpcv);
+	cv_destroy(&p->p_refcv);
 
 	/*
 	 * Free the proc structure and let pid be reallocated.  This will

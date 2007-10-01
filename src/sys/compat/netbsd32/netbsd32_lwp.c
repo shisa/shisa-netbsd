@@ -1,11 +1,8 @@
-/*	$NetBSD: netbsd32_lwp.c,v 1.5 2007/06/03 09:50:12 dsl Exp $	*/
+/*	$NetBSD: netbsd32_lwp.c,v 1.7 2007/09/10 10:54:20 cube Exp $	*/
 
 /*
  *  Copyright (c) 2005, 2006, 2007 The NetBSD Foundation.
  *  All rights reserved.
- *
- *  This code is derived from software contributed to the NetBSD Foundation
- *   by Quentin Garnier.
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions
@@ -33,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: netbsd32_lwp.c,v 1.5 2007/06/03 09:50:12 dsl Exp $");
+__KERNEL_RCSID(0, "$NetBSD: netbsd32_lwp.c,v 1.7 2007/09/10 10:54:20 cube Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -134,30 +131,32 @@ netbsd32__lwp_park(struct lwp *l, void *v, register_t *retval)
 {
 	struct netbsd32__lwp_park_args /* {
 		syscallarg(const netbsd32_timespecp) ts;
-		syscallarg(netbsd32_ucontextp) ucp;
+		syscallarg(lwpid_t) unpark;
 		syscallarg(netbsd32_voidp) hint;
+		syscallarg(netbsd32_voidp) unparkhint;
 	} */ *uap = v;
-	struct timespec ts;
+	struct timespec ts, *tsp;
 	struct netbsd32_timespec ts32;
 	int error;
 
-	/*
-	 * sys__lwp_park() ignores the ucontext_t argument, so we won't be
-	 * doing anything to it for now.  While that situation could change,
-	 * there's still a good chance it will only be considered as an
-	 * opaque value.
-	 */
-
 	if (SCARG_P32(uap, ts) == NULL)
-		return do_sys_lwp_park(l, NULL, SCARG_P32(uap, ucp),
-					SCARG_P32(uap, hint));
+		tsp = NULL;
+	else {
+		error = copyin(SCARG_P32(uap, ts), &ts32, sizeof ts32);
+		if (error != 0)
+			return error;
+		netbsd32_to_timespec(&ts32, &ts);
+		tsp = &ts;
+	}
 
-	if ((error = copyin(SCARG_P32(uap, ts), &ts32, sizeof ts32)) != 0)
-		return error;
-	netbsd32_to_timespec(&ts32, &ts);
+	if (SCARG(uap, unpark) != 0) {
+		error = lwp_unpark(SCARG(uap, unpark),
+		    SCARG_P32(uap, unparkhint));
+		if (error != 0)
+			return error;
+	}
 
-	return do_sys_lwp_park(l, &ts, SCARG_P32(uap, ucp),
-				SCARG_P32(uap, hint));
+	return lwp_park(tsp, SCARG_P32(uap, hint));
 }
 
 int

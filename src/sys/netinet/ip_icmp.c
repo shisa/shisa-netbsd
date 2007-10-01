@@ -1,4 +1,4 @@
-/*	$NetBSD: ip_icmp.c,v 1.111 2007/03/04 06:03:21 christos Exp $	*/
+/*	$NetBSD: ip_icmp.c,v 1.113 2007/08/27 05:39:44 dyoung Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -101,7 +101,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ip_icmp.c,v 1.111 2007/03/04 06:03:21 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ip_icmp.c,v 1.113 2007/08/27 05:39:44 dyoung Exp $");
 
 #include "opt_ipsec.h"
 
@@ -618,8 +618,7 @@ reflect:
 		icmpsrc.sin_addr = icp->icmp_ip.ip_dst;
 		rt = NULL;
 		rtredirect(sintosa(&icmpsrc), sintosa(&icmpdst),
-		    (struct sockaddr *)0, RTF_GATEWAY | RTF_HOST,
-		    sintosa(&icmpgw), (struct rtentry **)&rt);
+		    NULL, RTF_GATEWAY | RTF_HOST, sintosa(&icmpgw), &rt);
 		if (rt != NULL && icmp_redirtimeout != 0) {
 			i = rt_timer_add(rt, icmp_redirect_timeout,
 					 icmp_redirect_timeout_q);
@@ -1187,7 +1186,7 @@ icmp_mtudisc_timeout(struct rtentry *rt, struct rttimer *r)
 		panic("icmp_mtudisc_timeout:  bad route to timeout");
 	if ((rt->rt_flags & (RTF_DYNAMIC | RTF_HOST)) ==
 	    (RTF_DYNAMIC | RTF_HOST)) {
-		rtrequest((int) RTM_DELETE, (struct sockaddr *)rt_key(rt),
+		rtrequest((int) RTM_DELETE, rt_getkey(rt),
 		    rt->rt_gateway, rt_mask(rt), rt->rt_flags, 0);
 	} else {
 		if ((rt->rt_rmx.rmx_locks & RTV_MTU) == 0) {
@@ -1203,7 +1202,7 @@ icmp_redirect_timeout(struct rtentry *rt, struct rttimer *r)
 		panic("icmp_redirect_timeout:  bad route to timeout");
 	if ((rt->rt_flags & (RTF_DYNAMIC | RTF_HOST)) ==
 	    (RTF_DYNAMIC | RTF_HOST)) {
-		rtrequest((int) RTM_DELETE, (struct sockaddr *)rt_key(rt),
+		rtrequest((int) RTM_DELETE, rt_getkey(rt),
 		    rt->rt_gateway, rt_mask(rt), rt->rt_flags, 0);
 	}
 }

@@ -1,4 +1,4 @@
-/*	$NetBSD: proc.h,v 1.251 2007/06/03 09:50:12 dsl Exp $	*/
+/*	$NetBSD: proc.h,v 1.254 2007/09/07 18:56:12 rmind Exp $	*/
 
 /*-
  * Copyright (c) 2006, 2007 The NetBSD Foundation, Inc.
@@ -85,11 +85,11 @@
 #include <sys/aio.h>
 #include <sys/lock.h>
 #include <sys/rwlock.h>
+#include <sys/mqueue.h>
 #include <sys/mutex.h>
 #include <sys/condvar.h>
 #include <sys/lwp.h>
 #include <sys/queue.h>
-#include <sys/callout.h>
 #include <sys/signalvar.h>
 #include <sys/siginfo.h>
 #include <sys/event.h>
@@ -233,6 +233,8 @@ struct proc {
 	struct vmspace	*p_vmspace;	/*    Address space */
 	struct sigacts	*p_sigacts;	/*    Process sigactions */
 	struct aioproc	*p_aio;		/* p: Asynchronous I/O data */
+
+	u_int		p_mqueue_cnt;	/* (: Count of open mqueues */
 
 	specificdata_reference
 			p_specdataref;	/* subsystem proc-specific data */
@@ -534,9 +536,6 @@ void	cpu_lwp_free(struct lwp *, int);
 void	cpu_lwp_free2(struct lwp *);
 #endif
 #endif
-int	do_sys_lwp_park(struct lwp *, struct timespec *, ucontext_t *,
-	    const void *);
-
 
 #ifdef __HAVE_SYSCALL_INTERN
 void	syscall_intern(struct proc *);

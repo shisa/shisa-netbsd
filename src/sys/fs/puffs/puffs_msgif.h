@@ -1,4 +1,4 @@
-/*	$NetBSD: puffs_msgif.h,v 1.40 2007/07/02 18:25:36 pooka Exp $	*/
+/*	$NetBSD: puffs_msgif.h,v 1.52 2007/09/27 23:10:42 pooka Exp $	*/
 
 /*
  * Copyright (c) 2005, 2006  Antti Kantee.  All Rights Reserved.
@@ -29,8 +29,8 @@
  * SUCH DAMAGE.
  */
 
-#ifndef _PUFFS_MSGIF_H_
-#define _PUFFS_MSGIF_H_
+#ifndef _FS_PUFFS_PUFFS_MSGIF_H_
+#define _FS_PUFFS_PUFFS_MSGIF_H_
 
 #include <sys/param.h>
 #include <sys/time.h>
@@ -42,12 +42,15 @@
 #include <sys/dirent.h>
 #include <sys/fcntl.h>
 
-#define PUFFSOP_VFS	1
-#define PUFFSOP_VN	2
-#define PUFFSOP_CACHE	3
+#include <uvm/uvm_prot.h>
+
+#define PUFFSOP_VFS	0x01
+#define PUFFSOP_VN	0x02
+#define PUFFSOP_CACHE	0x03
+#define PUFFSOP_ERROR	0x04
 #define PUFFSOPFLAG_FAF	0x10	/* fire-and-forget */
 
-#define PUFFSOP_OPCMASK		0x03
+#define PUFFSOP_OPCMASK		0x07
 #define PUFFSOP_OPCLASS(a)	((a) & PUFFSOP_OPCMASK)
 #define PUFFSOP_WANTREPLY(a)	(((a) & PUFFSOPFLAG_FAF) == 0)
 
@@ -82,9 +85,22 @@ enum {
 };
 #define PUFFS_VN_MAX PUFFS_VN_SETEXTATTR
 
+enum {
+	PUFFS_ERR_MAKENODE,	PUFFS_ERR_LOOKUP,	PUFFS_ERR_READDIR,
+	PUFFS_ERR_READLINK,	PUFFS_ERR_READ,		PUFFS_ERR_WRITE,
+	PUFFS_ERR_VPTOFH
+};
+#define PUFFS_ERR_MAX PUFFS_ERR_VPTOFH
+
 #define PUFFSDEVELVERS	0x80000000
-#define PUFFSVERSION	14
+#define PUFFSVERSION	18
 #define PUFFSNAMESIZE	32
+
+#define PUFFS_TYPEPREFIX "puffs|"
+
+#define PUFFS_TYPELEN (_VFS_NAMELEN - (sizeof(PUFFS_TYPEPREFIX)+1))
+#define PUFFS_NAMELEN (_VFS_MNAMELEN-1)
+
 struct puffs_kargs {
 	unsigned int	pa_vers;
 	int		pa_fd;
@@ -103,7 +119,9 @@ struct puffs_kargs {
 
 	struct statvfs	pa_svfsb;
 	
-	char		pa_name[PUFFSNAMESIZE+1];   /* name for puffs type */
+	char		pa_typename[_VFS_NAMELEN];
+	char		pa_mntfromname[_VFS_MNAMELEN];
+
 	uint8_t		pa_vnopmask[PUFFS_VN_MAX];
 };
 #define PUFFS_KFLAG_NOCACHE_NAME	0x01	/* don't use name cache     */
@@ -113,12 +131,14 @@ struct puffs_kargs {
 #define PUFFS_KFLAG_WTCACHE		0x08	/* write-through page cache */
 #define PUFFS_KFLAG_IAONDEMAND		0x10	/* inactive only on demand  */
 #define PUFFS_KFLAG_LOOKUP_FULLPNBUF	0x20	/* full pnbuf in lookup     */
-#define PUFFS_KFLAG_MASK		0x2f
+#define PUFFS_KFLAG_MASK		0x3f
 
-#define PUFFS_FHFLAG_DYNAMIC	0x01
-#define PUFFS_FHFLAG_NFSV2	0x02
-#define PUFFS_FHFLAG_NFSV3	0x04
-#define PUFFS_FHFLAG_PROTOMASK	0x06
+#define PUFFS_FHFLAG_DYNAMIC		0x01
+#define PUFFS_FHFLAG_NFSV2		0x02
+#define PUFFS_FHFLAG_NFSV3		0x04
+#define PUFFS_FHFLAG_PROTOMASK		0x06
+#define PUFFS_FHFLAG_PASSTHROUGH	0x08
+#define PUFFS_FHFLAG_MASK		0x0f
 
 #define PUFFS_FHSIZE_MAX	1020	/* XXX: FHANDLE_SIZE_MAX - 4 */
 
@@ -300,6 +320,7 @@ struct puffs_flush {
 #define PUFFSFLUSHMULTIOP	_IOW ('p', 5, struct puffs_flushmulti)
 #endif
 #define PUFFSSUSPENDOP		_IO  ('p', 6)
+#define PUFFSREQSIZEOP		_IOR ('p', 7, size_t)
 
 
 /*
@@ -339,27 +360,13 @@ struct puffs_kcid {
 /* puffs struct componentname built by kernel */
 struct puffs_kcn {
 	/* args */
-	u_long			pkcn_nameiop;	/* namei operation	*/
-	u_long			pkcn_flags;	/* flags		*/
+	uint32_t		pkcn_nameiop;	/* namei operation	*/
+	uint32_t		pkcn_flags;	/* flags		*/
 
 	char pkcn_name[MAXPATHLEN];	/* nulterminated path component */
-	long pkcn_namelen;		/* current component length	*/
-	long pkcn_consume;		/* IN: extra chars server ate   */
+	size_t pkcn_namelen;		/* current component length	*/
+	size_t pkcn_consume;		/* IN: extra chars server ate   */
 };
-
-/*
- * XXX: figure out what to do with these, copied from namei.h for now
- */
-#define	PUFFSLOOKUP_LOOKUP	0	/* perform name lookup only */
-#define PUFFSLOOKUP_CREATE	1	/* setup for file creation */
-#define PUFFSLOOKUP_DELETE	2	/* setup for file deletion */
-#define PUFFSLOOKUP_RENAME	3	/* setup for file renaming */
-#define PUFFSLOOKUP_OPMASK	3	/* mask for operation */
-
-#define PUFFSLOOKUP_FOLLOW	0x00004	/* follow final symlink */
-#define PUFFSLOOKUP_NOFOLLOW	0x00008	/* don't follow final symlink */
-#define PUFFSLOOKUP_ISLASTCN	0x08000 /* is last component of lookup */
-#define PUFFSLOOKUP_REQUIREDIR	0x80000 /* must be directory */
 
 
 /*
@@ -684,7 +691,7 @@ struct puffs_vnreq_advlock {
 struct puffs_vnreq_mmap {
 	struct puffs_req	pvn_pr;
 
-	int			pvnr_fflags;		/* OUT	*/
+	vm_prot_t		pvnr_prot;		/* OUT	*/
 	struct puffs_kcred	pvnr_cred;		/* OUT	*/
 	struct puffs_kcid	pvnr_cid;		/* OUT	*/
 };
@@ -710,6 +717,15 @@ struct puffs_cacheinfo {
 #define PCACHE_TYPE_READ	0
 #define PCACHE_TYPE_WRITE	1
 
+/*
+ * Error notification.  Always outgoing, no response, no remorse.
+ */
+struct puffs_error {
+	struct puffs_req	perr_pr;
+
+	int			perr_error;
+};
+
 /* notyet */
 #if 0
 struct puffs_vnreq_kqfilter { };
@@ -729,4 +745,4 @@ struct puffs_vnreq_listextattr { };
 	memset(&a##_arg, 0, sizeof(struct puffs_vnreq_##a))
 #endif
 
-#endif /* _PUFFS_MSGIF_H_ */
+#endif /* _FS_PUFFS_PUFFS_MSGIF_H_ */

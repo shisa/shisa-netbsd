@@ -1,4 +1,4 @@
-/*	$NetBSD: filecore_vfsops.c,v 1.34 2007/06/30 09:37:55 pooka Exp $	*/
+/*	$NetBSD: filecore_vfsops.c,v 1.41 2007/09/24 00:42:13 rumble Exp $	*/
 
 /*-
  * Copyright (c) 1994 The Regents of the University of California.
@@ -66,7 +66,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: filecore_vfsops.c,v 1.34 2007/06/30 09:37:55 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: filecore_vfsops.c,v 1.41 2007/09/24 00:42:13 rumble Exp $");
 
 #if defined(_KERNEL_OPT)
 #include "opt_compat_netbsd.h"
@@ -96,6 +96,8 @@ __KERNEL_RCSID(0, "$NetBSD: filecore_vfsops.c,v 1.34 2007/06/30 09:37:55 pooka E
 
 MALLOC_JUSTDEFINE(M_FILECOREMNT,
     "filecore mount", "Filecore FS mount structures");
+MALLOC_JUSTDEFINE(M_FILECORETMP,
+    "filecore temp", "Filecore FS temporary structures");
 
 extern const struct vnodeopv_desc filecore_vnodeop_opv_desc;
 
@@ -106,6 +108,7 @@ const struct vnodeopv_desc * const filecore_vnodeopv_descs[] = {
 
 struct vfsops filecore_vfsops = {
 	MOUNT_FILECORE,
+	sizeof (struct filecore_args),
 	filecore_mount,
 	filecore_start,
 	filecore_unmount,
@@ -122,7 +125,7 @@ struct vfsops filecore_vfsops = {
 	NULL,				/* filecore_mountroot */
 	(int (*)(struct mount *, struct vnode *, struct timespec *)) eopnotsupp,
 	vfs_stdextattrctl,
-	vfs_stdsuspendctl,
+	(void *)eopnotsupp,		/* vfs_suspendctl */
 	filecore_vnodeopv_descs,
 	0,
 	{ NULL, NULL }
@@ -186,46 +189,48 @@ filecore_mountroot()
  * mount system call
  */
 int
-filecore_mount(mp, path, data, ndp, l)
+filecore_mount(mp, path, data, data_len, l)
 	struct mount *mp;
 	const char *path;
 	void *data;
-	struct nameidata *ndp;
+	size_t *data_len;
 	struct lwp *l;
 {
+	struct nameidata nd;
 	struct vnode *devvp;
-	struct filecore_args args;
+	struct filecore_args *args = data;
 	int error;
 	struct filecore_mnt *fcmp = NULL;
+
+	if (*data_len < sizeof *args)
+		return EINVAL;
 
 	if (mp->mnt_flag & MNT_GETARGS) {
 		fcmp = VFSTOFILECORE(mp);
 		if (fcmp == NULL)
 			return EIO;
-		args.flags = fcmp->fc_mntflags;
-		args.uid = fcmp->fc_uid;
-		args.gid = fcmp->fc_gid;
-		args.fspec = NULL;
-		return copyout(&args, data, sizeof(args));
+		args->flags = fcmp->fc_mntflags;
+		args->uid = fcmp->fc_uid;
+		args->gid = fcmp->fc_gid;
+		args->fspec = NULL;
+		*data_len = sizeof *args;
+		return 0;
 	}
-	error = copyin(data, &args, sizeof (struct filecore_args));
-	if (error)
-		return (error);
 
 	if ((mp->mnt_flag & MNT_RDONLY) == 0)
 		return (EROFS);
 
-	if ((mp->mnt_flag & MNT_UPDATE) && args.fspec == NULL)
+	if ((mp->mnt_flag & MNT_UPDATE) && args->fspec == NULL)
 		return EINVAL;
 
 	/*
 	 * Not an update, or updating the name: look up the name
 	 * and verify that it refers to a sensible block device.
 	 */
-	NDINIT(ndp, LOOKUP, FOLLOW, UIO_USERSPACE, args.fspec, l);
-	if ((error = namei(ndp)) != 0)
+	NDINIT(&nd, LOOKUP, FOLLOW, UIO_USERSPACE, args->fspec, l);
+	if ((error = namei(&nd)) != 0)
 		return (error);
-	devvp = ndp->ni_vp;
+	devvp = nd.ni_vp;
 
 	if (devvp->v_type != VBLK) {
 		vrele(devvp);
@@ -249,7 +254,7 @@ filecore_mount(mp, path, data, ndp, l)
 		}
 	}
 	if ((mp->mnt_flag & MNT_UPDATE) == 0)
-		error = filecore_mountfs(devvp, mp, l, &args);
+		error = filecore_mountfs(devvp, mp, l, args);
 	else {
 		if (devvp != fcmp->fc_devvp)
 			error = EINVAL;	/* needs translation */
@@ -261,8 +266,8 @@ filecore_mount(mp, path, data, ndp, l)
 		return error;
 	}
 	fcmp = VFSTOFILECORE(mp);
-	return set_statvfs_info(path, UIO_USERSPACE, args.fspec, UIO_USERSPACE,
-	    mp, l);
+	return set_statvfs_info(path, UIO_USERSPACE, args->fspec, UIO_USERSPACE,
+	    mp->mnt_op->vfs_name, mp, l);
 }
 
 /*
@@ -432,11 +437,6 @@ filecore_unmount(mp, mntflags, l)
 
 	if (mntflags & MNT_FORCE)
 		flags |= FORCECLOSE;
-#if 0
-	mntflushbuf(mp, 0);
-	if (mntinvalbuf(mp))
-		return EBUSY;
-#endif
 	if ((error = vflush(mp, NULLVP, flags)) != 0)
 		return (error);
 
@@ -690,7 +690,7 @@ filecore_vget(mp, ino, vpp)
 	 */
 
 	genfs_node_init(vp, &filecore_genfsops);
-	vp->v_size = ip->i_size;
+	uvm_vnp_setsize(vp, ip->i_size);
 	*vpp = vp;
 	return (0);
 }

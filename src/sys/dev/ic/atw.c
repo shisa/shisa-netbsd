@@ -1,4 +1,4 @@
-/*	$NetBSD: atw.c,v 1.126 2007/03/04 06:01:50 christos Exp $  */
+/*	$NetBSD: atw.c,v 1.128 2007/09/01 07:32:25 dyoung Exp $  */
 
 /*-
  * Copyright (c) 1998, 1999, 2000, 2002, 2003, 2004 The NetBSD Foundation, Inc.
@@ -41,7 +41,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: atw.c,v 1.126 2007/03/04 06:01:50 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: atw.c,v 1.128 2007/09/01 07:32:25 dyoung Exp $");
 
 #include "bpfilter.h"
 
@@ -853,7 +853,7 @@ atw_attach(struct atw_softc *sc)
 
 	/* complete initialization */
 	ieee80211_media_init(ic, atw_media_change, ieee80211_media_status);
-	callout_init(&sc->sc_scan_ch);
+	callout_init(&sc->sc_scan_ch, 0);
 
 #if NBPFILTER > 0
 	bpfattach2(ifp, DLT_IEEE802_11_RADIO,
@@ -3851,7 +3851,6 @@ int
 atw_ioctl(struct ifnet *ifp, u_long cmd, void *data)
 {
 	struct atw_softc *sc = ifp->if_softc;
-	struct ifreq *ifr = (struct ifreq *)data;
 	int s, error = 0;
 
 	/* XXX monkey see, monkey do. comes from wi_ioctl. */
@@ -3877,10 +3876,7 @@ atw_ioctl(struct ifnet *ifp, u_long cmd, void *data)
 		break;
 	case SIOCADDMULTI:
 	case SIOCDELMULTI:
-		error = (cmd == SIOCADDMULTI) ?
-		    ether_addmulti(ifr, &sc->sc_ec) :
-		    ether_delmulti(ifr, &sc->sc_ec);
-		if (error == ENETRESET) {
+		if ((error = ether_ioctl(ifp, cmd, data)) == ENETRESET) {
 			if (ifp->if_flags & IFF_RUNNING)
 				atw_filter_setup(sc); /* do not rescan */
 			error = 0;
