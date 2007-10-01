@@ -889,7 +889,11 @@ login_command_t(target_session_t * sess, uint8_t *header)
 		}
 		set_session_parameters(sess->params, &sess->sess_params);
 #ifdef HAVE_SYSLOG_H
-		syslog(LOG_INFO, "> %s login from %s on %s", param_val(sess->params, "SessionType"), param_val(sess->params, "InitiatorName"), sess->initiator);
+		syslog(LOG_INFO, "> %s login from %s on %s disk %d",
+			param_val(sess->params, "SessionType"),
+			param_val(sess->params, "InitiatorName"),
+			sess->initiator,
+			sess->d);
 #endif
 	}
 	/* No errors */
@@ -1586,7 +1590,7 @@ target_listen(globals_t *gp)
 	gp->listener_listening++;
 	iscsi_trace(TRACE_ISCSI_DEBUG, __FILE__, __LINE__, "listener thread started\n");
 
-	if (!iscsi_socks_establish(gp->sockv, gp->famv, &gp->sockc, gp->address_family)) {
+	if (!iscsi_socks_establish(gp->sockv, gp->famv, &gp->sockc, gp->address_family, gp->port)) {
 		iscsi_trace_error(__FILE__, __LINE__, "iscsi_sock_establish() failed\n");
 		goto done;
 	}

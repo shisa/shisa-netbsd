@@ -43,11 +43,25 @@ esac
 AC_CHECK_HEADER(net/pfkeyv2.h, [have_net_pfkey=yes], [have_net_pfkey=no])
 AC_CHECK_HEADER(netinet/ipsec.h, [have_netinet_ipsec=yes], [have_netinet_ipsec=no])
 AC_CHECK_HEADER(netinet6/ipsec.h, [have_netinet6_ipsec=yes], [have_netinet6_ipsec=no])
+AC_CHECK_HEADER(netipsec/ipsec.h, [have_netipsec_ipsec=yes], [have_netipsec_ipsec=no])
 
+# FreeBSD >=7 has only <netipsec/ipsec.h>
 # NetBSD has <netinet6/ipsec.h> but not <netinet/ipsec.h>
-if test "$have_netinet_ipsec$have_netinet6_ipsec" = noyes; then
+# XXX some *BSD still have both <netinet6/ipsec.h> and <netipsec/ipsec.h>,
+# we can't decide which one to use (actually <netinet6/ipsec.h>)
+
+
+if test "$have_netinet_ipsec$have_netinet6_ipsec$have_netipsec_ipsec" = nonoyes; then
     have_netinet_ipsec=yes
-    AC_DEFINE(HAVE_NETINET6_IPSEC, [], [Use <netinet6/ipsec.h>])
+    AC_DEFINE(PATH_IPSEC_H, [<netipsec/ipsec.h>], [Path to ipsec.h])
+else
+	if test "$have_netinet_ipsec$have_netinet6_ipsec" = noyes; then
+    	have_netinet_ipsec=yes
+	    AC_DEFINE(PATH_IPSEC_H, [<netinet6/ipsec.h>], [Path to ipsec.h])
+	else
+		# have_netinet_ipsec will be checked a few lines below
+	    AC_DEFINE(PATH_IPSEC_H, [<netinet/ipsec.h>], [Path to ipsec.h])
+	fi
 fi
 
 case "$host_os" in
@@ -753,6 +767,10 @@ yes
 esac
 AC_MSG_RESULT($kernel_secctx)
 
+AC_CHECK_HEADER(selinux/selinux.h,
+	[AC_CHECK_LIB(selinux, avc_init, [selinux_support=yes], 
+	[selinux_support=no])], [selinux_support=no])
+
 AC_MSG_CHECKING(whether to support Security Context)
 AC_ARG_ENABLE(security-context,
 	[  --enable-security-context    enable Security Context(yes/no/kernel)],
@@ -765,10 +783,14 @@ if test "$enable_security_context" = "yes"; then
 	if test "$kernel_secctx" = "no" ; then
 		AC_MSG_ERROR([Security Context requested, but no kernel support! Aborting.])
 	else
-		AC_DEFINE([HAVE_SECCTX], [], [Enable Security Context])
-		SECCTX_OBJS="security.o"
-		AC_SUBST(SECCTX_OBJS)
-		LIBS="$LIBS -lselinux"
+		if test "$selinux_support" = "no"; then
+			AC_MSG_ERROR([Security Context requested, but no selinux support! Aborting.])
+		else
+			AC_DEFINE([HAVE_SECCTX], [], [Enable Security Context])
+			SECCTX_OBJS="security.o"
+			AC_SUBST(SECCTX_OBJS)
+			LIBS="$LIBS -lselinux"
+		fi
 	fi
 fi
 

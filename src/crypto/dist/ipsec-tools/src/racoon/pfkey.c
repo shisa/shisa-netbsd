@@ -1,6 +1,6 @@
-/*	$NetBSD: pfkey.c,v 1.21 2007/05/04 09:09:26 vanhu Exp $	*/
+/*	$NetBSD: pfkey.c,v 1.23 2007/09/12 23:39:50 mgrooms Exp $	*/
 
-/* $Id: pfkey.c,v 1.21 2007/05/04 09:09:26 vanhu Exp $ */
+/* $Id: pfkey.c,v 1.23 2007/09/12 23:39:50 mgrooms Exp $ */
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -65,11 +65,7 @@
 #include <net/pfkeyv2.h>
 
 #include <netinet/in.h>
-#ifndef HAVE_NETINET6_IPSEC
-#include <netinet/ipsec.h>
-#else
-#include <netinet6/ipsec.h>
-#endif
+#include PATH_IPSEC_H
 #include <fcntl.h>
 
 #include "libpfkey.h"
@@ -1865,7 +1861,7 @@ pk_recvacquire(mhp)
 			remoteid=0;
 		}
 	}
-	iph2[n]->sainfo = getsainfo(idsrc, iddst, NULL, remoteid);
+	iph2[n]->sainfo = getsainfo(idsrc, iddst, NULL, NULL, remoteid);
 	vfree(idsrc);
 	vfree(iddst);
 	if (iph2[n]->sainfo == NULL) {

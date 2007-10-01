@@ -1,4 +1,4 @@
-/*	$NetBSD: cftoken.l,v 1.11 2006/12/09 05:52:57 manu Exp $	*/
+/*	$NetBSD: cftoken.l,v 1.14 2007/09/12 23:39:50 mgrooms Exp $	*/
 
 /* Id: cftoken.l,v 1.53 2006/08/22 18:17:17 manubsd Exp */
 
@@ -39,11 +39,7 @@
 #include <sys/socket.h>
 
 #include <netinet/in.h>
-#ifdef HAVE_NETINET6_IPSEC 
-#  include <netinet6/ipsec.h>
-#else 
-#  include <netinet/ipsec.h>
-#endif
+#include PATH_IPSEC_H
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -241,6 +237,7 @@ hexstring	0x{hexdigit}+
 <S_CFG>network4		{ YYD; return(CFG_NET4); }
 <S_CFG>netmask4		{ YYD; return(CFG_MASK4); }
 <S_CFG>dns4		{ YYD; return(CFG_DNS4); }
+<S_CFG>nbns4		{ YYD; return(CFG_NBNS4); }
 <S_CFG>wins4		{ YYD; return(CFG_NBNS4); }
 <S_CFG>default_domain	{ YYD; return(CFG_DEFAULT_DOMAIN); }
 <S_CFG>auth_source	{ YYD; return(CFG_AUTH_SOURCE); }
@@ -280,6 +277,7 @@ hexstring	0x{hexdigit}+
 	/* sainfo */
 <S_INI>sainfo		{ BEGIN S_SAINF; YYDB; return(SAINFO); }
 <S_SAINF>anonymous	{ YYD; return(ANONYMOUS); }
+<S_SAINF>clientaddr	{ YYD; return(CLIENTADDR); }
 <S_SAINF>{blcl}any{elcl}	{ YYD; return(PORTANY); }
 <S_SAINF>any		{ YYD; return(ANY); }
 <S_SAINF>from		{ YYD; return(FROM); }

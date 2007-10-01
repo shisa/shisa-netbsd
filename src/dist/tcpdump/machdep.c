@@ -1,4 +1,4 @@
-/*	$NetBSD: machdep.c,v 1.4 2004/09/27 23:04:24 dyoung Exp $	*/
+/*	$NetBSD: machdep.c,v 1.6 2007/07/28 16:02:17 drochner Exp $	*/
 
 /*
  * Copyright (c) 1996, 1997
@@ -25,9 +25,9 @@
 #ifndef lint
 #if 0
 static const char rcsid[] _U_ =
-    "@(#) Header: /tcpdump/master/tcpdump/machdep.c,v 1.10.2.3 2003/12/15 03:53:42 guy Exp (LBL)";
+    "@(#) Header: /tcpdump/master/tcpdump/machdep.c,v 1.13 2003/12/15 03:53:21 guy Exp (LBL)";
 #else
-__RCSID("$NetBSD: machdep.c,v 1.4 2004/09/27 23:04:24 dyoung Exp $");
+__RCSID("$NetBSD: machdep.c,v 1.6 2007/07/28 16:02:17 drochner Exp $");
 #endif
 #endif
 
@@ -60,7 +60,7 @@ int snprintf(char *, size_t, const char *, ...)
 #include "machdep.h"
 
 int
-abort_on_misalignment(char *ebuf, size_t ebufsiz)
+abort_on_misalignment(char *ebuf _U_, size_t ebufsiz _U_)
 {
 #ifdef __osf__
 	static int buf[2] = { SSIN_UACPROC, UAC_SIGBUS };

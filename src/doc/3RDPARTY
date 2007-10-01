@@ -1,4 +1,4 @@
-#	$NetBSD: 3RDPARTY,v 1.537 2007/07/02 16:20:21 wiz Exp $
+#	$NetBSD: 3RDPARTY,v 1.553 2007/09/25 14:00:18 wiz Exp $
 #
 # This file contains a list of the software that has been integrated into
 # NetBSD where we are not the primary maintainer.
@@ -76,8 +76,8 @@ Notes:
 bc includes dc, both of which are in the NetBSD tree.
 
 Package:	bind/named
-Version:	libc/includes: 9.4.1, bind: 9.4.1
-Current Vers:	9.4.1
+Version:	libc/includes: 9.4.1, bind: 9.4.1-P1
+Current Vers:	9.4.1-P1
 Maintainer:	Paul Vixie <vixie@vix.com>
 Archive Site:	ftp://ftp.isc.org/isc/bind9/
 Home Page:	http://www.isc.org/sw/bind/
@@ -270,7 +270,7 @@ Newer flex will be found in:
 
 Package:	gcc
 Version:	4.1.3-20070620
-Current Vers:	4.2.0
+Current Vers:	4.2.1
 Maintainer:	FSF
 Archive Site:	ftp://ftp.gnu.org/gnu/gcc/
 Home Page:	http://www.gnu.org/software/gcc/
@@ -357,7 +357,7 @@ for import.
 
 Package:	heimdal
 Version:	0.6.2
-Current Vers:	0.7.2
+Current Vers:	1.0.1
 Maintainer:	Heimdal <heimdal@pdc.kth.se>
 Archive Site:	ftp://ftp.pdc.kth.se/pub/heimdal/src/
 Home Page:	http://www.pdc.kth.se/heimdal/
@@ -401,16 +401,32 @@ Notes:
 ipf2netbsd should be used on a virgin ipfilter source tree.
 
 Package:	ipsec-tools
-Version:	0.6.3
-Current Vers:	0.6.5
+Version:	(ipsec-tools head is NetBSD-current head)
 Maintainer:	IPsec-Tools project <ipsec-tools-core@lists.sourceforge.net>
 Archive Site:	http://ipsec-tools.sourceforge.net
 Home Page:	http://ipsec-tools.sourceforge.net
 Mailing List:	ipsec-tools-devel@lists.sourceforge.net
-Responsible:	manu
+Responsible:	manu, vanhu, mgrooms
 License:	BSD (3-clause)
 Notes:
-See src/crypto/dist/ipsec-tools/netbsd-import.sh to import newer versions
+ipsec-tools is maintained within NetBSD src tree in src/crypto/dist/ipsec-tools
+We don't run ipsec-tools' configure as part of the NetBSD build. configure
+generated files are available in the NetBSD source tree at:
+  src/lib/libipsec/config.h
+  src/lib/libipsec/package_version.h
+When configure.ac is updated, run the following:
+  cd src/crypto/dist/ipsec-tools
+  ./bootstrap
+  ./configure --enable-adminport --enable-hybrid --enable-frag \
+  	      --enable-natt --enable-dpd 
+Then copy package_version.h to src/lib/libipsec and merge config.h with
+src/lib/libipsec/config.h (it needs some manual tweaking)
+
+NOTE: As NetBSD HEAD and ipsec-tools HEAD are just the same thing, 
+NetBSD-current always contains latest ipsec-tools code. On the other hand,
+ipsec-tools has stable branches (e.g.: ipsec-tools-0_7-branch), which 
+are manually pulled up to NetBSD stable branches (e.g.: netbsd-4 is regularly
+sync with ipsec-tools-0_7-branch)
 
 Package:	KAME IPv6
 Version:	KAME/NetBSD SNAP kit
@@ -450,6 +466,18 @@ Talk to mrg before importing any new version.  (less 381's configure
 does not detect NetBSD has a sigset_t due to a bad test; this is fixed
 by hand in defines.h.)
 
+Package:	libarchive
+Version:	2.2.6
+Current Ves.:	2.2.6
+Maintainer:	kientzle@freebsd.org
+Archive Site:	http://people.freebsd.org/~kientzle/libarchive/
+Home Page: 	http://people.freebsd.org/~kientzle/libarchive/
+Responsible:	joerg
+License:	BSD
+Notes:
+Distribution is stripped down to the relevant part. cpio is currently
+not usable, so it was left out.
+
 Package:	libcdk
 Version:	4.9.9-20000407-myc3
 Current Vers:	cdk-4.9.10-20000923
@@ -467,7 +495,7 @@ leave it alone.  (garbled 1/4/2001)
 
 Package:	libevent
 Version:	1.0c
-Current Vers:	1.3b
+Current Vers:	1.3e
 Maintainer:	Niels Provos <provos@citi.umich.edu>
 Archive Site:	http://www.monkey.org/~provos/libevent/
 Home Page:	http://www.monkey.org/~provos/libevent/
@@ -653,6 +681,18 @@ kernel code is imported into src/sys/dist/pf and src/sys/net has reachover
 definition (files.pf).  userland code is imported into src/dist/pf, and
 reachover Makefiles are in src/usr.sbin/pf.
 
+Package:	pkg_install
+Version:	20070802
+Current Vers.:	20070802
+Maintainer:	The pkgsrc developers
+Home Page:	http://www.pkgsrc.org
+Mailing List:	tech-pkg@NetBSD.org
+Responsible:	joerg
+License:	BSD
+Notes:
+The authoritive version used to live in src/usr.sbin/pkg_install and was
+moved to pkgsrc/pkgtool/pkg_install. Reachover Makefiles are kept in place.
+
 Package:	ping
 Version:	980911
 Current Vers:	980911
@@ -668,8 +708,8 @@ formating in man pages, disallowing flood pinging, alignment fixes,
 and more.
 
 Package:	postfix
-Version:	2.4.1
-Current Vers:	2.4.1
+Version:	2.4.5
+Current Vers:	2.4.5
 Maintainer:	Wietse Venema <wietse@porcupine.org>
 Archive Site:	ftp://postfix.cloud9.net/official/
 Home Page:	http://www.postfix.org/
@@ -769,8 +809,8 @@ arithmetic code is unchanged, though, and should behave exactly like the
 original.
 
 Package:	tcpdump
-Version:	3.8.3
-Current Vers:	3.9.5
+Version:	3.9.7
+Current Vers:	3.9.7
 Maintainer:	tcpdump-workers@lists.tcpdump.org
 Archive Site:	http://www.tcpdump.org/release/
 Home Page:	http://www.tcpdump.org/
@@ -805,7 +845,7 @@ Notes:
 
 Package:	texinfo
 Version:	4.7
-Current Vers:	4.9
+Current Vers:	4.11
 Maintainer:	FSF
 Archive Site:	ftp://ftp.gnu.org/gnu/texinfo/
 Home Page:	http://www.gnu.org/software/texinfo/
@@ -871,7 +911,7 @@ See /usr/src/dist/wpa_supplicant/NetBSD-upgrade for update instructions.
 
 Package:	XFree86
 Version:	4.5.0
-Current Vers:	4.6.0
+Current Vers:	4.7.0
 Maintainer:	XFree86 Project, Inc.
 Archive Site:	ftp://ftp.xfree86.org/pub/XFree86/
 Home Page:	http://www.xfree86.org/

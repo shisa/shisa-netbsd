@@ -1,6 +1,6 @@
-/*	$NetBSD: proposal.c,v 1.13 2006/12/09 05:52:57 manu Exp $	*/
+/*	$NetBSD: proposal.c,v 1.15 2007/07/18 12:07:52 vanhu Exp $	*/
 
-/* $Id: proposal.c,v 1.13 2006/12/09 05:52:57 manu Exp $ */
+/* $Id: proposal.c,v 1.15 2007/07/18 12:07:52 vanhu Exp $ */
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -39,11 +39,7 @@
 #include <sys/queue.h>
 
 #include <netinet/in.h>
-#ifdef HAVE_NETINET6_IPSEC
-#  include <netinet6/ipsec.h>
-#else
-#  include <netinet/ipsec.h>
-#endif
+#include PATH_IPSEC_H
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -1185,10 +1181,10 @@ set_proposal_from_proposal(iph2)
 	 * make my proposal according as the client proposal.
 	 * XXX assumed there is only one proposal even if it's the SA bundle.
 	 */
-        for (i = 0; i < MAXPROPPAIRLEN; i++) {
-                if (pair[i] == NULL)
-                        continue;
-
+	for (i = 0; i < MAXPROPPAIRLEN; i++) {
+		if (pair[i] == NULL)
+			continue;
+		
 		if (pp_peer != NULL)
 			flushsaprop(pp_peer);
 

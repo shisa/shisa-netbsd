@@ -126,12 +126,14 @@ enum {
  * Public *
  **********/
 
-int             initiator_init(const char *, int, const char *, int, int, int);
+int             initiator_init(const char *, int, int, const char *, int, int, int);
 int             initiator_info(char *, int, int);
 int             initiator_command(initiator_cmd_t *);
 int             initiator_enqueue(initiator_cmd_t *);
 int             initiator_abort(initiator_cmd_t *);
 int             initiator_shutdown(void);
 int             initiator_discover(char *, uint64_t, int);
+
+void		get_target_info(uint64_t, initiator_target_t *);
 
 #endif				/* _INITIATOR_H_ */

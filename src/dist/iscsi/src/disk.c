@@ -1,4 +1,4 @@
-/* $NetBSD: disk.c,v 1.25 2007/06/16 23:13:26 agc Exp $ */
+/* $NetBSD: disk.c,v 1.29 2007/09/26 12:01:49 agc Exp $ */
 
 /*
  * Copyright © 2006 Alistair Crooks.  All rights reserved.
@@ -245,7 +245,7 @@ de_open(disc_de_t *dp, int flags, int mode)
 static off_t
 extent_lseek(disc_extent_t *xp, off_t off, int whence)
 {
-	return lseek(xp->fd, xp->sacred + off, whence);
+	return lseek(xp->fd, (long long)(xp->sacred + off), whence);
 }
 
 /* (recursively) lseek on the device's devices */
@@ -259,15 +259,15 @@ device_lseek(disc_device_t *dp, off_t off, int whence)
 	ret = -1;
 	switch(dp->raid) {
 	case 0:
-		if (raid0_getoff(dp, off, &d, &suboff)) {
+		if (raid0_getoff(dp, (uint64_t) off, &d, &suboff)) {
 			switch (dp->xv[d].type) {
 			case DE_DEVICE:
-				if ((ret = device_lseek(dp->xv[d].u.dp, suboff, whence)) < 0) {
+				if ((ret = device_lseek(dp->xv[d].u.dp, (off_t) suboff, whence)) < 0) {
 					return -1;
 				}
 				break;
 			case DE_EXTENT:
-				if ((ret = extent_lseek(dp->xv[d].u.xp, suboff, whence)) < 0) {
+				if ((ret = extent_lseek(dp->xv[d].u.xp, (off_t) suboff, whence)) < 0) {
 					return -1;
 				}
 				break;
@@ -280,12 +280,12 @@ device_lseek(disc_device_t *dp, off_t off, int whence)
 		for (d = 0 ; d < dp->c ; d++) {
 			switch (dp->xv[d].type) {
 			case DE_DEVICE:
-				if ((ret = device_lseek(dp->xv[d].u.dp, off, whence)) < 0) {
+				if ((ret = device_lseek(dp->xv[d].u.dp, (off_t) off, whence)) < 0) {
 					return -1;
 				}
 				break;
 			case DE_EXTENT:
-				if ((ret = extent_lseek(dp->xv[d].u.xp, off, whence)) < 0) {
+				if ((ret = extent_lseek(dp->xv[d].u.xp, (off_t) off, whence)) < 0) {
 					return -1;
 				}
 				break;
@@ -319,7 +319,7 @@ static int
 extent_fsync_range(disc_extent_t *xp, int how, off_t from, off_t len)
 {
 #ifdef HAVE_FSYNC_RANGE
-	return fsync_range(xp->fd, how, xp->sacred + from, len);
+	return fsync_range(xp->fd, how, (off_t)(xp->sacred + from), len);
 #else
 	return fsync(xp->fd);
 #endif
@@ -336,15 +336,15 @@ device_fsync_range(disc_device_t *dp, int how, off_t from, off_t len)
 	ret = -1;
 	switch(dp->raid) {
 	case 0:
-		if (raid0_getoff(dp, from, &d, &suboff)) {
+		if (raid0_getoff(dp, (uint64_t) from, &d, &suboff)) {
 			switch (dp->xv[d].type) {
 			case DE_DEVICE:
-				if ((ret = device_fsync_range(dp->xv[d].u.dp, how, suboff, len)) < 0) {
+				if ((ret = device_fsync_range(dp->xv[d].u.dp, how, (off_t)suboff, len)) < 0) {
 					return -1;
 				}
 				break;
 			case DE_EXTENT:
-				if ((ret = extent_fsync_range(dp->xv[d].u.xp, how, suboff, len)) < 0) {
+				if ((ret = extent_fsync_range(dp->xv[d].u.xp, how, (off_t)suboff, len)) < 0) {
 					return -1;
 				}
 				break;
@@ -374,7 +374,8 @@ device_fsync_range(disc_device_t *dp, int how, off_t from, off_t len)
 	default:
 		break;
 	}
-	return dp->off = ret;
+	dp->off = (uint64_t) ret;
+	return ret;
 }
 
 /* and for the undecided... */
@@ -416,18 +417,18 @@ device_read(disc_device_t *dp, void *buf, size_t cc)
 			if (!raid0_getoff(dp, dp->off, &d, &suboff)) {
 				return -1;
 			}
-			if (device_lseek(dp, dp->off, SEEK_SET) < 0) {
+			if (device_lseek(dp, (off_t)dp->off, SEEK_SET) < 0) {
 				return -1;
 			}
-			subcc = MIN(cc - got, dp->len - dp->off);
+			subcc = MIN(cc - (size_t)got, (size_t)(dp->len - (size_t)dp->off));
 			switch (dp->xv[d].type) {
 			case DE_DEVICE:
-				if ((ret = device_read(dp->xv[d].u.dp, &cbuf[got], subcc)) < 0) {
+				if ((ret = device_read(dp->xv[d].u.dp, &cbuf[(int)got], subcc)) < 0) {
 					return -1;
 				}
 				break;
 			case DE_EXTENT:
-				if ((ret = extent_read(dp->xv[d].u.xp, &cbuf[got], subcc)) < 0) {
+				if ((ret = extent_read(dp->xv[d].u.xp, &cbuf[(int)got], subcc)) < 0) {
 					return -1;
 				}
 				break;
@@ -436,7 +437,7 @@ device_read(disc_device_t *dp, void *buf, size_t cc)
 			}
 			dp->off += ret;
 		}
-		ret = got;
+		ret = (ssize_t)got;
 		break;
 	case 1:
 		for (d = 0 ; d < dp->c ; d++) {
@@ -502,18 +503,18 @@ device_write(disc_device_t *dp, void *buf, size_t cc)
 			if (!raid0_getoff(dp, dp->off, &d, &suboff)) {
 				return -1;
 			}
-			subcc = MIN(cc - done, dp->len - dp->off);
-			if (device_lseek(dp, dp->off, SEEK_SET) < 0) {
+			subcc = (size_t) MIN(cc - (size_t)done, (size_t)(dp->len - dp->off));
+			if (device_lseek(dp, (off_t)dp->off, SEEK_SET) < 0) {
 				return -1;
 			}
 			switch (dp->xv[d].type) {
 			case DE_DEVICE:
-				if ((ret = device_write(dp->xv[d].u.dp, &cbuf[done], subcc)) < 0) {
+				if ((ret = device_write(dp->xv[d].u.dp, &cbuf[(int)done], subcc)) < 0) {
 					return -1;
 				}
 				break;
 			case DE_EXTENT:
-				if ((ret = extent_write(dp->xv[d].u.xp, &cbuf[done], subcc)) < 0) {
+				if ((ret = extent_write(dp->xv[d].u.xp, &cbuf[(int)done], subcc)) < 0) {
 					return -1;
 				}
 				break;
@@ -522,7 +523,7 @@ device_write(disc_device_t *dp, void *buf, size_t cc)
 			}
 			dp->off += ret;
 		}
-		ret = done;
+		ret = (ssize_t) done;
 		break;
 	case 1:
 		for (d = 0 ; d < dp->c ; d++) {
@@ -612,7 +613,7 @@ device_getsize(disc_device_t *dp)
 }
 
 /* and for the undecided... */
-static uint64_t
+static int64_t
 de_getsize(disc_de_t *dp)
 {
 	switch(dp->type) {
@@ -629,7 +630,7 @@ de_getsize(disc_de_t *dp)
 static void *
 extent_mmap(void *addr, size_t len, int prot, int flags, disc_extent_t *xp, off_t offset)
 {
-	return mmap(addr, len, prot, flags, xp->fd, xp->sacred + offset);
+	return mmap(addr, len, prot, flags, xp->fd, (off_t)(xp->sacred + offset));
 }
 
 /* (recursively) mmap on the device's devices */
@@ -757,19 +758,19 @@ device_set_var(const char *var, char *arg)
 static int
 de_allocate(disc_de_t *de, char *filename)
 {
-	uint64_t	size;
-	char		ch;
+	off_t	size;
+	char	block[DEFAULT_TARGET_BLOCK_LEN];
 
 	size = de_getsize(de);
-	if (de_lseek(de, size - 1, SEEK_SET) == -1) {
+	if (de_lseek(de, size - sizeof(block), SEEK_SET) == -1) {
 		iscsi_trace_error(__FILE__, __LINE__, "error seeking \"%s\"\n", filename);
 		return 0;
 	}
-	if (de_read(de, &ch, 1) == -1) {
+	if (de_read(de, block, sizeof(block)) == -1) {
 		iscsi_trace_error(__FILE__, __LINE__, "error reading \"%s\"", filename);
 		return 0;
 	}
-	if (de_write(de, &ch, 1) == -1) {
+	if (de_write(de, block, sizeof(block)) == -1) {
 		iscsi_trace_error(__FILE__, __LINE__, "error writing \"%s\"", filename);
 		return 0;
 	}
@@ -824,7 +825,7 @@ report_luns(uint64_t *data, int64_t luns)
 	int32_t		off;
 
 	for (lun = 0, off = 8 ; lun < luns ; lun++, off += sizeof(lun)) {
-		data[lun] = ISCSI_HTONLL(lun);
+		data[(int)lun] = ISCSI_HTONLL(lun);
 	}
 	return off;
 }
@@ -857,8 +858,9 @@ persistent_reserve_in(uint8_t action, uint8_t *data)
 }
 
 /* initialise the device */
+/* ARGSUSED */
 int 
-device_init(globals_t *gp, targv_t *tvp, disc_target_t *tp)
+device_init(globals_t *gp __attribute__((__unused__)), targv_t *tvp, disc_target_t *tp)
 {
 	int   	i;
 
@@ -927,7 +929,7 @@ device_command(target_session_t * sess, target_cmd_t * cmd)
 	uint8_t			*data;
 	uint8_t			*cdb = args->cdb;
 	uint8_t			lun = (uint8_t) (args->lun >> 32);
-	int			mode_data_len;
+	size_t			mode_data_len;
 
 #if (CONFIG_DISK_INITIAL_CHECK_CONDITION==1)
 	static int      initialized = 0;
@@ -994,7 +996,7 @@ device_command(target_session_t * sess, target_cmd_t * cmd)
 				*totlen = len;
 				/* add target device's Unit Serial Number */
 				/* section 7.6.10 of SPC-3 says that if there is no serial number, use spaces */
-				strpadcpy(&data[4], len, " ", strlen(" "), ' ');
+				strpadcpy(&data[4], (unsigned)len, " ", strlen(" "), ' ');
 				break;
 			case INQUIRY_DEVICE_IDENTIFICATION_VPD:
 				data[0] = DISK_PERIPHERAL_DEVICE;
@@ -1005,7 +1007,7 @@ device_command(target_session_t * sess, target_cmd_t * cmd)
 				cp[0] = (INQUIRY_DEVICE_ISCSI_PROTOCOL << 4) | INQUIRY_DEVICE_CODESET_UTF8;
 				cp[1] = (INQUIRY_DEVICE_PIV << 7) | (INQUIRY_DEVICE_ASSOCIATION_TARGET_DEVICE << 4) | INQUIRY_DEVICE_IDENTIFIER_SCSI_NAME;
 				len = (uint8_t) snprintf((char *)&cp[4],
-							(int)(*totsize - (int)(cp - &data[4])),
+							(unsigned)(*totsize - (int)(cp - &data[4])),
 							"%s",
 							sess->globals->targetname);
 				cp[3] = len;
@@ -1015,7 +1017,7 @@ device_command(target_session_t * sess, target_cmd_t * cmd)
 				cp[0] = (INQUIRY_DEVICE_ISCSI_PROTOCOL << 4) | INQUIRY_DEVICE_CODESET_UTF8;
 				cp[1] = (INQUIRY_DEVICE_PIV << 7) | (INQUIRY_DEVICE_ASSOCIATION_TARGET_PORT << 4) | INQUIRY_DEVICE_IDENTIFIER_SCSI_NAME;
 				len = (uint8_t) snprintf((char *)&cp[4],
-							(int)(*totsize - (int)(cp - &data[4])),
+							(unsigned)(*totsize - (int)(cp - &data[4])),
 							"%s,t,%#x",
 							sess->globals->targetname,
 							lun);
@@ -1030,7 +1032,7 @@ device_command(target_session_t * sess, target_cmd_t * cmd)
 					uuid_to_string(&disks.v[sess->d].uuid, &disks.v[sess->d].uuid_string, &status);
 				}
 				len = (uint8_t) snprintf((char *)&cp[4],
-							(int)(*totsize - (int)(cp - &data[4])),
+							(unsigned)(*totsize - (int)(cp - &data[4])),
 							"%s,L,0x%8.8s%4.4s%4.4s",
 							sess->globals->targetname,
 							disks.v[sess->d].uuid_string,
@@ -1045,7 +1047,7 @@ device_command(target_session_t * sess, target_cmd_t * cmd)
 				strpadcpy(&cp[4], 8, ISCSI_VENDOR, strlen(ISCSI_VENDOR), ' ');
 				len = 8;
 				len += (uint8_t) snprintf((char *)&cp[8 + 4],
-							(int)(*totsize - (int)(cp - &data[4])),
+							(unsigned)(*totsize - (int)(cp - &data[4])),
 							"0x%8.8s%4.4s%4.4s",
 							disks.v[sess->d].uuid_string,
 							&disks.v[sess->d].uuid_string[9],
@@ -1057,10 +1059,19 @@ device_command(target_session_t * sess, target_cmd_t * cmd)
 			case INQUIRY_SUPPORTED_VPD_PAGES:
 				data[0] = DISK_PERIPHERAL_DEVICE;
 				data[1] = INQUIRY_SUPPORTED_VPD_PAGES;
-				*totlen = 2;	/* # of supported pages */
+				*totlen = 3;	/* # of supported pages */
 				data[4] = INQUIRY_SUPPORTED_VPD_PAGES;
 				data[5] = INQUIRY_DEVICE_IDENTIFICATION_VPD;
+				data[6] = EXTENDED_INQUIRY_DATA_VPD;
 				args->length = *totsize + 1;
+				break;
+			case EXTENDED_INQUIRY_DATA_VPD:
+				data[0] = DISK_PERIPHERAL_DEVICE;
+				data[1] = EXTENDED_INQUIRY_DATA_VPD;
+				data[3] = 0x3c;	/* length is defined to be 60 */
+				data[4] = 0;
+				data[5] = 0;
+				args->length = 64;
 				break;
 			default:
 				iscsi_trace_error(__FILE__, __LINE__, "Unsupported INQUIRY VPD page %x\n", cdb[2]);
@@ -1083,6 +1094,13 @@ device_command(target_session_t * sess, target_cmd_t * cmd)
 		if (args->status == SCSI_SUCCESS) {
 			args->input = 1;
 		}
+		break;
+
+	case MODE_SELECT_6:
+	case MODE_SELECT_10:
+		iscsi_trace(TRACE_SCSI_CMD, __FILE__, __LINE__, "MODE_SELECT_6 | MODE_SELECT_10\n");
+		args->status = SCSI_SUCCESS;
+		args->length = 0;
 		break;
 
 	case STOP_START_UNIT:
@@ -1129,12 +1147,13 @@ device_command(target_session_t * sess, target_cmd_t * cmd)
 		break;
 
 	case MODE_SENSE_6:
+	case MODE_SENSE_10:
 		cp = data = args->send_data;
 		len = ISCSI_MODE_SENSE_LEN;
 		mode_data_len = len + 3;
 
-		iscsi_trace(TRACE_SCSI_CMD, __FILE__, __LINE__, "MODE_SENSE_6(len %u blocks)\n", len);
-		(void) memset(cp, 0x0, (size_t) mode_data_len);
+		iscsi_trace(TRACE_SCSI_CMD, __FILE__, __LINE__, "MODE_SENSE_6 | MODE_SENSE_10 (len %u blocks)\n", len);
+		(void) memset(cp, 0x0, mode_data_len);
 		/* magic constants courtesy of some values in the Lunix UNH iSCSI target */
 		cp[0] = mode_data_len;
 		cp[1] = 0;
@@ -1148,9 +1167,10 @@ device_command(target_session_t * sess, target_cmd_t * cmd)
 		break;
 
 	case WRITE_10:
+	case WRITE_VERIFY:
 		cdb2lba(&lba, &len, cdb);
 
-		iscsi_trace(TRACE_SCSI_CMD, __FILE__, __LINE__, "WRITE_10(lba %u, len %u blocks)\n", lba, len);
+		iscsi_trace(TRACE_SCSI_CMD, __FILE__, __LINE__, "WRITE_10 | WRITE_VERIFY(lba %u, len %u blocks)\n", lba, len);
 		if (disk_write(sess, args, lun, lba, (unsigned) len) != 0) {
 			iscsi_trace_error(__FILE__, __LINE__, "disk_write() failed\n");
 			args->status = SCSI_CHECK_CONDITION;
@@ -1178,7 +1198,7 @@ device_command(target_session_t * sess, target_cmd_t * cmd)
 		cdb2lba(&lba, &len, cdb);
 
 		iscsi_trace(TRACE_SCSI_CMD, __FILE__, __LINE__, "SYNC_CACHE (lba %u, len %u blocks)\n", lba, len);
-		if (de_fsync_range(&disks.v[sess->d].tv->v[lun].de, FDATASYNC, lba, len * disks.v[sess->d].blocklen) < 0) {
+		if (de_fsync_range(&disks.v[sess->d].tv->v[lun].de, FDATASYNC, lba, (off_t)(len * disks.v[sess->d].blocklen)) < 0) {
 			iscsi_trace_error(__FILE__, __LINE__, "disk_read() failed\n");
 			args->status = SCSI_CHECK_CONDITION;
 		} else {
@@ -1201,7 +1221,7 @@ device_command(target_session_t * sess, target_cmd_t * cmd)
 
 	case REPORT_LUNS:
 		iscsi_trace(TRACE_SCSI_CMD, __FILE__, __LINE__, "REPORT LUNS\n");
-		args->length = report_luns((uint64_t *) &args->send_data[8], disks.v[sess->d].luns);
+		args->length = report_luns((uint64_t *)(void *)&args->send_data[8], (off_t)disks.v[sess->d].luns);
 		*((uint32_t *) (void *)args->send_data) = ISCSI_HTONL(disks.v[sess->d].luns * sizeof(uint64_t));
 		args->input = 8;
 		args->status = SCSI_SUCCESS;
@@ -1241,6 +1261,7 @@ device_command(target_session_t * sess, target_cmd_t * cmd)
 	return 0;
 }
 
+/*ARGSUSED*/
 int 
 device_shutdown(target_session_t *sess)
 {

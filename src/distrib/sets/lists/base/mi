@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.713 2007/06/29 23:30:17 rumble Exp $
+# $NetBSD: mi,v 1.720 2007/08/09 22:01:25 pooka Exp $
 .						base-sys-root
 ./altroot					base-sys-root
 ./bin						base-sys-root
@@ -1018,6 +1018,7 @@
 ./usr/sbin/amd					base-amd-bin
 ./usr/sbin/amq					base-amd-bin
 ./usr/sbin/arp					base-netutil-bin
+./usr/sbin/audit-packages			base-pkgutil-bin
 ./usr/sbin/authpf				base-pf-bin		pf
 ./usr/sbin/bootpd				base-bootserver-bin
 ./usr/sbin/bootpef				base-bootserver-bin
@@ -1035,6 +1036,7 @@
 ./usr/sbin/chroot				base-sysutil-bin
 ./usr/sbin/chrtbl				base-sysutil-bin
 ./usr/sbin/cnwctl				base-netutil-bin
+./usr/sbin/cpuctl				base-sysutil-bin
 ./usr/sbin/cron					base-cron-bin
 ./usr/sbin/daicctl				base-isdn-bin
 ./usr/sbin/dbsym				base-sysutil-bin	bfd
@@ -1048,6 +1050,7 @@
 ./usr/sbin/dnssec-makekeyset			base-obsolete		obsolete
 ./usr/sbin/dnssec-signkey			base-obsolete		obsolete
 ./usr/sbin/dnssec-signzone			base-bind-bin
+./usr/sbin/download-vulnerability-list		base-pkgutil-bin
 ./usr/sbin/dtmfdecode				base-isdn-bin
 ./usr/sbin/dumpfs				base-sysutil-bin
 ./usr/sbin/dumplfs				base-sysutil-bin
@@ -1144,6 +1147,8 @@
 ./usr/sbin/moptrace				base-bootserver-bin
 ./usr/sbin/mount_9p				base-miscfs-bin		puffs
 ./usr/sbin/mount_psshfs				base-miscfs-bin		puffs
+./usr/sbin/mount_puffsportal			base-miscfs-bin		puffs
+./usr/sbin/mount_sysctlfs			base-miscfs-bin		puffs
 ./usr/sbin/mountd				base-nfsserver-bin
 ./usr/sbin/moused				base-sysutil-bin
 ./usr/sbin/mrinfo				base-router-bin
@@ -1649,6 +1654,7 @@
 ./usr/share/i18n/csmapper/CP/CP904%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP905%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP918%UCS.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/CP922%UCS.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP932EXT%UCS.mps	base-obsolete		obsolete
 ./usr/share/i18n/csmapper/CP/CP932UDA%UCS.mps		base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/CP932VDC@IBM%UCS.mps	base-sysutil-share	nls
@@ -1731,6 +1737,7 @@
 ./usr/share/i18n/csmapper/CP/UCS%CP904.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP905.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP918.mps	base-sysutil-share	nls
+./usr/share/i18n/csmapper/CP/UCS%CP922.mps	base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP932EXT.mps	base-obsolete		obsolete
 ./usr/share/i18n/csmapper/CP/UCS%CP932UDA.mps		base-sysutil-share	nls
 ./usr/share/i18n/csmapper/CP/UCS%CP932VDC@IBM.mps	base-sysutil-share	nls
@@ -2055,6 +2062,7 @@
 ./usr/share/i18n/esdb/CP/CP904.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP905.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP918.esdb		base-sysutil-share	nls
+./usr/share/i18n/esdb/CP/CP922.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP932.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP936.esdb		base-sysutil-share	nls
 ./usr/share/i18n/esdb/CP/CP942.esdb		base-sysutil-share	nls
@@ -3366,7 +3374,7 @@
 ./usr/share/wscons/keymaps/pckbd.br.abnt2	base-util-share		share
 ./usr/share/wscons/keymaps/pckbd.de_CH.iso8859-1	base-util-share		share
 ./usr/share/wscons/keymaps/pckbd.de_CH.iso8859-2	base-obsolete	obsolete
-./usr/share/wscons/keymaps/pckbd.fr_CA.iso8859-1	base-util-share
+./usr/share/wscons/keymaps/pckbd.fr_CA.iso8859-1	base-util-share 	share
 ./usr/share/wscons/keymaps/pckbd.fr_CH.iso8859-1	base-util-share		share
 ./usr/share/wscons/keymaps/pckbd.fr_CH.iso8859-2	base-obsolete	obsolete
 ./usr/share/wscons/keymaps/pckbd.hu.iso8859-2	base-util-share		share

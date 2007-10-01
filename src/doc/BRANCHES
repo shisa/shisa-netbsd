@@ -1,4 +1,4 @@
-#	$NetBSD: BRANCHES,v 1.196 2007/05/28 09:29:18 hubertf Exp $
+#	$NetBSD: BRANCHES,v 1.209 2007/09/24 10:55:20 yamt Exp $
 #
 # This file contains a list of branches that exist in the NetBSD CVS
 # tree and their current state.
@@ -254,6 +254,18 @@ Notes:		This code was on a branch because it involves changes to
 		cpuswitch.S which would otherwise make merging the
 		nathanw_sa branch difficult.
 
+Branch:		chris-arm-intr-rework
+Description:	Rework arm interrupt handling code
+Status:		Active
+Start Date:	11 Aug 2007
+End Date:
+Base Tag:	chris-arm-intr-rework-base
+Maintainer:	Chris Gilbert <chrisNetBSD.org>
+Scope:		sys/arch/arm sys/arch/cats (other arm archs to follow)
+Notes:		Rework arm interrupt code to provide a shared set of interrupt
+		routines, and allow improvements to be shared across all arm
+		based hardware.
+
 Branch:		gmcgarry_ctxsw
 Description:	Separate scheduler from context-switch code
 Status:		Dormant
@@ -279,6 +291,16 @@ Maintainer:	Gregory McGarry <gmcgarry@NetBSD.org>
 Scope:		kernel
 Notes:		merge pcred and ucred and poolify
 
+Branch:		hpcarm-cleanup
+Description:	Fix build problems for hpcarm
+Status:		Active
+Start Date:	31 July 2007
+End Date:
+Base Tag:	hpcarm-cleanup-base
+Maintainer:	Robert Swindells <rjs@NetBSD.org>
+Scope:		kernel
+Notes:		Modify SA11x0 interrupt code to match PXA2x0 equivalent.
+
 Branch:		itohy-usb1
 Description:	USB stack overhaul, mostly DMA related
 Status:		Active
@@ -292,6 +314,15 @@ Notes:		To check out the kernel source tree,
 			cvs checkout -ritohy-usb1 src/sys/dev/usb/filelist
 		2. update files in the branch
 			sh -e src/sys/dev/usb/filelist
+
+Branch:		jmcneill-pm
+Description:	Power management framework overhaul, ACPI improvements
+Status:		Active
+Start Date:	3 Aug 2007
+End Date:	
+Base Tag:	jmcneill-pm-base
+Scope:		kernel
+Notes:		
 
 Branch:		kame
 Description:	KAME Project
@@ -322,12 +353,34 @@ Notes:		http://mail-index.netbsd.org/tech-kern/2004/12/03/0007.html
 Branch:		matt-timespec
 Description:	Convert the kernel to struct timespec as its primary time
 		storage mechanism.
-Status:		Active
+Status:		Inactive
 Start Date:	2005-02-19
 End Date:
 Base Tag:	
 Maintainer:	Matt Thomas <matt@NetBSD.org>
 Scope:		kernel
+Notes:	
+
+Branch:		matt-mips64
+Description:	Rototill the mips code to support LP64 mips and N32/N64 ABIs
+Status:		Active
+Start Date:	2007-07-17
+End Date:
+Base Tag:	matt-mips64-base
+Maintainer:	Matt Thomas <matt@NetBSD.org>
+Scope:		kernel & userland
+Notes:	
+
+Branch:		matt-armv6
+Description:	Rototill the arm code to support features present in the
+		v6 of the ARM Architecure.  Additionally, clean up things
+		along the way to use common practices.
+Status:		Active
+Start Date:	2007-08-27
+End Date:
+Base Tag:	matt-armv6-base
+Maintainer:	Matt Thomas <matt@NetBSD.org>
+Scope:		kernel & userland
 Notes:	
 
 Branch:		newlock
@@ -357,6 +410,16 @@ Notes:		As per the newlock branch, however given the amount of time
 		- Implement new locking primitives on most-used ports.
 		- Minor locking improvements.
 		- Remove spinlockmgr().
+
+Branch:		nick-csl-alignment
+Description:	Provide correctly aligned __cpu_simple_lock_t for hppa
+Status:		Terminated
+Start Date:	2007-07-18
+End Date:
+Base Tag:	nick-csl-alignment-base5
+Maintainer:	Nick Hudson <skrll@NetBSD.org>
+Scope:		sys, lib/libpthread, lib/libpthread_dbg
+Notes:	
 
 Branch:	  	pkgviews
 Description:  	package views, enabling multiple conflicting packages to co-exist
@@ -510,7 +573,7 @@ Description:	implement and evaluate lazy mapping of mbuf external data pages
 Status:		Active
 Start Date:	Wed Jul  6 2005
 End Date:	
-Base Tag:	yamt-lazymbuf-base4
+Base Tag:	yamt-lazymbuf-base5
 Maintainer:	YAMAMOTO Takashi <yamt@NetBSD.org>
 Scope:		src/sys  (src/common is tagged but not branched)
 Notes:		
@@ -518,6 +581,16 @@ Notes:
 		amd64		DONE
 		other ports should work as the trunk does.
 		(conditionalized by __HAVE_LAZY_MBUF macro)
+
+Branch:		yamt-x86pmap
+Description:	merge i386 and amd64 pmap
+Status:		Active
+Start Date:	Mon Sep 24 2007
+End Date:	
+Base Tag:	yamt-x86pmap-base
+Maintainer:	YAMAMOTO Takashi <yamt@NetBSD.org>
+Scope:		src/sys  (src/common is tagged but not branched)
+Notes:		
 
 Branch:		reinoud-bufcleanup
 Description:	implement and evaluate struct buf usage cleanup strategies.
@@ -1121,16 +1194,16 @@ Notes:
 		  alpha			[ Done, UP tested, MP not tested ]
 		  i386			[ Done, tested ]
 		  amd64			[ Done, tested ]
-		  mips			[ Done, MIPS1 tested, MIPSX needs
-					  further testing + fixes ]
-		  sparc			[ WIP, commited known broken ]
-		  sparc64		[ WIP, commited known broken ]
-		  arm			[ Done, SA1 tested. ]
+		  mips			[ Done, both MIPS1 and MIPS3 tested]
+		  sparc			[ Done, UP tested, MP might have
+					  some problem after newlock2 merge ]
+		  sparc64		[ Done, tested ]
+		  arm			[ Done, SA1 tested. See PR 36548 ]
 		  macppc/powerpc	[ Done, OEA tested ]
-		  hppa			[ WIP. SYSCALLGATE trap issues remain. ]
+		  hppa			[ Done, tested ]
 		  sh3			[ Done, tested ]
 		  vax			[ Done, UP tested, MP untested ]
-		  m68k			[ broken ]
+		  m68k			[ Done, tested on several ports ]
 		  ns32k			[ broken ]
 		  ia64			[ broken ]
 		  pdp10			[ broken ]

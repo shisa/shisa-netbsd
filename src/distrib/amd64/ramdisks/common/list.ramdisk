@@ -1,6 +1,6 @@
-#	$NetBSD: list.ramdisk,v 1.2 2007/05/10 23:22:28 dogcow Exp $
+#	$NetBSD: list.ramdisk,v 1.4 2007/08/23 12:24:14 he Exp $
 
-SRCDIRS	bin sbin usr.bin usr.sbin gnu/usr.bin
+SRCDIRS	bin sbin usr.bin usr.sbin gnu/usr.bin libexec
 
 # init invokes the shell as -sh
 ARGVLN	sh -sh
@@ -19,6 +19,7 @@ COPY	${NETBSDSRCDIR}/distrib/common/services		etc/services
 COPY	${DESTDIR}/usr/mdec/boot		usr/mdec/boot
 COPY	${DESTDIR}/usr/mdec/bootxx_ffsv1	usr/mdec/bootxx_ffsv1
 COPY	${DESTDIR}/usr/mdec/bootxx_ffsv2	usr/mdec/bootxx_ffsv2
+COPY	${DESTDIR}/usr/mdec/bootxx_lfsv2	usr/mdec/bootxx_lfsv2
 COPY	${DESTDIR}/usr/mdec/mbr			usr/mdec/mbr
 COPY	${DESTDIR}/usr/mdec/mbr_ext		usr/mdec/mbr_ext
 COPY	${DESTDIR}/usr/mdec/mbr_bootsel		usr/mdec/mbr_bootsel

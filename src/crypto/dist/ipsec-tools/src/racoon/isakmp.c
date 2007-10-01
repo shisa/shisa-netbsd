@@ -1,4 +1,4 @@
-/*	$NetBSD: isakmp.c,v 1.26 2007/05/04 09:09:47 vanhu Exp $	*/
+/*	$NetBSD: isakmp.c,v 1.28 2007/09/19 19:29:36 mgrooms Exp $	*/
 
 /* Id: isakmp.c,v 1.74 2006/05/07 21:32:59 manubsd Exp */
 
@@ -41,11 +41,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#ifndef HAVE_NETINET6_IPSEC
-#include <netinet/ipsec.h>
-#else 
-#include <netinet6/ipsec.h>
-#endif
+#include PATH_IPSEC_H
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -1727,6 +1723,20 @@ isakmp_open()
 			return -1;
 		}
 #endif
+
+		if (setsockopt(p->sock, SOL_SOCKET,
+#ifdef __linux__
+					 SO_REUSEADDR,
+#else
+					 SO_REUSEPORT,
+#endif
+					 (void *)&yes, sizeof(yes)) < 0) {
+			plog(LLV_ERROR, LOCATION, NULL,
+				"failed to set REUSE flag on %s (%s).\n",
+				saddr2str(p->addr), strerror(errno));
+			close(p->sock);
+			goto err_and_next;
+		}
 
 		if (setsockopt_bypass(p->sock, p->addr->sa_family) < 0)
 			goto err_and_next;

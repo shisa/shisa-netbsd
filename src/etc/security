@@ -1,6 +1,6 @@
 #!/bin/sh -
 #
-#	$NetBSD: security,v 1.102 2007/06/06 13:30:48 martti Exp $
+#	$NetBSD: security,v 1.104 2007/08/27 19:57:02 adrianp Exp $
 #	from: @(#)security	8.1 (Berkeley) 6/9/93
 #
 
@@ -28,6 +28,7 @@ backup_dir=${backup_dir:-/var/backups}
 pkgdb_dir=${pkgdb_dir:-/var/db/pkg}
 max_loginlen=${max_loginlen:-8}
 max_grouplen=${max_grouplen:-8}
+pkg_info=${pkg_info:-/usr/sbin/pkg_info}
 
 # Other configurable variables
 #
@@ -849,13 +850,13 @@ if checkyesno check_disklabels; then
 		migrate_file "$file" "$work_dir/${file##*/}"
 	done
 
-		# generate list of old disklabels & fdisks and remove them
-	ls -1d $work_dir/disklabel.* $work_dir/fdisk.* 2>/dev/null |
+		# generate list of old disklabels, fdisks & wedges and remove them
+	ls -1d $work_dir/disklabel.* $work_dir/fdisk.* $work_dir/wedges.* 2>/dev/null |
 	    egrep -v '\.(backup|current)(,v)?$' > $LABELS
 	xargs rm < $LABELS
 
-		# generate disklabels of all disks excluding:	cd fd md st
-	disks=`iostat -x | awk 'NR > 1 && $1 !~ /^[cfm]d|st|nfs/ { print $1; }'`
+		# generate disklabels of all disks excluding:	cd dk fd md st
+	disks=`iostat -x | awk 'NR > 1 && $1 !~ /^[cfm]d|dk|st|nfs/ { print $1; }'`
 	for i in $disks; do
 		disklabel $i > "$work_dir/disklabel.$i" 2>/dev/null
 	done
@@ -868,8 +869,16 @@ if checkyesno check_disklabels; then
 		done
 	fi
 
-		# append list of new disklabels and fdisks
-	ls -1d $work_dir/disklabel.* $work_dir/fdisk.* 2>/dev/null |
+		# if dkctl is available, generate dkctl listwedges for:	ed ld sd wd cgd ofdisk ra rl raid
+	if [ -x /sbin/dkctl ]; then
+		disks=`iostat -x| awk 'NR > 1 && $1 ~ /^[elsw]d|cgd|ofdisk|r[al]|raid/ { print $1; }'`
+		for i in $disks; do
+			/sbin/dkctl $i listwedges > "$work_dir/wedges.$i" 2>/dev/null
+		done
+	fi
+
+		# append list of new disklabels, fdisks and wedges
+	ls -1d $work_dir/disklabel.* $work_dir/fdisk.* $work_dir/wedges.* 2>/dev/null |
 	    egrep -v '\.(backup|current)(,v)?$' >> $LABELS
 	CHANGELIST="$LABELS $CHANGELIST"
 fi
@@ -880,7 +889,7 @@ if checkyesno check_pkgs && [ -d $pkgdb_dir ]; then
 	pkgs=$work_dir/pkgs
 	migrate_file "$backup_dir/pkgs" "$pkgs"
 	(	cd $pkgdb_dir
-		pkg_info | sort
+		$pkg_info | sort
 		echo ""
 		find . \( -name +REQUIRED_BY -o -name +CONTENTS \) -print0 |
 			xargs -0 ls -ldgTq | sort -t. +1 | sed -e 's, \./, ,'
