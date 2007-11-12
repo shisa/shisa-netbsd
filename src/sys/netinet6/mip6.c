@@ -1,4 +1,4 @@
-/*	$Id: mip6.c,v 1.9 2007/04/04 05:08:32 keiichi Exp $	*/
+/*	$Id: mip6.c,v 1.10 2007/11/12 09:06:23 keiichi Exp $	*/
 
 /*
  * Copyright (C) 2004 WIDE Project.  All rights reserved.
@@ -1410,7 +1410,7 @@ mip6_bc_proxy_control(target, local, cmd)
 			 */
 			return (0);
 		}
-		error = rtrequest(RTM_DELETE, rt_key(rt), (struct sockaddr *)0,
+		error = rtrequest(RTM_DELETE, rt_getkey(rt), (struct sockaddr *)0,
 		    rt_mask(rt), 0, (struct rtentry **)0);
 		if (error) {
 			mip6log((LOG_ERR,

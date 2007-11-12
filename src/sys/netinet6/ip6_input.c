@@ -1,4 +1,4 @@
-/*	$NetBSD: ip6_input.c,v 1.107 2007/05/23 17:15:02 christos Exp $	*/
+/*	$NetBSD: ip6_input.c,v 1.110 2007/09/11 14:18:09 degroote Exp $	*/
 /*	$KAME: ip6_input.c,v 1.188 2001/03/29 05:34:31 itojun Exp $	*/
 
 /*
@@ -62,7 +62,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ip6_input.c,v 1.107 2007/05/23 17:15:02 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ip6_input.c,v 1.110 2007/09/11 14:18:09 degroote Exp $");
 
 #include "opt_inet.h"
 #include "opt_inet6.h"
@@ -136,7 +136,7 @@ static int ip6qmaxlen = IFQ_MAXLEN;
 struct in6_ifaddr *in6_ifaddr;
 struct ifqueue ip6intrq;
 
-extern struct callout in6_tmpaddrtimer_ch;
+extern callout_t in6_tmpaddrtimer_ch;
 
 int ip6_forward_srcrt;			/* XXX */
 int ip6_sourcecheck;			/* XXX */
@@ -202,11 +202,11 @@ ip6_init2(void *dummy)
 {
 
 	/* nd6_timer_init */
-	callout_init(&nd6_timer_ch);
+	callout_init(&nd6_timer_ch, 0);
 	callout_reset(&nd6_timer_ch, hz, nd6_timer, NULL);
 
 	/* timer for regeneranation of temporary addresses randomize ID */
-	callout_init(&in6_tmpaddrtimer_ch);
+	callout_init(&in6_tmpaddrtimer_ch, 0);
 	callout_reset(&in6_tmpaddrtimer_ch,
 		      (ip6_temp_preferred_lifetime - ip6_desync_factor -
 		       ip6_temp_regen_advance) * hz,
@@ -490,7 +490,7 @@ ip6_input(struct mbuf *m)
 	else
 		ip6stat.ip6s_forward_cachemiss++;
 
-#define rt6_key(r) ((struct sockaddr_in6 *)((r)->rt_nodes->rn_key))
+#define rt6_getkey(__rt) satocsin6(rt_getkey(__rt))
 
 	/*
 	 * Accept the packet if the forwarding interface to the destination
@@ -510,7 +510,7 @@ ip6_input(struct mbuf *m)
 	     * the destination and the key of the rtentry has
 	     * already done through looking up the routing table.
 	     */
-	    IN6_ARE_ADDR_EQUAL(&ip6->ip6_dst, &rt6_key(rt)->sin6_addr) &&
+	    IN6_ARE_ADDR_EQUAL(&ip6->ip6_dst, &rt6_getkey(rt)->sin6_addr) &&
 #endif
 #ifdef MOBILE_IPV6
 	    ((rt->rt_flags & RTF_ANNOUNCE) || rt->rt_ifp->if_type == IFT_LOOP)
@@ -847,7 +847,6 @@ ip6_input(struct mbuf *m)
 			/* XXX error stat??? */
 			error = EINVAL;
 			DPRINTF(("ip6_input: no SP, packet discarded\n"));/*XXX*/
-			goto bad;
 		}
 		splx(s);
 		if (error)

@@ -1,4 +1,4 @@
-/*	$NetBSD: nd6.c,v 1.115 2007/05/17 00:53:26 dyoung Exp $	*/
+/*	$NetBSD: nd6.c,v 1.120 2007/09/02 19:42:22 dyoung Exp $	*/
 /*	$KAME: nd6.c,v 1.279 2002/06/08 11:16:51 itojun Exp $	*/
 
 /*
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: nd6.c,v 1.115 2007/05/17 00:53:26 dyoung Exp $");
+__KERNEL_RCSID(0, "$NetBSD: nd6.c,v 1.120 2007/09/02 19:42:22 dyoung Exp $");
 
 #include "opt_ipsec.h"
 
@@ -86,9 +86,6 @@ __KERNEL_RCSID(0, "$NetBSD: nd6.c,v 1.115 2007/05/17 00:53:26 dyoung Exp $");
 #define ND6_SLOWTIMER_INTERVAL (60 * 60) /* 1 hour */
 #define ND6_RECALC_REACHTM_INTERVAL (60 * 120) /* 2 hours */
 
-#define SIN6(s) ((const struct sockaddr_in6 *)s)
-#define SDL(s) ((struct sockaddr_dl *)s)
-
 /* timer values */
 int	nd6_prune	= 1;	/* walk list every 1 seconds */
 int	nd6_delay	= 5;	/* delay first probe time 5 second */
@@ -130,9 +127,9 @@ static struct llinfo_nd6 *nd6_free __P((struct rtentry *, int));
 static void nd6_llinfo_timer __P((void *));
 static void clear_llinfo_pqueue __P((struct llinfo_nd6 *));
 
-struct callout nd6_slowtimo_ch = CALLOUT_INITIALIZER;
-struct callout nd6_timer_ch = CALLOUT_INITIALIZER;
-extern struct callout in6_tmpaddrtimer_ch;
+callout_t nd6_slowtimo_ch;
+callout_t nd6_timer_ch;
+extern callout_t in6_tmpaddrtimer_ch;
 
 static int fill_drlist __P((void *, size_t *, size_t));
 static int fill_prlist __P((void *, size_t *, size_t));
@@ -159,6 +156,9 @@ nd6_init(void)
 	TAILQ_INIT(&nd_defrouter);
 
 	nd6_init_done = 1;
+
+	callout_init(&nd6_slowtimo_ch, 0);
+	callout_init(&nd6_timer_ch, 0);
 
 	/* start timer */
 	callout_reset(&nd6_slowtimo_ch, ND6_SLOWTIMER_INTERVAL * hz,
@@ -441,7 +441,7 @@ nd6_llinfo_timer(void *arg)
 	if ((ifp = rt->rt_ifp) == NULL)
 		panic("ln->ln_rt->rt_ifp == NULL");
 	ndi = ND_IFINFO(ifp);
-	dst = (struct sockaddr_in6 *)rt_key(rt);
+	dst = satocsin6(rt_getkey(rt));
 
 	/* sanity check */
 	if (rt->rt_llinfo && (struct llinfo_nd6 *)rt->rt_llinfo != ln)
@@ -787,13 +787,13 @@ nd6_purge(struct ifnet *ifp)
 	ln = llinfo_nd6.ln_next;
 	while (ln && ln != &llinfo_nd6) {
 		struct rtentry *rt;
-		struct sockaddr_dl *sdl;
+		const struct sockaddr_dl *sdl;
 
 		nln = ln->ln_next;
 		rt = ln->ln_rt;
 		if (rt && rt->rt_gateway &&
 		    rt->rt_gateway->sa_family == AF_LINK) {
-			sdl = (struct sockaddr_dl *)rt->rt_gateway;
+			sdl = satocsdl(rt->rt_gateway);
 			if (sdl->sdl_index == ifp->if_index)
 				nln = nd6_free(rt, 0);
 		}
@@ -987,7 +987,7 @@ static struct llinfo_nd6 *
 nd6_free(struct rtentry *rt, int gc)
 {
 	struct llinfo_nd6 *ln = (struct llinfo_nd6 *)rt->rt_llinfo, *next;
-	struct in6_addr in6 = ((struct sockaddr_in6 *)rt_key(rt))->sin6_addr;
+	struct in6_addr in6 = satocsin6(rt_getkey(rt))->sin6_addr;
 	struct nd_defrouter *dr;
 
 	/*
@@ -1001,7 +1001,7 @@ nd6_free(struct rtentry *rt, int gc)
 	if (!ip6_forwarding) {
 		int s;
 		s = splsoftnet();
-		dr = defrouter_lookup(&((struct sockaddr_in6 *)rt_key(rt))->sin6_addr,
+		dr = defrouter_lookup(&satocsin6(rt_getkey(rt))->sin6_addr,
 		    rt->rt_ifp);
 
 		if (dr != NULL && dr->expire &&
@@ -1081,7 +1081,7 @@ nd6_free(struct rtentry *rt, int gc)
 	 * caches, and disable the route entry not to be used in already
 	 * cached routes.
 	 */
-	rtrequest(RTM_DELETE, rt_key(rt), (struct sockaddr *)0,
+	rtrequest(RTM_DELETE, rt_getkey(rt), (struct sockaddr *)0,
 	    rt_mask(rt), 0, (struct rtentry **)0);
 
 	return next;
@@ -1142,17 +1142,19 @@ nd6_rtrequest(int req, struct rtentry *rt, struct rt_addrinfo *info)
 {
 	struct sockaddr *gate = rt->rt_gateway;
 	struct llinfo_nd6 *ln = (struct llinfo_nd6 *)rt->rt_llinfo;
-	static const struct sockaddr_dl null_sdl = {
-		.sdl_len = sizeof(null_sdl),
-		.sdl_family = AF_LINK,
-	};
 	struct ifnet *ifp = rt->rt_ifp;
+	uint8_t namelen = strlen(ifp->if_xname), addrlen = ifp->if_addrlen;
 	struct ifaddr *ifa;
+
+	RT_DPRINTF("%s l.%d: rt->_rt_key = %p\n", __func__,
+	    __LINE__, (void *)rt->_rt_key);
 
 	if ((rt->rt_flags & RTF_GATEWAY) != 0)
 		return;
 
 	if (nd6_need_cache(ifp) == 0 && (rt->rt_flags & RTF_HOST) == 0) {
+		RT_DPRINTF("%s l.%d: rt->_rt_key = %p\n", __func__,
+		    __LINE__, (void *)rt->_rt_key);
 		/*
 		 * This is probably an interface direct route for a link
 		 * which does not need neighbor caches (e.g. fe80::%lo0/64).
@@ -1165,7 +1167,9 @@ nd6_rtrequest(int req, struct rtentry *rt, struct rt_addrinfo *info)
 
 	if (req == RTM_RESOLVE &&
 	    (nd6_need_cache(ifp) == 0 || /* stf case */
-	     !nd6_is_addr_neighbor(satocsin6(rt_key(rt)), ifp))) {
+	     !nd6_is_addr_neighbor(satocsin6(rt_getkey(rt)), ifp))) {
+		RT_DPRINTF("%s l.%d: rt->_rt_key = %p\n", __func__,
+		    __LINE__, (void *)rt->_rt_key);
 		/*
 		 * FreeBSD and BSD/OS often make a cloned host route based
 		 * on a less-specific route (e.g. the default route).
@@ -1186,6 +1190,8 @@ nd6_rtrequest(int req, struct rtentry *rt, struct rt_addrinfo *info)
 
 	switch (req) {
 	case RTM_ADD:
+		RT_DPRINTF("%s l.%d: rt->_rt_key = %p\n", __func__,
+		    __LINE__, (void *)rt->_rt_key);
 		/*
 		 * There is no backward compatibility :)
 		 *
@@ -1195,22 +1201,33 @@ nd6_rtrequest(int req, struct rtentry *rt, struct rt_addrinfo *info)
 		 */
 		if ((rt->rt_flags & RTF_CLONING) ||
 		    ((rt->rt_flags & RTF_LLINFO) && !ln)) {
+			union {
+				struct sockaddr sa;
+				struct sockaddr_dl sdl;
+				struct sockaddr_storage ss;
+			} u;
 			/*
 			 * Case 1: This route should come from a route to
 			 * interface (RTF_CLONING case) or the route should be
 			 * treated as on-link but is currently not
 			 * (RTF_LLINFO && !ln case).
 			 */
-			rt_setgate(rt, rt_key(rt),
-				   (const struct sockaddr *)&null_sdl);
+			sockaddr_dl_init(&u.sdl, sizeof(u.ss),
+			    ifp->if_index, ifp->if_type,
+			    NULL, namelen, NULL, addrlen);
+			rt_setgate(rt, &u.sa);
 			gate = rt->rt_gateway;
-			SDL(gate)->sdl_type = ifp->if_type;
-			SDL(gate)->sdl_index = ifp->if_index;
+			RT_DPRINTF("%s l.%d: rt->_rt_key = %p\n", __func__,
+			    __LINE__, (void *)rt->_rt_key);
 			if (ln)
 				nd6_llinfo_settimer(ln, 0);
+			RT_DPRINTF("%s l.%d: rt->_rt_key = %p\n", __func__,
+			    __LINE__, (void *)rt->_rt_key);
 			if ((rt->rt_flags & RTF_CLONING) != 0)
 				break;
 		}
+		RT_DPRINTF("%s l.%d: rt->_rt_key = %p\n", __func__,
+		    __LINE__, (void *)rt->_rt_key);
 		/*
 		 * In IPv4 code, we try to annonuce new RTF_ANNOUNCE entry here.
 		 * We don't do that here since llinfo is not ready yet.
@@ -1233,45 +1250,56 @@ nd6_rtrequest(int req, struct rtentry *rt, struct rt_addrinfo *info)
 		/* XXX it does not work */
 		if (rt->rt_flags & RTF_ANNOUNCE)
 			nd6_na_output(ifp,
-			      &SIN6(rt_key(rt))->sin6_addr,
-			      &SIN6(rt_key(rt))->sin6_addr,
+			      &satocsin6(rt_getkey(rt))->sin6_addr,
+			      &satocsin6(rt_getkey(rt))->sin6_addr,
 			      ip6_forwarding ? ND_NA_FLAG_ROUTER : 0,
 			      1, NULL);
 #endif
 		/* FALLTHROUGH */
 	case RTM_RESOLVE:
 		if ((ifp->if_flags & (IFF_POINTOPOINT | IFF_LOOPBACK)) == 0) {
+			RT_DPRINTF("%s l.%d: rt->_rt_key = %p\n", __func__,
+			    __LINE__, (void *)rt->_rt_key);
 			/*
 			 * Address resolution isn't necessary for a point to
 			 * point link, so we can skip this test for a p2p link.
 			 */
 			if (gate->sa_family != AF_LINK ||
-			    gate->sa_len < sizeof(null_sdl)) {
+			    gate->sa_len <
+			    sockaddr_dl_measure(namelen, addrlen)) {
 				log(LOG_DEBUG,
 				    "nd6_rtrequest: bad gateway value: %s\n",
 				    if_name(ifp));
 				break;
 			}
-			SDL(gate)->sdl_type = ifp->if_type;
-			SDL(gate)->sdl_index = ifp->if_index;
+			satosdl(gate)->sdl_type = ifp->if_type;
+			satosdl(gate)->sdl_index = ifp->if_index;
+			RT_DPRINTF("%s l.%d: rt->_rt_key = %p\n", __func__,
+			    __LINE__, (void *)rt->_rt_key);
 		}
 		if (ln != NULL)
 			break;	/* This happens on a route change */
+		RT_DPRINTF("%s l.%d: rt->_rt_key = %p\n", __func__,
+		    __LINE__, (void *)rt->_rt_key);
 		/*
 		 * Case 2: This route may come from cloning, or a manual route
 		 * add with a LL address.
 		 */
 		R_Malloc(ln, struct llinfo_nd6 *, sizeof(*ln));
 		rt->rt_llinfo = (void *)ln;
+		RT_DPRINTF("%s l.%d: rt->_rt_key = %p\n", __func__,
+		    __LINE__, (void *)rt->_rt_key);
 		if (ln == NULL) {
 			log(LOG_DEBUG, "nd6_rtrequest: malloc failed\n");
 			break;
 		}
+		RT_DPRINTF("%s l.%d: rt->_rt_key = %p\n", __func__,
+		    __LINE__, (void *)rt->_rt_key);
 		nd6_inuse++;
 		nd6_allocated++;
 		bzero(ln, sizeof(*ln));
 		ln->ln_rt = rt;
-		callout_init(&ln->ln_timer_ch);
+		callout_init(&ln->ln_timer_ch, 0);
 		/* this is required for "ndp" command. - shin */
 		if (req == RTM_ADD) {
 		        /*
@@ -1289,29 +1317,36 @@ nd6_rtrequest(int req, struct rtentry *rt, struct rt_addrinfo *info)
 			ln->ln_state = ND6_LLINFO_NOSTATE;
 			nd6_llinfo_settimer(ln, 0);
 		}
+		RT_DPRINTF("%s l.%d: rt->_rt_key = %p\n", __func__,
+		    __LINE__, (void *)rt->_rt_key);
 		rt->rt_flags |= RTF_LLINFO;
 		ln->ln_next = llinfo_nd6.ln_next;
 		llinfo_nd6.ln_next = ln;
 		ln->ln_prev = &llinfo_nd6;
 		ln->ln_next->ln_prev = ln;
 
+		RT_DPRINTF("%s l.%d: rt->_rt_key = %p\n", __func__,
+		    __LINE__, (void *)rt->_rt_key);
 		/*
-		 * check if rt_key(rt) is one of my address assigned
+		 * check if rt_getkey(rt) is an address assigned
 		 * to the interface.
 		 */
-		ifa = (struct ifaddr *)in6ifa_ifpwithaddr(rt->rt_ifp,
-		    &SIN6(rt_key(rt))->sin6_addr);
+		ifa = (struct ifaddr *)in6ifa_ifpwithaddr(ifp,
+		    &satocsin6(rt_getkey(rt))->sin6_addr);
+		RT_DPRINTF("%s l.%d: rt->_rt_key = %p\n", __func__,
+		    __LINE__, (void *)rt->_rt_key);
 		if (ifa) {
-			void *macp = nd6_ifptomac(ifp);
+			const void *mac;
 			nd6_llinfo_settimer(ln, -1);
 			ln->ln_state = ND6_LLINFO_REACHABLE;
 			ln->ln_byhint = 0;
-			if (macp) {
-				bcopy(macp, LLADDR(SDL(gate)), ifp->if_addrlen);
-				SDL(gate)->sdl_alen = ifp->if_addrlen;
+			if ((mac = nd6_ifptomac(ifp)) != NULL) {
+				/* XXX check for error */
+				(void)sockaddr_dl_setaddr(satosdl(gate),
+				    gate->sa_len, mac, ifp->if_addrlen);
 			}
 			if (nd6_useloopback) {
-				rt->rt_ifp = lo0ifp;	/* XXX */
+				ifp = rt->rt_ifp = lo0ifp;	/* XXX */
 				/*
 				 * Make sure rt_ifa be equal to the ifaddr
 				 * corresponding to the address.
@@ -1334,7 +1369,7 @@ nd6_rtrequest(int req, struct rtentry *rt, struct rt_addrinfo *info)
 				struct in6_addr llsol;
 				int error;
 
-				llsol = SIN6(rt_key(rt))->sin6_addr;
+				llsol = satocsin6(rt_getkey(rt))->sin6_addr;
 				llsol.s6_addr32[0] = htonl(0xff020000);
 				llsol.s6_addr32[1] = 0;
 				llsol.s6_addr32[2] = htonl(1);
@@ -1359,7 +1394,7 @@ nd6_rtrequest(int req, struct rtentry *rt, struct rt_addrinfo *info)
 			struct in6_addr llsol;
 			struct in6_multi *in6m;
 
-			llsol = SIN6(rt_key(rt))->sin6_addr;
+			llsol = satocsin6(rt_getkey(rt))->sin6_addr;
 			llsol.s6_addr32[0] = htonl(0xff020000);
 			llsol.s6_addr32[1] = 0;
 			llsol.s6_addr32[2] = htonl(1);
@@ -1627,7 +1662,7 @@ nd6_llinfo_release_pkts(struct llinfo_nd6 *ln, struct ifnet *ifp,
 		 * just set the 2nd argument as the 
 		 * 1st one.
 		 */
-		nd6_output(ifp, ifp, m_hold, satocsin6(rt_key(rt)), rt);
+		nd6_output(ifp, ifp, m_hold, satocsin6(rt_getkey(rt)), rt);
 	}
 }
 
@@ -1704,11 +1739,11 @@ fail:
 		goto fail;
 	if (rt->rt_gateway->sa_family != AF_LINK)
 		goto fail;
-	sdl = SDL(rt->rt_gateway);
+	sdl = satosdl(rt->rt_gateway);
 
 	olladdr = (sdl->sdl_alen) ? 1 : 0;
 	if (olladdr && lladdr) {
-		if (bcmp(lladdr, LLADDR(sdl), ifp->if_addrlen))
+		if (memcmp(lladdr, CLLADDR(sdl), ifp->if_addrlen))
 			llchange = 1;
 		else
 			llchange = 0;
@@ -1731,8 +1766,9 @@ fail:
 		 * Record source link-layer address
 		 * XXX is it dependent to ifp->if_type?
 		 */
-		sdl->sdl_alen = ifp->if_addrlen;
-		bcopy(lladdr, LLADDR(sdl), ifp->if_addrlen);
+		/* XXX check for error */
+		(void)sockaddr_dl_setaddr(sdl, sdl->sdl_len, lladdr,
+		    ifp->if_addrlen);
 	}
 
 	if (!is_newentry) {
@@ -2185,10 +2221,12 @@ nd6_storelladdr(const struct ifnet *ifp, const struct rtentry *rt,
 		switch (ifp->if_type) {
 		case IFT_ETHER:
 		case IFT_FDDI:
-			ETHER_MAP_IPV6_MULTICAST(&SIN6(dst)->sin6_addr, lldst);
+			ETHER_MAP_IPV6_MULTICAST(&satocsin6(dst)->sin6_addr,
+			    lldst);
 			return 1;
 		case IFT_IEEE1394:
-			bcopy(ifp->if_broadcastaddr, lldst, ifp->if_addrlen);
+			memcpy(lldst, ifp->if_broadcastaddr,
+			    MIN(dstsize, ifp->if_addrlen));
 			return 1;
 		case IFT_ARCNET:
 			*lldst = 0;
@@ -2209,11 +2247,11 @@ nd6_storelladdr(const struct ifnet *ifp, const struct rtentry *rt,
 		m_freem(m);
 		return 0;
 	}
-	sdl = SDL(rt->rt_gateway);
+	sdl = satocsdl(rt->rt_gateway);
 	if (sdl->sdl_alen == 0 || sdl->sdl_alen > dstsize) {
 		/* this should be impossible, but we bark here for debugging */
 		printf("%s: sdl_alen == 0, dst=%s, if=%s\n", __func__,
-		    ip6_sprintf(&SIN6(dst)->sin6_addr), if_name(ifp));
+		    ip6_sprintf(&satocsin6(dst)->sin6_addr), if_name(ifp));
 		m_freem(m);
 		return 0;
 	}

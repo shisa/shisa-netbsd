@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.1012 2007/06/29 23:30:18 rumble Exp $
+# $NetBSD: mi,v 1.1025 2007/09/25 06:27:05 wiz Exp $
 ./etc/mtree/set.man				man-sys-root
 ./usr/share/info/am-utils.info			man-amd-info		info
 ./usr/share/info/as.info			man-computil-info	bfd,info
@@ -51,6 +51,7 @@
 ./usr/share/man/cat1/audioctl.0			man-audio-catman	.cat
 ./usr/share/man/cat1/audioplay.0		man-audio-catman	.cat
 ./usr/share/man/cat1/audiorecord.0		man-audio-catman	.cat
+./usr/share/man/cat1/audit-packages.0		man-pkgutil-catman	.cat
 ./usr/share/man/cat1/awk.0			man-util-catman		.cat
 ./usr/share/man/cat1/banner.0			man-util-catman		.cat
 ./usr/share/man/cat1/basename.0			man-util-catman		.cat
@@ -115,6 +116,7 @@
 ./usr/share/man/cat1/dnskeygen.0		man-obsolete		obsolete
 ./usr/share/man/cat1/dnsquery.0			man-obsolete		obsolete
 ./usr/share/man/cat1/domainname.0		man-nis-catman		.cat
+./usr/share/man/cat1/download-vulnerability-list.0	man-pkgutil-catman	.cat
 ./usr/share/man/cat1/dtmfdecode.0		man-isdn-catman		.cat
 ./usr/share/man/cat1/du.0			man-util-catman		.cat
 ./usr/share/man/cat1/echo.0			man-util-catman		.cat
@@ -686,6 +688,7 @@
 ./usr/share/man/cat4/arm32/ptsc.0		man-obsolete		obsolete
 ./usr/share/man/cat4/arm32/quadmouse.0		man-obsolete		obsolete
 ./usr/share/man/cat4/arm32/wd.0			man-obsolete		obsolete
+./usr/share/man/cat4/aps.0			man-sys-catman		.cat
 ./usr/share/man/cat4/arp.0			man-sys-catman		.cat
 ./usr/share/man/cat4/artsata.0			man-sys-catman		.cat
 ./usr/share/man/cat4/ast.0			man-sys-catman		.cat
@@ -736,6 +739,7 @@
 ./usr/share/man/cat4/bridge.0			man-sys-catman		.cat
 ./usr/share/man/cat4/bt.0			man-sys-catman		.cat
 ./usr/share/man/cat4/bt3c.0			man-sys-catman		.cat
+./usr/share/man/cat4/btbc.0			man-sys-catman		.cat
 ./usr/share/man/cat4/btdev.0			man-obsolete		obsolete
 ./usr/share/man/cat4/bthidev.0			man-sys-catman		.cat
 ./usr/share/man/cat4/bthset.0			man-obsolete		obsolete
@@ -983,6 +987,8 @@
 ./usr/share/man/cat4/i4btrc.0			man-obsolete		obsolete
 ./usr/share/man/cat4/i915drm.0			man-sys-catman		.cat
 ./usr/share/man/cat4/iavc.0			man-sys-catman		.cat
+./usr/share/man/cat4/ichlpcib.0			man-sys-catman		.cat
+./usr/share/man/cat4/ichsmb.0			man-sys-catman		.cat
 ./usr/share/man/cat4/icmp.0			man-sys-catman		.cat
 ./usr/share/man/cat4/icmp6.0			man-sys-catman		.cat
 ./usr/share/man/cat4/icp.0			man-sys-catman		.cat
@@ -1137,6 +1143,8 @@
 ./usr/share/man/cat4/netsmb.0			man-sys-catman		.cat
 ./usr/share/man/cat4/networking.0		man-sys-catman		.cat
 ./usr/share/man/cat4/nfe.0			man-sys-catman		.cat
+./usr/share/man/cat4/nfsmb.0			man-sys-catman		.cat
+./usr/share/man/cat4/nfsmbc.0			man-sys-catman		.cat
 ./usr/share/man/cat4/njata.0			man-sys-catman		.cat
 ./usr/share/man/cat4/njs.0			man-sys-catman		.cat
 ./usr/share/man/cat4/ns.0			man-obsolete		obsolete
@@ -1186,6 +1194,7 @@
 ./usr/share/man/cat4/pflog.0			man-pf-catman		pf,.cat
 ./usr/share/man/cat4/phy.0			man-sys-catman		.cat
 ./usr/share/man/cat4/piixide.0			man-sys-catman		.cat
+./usr/share/man/cat4/piixpcib.0			man-sys-catman		.cat
 ./usr/share/man/cat4/piixpm.0			man-sys-catman		.cat
 ./usr/share/man/cat4/pim.0			man-sys-catman		.cat
 ./usr/share/man/cat4/plip.0			man-sys-catman		.cat
@@ -1349,6 +1358,7 @@
 ./usr/share/man/cat4/sparc64/sab.0		man-sys-catman		.cat
 ./usr/share/man/cat4/sparc64/sabtty.0		man-sys-catman		.cat
 ./usr/share/man/cat4/spc.0			man-sys-catman		.cat
+./usr/share/man/cat4/spdmem.0			man-sys-catman		.cat
 ./usr/share/man/cat4/speaker.0			man-sys-catman		.cat
 ./usr/share/man/cat4/spi.0			man-sys-catman		.cat
 ./usr/share/man/cat4/spic.0			man-obsolete		obsolete
@@ -1428,6 +1438,7 @@
 ./usr/share/man/cat4/ubsec.0			man-sys-catman		.cat
 ./usr/share/man/cat4/ubt.0			man-sys-catman		.cat
 ./usr/share/man/cat4/ubtbcmfw.0			man-obsolete		obsolete
+./usr/share/man/cat4/uchcom.0			man-sys-catman		.cat
 ./usr/share/man/cat4/ucom.0			man-sys-catman		.cat
 ./usr/share/man/cat4/ucycom.0			man-sys-catman		.cat
 ./usr/share/man/cat4/udav.0			man-sys-catman		.cat
@@ -1581,6 +1592,7 @@
 ./usr/share/man/cat5/altq.conf.0		man-router-catman	.cat
 ./usr/share/man/cat5/amd.conf.0			man-amd-catman		.cat
 ./usr/share/man/cat5/ar.0			man-sys-catman		.cat
+./usr/share/man/cat5/audit-packages.conf.0	man-pkgutil-catman	.cat
 ./usr/share/man/cat5/bluetooth.conf.0		man-obsolete		obsolete
 ./usr/share/man/cat5/body_checks.0		man-postfix-catman	postfix,.cat
 ./usr/share/man/cat5/bootparams.0		man-bootserver-catman	.cat
@@ -1884,6 +1896,7 @@
 ./usr/share/man/cat8/compat_win32.0		man-sys-catman		.cat
 ./usr/share/man/cat8/compat_xenix.0		man-sys-catman		.cat
 ./usr/share/man/cat8/comsat.0			man-man-catman		.cat
+./usr/share/man/cat8/cpuctl.0			man-sysutil-catman	.cat
 ./usr/share/man/cat8/cron.0			man-cron-catman		.cat
 ./usr/share/man/cat8/dbsym.0			man-sysutil-catman	bfd,.cat
 ./usr/share/man/cat8/defer.0			man-postfix-catman	postfix,.cat
@@ -2131,6 +2144,7 @@
 ./usr/share/man/cat8/mount_psshfs.0		man-sysutil-catman	puffs,.cat
 ./usr/share/man/cat8/mount_ptyfs.0		man-sysutil-catman	.cat
 ./usr/share/man/cat8/mount_smbfs.0		man-smbfs-catman	.cat
+./usr/share/man/cat8/mount_sysctlfs.0		man-sysutil-catman	puffs,.cat
 ./usr/share/man/cat8/mount_sysvbfs.0		man-sysutil-catman	.cat
 ./usr/share/man/cat8/mount_tmpfs.0		man-sysutil-catman	.cat
 ./usr/share/man/cat8/mount_udf.0		man-sysutil-catman	.cat
@@ -2530,6 +2544,7 @@
 ./usr/share/man/man1/audioctl.1			man-audio-man		.man
 ./usr/share/man/man1/audioplay.1		man-audio-man		.man
 ./usr/share/man/man1/audiorecord.1		man-audio-man		.man
+./usr/share/man/man1/audit-packages.1		man-pkgutil-man		.man
 ./usr/share/man/man1/awk.1			man-util-man		.man
 ./usr/share/man/man1/banner.1			man-util-man		.man
 ./usr/share/man/man1/basename.1			man-util-man		.man
@@ -2594,6 +2609,7 @@
 ./usr/share/man/man1/dnskeygen.1		man-obsolete		obsolete
 ./usr/share/man/man1/dnsquery.1			man-obsolete		obsolete
 ./usr/share/man/man1/domainname.1		man-nis-man		.man
+./usr/share/man/man1/download-vulnerability-list.1	man-pkgutil-man	.man
 ./usr/share/man/man1/dtmfdecode.1		man-isdn-man		.man
 ./usr/share/man/man1/du.1			man-util-man		.man
 ./usr/share/man/man1/echo.1			man-util-man		.man
@@ -3165,6 +3181,7 @@
 ./usr/share/man/man4/arm32/ptsc.4		man-obsolete		obsolete
 ./usr/share/man/man4/arm32/quadmouse.4		man-obsolete		obsolete
 ./usr/share/man/man4/arm32/wd.4			man-obsolete		obsolete
+./usr/share/man/man4/aps.4			man-sys-man		.man
 ./usr/share/man/man4/arp.4			man-sys-man		.man
 ./usr/share/man/man4/artsata.4			man-sys-man		.man
 ./usr/share/man/man4/ast.4			man-sys-man		.man
@@ -3215,6 +3232,7 @@
 ./usr/share/man/man4/bridge.4			man-sys-man		.man
 ./usr/share/man/man4/bt.4			man-sys-man		.man
 ./usr/share/man/man4/bt3c.4			man-sys-man		.man
+./usr/share/man/man4/btbc.4			man-sys-man		.man
 ./usr/share/man/man4/btdev.4			man-obsolete		obsolete
 ./usr/share/man/man4/bthidev.4			man-sys-man		.man
 ./usr/share/man/man4/bthset.4			man-obsolete		obsolete
@@ -3462,6 +3480,8 @@
 ./usr/share/man/man4/i4btrc.4			man-obsolete		obsolete
 ./usr/share/man/man4/i915drm.4			man-sys-man		.man
 ./usr/share/man/man4/iavc.4			man-sys-man		.man
+./usr/share/man/man4/ichlpcib.4			man-sys-man		.man
+./usr/share/man/man4/ichsmb.4			man-sys-man		.man
 ./usr/share/man/man4/icmp.4			man-sys-man		.man
 ./usr/share/man/man4/icmp6.4			man-sys-man		.man
 ./usr/share/man/man4/icp.4			man-sys-man		.man
@@ -3616,6 +3636,8 @@
 ./usr/share/man/man4/netsmb.4			man-sys-man		.man
 ./usr/share/man/man4/networking.4		man-sys-man		.man
 ./usr/share/man/man4/nfe.4			man-sys-man		.man
+./usr/share/man/man4/nfsmb.4			man-sys-man		.man
+./usr/share/man/man4/nfsmbc.4			man-sys-man		.man
 ./usr/share/man/man4/njata.4			man-sys-man		.man
 ./usr/share/man/man4/njs.4			man-sys-man		.man
 ./usr/share/man/man4/ns.4			man-obsolete		obsolete
@@ -3665,6 +3687,7 @@
 ./usr/share/man/man4/pflog.4			man-pf-man		pf,.man
 ./usr/share/man/man4/phy.4			man-sys-man		.man
 ./usr/share/man/man4/piixide.4			man-sys-man		.man
+./usr/share/man/man4/piixpcib.4			man-sys-man		.man
 ./usr/share/man/man4/piixpm.4			man-sys-man		.man
 ./usr/share/man/man4/pim.4			man-sys-man		.man
 ./usr/share/man/man4/plip.4			man-sys-man		.man
@@ -3828,6 +3851,7 @@
 ./usr/share/man/man4/sparc64/sab.4		man-sys-man		.man
 ./usr/share/man/man4/sparc64/sabtty.4		man-sys-man		.man
 ./usr/share/man/man4/spc.4			man-sys-man		.man
+./usr/share/man/man4/spdmem.4			man-sys-man		.man
 ./usr/share/man/man4/speaker.4			man-sys-man		.man
 ./usr/share/man/man4/spi.4			man-sys-man		.man
 ./usr/share/man/man4/spic.4			man-obsolete		obsolete
@@ -3907,6 +3931,7 @@
 ./usr/share/man/man4/ubsec.4			man-sys-man		.man
 ./usr/share/man/man4/ubt.4			man-sys-man		.man
 ./usr/share/man/man4/ubtbcmfw.4			man-obsolete		obsolete
+./usr/share/man/man4/uchcom.4			man-sys-man		.man
 ./usr/share/man/man4/ucom.4			man-sys-man		.man
 ./usr/share/man/man4/ucycom.4			man-sys-man		.man
 ./usr/share/man/man4/udav.4			man-sys-man		.man
@@ -4060,6 +4085,7 @@
 ./usr/share/man/man5/altq.conf.5		man-router-man		.man
 ./usr/share/man/man5/amd.conf.5			man-amd-man		.man
 ./usr/share/man/man5/ar.5			man-sys-man		.man
+./usr/share/man/man5/audit-packages.conf.5	man-pkgutil-man		.man
 ./usr/share/man/man5/bluetooth.conf.5		man-obsolete		obsolete
 ./usr/share/man/man5/body_checks.5		man-postfix-man		postfix,.man
 ./usr/share/man/man5/bootparams.5		man-bootserver-man	.man
@@ -4362,6 +4388,7 @@
 ./usr/share/man/man8/compat_win32.8		man-sys-man		.man
 ./usr/share/man/man8/compat_xenix.8		man-sys-man		.man
 ./usr/share/man/man8/comsat.8			man-man-man		.man
+./usr/share/man/man8/cpuctl.8			man-sysutil-man		.man
 ./usr/share/man/man8/cron.8			man-cron-man		.man
 ./usr/share/man/man8/dbsym.8			man-sysutil-man		bfd,.man
 ./usr/share/man/man8/defer.8			man-postfix-man		postfix,.man
@@ -4610,6 +4637,7 @@
 ./usr/share/man/man8/mount_psshfs.8		man-sysutil-man		puffs,.man
 ./usr/share/man/man8/mount_ptyfs.8		man-sysutil-man		.man
 ./usr/share/man/man8/mount_smbfs.8		man-smbfs-man		.man
+./usr/share/man/man8/mount_sysctlfs.8		man-sysutil-man		puffs,.man
 ./usr/share/man/man8/mount_sysvbfs.8		man-sysutil-man		.man
 ./usr/share/man/man8/mount_tmpfs.8		man-sysutil-man		.man
 ./usr/share/man/man8/mount_udf.8		man-sysutil-man		.man

@@ -1,4 +1,4 @@
-/*	$NetBSD: raw_ip6.c,v 1.85 2007/05/23 17:15:04 christos Exp $	*/
+/*	$NetBSD: raw_ip6.c,v 1.87 2007/09/19 04:33:44 dyoung Exp $	*/
 /*	$KAME: raw_ip6.c,v 1.82 2001/07/23 18:57:56 jinmei Exp $	*/
 
 /*
@@ -62,7 +62,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: raw_ip6.c,v 1.85 2007/05/23 17:15:04 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: raw_ip6.c,v 1.87 2007/09/19 04:33:44 dyoung Exp $");
 
 #include "opt_ipsec.h"
 
@@ -107,8 +107,6 @@ __KERNEL_RCSID(0, "$NetBSD: raw_ip6.c,v 1.85 2007/05/23 17:15:04 christos Exp $"
 #include <netipsec/ipsec_var.h> /* XXX ipsecstat namespace */
 #include <netipsec/ipsec6.h>
 #endif
-
-#include <machine/stdarg.h>
 
 #include "faith.h"
 #if defined(NFAITH) && 0 < NFAITH
@@ -392,17 +390,9 @@ rip6_ctlinput(int cmd, const struct sockaddr *sa, void *d)
  * Tack on options user may have setup with control call.
  */
 int
-#if __STDC__
-rip6_output(struct mbuf *m, ...)
-#else
-rip6_output(m, va_alist)
-	struct mbuf *m;
-	va_dcl
-#endif
+rip6_output(struct mbuf *m, struct socket *so, struct sockaddr_in6 *dstsock,
+    struct mbuf *control)
 {
-	struct socket *so;
-	struct sockaddr_in6 *dstsock;
-	struct mbuf *control;
 	struct in6_addr *dst;
 	struct ip6_hdr *ip6;
 	struct in6pcb *in6p;
@@ -414,13 +404,6 @@ rip6_output(m, va_alist)
 	int priv = 0;
 	int scope_ambiguous = 0;
 	struct in6_addr *in6a;
-	va_list ap;
-
-	va_start(ap, m);
-	so = va_arg(ap, struct socket *);
-	dstsock = va_arg(ap, struct sockaddr_in6 *);
-	control = va_arg(ap, struct mbuf *);
-	va_end(ap);
 
 	in6p = sotoin6pcb(so);
 
@@ -588,43 +571,45 @@ rip6_ctloutput(int op, struct socket *so, int level, int optname,
 {
 	int error = 0;
 
-	switch (level) {
-	case IPPROTO_IPV6:
-		switch (optname) {
-		case MRT6_INIT:
-		case MRT6_DONE:
-		case MRT6_ADD_MIF:
-		case MRT6_DEL_MIF:
-		case MRT6_ADD_MFC:
-		case MRT6_DEL_MFC:
-		case MRT6_PIM:
-			if (op == PRCO_SETOPT) {
-				error = ip6_mrouter_set(optname, so, *mp);
-				if (*mp)
-					(void)m_free(*mp);
-			} else if (op == PRCO_GETOPT)
-				error = ip6_mrouter_get(optname, so, mp);
-			else
-				error = EINVAL;
-			return error;
-		case IPV6_CHECKSUM:
-			return ip6_raw_ctloutput(op, so, level, optname, mp);
-		default:
+	if (level == SOL_SOCKET && optname == SO_NOHEADER) {
+		/* need to fiddle w/ opt(IPPROTO_IPV6, IPV6_CHECKSUM)? */
+		if (optname != SO_NOHEADER)
 			return ip6_ctloutput(op, so, level, optname, mp);
-		}
+		else if (op == PRCO_GETOPT) {
+			*mp = m_intopt(so, 1);
+			return 0;
+		} else if (*mp == NULL || (*mp)->m_len < sizeof(int))
+			error = EINVAL;
+		else if (*mtod(*mp, int *) == 0)
+			error = EINVAL;
+		goto free_m;
+	} else if (level != IPPROTO_IPV6)
+		return ip6_ctloutput(op, so, level, optname, mp);
 
-	case IPPROTO_ICMPV6:
-		/*
-		 * XXX: is it better to call icmp6_ctloutput() directly
-		 * from protosw?
-		 */
-		return icmp6_ctloutput(op, so, level, optname, mp);
-
+	switch (optname) {
+	case MRT6_INIT:
+	case MRT6_DONE:
+	case MRT6_ADD_MIF:
+	case MRT6_DEL_MIF:
+	case MRT6_ADD_MFC:
+	case MRT6_DEL_MFC:
+	case MRT6_PIM:
+		if (op == PRCO_SETOPT)
+			error = ip6_mrouter_set(optname, so, *mp);
+		else if (op == PRCO_GETOPT)
+			error = ip6_mrouter_get(optname, so, mp);
+		else
+			error = EINVAL;
+		break;
+	case IPV6_CHECKSUM:
+		return ip6_raw_ctloutput(op, so, level, optname, mp);
 	default:
-		if (op == PRCO_SETOPT && *mp)
-			m_free(*mp);
-		return EINVAL;
+		return ip6_ctloutput(op, so, level, optname, mp);
 	}
+free_m:
+	if (op == PRCO_SETOPT && *mp != NULL)
+		m_free(*mp);
+	return error;
 }
 
 extern	u_long rip6_sendspace;
