@@ -1,4 +1,4 @@
-/*	$Id: in_mtun.c,v 1.6 2007/05/16 03:47:59 keiichi Exp $	*/
+/*	$Id: in_mtun.c,v 1.7 2007/11/16 08:10:57 keiichi Exp $	*/
 /*	$NetBSD: in_gif.c,v 1.51 2006/11/23 04:07:07 rpaulo Exp $	*/
 /*	$KAME: in_gif.c,v 1.66 2001/07/29 04:46:09 itojun Exp $	*/
 
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$Id: in_mtun.c,v 1.6 2007/05/16 03:47:59 keiichi Exp $");
+__KERNEL_RCSID(0, "$Id: in_mtun.c,v 1.7 2007/11/16 08:10:57 keiichi Exp $");
 
 #include "opt_inet.h"
 #include "opt_iso.h"
@@ -373,10 +373,7 @@ in_mtun_detach(struct mtun_softc *sc)
 	if (error == 0)
 		sc->encap_cookie4 = NULL;
 
-	if (sc->mtun_ro.ro_rt) {
-		RTFREE(sc->mtun_ro.ro_rt);
-		sc->mtun_ro.ro_rt = NULL;
-	}
+	rtcache_free(&sc->mtun_ro);
 
 	return error;
 }
