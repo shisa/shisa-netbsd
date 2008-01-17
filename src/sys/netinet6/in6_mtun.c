@@ -1,4 +1,4 @@
-/*	$Id: in6_mtun.c,v 1.6 2007/05/16 03:47:59 keiichi Exp $	*/
+/*	$Id: in6_mtun.c,v 1.7 2008/01/17 07:16:18 keiichi Exp $	*/
 /*	$NetBSD: in6_gif.c,v 1.44.4.1 2006/09/09 02:58:55 rpaulo Exp $	*/
 /*	$KAME: in6_gif.c,v 1.62 2001/07/29 04:27:25 itojun Exp $	*/
 
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$Id: in6_mtun.c,v 1.6 2007/05/16 03:47:59 keiichi Exp $");
+__KERNEL_RCSID(0, "$Id: in6_mtun.c,v 1.7 2008/01/17 07:16:18 keiichi Exp $");
 
 #include "opt_inet.h"
 #include "opt_iso.h"
@@ -207,12 +207,14 @@ in6_mtun_output(ifp, family, m)
 
 	sockaddr_in6_init(&u.dst6, &sin6_dst->sin6_addr, 0, 0, 0);
 	if (rtcache_lookup(&sc->mtun_ro, &u.dst) == NULL) {
+		printf("no cached route\n");
 		m_freem(m);
 		return ENETUNREACH;
 	}
 
 	/* If the route constitutes infinite encapsulation, punt. */
-	if (sc->mtun_ro.ro_rt->rt_ifp == ifp) {
+	if (sc->mtun_ro.ro_rt->rt_ifp == ifp
+		&& sc->mtun_nexthop == NULL) {
 		m_freem(m);
 		return ENETUNREACH;	/* XXX */
 	}
@@ -227,7 +229,7 @@ in6_mtun_output(ifp, family, m)
 	if (sc->mtun_nexthop) {
 		pktopt.ip6po_nexthop =
 		    (struct sockaddr *)malloc(sizeof(struct sockaddr_in6),
-		    M_TEMP, M_NOWAIT); 
+		    M_IP6OPT, M_NOWAIT); 
 
 		if (pktopt.ip6po_nexthop == NULL) {
 			m_freem(m);
@@ -238,7 +240,7 @@ in6_mtun_output(ifp, family, m)
 		bcopy(sc->mtun_nexthop, pktopt.ip6po_nexthop,
 		    sizeof(struct sockaddr_in6));
 		satosin6(pktopt.ip6po_nexthop)->sin6_scope_id = 0; /* XXX */
-	} 
+	}
 
 #ifdef IPV6_MINMTU
 	/*
@@ -252,6 +254,10 @@ in6_mtun_output(ifp, family, m)
 	error = ip6_output(m, &pktopt, &sc->mtun_ro, 0,
 		    (struct ip6_moptions *)NULL, (struct socket *)NULL, NULL);
 #endif
+
+	if (sc->mtun_nexthop) {
+		ip6_clearpktopts(&pktopt, IPV6_NEXTHOP);
+	}
 
 	return (error);
 }
