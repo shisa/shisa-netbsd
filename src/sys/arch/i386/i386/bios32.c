@@ -1,4 +1,4 @@
-/*	$NetBSD: bios32.c,v 1.14 2007/08/07 11:30:20 ad Exp $	*/
+/*	$NetBSD: bios32.c,v 1.20 2008/01/23 19:46:44 bouyer Exp $	*/
 
 /*-
  * Copyright (c) 1999 The NetBSD Foundation, Inc.
@@ -93,7 +93,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: bios32.c,v 1.14 2007/08/07 11:30:20 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: bios32.c,v 1.20 2008/01/23 19:46:44 bouyer Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -110,6 +110,7 @@ __KERNEL_RCSID(0, "$NetBSD: bios32.c,v 1.14 2007/08/07 11:30:20 ad Exp $");
 #include <uvm/uvm.h>
 
 #include "ipmi.h"
+#include "opt_xen.h"
 
 #define	BIOS32_START	0xe0000
 #define	BIOS32_SIZE	0x20000
@@ -146,8 +147,8 @@ bios32_init()
 
 		entry = *(uint32_t *)(p + 4);
 
-		aprint_verbose("BIOS32 rev. %d found at 0x%lx\n",
-		    *(p + 8), entry);
+		aprint_debug("BIOS32 rev. %d found at 0x%lx\n",
+		    *(p + 8), (u_long)entry);
 
 		if (entry < BIOS32_START ||
 		    entry >= BIOS32_END) {
@@ -162,7 +163,6 @@ bios32_init()
 		bios32_entry.offset = (void *)ISA_HOLE_VADDR(entry);
 		bios32_entry.segment = GSEL(GCODE_SEL, SEL_KPL);
 	}
-#if NIPMI > 0
 	/* see if we have SMBIOS extentions */
 	for (p = ISA_HOLE_VADDR(SMBIOS_START);
 	    p < (char *)ISA_HOLE_VADDR(SMBIOS_END); p+= 16) {
@@ -201,17 +201,19 @@ bios32_init()
 		smbios_entry.count = sh->count;
 
     		for (; pa < end; pa+= NBPG, eva+= NBPG)
+#ifdef XEN
+			pmap_kenter_ma(eva, pa, VM_PROT_READ);
+#else
 			pmap_kenter_pa(eva, pa, VM_PROT_READ);
+#endif
 
-		printf("SMBIOS rev. %d.%d @ 0x%lx (%d entries)\n",
-			    sh->majrev, sh->minrev, (u_long)sh->addr,
-			    sh->count);
+		aprint_debug("SMBIOS rev. %d.%d @ 0x%lx (%d entries)\n",
+		    sh->majrev, sh->minrev, (u_long)sh->addr,
+		    sh->count);
 
 		break;
 	}
 	pmap_update(pmap_kernel());
-#endif
-
 }
 
 /*
@@ -259,7 +261,6 @@ bios32_service(service, e, ei)
 	return (1);
 }
 
-#if NIPMI > 0
 /*
  * smbios_find_table() takes a caller supplied smbios struct type and
  * a pointer to a handle (struct smbtable) returning one if the structure
@@ -343,4 +344,3 @@ smbios_get_string(struct smbtable *st, u_int8_t indx, char *dest, size_t len)
 
 	return ret;
 }
-#endif

@@ -1,4 +1,4 @@
-/*	$NetBSD: ufs_readwrite.c,v 1.82 2007/09/24 16:50:58 pooka Exp $	*/
+/*	$NetBSD: ufs_readwrite.c,v 1.86 2008/01/02 11:49:14 ad Exp $	*/
 
 /*-
  * Copyright (c) 1993
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(1, "$NetBSD: ufs_readwrite.c,v 1.82 2007/09/24 16:50:58 pooka Exp $");
+__KERNEL_RCSID(1, "$NetBSD: ufs_readwrite.c,v 1.86 2008/01/02 11:49:14 ad Exp $");
 
 #ifdef LFS_READWRITE
 #define	FS			struct lfs
@@ -169,10 +169,10 @@ READ(void *v)
 		error = uiomove((char *)bp->b_data + blkoffset, xfersize, uio);
 		if (error)
 			break;
-		brelse(bp);
+		brelse(bp, 0);
 	}
 	if (bp != NULL)
-		brelse(bp);
+		brelse(bp, 0);
 
  out:
 	if (!(vp->v_mount->mnt_flag & MNT_NOATIME)) {
@@ -311,7 +311,7 @@ WRITE(void *v)
 		if (error)
 			goto out;
 		if (flags & B_SYNC) {
-			simple_lock(&vp->v_interlock);
+			mutex_enter(&vp->v_interlock);
 			VOP_PUTPAGES(vp, trunc_page(osize & fs->fs_bmask),
 			    round_page(eob), PGO_CLEANIT | PGO_SYNCIO);
 		}
@@ -342,7 +342,7 @@ WRITE(void *v)
 		 */
 		overwrite = uio->uio_offset >= preallocoff &&
 		    uio->uio_offset < endallocoff;
-		if (!overwrite && (vp->v_flag & VMAPPED) == 0 &&
+		if (!overwrite && (vp->v_vflag & VV_MAPPED) == 0 &&
 		    blkoff(fs, uio->uio_offset) == 0 &&
 		    (uio->uio_offset & PAGE_MASK) == 0) {
 			vsize_t len;
@@ -406,7 +406,7 @@ WRITE(void *v)
 
 #ifndef LFS_READWRITE
 		if (!async && oldoff >> 16 != uio->uio_offset >> 16) {
-			simple_lock(&vp->v_interlock);
+			mutex_enter(&vp->v_interlock);
 			error = VOP_PUTPAGES(vp, (oldoff >> 16) << 16,
 			    (uio->uio_offset >> 16) << 16, PGO_CLEANIT);
 			if (error)
@@ -415,7 +415,7 @@ WRITE(void *v)
 #endif
 	}
 	if (error == 0 && ioflag & IO_SYNC) {
-		simple_lock(&vp->v_interlock);
+		mutex_enter(&vp->v_interlock);
 		error = VOP_PUTPAGES(vp, trunc_page(origoff & fs->fs_bmask),
 		    round_page(blkroundup(fs, uio->uio_offset)),
 		    PGO_CLEANIT | PGO_SYNCIO);
@@ -423,7 +423,7 @@ WRITE(void *v)
 	goto out;
 
  bcache:
-	simple_lock(&vp->v_interlock);
+	mutex_enter(&vp->v_interlock);
 	VOP_PUTPAGES(vp, trunc_page(origoff), round_page(origoff + resid),
 	    PGO_CLEANIT | PGO_FREE | PGO_SYNCIO);
 	while (uio->uio_resid > 0) {
@@ -465,8 +465,7 @@ WRITE(void *v)
 		 * so we need to invalidate it.
 		 */
 		if (error && (flags & B_CLRBUF) == 0) {
-			bp->b_flags |= B_INVAL;
-			brelse(bp);
+			brelse(bp, BC_INVAL);
 			break;
 		}
 #ifdef LFS_READWRITE
@@ -507,8 +506,7 @@ out:
 	if (resid > uio->uio_resid)
 		VN_KNOTE(vp, NOTE_WRITE | (extended ? NOTE_EXTEND : 0));
 	if (error) {
-		(void) UFS_TRUNCATE(vp, osize, ioflag & IO_SYNC, ap->a_cred,
-		    curlwp);
+		(void) UFS_TRUNCATE(vp, osize, ioflag & IO_SYNC, ap->a_cred);
 		uio->uio_offset -= resid - uio->uio_resid;
 		uio->uio_resid = resid;
 	} else if (resid > uio->uio_resid && (ioflag & IO_SYNC) == IO_SYNC)

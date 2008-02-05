@@ -1,4 +1,4 @@
-/* $NetBSD: osf1_generic.c,v 1.11 2007/06/17 19:50:01 dsl Exp $ */
+/* $NetBSD: osf1_generic.c,v 1.13 2007/12/20 23:03:02 dsl Exp $ */
 
 /*
  * Copyright (c) 1999 Christopher G. Demetriou.  All rights reserved.
@@ -58,7 +58,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: osf1_generic.c,v 1.11 2007/06/17 19:50:01 dsl Exp $");
+__KERNEL_RCSID(0, "$NetBSD: osf1_generic.c,v 1.13 2007/12/20 23:03:02 dsl Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -119,16 +119,15 @@ osf1_get_iov(struct osf1_iovec *uiov, unsigned int iovcnt, struct iovec **iovp)
 }
 
 int
-osf1_sys_readv(struct lwp *l, void *v, register_t *retval)
+osf1_sys_readv(struct lwp *l, const struct osf1_sys_readv_args *uap, register_t *retval)
 {
-	struct osf1_sys_readv_args *uap = v;
 	struct iovec aiov[UIO_SMALLIOV], *niov = aiov;
 	int error;
 
 	error = osf1_get_iov(SCARG(uap, iovp), SCARG(uap, iovcnt), &niov);
 
 	if (error == 0) {
-		error = do_filereadv(l, SCARG(uap, fd), niov,
+		error = do_filereadv(SCARG(uap, fd), niov,
 		    SCARG(uap, iovcnt), NULL,
 		    FOF_UPDATE_OFFSET | FOF_IOV_SYSSPACE, retval);
 	}
@@ -140,16 +139,15 @@ osf1_sys_readv(struct lwp *l, void *v, register_t *retval)
 }
 
 int
-osf1_sys_writev(struct lwp *l, void *v, register_t *retval)
+osf1_sys_writev(struct lwp *l, const struct osf1_sys_writev_args *uap, register_t *retval)
 {
-	struct osf1_sys_readv_args *uap = v;
 	struct iovec aiov[UIO_SMALLIOV], *niov = aiov;
 	int error;
 
 	error = osf1_get_iov(SCARG(uap, iovp), SCARG(uap, iovcnt), &niov);
 
 	if (error == 0) {
-		error = do_filewritev(l, SCARG(uap, fd), niov,
+		error = do_filewritev(SCARG(uap, fd), niov,
 		    SCARG(uap, iovcnt), NULL,
 		    FOF_UPDATE_OFFSET | FOF_IOV_SYSSPACE, retval);
 	}
@@ -161,9 +159,8 @@ osf1_sys_writev(struct lwp *l, void *v, register_t *retval)
 }
 
 int
-osf1_sys_select(struct lwp *l, void *v, register_t *retval)
+osf1_sys_select(struct lwp *l, const struct osf1_sys_select_args *uap, register_t *retval)
 {
-	struct osf1_sys_select_args *uap = v;
 	struct osf1_timeval otv;
 	struct timeval tv, *tvp;
 	int error;

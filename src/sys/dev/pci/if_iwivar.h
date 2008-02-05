@@ -1,4 +1,4 @@
-/*	$NetBSD: if_iwivar.h,v 1.13 2006/12/20 16:30:20 skrll Exp $ */
+/*	$NetBSD: if_iwivar.h,v 1.15 2007/12/09 20:28:09 jmcneill Exp $ */
 
 /*-
  * Copyright (c) 2004, 2005
@@ -111,7 +111,7 @@ struct iwi_node {
 };
 
 struct iwi_softc {
-	struct device		sc_dev;
+	device_t		sc_dev;
 	struct ethercom		sc_ec;
 	struct ieee80211com	sc_ic;
 	int			(*sc_newstate)(struct ieee80211com *,
@@ -143,10 +143,6 @@ struct iwi_softc {
 	pci_chipset_tag_t	sc_pct;
 	pcitag_t		sc_pcitag;
 	bus_size_t		sc_sz;
-
-	void			*sc_sdhook;	/* shutdown hook */
-	void			*sc_powerhook;	/* power management hook */
-	struct pci_conf_state	sc_pciconf;
 
 	struct sysctllog	*sc_sysctllog;
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: procfs_ctl.c,v 1.41 2007/07/09 21:10:58 ad Exp $	*/
+/*	$NetBSD: procfs_ctl.c,v 1.43 2008/01/23 15:04:40 elad Exp $	*/
 
 /*
  * Copyright (c) 1993
@@ -72,7 +72,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: procfs_ctl.c,v 1.41 2007/07/09 21:10:58 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: procfs_ctl.c,v 1.43 2008/01/23 15:04:40 elad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -172,8 +172,8 @@ procfs_control(curl, l, op, sig, pfs)
 		 *      (3) the security model prevents it.
 		 */
 		if ((error = kauth_authorize_process(curl->l_cred,
-		    KAUTH_PROCESS_CANPROCFS, p, pfs,
-		    KAUTH_ARG(KAUTH_REQ_PROCESS_CANPROCFS_CTL), NULL)) != 0)
+		    KAUTH_PROCESS_PROCFS, p, pfs,
+		    KAUTH_ARG(KAUTH_REQ_PROCESS_PROCFS_CTL), NULL)) != 0)
 		    	break;
 
 		break;
@@ -341,7 +341,7 @@ procfs_control(curl, l, op, sig, pfs)
 		 * Wait for the target process to stop.
 		 */
 		while (l->l_stat != LSSTOP && P_ZOMBIE(p)) {
-			error = tsleep(l, PWAIT|PCATCH, "procfsx", 0);
+			error = tsleep(l, PWAIT|PCATCH, "procfsx", hz);
 			if (error)
 				break;
 		}

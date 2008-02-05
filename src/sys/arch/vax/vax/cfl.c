@@ -1,4 +1,4 @@
-/*	$NetBSD: cfl.c,v 1.14 2007/07/29 12:15:41 ad Exp $	*/
+/*	$NetBSD: cfl.c,v 1.17 2008/01/02 11:48:31 ad Exp $	*/
 /*-
  * Copyright (c) 1982, 1986 The Regents of the University of California.
  * All rights reserved.
@@ -71,7 +71,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: cfl.c,v 1.14 2007/07/29 12:15:41 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: cfl.c,v 1.17 2008/01/02 11:48:31 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -154,7 +154,7 @@ cflclose(dev, flag, mode, l)
 {
 	int s;
 	s = splbio();
-	brelse(cfltab.cfl_buf);
+	brelse(cfltab.cfl_buf, 0);
 	splx(s);
 	cfltab.cfl_state = IDLE;
 	return 0;
@@ -195,16 +195,17 @@ cflrw(dev, uio, flag)
 				break;
 		}
 		if (uio->uio_rw == UIO_WRITE) {
-			bp->b_flags &= ~(B_READ|B_DONE);
+			bp->b_oflags &= ~(BO_DONE);
+			bp->b_flags &= ~(B_READ);
 			bp->b_flags |= B_WRITE;
 		} else {
-			bp->b_flags &= ~(B_WRITE|B_DONE);
+			bp->b_oflags &= ~(BO_DONE);
+			bp->b_flags &= ~(B_WRITE);
 			bp->b_flags |= B_READ;
 		}
 		s = splconsmedia(); 
 		cflstart();
-		while ((bp->b_flags & B_DONE) == 0)
-			(void) tsleep(bp, PRIBIO, "cflrw", 0);
+		biowait(bp);
 		splx(s);
 		if (bp->b_error != 0) {
 			error = bp->b_error;
@@ -284,7 +285,6 @@ void
 cflrint(int ch)
 {
 	struct buf *bp = cfltab.cfl_buf;
-	int s;
 
 	switch (cfltab.cfl_active) {
 	case CFL_NEXT:
@@ -292,10 +292,10 @@ cflrint(int ch)
 			cfltab.cfl_active = CFL_GETIN;
 		else {
 			cfltab.cfl_active = CFL_IDLE;
-			s = splbio();
-			bp->b_flags |= B_DONE;
-			splx(s);
-			wakeup(bp);
+			mutex_enter(bp->b_objlock);
+			bp->b_oflags |= BO_DONE;
+			cv_broadcast(&bp->b_done);
+			mutex_exit(bp->b_objlock);
 		}
 		break;
 
@@ -303,10 +303,10 @@ cflrint(int ch)
 		*cfltab.cfl_xaddr++ = ch & 0377;
 		if (--bp->b_bcount==0) {
 			cfltab.cfl_active = CFL_IDLE;
-			s = splbio();
-			bp->b_flags |= B_DONE;
-			splx(s);
-			wakeup(bp);
+			mutex_enter(bp->b_objlock);
+			bp->b_oflags |= BO_DONE;
+			cv_broadcast(&bp->b_done);
+			mutex_exit(bp->b_objlock);
 		}
 		break;
 	}

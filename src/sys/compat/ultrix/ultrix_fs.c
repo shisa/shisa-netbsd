@@ -1,4 +1,4 @@
-/*	$NetBSD: ultrix_fs.c,v 1.40 2007/07/17 20:54:45 christos Exp $	*/
+/*	$NetBSD: ultrix_fs.c,v 1.46 2008/01/30 11:46:59 ad Exp $	*/
 
 /*
  * Copyright (c) 1995, 1997 Jonathan Stone
@@ -33,7 +33,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ultrix_fs.c,v 1.40 2007/07/17 20:54:45 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ultrix_fs.c,v 1.46 2008/01/30 11:46:59 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -204,9 +204,8 @@ make_ultrix_mntent(struct statvfs *sp, struct ultrix_fs_data *tem)
 }
 
 int
-ultrix_sys_getmnt(struct lwp *l, void *v, register_t *retval)
+ultrix_sys_getmnt(struct lwp *l, const struct ultrix_sys_getmnt_args *uap, register_t *retval)
 {
-	struct ultrix_sys_getmnt_args *uap = v;
 	struct mount *mp, *nmp;
 	struct statvfs *sp;
 	struct ultrix_fs_data *sfsp;
@@ -248,17 +247,17 @@ ultrix_sys_getmnt(struct lwp *l, void *v, register_t *retval)
 		if ((error = copyin((void *)SCARG(uap, start), &start,
 				    sizeof(*SCARG(uap, start))))  != 0)
 			goto bad;
-		simple_lock(&mountlist_slock);
+		mutex_enter(&mountlist_lock);
 		for (skip = start, mp = mountlist.cqh_first;
 		    mp != (void*)&mountlist && skip-- > 0; mp = nmp)
 			nmp = mp->mnt_list.cqe_next;
-		simple_unlock(&mountlist_slock);
+		mutex_exit(&mountlist_lock);
 	}
 
-	simple_lock(&mountlist_slock);
+	mutex_enter(&mountlist_lock);
 	for (count = 0, mp = mountlist.cqh_first;
 	    mp != (void*)&mountlist && count < maxcount; mp = nmp) {
-		if (vfs_busy(mp, LK_NOWAIT, &mountlist_slock)) {
+		if (vfs_trybusy(mp, RW_READER, &mountlist_lock)) {
 			nmp = mp->mnt_list.cqe_next;
 			continue;
 		}
@@ -270,7 +269,7 @@ ultrix_sys_getmnt(struct lwp *l, void *v, register_t *retval)
 			 * If requested, refresh the fsstat cache.
 			 */
 			if (mntflags != MNT_WAIT &&
-			    (error = VFS_STATVFS(mp, sp, l)) != 0)
+			    (error = VFS_STATVFS(mp, sp)) != 0)
 				continue;
 
 			/*
@@ -281,17 +280,19 @@ ultrix_sys_getmnt(struct lwp *l, void *v, register_t *retval)
 			    strcmp(path, sp->f_mntonname) == 0) {
 				make_ultrix_mntent(sp, &tem);
 				if ((error = copyout((void *)&tem, sfsp,
-						     sizeof(tem))) != 0)
+				    sizeof(tem))) != 0) {
+					vfs_unbusy(mp, false);
 					goto bad;
+				}
 				sfsp++;
 				count++;
 			}
 		}
-		simple_lock(&mountlist_slock);
+		mutex_enter(&mountlist_lock);
 		nmp = mp->mnt_list.cqe_next;
-		vfs_unbusy(mp);
+		vfs_unbusy(mp, false);
 	}
-	simple_unlock(&mountlist_slock);
+	mutex_exit(&mountlist_lock);
 
 	if (sfsp != NULL && count > maxcount)
 		*retval = maxcount;
@@ -301,7 +302,7 @@ ultrix_sys_getmnt(struct lwp *l, void *v, register_t *retval)
 bad:
 	if (path)
 		FREE(path, M_TEMP);
-	return (error);
+	return error;
 }
 
 
@@ -344,9 +345,8 @@ struct ultrix_ufs_args {
 };
 
 int
-ultrix_sys_mount(struct lwp *l, void *v, register_t *retval)
+ultrix_sys_mount(struct lwp *l, const struct ultrix_sys_mount_args *uap, register_t *retval)
 {
-	struct ultrix_sys_mount_args *uap = v;
 	int error;
 	int otype = SCARG(uap, type);
 	char fsname[MFSNAMELEN];
@@ -374,9 +374,8 @@ ultrix_sys_mount(struct lwp *l, void *v, register_t *retval)
 		struct ultrix_nfs_args una;
 		struct nfs_args na;
 
-		if ((error = copyin(SCARG(uap, data), &una, sizeof una)) !=0) {
-			return (error);
-		}
+		if ((error = copyin(SCARG(uap, data), &una, sizeof(una))) != 0)
+			return error;
 #if 0
 		/*
 		 * This is the only syscall boundary the
@@ -385,7 +384,7 @@ ultrix_sys_mount(struct lwp *l, void *v, register_t *retval)
 		 */
 		if ((error = copyin(una.addr, &osa, sizeof osa)) != 0) {
 			printf("ultrix_mount: nfs copyin osa\n");
-			return (error);
+			return error;
 		}
 		sap->sin_family = (u_char)osa.sin_family;
 		sap->sin_len = sizeof(*sap);
@@ -404,7 +403,7 @@ ultrix_sys_mount(struct lwp *l, void *v, register_t *retval)
 		na.timeo = una.timeo;
 		na.retrans = una.retrans;
 		na.hostname = una.hostname;
-		return do_sys_mount(l, vfs_getopsbyname("ngs"), NULL,
+		return do_sys_mount(l, vfs_getopsbyname("nfs"), NULL,
 		    SCARG(uap, special), nflags, &na, UIO_SYSSPACE,
 		    sizeof na, &dummy);
 	}
@@ -439,5 +438,5 @@ ultrix_sys_mount(struct lwp *l, void *v, register_t *retval)
 		    &dummy);
 	}
 
-	return (EINVAL);
+	return EINVAL;
 }

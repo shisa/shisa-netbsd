@@ -1,4 +1,4 @@
-/*	$NetBSD: object.c,v 1.10 2006/03/30 04:27:24 jnemeth Exp $	*/
+/*	$NetBSD: object.c,v 1.13 2008/01/14 03:50:02 dholland Exp $	*/
 
 /*
  * Copyright (c) 1988, 1993
@@ -37,7 +37,7 @@
 #if 0
 static char sccsid[] = "@(#)object.c	8.1 (Berkeley) 5/31/93";
 #else
-__RCSID("$NetBSD: object.c,v 1.10 2006/03/30 04:27:24 jnemeth Exp $");
+__RCSID("$NetBSD: object.c,v 1.13 2008/01/14 03:50:02 dholland Exp $");
 #endif
 #endif /* not lint */
 
@@ -58,8 +58,9 @@ __RCSID("$NetBSD: object.c,v 1.10 2006/03/30 04:27:24 jnemeth Exp $");
 object level_objects;
 unsigned short dungeon[DROWS][DCOLS];
 short foods = 0;
-object *free_list = (object *) 0;
-char *fruit = (char *) 0;
+char *fruit = NULL;
+
+static object *free_list = NULL;
 
 fighter rogue = {
 	INIT_AW,	/* armor */
@@ -80,36 +81,36 @@ fighter rogue = {
 };
 
 struct id id_potions[POTIONS] = {
-{100, "blue \0                           ", "of increase strength ", 0},
-{250, "red \0                            ", "of restore strength ", 0},
-{100, "green \0                          ", "of healing ", 0},
-{200, "grey \0                           ", "of extra healing ", 0},
- {10, "brown \0                          ", "of poison ", 0},
-{300, "clear \0                          ", "of raise level ", 0},
- {10, "pink \0                           ", "of blindness ", 0},
- {25, "white \0                          ", "of hallucination ", 0},
-{100, "purple \0                         ", "of detect monster ", 0},
-{100, "black \0                          ", "of detect things ", 0},
- {10, "yellow \0                         ", "of confusion ", 0},
- {80, "plaid \0                          ", "of levitation ", 0},
-{150, "burgundy \0                       ", "of haste self ", 0},
-{145, "beige \0                          ", "of see invisible ", 0}
+{100, "blue ",     "of increase strength ", 0},
+{250, "red ",      "of restore strength ", 0},
+{100, "green ",    "of healing ", 0},
+{200, "grey ",     "of extra healing ", 0},
+ {10, "brown ",    "of poison ", 0},
+{300, "clear ",    "of raise level ", 0},
+ {10, "pink ",     "of blindness ", 0},
+ {25, "white ",    "of hallucination ", 0},
+{100, "purple ",   "of detect monster ", 0},
+{100, "black ",    "of detect things ", 0},
+ {10, "yellow ",   "of confusion ", 0},
+ {80, "plaid ",    "of levitation ", 0},
+{150, "burgundy ", "of haste self ", 0},
+{145, "beige ",    "of see invisible ", 0}
 };
 
 struct id id_scrolls[SCROLS] = {
-{505, "                                   ", "of protect armor ", 0},
-{200, "                                   ", "of hold monster ", 0},
-{235, "                                   ", "of enchant weapon ", 0},
-{235, "                                   ", "of enchant armor ", 0},
-{175, "                                   ", "of identify ", 0},
-{190, "                                   ", "of teleportation ", 0},
- {25, "                                   ", "of sleep ", 0},
-{610, "                                   ", "of scare monster ", 0},
-{210, "                                   ", "of remove curse ", 0},
- {80, "                                   ", "of create monster ",0},
- {25, "                                   ", "of aggravate monster ",0},
-{180, "                                   ", "of magic mapping ", 0},
- {90, "                                   ", "of confuse monster ", 0}
+{505, "", "of protect armor ", 0},
+{200, "", "of hold monster ", 0},
+{235, "", "of enchant weapon ", 0},
+{235, "", "of enchant armor ", 0},
+{175, "", "of identify ", 0},
+{190, "", "of teleportation ", 0},
+ {25, "", "of sleep ", 0},
+{610, "", "of scare monster ", 0},
+{210, "", "of remove curse ", 0},
+ {80, "", "of create monster ",0},
+ {25, "", "of aggravate monster ",0},
+{180, "", "of magic mapping ", 0},
+ {90, "", "of confuse monster ", 0}
 };
 
 struct id id_weapons[WEAPONS] = {
@@ -134,35 +135,35 @@ struct id id_armors[ARMORS] = {
 };
 
 struct id id_wands[WANDS] = {
-	 {25, "                                 ", "of teleport away ",0},
-	 {50, "                                 ", "of slow monster ", 0},
-	  {8, "                                 ", "of invisibility ",0},
-	 {55, "                                 ", "of polymorph ",0},
-	  {2, "                                 ", "of haste monster ",0},
-	 {20, "                                 ", "of magic missile ",0},
-	 {20, "                                 ", "of cancellation ",0},
-	  {0, "                                 ", "of do nothing ",0},
-	 {35, "                                 ", "of drain life ",0},
-	 {20, "                                 ", "of cold ",0},
-	 {20, "                                 ", "of fire ",0}
+	 {25, "", "of teleport away ",0},
+	 {50, "", "of slow monster ", 0},
+	  {8, "", "of invisibility ",0},
+	 {55, "", "of polymorph ",0},
+	  {2, "", "of haste monster ",0},
+	 {20, "", "of magic missile ",0},
+	 {20, "", "of cancellation ",0},
+	  {0, "", "of do nothing ",0},
+	 {35, "", "of drain life ",0},
+	 {20, "", "of cold ",0},
+	 {20, "", "of fire ",0}
 };
 
 struct id id_rings[RINGS] = {
-	 {250, "                                 ", "of stealth ",0},
-	 {100, "                                 ", "of teleportation ", 0},
-	 {255, "                                 ", "of regeneration ",0},
-	 {295, "                                 ", "of slow digestion ",0},
-	 {200, "                                 ", "of add strength ",0},
-	 {250, "                                 ", "of sustain strength ",0},
-	 {250, "                                 ", "of dexterity ",0},
-	  {25, "                                 ", "of adornment ",0},
-	 {300, "                                 ", "of see invisible ",0},
-	 {290, "                                 ", "of maintain armor ",0},
-	 {270, "                                 ", "of searching ",0},
+	 {250, "", "of stealth ",0},
+	 {100, "", "of teleportation ", 0},
+	 {255, "", "of regeneration ",0},
+	 {295, "", "of slow digestion ",0},
+	 {200, "", "of add strength ",0},
+	 {250, "", "of sustain strength ",0},
+	 {250, "", "of dexterity ",0},
+	  {25, "", "of adornment ",0},
+	 {300, "", "of see invisible ",0},
+	 {290, "", "of maintain armor ",0},
+	 {270, "", "of searching ",0},
 };
 
 void
-put_objects()
+put_objects(void)
 {
 	short i, n;
 	object *obj;
@@ -185,7 +186,7 @@ put_objects()
 }
 
 void
-put_gold()
+put_gold(void)
 {
 	short i, j;
 	short row,col;
@@ -215,9 +216,7 @@ put_gold()
 }
 
 void
-plant_gold(row, col, is_maze)
-	short row, col;
-	boolean is_maze;
+plant_gold(short row, short col, boolean is_maze)
 {
 	object *obj;
 
@@ -229,26 +228,22 @@ plant_gold(row, col, is_maze)
 		obj->quantity += obj->quantity / 2;
 	}
 	dungeon[row][col] |= OBJECT;
-	(void) add_to_pack(obj, &level_objects, 0);
+	(void)add_to_pack(obj, &level_objects, 0);
 }
 
 void
-place_at(obj, row, col)
-	object *obj;
-	int row, col;
+place_at(object *obj, int row, int col)
 {
 	obj->row = row;
 	obj->col = col;
 	dungeon[row][col] |= OBJECT;
-	(void) add_to_pack(obj, &level_objects, 0);
+	(void)add_to_pack(obj, &level_objects, 0);
 }
 
 object *
-object_at(pack, row, col)
-	object *pack;
-	short row, col;
+object_at(object *pack, short row, short col)
 {
-	object *obj = (object *) 0;
+	object *obj = NULL;
 
 	if (dungeon[row][col] & (MONSTER | OBJECT)) {
 		obj = pack->next_object;
@@ -257,15 +252,14 @@ object_at(pack, row, col)
 			obj = obj->next_object;
 		}
 		if (!obj) {
-			message("object_at(): inconsistent", 1);
+			messagef(1, "object_at(): inconsistent");
 		}
 	}
 	return(obj);
 }
 
 object *
-get_letter_object(ch)
-	int ch;
+get_letter_object(int ch)
 {
 	object *obj;
 
@@ -278,8 +272,7 @@ get_letter_object(ch)
 }
 
 void
-free_stuff(objlist)
-	object *objlist;
+free_stuff(object *objlist)
 {
 	object *obj;
 
@@ -292,8 +285,7 @@ free_stuff(objlist)
 }
 
 const char *
-name_of(obj)
-	const object *obj;
+name_of(const object *obj)
 {
 	const char *retstring;
 
@@ -349,7 +341,7 @@ name_of(obj)
 }
 
 object *
-gr_object()
+gr_object(void)
 {
 	object *obj;
 
@@ -388,7 +380,7 @@ gr_object()
 }
 
 unsigned short
-gr_what_is()
+gr_what_is(void)
 {
 	short percent;
 	unsigned short what_is;
@@ -414,8 +406,7 @@ gr_what_is()
 }
 
 void
-gr_scroll(obj)
-	object *obj;
+gr_scroll(object *obj)
 {
 	short percent;
 
@@ -453,8 +444,7 @@ gr_scroll(obj)
 }
 
 void
-gr_potion(obj)
-	object *obj;
+gr_potion(object *obj)
 {
 	short percent;
 
@@ -494,9 +484,7 @@ gr_potion(obj)
 }
 
 void
-gr_weapon(obj, assign_wk)
-	object *obj;
-	int assign_wk;
+gr_weapon(object *obj, int assign_wk)
 {
 	short percent;
 	short i;
@@ -507,7 +495,7 @@ gr_weapon(obj, assign_wk)
 		obj->which_kind = get_rand(0, (WEAPONS - 1));
 	}
 	if ((obj->which_kind == ARROW) || (obj->which_kind == DAGGER) ||
-		(obj->which_kind == SHURIKEN) | (obj->which_kind == DART)) {
+		(obj->which_kind == SHURIKEN) || (obj->which_kind == DART)) {
 		obj->quantity = get_rand(3, 15);
 		obj->quiver = get_rand(0, 126);
 	} else {
@@ -560,8 +548,7 @@ gr_weapon(obj, assign_wk)
 }
 
 void
-gr_armor(obj)
-	object *obj;
+gr_armor(object *obj)
 {
 	short percent;
 	short blessing;
@@ -587,8 +574,7 @@ gr_armor(obj)
 }
 
 void
-gr_wand(obj)
-	object *obj;
+gr_wand(object *obj)
 {
 	obj->what_is = WAND;
 	obj->which_kind = get_rand(0, (WANDS - 1));
@@ -596,9 +582,7 @@ gr_wand(obj)
 }
 
 void
-get_food(obj, force_ration)
-	object *obj;
-	boolean force_ration;
+get_food(object *obj, boolean force_ration)
 {
 	obj->what_is = FOOD;
 
@@ -610,7 +594,7 @@ get_food(obj, force_ration)
 }
 
 void
-put_stairs()
+put_stairs(void)
 {
 	short row, col;
 
@@ -619,8 +603,7 @@ put_stairs()
 }
 
 int
-get_armor_class(obj)
-	const object *obj;
+get_armor_class(const object *obj)
 {
 	if (obj) {
 		return(obj->class + obj->d_enchant);
@@ -629,15 +612,15 @@ get_armor_class(obj)
 }
 
 object *
-alloc_object()
+alloc_object(void)
 {
 	object *obj;
 
 	if (free_list) {
 		obj = free_list;
 		free_list = free_list->next_object;
-	} else if (!(obj = (object *) md_malloc(sizeof(object)))) {
-			message("cannot allocate object, saving game", 0);
+	} else if (!(obj = md_malloc(sizeof(object)))) {
+			messagef(0, "cannot allocate object, saving game");
 			save_into_file(error_file);
 			clean_up("alloc_object:  save failed");
 	}
@@ -651,15 +634,14 @@ alloc_object()
 }
 
 void
-free_object(obj)
-	object *obj;
+free_object(object *obj)
 {
 	obj->next_object = free_list;
 	free_list = obj;
 }
 
 void
-make_party()
+make_party(void)
 {
 	short n;
 
@@ -672,7 +654,7 @@ make_party()
 }
 
 void
-show_objects()
+show_objects(void)
 {
 	object *obj;
 	short mc, rc, row, col;
@@ -704,14 +686,14 @@ show_objects()
 
 	while (monster) {
 		if (monster->m_flags & IMITATES) {
-			mvaddch(monster->row, monster->col, (int) monster->disguise);
+			mvaddch(monster->row, monster->col, (int)monster->disguise);
 		}
 		monster = monster->next_monster;
 	}
 }
 
 void
-put_amulet()
+put_amulet(void)
 {
 	object *obj;
 
@@ -721,8 +703,7 @@ put_amulet()
 }
 
 void
-rand_place(obj)
-	object *obj;
+rand_place(object *obj)
 {
 	short row, col;
 
@@ -731,18 +712,18 @@ rand_place(obj)
 }
 
 void
-c_object_for_wizard()
+c_object_for_wizard(void)
 {
 	short ch, max, wk;
 	object *obj;
 	char buf[80];
 
 	max = 0;
-	if (pack_count((object *) 0) >= MAX_PACK_COUNT) {
-		message("pack full", 0);
+	if (pack_count(NULL) >= MAX_PACK_COUNT) {
+		messagef(0, "pack full");
 		return;
 	}
-	message("type of object?", 0);
+	messagef(0, "type of object?");
 
 	while (r_index("!?:)]=/,\033", (ch = rgetchar()), 0) == -1) {
 		sound_bell();
@@ -788,10 +769,10 @@ c_object_for_wizard()
 	}
 	if ((ch != ',') && (ch != ':')) {
 GIL:
-		if (get_input_line("which kind?", "", buf, "", 0, 1)) {
+		if (get_input_line("which kind?", "", buf, sizeof(buf), "", 0, 1)) {
 			wk = get_number(buf);
 			if ((wk >= 0) && (wk <= max)) {
-				obj->which_kind = (unsigned short) wk;
+				obj->which_kind = wk;
 				if (obj->what_is == RING) {
 					gr_ring(obj, 0);
 				}
@@ -804,7 +785,7 @@ GIL:
 			return;
 		}
 	}
-	get_desc(obj, buf);
-	message(buf, 0);
-	(void) add_to_pack(obj, &rogue.pack, 1);
+	get_desc(obj, buf, sizeof(buf));
+	messagef(0, "%s", buf);
+	(void)add_to_pack(obj, &rogue.pack, 1);
 }

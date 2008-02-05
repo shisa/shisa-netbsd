@@ -1,4 +1,4 @@
-/*	$NetBSD: if_re_pci.c,v 1.29 2007/08/07 07:48:57 simonb Exp $	*/
+/*	$NetBSD: if_re_pci.c,v 1.32 2007/12/11 11:25:52 lukem Exp $	*/
 
 /*
  * Copyright (c) 1997, 1998-2003
@@ -46,6 +46,7 @@
  */
 
 #include <sys/cdefs.h>
+__KERNEL_RCSID(0, "$NetBSD: if_re_pci.c,v 1.32 2007/12/11 11:25:52 lukem Exp $");
 
 #include "bpfilter.h"
 #include "vlan.h"
@@ -69,7 +70,7 @@
 #include <net/if_media.h>
 #include <net/if_vlanvar.h>
 
-#include <machine/bus.h>
+#include <sys/bus.h>
 
 #include <dev/mii/mii.h>
 #include <dev/mii/miivar.h>
@@ -183,42 +184,12 @@ re_pci_attach(struct device *parent, struct device *self, void *aux)
 	const struct rtk_type	*t;
 	uint32_t		hwrev;
 	int			error = 0;
-	pcireg_t		pmreg, memtype;
+	pcireg_t		memtype;
 	bool			ioh_valid, memh_valid;
 	pcireg_t		command;
 	bus_space_tag_t		iot, memt;
 	bus_space_handle_t	ioh, memh;
 	bus_size_t		iosize, memsize, bsize;
-
-
-	/*
-	 * Handle power management nonsense.
-	 */
-	if (pci_get_capability(pc, pa->pa_tag, PCI_CAP_PWRMGMT, &pmreg, 0)) {
-		command = pci_conf_read(pc, pa->pa_tag, pmreg + PCI_PMCSR);
-		if (command & PCI_PMCSR_STATE_MASK) {
-			u_int32_t		iobase, membase, irq;
-
-			/* Save important PCI config data. */
-			iobase = pci_conf_read(pc, pa->pa_tag, RTK_PCI_LOIO);
-			membase = pci_conf_read(pc, pa->pa_tag, RTK_PCI_LOMEM);
-			irq = pci_conf_read(pc, pa->pa_tag, PCI_INTERRUPT_REG);
-
-			/* Reset the power state. */
-			aprint_normal("%s: chip is is in D%d power mode "
-		    	    "-- setting to D0\n", sc->sc_dev.dv_xname,
-		    	    command & PCI_PMCSR_STATE_MASK);
-
-			command &= ~PCI_PMCSR_STATE_MASK;
-			pci_conf_write(pc, pa->pa_tag,
-			    pmreg + PCI_PMCSR, command);
-
-			/* Restore PCI config data. */
-			pci_conf_write(pc, pa->pa_tag, RTK_PCI_LOIO, iobase);
-			pci_conf_write(pc, pa->pa_tag, RTK_PCI_LOMEM, membase);
-			pci_conf_write(pc, pa->pa_tag, PCI_INTERRUPT_REG, irq);
-		}
-	}
 
 	/*
 	 * Map control/status registers.
@@ -329,4 +300,9 @@ re_pci_attach(struct device *parent, struct device *self, void *aux)
 				bus_space_unmap(memt, memh, memsize);
 		}
 	}
+
+	if (!pmf_device_register(self, NULL, NULL))
+		aprint_error_dev(self, "couldn't establish power handler\n");
+	else
+		pmf_class_network_register(self, &sc->ethercom.ec_if);
 }

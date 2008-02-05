@@ -1,4 +1,4 @@
-#       $NetBSD: Makefile,v 1.249 2007/09/24 20:44:23 wiz Exp $
+#       $NetBSD: Makefile,v 1.258 2007/12/09 20:37:42 jmcneill Exp $
 
 #	Makefile for section 9 (kernel function and variable) manual pages.
 
@@ -30,6 +30,7 @@ MAN=	altq.9 arc4random.9 arp.9 audio.9 autoconf.9 \
 	kpause.9 \
 	kfilter_register.9 knote.9 \
 	kprintf.9 kthread.9 linedisc.9 lock.9 log.9 ltsleep.9 \
+	LWP_CACHE_CREDS.9 \
 	makeiplcookie.9 \
 	malloc.9 mb.9 mbuf.9 mca.9 memcmp.9 memcpy.9 memoryallocators.9 \
 	memmove.9 memset.9 \
@@ -37,13 +38,13 @@ MAN=	altq.9 arc4random.9 arp.9 audio.9 autoconf.9 \
 	mstohz.9 mutex.9 m_tag.9 namecache.9 \
 	namei.9 opencrypto.9 optstr.9 \
 	panic.9 pci.9 pci_configure_bus.9 pci_intr.9 pckbport.9 \
-	pcmcia.9 pfil.9 physio.9 pmap.9 pmatch.9 pmc.9 \
+	pcmcia.9 pfil.9 physio.9 pmap.9 pmatch.9 pmc.9 pmf.9 \
 	pool.9 pool_cache.9 powerhook_establish.9 ppsratecheck.9 \
-	preempt.9 \
+	preempt.9 putter.9 \
 	radio.9 ras.9 rasops.9 ratecheck.9 resettodr.9 rnd.9 rssadapt.9 \
 	rt_timer.9 rwlock.9 RUN_ONCE.9 \
 	sched_4bsd.9 scsipi.9 \
-	secmodel.9 secmodel_bsd44.9 secmodel_overlay.9 \
+	secmodel.9 secmodel_bsd44.9 secmodel_overlay.9 secmodel_securelevel.9 \
 	setjmp.9 shutdownhook_establish.9 \
 	signal.9 softintr.9 spl.9 splraiseipl.9 store.9 suspendsched.9 \
 	sysctl.9 sysmon_envsys.9 tc.9 tcp_congctl.9 timecounter.9 time_second.9 \
@@ -245,7 +246,10 @@ MLINKS+=fstrans.9 fstrans_done.9 \
 	fstrans.9 fstrans_getstate.9 \
 	fstrans.9 fstrans_setstate.9 \
 	fstrans.9 fstrans_start.9 \
-	fstrans.9 fstrans_start_nowait.9
+	fstrans.9 fstrans_start_nowait.9 \
+	fstrans.9 fscow_establish.9 \
+	fstrans.9 fscow_disestablish.9 \
+	fstrans.9 fscow_run.9
 MLINKS+=getiobuf.9 getiobuf_nowait.9 \
 	getiobuf.9 putiobuf.9
 MLINKS+=hash.9 hash32_buf.9 hash.9 hash32_str.9 hash.9 hash32_strn.9
@@ -349,7 +353,8 @@ MLINKS+=mca.9 mca_intr_establish.9 \
 	mca.9 mca_conf_read.9 \
 	mca.9 mca_conf_write.9
 MLINKS+=mutex.9 mutex_init.9 mutex.9 mutex_destroy.9 mutex.9 mutex_enter.9 \
-	mutex.9 mutex_exit.9 mutex.9 mutex_tryenter.9 mutex.9 mutex_owned.9
+	mutex.9 mutex_exit.9 mutex.9 mutex_tryenter.9 mutex.9 mutex_owned.9 \
+	mutex.9 mutex_spin_enter.9 mutex.9 mutex_spin_exit.9
 MLINKS+=m_tag.9 m_tag_copy.9 \
 	m_tag.9 m_tag_copy_chain.9 \
 	m_tag.9 m_tag_delete.9 \
@@ -527,12 +532,15 @@ MLINKS+=signal.9 siginit.9 \
 	signal.9 sigcode.9 \
 	signal.9 sigtramp.9
 MLINKS+=softintr.9 softintr_establish.9 softintr.9 softintr_disestablish.9 \
-	softintr.9 softintr_schedule.9
+	softintr.9 softintr_schedule.9 softintr.9 softint.9 \
+	softintr.9 softint_establish.9 softintr.9 softint_disestablish.9 \
+	softintr.9 softint_schedule.9
 MLINKS+=spl.9 spl0.9 spl.9 splbio.9 spl.9 splclock.9 spl.9 splhigh.9 \
 	spl.9 splimp.9 spl.9 spllowersoftclock.9 spl.9 splnet.9 \
 	spl.9 splsched.9 spl.9 splserial.9 \
 	spl.9 splsoftclock.9 spl.9 splsoftnet.9 spl.9 splsoftserial.9 \
-	spl.9 splstatclock.9 spl.9 spltty.9 spl.9 splvm.9 spl.9 splx.9
+	spl.9 splstatclock.9 spl.9 spltty.9 spl.9 splvm.9 spl.9 splx.9 \
+	spl.9 splsoftbio.9
 MLINKS+=store.9 subyte.9 store.9 suibyte.9 store.9 susword.9 \
 	store.9 suswintr.9 store.9 suword.9 store.9 suiword.9
 MLINKS+=sysctl.9 old_sysctl.9 \
@@ -570,7 +578,7 @@ MLINKS+=uvm.9 uvm_init.9 uvm.9 uvm_init_limits.9 uvm.9 uvm_setpagesize.9 \
 	uvm.9 uvm_map_checkprot.9 uvm.9 uvm_map_protect.9 \
 	uvm.9 uvm_deallocate.9 uvm.9 uvmspace_alloc.9 uvm.9 uvmspace_exec.9 \
 	uvm.9 uvmspace_fork.9 uvm.9 uvmspace_free.9 uvm.9 uvmspace_share.9 \
-	uvm.9 uvmspace_unshare.9 uvm.9 uvm_fault.9 uvm.9 uvn_attach.9 \
+	uvm.9 uvmspace_unshare.9 uvm.9 uvm_fault.9 \
 	uvm.9 uvm_vnp_setsize.9 \
 	uvm.9 uvm_io.9 uvm.9 uvm_km_alloc.9 \
 	uvm.9 uvm_km_suballoc.9 uvm.9 uvm_km_free.9 \
@@ -584,6 +592,7 @@ MLINKS+=uvm.9 uvm_init.9 uvm.9 uvm_init_limits.9 uvm.9 uvm_setpagesize.9 \
 	uvm.9 uvm_fork.9 uvm.9 uvm_grow.9 \
 	uvm.9 ubc_alloc.9 \
 	uvm.9 ubc_release.9 \
+	uvm.9 ubc_uiomove.9 \
 	uvm.9 uvn_findpages.9 \
 	uvm.9 uvm_loan.9 uvm.9 uvm_unloan.9
 MLINKS+=vme.9 vme_probe.9 \
@@ -725,9 +734,7 @@ MLINKS+=vnsubr.9 vn_bwrite.9 \
 	vnsubr.9 vn_setrecurse.9 \
 	vnsubr.9 vn_stat.9 \
 	vnsubr.9 vn_open.9 \
-	vnsubr.9 vn_writechk.9 \
-	vnsubr.9 vn_cow_establish.9 \
-	vnsubr.9 vn_cow_disestablish.9
+	vnsubr.9 vn_writechk.9
 MLINKS+=wsdisplay.9 wsdisplay_switchtoconsole.9 \
 	wsdisplay.9 wsdisplay_cnattach.9 \
 	wsdisplay.9 wsdisplaydevprint.9 \

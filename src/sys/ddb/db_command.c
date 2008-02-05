@@ -1,4 +1,4 @@
-/*	$NetBSD: db_command.c,v 1.102 2007/09/23 23:55:54 martin Exp $	*/
+/*	$NetBSD: db_command.c,v 1.112 2007/12/13 02:45:11 yamt Exp $	*/
 /*
  * Mach Operating System
  * Copyright (c) 1991,1990 Carnegie Mellon University
@@ -65,7 +65,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: db_command.c,v 1.102 2007/09/23 23:55:54 martin Exp $");
+__KERNEL_RCSID(0, "$NetBSD: db_command.c,v 1.112 2007/12/13 02:45:11 yamt Exp $");
 
 #include "opt_ddb.h"
 #include "opt_kgdb.h"
@@ -76,14 +76,17 @@ __KERNEL_RCSID(0, "$NetBSD: db_command.c,v 1.102 2007/09/23 23:55:54 martin Exp 
 #include <sys/systm.h>
 #include <sys/reboot.h>
 #include <sys/device.h>
+#include <sys/lwp.h>
 #include <sys/malloc.h>
 #include <sys/mbuf.h>
 #include <sys/namei.h>
 #include <sys/pool.h>
 #include <sys/proc.h>
 #include <sys/vnode.h>
+#include <sys/vmem.h>
 #include <sys/lockdebug.h>
 #include <sys/sleepq.h>
+#include <sys/cpu.h>
 
 /*include queue macros*/
 #include <sys/queue.h>
@@ -92,9 +95,6 @@ __KERNEL_RCSID(0, "$NetBSD: db_command.c,v 1.102 2007/09/23 23:55:54 martin Exp 
 
 #if defined(_KERNEL_OPT)
 #include "opt_multiprocessor.h"
-#endif
-#ifdef MULTIPROCESSOR
-#include <machine/cpu.h>
 #endif
 
 #include <ddb/db_lex.h>
@@ -107,7 +107,6 @@ __KERNEL_RCSID(0, "$NetBSD: db_command.c,v 1.102 2007/09/23 23:55:54 martin Exp 
 #include <ddb/db_interface.h>
 #include <ddb/db_sym.h>
 #include <ddb/db_extern.h>
-#include <ddb/db_command_list.h>
 
 #include <uvm/uvm_extern.h>
 #include <uvm/uvm_ddb.h>
@@ -144,18 +143,39 @@ db_addr_t	db_next;
   add them to representativ lists.
 */
 
-/*head of base commands list*/
+static const struct db_command db_command_table[];
+static const struct db_command db_show_cmds[];
+#ifdef DB_MACHINE_COMMANDS
+static const struct db_command db_machine_command_table[];
+#endif
+
+/* the global queue of all command tables */
+TAILQ_HEAD(db_cmd_tbl_en_head, db_cmd_tbl_en);
+
+/* TAILQ entry used to register command tables */
+struct db_cmd_tbl_en {
+	const struct db_command *db_cmd;	/* cmd table */
+	TAILQ_ENTRY(db_cmd_tbl_en) db_cmd_next;
+};
+
+/* head of base commands list */
 static struct db_cmd_tbl_en_head db_base_cmd_list =
 	TAILQ_HEAD_INITIALIZER(db_base_cmd_list);
+static struct db_cmd_tbl_en db_base_cmd_builtins =
+     { .db_cmd = db_command_table };
 
-/*head of show commands list*/
+/* head of show commands list */
 static struct db_cmd_tbl_en_head db_show_cmd_list =
 	TAILQ_HEAD_INITIALIZER(db_show_cmd_list);
+static struct db_cmd_tbl_en db_show_cmd_builtins =
+     { .db_cmd = db_show_cmds };
 
-#ifdef DB_MACHINE_COMMANDS
-/*head of machine commands list*/
+/* head of machine commands list */
 static struct db_cmd_tbl_en_head db_mach_cmd_list =
 	TAILQ_HEAD_INITIALIZER(db_mach_cmd_list);
+#ifdef DB_MACHINE_COMMANDS
+static struct db_cmd_tbl_en db_mach_cmd_builtins =
+     { .db_cmd = db_machine_command_table };
 #endif
 
 /*
@@ -165,6 +185,9 @@ static struct db_cmd_tbl_en_head db_mach_cmd_list =
  */
 static bool	 db_ed_style = true;
 
+static void	db_init_commands(void);
+static int	db_register_tbl_entry(uint8_t type,
+    struct db_cmd_tbl_en *list_ent);
 static void	db_cmd_list(const struct db_cmd_tbl_en_head *);
 static int	db_cmd_search(const char *, const struct db_command *,
     const struct db_command **);
@@ -189,6 +212,7 @@ static void	db_reboot_cmd(db_expr_t, bool, db_expr_t, const char *);
 static void	db_sifting_cmd(db_expr_t, bool, db_expr_t, const char *);
 static void	db_stack_trace_cmd(db_expr_t, bool, db_expr_t, const char *);
 static void	db_sync_cmd(db_expr_t, bool, db_expr_t, const char *);
+static void	db_whatis_cmd(db_expr_t, bool, db_expr_t, const char *);
 static void	db_uvmexp_print_cmd(db_expr_t, bool, db_expr_t, const char *);
 static void	db_vnode_print_cmd(db_expr_t, bool, db_expr_t, const char *);
 
@@ -288,10 +312,8 @@ static const struct db_command db_command_table[] = {
 #ifdef KGDB
 	{ DDB_ADD_CMD("kgdb",	db_kgdb_cmd,	0,	NULL,NULL,NULL) },
 #endif
-#ifdef DB_MACHINE_COMMANDS
 	{ DDB_ADD_CMD("machine",NULL,CS_MACH,
 	    "Architecture specific functions.",NULL,NULL) },
-#endif	
 	{ DDB_ADD_CMD("match",	db_trace_until_matching_cmd,0,
 	    "Stop at the matching return instruction.","See help next",NULL) },
 	{ DDB_ADD_CMD("next",	db_trace_until_matching_cmd,0,
@@ -314,7 +336,7 @@ static const struct db_command db_command_table[] = {
 	    "[/bhl] address value [mask] [,count]",NULL) },
 	{ DDB_ADD_CMD("set",	db_set_cmd,		CS_OWN,
 	    "Set the named variable","$variable [=] expression",NULL) },
-	{ DDB_ADD_CMD("show",	NULL ,CS_SHOW,
+	{ DDB_ADD_CMD("show",	NULL, CS_SHOW,
 	    "Show kernel stats.", NULL,NULL) },
 	{ DDB_ADD_CMD("sifting",	db_sifting_cmd,		CS_OWN,
 	    "Search the symbol tables ","[/F] string",NULL) },
@@ -331,6 +353,8 @@ static const struct db_command db_command_table[] = {
 	    "Set a watchpoint for a region. ","address[,size]",NULL) },
 	{ DDB_ADD_CMD("watch",	db_watchpoint_cmd,	CS_MORE,
 	    "Set a watchpoint for a region. ","address[,size]",NULL) },
+	{ DDB_ADD_CMD("whatis",	db_whatis_cmd, 0,
+	    "Describe what an address is", "address", NULL) },
 	{ DDB_ADD_CMD("write",	db_write_cmd,		CS_MORE|CS_SET_DOT,
 	    "Write the expressions at succeeding locations.",
 	    "[/bhl] address expression [expression ...]",NULL) },
@@ -405,13 +429,12 @@ db_init_commands(void)
 	if (done) return;
 	done = true;
 
-	/*register command tables*/
-	(void)db_register_tbl(DDB_BASE_CMD,db_command_table);
-
+	/* register command tables */
+	(void)db_register_tbl_entry(DDB_BASE_CMD, &db_base_cmd_builtins);
 #ifdef DB_MACHINE_COMMANDS
-	(void)db_register_tbl(DDB_MACH_CMD,db_machine_command_table);
+	(void)db_register_tbl_entry(DDB_MACH_CMD, &db_mach_cmd_builtins);
 #endif
-	(void)db_register_tbl(DDB_SHOW_CMD,db_show_cmds);
+	(void)db_register_tbl_entry(DDB_SHOW_CMD, &db_show_cmd_builtins);
 }
 
 
@@ -426,111 +449,84 @@ db_init_commands(void)
 int
 db_register_tbl(uint8_t type, const struct db_command *cmd_tbl)
 {
-	/*XXX what is better count number of elements here or use num argument ?*/
-	uint32_t i=0; 
 	struct db_cmd_tbl_en *list_ent;
-	const struct db_command *cmd;
+
+	if (cmd_tbl->name == 0)
+		/* empty list - ignore */
+		return 0;
+
+	/* force builtin commands to be registered first */
+	db_init_commands();
+
+	/* now create a list entry for this table */
+	list_ent = malloc(sizeof(struct db_cmd_tbl_en), M_TEMP, M_ZERO);
+	if (list_ent == NULL)
+		return ENOMEM;
+	list_ent->db_cmd=cmd_tbl;
+
+	/* and register it */
+	return db_register_tbl_entry(type, list_ent);
+}
+
+static int
+db_register_tbl_entry(uint8_t type, struct db_cmd_tbl_en *list_ent)
+{
 	struct db_cmd_tbl_en_head *list;
-	
-	/*I have to check this because e.g. machine commands can be NULL*/
-	if (cmd_tbl->name != 0) {   
 
-		if ((list_ent = malloc(sizeof(struct db_cmd_tbl_en),M_TEMP,M_ZERO))
-		    == NULL)
-			return(ENOMEM);
-		  
-		list_ent->db_cmd=cmd_tbl;
-		  
-		  
-		for (cmd = cmd_tbl; cmd->name != 0; cmd++)
-			i++;
-		  
-		list_ent->db_cmd_num=i;
-
-		switch(type){
-
-		case DDB_BASE_CMD:
-			list=&db_base_cmd_list;
-			break;
-			
-		case DDB_SHOW_CMD:
-			list=&db_show_cmd_list;
-			break;
-
-#ifdef DB_MACHINE_COMMANDS
-		case DDB_MACH_CMD:
-			list=&db_mach_cmd_list;
-			break;
-#endif
-
-		default:
-			return (ENOENT);
-			break;
-		}
-		
-		/*Type specify list*/
-		
-		if (TAILQ_EMPTY(list))
-			/*If head is empty we add first table here*/
-			TAILQ_INSERT_HEAD(list,
-			    list_ent,db_cmd_next);
-		else	
-			/*new commands go to the end*/
-			TAILQ_INSERT_TAIL(list,
-			    list_ent,db_cmd_next);
+	switch(type) {
+	case DDB_BASE_CMD:
+		list = &db_base_cmd_list;
+		break;
+	case DDB_SHOW_CMD:
+		list = &db_show_cmd_list;
+		break;
+	case DDB_MACH_CMD:
+		list = &db_mach_cmd_list;
+		break;
+	default:
+		return ENOENT;
 	}
+
+	TAILQ_INSERT_TAIL(list, list_ent, db_cmd_next);
+
 	return 0;
 }
+
 /*
- *Remove command table specified with db_cmd address == cmd_tbl
+ * Remove command table specified with db_cmd address == cmd_tbl
  */
 int
 db_unregister_tbl(uint8_t type,const struct db_command *cmd_tbl)
 {
-
 	struct db_cmd_tbl_en *list_ent;
 	struct db_cmd_tbl_en_head *list;
-	int error=ENOENT;
-  
-	if  (db_base_cmd_list.tqh_first == NULL)
-		return (error);
 
-	/*I go through the list, selected with type and look for
-	  cmd_tbl address in list entries.*/
-	switch(type){
-		
+	/* find list on which the entry should live */
+	switch (type) {
 	case DDB_BASE_CMD:
 		list=&db_base_cmd_list;
 		break;
-		
 	case DDB_SHOW_CMD:
 		list=&db_show_cmd_list;
 		break;
-		
-#ifdef DB_MACHINE_COMMANDS
 	case DDB_MACH_CMD:
 		list=&db_mach_cmd_list;
 		break;
-#endif
-			
 	default:
-		return (EINVAL);
-		break;
+		return EINVAL;
 	}
-			
-	TAILQ_FOREACH(list_ent,list,db_cmd_next){
-		
+
+	TAILQ_FOREACH (list_ent,list,db_cmd_next) {
 		if (list_ent->db_cmd == cmd_tbl){
 			TAILQ_REMOVE(list,
 			    list_ent,db_cmd_next);
-			
 			free(list_ent,M_TEMP);
-			error=0;
+			return 0;
 		}
-	}			
-	return (error);
+	}
+	return ENOENT;
 }		
- 
+
 /*This function is called from machine trap code.*/
 void
 db_command_loop(void)
@@ -559,6 +555,7 @@ db_command_loop(void)
 	/*Execute default ddb start commands*/
 	db_execute_commandlist(db_cmd_on_enter);
 
+	(void) setjmp(&db_jmpbuf);
 	while (!db_cmd_loop_done) {
 		if (db_print_position() != 0)
 			db_printf("\n");
@@ -580,10 +577,10 @@ db_command_loop(void)
 
 /*
  * Search for command table for command prefix
- * ret: CMD_UNIQUE -> completly match cmd prefix
- *      CMD_FOUND  -> partialy match cmd prefix
- *      CMD_AMBIGIOUS ->more partialy matches
- *      CMD_NONE   -> command not found
+ * ret: CMD_UNIQUE    -> completely matches command
+ *      CMD_FOUND     -> matches prefix of single command
+ *      CMD_AMBIGIOUS -> matches prefix of more than one command
+ *      CMD_NONE      -> command not found
  */
 static int
 db_cmd_search(const char *name,const struct db_command *table,
@@ -591,37 +588,40 @@ db_cmd_search(const char *name,const struct db_command *table,
 {
   
 	const struct db_command	*cmd;
-	int			result = CMD_NONE;
+	int result;
 
+	result = CMD_NONE;
+	*cmdp = NULL;
 	for (cmd = table; cmd->name != 0; cmd++) {
 		const char *lp;
 		const char *rp;
-		int  c;
 
 		lp = name;
 		rp = cmd->name;
-		while ((c = *lp) == *rp) {
-			if (c == 0) {
-				/* complete match */
-				*cmdp = cmd;
-				return (CMD_UNIQUE);
-			}
-			lp++;
+		while (*lp != '\0' && *lp == *rp) {
 			rp++;
+			lp++;
 		}
-		if (c == 0) {
-			/* end of name, not end of command -
-			   partial match */
-			if (result == CMD_FOUND) {
-				result = CMD_AMBIGUOUS;
-				/* but keep looking for a full match -
-				   this lets us match single letters */
-			} else {
-				*cmdp = cmd;
-				result = CMD_FOUND;
-			}
+
+		if (*lp != '\0') /* mismatch or extra chars in name */
+			continue;
+
+		if (*rp == '\0') { /* complete match */
+			*cmdp = cmd;
+			return (CMD_UNIQUE);
+		}
+
+		/* prefix match: end of name, not end of command */
+		if (result == CMD_NONE) {
+			result = CMD_FOUND;
+			*cmdp = cmd;
+		}
+		else if (result == CMD_FOUND) {
+			result = CMD_AMBIGUOUS;
+			*cmdp = NULL;
 		}
 	}
+
 	return (result);
 }
 
@@ -634,14 +634,12 @@ db_cmd_list(const struct db_cmd_tbl_en_head *list)
 
 	struct db_cmd_tbl_en *list_ent;
 	const struct db_command *table;
-	int	 i, j, w, columns, lines, width=0, numcmds=0;
+	size_t		i, j, w, columns, lines, numcmds, width=0;
 	const char	*p;
 
-	TAILQ_FOREACH(list_ent,list,db_cmd_next){	  
-		numcmds+=list_ent->db_cmd_num;
-		table=list_ent->db_cmd;
-	
-		for (i = 0; i<list_ent->db_cmd_num; i++) {
+	TAILQ_FOREACH(list_ent,list,db_cmd_next) {
+		table = list_ent->db_cmd;
+		for (i = 0; table[i].name != NULL; i++) {
 			w = strlen(table[i].name);
 			if (w > width)
 				width = w;
@@ -654,18 +652,19 @@ db_cmd_list(const struct db_cmd_tbl_en_head *list)
 	if (columns == 0)
 		columns = 1;
 
-  
-	TAILQ_FOREACH(list_ent,list,db_cmd_next){
-		table=list_ent->db_cmd;
+	TAILQ_FOREACH(list_ent,list,db_cmd_next) {
+		table = list_ent->db_cmd;
 
-		lines = (list_ent->db_cmd_num + columns - 1) / columns;
+		for (numcmds = 0; table[numcmds].name != NULL; numcmds++)
+			;
+		lines = (numcmds + columns - 1) / columns;
 	
 		for (i = 0; i < lines; i++) {
 			for (j = 0; j < columns; j++) {
 				p = table[j * lines + i].name;
 				if (p)
 					db_printf("%s", p);
-				if (j * lines + i + lines >= list_ent->db_cmd_num){
+				if (j * lines + i + lines >= numcmds) {
 					db_putchar('\n');
 					break;
 				}
@@ -693,42 +692,48 @@ db_get_list_type(const char *name)
 	struct db_cmd_tbl_en *list_ent;
 	int error,ret=-1;
 
-	/*I go through base cmd list and search command with name(form cmd line)*/
-	TAILQ_FOREACH(list_ent,&db_base_cmd_list,db_cmd_next){
-		/*cmd_search returns CMD_UNIQUE, CMD_FOUND ...
-		 *CMD_UNIQUE when name was completly matched to cmd->name
-		 *CMD_FOUND  when name was only partially matched to cmd->name
-		 *CMD_NONE   command not found in a list
-		 *CMD_AMBIGIOUS ->more partialy matches   
+	/* search for the command name */
+	TAILQ_FOREACH(list_ent,&db_base_cmd_list,db_cmd_next) {
+		/*
+		 * cmd_search returns CMD_UNIQUE, CMD_FOUND ...
+		 * CMD_UNIQUE when name was completly matched to cmd->name
+		 * CMD_FOUND  when name was only partially matched to cmd->name
+		 * CMD_NONE   command not found in a list
+		 * CMD_AMBIGIOUS ->more partialy matches
 		 */
 
-		error=db_cmd_search(name,list_ent->db_cmd,&cmd);
-		/*because I can't have better result then CMD_UNIQUE I break*/
-		if (error == CMD_UNIQUE){
-			if (cmd->flag == CS_SHOW){
-				ret=DDB_SHOW_CMD;
+		error = db_cmd_search(name, list_ent->db_cmd, &cmd);
+
+		if (error == CMD_UNIQUE) {
+			/* exact match found */
+			if (cmd->flag == CS_SHOW) {
+				ret = DDB_SHOW_CMD;
+				break;
+			}
+			if (cmd->flag == CS_MACH) {
+				ret = DDB_MACH_CMD;
+				break;
+			} else {
+				ret = DDB_BASE_CMD;
 				break;
 			}
 
-			if (cmd->flag == CS_MACH){
-				ret=DDB_MACH_CMD;
-				break;
-			} else {
-				ret=DDB_BASE_CMD;
-				break;
-			}
-			/*I have only partially matched name so I continue search*/
-		} else if (error == CMD_FOUND){
+		} else if (error == CMD_FOUND) {
+			/*
+			 * partial match, search will continue, but
+			 * note current result in case we won't
+			 * find anything better.
+			 */
 			if (cmd->flag == CS_SHOW)
-				ret=DDB_SHOW_CMD;
-			if (cmd->flag == CS_MACH)
-				ret=DDB_MACH_CMD;
+				ret = DDB_SHOW_CMD;
+			else if (cmd->flag == CS_MACH)
+				ret = DDB_MACH_CMD;
 			else
-				ret=DDB_BASE_CMD;
+				ret = DDB_BASE_CMD;
 		}
 	}
 
-	return(ret);
+	return ret;
 }
 
 /*
@@ -790,13 +795,14 @@ db_command(const struct db_command **last_cmdp)
 		switch(db_get_list_type(db_tok_string)) {
 
 		case DDB_BASE_CMD:
-			list=&db_base_cmd_list;
+			list = &db_base_cmd_list;
 			break;
+
 		case DDB_SHOW_CMD:
-			list=&db_show_cmd_list;
+			list = &db_show_cmd_list;
 			/* need to read show subcommand if show command list
 			   is used. */
-			t = db_read_token(); 
+			t = db_read_token();
 
 			if (t != tIDENT) {
 				/* if only show command is executed, print
@@ -806,9 +812,8 @@ db_command(const struct db_command **last_cmdp)
 				return;
 			}
 			break;
-#ifdef DB_MACHINE_COMMANDS
 		case DDB_MACH_CMD:
-			list=&db_mach_cmd_list;
+			list = &db_mach_cmd_list;
 			/* need to read machine subcommand if
 			  machine level 2 command list is used. */
 			t = db_read_token();
@@ -821,7 +826,6 @@ db_command(const struct db_command **last_cmdp)
 				return;
 			}	
 			break;
-#endif
 		default:
 			db_printf("No such command\n");
 			db_flush_lex();                 
@@ -829,7 +833,7 @@ db_command(const struct db_command **last_cmdp)
 		}
 
  COMPAT_RET:
-		TAILQ_FOREACH(list_ent,list,db_cmd_next) {
+		TAILQ_FOREACH(list_ent, list, db_cmd_next) {
 			result = db_cmd_search(db_tok_string, list_ent->db_cmd,
 			    &command);
 
@@ -840,7 +844,7 @@ db_command(const struct db_command **last_cmdp)
 
 		}
 
-                /*check compatibility flag*/
+                /* check compatibility flag */
 		if (command && command->flag & CS_COMPAT){
 			t = db_read_token();
 			if (t != tIDENT) {
@@ -919,7 +923,8 @@ db_command(const struct db_command **last_cmdp)
 		/*
 		 * Execute the command.
 		 */
-		(*command->fcn)(addr, have_addr, count, modif);
+		if (command->fcn != NULL)
+			(*command->fcn)(addr, have_addr, count, modif);
 
 		if (command->flag & CS_SET_DOT) {
 			/*
@@ -950,14 +955,14 @@ db_help_print_cmd(db_expr_t addr, bool have_addr, db_expr_t count,
   
 	const struct db_cmd_tbl_en_head *list;
 	const struct db_cmd_tbl_en *list_ent;
-	const struct db_command *help;
+	const struct db_command *help = NULL;
 	int t, result;
   
 	t = db_read_token();
 	/* is there another command after the "help"? */
 	if (t == tIDENT){
 
-		switch(db_get_list_type(db_tok_string)){
+		switch(db_get_list_type(db_tok_string)) {
 
 		case DDB_BASE_CMD:
 			list=&db_base_cmd_list;
@@ -975,7 +980,6 @@ db_help_print_cmd(db_expr_t addr, bool have_addr, db_expr_t count,
 			}	
 			
 			break;
-#ifdef DB_MACHINE_COMMANDS
 		case DDB_MACH_CMD:
 			list=&db_mach_cmd_list;
 			/* read machine subcommand */
@@ -988,7 +992,7 @@ db_help_print_cmd(db_expr_t addr, bool have_addr, db_expr_t count,
 				return;
 			}
 			break;
-#endif
+
 		default:
 			db_printf("No such command\n");
 			db_flush_lex();
@@ -1050,6 +1054,7 @@ db_help_print_cmd(db_expr_t addr, bool have_addr, db_expr_t count,
 		
 	return;
 }
+
 /*ARGSUSED*/
 static void
 db_map_print_cmd(db_expr_t addr, bool have_addr, db_expr_t count,
@@ -1357,4 +1362,19 @@ db_sync_cmd(db_expr_t addr, bool have_addr,
 	 */
 	db_recover = 0;
 	cpu_reboot(RB_DUMP, NULL);
+}
+
+/*
+ * Describe what an address is
+ */
+void
+db_whatis_cmd(db_expr_t address, bool have_addr,
+    db_expr_t count, const char *modif)
+{
+	const uintptr_t addr = (uintptr_t)address;
+
+	lwp_whatis(addr, db_printf);
+	pool_whatis(addr, db_printf);
+	vmem_whatis(addr, db_printf);
+	uvm_whatis(addr, db_printf);
 }

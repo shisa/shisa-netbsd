@@ -1,4 +1,4 @@
-/*	$NetBSD: fd.c,v 1.73 2007/08/20 19:23:46 is Exp $ */
+/*	$NetBSD: fd.c,v 1.78 2008/01/02 11:48:22 ad Exp $ */
 
 /*
  * Copyright (c) 1994 Christian E. Hopps
@@ -33,7 +33,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: fd.c,v 1.73 2007/08/20 19:23:46 is Exp $");
+__KERNEL_RCSID(0, "$NetBSD: fd.c,v 1.78 2008/01/02 11:48:22 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -417,8 +417,7 @@ fdattach(struct device *pdp, struct device *dp, void *auxp)
 	/*
 	 * Initialize and attach the disk structure.
 	 */
-	sc->dkdev.dk_name = sc->sc_dv.dv_xname;
-	sc->dkdev.dk_driver = &fddkdriver;
+	disk_init(&sc->dkdev, sc->sc_dv.dv_xname, &fddkdriver);
 	disk_attach(&sc->dkdev);
 
 	/*
@@ -809,11 +808,11 @@ fdgetdisklabel(struct fd_softc *sc, dev_t dev)
 	bcopy(dlp, lp, sizeof(struct disklabel));
 	if (lp->d_trkseek > FDSTEPDELAY)
 		sc->stepdelay = lp->d_trkseek;
-	brelse(bp);
+	brelse(bp, 0);
 	return(0);
 nolabel:
 	fdgetdefaultlabel(sc, lp, part);
-	brelse(bp);
+	brelse(bp, 0);
 	return(0);
 }
 
@@ -913,12 +912,13 @@ fdputdisklabel(struct fd_softc *sc, dev_t dev)
 	bcopy(lp, dlp, sizeof(struct disklabel));
 	bp->b_blkno = 0;
 	bp->b_cylinder = 0;
-	bp->b_flags &= ~(B_READ|B_DONE);
+	bp->b_flags &= ~(B_READ);
+	bp->b_oflags &= ~(BO_DONE);
 	bp->b_flags |= B_WRITE;
 	fdstrategy(bp);
 	error = biowait(bp);
 done:
-	brelse(bp);
+	brelse(bp, 0);
 	return(error);
 }
 

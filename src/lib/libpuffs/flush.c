@@ -1,4 +1,4 @@
-/*	$NetBSD: flush.c,v 1.11 2007/07/19 12:52:28 pooka Exp $	*/
+/*	$NetBSD: flush.c,v 1.15 2007/12/05 18:55:19 pooka Exp $	*/
 
 /*
  * Copyright (c) 2007  Antti Kantee.  All Rights Reserved.
@@ -27,7 +27,7 @@
 
 #include <sys/cdefs.h>
 #if !defined(lint)
-__RCSID("$NetBSD: flush.c,v 1.11 2007/07/19 12:52:28 pooka Exp $");
+__RCSID("$NetBSD: flush.c,v 1.15 2007/12/05 18:55:19 pooka Exp $");
 #endif /* !lint */
 
 /*
@@ -36,10 +36,12 @@ __RCSID("$NetBSD: flush.c,v 1.11 2007/07/19 12:52:28 pooka Exp $");
 
 #include <sys/types.h>
 
+#include <assert.h>
 #include <err.h>
 #include <errno.h>
 #include <puffs.h>
 #include <stdio.h>
+#include <unistd.h>
 
 #include "puffs_priv.h"
 
@@ -53,78 +55,81 @@ puffs_inval_namecache_node(struct puffs_usermount *pu, void *cookie,
 }
 #endif
 
+static int
+doflush(struct puffs_usermount *pu, void *cookie, int op,
+	off_t start, off_t end)
+{
+	struct puffs_framebuf *pb;
+	struct puffs_flush *pf;
+	size_t winlen;
+	int rv;
+
+	pb = puffs_framebuf_make();
+	if (pb == NULL)
+		return ENOMEM;
+
+	winlen = sizeof(struct puffs_flush);
+	if ((rv = puffs_framebuf_getwindow(pb, 0, (void *)&pf, &winlen)) == -1)
+		goto out;
+	assert(winlen == sizeof(struct puffs_flush));
+
+	pf->pf_req.preq_buflen = sizeof(struct puffs_flush);
+	pf->pf_req.preq_opclass = PUFFSOP_FLUSH;
+	pf->pf_req.preq_id = puffs__nextreq(pu);
+
+	pf->pf_op = op;
+	pf->pf_cookie = cookie;
+	pf->pf_start = start;
+	pf->pf_end = end;
+
+	rv = puffs_framev_enqueue_cc(puffs_cc_getcc(pu),
+	    puffs_getselectable(pu), pb, 0);
+
+ out:
+	puffs_framebuf_destroy(pb);
+	return rv;
+}
+
 int
 puffs_inval_namecache_dir(struct puffs_usermount *pu, void *cookie)
 {
-	struct puffs_flush pf;
 
-	pf.pf_op = PUFFS_INVAL_NAMECACHE_DIR;
-	pf.pf_cookie = cookie;
-
-	return ioctl(pu->pu_fd, PUFFSFLUSHOP, &pf);
+	return doflush(pu, cookie, PUFFS_INVAL_NAMECACHE_DIR, 0, 0);
 }
 
 int
 puffs_inval_namecache_all(struct puffs_usermount *pu)
 {
-	struct puffs_flush pf;
 
-	pf.pf_op = PUFFS_INVAL_NAMECACHE_ALL;
-	pf.pf_cookie = NULL;
-
-	return ioctl(pu->pu_fd, PUFFSFLUSHOP, &pf);
+	return doflush(pu, NULL, PUFFS_INVAL_NAMECACHE_ALL, 0, 0);
 }
 
 int
 puffs_inval_pagecache_node(struct puffs_usermount *pu, void *cookie)
 {
-	struct puffs_flush pf;
 
-	pf.pf_op = PUFFS_INVAL_PAGECACHE_NODE_RANGE;
-	pf.pf_cookie = cookie;
-	pf.pf_start = 0;
-	pf.pf_end = 0;
-
-	return ioctl(pu->pu_fd, PUFFSFLUSHOP, &pf);
+	return doflush(pu, cookie, PUFFS_INVAL_PAGECACHE_NODE_RANGE, 0, 0);
 }
 
 int
 puffs_inval_pagecache_node_range(struct puffs_usermount *pu, void *cookie,
 	off_t start, off_t end)
 {
-	struct puffs_flush pf;
 
-	pf.pf_op = PUFFS_INVAL_PAGECACHE_NODE_RANGE;
-	pf.pf_cookie = cookie;
-	pf.pf_start = start;
-	pf.pf_end = end;
-
-	return ioctl(pu->pu_fd, PUFFSFLUSHOP, &pf);
+	return doflush(pu, cookie, PUFFS_INVAL_PAGECACHE_NODE_RANGE, start,end);
 }
 
 int
 puffs_flush_pagecache_node(struct puffs_usermount *pu, void *cookie)
 {
-	struct puffs_flush pf;
 
-	pf.pf_op = PUFFS_FLUSH_PAGECACHE_NODE_RANGE;
-	pf.pf_cookie = cookie;
-	pf.pf_start = 0;
-	pf.pf_end = 0;
-
-	return ioctl(pu->pu_fd, PUFFSFLUSHOP, &pf);
+	return doflush(pu, cookie, PUFFS_FLUSH_PAGECACHE_NODE_RANGE, 0, 0);
 }
 
 int
 puffs_flush_pagecache_node_range(struct puffs_usermount *pu, void *cookie,
 	off_t start, off_t end)
 {
-	struct puffs_flush pf;
 
-	pf.pf_op = PUFFS_FLUSH_PAGECACHE_NODE_RANGE;
-	pf.pf_cookie = cookie;
-	pf.pf_start = start;
-	pf.pf_end = end;
-
-	return ioctl(pu->pu_fd, PUFFSFLUSHOP, &pf);
+	return doflush(pu, cookie, PUFFS_FLUSH_PAGECACHE_NODE_RANGE, start,end);
 }

@@ -1,4 +1,4 @@
-/*	$NetBSD: sysvbfs.c,v 1.6 2007/07/26 22:57:38 pooka Exp $	*/
+/*	$NetBSD: sysvbfs.c,v 1.9 2008/01/28 14:31:17 dholland Exp $	*/
 
 /*-
  * Copyright (c) 2004 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: sysvbfs.c,v 1.6 2007/07/26 22:57:38 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: sysvbfs.c,v 1.9 2008/01/28 14:31:17 dholland Exp $");
 
 #include <sys/resource.h>
 #include <sys/param.h>
@@ -63,7 +63,6 @@ const struct vnodeopv_entry_desc sysvbfs_vnodeop_entries[] = {
 	{ &vop_setattr_desc, sysvbfs_setattr },		/* setattr */
 	{ &vop_read_desc, sysvbfs_read },		/* read */
 	{ &vop_write_desc, sysvbfs_write },		/* write */
-	{ &vop_lease_desc, genfs_lease_check },		/* lease */
 	{ &vop_fcntl_desc, genfs_fcntl },		/* fcntl */
 	{ &vop_ioctl_desc, genfs_enoioctl },		/* ioctl */
 	{ &vop_poll_desc, genfs_poll },			/* poll */
@@ -120,7 +119,7 @@ struct vfsops sysvbfs_vfsops = {
 	sysvbfs_start,
 	sysvbfs_unmount,
 	sysvbfs_root,
-	sysvbfs_quotactl,
+	(void *)eopnotsupp,	/* vfs_quotactl */
 	sysvbfs_statvfs,
 	sysvbfs_sync,
 	sysvbfs_vget,
@@ -134,6 +133,8 @@ struct vfsops sysvbfs_vfsops = {
 	    eopnotsupp,		/* snapshot */
 	vfs_stdextattrctl,
 	(void *)eopnotsupp,	/* vfs_suspendctl */
+	genfs_renamelock_enter,
+	genfs_renamelock_exit,
 	sysvbfs_vnodeopv_descs,
 	0,
 	{ NULL, NULL }

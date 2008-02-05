@@ -1,4 +1,4 @@
-/*	$NetBSD: prop_number.c,v 1.14 2007/08/30 12:23:54 joerg Exp $	*/
+/*	$NetBSD: prop_number.c,v 1.16 2008/01/05 01:15:02 ad Exp $	*/
 
 /*-
  * Copyright (c) 2006 The NetBSD Foundation, Inc.

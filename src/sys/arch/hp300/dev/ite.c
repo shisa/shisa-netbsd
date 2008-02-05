@@ -1,4 +1,4 @@
-/*	$NetBSD: ite.c,v 1.77 2007/03/04 05:59:48 christos Exp $	*/
+/*	$NetBSD: ite.c,v 1.79 2007/11/19 18:51:40 ad Exp $	*/
 
 /*-
  * Copyright (c) 1996, 1997 The NetBSD Foundation, Inc.
@@ -119,7 +119,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ite.c,v 1.77 2007/03/04 05:59:48 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ite.c,v 1.79 2007/11/19 18:51:40 ad Exp $");
 
 #include "hil.h"
 
@@ -516,13 +516,7 @@ itestart(struct tty *tp)
 	}
 	tp->t_state |= TS_BUSY;
 	cc = tp->t_outq.c_cc;
-	if (cc <= tp->t_lowat) {
-		if (tp->t_state & TS_ASLEEP) {
-			tp->t_state &= ~TS_ASLEEP;
-			wakeup((void *)&tp->t_outq);
-		}
-		selwakeup(&tp->t_wsel);
-	}
+	ttypull(tp);
 	/*
 	 * Handle common (?) case
 	 */
@@ -554,7 +548,7 @@ itestart(struct tty *tp)
 		}
 		if (hiwat) {
 			tp->t_state |= TS_TIMEOUT;
-			callout_reset(&tp->t_rstrt_ch, 1, ttrstrt, tp);
+			callout_schedule(&tp->t_rstrt_ch, 1);
 		}
 	}
 	tp->t_state &= ~TS_BUSY;

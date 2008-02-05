@@ -1,4 +1,4 @@
-/*	$NetBSD: arm32_machdep.c,v 1.50 2007/09/15 09:25:21 scw Exp $	*/
+/*	$NetBSD: arm32_machdep.c,v 1.55 2008/01/19 15:04:09 chris Exp $	*/
 
 /*
  * Copyright (c) 1994-1998 Mark Brinicombe.
@@ -42,7 +42,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: arm32_machdep.c,v 1.50 2007/09/15 09:25:21 scw Exp $");
+__KERNEL_RCSID(0, "$NetBSD: arm32_machdep.c,v 1.55 2008/01/19 15:04:09 chris Exp $");
 
 #include "opt_md.h"
 #include "opt_pmap_debug.h"
@@ -68,7 +68,6 @@ __KERNEL_RCSID(0, "$NetBSD: arm32_machdep.c,v 1.50 2007/09/15 09:25:21 scw Exp $
 #include <arm/arm32/machdep.h>
 #include <machine/bootconfig.h>
 
-#include "opt_ipkdb.h"
 #include "md.h"
 
 struct vm_map *exec_map = NULL;
@@ -274,8 +273,6 @@ cpu_startup()
 
 	curpcb = &lwp0.l_addr->u_pcb;
 	curpcb->pcb_flags = 0;
-	curpcb->pcb_un.un_32.pcb32_und_sp = (u_int)lwp0.l_addr +
-	    USPACE_UNDEF_STACK_TOP;
 	curpcb->pcb_un.un_32.pcb32_sp = (u_int)lwp0.l_addr +
 	    USPACE_SVC_STACK_TOP;
 
@@ -426,10 +423,17 @@ cpu_need_resched(struct cpu_info *ci, int flags)
 {
 	bool immed = (flags & RESCHED_IMMED) != 0;
 
-	if (want_resched && !immed)
+	if (ci->ci_want_resched && !immed)
 		return;
 
-	want_resched = 1;
+	ci->ci_want_resched = 1;
 	if (curlwp != ci->ci_data.cpu_idlelwp)
 		setsoftast();
+}
+
+bool
+cpu_intr_p(void)
+{
+
+	return curcpu()->ci_idepth != 0;
 }

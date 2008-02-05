@@ -1,7 +1,7 @@
-/*	$NetBSD: com.c,v 1.262 2007/08/16 08:56:49 martin Exp $	*/
+/*	$NetBSD: com.c,v 1.272 2008/01/28 18:12:29 dyoung Exp $	*/
 
 /*-
- * Copyright (c) 1998, 1999, 2004 The NetBSD Foundation, Inc.
+ * Copyright (c) 1998, 1999, 2004, 2008 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
  * This code is derived from software contributed to The NetBSD Foundation
@@ -73,7 +73,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: com.c,v 1.262 2007/08/16 08:56:49 martin Exp $");
+__KERNEL_RCSID(0, "$NetBSD: com.c,v 1.272 2008/01/28 18:12:29 dyoung Exp $");
 
 #include "opt_com.h"
 #include "opt_ddb.h"
@@ -122,9 +122,9 @@ __KERNEL_RCSID(0, "$NetBSD: com.c,v 1.262 2007/08/16 08:56:49 martin Exp $");
 #include <sys/timepps.h>
 #include <sys/vnode.h>
 #include <sys/kauth.h>
+#include <sys/intr.h>
 
-#include <machine/intr.h>
-#include <machine/bus.h>
+#include <sys/bus.h>
 
 #include <dev/ic/comreg.h>
 #include <dev/ic/comvar.h>
@@ -178,7 +178,6 @@ void	com_modem(struct com_softc *, int);
 void	tiocm_to_com(struct com_softc *, u_long, int);
 int	com_to_tiocm(struct com_softc *);
 void	com_iflush(struct com_softc *);
-void	com_power(int, void *);
 
 int	com_common_getc(dev_t, struct com_regs *);
 void	com_common_putc(dev_t, struct com_regs *, int);
@@ -191,7 +190,6 @@ void	comcnpollc(dev_t, int);
 
 #define	integrate	static inline
 void 	comsoft(void *);
-
 integrate void com_rxsoft(struct com_softc *, struct tty *);
 integrate void com_txsoft(struct com_softc *, struct tty *);
 integrate void com_stsoft(struct com_softc *, struct tty *);
@@ -230,14 +228,6 @@ static int comconsrate;
 static tcflag_t comconscflag;
 static struct cnm_state com_cnm_state;
 
-#ifndef __HAVE_TIMECOUNTER
-static int ppscap =
-	PPS_TSFMT_TSPEC |
-	PPS_CAPTUREASSERT |
-	PPS_CAPTURECLEAR |
-	PPS_OFFSETASSERT | PPS_OFFSETCLEAR;
-#endif /* !__HAVE_TIMECOUNTER */
-
 #ifdef KGDB
 #include <sys/kgdb.h>
 
@@ -270,9 +260,6 @@ const bus_size_t com_std_map[16] = COM_REG_16550;
 #define	BW	BUS_SPACE_BARRIER_WRITE
 #define COM_BARRIER(r, f) \
 	bus_space_barrier((r)->cr_iot, (r)->cr_ioh, 0, (r)->cr_nports, (f))
-
-#define COM_LOCK(sc) simple_lock(&(sc)->sc_lock)
-#define COM_UNLOCK(sc) simple_unlock(&(sc)->sc_lock)
 
 /*ARGSUSED*/
 int
@@ -356,9 +343,14 @@ comprobe1(bus_space_tag_t iot, bus_space_handle_t ioh)
 	return com_probe_subr(&regs);
 }
 
+/*
+ * No locking in this routine; it is only called during attach,
+ * or with the port already locked.
+ */
 static void
 com_enable_debugport(struct com_softc *sc)
 {
+
 	/* Turn on line break interrupt, set carrier. */
 	sc->sc_ier = IER_ERXRDY;
 	if (sc->sc_type == COM_TYPE_PXA2x0)
@@ -381,7 +373,7 @@ com_attach_subr(struct com_softc *sc)
 	aprint_naive("\n");
 
 	callout_init(&sc->sc_diag_callout, 0);
-	simple_lock_init(&sc->sc_lock);
+	mutex_init(&sc->sc_lock, MUTEX_DEFAULT, IPL_HIGH);
 
 	/* Disable interrupts before configuring the device. */
 	if (sc->sc_type == COM_TYPE_PXA2x0)
@@ -534,7 +526,7 @@ fifodone:
 	}
 #endif
 
-	sc->sc_si = softintr_establish(IPL_SOFTSERIAL, comsoft, sc);
+	sc->sc_si = softint_establish(SOFTINT_SERIAL, comsoft, sc);
 
 #if NRND > 0 && defined(RND_COM)
 	rnd_attach_source(&sc->rnd_source, sc->sc_dev.dv_xname,
@@ -547,12 +539,6 @@ fifodone:
 		sc->enabled = 1;
 
 	com_config(sc);
-
-	sc->sc_powerhook = powerhook_establish(sc->sc_dev.dv_xname,
-	    com_power, sc);
-	if (sc->sc_powerhook == NULL)
-		aprint_error("%s: WARNING: unable to establish power hook\n",
-			sc->sc_dev.dv_xname);
 
 	SET(sc->sc_hwflags, COM_HW_DEV_OK);
 }
@@ -613,9 +599,8 @@ com_detach(struct device *self, int flags)
 	struct com_softc *sc = (struct com_softc *)self;
 	int maj, mn;
 
-	/* kill the power hook */
-	if (sc->sc_powerhook != NULL)
-		powerhook_disestablish(sc->sc_powerhook);
+        if (ISSET(sc->sc_hwflags, COM_HW_CONSOLE))
+		return EBUSY;
 
 	/* locate the major number */
 	maj = cdevsw_lookup_major(&com_cdevsw);
@@ -644,12 +629,15 @@ com_detach(struct device *self, int flags)
 	ttyfree(sc->sc_tty);
 
 	/* Unhook the soft interrupt handler. */
-	softintr_disestablish(sc->sc_si);
+	softint_disestablish(sc->sc_si);
 
 #if NRND > 0 && defined(RND_COM)
 	/* Unhook the entropy source. */
 	rnd_detach_source(&sc->rnd_source);
 #endif
+
+	/* Destroy the lock. */
+	mutex_destroy(&sc->sc_lock);
 
 	return (0);
 }
@@ -658,10 +646,8 @@ int
 com_activate(struct device *self, enum devact act)
 {
 	struct com_softc *sc = (struct com_softc *)self;
-	int s, rv = 0;
+	int rv = 0;
 
-	s = splserial();
-	COM_LOCK(sc);
 	switch (act) {
 	case DVACT_ACTIVATE:
 		rv = EOPNOTSUPP;
@@ -680,8 +666,6 @@ com_activate(struct device *self, enum devact act)
 		break;
 	}
 
-	COM_UNLOCK(sc);
-	splx(s);
 	return (rv);
 }
 
@@ -689,10 +673,8 @@ void
 com_shutdown(struct com_softc *sc)
 {
 	struct tty *tp = sc->sc_tty;
-	int s;
 
-	s = splserial();
-	COM_LOCK(sc);
+	mutex_spin_enter(&sc->sc_lock);
 
 	/* If we were asserting flow control, then deassert it. */
 	SET(sc->sc_rx_flags, RX_IBUF_BLOCKED);
@@ -701,12 +683,6 @@ com_shutdown(struct com_softc *sc)
 	/* Clear any break condition set with TIOCSBRK. */
 	com_break(sc, 0);
 
-#ifndef __HAVE_TIMECOUNTER
-	/* Turn off PPS capture on last close. */
-	sc->sc_ppsmask = 0;
-	sc->ppsparam.mode = 0;
-#endif /* !__HAVE_TIMECOUNTER */
-
 	/*
 	 * Hang up if necessary.  Wait a bit, so the other side has time to
 	 * notice even if we immediately open the port again.
@@ -714,12 +690,10 @@ com_shutdown(struct com_softc *sc)
 	 */
 	if (ISSET(tp->t_cflag, HUPCL)) {
 		com_modem(sc, 0);
-		COM_UNLOCK(sc);
-		splx(s);
-		/* XXX tsleep will only timeout */
-		(void) tsleep(sc, TTIPRI, ttclos, hz);
-		s = splserial();
-		COM_LOCK(sc);
+		mutex_spin_exit(&sc->sc_lock);
+		/* XXX will only timeout */
+		(void) kpause(ttclos, false, hz, NULL);
+		mutex_spin_enter(&sc->sc_lock);
 	}
 
 	/* Turn off interrupts. */
@@ -735,6 +709,8 @@ com_shutdown(struct com_softc *sc)
 
 	CSR_WRITE_1(&sc->sc_regs, COM_REG_IER, sc->sc_ier);
 
+	mutex_spin_exit(&sc->sc_lock);
+
 	if (sc->disable) {
 #ifdef DIAGNOSTIC
 		if (!sc->enabled)
@@ -743,8 +719,6 @@ com_shutdown(struct com_softc *sc)
 		(*sc->disable)(sc);
 		sc->enabled = 0;
 	}
-	COM_UNLOCK(sc);
-	splx(s);
 }
 
 int
@@ -752,7 +726,7 @@ comopen(dev_t dev, int flag, int mode, struct lwp *l)
 {
 	struct com_softc *sc;
 	struct tty *tp;
-	int s, s2;
+	int s;
 	int error;
 
 	sc = device_lookup(&com_cd, COMUNIT(dev));
@@ -786,20 +760,19 @@ comopen(dev_t dev, int flag, int mode, struct lwp *l)
 
 		tp->t_dev = dev;
 
-		s2 = splserial();
-		COM_LOCK(sc);
 
 		if (sc->enable) {
 			if ((*sc->enable)(sc)) {
-				COM_UNLOCK(sc);
-				splx(s2);
 				splx(s);
 				printf("%s: device enable failed\n",
 				       sc->sc_dev.dv_xname);
 				return (EIO);
 			}
+			mutex_spin_enter(&sc->sc_lock);
 			sc->enabled = 1;
 			com_config(sc);
+		} else {
+			mutex_spin_enter(&sc->sc_lock);
 		}
 
 		/* Turn on interrupts. */
@@ -812,17 +785,11 @@ comopen(dev_t dev, int flag, int mode, struct lwp *l)
 		sc->sc_msr = CSR_READ_1(&sc->sc_regs, COM_REG_MSR);
 
 		/* Clear PPS capture state on first open. */
-#ifdef __HAVE_TIMECOUNTER
 		memset(&sc->sc_pps_state, 0, sizeof(sc->sc_pps_state));
 		sc->sc_pps_state.ppscap = PPS_CAPTUREASSERT | PPS_CAPTURECLEAR;
 		pps_init(&sc->sc_pps_state);
-#else /* !__HAVE_TIMECOUNTER */
-		sc->sc_ppsmask = 0;
-		sc->ppsparam.mode = 0;
-#endif /* !__HAVE_TIMECOUNTER */
 
-		COM_UNLOCK(sc);
-		splx(s2);
+		mutex_spin_exit(&sc->sc_lock);
 
 		/*
 		 * Initialize the termios status to the defaults.  Add in the
@@ -851,8 +818,7 @@ comopen(dev_t dev, int flag, int mode, struct lwp *l)
 		ttychars(tp);
 		ttsetwater(tp);
 
-		s2 = splserial();
-		COM_LOCK(sc);
+		mutex_spin_enter(&sc->sc_lock);
 
 		/*
 		 * Turn on DTR.  We must always do this, even if carrier is not
@@ -875,8 +841,7 @@ comopen(dev_t dev, int flag, int mode, struct lwp *l)
 			comstatus(sc, "comopen  ");
 #endif
 
-		COM_UNLOCK(sc);
-		splx(s2);
+		mutex_spin_exit(&sc->sc_lock);
 	}
 
 	splx(s);
@@ -982,7 +947,6 @@ comioctl(dev_t dev, u_long cmd, void *data, int flag, struct lwp *l)
 	struct com_softc *sc = device_lookup(&com_cd, COMUNIT(dev));
 	struct tty *tp = sc->sc_tty;
 	int error;
-	int s;
 
 	if (COM_ISALIVE(sc) == 0)
 		return (EIO);
@@ -1009,8 +973,7 @@ comioctl(dev_t dev, u_long cmd, void *data, int flag, struct lwp *l)
 		return error;
 	}
 
-	s = splserial();
-	COM_LOCK(sc);
+	mutex_spin_enter(&sc->sc_lock);
 
 	switch (cmd) {
 	case TIOCSBRK:
@@ -1047,7 +1010,6 @@ comioctl(dev_t dev, u_long cmd, void *data, int flag, struct lwp *l)
 		*(int *)data = com_to_tiocm(sc);
 		break;
 
-#ifdef __HAVE_TIMECOUNTER
 	case PPS_IOC_CREATE:
 	case PPS_IOC_DESTROY:
 	case PPS_IOC_GETPARAMS:
@@ -1059,103 +1021,8 @@ comioctl(dev_t dev, u_long cmd, void *data, int flag, struct lwp *l)
 #endif
 		error = pps_ioctl(cmd, data, &sc->sc_pps_state);
 		break;
-#else /* !__HAVE_TIMECOUNTER */
-	case PPS_IOC_CREATE:
-		break;
-
-	case PPS_IOC_DESTROY:
-		break;
-
-	case PPS_IOC_GETPARAMS: {
-		pps_params_t *pp;
-		pp = (pps_params_t *)data;
-		*pp = sc->ppsparam;
-		break;
-	}
-
-	case PPS_IOC_SETPARAMS: {
-	  	pps_params_t *pp;
-		int mode;
-		pp = (pps_params_t *)data;
-		if (pp->mode & ~ppscap) {
-			error = EINVAL;
-			break;
-		}
-		sc->ppsparam = *pp;
-	 	/*
-		 * Compute msr masks from user-specified timestamp state.
-		 */
-		mode = sc->ppsparam.mode;
-		switch (mode & PPS_CAPTUREBOTH) {
-		case 0:
-			sc->sc_ppsmask = 0;
-			break;
-
-		case PPS_CAPTUREASSERT:
-			sc->sc_ppsmask = MSR_DCD;
-			sc->sc_ppsassert = MSR_DCD;
-			sc->sc_ppsclear = -1;
-			break;
-
-		case PPS_CAPTURECLEAR:
-			sc->sc_ppsmask = MSR_DCD;
-			sc->sc_ppsassert = -1;
-			sc->sc_ppsclear = 0;
-			break;
-
-		case PPS_CAPTUREBOTH:
-			sc->sc_ppsmask = MSR_DCD;
-			sc->sc_ppsassert = MSR_DCD;
-			sc->sc_ppsclear = 0;
-			break;
-
-		default:
-			error = EINVAL;
-			break;
-		}
-		break;
-	}
-
-	case PPS_IOC_GETCAP:
-		*(int*)data = ppscap;
-		break;
-
-	case PPS_IOC_FETCH: {
-		pps_info_t *pi;
-		pi = (pps_info_t *)data;
-		*pi = sc->ppsinfo;
-		break;
-	}
-
-#ifdef PPS_SYNC
-	case PPS_IOC_KCBIND: {
-		int edge = (*(int *)data) & PPS_CAPTUREBOTH;
-
-		if (edge == 0) {
-			/*
-			 * remove binding for this source; ignore
-			 * the request if this is not the current
-			 * hardpps source
-			 */
-			if (pps_kc_hardpps_source == sc) {
-				pps_kc_hardpps_source = NULL;
-				pps_kc_hardpps_mode = 0;
-			}
-		} else {
-			/*
-			 * bind hardpps to this source, replacing any
-			 * previously specified source or edges
-			 */
-			pps_kc_hardpps_source = sc;
-			pps_kc_hardpps_mode = edge;
-		}
-		break;
-	}
-#endif /* PPS_SYNC */
-#endif /* !__HAVE_TIMECOUNTER */
 
 	case TIOCDCDTIMESTAMP:	/* XXX old, overloaded  API used by xntpd v3 */
-#ifdef __HAVE_TIMECOUNTER
 #ifndef PPS_TRAILING_EDGE
 		TIMESPEC_TO_TIMEVAL((struct timeval *)data,
 		    &sc->sc_pps_state.ppsinfo.assert_timestamp);
@@ -1163,25 +1030,6 @@ comioctl(dev_t dev, u_long cmd, void *data, int flag, struct lwp *l)
 		TIMESPEC_TO_TIMEVAL((struct timeval *)data,
 		    &sc->sc_pps_state.ppsinfo.clear_timestamp);
 #endif
-#else /* !__HAVE_TIMECOUNTER */
-		/*
-		 * Some GPS clocks models use the falling rather than
-		 * rising edge as the on-the-second signal.
-		 * The old API has no way to specify PPS polarity.
-		 */
-		sc->sc_ppsmask = MSR_DCD;
-#ifndef PPS_TRAILING_EDGE
-		sc->sc_ppsassert = MSR_DCD;
-		sc->sc_ppsclear = -1;
-		TIMESPEC_TO_TIMEVAL((struct timeval *)data,
-		    &sc->ppsinfo.assert_timestamp);
-#else
-		sc->sc_ppsassert = -1;
-		sc->sc_ppsclear = 0;
-		TIMESPEC_TO_TIMEVAL((struct timeval *)data,
-		    &sc->ppsinfo.clear_timestamp);
-#endif
-#endif /* !__HAVE_TIMECOUNTER */
 		break;
 
 	default:
@@ -1189,8 +1037,7 @@ comioctl(dev_t dev, u_long cmd, void *data, int flag, struct lwp *l)
 		break;
 	}
 
-	COM_UNLOCK(sc);
-	splx(s);
+	mutex_spin_exit(&sc->sc_lock);
 
 #ifdef COM_DEBUG
 	if (com_debug)
@@ -1207,7 +1054,7 @@ com_schedrx(struct com_softc *sc)
 	sc->sc_rx_ready = 1;
 
 	/* Wake up the poller. */
-	softintr_schedule(sc->sc_si);
+	softint_schedule(sc->sc_si);
 }
 
 void
@@ -1351,7 +1198,6 @@ comparam(struct tty *tp, struct termios *t)
 	struct com_softc *sc = device_lookup(&com_cd, COMUNIT(tp->t_dev));
 	int ospeed;
 	u_char lcr;
-	int s;
 
 	if (COM_ISALIVE(sc) == 0)
 		return (EIO);
@@ -1404,8 +1250,7 @@ comparam(struct tty *tp, struct termios *t)
 
 	lcr = ISSET(sc->sc_lcr, LCR_SBREAK) | cflag2lcr(t->c_cflag);
 
-	s = splserial();
-	COM_LOCK(sc);
+	mutex_spin_enter(&sc->sc_lock);
 
 	sc->sc_lcr = lcr;
 
@@ -1510,8 +1355,7 @@ comparam(struct tty *tp, struct termios *t)
 		sc->sc_r_lowat = com_rbuf_lowat;
 	}
 
-	COM_UNLOCK(sc);
-	splx(s);
+	mutex_spin_exit(&sc->sc_lock);
 
 	/*
 	 * Update the tty layer's idea of the carrier bit, in case we changed
@@ -1611,7 +1455,6 @@ int
 comhwiflow(struct tty *tp, int block)
 {
 	struct com_softc *sc = device_lookup(&com_cd, COMUNIT(tp->t_dev));
-	int s;
 
 	if (COM_ISALIVE(sc) == 0)
 		return (0);
@@ -1619,8 +1462,7 @@ comhwiflow(struct tty *tp, int block)
 	if (sc->sc_mcr_rts == 0)
 		return (0);
 
-	s = splserial();
-	COM_LOCK(sc);
+	mutex_spin_enter(&sc->sc_lock);
 
 	if (block) {
 		if (!ISSET(sc->sc_rx_flags, RX_TTY_BLOCKED)) {
@@ -1638,8 +1480,7 @@ comhwiflow(struct tty *tp, int block)
 		}
 	}
 
-	COM_UNLOCK(sc);
-	splx(s);
+	mutex_spin_exit(&sc->sc_lock);
 	return (1);
 }
 
@@ -1680,16 +1521,8 @@ comstart(struct tty *tp)
 		goto out;
 	if (sc->sc_tx_stopped)
 		goto out;
-
-	if (tp->t_outq.c_cc <= tp->t_lowat) {
-		if (ISSET(tp->t_state, TS_ASLEEP)) {
-			CLR(tp->t_state, TS_ASLEEP);
-			wakeup(&tp->t_outq);
-		}
-		selwakeup(&tp->t_wsel);
-		if (tp->t_outq.c_cc == 0)
-			goto out;
-	}
+	if (!ttypull(tp))
+		goto out;
 
 	/* Grab the first contiguous region of buffer space. */
 	{
@@ -1699,8 +1532,7 @@ comstart(struct tty *tp)
 		tba = tp->t_outq.c_cf;
 		tbc = ndqb(&tp->t_outq, 0);
 
-		(void)splserial();
-		COM_LOCK(sc);
+		mutex_spin_enter(&sc->sc_lock);
 
 		sc->sc_tba = tba;
 		sc->sc_tbc = tbc;
@@ -1727,7 +1559,7 @@ comstart(struct tty *tp)
 		sc->sc_tba += n;
 	}
 
-	COM_UNLOCK(sc);
+	mutex_spin_exit(&sc->sc_lock);
 out:
 	splx(s);
 	return;
@@ -1740,10 +1572,8 @@ void
 comstop(struct tty *tp, int flag)
 {
 	struct com_softc *sc = device_lookup(&com_cd, COMUNIT(tp->t_dev));
-	int s;
 
-	s = splserial();
-	COM_LOCK(sc);
+	mutex_spin_enter(&sc->sc_lock);
 	if (ISSET(tp->t_state, TS_BUSY)) {
 		/* Stop transmitting at the next chunk. */
 		sc->sc_tbc = 0;
@@ -1751,8 +1581,7 @@ comstop(struct tty *tp, int flag)
 		if (!ISSET(tp->t_state, TS_TTSTOP))
 			SET(tp->t_state, TS_FLUSH);
 	}
-	COM_UNLOCK(sc);
-	splx(s);
+	mutex_spin_exit(&sc->sc_lock);
 }
 
 void
@@ -1760,17 +1589,14 @@ comdiag(void *arg)
 {
 	struct com_softc *sc = arg;
 	int overflows, floods;
-	int s;
 
-	s = splserial();
-	COM_LOCK(sc);
+	mutex_spin_enter(&sc->sc_lock);
 	overflows = sc->sc_overflows;
 	sc->sc_overflows = 0;
 	floods = sc->sc_floods;
 	sc->sc_floods = 0;
 	sc->sc_errors = 0;
-	COM_UNLOCK(sc);
-	splx(s);
+	mutex_spin_exit(&sc->sc_lock);
 
 	log(LOG_WARNING, "%s: %d silo overflow%s, %d ibuf flood%s\n",
 	    sc->sc_dev.dv_xname,
@@ -1786,7 +1612,6 @@ com_rxsoft(struct com_softc *sc, struct tty *tp)
 	u_int cc, scc;
 	u_char lsr;
 	int code;
-	int s;
 
 	end = sc->sc_ebuf;
 	get = sc->sc_rbget;
@@ -1857,8 +1682,7 @@ com_rxsoft(struct com_softc *sc, struct tty *tp)
 
 	if (cc != scc) {
 		sc->sc_rbget = get;
-		s = splserial();
-		COM_LOCK(sc);
+		mutex_spin_enter(&sc->sc_lock);
 
 		cc = sc->sc_rbavail += scc - cc;
 		/* Buffers should be ok again, release possible block. */
@@ -1877,8 +1701,7 @@ com_rxsoft(struct com_softc *sc, struct tty *tp)
 				com_hwiflow(sc);
 			}
 		}
-		COM_UNLOCK(sc);
-		splx(s);
+		mutex_spin_exit(&sc->sc_lock);
 	}
 }
 
@@ -1898,15 +1721,12 @@ integrate void
 com_stsoft(struct com_softc *sc, struct tty *tp)
 {
 	u_char msr, delta;
-	int s;
 
-	s = splserial();
-	COM_LOCK(sc);
+	mutex_spin_enter(&sc->sc_lock);
 	msr = sc->sc_msr;
 	delta = sc->sc_msr_delta;
 	sc->sc_msr_delta = 0;
-	COM_UNLOCK(sc);
-	splx(s);
+	mutex_spin_exit(&sc->sc_lock);
 
 	if (ISSET(delta, sc->sc_msr_dcd)) {
 		/*
@@ -1971,10 +1791,10 @@ comintr(void *arg)
 	if (COM_ISALIVE(sc) == 0)
 		return (0);
 
-	COM_LOCK(sc);
+	mutex_spin_enter(&sc->sc_lock);
 	iir = CSR_READ_1(regsp, COM_REG_IIR);
 	if (ISSET(iir, IIR_NOPEND)) {
-		COM_UNLOCK(sc);
+		mutex_spin_exit(&sc->sc_lock);
 		return (0);
 	}
 
@@ -2066,7 +1886,6 @@ again:	do {
 		msr = CSR_READ_1(regsp, COM_REG_MSR);
 		delta = msr ^ sc->sc_msr;
 		sc->sc_msr = msr;
-#ifdef __HAVE_TIMECOUNTER
 		if ((sc->sc_pps_state.ppsparam.mode & PPS_CAPTUREBOTH) &&
 		    (delta & MSR_DCD)) {
 			pps_capture(&sc->sc_pps_state);
@@ -2075,55 +1894,6 @@ again:	do {
 			    PPS_CAPTUREASSERT :
 			    PPS_CAPTURECLEAR);
 		}
-#else /* !__HAVE_TIMECOUNTER */
-		/*
-		 * Pulse-per-second (PSS) signals on edge of DCD?
-		 * Process these even if line discipline is ignoring DCD.
-		 */
-		if (delta & sc->sc_ppsmask) {
-			struct timeval tv;
-		    	if ((msr & sc->sc_ppsmask) == sc->sc_ppsassert) {
-				/* XXX nanotime() */
-				microtime(&tv);
-				TIMEVAL_TO_TIMESPEC(&tv,
-				    &sc->ppsinfo.assert_timestamp);
-				if (sc->ppsparam.mode & PPS_OFFSETASSERT) {
-					timespecadd(&sc->ppsinfo.assert_timestamp,
-					    &sc->ppsparam.assert_offset,
-						    &sc->ppsinfo.assert_timestamp);
-				}
-
-#ifdef PPS_SYNC
-				if (pps_kc_hardpps_source == sc &&
-				    pps_kc_hardpps_mode & PPS_CAPTUREASSERT) {
-					hardpps(&tv, tv.tv_usec);
-				}
-#endif
-				sc->ppsinfo.assert_sequence++;
-				sc->ppsinfo.current_mode = sc->ppsparam.mode;
-
-			} else if ((msr & sc->sc_ppsmask) == sc->sc_ppsclear) {
-				/* XXX nanotime() */
-				microtime(&tv);
-				TIMEVAL_TO_TIMESPEC(&tv,
-				    &sc->ppsinfo.clear_timestamp);
-				if (sc->ppsparam.mode & PPS_OFFSETCLEAR) {
-					timespecadd(&sc->ppsinfo.clear_timestamp,
-					    &sc->ppsparam.clear_offset,
-					    &sc->ppsinfo.clear_timestamp);
-				}
-
-#ifdef PPS_SYNC
-				if (pps_kc_hardpps_source == sc &&
-				    pps_kc_hardpps_mode & PPS_CAPTURECLEAR) {
-					hardpps(&tv, tv.tv_usec);
-				}
-#endif
-				sc->ppsinfo.clear_sequence++;
-				sc->ppsinfo.current_mode = sc->ppsparam.mode;
-			}
-		}
-#endif /* !__HAVE_TIMECOUNTER */
 
 		/*
 		 * Process normal status changes
@@ -2204,10 +1974,10 @@ again:	do {
 	if (!ISSET((iir = CSR_READ_1(regsp, COM_REG_IIR)), IIR_NOPEND))
 		goto again;
 
-	COM_UNLOCK(sc);
+	mutex_spin_exit(&sc->sc_lock);
 
 	/* Wake up the poller. */
-	softintr_schedule(sc->sc_si);
+	softint_schedule(sc->sc_si);
 
 #if NRND > 0 && defined(RND_COM)
 	rnd_add_uint32(&sc->rnd_source, iir | lsr);
@@ -2505,25 +2275,14 @@ com_cleanup(void *arg)
 		CSR_WRITE_1(&sc->sc_regs, COM_REG_FIFO, 0);
 }
 
-void
-com_power(int why, void *arg)
+bool
+com_resume(device_t dev)
 {
-	struct com_softc *sc = arg;
-	int s;
+	struct com_softc *sc = device_private(dev);
 
-	s = splserial();
-	switch (why) {
-	case PWR_SUSPEND:
-	case PWR_STANDBY:
-		/* XXX should we do something to stop the device? */
-		break;
-	case PWR_RESUME:
-		com_loadchannelregs(sc);
-		break;
-	case PWR_SOFTSUSPEND:
-	case PWR_SOFTSTANDBY:
-	case PWR_SOFTRESUME:
-		break;
-	}
-	splx(s);
+	mutex_spin_enter(&sc->sc_lock);
+	com_loadchannelregs(sc);
+	mutex_spin_exit(&sc->sc_lock);
+
+	return true;
 }

@@ -1,4 +1,4 @@
-/*	$NetBSD: pdqvar.h,v 1.37 2007/03/04 06:02:00 christos Exp $	*/
+/*	$NetBSD: pdqvar.h,v 1.39 2007/12/20 21:08:18 dyoung Exp $	*/
 
 /*-
  * Copyright (c) 1995, 1996 Matt Thomas <matt@3am-software.com>
@@ -139,8 +139,8 @@ typedef pdq_bus_memaddr_t pdq_bus_memoffset_t;
 #if !defined(PDQ_HWSUPPORT)
 #include <net/if_media.h>
 #endif
-#include <machine/bus.h>
-#include <machine/intr.h>
+#include <sys/bus.h>
+#include <sys/intr.h>
 #define PDQ_OS_HDR_OFFSET	(PDQ_RX_FC_OFFSET-3)
 #define	PDQ_OS_PTR_FMT		"%p"
 #define	PDQ_OS_CSR_FMT		"0x%lx"
@@ -228,7 +228,7 @@ extern void pdq_os_databuf_free(struct _pdq_os_ctx_t *, struct mbuf *);
 #define	PDQ_OS_IFP_TO_SOFTC(ifp)		((pdq_softc_t *) (ifp)->if_softc)
 #define	PDQ_ARP_IFINIT(sc, ifa)			arp_ifinit(&(sc)->sc_if, (ifa))
 #define	PDQ_FDDICOM(sc)				(&(sc)->sc_ec)
-#define	PDQ_LANADDR(sc)				LLADDR((sc)->sc_if.if_sadl)
+#define	PDQ_LANADDR(sc)				CLLADDR((sc)->sc_if.if_sadl)
 #define	PDQ_LANADDR_SIZE(sc)			((sc)->sc_if.if_sadl->sdl_alen)
 #endif
 

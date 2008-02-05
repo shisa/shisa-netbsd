@@ -1,4 +1,4 @@
-/*	$NetBSD: sysctl.h,v 1.170 2007/05/17 14:51:43 yamt Exp $	*/
+/*	$NetBSD: sysctl.h,v 1.173 2008/01/07 16:12:56 ad Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993
@@ -806,6 +806,7 @@ struct kinfo_file {
 #define	HW_USERMEM64	14		/* quad: non-kernel memory (bytes) */
 #define	HW_IOSTATNAMES	15		/* string: iostat names */
 #define	HW_MAXID	15		/* number of valid hw ids */
+#define	HW_NCPUONLINE	16		/* number CPUs online */
 
 #define	CTL_HW_NAMES { \
 	{ 0, 0 }, \
@@ -823,6 +824,7 @@ struct kinfo_file {
 	{ "cnmagic", CTLTYPE_STRING }, \
 	{ "physmem64", CTLTYPE_QUAD }, \
 	{ "usermem64", CTLTYPE_QUAD }, \
+	{ "ncpuonline", CTLTYPE_INT }, \
 }
 
 /*
@@ -1058,6 +1060,7 @@ extern struct ctldebug debug15, debug16, debug17, debug18, debug19;
 	void name(struct sysctllog **)
 #ifdef SYSCTL_DEBUG_SETUP
 #define SYSCTL_SETUP(name, desc)				\
+	SYSCTL_SETUP_PROTO(name);				\
 	static void __CONCAT(___,name)(struct sysctllog **);	\
 	void name(struct sysctllog **clog) {			\
 		printf("%s\n", desc);				\
@@ -1066,6 +1069,7 @@ extern struct ctldebug debug15, debug16, debug17, debug18, debug19;
 	static void __CONCAT(___,name)(struct sysctllog **clog)
 #else  /* !SYSCTL_DEBUG_SETUP */
 #define SYSCTL_SETUP(name, desc)				\
+	SYSCTL_SETUP_PROTO(name);				\
 	__link_set_add_text(sysctl_funcs, name);		\
 	void name(struct sysctllog **clog)
 #endif /* !SYSCTL_DEBUG_SETUP */
@@ -1118,9 +1122,10 @@ void	sysctl_init(void);
 /*
  * typical syscall call order
  */
-int	sysctl_lock(struct lwp *, void *, size_t);
+void	sysctl_lock(bool);
 int	sysctl_dispatch(SYSCTLFN_PROTO);
-void	sysctl_unlock(struct lwp *);
+void	sysctl_unlock(void);
+void	sysctl_relock(void);
 
 /*
  * tree navigation primitives (must obtain lock before using these)

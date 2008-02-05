@@ -1,4 +1,4 @@
-/*	$NetBSD: portal_vnops.c,v 1.74 2007/07/23 11:27:46 pooka Exp $	*/
+/*	$NetBSD: portal_vnops.c,v 1.77 2008/01/19 21:54:47 pooka Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -40,7 +40,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: portal_vnops.c,v 1.74 2007/07/23 11:27:46 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: portal_vnops.c,v 1.77 2008/01/19 21:54:47 pooka Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -105,7 +105,7 @@ int	portal_reclaim(void *);
 int	portal_print(void *);
 #define	portal_islocked	genfs_islocked
 int	portal_pathconf(void *);
-#define	portal_advlock	genfs_badop
+#define	portal_advlock	genfs_eopnotsupp
 #define	portal_bwrite	genfs_eopnotsupp
 #define	portal_putpages	genfs_null_putpages
 
@@ -288,11 +288,10 @@ portal_open(v)
 		struct vnode *a_vp;
 		int  a_mode;
 		kauth_cred_t a_cred;
-		struct lwp *a_l;
 	} */ *ap = v;
 	struct socket *so = 0;
 	struct portalnode *pt;
-	struct lwp *l = ap->a_l;
+	struct lwp *l = curlwp;
 	struct vnode *vp = ap->a_vp;
 	int s;
 	struct uio auio;
@@ -312,7 +311,7 @@ portal_open(v)
 	/*
 	 * Nothing to do when opening the root node.
 	 */
-	if (vp->v_flag & VROOT)
+	if (vp->v_vflag & VV_ROOT)
 		return (0);
 
 	/*
@@ -523,7 +522,6 @@ portal_getattr(v)
 		struct vnode *a_vp;
 		struct vattr *a_vap;
 		kauth_cred_t a_cred;
-		struct lwp *a_l;
 	} */ *ap = v;
 	struct vnode *vp = ap->a_vp;
 	struct vattr *vap = ap->a_vap;
@@ -544,7 +542,7 @@ portal_getattr(v)
 	/* vap->va_qbytes = 0; */
 	vap->va_bytes = 0;
 	/* vap->va_qsize = 0; */
-	if (vp->v_flag & VROOT) {
+	if (vp->v_vflag & VV_ROOT) {
 		vap->va_type = VDIR;
 		vap->va_mode = S_IRUSR|S_IWUSR|S_IXUSR|
 				S_IRGRP|S_IWGRP|S_IXGRP|
@@ -570,13 +568,12 @@ portal_setattr(v)
 		struct vnode *a_vp;
 		struct vattr *a_vap;
 		kauth_cred_t a_cred;
-		struct lwp *a_l;
 	} */ *ap = v;
 
 	/*
 	 * Can't mess with the root vnode
 	 */
-	if (ap->a_vp->v_flag & VROOT)
+	if (ap->a_vp->v_vflag & VV_ROOT)
 		return (EACCES);
 
 	return (0);
@@ -601,7 +598,6 @@ portal_inactive(v)
 {
 	struct vop_inactive_args /* {
 		struct vnode *a_vp;
-		struct lwp *a_l;
 	} */ *ap = v;
 
 	VOP_UNLOCK(ap->a_vp, 0);

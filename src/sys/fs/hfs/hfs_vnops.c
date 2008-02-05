@@ -1,4 +1,4 @@
-/*	$NetBSD: hfs_vnops.c,v 1.4 2007/08/17 17:44:43 pooka Exp $	*/
+/*	$NetBSD: hfs_vnops.c,v 1.9 2008/01/30 09:50:20 ad Exp $	*/
 
 /*-
  * Copyright (c) 2005, 2007 The NetBSD Foundation, Inc.
@@ -101,7 +101,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: hfs_vnops.c,v 1.4 2007/08/17 17:44:43 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: hfs_vnops.c,v 1.9 2008/01/30 09:50:20 ad Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_ipsec.h"
@@ -159,7 +159,6 @@ const struct vnodeopv_entry_desc hfs_vnodeop_entries[] = {
 	{ &vop_setattr_desc, hfs_vop_setattr },	/* setattr */
 	{ &vop_read_desc, hfs_vop_read },		/* read */
 	{ &vop_write_desc, genfs_eopnotsupp },		/* write */
-	{ &vop_lease_desc, genfs_eopnotsupp },		/* lease */
 	{ &vop_ioctl_desc, genfs_eopnotsupp },		/* ioctl */
 	{ &vop_fcntl_desc, genfs_fcntl },		/* fcntl */
 	{ &vop_poll_desc, genfs_eopnotsupp },		/* poll */
@@ -214,7 +213,6 @@ const struct vnodeopv_entry_desc hfs_specop_entries[] = {
 	{ &vop_setattr_desc, hfs_vop_setattr },	/* setattr */
 	{ &vop_read_desc, spec_read },			/* read */
 	{ &vop_write_desc, spec_write },		/* write */
-	{ &vop_lease_desc, spec_lease_check },		/* lease */
 	{ &vop_ioctl_desc, spec_ioctl },		/* ioctl */
 	{ &vop_fcntl_desc, genfs_fcntl },		/* fcntl */
 	{ &vop_poll_desc, spec_poll },			/* poll */
@@ -271,7 +269,6 @@ const struct vnodeopv_entry_desc hfs_fifoop_entries[] = {
 	{ &vop_setattr_desc, hfs_vop_setattr },	/* setattr */
 	{ &vop_read_desc, fifo_read },			/* read */
 	{ &vop_write_desc, fifo_write },		/* write */
-	{ &vop_lease_desc, fifo_lease_check },		/* lease */
 	{ &vop_ioctl_desc, fifo_ioctl },		/* ioctl */
 	{ &vop_fcntl_desc, genfs_fcntl },		/* fcntl */
 	{ &vop_poll_desc, fifo_poll },			/* poll */
@@ -360,7 +357,7 @@ hfs_vop_lookup(void *v)
 	/*
 	 * Check accessiblity of directory.
 	 */
-	if ((error = VOP_ACCESS(vdp, VEXEC, cred, cnp->cn_lwp)) != 0)
+	if ((error = VOP_ACCESS(vdp, VEXEC, cred)) != 0)
 		return error;
 
 	if ((flags & ISLASTCN) && (vdp->v_mount->mnt_flag & MNT_RDONLY) &&
@@ -401,12 +398,9 @@ hfs_vop_lookup(void *v)
 		*vpp = vdp;
 	} else {
 		hfs_callback_args cbargs;
-		hfs_libcb_argsread argsread;
 		uint8_t len;
 
 		hfslib_init_cbargs(&cbargs);
-		argsread.l = cnp->cn_lwp;
-		argsread.cred = cnp->cn_cred;
 
 		/* XXX: when decomposing, string could grow
 		   and we have to handle overflow */
@@ -487,7 +481,6 @@ hfs_vop_open(void *v)
 		struct vnode *a_vp;
 		int a_mode;
 		kauth_cred_t a_cred;
-		struct lwp *a_l;
 	} */ *ap = v;
 	struct hfsnode *hn = VTOH(ap->a_vp);
 #endif
@@ -512,7 +505,6 @@ hfs_vop_close(void *v)
 		struct vnode *a_vp;
 		int a_fflag;
 		kauth_cred_t a_cred;
-		struct lwp *a_l;
 	} */ *ap = v;
 	struct hfsnode *hn = VTOH(ap->a_vp);
 #endif
@@ -532,7 +524,6 @@ hfs_vop_access(void *v)
 		struct vnode *a_vp;
 		int a_mode;
 		kauth_cred_t a_cred;
-		struct lwp *a_l;
 	} */ *ap = v;
 	struct vattr va;
 	int error;
@@ -557,7 +548,7 @@ hfs_vop_access(void *v)
 		}
 	}
 
-	if ((error = VOP_GETATTR(ap->a_vp, &va, ap->a_cred, ap->a_l)) != 0)
+	if ((error = VOP_GETATTR(ap->a_vp, &va, ap->a_cred)) != 0)
 		return error;
 
 	return vaccess(va.va_type, va.va_mode, va.va_uid, va.va_gid,
@@ -571,7 +562,6 @@ hfs_vop_getattr(void *v)
 		struct vnode	*a_vp;
 		struct vattr	*a_vap;
 		struct ucred	*a_cred;
-		struct lwp	*a_l;
 	} */ *ap = v;
 	struct vnode	*vp;
 	struct hfsnode	*hp;
@@ -663,7 +653,6 @@ hfs_vop_setattr(void *v)
 		struct vnode	*a_vp;
 		struct vattr	*a_vap;
 		kauth_cred_t	a_cred;
-		struct lwp	*a_l;
 	} */ *ap = v;
 	struct vattr	*vap;
 	struct vnode	*vp;
@@ -1003,7 +992,6 @@ hfs_vop_reclaim(void *v)
 {
 	struct vop_reclaim_args /* {
 		struct vnode *a_vp;
-		struct lwp *a_l;
 	} */ *ap = v;
 	struct vnode *vp;
 	struct hfsnode *hp;
@@ -1053,7 +1041,6 @@ hfs_vop_print(void *v)
 	hp = VTOH(vp);
 
 	printf("dummy = %X\n", (unsigned)hp->dummy);
-	lockmgr_printinfo(&vp->v_lock);
 	printf("\n");
 
 	return 0;

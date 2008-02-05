@@ -1,4 +1,4 @@
-/*	$NetBSD: fstrans_stub.c,v 1.1 2007/08/05 22:28:07 pooka Exp $	*/
+/*	$NetBSD: fstrans_stub.c,v 1.5 2008/01/02 18:15:14 pooka Exp $	*/
 
 /*
  * Copyright (c) 2007 Antti Kantee.  All Rights Reserved.
@@ -63,4 +63,54 @@ fstrans_is_owner(struct mount *mp)
 {
 
 	return 1;
+}
+
+int
+fscow_establish(struct mount *mp, int (*func)(void *, struct buf *, bool),
+    void *arg)
+{
+
+	return 0;
+}
+
+int
+fscow_disestablish(struct mount *mp, int (*func)(void *, struct buf *, bool),
+    void *arg)
+{
+
+	return 0;
+}
+
+int
+fscow_run(struct buf *bp, bool data_valid)
+{
+
+	return 0;
+}
+
+int
+vfs_suspend(struct mount *mp, int nowait)
+{
+
+	return ENOSYS;
+}
+
+void
+vfs_resume(struct mount *mp)
+{
+
+	panic("%s: impossible", __func__);
+}
+
+int
+fstrans_mount(struct mount *mp)
+{
+
+	return 0;
+}
+
+void
+fstrans_unmount(struct mount *mp)
+{
+
 }

@@ -1,4 +1,4 @@
-/*	$NetBSD: if_nfe.c,v 1.19 2007/09/24 13:17:53 cube Exp $	*/
+/*	$NetBSD: if_nfe.c,v 1.27 2008/01/26 14:13:06 tsutsui Exp $	*/
 /*	$OpenBSD: if_nfe.c,v 1.52 2006/03/02 09:04:00 jsg Exp $	*/
 
 /*-
@@ -21,7 +21,7 @@
 /* Driver for NVIDIA nForce MCP Fast Ethernet and Gigabit Ethernet */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_nfe.c,v 1.19 2007/09/24 13:17:53 cube Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_nfe.c,v 1.27 2008/01/26 14:13:06 tsutsui Exp $");
 
 #include "opt_inet.h"
 #include "bpfilter.h"
@@ -39,7 +39,7 @@ __KERNEL_RCSID(0, "$NetBSD: if_nfe.c,v 1.19 2007/09/24 13:17:53 cube Exp $");
 #include <sys/device.h>
 #include <sys/socket.h>
 
-#include <machine/bus.h>
+#include <sys/bus.h>
 
 #include <net/if.h>
 #include <net/if_dl.h>
@@ -104,8 +104,6 @@ void	nfe_free_rx_ring(struct nfe_softc *, struct nfe_rx_ring *);
 int	nfe_alloc_tx_ring(struct nfe_softc *, struct nfe_tx_ring *);
 void	nfe_reset_tx_ring(struct nfe_softc *, struct nfe_tx_ring *);
 void	nfe_free_tx_ring(struct nfe_softc *, struct nfe_tx_ring *);
-int	nfe_ifmedia_upd(struct ifnet *);
-void	nfe_ifmedia_sts(struct ifnet *, struct ifmediareq *);
 void	nfe_setmulti(struct nfe_softc *);
 void	nfe_get_macaddr(struct nfe_softc *, uint8_t *);
 void	nfe_set_macaddr(struct nfe_softc *, const uint8_t *);
@@ -173,7 +171,15 @@ const struct nfe_product {
 	{ PCI_VENDOR_NVIDIA, PCI_PRODUCT_NVIDIA_MCP65_LAN1 },
 	{ PCI_VENDOR_NVIDIA, PCI_PRODUCT_NVIDIA_MCP65_LAN2 },
 	{ PCI_VENDOR_NVIDIA, PCI_PRODUCT_NVIDIA_MCP65_LAN3 },
-	{ PCI_VENDOR_NVIDIA, PCI_PRODUCT_NVIDIA_MCP65_LAN4 }
+	{ PCI_VENDOR_NVIDIA, PCI_PRODUCT_NVIDIA_MCP65_LAN4 },
+	{ PCI_VENDOR_NVIDIA, PCI_PRODUCT_NVIDIA_MCP67_LAN1 },
+	{ PCI_VENDOR_NVIDIA, PCI_PRODUCT_NVIDIA_MCP67_LAN2 },
+	{ PCI_VENDOR_NVIDIA, PCI_PRODUCT_NVIDIA_MCP67_LAN3 },
+	{ PCI_VENDOR_NVIDIA, PCI_PRODUCT_NVIDIA_MCP67_LAN4 },
+	{ PCI_VENDOR_NVIDIA, PCI_PRODUCT_NVIDIA_MCP73_LAN1 },
+	{ PCI_VENDOR_NVIDIA, PCI_PRODUCT_NVIDIA_MCP73_LAN2 },
+	{ PCI_VENDOR_NVIDIA, PCI_PRODUCT_NVIDIA_MCP73_LAN3 },
+	{ PCI_VENDOR_NVIDIA, PCI_PRODUCT_NVIDIA_MCP73_LAN4 }
 };
 
 int
@@ -241,6 +247,10 @@ nfe_attach(struct device *parent, struct device *self, void *aux)
 
 	sc->sc_dmat = pa->pa_dmat;
 
+	/* Check for reversed ethernet address */
+	if ((NFE_READ(sc, NFE_TX_UNK) & NFE_MAC_ADDR_INORDER) != 0)
+		sc->sc_flags |= NFE_CORRECT_MACADDR;
+
 	nfe_get_macaddr(sc, sc->sc_enaddr);
 	printf("%s: Ethernet address %s\n",
 	    sc->sc_dev.dv_xname, ether_sprintf(sc->sc_enaddr));
@@ -260,7 +270,15 @@ nfe_attach(struct device *parent, struct device *self, void *aux)
 	case PCI_PRODUCT_NVIDIA_MCP61_LAN2:
 	case PCI_PRODUCT_NVIDIA_MCP61_LAN3:
 	case PCI_PRODUCT_NVIDIA_MCP61_LAN4:
-		sc->sc_flags |= NFE_40BIT_ADDR;
+	case PCI_PRODUCT_NVIDIA_MCP67_LAN1:
+	case PCI_PRODUCT_NVIDIA_MCP67_LAN2:
+	case PCI_PRODUCT_NVIDIA_MCP67_LAN3:
+	case PCI_PRODUCT_NVIDIA_MCP67_LAN4:
+	case PCI_PRODUCT_NVIDIA_MCP73_LAN1:
+	case PCI_PRODUCT_NVIDIA_MCP73_LAN2:
+	case PCI_PRODUCT_NVIDIA_MCP73_LAN3:
+	case PCI_PRODUCT_NVIDIA_MCP73_LAN4:
+		sc->sc_flags |= NFE_40BIT_ADDR |NFE_PWR_MGMT;
 		break;
 	case PCI_PRODUCT_NVIDIA_CK804_LAN1:
 	case PCI_PRODUCT_NVIDIA_CK804_LAN2:
@@ -275,8 +293,20 @@ nfe_attach(struct device *parent, struct device *self, void *aux)
 	case PCI_PRODUCT_NVIDIA_MCP65_LAN3:
 	case PCI_PRODUCT_NVIDIA_MCP65_LAN4:
 		sc->sc_flags |= NFE_JUMBO_SUP | NFE_40BIT_ADDR | NFE_HW_CSUM |
-		    NFE_HW_VLAN;
+		    NFE_HW_VLAN | NFE_PWR_MGMT;
 		break;
+	}
+
+	if ((sc->sc_flags & NFE_PWR_MGMT) != 0) {
+		/* wakeup some newer chips from powerdown mode */
+		NFE_WRITE(sc, NFE_RXTX_CTL, NFE_RXTX_RESET | NFE_RXTX_BIT2);
+		NFE_WRITE(sc, NFE_MAC_RESET, NFE_MAC_RESET_MAGIC);
+		DELAY(100);
+		NFE_WRITE(sc, NFE_MAC_RESET, 0);
+		DELAY(100);
+		NFE_WRITE(sc, NFE_RXTX_CTL, NFE_RXTX_BIT2);
+		NFE_WRITE(sc, NFE_PWR2_CTL,
+		    NFE_READ(sc, NFE_PWR2_CTL) & ~NFE_PWR2_WAKEUP_MASK);
 	}
 
 #ifndef NFE_NO_JUMBO
@@ -307,6 +337,7 @@ nfe_attach(struct device *parent, struct device *self, void *aux)
 	ifp->if_flags = IFF_BROADCAST | IFF_SIMPLEX | IFF_MULTICAST;
 	ifp->if_ioctl = nfe_ioctl;
 	ifp->if_start = nfe_start;
+	ifp->if_stop = nfe_stop;
 	ifp->if_watchdog = nfe_watchdog;
 	ifp->if_init = nfe_init;
 	ifp->if_baudrate = IF_Gbps(1);
@@ -331,8 +362,9 @@ nfe_attach(struct device *parent, struct device *self, void *aux)
 	sc->sc_mii.mii_writereg = nfe_miibus_writereg;
 	sc->sc_mii.mii_statchg = nfe_miibus_statchg;
 
-	ifmedia_init(&sc->sc_mii.mii_media, 0, nfe_ifmedia_upd,
-	    nfe_ifmedia_sts);
+	sc->sc_ethercom.ec_mii = &sc->sc_mii;
+	ifmedia_init(&sc->sc_mii.mii_media, 0, ether_mediachange,
+	    ether_mediastatus);
 	mii_attach(self, &sc->sc_mii, 0xffffffff, MII_PHY_ANY,
 	    MII_OFFSET_ANY, 0);
 	if (LIST_FIRST(&sc->sc_mii.mii_phys) == NULL) {
@@ -349,25 +381,10 @@ nfe_attach(struct device *parent, struct device *self, void *aux)
 	callout_init(&sc->sc_tick_ch, 0);
 	callout_setfunc(&sc->sc_tick_ch, nfe_tick, sc);
 
-	sc->sc_powerhook = powerhook_establish(sc->sc_dev.dv_xname,
-	    nfe_power, sc);
-}
-
-void
-nfe_power(int why, void *arg)
-{
-	struct nfe_softc *sc = arg;
-	struct ifnet *ifp;
-
-	if (why == PWR_RESUME) {
-		ifp = &sc->sc_ethercom.ec_if;
-		if (ifp->if_flags & IFF_UP) {
-			ifp->if_flags &= ~IFF_RUNNING;
-			nfe_init(ifp);
-			if (ifp->if_flags & IFF_RUNNING)
-				nfe_start(ifp);
-		}
-	}
+	if (!pmf_device_register(self, NULL, NULL))
+		aprint_error_dev(self, "couldn't establish power handler\n");
+	else
+		pmf_class_network_register(self, ifp);
 }
 
 void
@@ -589,27 +606,13 @@ nfe_ioctl(struct ifnet *ifp, u_long cmd, void *data)
 		}
 		sc->sc_if_flags = ifp->if_flags;
 		break;
-	case SIOCADDMULTI:
-	case SIOCDELMULTI:
+	default:
 		if ((error = ether_ioctl(ifp, cmd, data)) == ENETRESET) {
 			if (ifp->if_flags & IFF_RUNNING)
 				nfe_setmulti(sc);
 			error = 0;
 		}
 		break;
-	case SIOCSIFMEDIA:
-	case SIOCGIFMEDIA:
-		error = ifmedia_ioctl(ifp, ifr, &sc->sc_mii.mii_media, cmd);
-		break;
-	default:
-		error = ether_ioctl(ifp, cmd, data);
-		if (error == ENETRESET) {
-			if (ifp->if_flags & IFF_RUNNING)
-				nfe_setmulti(sc);
-			error = 0;
-		}
-		break;
-
 	}
 
 	splx(s);
@@ -1167,7 +1170,7 @@ nfe_init(struct ifnet *ifp)
 {
 	struct nfe_softc *sc = ifp->if_softc;
 	uint32_t tmp;
-	int s;
+	int rc = 0, s;
 
 	if (ifp->if_flags & IFF_RUNNING)
 		return 0;
@@ -1260,7 +1263,8 @@ nfe_init(struct ifnet *ifp)
 	/* set Rx filter */
 	nfe_setmulti(sc);
 
-	nfe_ifmedia_upd(ifp);
+	if ((rc = ether_mediachange(ifp)) != 0)
+		goto out;
 
 	nfe_tick(sc);
 
@@ -1280,7 +1284,8 @@ nfe_init(struct ifnet *ifp)
 	ifp->if_flags |= IFF_RUNNING;
 	ifp->if_flags &= ~IFF_OACTIVE;
 
-	return 0;
+out:
+	return rc;
 }
 
 void
@@ -1549,7 +1554,7 @@ nfe_jfree(struct mbuf *m, void *buf, size_t size, void *arg)
 	SLIST_INSERT_HEAD(&sc->rxq.jfreelist, jbuf, jnext);
 
         if (m != NULL)
-                pool_cache_put(&mbpool_cache, m);
+                pool_cache_put(mb_cache, m);
 }
 
 int
@@ -1781,31 +1786,6 @@ nfe_free_tx_ring(struct nfe_softc *sc, struct nfe_tx_ring *ring)
 	}
 }
 
-int
-nfe_ifmedia_upd(struct ifnet *ifp)
-{
-	struct nfe_softc *sc = ifp->if_softc;
-	struct mii_data *mii = &sc->sc_mii;
-	struct mii_softc *miisc;
-
-	if (mii->mii_instance != 0) {
-		LIST_FOREACH(miisc, &mii->mii_phys, mii_list)
-			mii_phy_reset(miisc);
-	}
-	return mii_mediachg(mii);
-}
-
-void
-nfe_ifmedia_sts(struct ifnet *ifp, struct ifmediareq *ifmr)
-{
-	struct nfe_softc *sc = ifp->if_softc;
-	struct mii_data *mii = &sc->sc_mii;
-
-	mii_pollstat(mii);
-	ifmr->ifm_status = mii->mii_media_status;
-	ifmr->ifm_active = mii->mii_media_active;
-}
-
 void
 nfe_setmulti(struct nfe_softc *sc)
 {
@@ -1864,15 +1844,27 @@ nfe_get_macaddr(struct nfe_softc *sc, uint8_t *addr)
 {
 	uint32_t tmp;
 
-	tmp = NFE_READ(sc, NFE_MACADDR_LO);
-	addr[0] = (tmp >> 8) & 0xff;
-	addr[1] = (tmp & 0xff);
+	if ((sc->sc_flags & NFE_CORRECT_MACADDR) == 0) {
+		tmp = NFE_READ(sc, NFE_MACADDR_LO);
+		addr[0] = (tmp >> 8) & 0xff;
+		addr[1] = (tmp & 0xff);
 
-	tmp = NFE_READ(sc, NFE_MACADDR_HI);
-	addr[2] = (tmp >> 24) & 0xff;
-	addr[3] = (tmp >> 16) & 0xff;
-	addr[4] = (tmp >>  8) & 0xff;
-	addr[5] = (tmp & 0xff);
+		tmp = NFE_READ(sc, NFE_MACADDR_HI);
+		addr[2] = (tmp >> 24) & 0xff;
+		addr[3] = (tmp >> 16) & 0xff;
+		addr[4] = (tmp >>  8) & 0xff;
+		addr[5] = (tmp & 0xff);
+	} else {
+		tmp = NFE_READ(sc, NFE_MACADDR_LO);
+		addr[5] = (tmp >> 8) & 0xff;
+		addr[4] = (tmp & 0xff);
+
+		tmp = NFE_READ(sc, NFE_MACADDR_HI);
+		addr[3] = (tmp >> 24) & 0xff;
+		addr[2] = (tmp >> 16) & 0xff;
+		addr[1] = (tmp >>  8) & 0xff;
+		addr[0] = (tmp & 0xff);
+	}
 }
 
 void

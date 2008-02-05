@@ -1,4 +1,4 @@
-/*	$NetBSD: miivar.h,v 1.47 2006/11/16 21:24:07 christos Exp $	*/
+/*	$NetBSD: miivar.h,v 1.49 2008/01/10 07:29:42 dyoung Exp $	*/
 
 /*-
  * Copyright (c) 1998, 1999, 2000, 2001 The NetBSD Foundation, Inc.
@@ -233,11 +233,14 @@ void	mii_attach(struct device *, struct mii_data *, int, int,
 	    int, int);
 void	mii_activate(struct mii_data *, enum devact, int, int);
 void	mii_detach(struct mii_data *, int, int);
+bool	mii_phy_resume(device_t);
 
 int	mii_mediachg(struct mii_data *);
 void	mii_tick(struct mii_data *);
 void	mii_pollstat(struct mii_data *);
 void	mii_down(struct mii_data *);
+
+int mii_ifmedia_change(struct mii_data *);
 
 int	mii_phy_activate(struct device *, enum devact);
 int	mii_phy_detach(struct device *, int);

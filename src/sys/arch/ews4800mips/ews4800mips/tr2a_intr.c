@@ -1,4 +1,4 @@
-/*	$NetBSD: tr2a_intr.c,v 1.7 2007/08/22 12:45:41 tsutsui Exp $	*/
+/*	$NetBSD: tr2a_intr.c,v 1.10 2008/01/04 22:15:09 ad Exp $	*/
 
 /*-
  * Copyright (c) 2004, 2005 The NetBSD Foundation, Inc.
@@ -37,13 +37,14 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: tr2a_intr.c,v 1.7 2007/08/22 12:45:41 tsutsui Exp $");
+__KERNEL_RCSID(0, "$NetBSD: tr2a_intr.c,v 1.10 2008/01/04 22:15:09 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/kernel.h>
+#include <sys/evcnt.h>
+#include <sys/intr.h>
 
-#include <machine/intr.h>
 #include <machine/locore.h>	/* mips3_cp0* */
 #include <machine/sbdvar.h>
 #define	_SBD_TR2A_PRIVATE
@@ -53,32 +54,18 @@ SBD_DECL(tr2a);
 
 const uint32_t tr2a_sr_bits[_IPL_N] = {
 	[IPL_NONE] = 0,
-	[IPL_SOFT] =
-	    MIPS_SOFT_INT_MASK_0,
 	[IPL_SOFTCLOCK] =
 	    MIPS_SOFT_INT_MASK_0,
 	[IPL_SOFTNET] =
 	    MIPS_SOFT_INT_MASK_0 | MIPS_SOFT_INT_MASK_1,
-	[IPL_SOFTSERIAL] =
-	    MIPS_SOFT_INT_MASK_0 | MIPS_SOFT_INT_MASK_1,
-	[IPL_BIO] =
-	    MIPS_SOFT_INT_MASK_0 | MIPS_SOFT_INT_MASK_1 |
-	    MIPS_INT_MASK_0 |
-	    MIPS_INT_MASK_1 |
-	    MIPS_INT_MASK_2,
-	[IPL_NET] =
-	    MIPS_SOFT_INT_MASK_0 | MIPS_SOFT_INT_MASK_1 |
-	    MIPS_INT_MASK_0 |
-	    MIPS_INT_MASK_1 |
-	    MIPS_INT_MASK_2,
-	[IPL_TTY] =
+	[IPL_VM] =
 	    MIPS_SOFT_INT_MASK_0 | MIPS_SOFT_INT_MASK_1 |
 	    MIPS_INT_MASK_0 |
 	    MIPS_INT_MASK_1 |
 	    MIPS_INT_MASK_2 |
 	    MIPS_INT_MASK_3 |
 	    MIPS_INT_MASK_4,
-	[IPL_CLOCK] =
+	[IPL_SCHED] =
 	    MIPS_SOFT_INT_MASK_0 | MIPS_SOFT_INT_MASK_1 |
 	    MIPS_INT_MASK_0 |
 	    MIPS_INT_MASK_1 |

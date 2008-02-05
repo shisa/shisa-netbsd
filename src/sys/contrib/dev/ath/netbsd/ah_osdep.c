@@ -33,8 +33,12 @@
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGES.
  *
- * $Id: ah_osdep.c,v 1.12 2007/08/28 00:12:46 nakayama Exp $
+ * $Id: ah_osdep.c,v 1.14 2007/12/11 05:20:33 lukem Exp $
  */
+
+#include <sys/cdefs.h>
+__KERNEL_RCSID(0, "$NetBSD: ah_osdep.c,v 1.14 2007/12/11 05:20:33 lukem Exp $");
+
 #include "opt_athhal.h"
 #include "athhal_options.h"
 
@@ -57,7 +61,7 @@
 #include <contrib/dev/ath/ah.h>
 
 #ifdef __mips__
-#include <machine/cpu.h>
+#include <sys/cpu.h>
 
 #define ENTER	lwp_t *savlwp = curlwp; curlwp = cpu_info_store.ci_curlwp;
 #define	EXIT	curlwp = savlwp;

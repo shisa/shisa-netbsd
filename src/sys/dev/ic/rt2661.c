@@ -1,4 +1,4 @@
-/*	$NetBSD: rt2661.c,v 1.17 2007/09/01 07:32:27 dyoung Exp $	*/
+/*	$NetBSD: rt2661.c,v 1.21 2007/12/09 20:27:58 jmcneill Exp $	*/
 /*	$OpenBSD: rt2661.c,v 1.17 2006/05/01 08:41:11 damien Exp $	*/
 /*	$FreeBSD: rt2560.c,v 1.5 2006/06/02 19:59:31 csjp Exp $	*/
 
@@ -25,7 +25,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: rt2661.c,v 1.17 2007/09/01 07:32:27 dyoung Exp $");
+__KERNEL_RCSID(0, "$NetBSD: rt2661.c,v 1.21 2007/12/09 20:27:58 jmcneill Exp $");
 
 #include "bpfilter.h"
 
@@ -41,9 +41,9 @@ __KERNEL_RCSID(0, "$NetBSD: rt2661.c,v 1.17 2007/09/01 07:32:27 dyoung Exp $");
 #include <sys/conf.h>
 #include <sys/device.h>
 
-#include <machine/bus.h>
+#include <sys/bus.h>
 #include <machine/endian.h>
-#include <machine/intr.h>
+#include <sys/intr.h>
 
 #if NBPFILTER > 0
 #include <net/bpf.h>
@@ -427,6 +427,7 @@ rt2661_attach(void *xsc, int id)
 	ifp->if_softc = sc;
 	ifp->if_flags = IFF_BROADCAST | IFF_SIMPLEX | IFF_MULTICAST;
 	ifp->if_init = rt2661_init;
+	ifp->if_stop = rt2661_stop;
 	ifp->if_ioctl = rt2661_ioctl;
 	ifp->if_start = rt2661_start;
 	ifp->if_watchdog = rt2661_watchdog;
@@ -494,7 +495,7 @@ rt2661_attach(void *xsc, int id)
 	ic->ic_newstate = rt2661_newstate;
 	ieee80211_media_init(ic, rt2661_media_change, ieee80211_media_status);
 
-#if NPBFILTER > 0
+#if NBPFILTER > 0
 	bpfattach2(ifp, DLT_IEEE802_11_RADIO,
 	    sizeof (struct ieee80211_frame) + 64, &sc->sc_drvbpf);
 
@@ -508,6 +509,11 @@ rt2661_attach(void *xsc, int id)
 #endif
 
 	ieee80211_announce(ic);
+
+	if (!pmf_device_register(&sc->sc_dev, NULL, NULL))
+		aprint_error_dev(&sc->sc_dev, "couldn't establish power handler\n");
+	else
+		pmf_class_network_register(&sc->sc_dev, ifp);
 
 	return 0;
 
@@ -527,6 +533,8 @@ rt2661_detach(void *xsc)
 
 	callout_stop(&sc->scan_ch);
 	callout_stop(&sc->rssadapt_ch);
+
+	pmf_device_deregister(&sc->sc_dev);
 
 	ieee80211_ifdetach(&sc->sc_ic);
 	if_detach(ifp);
@@ -1574,6 +1582,7 @@ rt2661_tx_mgt(struct rt2661_softc *sc, struct mbuf *m0,
 	struct rt2661_tx_desc *desc;
 	struct rt2661_tx_data *data;
 	struct ieee80211_frame *wh;
+	struct ieee80211_key *k;
 	uint16_t dur;
 	uint32_t flags = 0;
 	int rate, error;
@@ -1583,6 +1592,16 @@ rt2661_tx_mgt(struct rt2661_softc *sc, struct mbuf *m0,
 
 	/* send mgt frames at the lowest available rate */
 	rate = IEEE80211_IS_CHAN_5GHZ(ic->ic_curchan) ? 12 : 2;
+
+	wh = mtod(m0, struct ieee80211_frame *);
+
+	if (wh->i_fc[1] & IEEE80211_FC1_WEP) {
+		k = ieee80211_crypto_encap(ic, ni, m0);
+		if (k == NULL) {
+			m_freem(m0);
+			return ENOBUFS;
+		}
+	}
 
 	error = bus_dmamap_load_mbuf(sc->sc_dmat, data->map, m0,
 	    BUS_DMA_NOWAIT);
@@ -2336,10 +2355,11 @@ rt2661_set_chan(struct rt2661_softc *sc, struct ieee80211_channel *c)
 	}
 
 	/*
-	 * If we are switching from the 2GHz band to the 5GHz band or
-	 * vice-versa, BBP registers need to be reprogrammed.
+	 * If we've yet to select a channel, or we are switching from the
+	 * 2GHz band to the 5GHz band or vice-versa, BBP registers need to
+	 * be reprogrammed.
 	 */
-	if (c->ic_flags != sc->sc_curchan->ic_flags) {
+	if (sc->sc_curchan == NULL || c->ic_flags != sc->sc_curchan->ic_flags) {
 		rt2661_select_band(sc, c);
 		rt2661_select_antenna(sc);
 	}

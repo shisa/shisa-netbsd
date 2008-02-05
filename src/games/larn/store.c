@@ -1,4 +1,4 @@
-/*	$NetBSD: store.c,v 1.10 2004/01/27 20:30:30 jsm Exp $	 */
+/*	$NetBSD: store.c,v 1.12 2008/01/28 05:38:54 dholland Exp $	 */
 
 /*-
  * Copyright (c) 1988 The Regents of the University of California.
@@ -34,7 +34,7 @@
 #if 0
 static char     sccsid[] = "@(#)store.c	5.4 (Berkeley) 5/13/91";
 #else
-__RCSID("$NetBSD: store.c,v 1.10 2004/01/27 20:30:30 jsm Exp $");
+__RCSID("$NetBSD: store.c,v 1.12 2008/01/28 05:38:54 dholland Exp $");
 #endif
 #endif				/* not lint */
 
@@ -46,7 +46,7 @@ static void handsfull(void);
 static void outofstock(void);
 static void nogold(void);
 static void dnditem(int);
-static void banktitle(char *);
+static void banktitle(const char *);
 static void otradhead(void);
 
 static int      dndcount = 0, dnditm = 0;
@@ -240,7 +240,7 @@ dndstore()
 	if (outstanding_taxes > 0) {
 		lprcat("\n\nThe Larn Revenue Service has ordered us to not do business with tax evaders.\n");
 		beep();
-		lprintf("They have also told us that you owe %d gp in back taxes, and as we must\n", (long) outstanding_taxes);
+		lprintf("They have also told us that you owe %ld gp in back taxes, and as we must\n", (long) outstanding_taxes);
 		lprcat("comply with the law, we cannot serve you at this time.  Soo Sorry.\n");
 		cursors();
 		lprcat("\nPress ");
@@ -257,7 +257,7 @@ dndstore()
 	dnd_hed();
 	while (1) {
 		cursor(59, 18);
-		lprintf("%d gold pieces", (long) c[GOLD]);
+		lprintf("%ld gold pieces", (long) c[GOLD]);
 		cltoeoln();
 		cl_dn(1, 20);	/* erase to eod */
 		lprcat("\nEnter your transaction [");
@@ -335,7 +335,7 @@ dnditem(i)
 	} else
 		lprintf("%s", objectname[itm[i].obj]);
 	cursor(j + 31, k);
-	lprintf("%6d", (long) (itm[i].price * 10));
+	lprintf("%6ld", (long) (itm[i].price * 10));
 }
 
 
@@ -394,7 +394,7 @@ oschool()
 	sch_hed();
 	while (1) {
 		cursor(57, 18);
-		lprintf("%d gold pieces.   ", (long) c[GOLD]);
+		lprintf("%ld gold pieces.   ", (long) c[GOLD]);
 		cursors();
 		lprcat("\nWhat is your choice [");
 		standout("escape");
@@ -520,9 +520,9 @@ obank2()
 {
 	banktitle("Welcome to the 5th level branch office of the First National Bank of Larn.");
 }
+
 static void
-banktitle(str)
-	char           *str;
+banktitle(const char *str)
 {
 	nosignal = 1;		/* disable signals */
 	clear();
@@ -531,7 +531,7 @@ banktitle(str)
 		int    i;
 		lprcat("\n\nThe Larn Revenue Service has ordered that your account be frozen until all\n");
 		beep();
-		lprintf("levied taxes have been paid.  They have also told us that you owe %d gp in\n", (long) outstanding_taxes);
+		lprintf("levied taxes have been paid.  They have also told us that you owe %ld gp in\n", (long) outstanding_taxes);
 		lprcat("taxes, and we must comply with them. We cannot serve you at this time.  Sorry.\n");
 		lprcat("We suggest you go to the LRS office and pay your taxes.\n");
 		cursors();
@@ -577,7 +577,7 @@ static long     gemvalue[26] = {0};	/* the appraisal of the gems */
 void
 obanksub()
 {
-	unsigned long   amt;
+	long   amt;
 	int    i, k;
 	ointerest();		/* credit any needed interest */
 
@@ -599,13 +599,13 @@ obanksub()
 			cursor((k % 2) * 40 + 1, (k >> 1) + 4);
 			lprintf("%c) %s", i + 'a', objectname[iven[i]]);
 			cursor((k % 2) * 40 + 33, (k >> 1) + 4);
-			lprintf("%5d", (long) gemvalue[i]);
+			lprintf("%5ld", (long) gemvalue[i]);
 			k++;
 		};
 	cursor(31, 17);
-	lprintf("You have %8d gold pieces in the bank.", (long) c[BANKACCOUNT]);
+	lprintf("You have %8ld gold pieces in the bank.", (long) c[BANKACCOUNT]);
 	cursor(40, 18);
-	lprintf("You have %8d gold pieces", (long) c[GOLD]);
+	lprintf("You have %8ld gold pieces", (long) c[GOLD]);
 	if (c[BANKACCOUNT] + c[GOLD] >= 500000)
 		lprcat("\nNote:  Larndom law states that only deposits under 500,000gp  can earn interest.");
 	while (1) {
@@ -691,9 +691,9 @@ obanksub()
 			return;
 		};
 		cursor(40, 17);
-		lprintf("%8d", (long) c[BANKACCOUNT]);
+		lprintf("%8ld", (long) c[BANKACCOUNT]);
 		cursor(49, 18);
-		lprintf("%8d", (long) c[GOLD]);
+		lprintf("%8ld", (long) c[GOLD]);
 	}
 }
 
@@ -721,7 +721,7 @@ appraise(gemstone)
 						amt = 50000;
 				} else
 					amt = (255 & ivenarg[j]) * 100;
-				lprintf("\nI can see this is an excellent stone, It is worth %d", (long) amt);
+				lprintf("\nI can see this is an excellent stone, It is worth %ld", (long) amt);
 				lprcat("\nWould you like to sell it to us? ");
 				yrepcount = 0;
 				if (getyn() == 'y') {
@@ -812,7 +812,7 @@ otradepost()
 								value *= 2;
 							while ((izarg-- > 0) && ((value = 14 * (67 + value) / 10) < 500000));
 						}
-						lprintf("\nItem (%c) is worth %d gold pieces to us.  Do you want to sell it? ", i, (long) value);
+						lprintf("\nItem (%c) is worth %ld gold pieces to us.  Do you want to sell it? ", i, (long) value);
 						yrepcount = 0;
 						if (getyn() == 'y') {
 							lprcat("yes\n");
@@ -850,7 +850,7 @@ void
 olrs()
 {
 	int    i, first;
-	unsigned long   amt;
+	long   amt;
 	first = nosignal = 1;	/* disable signals */
 	clear();
 	resetscroll();
@@ -881,7 +881,7 @@ olrs()
 			} else if (amt > c[GOLD])
 				lprcat("  You don't have that much.\n");
 			else
-				c[GOLD] -= paytaxes((long) amt);
+				c[GOLD] -= paytaxes(amt);
 			break;
 
 		case '\33':
@@ -893,12 +893,12 @@ olrs()
 
 nxt:		cursor(1, 6);
 		if (outstanding_taxes > 0)
-			lprintf("You presently owe %d gp in taxes.  ", (long) outstanding_taxes);
+			lprintf("You presently owe %ld gp in taxes.  ", (long) outstanding_taxes);
 		else
 			lprcat("You do not owe us any taxes.           ");
 		cursor(1, 8);
 		if (c[GOLD] > 0)
-			lprintf("You have %6d gp.    ", (long) c[GOLD]);
+			lprintf("You have %6ld gp.    ", (long) c[GOLD]);
 		else
 			lprcat("You have no gold pieces.  ");
 	}

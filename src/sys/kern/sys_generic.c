@@ -1,4 +1,4 @@
-/*	$NetBSD: sys_generic.c,v 1.107 2007/09/25 13:53:11 ad Exp $	*/
+/*	$NetBSD: sys_generic.c,v 1.111 2008/01/05 19:08:48 dsl Exp $	*/
 
 /*-
  * Copyright (c) 2007 The NetBSD Foundation, Inc.
@@ -77,7 +77,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: sys_generic.c,v 1.107 2007/09/25 13:53:11 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: sys_generic.c,v 1.111 2008/01/05 19:08:48 dsl Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -118,13 +118,13 @@ int		nselcoll;
  */
 /* ARGSUSED */
 int
-sys_read(lwp_t *l, void *v, register_t *retval)
+sys_read(struct lwp *l, const struct sys_read_args *uap, register_t *retval)
 {
-	struct sys_read_args /* {
+	/* {
 		syscallarg(int)		fd;
 		syscallarg(void *)	buf;
 		syscallarg(size_t)	nbyte;
-	} */ *uap = v;
+	} */
 	int		fd;
 	struct file	*fp;
 	proc_t		*p;
@@ -138,34 +138,28 @@ sys_read(lwp_t *l, void *v, register_t *retval)
 		return (EBADF);
 
 	if ((fp->f_flag & FREAD) == 0) {
-		simple_unlock(&fp->f_slock);
+		FILE_UNLOCK(fp);
 		return (EBADF);
 	}
 
 	FILE_USE(fp);
 
 	/* dofileread() will unuse the descriptor for us */
-	return (dofileread(l, fd, fp, SCARG(uap, buf), SCARG(uap, nbyte),
+	return (dofileread(fd, fp, SCARG(uap, buf), SCARG(uap, nbyte),
 	    &fp->f_offset, FOF_UPDATE_OFFSET, retval));
 }
 
 int
-dofileread(lwp_t *l, int fd, struct file *fp, void *buf, size_t nbyte,
+dofileread(int fd, struct file *fp, void *buf, size_t nbyte,
 	off_t *offset, int flags, register_t *retval)
 {
 	struct iovec aiov;
 	struct uio auio;
-	proc_t *p;
-	struct vmspace *vm;
 	size_t cnt;
 	int error;
-	p = l->l_proc;
+	lwp_t *l;
 
-	error = proc_vmspace_getref(p, &vm);
-	if (error) {
-		FILE_UNUSE(fp, l);
-		return error;
-	}
+	l = curlwp;
 
 	aiov.iov_base = (void *)buf;
 	aiov.iov_len = nbyte;
@@ -173,7 +167,7 @@ dofileread(lwp_t *l, int fd, struct file *fp, void *buf, size_t nbyte,
 	auio.uio_iovcnt = 1;
 	auio.uio_resid = nbyte;
 	auio.uio_rw = UIO_READ;
-	auio.uio_vmspace = vm;
+	auio.uio_vmspace = l->l_proc->p_vmspace;
 
 	/*
 	 * Reads return ssize_t because -1 is returned on error.  Therefore
@@ -196,7 +190,6 @@ dofileread(lwp_t *l, int fd, struct file *fp, void *buf, size_t nbyte,
 	*retval = cnt;
  out:
 	FILE_UNUSE(fp, l);
-	uvmspace_free(vm);
 	return (error);
 }
 
@@ -204,54 +197,45 @@ dofileread(lwp_t *l, int fd, struct file *fp, void *buf, size_t nbyte,
  * Scatter read system call.
  */
 int
-sys_readv(lwp_t *l, void *v, register_t *retval)
+sys_readv(struct lwp *l, const struct sys_readv_args *uap, register_t *retval)
 {
-	struct sys_readv_args /* {
+	/* {
 		syscallarg(int)				fd;
 		syscallarg(const struct iovec *)	iovp;
 		syscallarg(int)				iovcnt;
-	} */ *uap = v;
+	} */
 
-	return do_filereadv(l, SCARG(uap, fd), SCARG(uap, iovp),
+	return do_filereadv(SCARG(uap, fd), SCARG(uap, iovp),
 	    SCARG(uap, iovcnt), NULL, FOF_UPDATE_OFFSET, retval);
 }
 
 int
-do_filereadv(struct lwp *l, int fd, const struct iovec *iovp, int iovcnt,
+do_filereadv(int fd, const struct iovec *iovp, int iovcnt,
     off_t *offset, int flags, register_t *retval)
 {
-	struct proc	*p;
 	struct uio	auio;
 	struct iovec	*iov, *needfree = NULL, aiov[UIO_SMALLIOV];
-	struct vmspace	*vm;
 	int		i, error;
 	size_t		cnt;
 	u_int		iovlen;
 	struct file	*fp;
-	struct filedesc	*fdp;
 	struct iovec	*ktriov = NULL;
+	lwp_t		*l;
 
 	if (iovcnt == 0)
 		return EINVAL;
 
-	p = l->l_proc;
-	fdp = p->p_fd;
+	l = curlwp;
 
-	if ((fp = fd_getfile(fdp, fd)) == NULL)
+	if ((fp = fd_getfile(l->l_proc->p_fd, fd)) == NULL)
 		return EBADF;
 
 	if ((fp->f_flag & FREAD) == 0) {
-		simple_unlock(&fp->f_slock);
+		FILE_UNLOCK(fp);
 		return EBADF;
 	}
 
 	FILE_USE(fp);
-
-	error = proc_vmspace_getref(p, &vm);
-	if (error) {
-		FILE_UNUSE(fp, l);
-		return error;
-	}
 
 	if (offset == NULL)
 		offset = &fp->f_offset;
@@ -296,7 +280,7 @@ do_filereadv(struct lwp *l, int fd, const struct iovec *iovp, int iovcnt,
 	auio.uio_iov = iov;
 	auio.uio_iovcnt = iovcnt;
 	auio.uio_rw = UIO_READ;
-	auio.uio_vmspace = vm;
+	auio.uio_vmspace = l->l_proc->p_vmspace;
 
 	auio.uio_resid = 0;
 	for (i = 0; i < iovcnt; i++, iov++) {
@@ -340,7 +324,6 @@ do_filereadv(struct lwp *l, int fd, const struct iovec *iovp, int iovcnt,
 		kmem_free(needfree, iovlen);
  out:
 	FILE_UNUSE(fp, l);
-	uvmspace_free(vm);
 	return (error);
 }
 
@@ -348,61 +331,52 @@ do_filereadv(struct lwp *l, int fd, const struct iovec *iovp, int iovcnt,
  * Write system call
  */
 int
-sys_write(lwp_t *l, void *v, register_t *retval)
+sys_write(struct lwp *l, const struct sys_write_args *uap, register_t *retval)
 {
-	struct sys_write_args /* {
+	/* {
 		syscallarg(int)			fd;
 		syscallarg(const void *)	buf;
 		syscallarg(size_t)		nbyte;
-	} */ *uap = v;
+	} */
 	int		fd;
 	struct file	*fp;
-	proc_t		*p;
-	struct filedesc	*fdp;
 
 	fd = SCARG(uap, fd);
-	p = l->l_proc;
-	fdp = p->p_fd;
 
-	if ((fp = fd_getfile(fdp, fd)) == NULL)
+	if ((fp = fd_getfile(curproc->p_fd, fd)) == NULL)
 		return (EBADF);
 
 	if ((fp->f_flag & FWRITE) == 0) {
-		simple_unlock(&fp->f_slock);
+		FILE_UNLOCK(fp);
 		return (EBADF);
 	}
 
 	FILE_USE(fp);
 
 	/* dofilewrite() will unuse the descriptor for us */
-	return (dofilewrite(l, fd, fp, SCARG(uap, buf), SCARG(uap, nbyte),
+	return (dofilewrite(fd, fp, SCARG(uap, buf), SCARG(uap, nbyte),
 	    &fp->f_offset, FOF_UPDATE_OFFSET, retval));
 }
 
 int
-dofilewrite(lwp_t *l, int fd, struct file *fp, const void *buf,
+dofilewrite(int fd, struct file *fp, const void *buf,
 	size_t nbyte, off_t *offset, int flags, register_t *retval)
 {
 	struct iovec aiov;
 	struct uio auio;
-	proc_t *p;
-	struct vmspace *vm;
 	size_t cnt;
 	int error;
+	lwp_t *l;
 
-	p = l->l_proc;
-	error = proc_vmspace_getref(p, &vm);
-	if (error) {
-		FILE_UNUSE(fp, l);
-		return error;
-	}
+	l = curlwp;
+
 	aiov.iov_base = __UNCONST(buf);		/* XXXUNCONST kills const */
 	aiov.iov_len = nbyte;
 	auio.uio_iov = &aiov;
 	auio.uio_iovcnt = 1;
 	auio.uio_resid = nbyte;
 	auio.uio_rw = UIO_WRITE;
-	auio.uio_vmspace = vm;
+	auio.uio_vmspace = l->l_proc->p_vmspace;
 
 	/*
 	 * Writes return ssize_t because -1 is returned on error.  Therefore
@@ -422,7 +396,7 @@ dofilewrite(lwp_t *l, int fd, struct file *fp, const void *buf,
 			error = 0;
 		if (error == EPIPE) {
 			mutex_enter(&proclist_mutex);
-			psignal(p, SIGPIPE);
+			psignal(l->l_proc, SIGPIPE);
 			mutex_exit(&proclist_mutex);
 		}
 	}
@@ -431,7 +405,6 @@ dofilewrite(lwp_t *l, int fd, struct file *fp, const void *buf,
 	*retval = cnt;
  out:
 	FILE_UNUSE(fp, l);
-	uvmspace_free(vm);
 	return (error);
 }
 
@@ -439,54 +412,45 @@ dofilewrite(lwp_t *l, int fd, struct file *fp, const void *buf,
  * Gather write system call
  */
 int
-sys_writev(lwp_t *l, void *v, register_t *retval)
+sys_writev(struct lwp *l, const struct sys_writev_args *uap, register_t *retval)
 {
-	struct sys_writev_args /* {
+	/* {
 		syscallarg(int)				fd;
 		syscallarg(const struct iovec *)	iovp;
 		syscallarg(int)				iovcnt;
-	} */ *uap = v;
+	} */
 
-	return do_filewritev(l, SCARG(uap, fd), SCARG(uap, iovp),
+	return do_filewritev(SCARG(uap, fd), SCARG(uap, iovp),
 	    SCARG(uap, iovcnt), NULL, FOF_UPDATE_OFFSET, retval);
 }
 
 int
-do_filewritev(struct lwp *l, int fd, const struct iovec *iovp, int iovcnt,
+do_filewritev(int fd, const struct iovec *iovp, int iovcnt,
     off_t *offset, int flags, register_t *retval)
 {
-	struct proc	*p;
 	struct uio	auio;
 	struct iovec	*iov, *needfree = NULL, aiov[UIO_SMALLIOV];
-	struct vmspace	*vm;
 	int		i, error;
 	size_t		cnt;
 	u_int		iovlen;
 	struct file	*fp;
-	struct filedesc	*fdp;
 	struct iovec	*ktriov = NULL;
+	lwp_t		*l;
+
+	l = curlwp;
 
 	if (iovcnt == 0)
 		return EINVAL;
 
-	p = l->l_proc;
-	fdp = p->p_fd;
-
-	if ((fp = fd_getfile(fdp, fd)) == NULL)
+	if ((fp = fd_getfile(l->l_proc->p_fd, fd)) == NULL)
 		return EBADF;
 
 	if ((fp->f_flag & FWRITE) == 0) {
-		simple_unlock(&fp->f_slock);
+		FILE_UNLOCK(fp);
 		return EBADF;
 	}
 
 	FILE_USE(fp);
-
-	error = proc_vmspace_getref(p, &vm);
-	if (error) {
-		FILE_UNUSE(fp, l);
-		return error;
-	}
 
 	if (offset == NULL)
 		offset = &fp->f_offset;
@@ -531,7 +495,7 @@ do_filewritev(struct lwp *l, int fd, const struct iovec *iovp, int iovcnt,
 	auio.uio_iov = iov;
 	auio.uio_iovcnt = iovcnt;
 	auio.uio_rw = UIO_WRITE;
-	auio.uio_vmspace = vm;
+	auio.uio_vmspace = curproc->p_vmspace;
 
 	auio.uio_resid = 0;
 	for (i = 0; i < iovcnt; i++, iov++) {
@@ -564,7 +528,7 @@ do_filewritev(struct lwp *l, int fd, const struct iovec *iovp, int iovcnt,
 			error = 0;
 		if (error == EPIPE) {
 			mutex_enter(&proclist_mutex);
-			psignal(p, SIGPIPE);
+			psignal(l->l_proc, SIGPIPE);
 			mutex_exit(&proclist_mutex);
 		}
 	}
@@ -581,7 +545,6 @@ do_filewritev(struct lwp *l, int fd, const struct iovec *iovp, int iovcnt,
 		kmem_free(needfree, iovlen);
  out:
 	FILE_UNUSE(fp, l);
-	uvmspace_free(vm);
 	return (error);
 }
 
@@ -590,13 +553,13 @@ do_filewritev(struct lwp *l, int fd, const struct iovec *iovp, int iovcnt,
  */
 /* ARGSUSED */
 int
-sys_ioctl(struct lwp *l, void *v, register_t *retval)
+sys_ioctl(struct lwp *l, const struct sys_ioctl_args *uap, register_t *retval)
 {
-	struct sys_ioctl_args /* {
+	/* {
 		syscallarg(int)		fd;
 		syscallarg(u_long)	com;
 		syscallarg(void *)	data;
-	} */ *uap = v;
+	} */
 	struct file	*fp;
 	proc_t		*p;
 	struct filedesc	*fdp;
@@ -624,11 +587,15 @@ sys_ioctl(struct lwp *l, void *v, register_t *retval)
 
 	switch (com = SCARG(uap, com)) {
 	case FIONCLEX:
+		rw_enter(&fdp->fd_lock, RW_WRITER);
 		fdp->fd_ofileflags[SCARG(uap, fd)] &= ~UF_EXCLOSE;
+		rw_exit(&fdp->fd_lock);
 		goto out;
 
 	case FIOCLEX:
+		rw_enter(&fdp->fd_lock, RW_WRITER);
 		fdp->fd_ofileflags[SCARG(uap, fd)] |= UF_EXCLOSE;
+		rw_exit(&fdp->fd_lock);
 		goto out;
 	}
 
@@ -671,18 +638,22 @@ sys_ioctl(struct lwp *l, void *v, register_t *retval)
 	switch (com) {
 
 	case FIONBIO:
+		FILE_LOCK(fp);
 		if (*(int *)data != 0)
 			fp->f_flag |= FNONBLOCK;
 		else
 			fp->f_flag &= ~FNONBLOCK;
+		FILE_UNLOCK(fp);
 		error = (*fp->f_ops->fo_ioctl)(fp, FIONBIO, data, l);
 		break;
 
 	case FIOASYNC:
+		FILE_LOCK(fp);
 		if (*(int *)data != 0)
 			fp->f_flag |= FASYNC;
 		else
 			fp->f_flag &= ~FASYNC;
+		FILE_UNLOCK(fp);
 		error = (*fp->f_ops->fo_ioctl)(fp, FIOASYNC, data, l);
 		break;
 
@@ -723,16 +694,16 @@ sys_ioctl(struct lwp *l, void *v, register_t *retval)
  * Select system call.
  */
 int
-sys_pselect(lwp_t *l, void *v, register_t *retval)
+sys_pselect(struct lwp *l, const struct sys_pselect_args *uap, register_t *retval)
 {
-	struct sys_pselect_args /* {
+	/* {
 		syscallarg(int)				nd;
 		syscallarg(fd_set *)			in;
 		syscallarg(fd_set *)			ou;
 		syscallarg(fd_set *)			ex;
 		syscallarg(const struct timespec *)	ts;
 		syscallarg(sigset_t *)			mask;
-	} */ * const uap = v;
+	} */
 	struct timespec	ats;
 	struct timeval	atv, *tv = NULL;
 	sigset_t	amask, *mask = NULL;
@@ -785,15 +756,15 @@ gettimeleft(struct timeval *tv, struct timeval *sleeptv)
 }
 
 int
-sys_select(lwp_t *l, void *v, register_t *retval)
+sys_select(struct lwp *l, const struct sys_select_args *uap, register_t *retval)
 {
-	struct sys_select_args /* {
+	/* {
 		syscallarg(int)			nd;
 		syscallarg(fd_set *)		in;
 		syscallarg(fd_set *)		ou;
 		syscallarg(fd_set *)		ex;
 		syscallarg(struct timeval *)	tv;
-	} */ * const uap = v;
+	} */
 	struct timeval atv, *tv = NULL;
 	int error;
 
@@ -951,13 +922,13 @@ selscan(lwp_t *l, fd_mask *ibitp, fd_mask *obitp, int nfd,
  * Poll system call.
  */
 int
-sys_poll(lwp_t *l, void *v, register_t *retval)
+sys_poll(struct lwp *l, const struct sys_poll_args *uap, register_t *retval)
 {
-	struct sys_poll_args /* {
+	/* {
 		syscallarg(struct pollfd *)	fds;
 		syscallarg(u_int)		nfds;
 		syscallarg(int)			timeout;
-	} */ * const uap = v;
+	} */
 	struct timeval	atv, *tv = NULL;
 
 	if (SCARG(uap, timeout) != INFTIM) {
@@ -974,14 +945,14 @@ sys_poll(lwp_t *l, void *v, register_t *retval)
  * Poll system call.
  */
 int
-sys_pollts(lwp_t *l, void *v, register_t *retval)
+sys_pollts(struct lwp *l, const struct sys_pollts_args *uap, register_t *retval)
 {
-	struct sys_pollts_args /* {
+	/* {
 		syscallarg(struct pollfd *)		fds;
 		syscallarg(u_int)			nfds;
 		syscallarg(const struct timespec *)	ts;
 		syscallarg(const sigset_t *)		mask;
-	} */ * const uap = v;
+	} */
 	struct timespec	ats;
 	struct timeval	atv, *tv = NULL;
 	sigset_t	amask, *mask = NULL;
@@ -1224,7 +1195,7 @@ void
 selsysinit(void)
 {
 
-	mutex_init(&select_lock, MUTEX_DRIVER, IPL_VM);
+	mutex_init(&select_lock, MUTEX_DEFAULT, IPL_VM);
 	cv_init(&select_cv, "select");
 }
 

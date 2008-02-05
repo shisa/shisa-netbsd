@@ -1,4 +1,4 @@
-/*	$NetBSD: smc90cx6.c,v 1.50 2007/09/03 11:32:07 he Exp $ */
+/*	$NetBSD: smc90cx6.c,v 1.54 2007/12/28 20:18:45 joerg Exp $ */
 
 /*-
  * Copyright (c) 1994, 1995, 1998 The NetBSD Foundation, Inc.
@@ -42,7 +42,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: smc90cx6.c,v 1.50 2007/09/03 11:32:07 he Exp $");
+__KERNEL_RCSID(0, "$NetBSD: smc90cx6.c,v 1.54 2007/12/28 20:18:45 joerg Exp $");
 
 /* #define BAHSOFTCOPY */
 #define BAHRETRANSMIT /**/
@@ -60,6 +60,8 @@ __KERNEL_RCSID(0, "$NetBSD: smc90cx6.c,v 1.50 2007/09/03 11:32:07 he Exp $");
 #include <sys/syslog.h>
 #include <sys/ioctl.h>
 #include <sys/errno.h>
+#include <sys/kernel.h>
+#include <sys/intr.h>
 
 #include <net/if.h>
 #include <net/if_dl.h>
@@ -79,10 +81,8 @@ __KERNEL_RCSID(0, "$NetBSD: smc90cx6.c,v 1.50 2007/09/03 11:32:07 he Exp $");
 #include <net/bpfdesc.h>
 #endif
 
-#include <sys/kernel.h>
-#include <machine/bus.h>
-#include <machine/cpu.h>
-#include <machine/intr.h>
+#include <sys/bus.h>
+#include <sys/cpu.h>
 #include <machine/mtpr.h>
 
 #include <dev/ic/smc90cx6reg.h>
@@ -215,8 +215,8 @@ bah_attach_subr(sc)
 	arc_ifattach(ifp, linkaddress);
 
 #ifdef BAHSOFTCOPY
-	sc->sc_rxcookie = softintr_establish(IPL_SOFTNET, bah_srint, sc);
-	sc->sc_txcookie = softintr_establish(IPL_SOFTNET,
+	sc->sc_rxcookie = softint_establish(SOFTINT_NET, bah_srint, sc);
+	sc->sc_txcookie = softint_establish(SOFTINT_NET,
 		(void (*)(void *))bah_start, ifp);
 #endif
 
@@ -256,7 +256,7 @@ bah_reset(sc)
 	struct bah_softc *sc;
 {
 	struct ifnet *ifp;
-	int linkaddress;
+	uint8_t linkaddress;
 
 	bus_space_tag_t bst_r = sc->sc_bst_r;
         bus_space_tag_t bst_m = sc->sc_bst_m;
@@ -283,7 +283,7 @@ bah_reset(sc)
 #endif
 
 	/* tell the routing level about the (possibly changed) link address */
-	arc_storelladdr(ifp, linkaddress);
+	if_set_sadl(ifp, &linkaddress, sizeof(linkaddress));
 
 	/* POR is NMI, but we need it below: */
 	sc->sc_intmask = BAH_RECON|BAH_POR;
@@ -737,7 +737,7 @@ bah_tint(sc, isr)
 	/* XXXX TODO */
 #ifdef BAHSOFTCOPY
 	/* schedule soft int to fill a new buffer for us */
-	softintr_schedule(sc->sc_txcookie);
+	softint_schedule(sc->sc_txcookie);
 #else
 	/* call it directly */
 	bah_start(ifp);
@@ -808,7 +808,7 @@ bahintr(arg)
 			 */
 
 			callout_stop(&sc->sc_recon_ch);
-			newsec = time.tv_sec;
+			newsec = time_second;
 			if ((newsec - sc->sc_recontime <= 2) &&
 			    (++sc->sc_reconcount == ARC_EXCESSIVE_RECONS)) {
 				log(LOG_WARNING,
@@ -870,7 +870,7 @@ bahintr(arg)
 				 * this one starts a soft int to copy out
 				 * of the hw
 				 */
-				softintr_schedule(sc->sc_rxcookie);
+				softint_schedule(sc->sc_rxcookie);
 #else
 				/* this one does the copy here */
 				bah_srint(sc);

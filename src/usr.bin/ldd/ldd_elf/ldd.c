@@ -1,4 +1,4 @@
-/*	$NetBSD: ldd.c,v 1.28 2007/05/19 15:35:04 christos Exp $	*/
+/*	$NetBSD: ldd.c,v 1.31 2007/12/15 19:44:51 perry Exp $	*/
 
 /*-
  * Copyright (c) 1998, 2000 The NetBSD Foundation, Inc.
@@ -69,7 +69,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: ldd.c,v 1.28 2007/05/19 15:35:04 christos Exp $");
+__RCSID("$NetBSD: ldd.c,v 1.31 2007/12/15 19:44:51 perry Exp $");
 #endif /* not lint */
 
 #include <sys/types.h>
@@ -109,7 +109,7 @@ Library_Xform *_rtld_xforms;
 static void fmtprint(const char *, Obj_Entry *, const char *, const char *);
 static void print_needed(Obj_Entry *, const char *, const char *);
 static int ldd_aout(char *, char *, char *, int);
-static void usage(void) __attribute__((__noreturn__));
+static void usage(void) __dead;
 static char *main_local;
 static char *main_progname;
 
@@ -153,9 +153,9 @@ main(int argc, char **argv)
 		usage();
 		/*NOTREACHED*/
 	}
-	_rtld_add_paths(argv[0], &_rtld_default_paths, RTLD_DEFAULT_LIBRARY_PATH);
 
 	_rtld_pagesz = sysconf(_SC_PAGESIZE);
+	_rtld_add_paths(argv[0], &_rtld_default_paths, RTLD_DEFAULT_LIBRARY_PATH);
 
 	for (; argc != 0; argc--, argv++) {
 		int fd = open(*argv, O_RDONLY);
@@ -206,17 +206,17 @@ main(int argc, char **argv)
 			while (obj->rpaths != NULL) {
 				const Search_Path *rpath = obj->rpaths;
 				obj->rpaths = rpath->sp_next;
-				free((void *) rpath->sp_path);
-				free((void *) rpath);
+				xfree(__UNCONST(rpath->sp_path));
+				xfree(__UNCONST(rpath));
 			}
 			while (obj->needed != NULL) {
 				const Needed_Entry *needed = obj->needed;
 				obj->needed = needed->next;
-				free((void *) needed);
+				xfree(__UNCONST(needed));
 			}
 			(void) munmap(obj->mapbase, obj->mapsize);
-			free(obj->path);
-			free(obj);
+			xfree(obj->path);
+			xfree(obj);
 		}
 
 		_rtld_objmain = NULL;

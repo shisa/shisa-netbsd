@@ -1,11 +1,8 @@
-/* $NetBSD: msr_ipifuncs.c,v 1.9 2007/05/15 14:29:36 xtraeme Exp $ */
+/* $NetBSD: msr_ipifuncs.c,v 1.15 2008/01/04 21:17:45 ad Exp $ */
 
 /*-
- * Copyright (c) 2007 The NetBSD Foundation, Inc.
+ * Copyright (c) 2007 Juan Romero Pardines.
  * All rights reserved.
- *
- * This code is derived from software contributed to The NetBSD Foundation
- * by Juan Romero Pardines.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -15,25 +12,17 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. All advertising materials mentioning features or use of this software
- *    must display the following acknowledgement:
- *      This product includes software developed by the NetBSD
- *      Foundation, Inc. and its contributors.
- * 4. Neither the name of The NetBSD Foundation nor the names of its
- *    contributors may be used to endorse or promote products derived
- *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS
- * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
- * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
- * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS
- * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 /*
@@ -45,22 +34,24 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: msr_ipifuncs.c,v 1.9 2007/05/15 14:29:36 xtraeme Exp $");
+__KERNEL_RCSID(0, "$NetBSD: msr_ipifuncs.c,v 1.15 2008/01/04 21:17:45 ad Exp $");
 
 #include "opt_multiprocessor.h"
 
 #include <sys/param.h>
 #include <sys/mutex.h>
-#include <sys/lock.h>
+#include <sys/atomic.h>
+#include <sys/cpu.h>
 
 #include <x86/cpu_msr.h>
 
-#include <machine/cpu.h>
 #include <machine/intrdefs.h>
+#include <machine/cpufunc.h>
 
 static kmutex_t msr_mtx;
 static volatile uint64_t msr_setvalue, msr_setmask;
-static volatile int msr_type, msr_runcount, msr_read;
+static volatile int msr_type, msr_read;
+static volatile u_int msr_runcount;
 
 
 /*
@@ -89,7 +80,7 @@ msr_write_ipi(struct cpu_info *ci)
 	wrmsr(msr_type, msr);
 
 	/* This cpu has finished making all tasks, update the counter. */
-	__asm volatile ("lock; incl (%0)" :: "r" (&msr_runcount));
+	atomic_inc_uint(&msr_runcount);
 }
 
 /*
@@ -119,7 +110,7 @@ msr_cpu_broadcast(struct msr_cpu_broadcast *mcb)
 	 * Issue a full memory barrier, to make sure the operations
 	 * are done in a serialized way.
 	 */
-	mb_memory();
+	membar_sync();
 
 	/* Run the IPI write handler in the CPUs. */
 	msr_write_ipi(curcpu());
@@ -143,5 +134,6 @@ msr_cpu_broadcast(struct msr_cpu_broadcast *mcb)
 void
 msr_cpu_broadcast_initmtx(void)
 {
-	mutex_init(&msr_mtx, MUTEX_DRIVER, IPL_NONE);
+
+	mutex_init(&msr_mtx, MUTEX_DEFAULT, IPL_NONE);
 }

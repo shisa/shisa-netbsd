@@ -1,4 +1,4 @@
-/*	$NetBSD: trap.c,v 1.132 2007/09/01 21:31:55 mhitch Exp $	*/
+/*	$NetBSD: trap.c,v 1.137 2007/12/31 13:38:50 ad Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1990, 1993
@@ -77,13 +77,12 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: trap.c,v 1.132 2007/09/01 21:31:55 mhitch Exp $");
+__KERNEL_RCSID(0, "$NetBSD: trap.c,v 1.137 2007/12/31 13:38:50 ad Exp $");
 
 #include "opt_ddb.h"
 #include "opt_execfmt.h"
 #include "opt_kgdb.h"
 #include "opt_compat_sunos.h"
-#include "opt_compat_hpux.h"
 
 #include <machine/hp300spu.h>	/* XXX param.h includes cpu.h */
 
@@ -111,10 +110,6 @@ __KERNEL_RCSID(0, "$NetBSD: trap.c,v 1.132 2007/09/01 21:31:55 mhitch Exp $");
 #include <uvm/uvm_extern.h>
 
 #include <dev/cons.h>
-
-#ifdef COMPAT_HPUX
-#include <compat/hpux/hpux.h>
-#endif
 
 #ifdef COMPAT_SUNOS
 #include <compat/sunos/sunos_exec.h>
@@ -266,7 +261,6 @@ userret(struct lwp *l, struct frame *fp, u_quad_t oticks,
 		}
 	}
 #endif
-	curcpu()->ci_schedstate.spc_curpriority = l->l_priority = l->l_usrpri;
 }
 
 /*
@@ -440,20 +434,7 @@ trap(struct frame *fp, int type, u_int code, u_int v)
 #endif
 
 	case T_ILLINST|T_USER:	/* illegal instruction fault */
-#ifdef COMPAT_HPUX
-		if (p->p_emul == &emul_hpux) {
-			ksi.ksi_addr = (void *)HPUX_ILL_ILLINST_TRAP;
-			ksi.ksi_signo = SIGILL;
-			break;
-		}
-		/* fall through */
-#endif
 	case T_PRIVINST|T_USER:	/* privileged instruction fault */
-#ifdef COMPAT_HPUX
-		if (p->p_emul == &emul_hpux)
-			ksi.ksi_addr = (void *)HPUX_ILL_PRIV_TRAP;
-		else
-#endif
 		ksi.ksi_addr = (void *)(int)fp->f_format;
 				/* XXX was ILL_PRIVIN_FAULT */
 		ksi.ksi_signo = SIGILL;
@@ -462,11 +443,6 @@ trap(struct frame *fp, int type, u_int code, u_int v)
 		break;
 
 	case T_ZERODIV|T_USER:	/* Divide by zero */
-#ifdef COMPAT_HPUX
-		if (p->p_emul == &emul_hpux)
-			ksi.ksi_addr = (void *)HPUX_FPE_INTDIV_TRAP;
-		else
-#endif
 		ksi.ksi_addr = (void *)(int)fp->f_format;
 				/* XXX was FPE_INTDIV_TRAP */
 		ksi.ksi_signo = SIGFPE;
@@ -474,28 +450,12 @@ trap(struct frame *fp, int type, u_int code, u_int v)
 		break;
 
 	case T_CHKINST|T_USER:	/* CHK instruction trap */
-#ifdef COMPAT_HPUX
-		if (p->p_emul == &emul_hpux) {
-			/* handled differently under hp-ux */
-			ksi.ksi_signo = SIGILL;
-			ksi.ksi_addr = (void *)HPUX_ILL_CHK_TRAP;
-			break;
-		}
-#endif
 		ksi.ksi_addr = (void *)(int)fp->f_format;
 				/* XXX was FPE_SUBRNG_TRAP */
 		ksi.ksi_signo = SIGFPE;
 		break;
 
 	case T_TRAPVINST|T_USER:	/* TRAPV instruction trap */
-#ifdef COMPAT_HPUX
-		if (p->p_emul == &emul_hpux) {
-			/* handled differently under hp-ux */
-			ksi.ksi_signo = SIGILL;
-			ksi.ksi_addr = (void *)HPUX_ILL_TRAPV_TRAP;
-			break;
-		}
-#endif
 		ksi.ksi_addr = (void *)(int)fp->f_format;
 				/* XXX was FPE_INTOVF_TRAP */
 		ksi.ksi_signo = SIGFPE;
@@ -543,7 +503,7 @@ trap(struct frame *fp, int type, u_int code, u_int v)
 		/*
 		 * Don't go stepping into a RAS.
 		 */
-		if (!LIST_EMPTY(&p->p_raslist) &&
+		if (p->p_raslist != NULL &&
 		    (ras_lookup(p, (void *)fp->f_pc) != (void *)-1))
 			goto out;
 		fp->f_sr &= ~PSL_T;
@@ -568,9 +528,6 @@ trap(struct frame *fp, int type, u_int code, u_int v)
 
 	case T_SSIR:		/* software interrupt */
 	case T_SSIR|T_USER:
-
-		softintr_dispatch();
-
 		/*
 		 * If this was not an AST trap, we are all done.
 		 */
@@ -639,20 +596,6 @@ trap(struct frame *fp, int type, u_int code, u_int v)
 			goto dopanic;
 		}
 
-#ifdef COMPAT_HPUX
-		if (ISHPMMADDR(va)) {
-			int pmap_mapmulti(pmap_t, vaddr_t);
-			vaddr_t bva;
-
-			rv = pmap_mapmulti(map->pmap, va);
-			if (rv != 0) {
-				bva = HPMMBASEADDR(va);
-				rv = uvm_fault(map, bva, ftype);
-				if (rv == 0)
-					(void) pmap_mapmulti(map->pmap, va);
-			}
-		} else
-#endif
 		rv = uvm_fault(map, va, ftype);
 #ifdef DEBUG
 		if (rv && MDB_ISPID(p->p_pid))

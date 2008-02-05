@@ -1,4 +1,4 @@
-/*	$NetBSD: bufcache.h,v 1.7 2006/05/03 15:04:51 yamt Exp $	*/
+/*	$NetBSD: bufcache.h,v 1.9 2007/12/28 21:44:32 ad Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2000 The NetBSD Foundation, Inc.
@@ -90,6 +90,7 @@ struct ubuf {
 	daddr_t	b_blkno;		/* Underlying physical block number */
 	struct	uvnode *b_vp;		/* File vnode. */
 	int	b_hashval;		/* Hash value */
+	void	(*b_iodone)(void *);	/* unused */
 };
 
 #define b_bufsize b_bcount
@@ -109,6 +110,8 @@ struct ubuf {
 #define	B_READ		0x00100000	/* Read buffer. */
 #define	B_DONTFREE	0x00010000	/* b_data not managed by bufcache */
 
+#define	b_cflags	b_flags
+
 LIST_HEAD(bufhash_struct, ubuf);
 
 #if !defined(NOCRED)
@@ -123,7 +126,7 @@ void bremfree(struct ubuf *);
 struct ubuf *incore(struct uvnode *, int);
 struct ubuf *getblk(struct uvnode *, daddr_t, int);
 void bwrite(struct ubuf *);
-void brelse(struct ubuf *);
+void brelse(struct ubuf *, int);
 int bread(struct uvnode *, daddr_t, int, void *, struct ubuf **);
 void reassignbuf(struct ubuf *, struct uvnode *);
 void dump_free_lists(void);

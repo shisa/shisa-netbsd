@@ -1,4 +1,4 @@
-/*	$NetBSD: ip_var.h,v 1.79 2007/03/25 20:12:20 liamjfoy Exp $	*/
+/*	$NetBSD: ip_var.h,v 1.83 2007/12/25 18:33:47 perry Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1993
@@ -46,7 +46,7 @@ struct ipovly {
 	u_int16_t ih_len;		/* protocol length */
 	struct	  in_addr ih_src;	/* source internet address */
 	struct	  in_addr ih_dst;	/* destination internet address */
-} __attribute__((__packed__));
+} __packed;
 
 /*
  * Ip (reassembly or sequence) queue structures.
@@ -94,6 +94,7 @@ struct ipq {
 	struct	  ipqehead ipq_fragq;	/* to ip fragment queue */
 	struct	  in_addr ipq_src, ipq_dst;
 	u_int16_t ipq_nfrags;		/* frags in this queue entry */
+	u_int8_t  ipq_tos;		/* TOS of this fragment */
 };
 
 /*
@@ -241,7 +242,6 @@ int	 ip_setmoptions(int, struct ip_moptions **, struct mbuf *);
 void	 ip_slowtimo(void);
 struct mbuf *
 	 ip_srcroute(void);
-void	 ip_stripoptions(struct mbuf *, struct mbuf *);
 int	 ip_sysctl(int *, u_int, void *, size_t *, void *, size_t);
 void	 ipintr(void);
 void *	 rip_ctlinput(int, const struct sockaddr *, void *);
@@ -279,6 +279,11 @@ ip_newid_range(unsigned int num)
 		return ip_randomid();
 	}
 
+	/*
+	 * never allow an ip_id of 0. (detect wrap)
+	 */
+	if ((uint16_t)(ip_id + num) < ip_id)
+		ip_id = 1;
 	id = htons(ip_id);
 	ip_id += num;
 

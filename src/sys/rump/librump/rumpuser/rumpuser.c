@@ -1,9 +1,10 @@
-/*	$NetBSD: rumpuser.c,v 1.8 2007/09/20 23:43:45 pooka Exp $	*/
+/*	$NetBSD: rumpuser.c,v 1.11 2008/01/03 02:38:23 pooka Exp $	*/
 
 /*
  * Copyright (c) 2007 Antti Kantee.  All Rights Reserved.
  *
- * Development of this software was supported by Google Summer of Code.
+ * Development of this software was supported by Google Summer of Code
+ * and the Finnish Cultural Foundation.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -46,8 +47,9 @@
 #include <sys/param.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
-#include <sys/time.h>
+#include <sys/queue.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 
 #include <err.h>
 #include <errno.h>
@@ -83,6 +85,13 @@ rumpuser_lstat(const char *path, struct stat *sb, int *error)
 {
 
 	DOCALL(int, (lstat(path, sb)));
+}
+
+int
+rumpuser_usleep(unsigned long sec, int *error)
+{
+
+	DOCALL(int, (usleep(sec)));
 }
 
 void *
@@ -153,17 +162,81 @@ rumpuser_fsync(int fd, int *error)
 }
 
 ssize_t
+rumpuser_read(int fd, void *data, size_t size, int *error)
+{
+	ssize_t rv;
+
+	rv = read(fd, data, size);
+	if (rv == -1)
+		*error = errno;
+
+	return rv;
+}
+
+ssize_t
 rumpuser_pread(int fd, void *data, size_t size, off_t offset, int *error)
 {
+	ssize_t rv;
 
-	DOCALL(ssize_t, (pread(fd, data, size, offset)));
+	rv = pread(fd, data, size, offset);
+	if (rv == -1)
+		*error = errno;
+
+	return rv;
+}
+
+void
+rumpuser_read_bio(int fd, void *data, size_t size, off_t offset,
+	void *biodonecookie)
+{
+	ssize_t rv;
+	int error = 0;
+
+	rv = rumpuser_pread(fd, data, size, offset, &error);
+	/* check against <0 instead of ==-1 to get typing below right */
+	if (rv < 0)
+		rv = 0;
+		
+	rump_biodone(biodonecookie, rv, error);
+}
+
+ssize_t
+rumpuser_write(int fd, const void *data, size_t size, int *error)
+{
+	ssize_t rv;
+
+	rv = write(fd, data, size);
+	if (rv == -1)
+		*error = errno;
+
+	return rv;
 }
 
 ssize_t
 rumpuser_pwrite(int fd, const void *data, size_t size, off_t offset, int *error)
 {
+	ssize_t rv;
 
-	DOCALL(ssize_t, (pwrite(fd, data, size, offset)));
+	rv = pwrite(fd, data, size, offset);
+	if (rv == -1)
+		*error = errno;
+
+	return rv;
+}
+
+void
+rumpuser_write_bio(int fd, const void *data, size_t size, off_t offset,
+	void *biodonecookie)
+{
+	ssize_t rv;
+	int error = 0;
+
+	rv = rumpuser_pwrite(fd, data, size, offset, &error);
+	/* check against <0 instead of ==-1 to get typing below right */
+	if (rv < 0)
+		rv = 0;
+
+	rump_biodone(biodonecookie, rv, error);
 }
 
 int

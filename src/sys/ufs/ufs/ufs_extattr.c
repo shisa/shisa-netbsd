@@ -1,4 +1,4 @@
-/*	$NetBSD: ufs_extattr.c,v 1.15 2007/07/10 09:50:09 hannken Exp $	*/
+/*	$NetBSD: ufs_extattr.c,v 1.20 2008/01/30 14:54:01 ad Exp $	*/
 
 /*-
  * Copyright (c) 1999-2002 Robert N. M. Watson
@@ -48,7 +48,7 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: ufs_extattr.c,v 1.15 2007/07/10 09:50:09 hannken Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ufs_extattr.c,v 1.20 2008/01/30 14:54:01 ad Exp $");
 
 #include "opt_ffs.h"
 
@@ -107,16 +107,23 @@ static void
 ufs_extattr_uepm_lock(struct ufsmount *ump)
 {
 
-	/* Ideally, LK_CANRECURSE would not be used, here. */
-	lockmgr(&ump->um_extattr.uepm_lock, LK_EXCLUSIVE |
-	    LK_CANRECURSE, NULL);
+	/* XXX Why does this need to be recursive? */
+	if (mutex_owned(&ump->um_extattr.uepm_lock)) {
+		ump->um_extattr.uepm_lockcnt++;
+		return;
+	}
+	mutex_enter(&ump->um_extattr.uepm_lock);
 }
 
 static void
 ufs_extattr_uepm_unlock(struct ufsmount *ump)
 {
 
-	lockmgr(&ump->um_extattr.uepm_lock, LK_RELEASE, NULL);
+	if (ump->um_extattr.uepm_lockcnt != 0) {
+		KASSERT(mutex_owned(&ump->um_extattr.uepm_lock));
+		ump->um_extattr.uepm_lockcnt--;
+	}
+	mutex_exit(&ump->um_extattr.uepm_lock);
 }
 
 /*-
@@ -170,10 +177,10 @@ ufs_extattr_uepm_init(struct ufs_extattr_per_mount *uepm)
 {
 
 	uepm->uepm_flags = 0;
+	uepm->uepm_lockcnt = 0;
 
 	LIST_INIT(&uepm->uepm_list);
-	/* XXX is PVFS right, here? */
-	lockinit(&uepm->uepm_lock, PVFS, "ufsea", 0, 0);
+	mutex_init(&uepm->uepm_lock, MUTEX_DEFAULT, IPL_NONE);
 	uepm->uepm_flags |= UFS_EXTATTR_UEPM_INITIALIZED;
 }
 
@@ -197,7 +204,7 @@ ufs_extattr_uepm_destroy(struct ufs_extattr_per_mount *uepm)
 	 * during unmount, and with vfs_busy().
 	 */
 	uepm->uepm_flags &= ~UFS_EXTATTR_UEPM_INITIALIZED;
-	lockmgr(&uepm->uepm_lock, LK_DRAIN, NULL);
+	mutex_destroy(&uepm->uepm_lock);
 }
 
 /*
@@ -305,7 +312,7 @@ ufs_extattr_enable_with_open(struct ufsmount *ump, struct vnode *vp,
 {
 	int error;
 
-	error = VOP_OPEN(vp, FREAD|FWRITE, l->l_cred, l);
+	error = VOP_OPEN(vp, FREAD|FWRITE, l->l_cred);
 	if (error) {
 		printf("ufs_extattr_enable_with_open.VOP_OPEN(): failed "
 		    "with %d\n", error);
@@ -313,7 +320,9 @@ ufs_extattr_enable_with_open(struct ufsmount *ump, struct vnode *vp,
 		return (error);
 	}
 
+	mutex_enter(&vp->v_interlock);
 	vp->v_writecount++;
+	mutex_exit(&vp->v_interlock);
 
 	vref(vp);
 
@@ -528,12 +537,11 @@ ufs_extattr_autostart(struct mount *mp, struct lwp *l)
 /*
  * Stop extended attribute support on an FS.
  */
-int
+void
 ufs_extattr_stop(struct mount *mp, struct lwp *l)
 {
 	struct ufs_extattr_list_entry *uele;
 	struct ufsmount *ump = VFSTOUFS(mp);
-	int error = 0;
 
 	ufs_extattr_uepm_lock(ump);
 
@@ -542,7 +550,6 @@ ufs_extattr_stop(struct mount *mp, struct lwp *l)
 	 * the processing work.
 	 */
 	if (!(ump->um_extattr.uepm_flags & UFS_EXTATTR_UEPM_STARTED)) {
-		error = EOPNOTSUPP;
 		goto unlock;
 	}
 
@@ -559,8 +566,6 @@ ufs_extattr_stop(struct mount *mp, struct lwp *l)
 
  unlock:
 	ufs_extattr_uepm_unlock(ump);
-
-	return (error);
 }
 
 /*
@@ -611,7 +616,6 @@ ufs_extattr_enable(struct ufsmount *ump, int attrnamespace,
 	auio.uio_rw = UIO_READ;
 	UIO_SETUP_SYSSPACE(&auio);
 
-	VOP_LEASE(backing_vnode, l, l->l_cred, LEASE_WRITE);
 	vn_lock(backing_vnode, LK_SHARED | LK_RETRY);
 	error = VOP_READ(backing_vnode, &auio, IO_NODELOCKED,
 	    ump->um_extattr.uepm_ucred);
@@ -702,8 +706,9 @@ ufs_extattr_disable(struct ufsmount *ump, int attrnamespace,
  */
 int
 ufs_extattrctl(struct mount *mp, int cmd, struct vnode *filename_vp,
-    int attrnamespace, const char *attrname, struct lwp *l)
+    int attrnamespace, const char *attrname)
 {
+	struct lwp *l = curlwp;
 	struct ufsmount *ump = VFSTOUFS(mp);
 	int error;
 
@@ -737,8 +742,8 @@ ufs_extattrctl(struct mount *mp, int cmd, struct vnode *filename_vp,
 		if (attrname != NULL)
 			return (EINVAL);
 
-		error = ufs_extattr_stop(mp, l);
-		return (error);
+		ufs_extattr_stop(mp, l);
+		return (0);
 
 	case UFS_EXTATTR_CMD_ENABLE:
 		if (filename_vp == NULL)
@@ -789,7 +794,6 @@ vop_getextattr {
 	INOUT struct uio *a_uio;
 	OUT size_t *a_size;
 	IN kauth_cred_t a_cred;
-	IN struct lwp *a_l;
 };
 */
 {
@@ -800,7 +804,7 @@ vop_getextattr {
 	ufs_extattr_uepm_lock(ump);
 
 	error = ufs_extattr_get(ap->a_vp, ap->a_attrnamespace, ap->a_name,
-	    ap->a_uio, ap->a_size, ap->a_cred, ap->a_l);
+	    ap->a_uio, ap->a_size, ap->a_cred, curlwp);
 
 	ufs_extattr_uepm_unlock(ump);
 
@@ -870,10 +874,6 @@ ufs_extattr_get(struct vnode *vp, int attrnamespace, const char *name,
 	local_aio.uio_resid = sizeof(struct ufs_extattr_header);
 	UIO_SETUP_SYSSPACE(&local_aio);
 
-	/*
-	 * Acquire locks.
-	 */
-	VOP_LEASE(attribute->uele_backing_vnode, l, cred, LEASE_READ);
 	/*
 	 * Don't need to get a lock on the backing file if the getattr is
 	 * being applied to the backing file, as the lock is already held.
@@ -970,7 +970,6 @@ vop_deleteextattr {
 	IN int a_attrnamespace;
 	IN const char *a_name;
 	IN kauth_cred_t a_cred;
-	IN struct lwp *a_l;
 };
 */
 {
@@ -981,7 +980,7 @@ vop_deleteextattr {
 	ufs_extattr_uepm_lock(ump);
 
 	error = ufs_extattr_rm(ap->a_vp, ap->a_attrnamespace, ap->a_name,
-	    ap->a_cred, ap->a_l);
+	    ap->a_cred, curlwp);
 
 	ufs_extattr_uepm_unlock(ump);
 
@@ -1000,7 +999,6 @@ vop_setextattr {
 	IN const char *a_name;
 	INOUT struct uio *a_uio;
 	IN kauth_cred_t a_cred;
-	IN struct lwp *a_l;
 };
 */
 {
@@ -1013,11 +1011,13 @@ vop_setextattr {
 	/*
 	 * XXX: No longer a supported way to delete extended attributes.
 	 */
-	if (ap->a_uio == NULL)
+	if (ap->a_uio == NULL) {
+		ufs_extattr_uepm_unlock(ump);
 		return (EINVAL);
+	}
 
 	error = ufs_extattr_set(ap->a_vp, ap->a_attrnamespace, ap->a_name,
-	    ap->a_uio, ap->a_cred, ap->a_l);
+	    ap->a_uio, ap->a_cred, curlwp);
 
 	ufs_extattr_uepm_unlock(ump);
 
@@ -1090,11 +1090,6 @@ ufs_extattr_set(struct vnode *vp, int attrnamespace, const char *name,
 	local_aio.uio_offset = base_offset;
 	local_aio.uio_resid = sizeof(struct ufs_extattr_header);
 	UIO_SETUP_SYSSPACE(&local_aio);
-
-	/*
-	 * Acquire locks.
-	 */
-	VOP_LEASE(attribute->uele_backing_vnode, l, cred, LEASE_WRITE);
 
 	/*
 	 * Don't need to get a lock on the backing file if the setattr is
@@ -1192,8 +1187,6 @@ ufs_extattr_rm(struct vnode *vp, int attrnamespace, const char *name,
 	local_aio.uio_offset = base_offset;
 	local_aio.uio_resid = sizeof(struct ufs_extattr_header);
 	UIO_SETUP_SYSSPACE(&local_aio);
-
-	VOP_LEASE(attribute->uele_backing_vnode, l, cred, LEASE_WRITE);
 
 	/*
 	 * Don't need to get the lock on the backing vnode if the vnode we're

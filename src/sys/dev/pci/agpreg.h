@@ -1,4 +1,4 @@
-/*	$NetBSD: agpreg.h,v 1.14 2007/08/15 02:26:13 markd Exp $	*/
+/*	$NetBSD: agpreg.h,v 1.17 2008/01/15 00:27:58 drochner Exp $	*/
 
 /*-
  * Copyright (c) 2000 Doug Rabson
@@ -201,11 +201,11 @@
 /*
  * Config registers for 852GM/855GM/865G device 0
  */
-#define AGP_I855_GCC1			0x52
+#define AGP_I855_GCC1			0x50 /* upper word */
 #define AGP_I855_GCC1_DEV2		0x08
 #define AGP_I855_GCC1_DEV2_ENABLED	0x00
 #define AGP_I855_GCC1_DEV2_DISABLED	0x08
-#define AGP_I855_GCC1_GMS		0x70
+#define AGP_I855_GCC1_GMS		0xf0	/* Top bit reserved pre-G33 */
 #define AGP_I855_GCC1_GMS_STOLEN_0M	0x00
 #define AGP_I855_GCC1_GMS_STOLEN_1M	0x10
 #define AGP_I855_GCC1_GMS_STOLEN_4M	0x20
@@ -228,7 +228,7 @@
 #define 	AGP_I915_GCC1_GMS_STOLEN_32M	0x50
 #define 	AGP_I915_GCC1_GMS_STOLEN_48M	0x60
 #define 	AGP_I915_GCC1_GMS_STOLEN_64M	0x70
-#define AGP_I915_MSAC			0x62
+#define AGP_I915_MSAC			0x60 /* upper word */
 #define 	AGP_I915_MSAC_APER_128M		0x02
 
 /*
@@ -238,6 +238,16 @@
 #define AGP_I965_GMADR			0x18
 
 #define AGP_I965_GTT			0x80000
+
+/*
+ * Config registers for G33
+ */
+#define AGP_G33_PGTBL_SIZE_MASK		(3U << 8)
+#define AGP_G33_PGTBL_SIZE_1M		(1U << 8)
+#define AGP_G33_PGTBL_SIZE_2M		(2U << 8)
+
+#define AGP_G33_GCC1_GMS_STOLEN_128M	0x80
+#define AGP_G33_GCC1_GMS_STOLEN_256M	0x90
 
 /*
  * AMD64 GART registers

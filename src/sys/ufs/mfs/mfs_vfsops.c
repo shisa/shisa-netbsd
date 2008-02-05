@@ -1,4 +1,4 @@
-/*	$NetBSD: mfs_vfsops.c,v 1.83 2007/07/31 21:14:20 pooka Exp $	*/
+/*	$NetBSD: mfs_vfsops.c,v 1.89 2008/01/30 11:47:05 ad Exp $	*/
 
 /*
  * Copyright (c) 1989, 1990, 1993, 1994
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mfs_vfsops.c,v 1.83 2007/07/31 21:14:20 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: mfs_vfsops.c,v 1.89 2008/01/30 11:47:05 ad Exp $");
 
 #if defined(_KERNEL_OPT)
 #include "opt_compat_netbsd.h"
@@ -51,6 +51,8 @@ __KERNEL_RCSID(0, "$NetBSD: mfs_vfsops.c,v 1.83 2007/07/31 21:14:20 pooka Exp $"
 #include <sys/vnode.h>
 #include <sys/malloc.h>
 
+#include <miscfs/genfs/genfs.h>
+#include <miscfs/specfs/specdev.h>
 #include <miscfs/syncfs/syncfs.h>
 
 #include <ufs/ufs/quota.h>
@@ -104,6 +106,8 @@ struct vfsops mfs_vfsops = {
 	(int (*)(struct mount *, struct vnode *, struct timespec *)) eopnotsupp,
 	vfs_stdextattrctl,
 	(void *)eopnotsupp,	/* vfs_suspendctl */
+	genfs_renamelock_enter,
+	genfs_renamelock_exit,
 	mfs_vnodeopv_descs,
 	0,
 	{ NULL, NULL },
@@ -194,22 +198,21 @@ mfs_mountroot(void)
 	mfsp->mfs_shutdown = 0;
 	bufq_alloc(&mfsp->mfs_buflist, "fcfs", 0);
 	if ((error = ffs_mountfs(rootvp, mp, l)) != 0) {
-		mp->mnt_op->vfs_refcount--;
-		vfs_unbusy(mp);
+		vfs_unbusy(mp, false);
 		bufq_free(mfsp->mfs_buflist);
-		free(mp, M_MOUNT);
+		vfs_destroy(mp);
 		free(mfsp, M_MFSNODE);
 		return (error);
 	}
-	simple_lock(&mountlist_slock);
+	mutex_enter(&mountlist_lock);
 	CIRCLEQ_INSERT_TAIL(&mountlist, mp, mnt_list);
-	simple_unlock(&mountlist_slock);
+	mutex_exit(&mountlist_lock);
 	mp->mnt_vnodecovered = NULLVP;
 	ump = VFSTOUFS(mp);
 	fs = ump->um_fs;
 	(void) copystr(mp->mnt_stat.f_mntonname, fs->fs_fsmnt, MNAMELEN - 1, 0);
-	(void)ffs_statvfs(mp, &mp->mnt_stat, l);
-	vfs_unbusy(mp);
+	(void)ffs_statvfs(mp, &mp->mnt_stat);
+	vfs_unbusy(mp, false);
 	return (0);
 }
 
@@ -241,9 +244,9 @@ mfs_initminiroot(void *base)
  */
 /* ARGSUSED */
 int
-mfs_mount(struct mount *mp, const char *path, void *data, size_t *data_len,
-    struct lwp *l)
+mfs_mount(struct mount *mp, const char *path, void *data, size_t *data_len)
 {
+	struct lwp *l = curlwp;
 	struct vnode *devvp;
 	struct mfs_args *args = data;
 	struct ufsmount *ump;
@@ -313,8 +316,7 @@ mfs_mount(struct mount *mp, const char *path, void *data, size_t *data_len,
 	if (error)
 		return (error);
 	devvp->v_type = VBLK;
-	if (checkalias(devvp, makedev(255, mfs_minor), (struct mount *)0))
-		panic("mfs_mount: dup dev");
+	spec_node_init(devvp, makedev(255, mfs_minor));
 	mfs_minor++;
 	mfsp = (struct mfsnode *)malloc(sizeof *mfsp, M_MFSNODE, M_WAITOK);
 	devvp->v_data = mfsp;
@@ -354,8 +356,9 @@ int	mfs_pri = PWAIT | PCATCH;		/* XXX prob. temp */
  */
 /* ARGSUSED */
 int
-mfs_start(struct mount *mp, int flags, struct lwp *l)
+mfs_start(struct mount *mp, int flags)
 {
+	struct lwp *l = curlwp;
 	struct vnode *vp = VFSTOUFS(mp)->um_devvp;
 	struct mfsnode *mfsp = VTOMFS(vp);
 	struct proc *p;
@@ -383,7 +386,7 @@ mfs_start(struct mount *mp, int flags, struct lwp *l)
 			 * the mount point.  See dounmount() for details.
 			 */
 			mutex_enter(&syncer_mutex);
-			if (vfs_busy(mp, LK_NOWAIT, 0) != 0)
+			if (vfs_trybusy(mp, RW_WRITER, NULL) != 0)
 				mutex_exit(&syncer_mutex);
 			else if (dounmount(mp, 0, l) != 0) {
 				p = l->l_proc;
@@ -408,11 +411,11 @@ mfs_start(struct mount *mp, int flags, struct lwp *l)
  * Get file system statistics.
  */
 int
-mfs_statvfs(struct mount *mp, struct statvfs *sbp, struct lwp *l)
+mfs_statvfs(struct mount *mp, struct statvfs *sbp)
 {
 	int error;
 
-	error = ffs_statvfs(mp, sbp, l);
+	error = ffs_statvfs(mp, sbp);
 	if (error)
 		return error;
 	(void)strncpy(sbp->f_fstypename, mp->mnt_op->vfs_name,

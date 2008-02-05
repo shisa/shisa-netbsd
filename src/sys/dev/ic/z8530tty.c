@@ -1,4 +1,4 @@
-/*	$NetBSD: z8530tty.c,v 1.114 2007/07/09 21:00:41 ad Exp $	*/
+/*	$NetBSD: z8530tty.c,v 1.120 2008/01/20 18:09:11 joerg Exp $	*/
 
 /*-
  * Copyright (c) 1993, 1994, 1995, 1996, 1997, 1998, 1999
@@ -137,7 +137,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: z8530tty.c,v 1.114 2007/07/09 21:00:41 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: z8530tty.c,v 1.120 2008/01/20 18:09:11 joerg Exp $");
 
 #include "opt_kgdb.h"
 #include "opt_ntp.h"
@@ -183,14 +183,6 @@ u_int zstty_rbuf_size = ZSTTY_RING_SIZE;
 /* Stop input when 3/4 of the ring is full; restart when only 1/4 is full. */
 u_int zstty_rbuf_hiwat = (ZSTTY_RING_SIZE * 1) / 4;
 u_int zstty_rbuf_lowat = (ZSTTY_RING_SIZE * 3) / 4;
-
-#ifndef __HAVE_TIMECOUNTER
-static int zsppscap =
-	PPS_TSFMT_TSPEC |
-	PPS_CAPTUREASSERT |
-	PPS_CAPTURECLEAR |
-	PPS_OFFSETASSERT | PPS_OFFSETCLEAR;
-#endif /* __HAVE_TIMECOUNTER */
 
 struct zstty_softc {
 	struct	device zst_dev;		/* required first: base device */
@@ -239,14 +231,7 @@ struct zstty_softc {
 
 	/* PPS signal on DCD, with or without inkernel clock disciplining */
 	u_char  zst_ppsmask;			/* pps signal mask */
-#ifdef __HAVE_TIMECOUNTER
 	struct pps_state zst_pps_state;
-#else /* !__HAVE_TIMECOUNTER */
-	u_char  zst_ppsassert;			/* pps leading edge */
-	u_char  zst_ppsclear;			/* pps trailing edge */
-	pps_info_t ppsinfo;
-	pps_params_t ppsparam;
-#endif /* !__HAVE_TIMECOUNTER */
 };
 
 /* Definition of the driver for autoconfig. */
@@ -289,6 +274,7 @@ static void zstty_rxint  (struct zs_chanstate *);
 static void zstty_stint  (struct zs_chanstate *, int);
 static void zstty_txint  (struct zs_chanstate *);
 static void zstty_softint(struct zs_chanstate *);
+static void zstty_softint1(struct zs_chanstate *);
 
 #define	ZSUNIT(x)	(minor(x) & 0x7ffff)
 #define	ZSDIALOUT(x)	(minor(x) & 0x80000)
@@ -343,7 +329,7 @@ zstty_attach(parent, self, aux)
 	struct zsc_attach_args *args = aux;
 	struct zs_chanstate *cs;
 	struct tty *tp;
-	int channel, s, tty_unit;
+	int channel,  tty_unit;
 	dev_t dev;
 	const char *i, *o;
 	int dtr_on;
@@ -472,13 +458,11 @@ zstty_attach(parent, self, aux)
 		resetbit = (channel == 0) ? ZSWR9_A_RESET : ZSWR9_B_RESET;
 	}
 
-	s = splzs();
-	simple_lock(&cs->cs_lock);
+	mutex_spin_enter(&cs->cs_lock);
 	if (resetbit)
 		zs_write_reg(cs, 9, resetbit);
 	zs_modem(zst, dtr_on);
-	simple_unlock(&cs->cs_lock);
-	splx(s);
+	mutex_spin_exit(&cs->cs_lock);
 }
 
 
@@ -501,10 +485,8 @@ zs_shutdown(zst)
 {
 	struct zs_chanstate *cs = zst->zst_cs;
 	struct tty *tp = zst->zst_tty;
-	int s;
 
-	s = splzs();
-	simple_lock(&cs->cs_lock);
+	mutex_spin_enter(&cs->cs_lock);
 
 	/* If we were asserting flow control, then deassert it. */
 	SET(zst->zst_rx_flags, RX_IBUF_BLOCKED);
@@ -513,20 +495,13 @@ zs_shutdown(zst)
 	/* Clear any break condition set with TIOCSBRK. */
 	zs_break(cs, 0);
 
-#ifndef __HAVE_TIMECOUNTER
-	/* Turn off PPS capture on last close. */
-	zst->zst_ppsmask = 0;
-	zst->ppsparam.mode = 0;
-#endif /* __HAVE_TIMECOUNTER */
-
 	/*
 	 * Hang up if necessary.  Wait a bit, so the other side has time to
 	 * notice even if we immediately open the port again.
 	 */
 	if (ISSET(tp->t_cflag, HUPCL)) {
 		zs_modem(zst, 0);
-		simple_unlock(&cs->cs_lock);
-		splx(s);
+		mutex_spin_exit(&cs->cs_lock);
 		/*
 		 * XXX -    another process is not prevented from opening
 		 *	    the device during our sleep.
@@ -536,8 +511,7 @@ zs_shutdown(zst)
 		if (ISSET(tp->t_state, TS_ISOPEN) || tp->t_wopen != 0)
 			return;
 
-		s = splzs();
-		simple_lock(&cs->cs_lock);
+		mutex_spin_enter(&cs->cs_lock);
 	}
 
 	/* Turn off interrupts if not the console. */
@@ -556,8 +530,7 @@ zs_shutdown(zst)
 		(*cs->disable)(zst->zst_cs);
 	}
 
-	simple_unlock(&cs->cs_lock);
-	splx(s);
+	mutex_spin_exit(&cs->cs_lock);
 }
 
 /*
@@ -573,7 +546,6 @@ zsopen(dev, flags, mode, l)
 	struct zstty_softc *zst;
 	struct zs_chanstate *cs;
 	struct tty *tp;
-	int s, s2;
 	int error;
 
 	zst = device_lookup(&zstty_cd, ZSUNIT(dev));
@@ -590,7 +562,7 @@ zsopen(dev, flags, mode, l)
 	if (kauth_authorize_device_tty(l->l_cred, KAUTH_DEVICE_TTY_OPEN, tp))
 		return (EBUSY);
 
-	s = spltty();
+	mutex_spin_enter(&tty_lock);
 
 	/*
 	 * Do the following iff this is a first open.
@@ -603,7 +575,7 @@ zsopen(dev, flags, mode, l)
 		/* Call the power management hook. */
 		if (cs->enable) {
 			if ((*cs->enable)(cs)) {
-				splx(s);
+				mutex_spin_exit(&tty_lock);
 				printf("%s: device enable failed\n",
 			       	zst->zst_dev.dv_xname);
 				return (EIO);
@@ -626,8 +598,7 @@ zsopen(dev, flags, mode, l)
 		if (ISSET(zst->zst_swflags, TIOCFLAG_MDMBUF))
 			SET(t.c_cflag, MDMBUF);
 
-		s2 = splzs();
-		simple_lock(&cs->cs_lock);
+		mutex_spin_enter(&cs->cs_lock);
 
 		/*
 		 * Turn on receiver and status interrupts.
@@ -639,16 +610,11 @@ zsopen(dev, flags, mode, l)
 
 		/* Clear PPS capture state on first open. */
 		zst->zst_ppsmask = 0;
-#ifdef __HAVE_TIMECOUNTER
 		memset(&zst->zst_pps_state, 0, sizeof(zst->zst_pps_state));
 		zst->zst_pps_state.ppscap = PPS_CAPTUREASSERT | PPS_CAPTURECLEAR;
 		pps_init(&zst->zst_pps_state);
-#else /* !__HAVE_TIMECOUNTER */
-		zst->ppsparam.mode = 0;
-#endif /* !__HAVE_TIMECOUNTER */
 
-		simple_unlock(&cs->cs_lock);
-		splx(s2);
+		mutex_spin_exit(&cs->cs_lock);
 
 		/* Make sure zsparam will see changes. */
 		tp->t_ospeed = 0;
@@ -671,8 +637,7 @@ zsopen(dev, flags, mode, l)
 		ttychars(tp);
 		ttsetwater(tp);
 
-		s2 = splzs();
-		simple_lock(&cs->cs_lock);
+		mutex_spin_enter(&cs->cs_lock);
 
 		/*
 		 * Turn on DTR.  We must always do this, even if carrier is not
@@ -690,11 +655,10 @@ zsopen(dev, flags, mode, l)
 		CLR(zst->zst_rx_flags, RX_ANY_BLOCK);
 		zs_hwiflow(zst);
 
-		simple_unlock(&cs->cs_lock);
-		splx(s2);
+		mutex_spin_exit(&cs->cs_lock);
 	}
 
-	splx(s);
+	mutex_spin_exit(&tty_lock);
 
 	error = ttyopen(tp, ZSDIALOUT(dev), ISSET(flags, O_NONBLOCK));
 	if (error)
@@ -801,7 +765,6 @@ zsioctl(dev, cmd, data, flag, l)
 	struct zs_chanstate *cs = zst->zst_cs;
 	struct tty *tp = zst->zst_tty;
 	int error;
-	int s;
 
 	error = (*tp->t_linesw->l_ioctl)(tp, cmd, data, flag, l);
 	if (error != EPASSTHROUGH)
@@ -819,8 +782,7 @@ zsioctl(dev, cmd, data, flag, l)
 
 	error = 0;
 
-	s = splzs();
-	simple_lock(&cs->cs_lock);
+	mutex_spin_enter(&cs->cs_lock);
 
 	switch (cmd) {
 	case TIOCSBRK:
@@ -861,7 +823,6 @@ zsioctl(dev, cmd, data, flag, l)
 		*(int *)data = zs_to_tiocm(zst);
 		break;
 
-#ifdef __HAVE_TIMECOUNTER
 	case PPS_IOC_CREATE:
 	case PPS_IOC_DESTROY:
 	case PPS_IOC_GETPARAMS:
@@ -877,129 +838,12 @@ zsioctl(dev, cmd, data, flag, l)
 		else
 			zst->zst_ppsmask = 0;
 		break;
-#else /* !__HAVE_TIMECOUNTER */
-	case PPS_IOC_CREATE:
-		break;
-
-	case PPS_IOC_DESTROY:
-		break;
-
-	case PPS_IOC_GETPARAMS: {
-		pps_params_t *pp;
-		pp = (pps_params_t *)data;
-		*pp = zst->ppsparam;
-		break;
-	}
-
-	case PPS_IOC_SETPARAMS: {
-		pps_params_t *pp;
-		int mode;
-		if (cs->cs_rr0_pps == 0) {
-			error = EINVAL;
-			break;
-		}
-		pp = (pps_params_t *)data;
-		if (pp->mode & ~zsppscap) {
-			error = EINVAL;
-			break;
-		}
-		zst->ppsparam = *pp;
-		/*
-		 * compute masks from user-specified timestamp state.
-		 */
-		mode = zst->ppsparam.mode;
-		switch (mode & PPS_CAPTUREBOTH) {
-		case 0:
-			zst->zst_ppsmask = 0;
-			break;
-
-		case PPS_CAPTUREASSERT:
-			zst->zst_ppsmask = ZSRR0_DCD;
-			zst->zst_ppsassert = ZSRR0_DCD;
-			zst->zst_ppsclear = -1;
-			break;
-
-		case PPS_CAPTURECLEAR:
-			zst->zst_ppsmask = ZSRR0_DCD;
-			zst->zst_ppsassert = -1;
-			zst->zst_ppsclear = 0;
-			break;
-
-		case PPS_CAPTUREBOTH:
-			zst->zst_ppsmask = ZSRR0_DCD;
-			zst->zst_ppsassert = ZSRR0_DCD;
-			zst->zst_ppsclear = 0;
-			break;
-
-		default:
-			error = EINVAL;
-			break;
-		}
-
-		/*
-		 * Now update interrupts.
-		 */
-		zs_maskintr(zst);
-		/*
-		 * If nothing is being transmitted, set up new current values,
-		 * else mark them as pending.
-		 */
-		if (!cs->cs_heldchange) {
-			if (zst->zst_tx_busy) {
-				zst->zst_heldtbc = zst->zst_tbc;
-				zst->zst_tbc = 0;
-				cs->cs_heldchange = 1;
-			} else
-				zs_loadchannelregs(cs);
-		}
-
-		break;
-	}
-
-	case PPS_IOC_GETCAP:
-		*(int *)data = zsppscap;
-		break;
-
-	case PPS_IOC_FETCH: {
-		pps_info_t *pi;
-		pi = (pps_info_t *)data;
-		*pi = zst->ppsinfo;
-		break;
-	}
-
-#ifdef PPS_SYNC
-	case PPS_IOC_KCBIND: {
-		int edge = (*(int *)data) & PPS_CAPTUREBOTH;
-
-		if (edge == 0) {
-			/*
-			 * remove binding for this source; ignore
-			 * the request if this is not the current
-			 * hardpps source
-			 */
-			if (pps_kc_hardpps_source == zst) {
-				pps_kc_hardpps_source = NULL;
-				pps_kc_hardpps_mode = 0;
-			}
-		} else {
-			/*
-			 * bind hardpps to this source, replacing any
-			 * previously specified source or edges
-			 */
-			pps_kc_hardpps_source = zst;
-			pps_kc_hardpps_mode = edge;
-		}
-		break;
-	}
-#endif /* PPS_SYNC */
-#endif /* !__HAVE_TIMECOUNTER */
 
 	case TIOCDCDTIMESTAMP:	/* XXX old, overloaded  API used by xntpd v3 */
 		if (cs->cs_rr0_pps == 0) {
 			error = EINVAL;
 			break;
 		}
-#ifdef __HAVE_TIMECOUNTER
 #ifndef PPS_TRAILING_EDGE
 		TIMESPEC_TO_TIMEVAL((struct timeval *)data,
 		    &zst->zst_pps_state.ppsinfo.assert_timestamp);
@@ -1007,20 +851,6 @@ zsioctl(dev, cmd, data, flag, l)
 		TIMESPEC_TO_TIMEVAL((struct timeval *)data,
 		    &zst->zst_pps_state.ppsinfo.clear_timestamp);
 #endif
-#else /* !__HAVE_TIMECOUNTER */
-		zst->zst_ppsmask = ZSRR0_DCD;
-#ifndef	PPS_TRAILING_EDGE
-		zst->zst_ppsassert = ZSRR0_DCD;
-		zst->zst_ppsclear = -1;
-		TIMESPEC_TO_TIMEVAL((struct timeval *)data,
-			&zst->ppsinfo.assert_timestamp);
-#else
-		zst->zst_ppsassert = -1;
-		zst->zst_ppsclear = 01;
-		TIMESPEC_TO_TIMEVAL((struct timeval *)data,
-			&zst->ppsinfo.clear_timestamp);
-#endif
-#endif /* !__HAVE_TIMECOUNTER */
 		/*
 		 * Now update interrupts.
 		 */
@@ -1045,8 +875,7 @@ zsioctl(dev, cmd, data, flag, l)
 		break;
 	}
 
-	simple_unlock(&cs->cs_lock);
-	splx(s);
+	mutex_spin_exit(&cs->cs_lock);
 
 	return (error);
 }
@@ -1061,30 +890,20 @@ zsstart(tp)
 	struct zstty_softc *zst = device_lookup(&zstty_cd, ZSUNIT(tp->t_dev));
 	struct zs_chanstate *cs = zst->zst_cs;
 	u_char *tba;
-	int s, tbc;
+	int tbc;
 
-	s = spltty();
 	if (ISSET(tp->t_state, TS_BUSY | TS_TIMEOUT | TS_TTSTOP))
-		goto out;
+		return;
 	if (zst->zst_tx_stopped)
-		goto out;
-
-	if (tp->t_outq.c_cc <= tp->t_lowat) {
-		if (ISSET(tp->t_state, TS_ASLEEP)) {
-			CLR(tp->t_state, TS_ASLEEP);
-			wakeup((void *)&tp->t_outq);
-		}
-		selwakeup(&tp->t_wsel);
-		if (tp->t_outq.c_cc == 0)
-			goto out;
-	}
+		return;
+	if (!ttypull(tp))
+		return;
 
 	/* Grab the first contiguous region of buffer space. */
 	tba = tp->t_outq.c_cf;
 	tbc = ndqb(&tp->t_outq, 0);
 
-	(void) splzs();
-	simple_lock(&cs->cs_lock);
+	mutex_spin_enter(&cs->cs_lock);
 
 	zst->zst_tba = tba;
 	zst->zst_tbc = tbc;
@@ -1094,7 +913,8 @@ zsstart(tp)
 #ifdef ZS_TXDMA
 	if (zst->zst_tbc > 1) {
 		zs_dma_setup(cs, zst->zst_tba, zst->zst_tbc);
-		goto out;
+		mutex_spin_exit(&cs->cs_lock);
+		return;
 	}
 #endif
 
@@ -1110,10 +930,7 @@ zsstart(tp)
 	zst->zst_tbc--;
 	zst->zst_tba++;
 
-	simple_unlock(&cs->cs_lock);
-out:
-	splx(s);
-	return;
+	mutex_spin_exit(&cs->cs_lock);
 }
 
 /*
@@ -1153,7 +970,7 @@ zsparam(tp, t)
 	int ospeed;
 	tcflag_t cflag;
 	u_char tmp3, tmp4, tmp5;
-	int s, error;
+	int error;
 
 	ospeed = t->c_ospeed;
 	cflag = t->c_cflag;
@@ -1204,8 +1021,7 @@ zsparam(tp, t)
 	 * interrupt enable is handled by zsc.c
 	 *
 	 */
-	s = splzs();
-	simple_lock(&cs->cs_lock);
+	mutex_spin_enter(&cs->cs_lock);
 
 	/*
 	 * Recalculate which status ints to enable.
@@ -1301,8 +1117,7 @@ zsparam(tp, t)
 	 */
 	zstty_stint(cs, 1);
 
-	simple_unlock(&cs->cs_lock);
-	splx(s);
+	mutex_spin_exit(&cs->cs_lock);
 
 	/*
 	 * If hardware flow control is disabled, unblock any hard flow control
@@ -1315,7 +1130,7 @@ zsparam(tp, t)
 		}
 	}
 
-	zstty_softint(cs);
+	zstty_softint1(cs);
 
 	return (0);
 }
@@ -1468,13 +1283,11 @@ zshwiflow(tp, block)
 {
 	struct zstty_softc *zst = device_lookup(&zstty_cd, ZSUNIT(tp->t_dev));
 	struct zs_chanstate *cs = zst->zst_cs;
-	int s;
 
 	if (cs->cs_wr5_rts == 0)
 		return (0);
 
-	s = splzs();
-	simple_lock(&cs->cs_lock);
+	mutex_spin_enter(&cs->cs_lock);
 	if (block) {
 		if (!ISSET(zst->zst_rx_flags, RX_TTY_BLOCKED)) {
 			SET(zst->zst_rx_flags, RX_TTY_BLOCKED);
@@ -1491,8 +1304,7 @@ zshwiflow(tp, block)
 			zs_hwiflow(zst);
 		}
 	}
-	simple_unlock(&cs->cs_lock);
-	splx(s);
+	mutex_spin_exit(&cs->cs_lock);
 	return (1);
 }
 
@@ -1690,7 +1502,6 @@ zstty_stint(cs, force)
 		 * Pulse-per-second clock signal on edge of DCD?
 		 */
 		if (ISSET(delta, zst->zst_ppsmask)) {
-#ifdef __HAVE_TIMECOUNTER
 			if (zst->zst_pps_state.ppsparam.mode & PPS_CAPTUREBOTH) {
 				pps_capture(&zst->zst_pps_state);
 				pps_event(&zst->zst_pps_state,
@@ -1698,49 +1509,6 @@ zstty_stint(cs, force)
 				    ? PPS_CAPTUREASSERT
 				    : PPS_CAPTURECLEAR);
 			}
-#else /* !__HAVE_TIMECOUNTER */
-			struct timeval tv;
-			if (ISSET(rr0, zst->zst_ppsmask) == zst->zst_ppsassert) {
-				/* XXX nanotime() */
-				microtime(&tv);
-				TIMEVAL_TO_TIMESPEC(&tv,
-					&zst->ppsinfo.assert_timestamp);
-				if (zst->ppsparam.mode & PPS_OFFSETASSERT) {
-					timespecadd(&zst->ppsinfo.assert_timestamp,
-					    &zst->ppsparam.assert_offset,
-					    &zst->ppsinfo.assert_timestamp);
-				}
-
-#ifdef PPS_SYNC
-				if (pps_kc_hardpps_source == zst &&
-				    pps_kc_hardpps_mode & PPS_CAPTUREASSERT) {
-					hardpps(&tv, tv.tv_usec);
-				}
-#endif
-				zst->ppsinfo.assert_sequence++;
-				zst->ppsinfo.current_mode = zst->ppsparam.mode;
-			} else if (ISSET(rr0, zst->zst_ppsmask) ==
-						zst->zst_ppsclear) {
-				/* XXX nanotime() */
-				microtime(&tv);
-				TIMEVAL_TO_TIMESPEC(&tv,
-					&zst->ppsinfo.clear_timestamp);
-				if (zst->ppsparam.mode & PPS_OFFSETCLEAR) {
-					timespecadd(&zst->ppsinfo.clear_timestamp,
-						&zst->ppsparam.clear_offset,
-						&zst->ppsinfo.clear_timestamp);
-				}
-
-#ifdef PPS_SYNC
-				if (pps_kc_hardpps_source == zst &&
-				    pps_kc_hardpps_mode & PPS_CAPTURECLEAR) {
-					hardpps(&tv, tv.tv_usec);
-				}
-#endif
-				zst->ppsinfo.clear_sequence++;
-				zst->ppsinfo.current_mode = zst->ppsparam.mode;
-			}
-#endif /* !__HAVE_TIMECOUNTER */
 		}
 
 		/*
@@ -1790,7 +1558,6 @@ zstty_rxsoft(zst, tp)
 	u_int cc, scc;
 	u_char rr1;
 	int code;
-	int s;
 
 	end = zst->zst_ebuf;
 	get = zst->zst_rbget;
@@ -1861,8 +1628,7 @@ zstty_rxsoft(zst, tp)
 
 	if (cc != scc) {
 		zst->zst_rbget = get;
-		s = splzs();
-		simple_lock(&cs->cs_lock);
+		mutex_spin_enter(&cs->cs_lock);
 		cc = zst->zst_rbavail += scc - cc;
 		/* Buffers should be ok again, release possible block. */
 		if (cc >= zst->zst_r_lowat) {
@@ -1877,8 +1643,7 @@ zstty_rxsoft(zst, tp)
 				zs_hwiflow(zst);
 			}
 		}
-		simple_unlock(&cs->cs_lock);
-		splx(s);
+		mutex_spin_exit(&cs->cs_lock);
 	}
 
 #if 0
@@ -1892,17 +1657,14 @@ zstty_txsoft(zst, tp)
 	struct tty *tp;
 {
 	struct zs_chanstate *cs = zst->zst_cs;
-	int s;
 
-	s = splzs();
-	simple_lock(&cs->cs_lock);
+	mutex_spin_enter(&cs->cs_lock);
 	CLR(tp->t_state, TS_BUSY);
 	if (ISSET(tp->t_state, TS_FLUSH))
 		CLR(tp->t_state, TS_FLUSH);
 	else
 		ndflush(&tp->t_outq, (int)(zst->zst_tba - tp->t_outq.c_cf));
-	simple_unlock(&cs->cs_lock);
-	splx(s);
+	mutex_spin_exit(&cs->cs_lock);
 	(*tp->t_linesw->l_start)(tp);
 }
 
@@ -1913,21 +1675,20 @@ zstty_stsoft(zst, tp)
 {
 	struct zs_chanstate *cs = zst->zst_cs;
 	u_char rr0, delta;
-	int s;
 
-	s = splzs();
-	simple_lock(&cs->cs_lock);
+	mutex_spin_enter(&cs->cs_lock);
 	rr0 = cs->cs_rr0;
 	delta = cs->cs_rr0_delta;
 	cs->cs_rr0_delta = 0;
-	simple_unlock(&cs->cs_lock);
-	splx(s);
+	mutex_spin_exit(&cs->cs_lock);
 
 	if (ISSET(delta, cs->cs_rr0_dcd)) {
 		/*
 		 * Inform the tty layer that carrier detect changed.
 		 */
+		mutex_spin_exit(&tty_lock);
 		(void) (*tp->t_linesw->l_modem)(tp, ISSET(rr0, ZSRR0_DCD));
+		mutex_spin_enter(&tty_lock);
 	}
 
 	if (ISSET(delta, cs->cs_rr0_cts)) {
@@ -1957,11 +1718,19 @@ static void
 zstty_softint(cs)
 	struct zs_chanstate *cs;
 {
+
+	mutex_spin_enter(&tty_lock);
+	zstty_softint1(cs);
+	mutex_spin_exit(&tty_lock);
+}
+
+static void
+zstty_softint1(cs)
+	struct zs_chanstate *cs;
+{
 	struct zstty_softc *zst = cs->cs_private;
 	struct tty *tp = zst->zst_tty;
-	int s;
 
-	s = spltty();
 
 	if (zst->zst_rx_ready) {
 		zst->zst_rx_ready = 0;
@@ -1977,8 +1746,6 @@ zstty_softint(cs)
 		zst->zst_tx_done = 0;
 		zstty_txsoft(zst, tp);
 	}
-
-	splx(s);
 }
 
 struct zsops zsops_tty = {

@@ -1,4 +1,4 @@
-/*	$NetBSD: errata.c,v 1.9 2007/09/26 19:48:43 ad Exp $	*/
+/*	$NetBSD: errata.c,v 1.13 2007/11/14 17:55:00 ad Exp $	*/
 
 /*-
  * Copyright (c) 2007 The NetBSD Foundation, Inc.
@@ -52,12 +52,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: errata.c,v 1.9 2007/09/26 19:48:43 ad Exp $");
-
-#include "opt_multiprocessor.h"
-#ifdef i386
-#include "opt_cputype.h"
-#endif
+__KERNEL_RCSID(0, "$NetBSD: errata.c,v 1.13 2007/11/14 17:55:00 ad Exp $");
 
 #include <sys/types.h>
 #include <sys/systm.h>
@@ -68,8 +63,6 @@ __KERNEL_RCSID(0, "$NetBSD: errata.c,v 1.9 2007/09/26 19:48:43 ad Exp $");
 
 #include <x86/cpuvar.h>
 #include <x86/cputypes.h>
-
-#if defined(I686_CPU) || defined(__x86_64__)
 
 typedef struct errata {
 	u_short		e_num;
@@ -197,7 +190,6 @@ static errata_t errata[] = {
 		113, FALSE, MSR_BU_CFG, x86_errata_set3,
 		x86_errata_setmsr, BU_CFG_WBENHWSBDIS
 	},
-#ifdef MULTIPROCESSOR
 	/*
 	 * 69: Multiprocessor Coherency Problem with Hardware
 	 * Prefetch Mechanism
@@ -238,7 +230,6 @@ static errata_t errata[] = {
 		122, FALSE, MSR_HWCR, x86_errata_set4,
 		x86_errata_setmsr, HWCR_FFDIS
 	},
-#endif	/* MULTIPROCESSOR */
 };
 
 static bool 
@@ -267,21 +258,26 @@ x86_errata_setmsr(struct cpu_info *ci, errata_t *e)
 	if ((val & e->e_data2) != 0)
 		return FALSE;
 	wrmsr_locked(e->e_data1, OPTERON_MSR_PASSCODE, val | e->e_data2);
+	aprint_debug("%s: erratum %d patched\n",
+	    ci->ci_dev->dv_xname, e->e_num);
 
 	return FALSE;
 }
 
 void
-x86_errata(struct cpu_info *ci, int vendor)
+x86_errata(void)
 {
+	struct cpu_info *ci;
 	uint32_t descs[4];
 	errata_t *e, *ex;
 	cpurev_t rev;
 	int i, j, upgrade;
 	static int again;
 
-	if (vendor != CPUVENDOR_AMD)
+	if (cpu_vendor != CPUVENDOR_AMD)
 		return;
+
+	ci = curcpu();
 
 	x86_cpuid(0x80000001, descs);
 
@@ -325,14 +321,3 @@ x86_errata(struct cpu_info *ci, int vendor)
 		    "operation\n", ci->ci_dev->dv_xname);
 	}
 }
-
-#else	/* defined(I686_CPU) || defined(__x86_64__) */
-
-void
-x86_errata(struct cpu_info *ci, int vendor)
-{
-	(void)ci;
-	(void)vendor;
-}
-
-#endif	/* defined(I686_CPU) || defined(__x86_64__) */

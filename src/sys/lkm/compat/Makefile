@@ -1,4 +1,4 @@
-# $NetBSD: Makefile,v 1.22 2005/12/11 12:24:47 christos Exp $
+# $NetBSD: Makefile,v 1.26 2007/12/31 13:39:03 ad Exp $
 
 .if (${MACHINE_ARCH} == "sparc64")
 SUBDIR+=	netbsd32 sunos32 svr4 svr4_32
@@ -8,6 +8,10 @@ SUBDIR+=	netbsd32 sunos32 svr4 svr4_32
 SUBDIR+=	freebsd linux svr4 pecoff
 .endif
 
+.if (${MACHINE} == "amd64")
+SUBDIR+=	linux
+.endif
+
 # These are untested, but do compile.  Once they are tested,
 # move them above.
 
@@ -15,10 +19,6 @@ SUBDIR+=	freebsd linux svr4 pecoff
 
 .if (${MACHINE} == "alpha")
 SUBDIR+=	linux osf1
-.endif
-
-.if (${MACHINE} == "hp300")
-SUBDIR+=	hpux
 .endif
 
 .if (${MACHINE} == "i386")

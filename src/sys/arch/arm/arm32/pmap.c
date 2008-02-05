@@ -1,4 +1,4 @@
-/*	$NetBSD: pmap.c,v 1.165 2007/09/15 09:25:21 scw Exp $	*/
+/*	$NetBSD: pmap.c,v 1.171 2008/01/06 03:11:42 matt Exp $	*/
 
 /*
  * Copyright 2003 Wasabi Systems, Inc.
@@ -194,8 +194,8 @@
 #include "opt_lockdebug.h"
 #include "opt_multiprocessor.h"
 
-#include <sys/types.h>
 #include <sys/param.h>
+#include <sys/types.h>
 #include <sys/kernel.h>
 #include <sys/systm.h>
 #include <sys/proc.h>
@@ -203,6 +203,7 @@
 #include <sys/user.h>
 #include <sys/pool.h>
 #include <sys/cdefs.h>
+#include <sys/cpu.h>
  
 #include <uvm/uvm.h>
 
@@ -212,7 +213,7 @@
 #include <machine/param.h>
 #include <arm/arm32/katelib.h>
 
-__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.165 2007/09/15 09:25:21 scw Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.171 2008/01/06 03:11:42 matt Exp $");
 
 #ifdef PMAP_DEBUG
 
@@ -268,8 +269,7 @@ static pmap_t pmap_recent_user;
  * We use a cache to avoid clearing the pm_l2[] array (1KB)
  * in pmap_create().
  */
-static struct pool pmap_pmap_pool;
-static struct pool_cache pmap_pmap_cache;
+static struct pool_cache pmap_cache;
 static LIST_HEAD(, pmap) pmap_pmaps;
 
 /*
@@ -287,7 +287,6 @@ static struct pool_allocator pmap_bootstrap_pv_allocator = {
  * We use a cache to avoid clearing the structures when they're
  * allocated. (196 bytes)
  */
-static struct pool pmap_l2dtable_pool;
 static struct pool_cache pmap_l2dtable_cache;
 static vaddr_t pmap_kernel_l2dtable_kva;
 
@@ -296,7 +295,6 @@ static vaddr_t pmap_kernel_l2dtable_kva;
  * We use a cache to avoid clearing the descriptor table
  * when they're allocated. (1KB)
  */
-static struct pool pmap_l2ptp_pool;
 static struct pool_cache pmap_l2ptp_cache;
 static vaddr_t pmap_kernel_l2ptp_kva;
 static paddr_t pmap_kernel_l2ptp_phys;
@@ -306,7 +304,7 @@ static paddr_t pmap_kernel_l2ptp_phys;
  */
 static pt_entry_t *csrc_pte, *cdst_pte;
 static vaddr_t csrcp, cdstp;
-char *memhook;
+vaddr_t memhook;
 extern void *msgbufaddr;
 
 /*
@@ -318,7 +316,7 @@ bool pmap_initialized;
  * Misc. locking data structures
  */
 
-#if defined(MULTIPROCESSOR) || defined(LOCKDEBUG)
+#if 0 /* defined(MULTIPROCESSOR) || defined(LOCKDEBUG) */
 static struct lock pmap_main_lock;
 
 #define PMAP_MAP_TO_HEAD_LOCK() \
@@ -949,7 +947,7 @@ pmap_use_l1(pmap_t pm)
 	 * Access to an L1 by the kernel pmap must not affect
 	 * the LRU list.
 	 */
-	if (current_intr_depth || pm == pmap_kernel())
+	if (cpu_intr_p() || pm == pmap_kernel())
 		return;
 
 	l1 = pm->pm_l1;
@@ -1910,7 +1908,7 @@ pmap_create(void)
 {
 	pmap_t pm;
 
-	pm = pool_cache_get(&pmap_pmap_cache, PR_WAITOK);
+	pm = pool_cache_get(&pmap_cache, PR_WAITOK);
 
 	simple_lock_init(&pm->pm_lock);
 	pm->pm_obj.pgops = NULL;	/* currently not a mappable object */
@@ -3274,7 +3272,7 @@ pmap_destroy(pmap_t pm)
 		pmap_recent_user = NULL;
 
 	/* return the pmap to the pool */
-	pool_cache_put(&pmap_pmap_cache, pm);
+	pool_cache_put(&pmap_cache, pm);
 }
 
 
@@ -3966,7 +3964,7 @@ pmap_bootstrap(pd_entry_t *kernel_l1pt, vaddr_t vstart, vaddr_t vend)
 	pmap_set_pt_cache_mode(kernel_l1pt, (vaddr_t)csrc_pte);
 	pmap_alloc_specials(&virtual_avail, 1, &cdstp, &cdst_pte);
 	pmap_set_pt_cache_mode(kernel_l1pt, (vaddr_t)cdst_pte);
-	pmap_alloc_specials(&virtual_avail, 1, (void *)&memhook, NULL);
+	pmap_alloc_specials(&virtual_avail, 1, &memhook, NULL);
 	pmap_alloc_specials(&virtual_avail, round_page(MSGBUFSIZE) / PAGE_SIZE,
 	    (void *)&msgbufaddr, NULL);
 
@@ -3988,9 +3986,7 @@ pmap_bootstrap(pd_entry_t *kernel_l1pt, vaddr_t vstart, vaddr_t vend)
 	/*
 	 * init the static-global locks and global pmap list.
 	 */
-#if defined(MULTIPROCESSOR) || defined(LOCKDEBUG)
-	spinlockinit(&pmap_main_lock, "pmaplk", 0);
-#endif
+	/* spinlockinit(&pmap_main_lock, "pmaplk", 0); */
 
 	/*
 	 * We can now initialise the first L1's metadata.
@@ -4010,12 +4006,10 @@ pmap_bootstrap(pd_entry_t *kernel_l1pt, vaddr_t vstart, vaddr_t vend)
 		pm->pm_pl1vec = NULL;
 
 	/*
-	 * Initialize the pmap pool and cache
+	 * Initialize the pmap cache
 	 */
-	pool_init(&pmap_pmap_pool, sizeof(struct pmap), 0, 0, 0, "pmappl",
-	    &pool_allocator_nointr, IPL_NONE);
-	pool_cache_init(&pmap_pmap_cache, &pmap_pmap_pool,
-	    pmap_pmap_ctor, NULL, NULL);
+	pool_cache_bootstrap(&pmap_cache, sizeof(struct pmap), 0, 0, 0,
+	    "pmappl", NULL, IPL_NONE, pmap_pmap_ctor, NULL, NULL);
 	LIST_INIT(&pmap_pmaps);
 	LIST_INSERT_HEAD(&pmap_pmaps, pm, pm_list);
 
@@ -4028,17 +4022,14 @@ pmap_bootstrap(pd_entry_t *kernel_l1pt, vaddr_t vstart, vaddr_t vend)
 	/*
 	 * Initialize the L2 dtable pool and cache.
 	 */
-	pool_init(&pmap_l2dtable_pool, sizeof(struct l2_dtable), 0, 0, 0,
-	    "l2dtblpl", NULL, IPL_NONE);
-	pool_cache_init(&pmap_l2dtable_cache, &pmap_l2dtable_pool,
-	    pmap_l2dtable_ctor, NULL, NULL);
+	pool_cache_bootstrap(&pmap_l2dtable_cache, sizeof(struct l2_dtable), 0,
+	    0, 0, "l2dtblpl", NULL, IPL_NONE, pmap_l2dtable_ctor, NULL, NULL);
 
 	/*
 	 * Initialise the L2 descriptor table pool and cache
 	 */
-	pool_init(&pmap_l2ptp_pool, L2_TABLE_SIZE_REAL, 0, L2_TABLE_SIZE_REAL,
-	    0, "l2ptppl", NULL, IPL_NONE);
-	pool_cache_init(&pmap_l2ptp_cache, &pmap_l2ptp_pool,
+	pool_cache_bootstrap(&pmap_l2ptp_cache, L2_TABLE_SIZE_REAL, 0,
+	    L2_TABLE_SIZE_REAL, 0, "l2ptppl", NULL, IPL_NONE,
 	    pmap_l2ptp_ctor, NULL, NULL);
 
 	cpu_dcache_wbinv_all();
@@ -4198,9 +4189,9 @@ pmap_postinit(void)
 	u_int loop, needed;
 	int error;
 
-	pool_setlowat(&pmap_l2ptp_pool,
+	pool_cache_setlowat(&pmap_l2ptp_cache,
 	    (PAGE_SIZE / L2_TABLE_SIZE_REAL) * 4);
-	pool_setlowat(&pmap_l2dtable_pool,
+	pool_cache_setlowat(&pmap_l2dtable_cache,
 	    (PAGE_SIZE / sizeof(struct l2_dtable)) * 2);
 
 	needed = (maxproc / PMAP_DOMAINS) + ((maxproc % PMAP_DOMAINS) ? 1 : 0);
@@ -4994,6 +4985,14 @@ pmap_uarea(vaddr_t va)
 	cpu_cpwait();
 }
 #endif /* ARM_MMU_XSCALE == 1 */
+
+/*
+ * return the PA of the current L1 table, for use when handling a crash dump
+ */
+uint32_t pmap_kernel_L1_addr()
+{
+	return pmap_kernel()->pm_l1->l1_physaddr;
+}
 
 #if defined(DDB)
 /*

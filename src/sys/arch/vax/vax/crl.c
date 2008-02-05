@@ -1,4 +1,4 @@
-/*	$NetBSD: crl.c,v 1.21 2007/07/29 12:15:41 ad Exp $	*/
+/*	$NetBSD: crl.c,v 1.24 2008/01/02 11:48:31 ad Exp $	*/
 /*-
  * Copyright (c) 1982, 1986 The Regents of the University of California.
  * All rights reserved.
@@ -36,7 +36,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: crl.c,v 1.21 2007/07/29 12:15:41 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: crl.c,v 1.24 2008/01/02 11:48:31 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -111,7 +111,7 @@ crlclose(dev, flag, mode, l)
 	struct lwp *l;
 {
 
-	brelse(crltab.crl_buf);
+	brelse(crltab.crl_buf, 0);
 	crltab.crl_state = CRL_IDLE;
 	return 0;
 }
@@ -150,16 +150,17 @@ crlrw(dev, uio, flag)
 				break;
 		}
 		if (uio->uio_rw == UIO_WRITE) {
-			bp->b_flags &= ~(B_READ|B_DONE);
+			bp->b_oflags &= ~(BO_DONE);
+			bp->b_flags &= ~(B_READ);
 			bp->b_flags |= B_WRITE;
 		} else {
-			bp->b_flags &= ~(B_WRITE|B_DONE);
+			bp->b_oflags &= ~(BO_DONE);
+			bp->b_flags &= ~(B_WRITE);
 			bp->b_flags |= B_READ;
 		}
 		s = splconsmedia(); 
 		crlstart();
-		while ((bp->b_flags & B_DONE) == 0)
-			(void) tsleep(bp, PRIBIO, "crlrw", 0);
+		biowait(bp);
 		splx(s);
 		if (bp->b_error != 0) {
 			error = bp->b_error;
@@ -231,7 +232,7 @@ crlintr(arg)
 
 		case CRL_F_READ:
 		case CRL_F_WRITE:
-			bp->b_flags |= B_DONE;
+			bp->b_oflags |= BO_DONE;
 		}
 		crltab.crl_active = 0;
 		wakeup((void *)bp);
@@ -254,7 +255,7 @@ crlintr(arg)
 	case CRL_S_ABORT:
 		crltab.crl_active = CRL_F_RETSTS;
 		mtpr(STXCS_IE | CRL_F_RETSTS, PR_STXCS);
-		bp->b_flags |= B_DONE;
+		bp->b_oflags |= BO_DONE;
 		bp->b_error = EIO;
 		break;
 
@@ -266,9 +267,9 @@ crlintr(arg)
 	case CRL_S_HNDSHK:
 		printf("crl: hndshk error\n");	/* dump out some status too? */
 		crltab.crl_active = 0;
-		bp->b_flags |= B_DONE;
+		bp->b_oflags |= BO_DONE;
 		bp->b_error = EIO;
-		wakeup((void *)bp);
+		cv_broadcast(&bp->b_done);
 		break;
 
 	case CRL_S_HWERR:

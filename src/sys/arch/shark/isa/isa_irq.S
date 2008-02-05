@@ -1,4 +1,4 @@
-/*	$NetBSD: isa_irq.S,v 1.8 2007/08/13 01:55:31 tsutsui Exp $	*/
+/*	$NetBSD: isa_irq.S,v 1.11 2008/01/06 01:19:42 matt Exp $	*/
 
 /*
  * Copyright 1997
@@ -108,7 +108,7 @@ Lcurrent_spl_level:
 	.word	_C_LABEL(current_spl_level)
 
 Lcurrent_intr_depth:
-	.word	_C_LABEL(current_intr_depth)
+	.word	_C_LABEL(cpu_info_store) + CI_IDEPTH
 
 Lvam_io_data:
 	.word	_C_LABEL(isa_io_bs_tag)
@@ -276,7 +276,9 @@ nextirq:
 	str	r2, [r1]
 	bl	_C_LABEL(irq_setmasks)
 
+#ifdef __HAVE_FAST_SOFTINTS
 	bl	_C_LABEL(dosoftints)	/* Handle the soft interrupts */
+#endif
 
 	/* Kill IRQ's in preparation for exit */
 	mrs     r0, cpsr_all

@@ -1,4 +1,4 @@
-/*	$NetBSD: db_memrw.c,v 1.3 2005/12/11 12:16:21 christos Exp $	*/
+/*	$NetBSD: db_memrw.c,v 1.5 2007/11/22 16:16:41 bouyer Exp $	*/
 
 /*-
  * Copyright (c) 1996, 2000 The NetBSD Foundation, Inc.
@@ -58,9 +58,9 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: db_memrw.c,v 1.3 2005/12/11 12:16:21 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: db_memrw.c,v 1.5 2007/11/22 16:16:41 bouyer Exp $");
 
-#include "opt_largepages.h"
+#include "opt_xen.h"
 
 #include <sys/param.h>
 #include <sys/proc.h>
@@ -133,11 +133,9 @@ db_write_text(vaddr_t addr, size_t size, const char *data)
 		/*
 		 * Get the VA for the page.
 		 */
-#ifdef LARGEPAGES
 		if (oldpte & PG_PS)
 			pgva = (vaddr_t)dst & PG_LGFRAME;
 		else
-#endif
 			pgva = x86_trunc_page(dst);
 
 		/*
@@ -145,18 +143,20 @@ db_write_text(vaddr_t addr, size_t size, const char *data)
 		 * with this mapping and subtract it from the
 		 * total size.
 		 */
-#ifdef LARGEPAGES
 		if (oldpte & PG_PS)
-			limit = NBPD - ((vaddr_t)dst & (NBPD - 1));
+			limit = NBPD_L2 - ((vaddr_t)dst & (NBPD_L2 - 1));
 		else
-#endif
 			limit = PAGE_SIZE - ((vaddr_t)dst & PGOFSET);
 		if (limit > size)
 			limit = size;
 		size -= limit;
 
 		tmppte = (oldpte & ~PG_KR) | PG_KW;
+#ifdef XEN
+		xpmap_update(pte, tmppte);
+#else
 		*pte = tmppte;
+#endif
 		pmap_update_pg(pgva);
 
 		/*
@@ -169,7 +169,11 @@ db_write_text(vaddr_t addr, size_t size, const char *data)
 		/*
 		 * Restore the old PTE.
 		 */
+#ifdef XEN
+		xpmap_update(pte, oldpte);
+#else
 		*pte = oldpte;
+#endif
 
 		pmap_update_pg(pgva);
 		
@@ -182,13 +186,13 @@ db_write_text(vaddr_t addr, size_t size, const char *data)
 void
 db_write_bytes(vaddr_t addr, size_t size, const char *data)
 {
-	extern char etext;
+	extern char __data_start;
 	char *dst;
 
 	dst = (char *)addr;
 
 	/* If any part is in kernel text, use db_write_text() */
-	if (addr >= KERNBASE && addr < (vaddr_t)&etext) {
+	if (addr >= KERNBASE && addr < (vaddr_t)&__data_start) {
 		db_write_text(addr, size, data);
 		return;
 	}

@@ -1,4 +1,4 @@
-/*	$NetBSD: zs.c,v 1.53 2007/03/06 14:13:02 tsutsui Exp $	*/
+/*	$NetBSD: zs.c,v 1.55 2008/01/08 18:04:16 joerg Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -82,7 +82,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: zs.c,v 1.53 2007/03/06 14:13:02 tsutsui Exp $");
+__KERNEL_RCSID(0, "$NetBSD: zs.c,v 1.55 2008/01/08 18:04:16 joerg Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -726,9 +726,10 @@ int	unit;
 long	*ptime;
 const char *what;
 {
+	time_t cur_sec = time_second;
 
-	if(*ptime != time.tv_sec) {
-		*ptime = time.tv_sec;
+	if(*ptime != cur_sec) {
+		*ptime = cur_sec;
 		log(LOG_WARNING, "zs%d%c: %s overrun\n", unit >> 1,
 		    (unit & 1) + 'a', what);
 	}
@@ -1001,13 +1002,7 @@ register struct tty *tp;
 	 * If there are sleepers, and output has drained below low
 	 * water mark, awaken.
 	 */
-	if(tp->t_outq.c_cc <= tp->t_lowat) {
-		if(tp->t_state & TS_ASLEEP) {
-			tp->t_state &= ~TS_ASLEEP;
-			wakeup((void *)&tp->t_outq);
-		}
-		selwakeup(&tp->t_wsel);
-	}
+	ttypull(tp);
 
 	nch = ndqb(&tp->t_outq, 0);	/* XXX */
 	if(nch) {

@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_timeout.c,v 1.26 2007/08/01 23:23:41 ad Exp $	*/
+/*	$NetBSD: kern_timeout.c,v 1.31 2008/01/04 21:18:11 ad Exp $	*/
 
 /*-
  * Copyright (c) 2003, 2006, 2007 The NetBSD Foundation, Inc.
@@ -66,7 +66,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_timeout.c,v 1.26 2007/08/01 23:23:41 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_timeout.c,v 1.31 2008/01/04 21:18:11 ad Exp $");
 
 /*
  * Timeouts are kept in a hierarchical timing wheel.  The c_time is the
@@ -93,15 +93,13 @@ __KERNEL_RCSID(0, "$NetBSD: kern_timeout.c,v 1.26 2007/08/01 23:23:41 ad Exp $")
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/kernel.h>
-#include <sys/lock.h>
 #include <sys/callout.h>
 #include <sys/mutex.h>
 #include <sys/proc.h>
 #include <sys/sleepq.h>
 #include <sys/syncobj.h>
 #include <sys/evcnt.h>
-
-#include <machine/intr.h>
+#include <sys/intr.h>
 
 #ifdef DDB
 #include <machine/db_machdep.h>
@@ -218,9 +216,9 @@ callout_barrier(callout_impl_t *c)
 		ci->ci_data.cpu_callout_nwait++;
 		callout_ev_block.ev_count++;
 
+		l->l_kpriority = true;
 		sleepq_enter(&callout_sleepq, l);
-		sleepq_enqueue(&callout_sleepq, sched_kpri(l), ci,
-		    "callout", &sleep_syncobj);
+		sleepq_enqueue(&callout_sleepq, ci, "callout", &sleep_syncobj);
 		sleepq_block(0, false);
 		mutex_spin_enter(&callout_lock);
 	}
@@ -261,7 +259,7 @@ callout_startup(void)
 	for (b = 0; b < BUCKETS; b++)
 		CIRCQ_INIT(&timeout_wheel[b]);
 
-	mutex_init(&callout_lock, MUTEX_SPIN, IPL_SCHED);
+	mutex_init(&callout_lock, MUTEX_DEFAULT, IPL_SCHED);
 	sleepq_init(&callout_sleepq, &callout_lock);
 
 	evcnt_attach_dynamic(&callout_ev_late, EVCNT_TYPE_MISC,
@@ -279,7 +277,7 @@ void
 callout_startup2(void)
 {
 
-	callout_si = softintr_establish(IPL_SOFTCLOCK,
+	callout_si = softint_establish(SOFTINT_CLOCK | SOFTINT_MPSAFE,
 	    callout_softclock, NULL);
 	if (callout_si == NULL)
 		panic("callout_startup2: unable to register softclock intr");
@@ -327,32 +325,25 @@ callout_destroy(callout_t *cs)
 	c->c_magic = 0;
 }
 
-
 /*
- * callout_reset:
+ * callout_schedule_locked:
  *
- *	Reset a callout structure with a new function and argument, and
- *	schedule it to run.
+ *	Schedule a callout to run.  The function and argument must
+ *	already be set in the callout structure.  Must be called with
+ *	callout_lock.
  */
-void
-callout_reset(callout_t *cs, int to_ticks, void (*func)(void *), void *arg)
+static void
+callout_schedule_locked(callout_impl_t *c, int to_ticks)
 {
-	callout_impl_t *c = (callout_impl_t *)cs;
 	int old_time;
 
 	KASSERT(to_ticks >= 0);
-	KASSERT(c->c_magic == CALLOUT_MAGIC);
-	KASSERT(func != NULL);
-
-	mutex_spin_enter(&callout_lock);
+	KASSERT(c->c_func != NULL);
 
 	/* Initialize the time here, it won't change. */
 	old_time = c->c_time;
 	c->c_time = to_ticks + hardclock_ticks;
 	c->c_flags &= ~CALLOUT_FIRED;
-
-	c->c_func = func;
-	c->c_arg = arg;
 
 	/*
 	 * If this timeout is already scheduled and now is moved
@@ -368,6 +359,27 @@ callout_reset(callout_t *cs, int to_ticks, void (*func)(void *), void *arg)
 		c->c_flags |= CALLOUT_PENDING;
 		CIRCQ_INSERT(&c->c_list, &timeout_todo);
 	}
+}
+
+/*
+ * callout_reset:
+ *
+ *	Reset a callout structure with a new function and argument, and
+ *	schedule it to run.
+ */
+void
+callout_reset(callout_t *cs, int to_ticks, void (*func)(void *), void *arg)
+{
+	callout_impl_t *c = (callout_impl_t *)cs;
+
+	KASSERT(c->c_magic == CALLOUT_MAGIC);
+
+	mutex_spin_enter(&callout_lock);
+
+	c->c_func = func;
+	c->c_arg = arg;
+
+	callout_schedule_locked(c, to_ticks);
 
 	mutex_spin_exit(&callout_lock);
 }
@@ -382,34 +394,11 @@ void
 callout_schedule(callout_t *cs, int to_ticks)
 {
 	callout_impl_t *c = (callout_impl_t *)cs;
-	int old_time;
 
-	KASSERT(to_ticks >= 0);
 	KASSERT(c->c_magic == CALLOUT_MAGIC);
-	KASSERT(c->c_func != NULL);
 
 	mutex_spin_enter(&callout_lock);
-
-	/* Initialize the time here, it won't change. */
-	old_time = c->c_time;
-	c->c_time = to_ticks + hardclock_ticks;
-	c->c_flags &= ~CALLOUT_FIRED;
-
-	/*
-	 * If this timeout is already scheduled and now is moved
-	 * earlier, reschedule it now. Otherwise leave it in place
-	 * and let it be rescheduled later.
-	 */
-	if ((c->c_flags & CALLOUT_PENDING) != 0) {
-		if (c->c_time - old_time < 0) {
-			CIRCQ_REMOVE(&c->c_list);
-			CIRCQ_INSERT(&c->c_list, &timeout_todo);
-		}
-	} else {
-		c->c_flags |= CALLOUT_PENDING;
-		CIRCQ_INSERT(&c->c_list, &timeout_todo);
-	}
-
+	callout_schedule_locked(c, to_ticks);
 	mutex_spin_exit(&callout_lock);
 }
 
@@ -553,7 +542,7 @@ callout_hardclock(void)
 	mutex_spin_exit(&callout_lock);
 
 	if (needsoftclock)
-		softintr_schedule(callout_si);
+		softint_schedule(callout_si);
 }
 
 /* ARGSUSED */

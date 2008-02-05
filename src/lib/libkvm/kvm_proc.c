@@ -1,4 +1,4 @@
-/*	$NetBSD: kvm_proc.c,v 1.73 2007/07/09 22:28:13 ad Exp $	*/
+/*	$NetBSD: kvm_proc.c,v 1.76 2008/01/15 13:57:42 ad Exp $	*/
 
 /*-
  * Copyright (c) 1998 The NetBSD Foundation, Inc.
@@ -74,7 +74,7 @@
 #if 0
 static char sccsid[] = "@(#)kvm_proc.c	8.3 (Berkeley) 9/23/93";
 #else
-__RCSID("$NetBSD: kvm_proc.c,v 1.73 2007/07/09 22:28:13 ad Exp $");
+__RCSID("$NetBSD: kvm_proc.c,v 1.76 2008/01/15 13:57:42 ad Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
@@ -272,12 +272,12 @@ _kvm_ureadm(kd, p, va, cnt)
 		if (KREAD(kd, addr, &pg))
 			return (NULL);
 
-		if (pread(kd->pmfd, kd->swapspc, (size_t)kd->nbpg,
+		if (_kvm_pread(kd, kd->pmfd, kd->swapspc, (size_t)kd->nbpg,
 		    (off_t)pg.phys_addr) != kd->nbpg)
 			return (NULL);
 	} else {
 		if (kd->swfd < 0 ||
-		    pread(kd->swfd, kd->swapspc, (size_t)kd->nbpg,
+		    _kvm_pread(kd, kd->swfd, kd->swapspc, (size_t)kd->nbpg,
 		    (off_t)(anon.an_swslot * kd->nbpg)) != kd->nbpg)
 			return (NULL);
 	}
@@ -562,6 +562,8 @@ again:
 		kp2c = (char *)(void *)kd->procbase2;
 		kp2p = &kp2;
 		for (i = 0; i < nprocs; i++, kp++) {
+			struct timeval tv;
+
 			kl = kvm_getlwps(kd, kp->kp_proc.p_pid,
 			    (u_long)PTRTOUINT64(kp->kp_eproc.e_paddr),
 			    sizeof(struct kinfo_lwp), &nlwps);
@@ -616,11 +618,10 @@ again:
 			kp2p->p_tpgid = kp->kp_eproc.e_tpgid;
 			kp2p->p_tsess = PTRTOUINT64(kp->kp_eproc.e_tsess);
 
-			kp2p->p_estcpu = kp->kp_proc.p_estcpu;
-			kp2p->p_rtime_sec =
-			    (uint32_t)kp->kp_proc.p_rtime.tv_sec;
-			kp2p->p_rtime_usec =
-			    (uint32_t)kp->kp_proc.p_rtime.tv_usec;
+			kp2p->p_estcpu = 0;
+			bintime2timeval(&kp->kp_proc.p_rtime, &tv);
+			kp2p->p_rtime_sec = (uint32_t)tv.tv_sec;
+			kp2p->p_rtime_usec = (uint32_t)tv.tv_usec;
 			kp2p->p_cpticks = kl[0].l_cpticks;
 			kp2p->p_pctcpu = kp->kp_proc.p_pctcpu;
 			kp2p->p_swtime = kl[0].l_swtime;
@@ -654,7 +655,7 @@ again:
 
 			kp2p->p_stat = kl[0].l_stat;
 			kp2p->p_priority = kl[0].l_priority;
-			kp2p->p_usrpri = kl[0].l_usrpri;
+			kp2p->p_usrpri = kl[0].l_priority;
 			kp2p->p_nice = kp->kp_proc.p_nice;
 
 			kp2p->p_xstat = kp->kp_proc.p_xstat;
@@ -825,7 +826,7 @@ again:
 			kl->l_schedflags = 0; /* XXX */
 			kl->l_holdcnt = l.l_holdcnt;
 			kl->l_priority = l.l_priority;
-			kl->l_usrpri = l.l_usrpri;
+			kl->l_usrpri = l.l_priority;
 			kl->l_stat = l.l_stat;
 			kl->l_wchan = PTRTOUINT64(l.l_wchan);
 			if (l.l_wmesg)

@@ -1,4 +1,4 @@
-/*	$NetBSD: cuda.c,v 1.3 2007/02/15 01:45:40 macallan Exp $ */
+/*	$NetBSD: cuda.c,v 1.6 2007/12/06 17:00:33 ad Exp $ */
 
 /*-
  * Copyright (c) 2006 Michael Lorenz
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: cuda.c,v 1.3 2007/02/15 01:45:40 macallan Exp $");
+__KERNEL_RCSID(0, "$NetBSD: cuda.c,v 1.6 2007/12/06 17:00:33 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -40,6 +40,7 @@ __KERNEL_RCSID(0, "$NetBSD: cuda.c,v 1.3 2007/02/15 01:45:40 macallan Exp $");
 
 #include <machine/bus.h>
 #include <machine/autoconf.h>
+#include <machine/pio.h>
 #include <dev/clock_subr.h>
 #include <dev/i2c/i2cvar.h>
 
@@ -80,7 +81,6 @@ struct cuda_softc {
 	struct todr_chip_handle sc_todr;
 	struct adb_bus_accessops sc_adbops;
 	struct i2c_controller sc_i2c;
-	struct lock sc_buslock;
 	bus_space_tag_t sc_memt;
 	bus_space_handle_t sc_memh;
 	int sc_node;
@@ -180,7 +180,7 @@ cuda_attach(struct device *parent, struct device *dev, void *aux)
 	int node, i, child;
 	char name[32];
 
-	node = getnodebyname(OF_parent(ca->ca_node), "extint-gpio1");
+	node = of_getnode_byname(OF_parent(ca->ca_node), "extint-gpio1");
 	if (node)
 		OF_getprop(node, "interrupts", &irq, 4);
 
@@ -203,7 +203,7 @@ cuda_attach(struct device *parent, struct device *dev, void *aux)
 		printf("%s: unable to map registers\n", dev->dv_xname);
 		return;
 	}
-	sc->sc_ih = intr_establish(irq, IST_LEVEL, IPL_TTY, cuda_intr, sc);
+	sc->sc_ih = intr_establish(irq, IST_EDGE, IPL_TTY, cuda_intr, sc);
 	printf("\n");
 
 	for (i = 0; i < 16; i++) {

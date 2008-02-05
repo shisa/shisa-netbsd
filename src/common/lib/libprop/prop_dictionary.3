@@ -1,4 +1,4 @@
-.\"	$NetBSD: prop_dictionary.3,v 1.8 2007/08/16 16:31:00 thorpej Exp $
+.\"	$NetBSD: prop_dictionary.3,v 1.11 2008/01/21 22:15:03 christos Exp $
 .\"
 .\" Copyright (c) 2006 The NetBSD Foundation, Inc.
 .\" All rights reserved.
@@ -34,7 +34,7 @@
 .\" ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 .\" POSSIBILITY OF SUCH DAMAGE.
 .\"
-.Dd April 28, 2007
+.Dd January 21, 2008
 .Dt PROP_DICTIONARY 3
 .Os
 .Sh NAME
@@ -43,7 +43,6 @@
 .Nm prop_dictionary_create_with_capacity ,
 .Nm prop_dictionary_copy ,
 .Nm prop_dictionary_copy_mutable ,
-.Nm prop_dictionary_capacity ,
 .Nm prop_dictionary_count ,
 .Nm prop_dictionary_ensure_capacity ,
 .Nm prop_dictionary_iterator ,
@@ -79,8 +78,6 @@
 .Ft prop_dictionary_t
 .Fn prop_dictionary_copy_mutable "prop_dictionary_t dict"
 .\"
-.Ft unsigned int
-.Fn prop_dictionary_capacity "prop_dictionary_t dict"
 .Ft unsigned int
 .Fn prop_dictionary_count "prop_dictionary_t dict"
 .Ft bool
@@ -145,10 +142,16 @@ A dictionary is an unordered set of objects stored as key-value pairs.
 .It Fn prop_dictionary_create "void"
 Create an empty dictionary.
 The dictionary initially has no capacity.
+Returns
+.Dv NULL
+on failure.
 .It Fn prop_dictionary_create_with_capacity "unsigned int capacity"
 Create a dictionary with the capacity to store
 .Fa capacity
 objects.
+Returns
+.Dv NULL
+on failure.
 .It Fn prop_dictionary_copy "prop_dictionary_t dict"
 Copy a dictionary.
 The new dictionary has an initial capacity equal to the number of objects
@@ -162,9 +165,6 @@ immutable.
 Like
 .Fn prop_dictionary_copy ,
 except the resulting dictionary is always mutable.
-.It Fn prop_dictionary_capacity "prop_dictionary_t dict"
-Returns the total capacity of the dictionary, including objects already stored
-in the dictionary.
 .It Fn prop_dictionary_count "prop_dictionary_t dict"
 Returns the number of objects stored in the dictionary.
 .It Fn prop_dictionary_ensure_capacity "prop_dictionary_t dict"
@@ -179,6 +179,9 @@ or if the expansion of the dictionary's capacity was successful
 and
 .Dv false
 otherwise.
+If the supplied object isn't a dictionary,
+.Dv false
+is returned.
 .It Fn prop_dictionary_iterator "prop_dictionary_t dict"
 Create an iterator for the dictionary.
 The dictionary is retained by the iterator.
@@ -187,6 +190,9 @@ in the dictionary; to get the object itself, a dictionary lookup using this
 key symbol must be performed.
 Storing to or removing from the dictionary invalidates any active iterators for
 the dictionary.
+Returns
+.Dv NULL
+on failure.
 .It Fn prop_dictionary_all_keys "prop_dictionary_t dict"
 Return an array of all of the dictionary key symbols
 .Pq prop_dictionary_keysym_t
@@ -195,6 +201,9 @@ This provides a way to iterate over the items in the dictionary while
 retaining the ability to mutate the dictionary; instead of iterating
 over the dictionary itself, iterate over the array of keys.
 The caller is responsible for releasing the array.
+Returns
+.Dv NULL
+on failure.
 .It Fn prop_dictionary_make_immutable "prop_dictionary_t dict"
 Make
 .Fa dict
@@ -215,7 +224,7 @@ Store a reference to the object
 .Fa obj
 with the key
 .Fa key .
-The object will be retained by the array.
+The object will be retained by the dictionary.
 If the key already exists in the dictionary, the object associated with
 that key will be released and replaced with the new object.
 Returns
@@ -306,6 +315,9 @@ if externalizing or writing the dictionary fails for any reason.
 Reads the XML property list contained in the file specified by
 .Fa path ,
 internalizes it, and returns the corresponding array.
+Returns
+.Dv NULL
+on failure.
 .El
 .Sh SEE ALSO
 .Xr prop_array 3 ,

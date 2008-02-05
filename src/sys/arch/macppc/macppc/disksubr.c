@@ -1,4 +1,4 @@
-/*	$NetBSD: disksubr.c,v 1.40 2007/03/04 10:02:23 macallan Exp $	*/
+/*	$NetBSD: disksubr.c,v 1.43 2008/01/02 11:48:26 ad Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1988 Regents of the University of California.
@@ -106,7 +106,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: disksubr.c,v 1.40 2007/03/04 10:02:23 macallan Exp $");
+__KERNEL_RCSID(0, "$NetBSD: disksubr.c,v 1.43 2008/01/02 11:48:26 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -393,7 +393,7 @@ read_mac_label(dev, strat, lp, osdep)
 	lp->d_npartitions = ((maxslot >= RAW_PART) ? maxslot : RAW_PART) + 1;
 
 done:
-	brelse(bp);
+	brelse(bp, 0);
 	return msg;
 }
 
@@ -502,7 +502,7 @@ read_dos_label(dev, strat, lp, osdep)
 	lp->d_npartitions = ((maxslot >= RAW_PART) ? maxslot : RAW_PART) + 1;
 
  done:
-	brelse(bp);
+	brelse(bp, 0);
 	return (msg);
 }
 
@@ -545,12 +545,12 @@ get_netbsd_label(dev, strat, lp, osdep)
 			*lp = *dlp;
 			osdep->cd_labeloffset = (char *)dlp -
 			    (char *)bp->b_data;
-			brelse(bp);
+			brelse(bp, 0);
 			return 1;
 		}
 	}
 done:
-	brelse(bp);
+	brelse(bp, 0);
 	return 0;
 }
 
@@ -625,7 +625,7 @@ readdisklabel(dev, strat, lp, osdep)
 	}
 
 done:
-	brelse(bp);
+	brelse(bp, 0);
 	return (msg);
 }
 
@@ -695,8 +695,9 @@ writedisklabel(dev, strat, lp, osdep)
 	if (error != 0)
 		goto done;
 
-	bp->b_flags &= ~(B_READ|B_DONE);
+	bp->b_flags &= ~B_READ;
 	bp->b_flags |= B_WRITE;
+	bp->b_oflags &= ~BO_DONE;
 
 	memcpy((char *)bp->b_data + osdep->cd_labeloffset, (void *)lp,
 	    sizeof *lp);
@@ -705,7 +706,7 @@ writedisklabel(dev, strat, lp, osdep)
 	error = biowait(bp);
 
 done:
-	brelse(bp);
+	brelse(bp, 0);
 
 	return error;
 }

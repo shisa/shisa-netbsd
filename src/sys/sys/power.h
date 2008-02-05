@@ -1,4 +1,4 @@
-/*	$NetBSD: power.h,v 1.8 2007/09/04 16:54:02 xtraeme Exp $	*/
+/*	$NetBSD: power.h,v 1.11 2007/12/22 18:35:13 jmcneill Exp $	*/
 
 /*
  * Copyright (c) 2003 Wasabi Systems, Inc.
@@ -86,6 +86,13 @@
 #define	PSWITCH_TYPE_LID	2	/* lid switch */
 #define	PSWITCH_TYPE_RESET	3	/* reset button */
 #define	PSWITCH_TYPE_ACADAPTER	4	/* AC adapter presence */
+#define	PSWITCH_TYPE_HOTKEY	5	/* hotkey button */
+#define		PSWITCH_HK_DISPLAY_CYCLE	"display-cycle"
+#define		PSWITCH_HK_LOCK_SCREEN		"lock-screen"
+#define		PSWITCH_HK_BATTERY_INFO		"battery-info"
+#define		PSWITCH_HK_EJECT_BUTTON		"eject-button"
+#define		PSWITCH_HK_ZOOM_BUTTON		"zoom-button"
+#define		PSWITCH_HK_VENDOR_BUTTON	"vendor-button"
 
 #define	PSWITCH_EVENT_PRESSED	0	/* button pressed, lid closed, AC off */
 #define	PSWITCH_EVENT_RELEASED	1	/* button released, lid open, AC on */
@@ -159,23 +166,26 @@ struct pswitch_state {
  * 	PENVSYS_EVENT_NORMAL		Normal state in the sensor.
  */
 
-#define PENVSYS_EVENT_NORMAL		 90
+#define PENVSYS_EVENT_NORMAL 		90
 #define PENVSYS_EVENT_CRITICAL 		100
 #define PENVSYS_EVENT_CRITOVER 		110
 #define PENVSYS_EVENT_CRITUNDER 	120
 #define PENVSYS_EVENT_WARNOVER 		130
 #define PENVSYS_EVENT_WARNUNDER 	140
-#define PENVSYS_EVENT_USER_CRITMAX	150
-#define PENVSYS_EVENT_USER_CRITMIN	160
+#define PENVSYS_EVENT_USER_CRITMAX 	150
+#define PENVSYS_EVENT_USER_CRITMIN  	160
 
 /*
  * The following events apply for battery sensors:
  *
  * 	PENVSYS_EVENT_BATT_USERCAP	User capacity.
  *
+ * 	PENVSYS_EVENT_LOW_POWER		AC Adapter is OFF and all batteries
+ * 					are discharged.
  */
 
-#define PENVSYS_EVENT_BATT_USERCAP	170
+#define PENVSYS_EVENT_BATT_USERCAP 	170
+#define PENVSYS_EVENT_LOW_POWER 	180
 
 /*
  * The following event apply for battery state and drive sensors:
@@ -183,7 +193,7 @@ struct pswitch_state {
  * 	PENVSYS_EVENT_STATE_CHANGED	State has changed.
  *
  */
-#define PENVSYS_EVENT_STATE_CHANGED	180
+#define PENVSYS_EVENT_STATE_CHANGED 	190
 
 
 /*
@@ -194,7 +204,6 @@ struct penvsys_state {
 	char	pes_sensname[32];	/* sensor name */
 	char	pes_statedesc[64];	/* sensor state description */
 	int32_t	pes_type;		/* envsys power type */
-	int32_t	pes_state;		/* state for the event */
 };
 
 /*

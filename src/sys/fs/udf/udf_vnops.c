@@ -1,4 +1,4 @@
-/* $NetBSD: udf_vnops.c,v 1.11 2007/09/24 00:42:15 rumble Exp $ */
+/* $NetBSD: udf_vnops.c,v 1.17 2008/01/25 14:32:14 ad Exp $ */
 
 /*
  * Copyright (c) 2006 Reinoud Zandijk
@@ -36,7 +36,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: udf_vnops.c,v 1.11 2007/09/24 00:42:15 rumble Exp $");
+__KERNEL_RCSID(0, "$NetBSD: udf_vnops.c,v 1.17 2008/01/25 14:32:14 ad Exp $");
 #endif /* not lint */
 
 
@@ -85,9 +85,6 @@ udf_inactive(void *v)
 	} */ *ap = v;
 	struct vnode *vp = ap->a_vp;
 
-	if (prtactive && vp->v_usecount != 0)
-		vprint("udf_inactive(): pushing active", vp);
-
 	VOP_UNLOCK(vp, 0);
 
 	DPRINTF(LOCKING, ("udf_inactive called for node %p\n", VTOI(vp)));
@@ -112,7 +109,7 @@ udf_reclaim(void *v)
 	struct vnode *vp = ap->a_vp;
 	struct udf_node *node = VTOI(vp);
 
-	if (prtactive && vp->v_usecount != 0)
+	if (prtactive && vp->v_usecount > 1)
 		vprint("udf_reclaim(): pushing active", vp);
 
 	/* purge old data from namei */
@@ -491,7 +488,7 @@ udf_lookup(void *v)
 	mounted_ro  = dvp->v_mount->mnt_flag & MNT_RDONLY;
 
 	/* check exec/dirread permissions first */
-	error = VOP_ACCESS(dvp, VEXEC, cnp->cn_cred, cnp->cn_lwp);
+	error = VOP_ACCESS(dvp, VEXEC, cnp->cn_cred);
 	if (error)
 		return error;
 
@@ -572,8 +569,7 @@ udf_lookup(void *v)
 				(nameiop == CREATE || nameiop == RENAME))
 					error = 0;
 			if (!error) {
-				error = VOP_ACCESS(dvp, VWRITE, cnp->cn_cred,
-						cnp->cn_lwp);
+				error = VOP_ACCESS(dvp, VWRITE, cnp->cn_cred);
 				if (!error) {
 					/* keep the component name */
 					cnp->cn_flags |= SAVENAME;
@@ -843,11 +839,11 @@ udf_close(void *v)
 	DPRINTF(CALL, ("udf_close called\n"));
 	udf_node = udf_node;	/* shut up gcc */
 
-	simple_lock(&vp->v_interlock);
+	mutex_enter(&vp->v_interlock);
 		if (vp->v_usecount > 1) {
 			/* TODO update times */
 		}
-	simple_unlock(&vp->v_interlock);
+	mutex_exit(&vp->v_interlock);
 
 	return 0;
 }
@@ -1004,7 +1000,7 @@ udf_link(void *v)
 
 	/* error out */
 	/* XXX or just VOP_ABORTOP(dvp, a_cnp); ? */
-	if (VOP_ISLOCKED(vp))
+	if (VOP_ISLOCKED(vp) == LK_EXCLUSIVE)
 		VOP_UNLOCK(vp, 0);
 	PNBUF_PUT(cnp->cn_pnbuf);
 	vput(dvp);
@@ -1220,7 +1216,6 @@ const struct vnodeopv_entry_desc udf_vnodeop_entries[] = {
 	{ &vop_setattr_desc, udf_setattr },	/* setattr */	/* TODO */
 	{ &vop_read_desc, udf_read },		/* read */
 	{ &vop_write_desc, udf_write },		/* write */	/* WRITE */
-	{ &vop_lease_desc, genfs_lease_check },	/* lease */	/* TODO? */
 	{ &vop_fcntl_desc, genfs_fcntl },	/* fcntl */	/* TODO? */
 	{ &vop_ioctl_desc, genfs_enoioctl },	/* ioctl */	/* TODO? */
 	{ &vop_poll_desc, genfs_poll },		/* poll */	/* TODO/OK? */

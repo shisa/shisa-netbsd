@@ -1,4 +1,4 @@
-/* $NetBSD: zs_ioasic.c,v 1.32 2006/05/10 06:24:03 skrll Exp $ */
+/* $NetBSD: zs_ioasic.c,v 1.35 2007/11/09 00:05:38 ad Exp $ */
 
 /*-
  * Copyright (c) 1996, 1998 The NetBSD Foundation, Inc.
@@ -48,7 +48,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: zs_ioasic.c,v 1.32 2006/05/10 06:24:03 skrll Exp $");
+__KERNEL_RCSID(0, "$NetBSD: zs_ioasic.c,v 1.35 2007/11/09 00:05:38 ad Exp $");
 
 #include "opt_ddb.h"
 #include "opt_kgdb.h"
@@ -66,9 +66,9 @@ __KERNEL_RCSID(0, "$NetBSD: zs_ioasic.c,v 1.32 2006/05/10 06:24:03 skrll Exp $")
 #include <sys/tty.h>
 #include <sys/time.h>
 #include <sys/syslog.h>
+#include <sys/intr.h>
 
 #include <machine/autoconf.h>
-#include <machine/intr.h>
 #include <machine/z8530var.h>
 
 #include <dev/cons.h>
@@ -255,6 +255,7 @@ zs_ioasic_attach(struct device *parent, struct device *self, void *aux)
 		} else {
 			cs = malloc(sizeof(struct zs_chanstate),
 					M_DEVBUF, M_NOWAIT|M_ZERO);
+			zs_lock_init(cs);
 			zc = zs_ioasic_get_chan_addr(d->iada_addr, channel);
 			cs->cs_reg_csr = (volatile void *)&zc->zc_csr;
 
@@ -329,7 +330,7 @@ zs_ioasic_attach(struct device *parent, struct device *self, void *aux)
 	 */
 	ioasic_intr_establish(parent, d->iada_cookie, TC_IPL_TTY,
 	    zs_ioasic_hardintr, zs);
-	zs->zsc_sih = softintr_establish(IPL_SOFTSERIAL,
+	zs->zsc_sih = softint_establish(SOFTINT_SERIAL,
 	    zs_ioasic_softintr, zs);
 	if (zs->zsc_sih == NULL)
 		panic("zs_ioasic_attach: unable to register softintr");
@@ -430,7 +431,7 @@ zs_ioasic_hardintr(void *arg)
 	 * processing interrupts.
 	 */
 	if (zsc->zsc_cs[0]->cs_softreq | zsc->zsc_cs[1]->cs_softreq)
-		softintr_schedule(zsc->zsc_sih);
+		softint_schedule(zsc->zsc_sih);
 
 	return (1);
 }
@@ -776,6 +777,7 @@ zs_ioasic_cnattach(tc_addr_t ioasic_addr, tc_offset_t zs_offset, int channel)
 	extern const struct cdevsw zstty_cdevsw;
 
 	zs_ioasic_cninit(ioasic_addr, zs_offset, channel);
+	zs_lock_init(cs);
 	cs->cs_defspeed = 9600;
 	cs->cs_defcflag = (TTYDEF_CFLAG & ~(CSIZE | PARENB)) | CS8;
 
@@ -798,6 +800,7 @@ zs_ioasic_lk201_cnattach(tc_addr_t ioasic_addr, tc_offset_t zs_offset,
 	struct zs_chanstate *cs = &zs_ioasic_conschanstate_store;
 
 	zs_ioasic_cninit(ioasic_addr, zs_offset, channel);
+	zs_lock_init(cs);
 	cs->cs_defspeed = 4800;
 	cs->cs_defcflag = (TTYDEF_CFLAG & ~(CSIZE | PARENB)) | CS8;
 	return (zskbd_cnattach(cs));

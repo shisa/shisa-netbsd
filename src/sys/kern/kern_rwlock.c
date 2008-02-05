@@ -1,7 +1,7 @@
-/*	$NetBSD: kern_rwlock.c,v 1.10 2007/09/21 19:14:12 dsl Exp $	*/
+/*	$NetBSD: kern_rwlock.c,v 1.18 2008/01/28 19:58:32 ad Exp $	*/
 
 /*-
- * Copyright (c) 2002, 2006, 2007 The NetBSD Foundation, Inc.
+ * Copyright (c) 2002, 2006, 2007, 2008 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
  * This code is derived from software contributed to The NetBSD Foundation
@@ -45,7 +45,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_rwlock.c,v 1.10 2007/09/21 19:14:12 dsl Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_rwlock.c,v 1.18 2008/01/28 19:58:32 ad Exp $");
 
 #include "opt_multiprocessor.h"
 
@@ -58,11 +58,11 @@ __KERNEL_RCSID(0, "$NetBSD: kern_rwlock.c,v 1.10 2007/09/21 19:14:12 dsl Exp $")
 #include <sys/sleepq.h>
 #include <sys/systm.h>
 #include <sys/lockdebug.h>
+#include <sys/cpu.h>
+#include <sys/atomic.h>
+#include <sys/lock.h>
 
 #include <dev/lockstat.h>
-
-#define RW_ABORT(rw, msg)						\
-    LOCKDEBUG_ABORT(RW_GETID(rw), rw, &rwlock_lockops, __func__, msg)
 
 /*
  * LOCKDEBUG
@@ -71,18 +71,18 @@ __KERNEL_RCSID(0, "$NetBSD: kern_rwlock.c,v 1.10 2007/09/21 19:14:12 dsl Exp $")
 #if defined(LOCKDEBUG)
 
 #define	RW_WANTLOCK(rw, op)						\
-	LOCKDEBUG_WANTLOCK(RW_GETID(rw),				\
+	LOCKDEBUG_WANTLOCK(RW_DEBUG_P(rw), (rw),			\
 	    (uintptr_t)__builtin_return_address(0), op == RW_READER);
 #define	RW_LOCKED(rw, op)						\
-	LOCKDEBUG_LOCKED(RW_GETID(rw),					\
+	LOCKDEBUG_LOCKED(RW_DEBUG_P(rw), (rw),				\
 	    (uintptr_t)__builtin_return_address(0), op == RW_READER);
 #define	RW_UNLOCKED(rw, op)						\
-	LOCKDEBUG_UNLOCKED(RW_GETID(rw),				\
+	LOCKDEBUG_UNLOCKED(RW_DEBUG_P(rw), (rw),			\
 	    (uintptr_t)__builtin_return_address(0), op == RW_READER);
 #define	RW_DASSERT(rw, cond)						\
 do {									\
 	if (!(cond))							\
-		RW_ABORT(rw, "assertion failed: " #cond);		\
+		rw_abort(rw, __func__, "assertion failed: " #cond);	\
 } while (/* CONSTCOND */ 0);
 
 #else	/* LOCKDEBUG */
@@ -103,7 +103,7 @@ do {									\
 #define	RW_ASSERT(rw, cond)						\
 do {									\
 	if (!(cond))							\
-		RW_ABORT(rw, "assertion failed: " #cond);		\
+		rw_abort(rw, __func__, "assertion failed: " #cond);	\
 } while (/* CONSTCOND */ 0)
 
 #else
@@ -116,10 +116,23 @@ do {									\
  * For platforms that use 'simple' RW locks.
  */
 #ifdef __HAVE_SIMPLE_RW_LOCKS
-#define	RW_ACQUIRE(rw, old, new)	RW_CAS(&(rw)->rw_owner, old, new)
-#define	RW_RELEASE(rw, old, new)	RW_CAS(&(rw)->rw_owner, old, new)
-#define	RW_SETID(rw, id)		((rw)->rw_id = id)
-#define	RW_GETID(rw)			((rw)->rw_id)
+#define	RW_ACQUIRE(rw, old, new)	RW_CAS1(&(rw)->rw_owner, old, new)
+#define	RW_RELEASE(rw, old, new)	RW_CAS1(&(rw)->rw_owner, old, new)
+#define	RW_SETDEBUG(rw, on)		((rw)->rw_owner |= (on) ? RW_DEBUG : 0)
+#define	RW_DEBUG_P(rw)			(((rw)->rw_owner & RW_DEBUG) != 0)
+#if defined(LOCKDEBUG)
+#define	RW_INHERITDEBUG(new, old)	(new) |= (old) & RW_DEBUG
+#else /* defined(LOCKDEBUG) */
+#define	RW_INHERITDEBUG(new, old)	/* nothing */
+#endif /* defined(LOCKDEBUG) */
+
+static inline int
+RW_CAS1(volatile uintptr_t *ptr, uintptr_t old, uintptr_t new)
+{
+
+	RW_INHERITDEBUG(new, old);
+	return RW_CAS(ptr, old, new);
+}
 
 static inline int
 RW_SET_WAITERS(krwlock_t *rw, uintptr_t need, uintptr_t set)
@@ -142,6 +155,7 @@ RW_SET_WAITERS(krwlock_t *rw, uintptr_t need, uintptr_t set)
 #ifndef __HAVE_RW_STUBS
 __strong_alias(rw_enter,rw_vector_enter);
 __strong_alias(rw_exit,rw_vector_exit);
+__strong_alias(rw_tryenter,rw_vector_tryenter);
 #endif
 
 static void	rw_dump(volatile void *);
@@ -166,13 +180,33 @@ syncobj_t rw_syncobj = {
  *
  *	Dump the contents of a rwlock structure.
  */
-void
+static void
 rw_dump(volatile void *cookie)
 {
 	volatile krwlock_t *rw = cookie;
 
 	printf_nolog("owner/count  : %#018lx flags    : %#018x\n",
 	    (long)RW_OWNER(rw), (int)RW_FLAGS(rw));
+}
+
+/*
+ * rw_abort:
+ *
+ *	Dump information about an error and panic the system.  This
+ *	generates a lot of machine code in the DIAGNOSTIC case, so
+ *	we ask the compiler to not inline it.
+ */
+#if __GNUC_PREREQ__(3, 0)
+__attribute ((noinline))
+#endif
+static void
+rw_abort(krwlock_t *rw, const char *func, const char *msg)
+{
+
+	if (panicstr != NULL)
+		return;
+
+	LOCKDEBUG_ABORT(rw, &rwlock_lockops, func, msg);
 }
 
 /*
@@ -183,12 +217,13 @@ rw_dump(volatile void *cookie)
 void
 rw_init(krwlock_t *rw)
 {
-	u_int id;
+	bool dodebug;
 
 	memset(rw, 0, sizeof(*rw));
 
-	id = LOCKDEBUG_ALLOC(rw, &rwlock_lockops);
-	RW_SETID(rw, id);
+	dodebug = LOCKDEBUG_ALLOC(rw, &rwlock_lockops,
+	    (uintptr_t)__builtin_return_address(0));
+	RW_SETDEBUG(rw, dodebug);
 }
 
 /*
@@ -200,8 +235,8 @@ void
 rw_destroy(krwlock_t *rw)
 {
 
-	LOCKDEBUG_FREE(rw, RW_GETID(rw));
-	RW_ASSERT(rw, rw->rw_owner == 0);
+	RW_ASSERT(rw, (rw->rw_owner & ~RW_DEBUG) == 0);
+	LOCKDEBUG_FREE(RW_DEBUG_P(rw), rw);
 }
 
 /*
@@ -222,15 +257,13 @@ rw_vector_enter(krwlock_t *rw, const krw_t op)
 	l = curlwp;
 	curthread = (uintptr_t)l;
 
+	RW_ASSERT(rw, !cpu_intr_p());
 	RW_ASSERT(rw, curthread != 0);
 	RW_WANTLOCK(rw, op);
 
-#ifdef LOCKDEBUG
 	if (panicstr == NULL) {
-		simple_lock_only_held(NULL, "rw_enter");
 		LOCKDEBUG_BARRIER(&kernel_lock, 1);
 	}
-#endif
 
 	/*
 	 * We play a slight trick here.  If we're a reader, we want
@@ -278,20 +311,13 @@ rw_vector_enter(krwlock_t *rw, const krw_t op)
 		if (panicstr != NULL)
 			return;
 		if (RW_OWNER(rw) == curthread)
-			RW_ABORT(rw, "locking against myself");
+			rw_abort(rw, __func__, "locking against myself");
 
 		/*
 		 * Grab the turnstile chain lock.  Once we have that, we
 		 * can adjust the waiter bits and sleep queue.
 		 */
 		ts = turnstile_lookup(rw);
-
-		/*
-		 * XXXSMP if this is a high priority LWP (interrupt handler
-		 * or realtime) and acquiring a read hold, then we shouldn't
-		 * wait for RW_WRITE_WANTED if our priority is >= that of
-		 * the highest priority writer that is waiting.
-		 */
 
 		/*
 		 * Mark the rwlock as having waiters.  If the set fails,
@@ -340,13 +366,8 @@ rw_vector_exit(krwlock_t *rw)
 	curthread = (uintptr_t)curlwp;
 	RW_ASSERT(rw, curthread != 0);
 
-	if (panicstr != NULL) {
-		/*
-		 * XXX What's the correct thing to do here?  We should at
-		 * least release the lock.
-		 */
+	if (panicstr != NULL)
 		return;
-	}
 
 	/*
 	 * Again, we use a trick.  Since we used an add operation to
@@ -437,7 +458,7 @@ rw_vector_exit(krwlock_t *rw)
 			new = rcnt << RW_READ_COUNT_SHIFT;
 			if (wcnt != 0)
 				new |= RW_HAS_WAITERS | RW_WRITE_WANTED;
-				
+			
 			RW_GIVE(rw);
 			if (!RW_RELEASE(rw, owner, new)) {
 				/* Oops, try again. */
@@ -454,19 +475,18 @@ rw_vector_exit(krwlock_t *rw)
 }
 
 /*
- * rw_tryenter:
+ * rw_vector_tryenter:
  *
  *	Try to acquire a rwlock.
  */
 int
-rw_tryenter(krwlock_t *rw, const krw_t op)
+rw_vector_tryenter(krwlock_t *rw, const krw_t op)
 {
 	uintptr_t curthread, owner, incr, need_wait;
 
 	curthread = (uintptr_t)curlwp;
 
 	RW_ASSERT(rw, curthread != 0);
-	RW_WANTLOCK(rw, op);
 
 	if (op == RW_READER) {
 		incr = RW_READ_INCR;
@@ -489,6 +509,7 @@ rw_tryenter(krwlock_t *rw, const krw_t op)
 		return 0;
 	}
 
+	RW_WANTLOCK(rw, op);
 	RW_LOCKED(rw, op);
 	RW_DASSERT(rw, (op != RW_READER && RW_OWNER(rw) == curthread) ||
 	    (op == RW_READER && RW_COUNT(rw) != 0));
@@ -656,7 +677,8 @@ rw_write_held(krwlock_t *rw)
 	if (panicstr != NULL)
 		return 1;
 
-	return (rw->rw_owner & RW_WRITE_LOCKED) != 0;
+	return (rw->rw_owner & (RW_WRITE_LOCKED | RW_THREAD)) ==
+	    (RW_WRITE_LOCKED | (uintptr_t)curlwp);
 }
 
 /*

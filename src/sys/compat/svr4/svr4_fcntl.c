@@ -1,4 +1,4 @@
-/*	$NetBSD: svr4_fcntl.c,v 1.58 2007/05/13 08:14:06 dsl Exp $	 */
+/*	$NetBSD: svr4_fcntl.c,v 1.68 2008/01/09 13:24:57 gson Exp $	 */
 
 /*-
  * Copyright (c) 1994, 1997 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: svr4_fcntl.c,v 1.58 2007/05/13 08:14:06 dsl Exp $");
+__KERNEL_RCSID(0, "$NetBSD: svr4_fcntl.c,v 1.68 2008/01/09 13:24:57 gson Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -63,19 +63,18 @@ __KERNEL_RCSID(0, "$NetBSD: svr4_fcntl.c,v 1.58 2007/05/13 08:14:06 dsl Exp $");
 #include <compat/svr4/svr4_util.h>
 #include <compat/svr4/svr4_fcntl.h>
 
-static int svr4_to_bsd_flags __P((int));
-static int bsd_to_svr4_flags __P((int));
-static void bsd_to_svr4_flock __P((struct flock *, struct svr4_flock *));
-static void svr4_to_bsd_flock __P((struct svr4_flock *, struct flock *));
-static void bsd_to_svr4_flock64 __P((struct flock *, struct svr4_flock64 *));
-static void svr4_to_bsd_flock64 __P((struct svr4_flock64 *, struct flock *));
-static int fd_revoke __P((struct lwp *, int, register_t *));
-static int fd_truncate __P((struct lwp *, int, struct flock *, register_t *));
+static int svr4_to_bsd_flags(int);
+static int bsd_to_svr4_flags(int);
+static void bsd_to_svr4_flock(struct flock *, struct svr4_flock *);
+static void svr4_to_bsd_flock(struct svr4_flock *, struct flock *);
+static void bsd_to_svr4_flock64(struct flock *, struct svr4_flock64 *);
+static void svr4_to_bsd_flock64(struct svr4_flock64 *, struct flock *);
+static int fd_revoke(struct lwp *, int, register_t *);
+static int fd_truncate(struct lwp *, int, struct flock *, register_t *);
 
 
 static int
-svr4_to_bsd_flags(l)
-	int	l;
+svr4_to_bsd_flags(int l)
 {
 	int	r = 0;
 	r |= (l & SVR4_O_RDONLY) ? O_RDONLY : 0;
@@ -97,8 +96,7 @@ svr4_to_bsd_flags(l)
 
 
 static int
-bsd_to_svr4_flags(l)
-	int	l;
+bsd_to_svr4_flags(int l)
 {
 	int	r = 0;
 	r |= (l & O_RDONLY) ? SVR4_O_RDONLY : 0;
@@ -120,9 +118,7 @@ bsd_to_svr4_flags(l)
 
 
 static void
-bsd_to_svr4_flock(iflp, oflp)
-	struct flock		*iflp;
-	struct svr4_flock	*oflp;
+bsd_to_svr4_flock(struct flock *iflp, struct svr4_flock *oflp)
 {
 	switch (iflp->l_type) {
 	case F_RDLCK:
@@ -148,9 +144,7 @@ bsd_to_svr4_flock(iflp, oflp)
 
 
 static void
-svr4_to_bsd_flock(iflp, oflp)
-	struct svr4_flock	*iflp;
-	struct flock		*oflp;
+svr4_to_bsd_flock(struct svr4_flock *iflp, struct flock *oflp)
 {
 	switch (iflp->l_type) {
 	case SVR4_F_RDLCK:
@@ -175,9 +169,7 @@ svr4_to_bsd_flock(iflp, oflp)
 }
 
 static void
-bsd_to_svr4_flock64(iflp, oflp)
-	struct flock		*iflp;
-	struct svr4_flock64	*oflp;
+bsd_to_svr4_flock64(struct flock *iflp, struct svr4_flock64 *oflp)
 {
 	switch (iflp->l_type) {
 	case F_RDLCK:
@@ -203,9 +195,7 @@ bsd_to_svr4_flock64(iflp, oflp)
 
 
 static void
-svr4_to_bsd_flock64(iflp, oflp)
-	struct svr4_flock64	*iflp;
-	struct flock		*oflp;
+svr4_to_bsd_flock64(struct svr4_flock64 *iflp, struct flock *oflp)
 {
 	switch (iflp->l_type) {
 	case SVR4_F_RDLCK:
@@ -236,45 +226,33 @@ fd_revoke(struct lwp *l, int fd, register_t *retval)
 	struct filedesc *fdp = l->l_proc->p_fd;
 	struct file *fp;
 	struct vnode *vp;
-	struct vattr vattr;
 	int error;
 
 	if ((fp = fd_getfile(fdp, fd)) == NULL)
 		return EBADF;
 
-	simple_unlock(&fp->f_slock);
-	if (fp->f_type != DTYPE_VNODE)
+	if (fp->f_type != DTYPE_VNODE) {
+		FILE_UNLOCK(fp);
 		return EINVAL;
+	}
 
 	vp = (struct vnode *) fp->f_data;
-
+	FILE_USE(fp);
 	if (vp->v_type != VCHR && vp->v_type != VBLK) {
 		error = EINVAL;
 		goto out;
 	}
 
-	if ((error = VOP_GETATTR(vp, &vattr, l->l_cred, l)) != 0)
-		goto out;
-
-	if (kauth_cred_geteuid(l->l_cred) != vattr.va_uid &&
-	    (error = kauth_authorize_generic(l->l_cred,
-	    KAUTH_GENERIC_ISSUSER, NULL)) != 0)
-		goto out;
-
-	if (vp->v_usecount > 1 || (vp->v_flag & VALIASED))
-		VOP_REVOKE(vp, REVOKEALL);
+	error = dorevoke(vp, l->l_cred);
 out:
 	vrele(vp);
+	FILE_UNUSE(fp, l);
 	return error;
 }
 
 
 static int
-fd_truncate(l, fd, flp, retval)
-	struct lwp *l;
-	int fd;
-	struct flock *flp;
-	register_t *retval;
+fd_truncate(struct lwp *l, int fd, struct flock *flp, register_t *retval)
 {
 	struct filedesc *fdp = l->l_proc->p_fd;
 	struct file *fp;
@@ -290,13 +268,16 @@ fd_truncate(l, fd, flp, retval)
 	if ((fp = fd_getfile(fdp, fd)) == NULL)
 		return EBADF;
 
-	simple_unlock(&fp->f_slock);
 	vp = (struct vnode *)fp->f_data;
-	if (fp->f_type != DTYPE_VNODE || vp->v_type == VFIFO)
+	if (fp->f_type != DTYPE_VNODE || vp->v_type == VFIFO) {
+		FILE_UNLOCK(fp);
 		return ESPIPE;
-
-	if ((error = VOP_GETATTR(vp, &vattr, l->l_cred, l)) != 0)
+	}
+	FILE_USE(fp);
+	if ((error = VOP_GETATTR(vp, &vattr, l->l_cred)) != 0) {
+		FILE_UNUSE(fp, l);
 		return error;
+	}
 
 	length = vattr.va_size;
 
@@ -314,28 +295,28 @@ fd_truncate(l, fd, flp, retval)
 		break;
 
 	default:
+		FILE_UNUSE(fp, l);
 		return EINVAL;
 	}
 
 	if (start + flp->l_len < length) {
 		/* We don't support free'ing in the middle of the file */
+		FILE_UNUSE(fp, l);
 		return EINVAL;
 	}
 
 	SCARG(&ft, fd) = fd;
 	SCARG(&ft, length) = start;
 
-	return sys_ftruncate(l, &ft, retval);
+	error = sys_ftruncate(l, &ft, retval);
+	FILE_UNUSE(fp, l);
+	return error;
 }
 
 
 int
-svr4_sys_open(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+svr4_sys_open(struct lwp *l, const struct svr4_sys_open_args *uap, register_t *retval)
 {
-	struct svr4_sys_open_args	*uap = v;
 	int			error;
 	struct sys_open_args	cup;
 
@@ -356,33 +337,29 @@ svr4_sys_open(l, v, retval)
 		struct file	*fp;
 
 		fp = fd_getfile(fdp, *retval);
-		simple_unlock(&fp->f_slock);
 
 		/* ignore any error, just give it a try */
-		if (fp != NULL && fp->f_type == DTYPE_VNODE)
-			(fp->f_ops->fo_ioctl) (fp, TIOCSCTTY, (void *) 0, l);
+		if (fp != NULL) {
+			FILE_USE(fp);
+			if (fp->f_type == DTYPE_VNODE)
+				(fp->f_ops->fo_ioctl)(fp, TIOCSCTTY, NULL, l);
+			FILE_UNUSE(fp, l);
+		}
 	}
 	return 0;
 }
 
 
 int
-svr4_sys_open64(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+svr4_sys_open64(struct lwp *l, const struct svr4_sys_open64_args *uap, register_t *retval)
 {
-	return svr4_sys_open(l, v, retval);
+	return svr4_sys_open(l, (const void *)uap, retval);
 }
 
 
 int
-svr4_sys_creat(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+svr4_sys_creat(struct lwp *l, const struct svr4_sys_creat_args *uap, register_t *retval)
 {
-	struct svr4_sys_creat_args *uap = v;
 	struct sys_open_args cup;
 
 	SCARG(&cup, path) = SCARG(uap, path);
@@ -394,22 +371,15 @@ svr4_sys_creat(l, v, retval)
 
 
 int
-svr4_sys_creat64(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+svr4_sys_creat64(struct lwp *l, const struct svr4_sys_creat64_args *uap, register_t *retval)
 {
-	return svr4_sys_creat(l, v, retval);
+	return svr4_sys_creat(l, (const void *)uap, retval);
 }
 
 
 int
-svr4_sys_llseek(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+svr4_sys_llseek(struct lwp *l, const struct svr4_sys_llseek_args *uap, register_t *retval)
 {
-	struct svr4_sys_llseek_args *uap = v;
 	struct sys_lseek_args ap;
 
 	SCARG(&ap, fd) = SCARG(uap, fd);
@@ -427,12 +397,8 @@ svr4_sys_llseek(l, v, retval)
 }
 
 int
-svr4_sys_access(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+svr4_sys_access(struct lwp *l, const struct svr4_sys_access_args *uap, register_t *retval)
 {
-	struct svr4_sys_access_args *uap = v;
 	struct sys_access_args cup;
 
 	SCARG(&cup, path) = SCARG(uap, path);
@@ -443,12 +409,8 @@ svr4_sys_access(l, v, retval)
 
 
 int
-svr4_sys_pread(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+svr4_sys_pread(struct lwp *l, const struct svr4_sys_pread_args *uap, register_t *retval)
 {
-	struct svr4_sys_pread_args *uap = v;
 	struct sys_pread_args pra;
 
 	/*
@@ -465,13 +427,8 @@ svr4_sys_pread(l, v, retval)
 
 
 int
-svr4_sys_pread64(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+svr4_sys_pread64(struct lwp *l, const struct svr4_sys_pread64_args *uap, register_t *retval)
 {
-
-	struct svr4_sys_pread64_args *uap = v;
 	struct sys_pread_args pra;
 
 	/*
@@ -488,12 +445,8 @@ svr4_sys_pread64(l, v, retval)
 
 
 int
-svr4_sys_pwrite(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+svr4_sys_pwrite(struct lwp *l, const struct svr4_sys_pwrite_args *uap, register_t *retval)
 {
-	struct svr4_sys_pwrite_args *uap = v;
 	struct sys_pwrite_args pwa;
 
 	/*
@@ -510,12 +463,8 @@ svr4_sys_pwrite(l, v, retval)
 
 
 int
-svr4_sys_pwrite64(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+svr4_sys_pwrite64(struct lwp *l, const struct svr4_sys_pwrite64_args *uap, register_t *retval)
 {
-	struct svr4_sys_pwrite64_args *uap = v;
 	struct sys_pwrite_args pwa;
 
 	/*
@@ -532,12 +481,8 @@ svr4_sys_pwrite64(l, v, retval)
 
 
 int
-svr4_sys_fcntl(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+svr4_sys_fcntl(struct lwp *l, const struct svr4_sys_fcntl_args *uap, register_t *retval)
 {
-	struct svr4_sys_fcntl_args	*uap = v;
 	struct sys_fcntl_args	fa;
 	register_t		flags;
 	struct svr4_flock64	ifl64;

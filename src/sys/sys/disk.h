@@ -1,4 +1,4 @@
-/*	$NetBSD: disk.h,v 1.45 2007/07/21 19:51:49 ad Exp $	*/
+/*	$NetBSD: disk.h,v 1.47 2007/12/28 19:53:10 riz Exp $	*/
 
 /*-
  * Copyright (c) 1996, 1997, 2004 The NetBSD Foundation, Inc.
@@ -234,6 +234,7 @@ __link_set_add_data(dkwedge_methods, name ## _ddm)
 #define	DKW_PTYPE_CCD		"ccd"
 #define	DKW_PTYPE_APPLEUFS	"appleufs"
 #define	DKW_PTYPE_NTFS		"ntfs"
+#define	DKW_PTYPE_CGD		"cgd"
 
 /*
  * Disk geometry dictionary.
@@ -502,9 +503,8 @@ struct proc;
 
 void	disk_attach(struct disk *);
 void	disk_detach(struct disk *);
-void	pseudo_disk_init(struct disk *);
-void	pseudo_disk_attach(struct disk *);
-void	pseudo_disk_detach(struct disk *);
+void	disk_init(struct disk *, char *, struct dkdriver *);
+void	disk_destroy(struct disk *);
 void	disk_busy(struct disk *);
 void	disk_unbusy(struct disk *, long, int);
 void	disk_blocksize(struct disk *, int);

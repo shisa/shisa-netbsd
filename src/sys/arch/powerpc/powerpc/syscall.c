@@ -1,4 +1,4 @@
-/*	$NetBSD: syscall.c,v 1.34 2007/08/15 12:07:26 ad Exp $	*/
+/*	$NetBSD: syscall.c,v 1.38 2008/01/05 12:53:54 dsl Exp $	*/
 
 /*
  * Copyright (C) 2002 Matt Thomas
@@ -60,7 +60,7 @@
 #define EMULNAME(x)	(x)
 #define EMULNAMEU(x)	(x)
 
-__KERNEL_RCSID(0, "$NetBSD: syscall.c,v 1.34 2007/08/15 12:07:26 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: syscall.c,v 1.38 2008/01/05 12:53:54 dsl Exp $");
 
 void
 child_return(void *arg)
@@ -78,7 +78,6 @@ child_return(void *arg)
 	l->l_addr->u_pcb.pcb_fpcpu = NULL;
 	ktrsysret(SYS_fork, 0, 0);
 	/* Profiling?							XXX */
-	curcpu()->ci_schedstate.spc_curpriority = l->l_priority;
 }
 #endif
 
@@ -136,11 +135,9 @@ EMULNAME(syscall_plain)(struct trapframe *frame)
 
 	if (argsize > n * sizeof(register_t)) {
 		memcpy(args, params, n * sizeof(register_t));
-		KERNEL_LOCK(1, l);
 		error = copyin(MOREARGS(frame->fixreg[1]),
 		       args + n,
 		       argsize - n * sizeof(register_t));
-		KERNEL_UNLOCK_LAST(l);
 		if (error)
 			goto bad;
 		params = args;
@@ -260,7 +257,7 @@ EMULNAME(syscall_fancy)(struct trapframe *frame)
 		params = args;
 	}
 
-	if ((error = trace_enter(l, code, realcode, callp - code, params)) != 0)
+	if ((error = trace_enter(code, realcode, callp - code, params)) != 0)
 		goto out;
 
 	rval[0] = 0;
@@ -301,7 +298,7 @@ out:
 		break;
 	}
 	KERNEL_UNLOCK_LAST(l);
-	trace_exit(l, realcode, params, rval, error);
+	trace_exit(realcode, params, rval, error);
 	userret(l, frame);
 }
 

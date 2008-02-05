@@ -1,4 +1,4 @@
-/*	$NetBSD: xd.c,v 1.58 2007/07/29 12:15:40 ad Exp $	*/
+/*	$NetBSD: xd.c,v 1.61 2008/01/02 11:48:30 ad Exp $	*/
 
 /*
  *
@@ -52,7 +52,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: xd.c,v 1.58 2007/07/29 12:15:40 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: xd.c,v 1.61 2008/01/02 11:48:30 ad Exp $");
 
 #undef XDC_DEBUG		/* full debug */
 #define XDC_DIAG		/* extra sanity checks */
@@ -309,8 +309,8 @@ xddummystrat(struct buf *bp)
 	if (bp->b_bcount != XDFM_BPS)
 		panic("xddummystrat");
 	memcpy(bp->b_data, xd_labeldata, XDFM_BPS);
-	bp->b_flags |= B_DONE;
-	bp->b_flags &= ~B_BUSY;
+	bp->b_oflags |= BO_DONE;
+	bp->b_cflags &= ~BC_BUSY;
 }
 
 int 
@@ -553,8 +553,7 @@ xdattach(struct device *parent, struct device *self, void *aux)
 	 * to start with a clean slate.
 	 */
 	memset(&xd->sc_dk, 0, sizeof(xd->sc_dk));
-	xd->sc_dk.dk_driver = &xddkdriver;
-	xd->sc_dk.dk_name = xd->sc_dev.dv_xname;
+	disk_init(&xd->sc_dk, xd->sc_dev.dv_xname, &xddkdriver);
 
 	xd->state = XD_DRIVE_UNKNOWN;	/* to start */
 	xd->flags = 0;

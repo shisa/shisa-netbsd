@@ -1,4 +1,4 @@
-/*	$NetBSD: oea_machdep.c,v 1.35 2007/07/14 21:48:22 ad Exp $	*/
+/*	$NetBSD: oea_machdep.c,v 1.39 2008/01/28 18:24:21 garbled Exp $	*/
 
 /*
  * Copyright (C) 2002 Matt Thomas
@@ -33,7 +33,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: oea_machdep.c,v 1.35 2007/07/14 21:48:22 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: oea_machdep.c,v 1.39 2008/01/28 18:24:21 garbled Exp $");
 
 #include "opt_compat_netbsd.h"
 #include "opt_ddb.h"
@@ -127,7 +127,9 @@ oea_init(void (*handler)(void))
 	register_t msr;
 #endif
 	uintptr_t exc;
+#if defined(ALTIVEC) || defined(PPC_OEA)
 	register_t scratch;
+#endif
 	unsigned int cpuvers;
 	size_t size;
 	struct cpu_info * const ci = &cpu_info[0];
@@ -411,7 +413,7 @@ mpc601_ioseg_add(paddr_t pa, register_t len)
 }
 
 
-#if defined (PPC_OEA) && !defined (PPC_OEA64) && !defined (PPC_OEA64_BRIDGE)
+#if defined (PPC_OEA) || defined (PPC_OEA64_BRIDGE)
 void
 oea_iobat_add(paddr_t pa, register_t len)
 {
@@ -635,7 +637,7 @@ oea_batinit(paddr_t pa, ...)
 		}
 	}
 }
-#endif /* (PPC_OEA) && !(PPC_OEA64) && !(PPC_OEA64_BRIDGE) */
+#endif /* PPC_OEA || PPC_OEA64_BRIDGE */
 
 void
 oea_install_extint(void (*handler)(void))

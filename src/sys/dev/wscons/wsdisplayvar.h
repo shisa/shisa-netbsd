@@ -1,4 +1,4 @@
-/* $NetBSD: wsdisplayvar.h,v 1.42 2007/03/04 06:02:51 christos Exp $ */
+/* $NetBSD: wsdisplayvar.h,v 1.45 2007/12/13 15:14:48 joerg Exp $ */
 
 /*
  * Copyright (c) 1996, 1997 Christopher G. Demetriou.  All rights reserved.
@@ -33,7 +33,7 @@
 #ifndef _DEV_WSCONS_WSDISPLAYVAR_H
 #define _DEV_WSCONS_WSDISPLAYVAR_H
 
-struct device;
+#include <sys/device.h>
 
 /*
  * WSDISPLAY interfaces
@@ -198,8 +198,7 @@ int wsscreen_switchwait(struct wsdisplay_softc *, int);
 int wsdisplay_internal_ioctl(struct wsdisplay_softc *, struct wsscreen *,
 			     u_long, void *, int, struct lwp *);
 
-int wsdisplay_usl_ioctl1(struct wsdisplay_softc *,
-			 u_long, void *, int, struct lwp *);
+int wsdisplay_usl_ioctl1(device_t, u_long, void *, int, struct lwp *);
 
 int wsdisplay_usl_ioctl2(struct wsdisplay_softc *, struct wsscreen *,
 			 u_long, void *, int, struct lwp *);
@@ -225,7 +224,6 @@ int wsdisplay_stat_inject(struct device *, u_int, int);
  * for general use
  */
 #define WSDISPLAY_NULLSCREEN	-1
-void wsdisplay_switchtoconsole(void);
 const struct wsscreen_descr *wsdisplay_screentype_pick(
     const struct wsscreen_list *, const char *);
 

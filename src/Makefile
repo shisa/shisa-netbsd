@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.249 2007/09/07 04:20:44 lukem Exp $
+#	$NetBSD: Makefile,v 1.251 2007/11/12 15:06:45 jmmv Exp $
 
 #
 # This is the top-level makefile for building NetBSD. For an outline of
@@ -121,7 +121,7 @@ _SRC_TOP_OBJ_=
 .endif
 
 _SUBDIR=	tools lib include gnu bin games libexec sbin usr.bin
-_SUBDIR+=	usr.sbin share rescue sys etc .WAIT distrib regress
+_SUBDIR+=	usr.sbin share rescue sys etc tests .WAIT distrib regress
 
 #
 # Weed out directories that don't exist.
@@ -158,7 +158,7 @@ _POSTINSTALL=	${.CURDIR}/usr.sbin/postinstall/postinstall
 
 postinstall-check: .PHONY
 	@echo "   === Post installation checks ==="
-	${HOST_SH} ${_POSTINSTALL} -s ${.CURDIR} -d ${DESTDIR}/ check
+	${HOST_SH} ${_POSTINSTALL} -s ${.CURDIR} -d ${DESTDIR}/ check; if [ $$? -gt 1 ]; then exit 1; fi
 	@echo "   ================================"
 
 postinstall-fix: .NOTMAIN .PHONY

@@ -1,4 +1,4 @@
-/*	$NetBSD: ffs_balloc.c,v 1.45 2007/06/29 15:34:59 pooka Exp $	*/
+/*	$NetBSD: ffs_balloc.c,v 1.48 2008/01/02 11:49:09 ad Exp $	*/
 
 /*
  * Copyright (c) 2002 Networks Associates Technology, Inc.
@@ -41,7 +41,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ffs_balloc.c,v 1.45 2007/06/29 15:34:59 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ffs_balloc.c,v 1.48 2008/01/02 11:49:09 ad Exp $");
 
 #if defined(_KERNEL_OPT)
 #include "opt_quota.h"
@@ -96,6 +96,7 @@ ffs_balloc_ufs1(struct vnode *vp, off_t off, int size, kauth_cred_t cred,
 	struct buf *bp, *nbp;
 	struct inode *ip = VTOI(vp);
 	struct fs *fs = ip->i_fs;
+	struct ufsmount *ump = ip->i_ump;
 	struct indir indirs[NIADDR + 2];
 	daddr_t newb, pref, nb;
 	int32_t *bap;	/* XXX ondisk32 */
@@ -131,6 +132,7 @@ ffs_balloc_ufs1(struct vnode *vp, off_t off, int size, kauth_cred_t cred,
 		nb = lastlbn;
 		osize = blksize(fs, ip, nb);
 		if (osize < fs->fs_bsize && osize > 0) {
+			mutex_enter(&ump->um_lock);
 			error = ffs_realloccg(ip, nb,
 				    ffs_blkpref_ufs1(ip, lastlbn, nb,
 					&ip->i_ffs1_db[0]),
@@ -174,7 +176,7 @@ ffs_balloc_ufs1(struct vnode *vp, off_t off, int size, kauth_cred_t cred,
 				error = bread(vp, lbn, fs->fs_bsize, NOCRED,
 					      bpp);
 				if (error) {
-					brelse(*bpp);
+					brelse(*bpp, 0);
 					return (error);
 				}
 			}
@@ -200,7 +202,7 @@ ffs_balloc_ufs1(struct vnode *vp, off_t off, int size, kauth_cred_t cred,
 					error = bread(vp, lbn, osize, NOCRED,
 						      bpp);
 					if (error) {
-						brelse(*bpp);
+						brelse(*bpp, 0);
 						return (error);
 					}
 				}
@@ -211,7 +213,7 @@ ffs_balloc_ufs1(struct vnode *vp, off_t off, int size, kauth_cred_t cred,
 				 * The existing block is smaller than we want,
 				 * grow it.
 				 */
-
+				mutex_enter(&ump->um_lock);
 				error = ffs_realloccg(ip, lbn,
 				    ffs_blkpref_ufs1(ip, lbn, (int)lbn,
 					&ip->i_ffs1_db[0]), osize, nsize, cred,
@@ -234,6 +236,7 @@ ffs_balloc_ufs1(struct vnode *vp, off_t off, int size, kauth_cred_t cred,
 				nsize = fragroundup(fs, size);
 			else
 				nsize = fs->fs_bsize;
+			mutex_enter(&ump->um_lock);
 			error = ffs_alloc(ip, lbn,
 			    ffs_blkpref_ufs1(ip, lbn, (int)lbn,
 				&ip->i_ffs1_db[0]),
@@ -274,6 +277,7 @@ ffs_balloc_ufs1(struct vnode *vp, off_t off, int size, kauth_cred_t cred,
 	allocib = NULL;
 	allocblk = allociblk;
 	if (nb == 0) {
+		mutex_enter(&ump->um_lock);
 		pref = ffs_blkpref_ufs1(ip, lbn, 0, (int32_t *)0);
 		error = ffs_alloc(ip, lbn, pref, (int)fs->fs_bsize, cred,
 		    &newb);
@@ -312,7 +316,7 @@ ffs_balloc_ufs1(struct vnode *vp, off_t off, int size, kauth_cred_t cred,
 		error = bread(vp,
 		    indirs[i].in_lbn, (int)fs->fs_bsize, NOCRED, &bp);
 		if (error) {
-			brelse(bp);
+			brelse(bp, 0);
 			goto fail;
 		}
 		bap = (int32_t *)bp->b_data;	/* XXX ondisk32 */
@@ -321,15 +325,16 @@ ffs_balloc_ufs1(struct vnode *vp, off_t off, int size, kauth_cred_t cred,
 			break;
 		i++;
 		if (nb != 0) {
-			brelse(bp);
+			brelse(bp, 0);
 			continue;
 		}
+		mutex_enter(&ump->um_lock);
 		if (pref == 0)
 			pref = ffs_blkpref_ufs1(ip, lbn, 0, (int32_t *)0);
 		error = ffs_alloc(ip, lbn, pref, (int)fs->fs_bsize, cred,
 		    &newb);
 		if (error) {
-			brelse(bp);
+			brelse(bp, 0);
 			goto fail;
 		}
 		nb = newb;
@@ -349,7 +354,7 @@ ffs_balloc_ufs1(struct vnode *vp, off_t off, int size, kauth_cred_t cred,
 			 */
 
 			if ((error = bwrite(nbp)) != 0) {
-				brelse(bp);
+				brelse(bp, 0);
 				goto fail;
 			}
 		}
@@ -380,11 +385,12 @@ ffs_balloc_ufs1(struct vnode *vp, off_t off, int size, kauth_cred_t cred,
 	 */
 
 	if (nb == 0) {
+		mutex_enter(&ump->um_lock);
 		pref = ffs_blkpref_ufs1(ip, lbn, indirs[num].in_off, &bap[0]);
 		error = ffs_alloc(ip, lbn, pref, (int)fs->fs_bsize, cred,
 		    &newb);
 		if (error) {
-			brelse(bp);
+			brelse(bp, 0);
 			goto fail;
 		}
 		nb = newb;
@@ -416,12 +422,12 @@ ffs_balloc_ufs1(struct vnode *vp, off_t off, int size, kauth_cred_t cred,
 		}
 		return (0);
 	}
-	brelse(bp);
+	brelse(bp, 0);
 	if (bpp != NULL) {
 		if (flags & B_CLRBUF) {
 			error = bread(vp, lbn, (int)fs->fs_bsize, NOCRED, &nbp);
 			if (error) {
-				brelse(nbp);
+				brelse(nbp, 0);
 				goto fail;
 			}
 		} else {
@@ -454,23 +460,28 @@ fail:
 			}
 			bp = getblk(vp, indirs[i].in_lbn, (int)fs->fs_bsize, 0,
 			    0);
-			if (bp->b_flags & B_DELWRI) {
+			if (bp->b_oflags & BO_DELWRI) {
 				nb = fsbtodb(fs, cgtod(fs, dtog(fs,
 				    dbtofsb(fs, bp->b_blkno))));
 				bwrite(bp);
 				bp = getblk(ip->i_devvp, nb, (int)fs->fs_cgsize,
 				    0, 0);
-				if (bp->b_flags & B_DELWRI) {
+				if (bp->b_oflags & BO_DELWRI) {
 					bwrite(bp);
 				} else {
-					bp->b_flags |= B_INVAL;
-					brelse(bp);
+					brelse(bp, BC_INVAL);
 				}
 			} else {
-				bp->b_flags |= B_INVAL;
-				brelse(bp);
+				brelse(bp, BC_INVAL);
 			}
 		}
+
+		/* Now flush all dependencies to disk. */
+#ifdef notyet
+		/* XXX pages locked */
+		(void)softdep_sync_metadata(vp);
+#endif
+
 		if (DOINGSOFTDEP(vp) && unwindidx == 0) {
 			ip->i_flag |= IN_CHANGE | IN_UPDATE;
 			ffs_update(vp, NULL, NULL, UPDATE_WAIT);
@@ -493,7 +504,7 @@ fail:
 			    (int)fs->fs_bsize, NOCRED, &bp);
 			if (r) {
 				panic("Could not unwind indirect block, error %d", r);
-				brelse(bp);
+				brelse(bp, 0);
 			} else {
 				bap = (int32_t *)bp->b_data; /* XXX ondisk32 */
 				bap[indirs[unwindidx].in_off] = 0;
@@ -503,8 +514,7 @@ fail:
 		for (i = unwindidx + 1; i <= num; i++) {
 			bp = getblk(vp, indirs[i].in_lbn, (int)fs->fs_bsize, 0,
 			    0);
-			bp->b_flags |= B_INVAL;
-			brelse(bp);
+			brelse(bp, BC_INVAL);
 		}
 	}
 	for (deallocated = 0, blkp = allociblk; blkp < allocblk; blkp++) {
@@ -521,6 +531,14 @@ fail:
 		ip->i_ffs1_blocks -= btodb(deallocated);
 		ip->i_flag |= IN_CHANGE | IN_UPDATE;
 	}
+	/*
+	 * Flush all dependencies again so that the soft updates code
+	 * doesn't find any untracked changes.
+	 */
+#ifdef notyet
+	/* XXX pages locked */
+	(void)softdep_sync_metadata(vp);
+#endif
 	return (error);
 }
 
@@ -532,6 +550,7 @@ ffs_balloc_ufs2(struct vnode *vp, off_t off, int size, kauth_cred_t cred,
 	struct buf *bp, *nbp;
 	struct inode *ip = VTOI(vp);
 	struct fs *fs = ip->i_fs;
+	struct ufsmount *ump = ip->i_ump;
 	struct indir indirs[NIADDR + 2];
 	daddr_t newb, pref, nb;
 	int64_t *bap;
@@ -573,6 +592,7 @@ ffs_balloc_ufs2(struct vnode *vp, off_t off, int size, kauth_cred_t cred,
 			nb = lastlbn;
 			osize = sblksize(fs, dp->di_extsize, nb);
 			if (osize < fs->fs_bsize && osize > 0) {
+				mutex_enter(&ump->um_lock);
 				error = ffs_realloccg(ip, -1 - nb,
 				    dp->di_extb[nb],
 				    ffs_blkpref_ufs2(ip, lastlbn, (int)nb,
@@ -604,11 +624,13 @@ ffs_balloc_ufs2(struct vnode *vp, off_t off, int size, kauth_cred_t cred,
 		if (nb != 0 && dp->di_extsize >= smalllblktosize(fs, lbn + 1)) {
 			error = bread(vp, -1 - lbn, fs->fs_bsize, NOCRED, &bp);
 			if (error) {
-				brelse(bp);
+				brelse(bp, 0);
 				return (error);
 			}
+			mutex_enter(&bp->b_interlock);
 			bp->b_blkno = fsbtodb(fs, nb);
 			bp->b_xflags |= BX_ALTDATA;
+			mutex_exit(&bp->b_interlock);
 			*bpp = bp;
 			return (0);
 		}
@@ -621,12 +643,15 @@ ffs_balloc_ufs2(struct vnode *vp, off_t off, int size, kauth_cred_t cred,
 			if (nsize <= osize) {
 				error = bread(vp, -1 - lbn, osize, NOCRED, &bp);
 				if (error) {
-					brelse(bp);
+					brelse(bp, 0);
 					return (error);
 				}
+				mutex_enter(&bp->b_interlock);
 				bp->b_blkno = fsbtodb(fs, nb);
 				bp->b_xflags |= BX_ALTDATA;
+				mutex_exit(&bp->b_interlock);
 			} else {
+				mutex_enter(&ump->um_lock);
 				error = ffs_realloccg(ip, -1 - lbn,
 				    dp->di_extb[lbn],
 				    ffs_blkpref_ufs2(ip, lbn, (int)lbn,
@@ -644,6 +669,7 @@ ffs_balloc_ufs2(struct vnode *vp, off_t off, int size, kauth_cred_t cred,
 				nsize = fragroundup(fs, size);
 			else
 				nsize = fs->fs_bsize;
+			mutex_enter(&ump->um_lock);
 			error = ffs_alloc(ip, lbn,
 			   ffs_blkpref_ufs2(ip, lbn, (int)lbn, &dp->di_extb[0]),
 			   nsize, cred, &newb);
@@ -675,6 +701,7 @@ ffs_balloc_ufs2(struct vnode *vp, off_t off, int size, kauth_cred_t cred,
 		nb = lastlbn;
 		osize = blksize(fs, ip, nb);
 		if (osize < fs->fs_bsize && osize > 0) {
+			mutex_enter(&ump->um_lock);
 			error = ffs_realloccg(ip, nb,
 				    ffs_blkpref_ufs2(ip, lastlbn, nb,
 					&ip->i_ffs2_db[0]),
@@ -718,7 +745,7 @@ ffs_balloc_ufs2(struct vnode *vp, off_t off, int size, kauth_cred_t cred,
 				error = bread(vp, lbn, fs->fs_bsize, NOCRED,
 					      bpp);
 				if (error) {
-					brelse(*bpp);
+					brelse(*bpp, 0);
 					return (error);
 				}
 			}
@@ -744,7 +771,7 @@ ffs_balloc_ufs2(struct vnode *vp, off_t off, int size, kauth_cred_t cred,
 					error = bread(vp, lbn, osize, NOCRED,
 						      bpp);
 					if (error) {
-						brelse(*bpp);
+						brelse(*bpp, 0);
 						return (error);
 					}
 				}
@@ -755,7 +782,7 @@ ffs_balloc_ufs2(struct vnode *vp, off_t off, int size, kauth_cred_t cred,
 				 * The existing block is smaller than we want,
 				 * grow it.
 				 */
-
+				mutex_enter(&ump->um_lock);
 				error = ffs_realloccg(ip, lbn,
 				    ffs_blkpref_ufs2(ip, lbn, (int)lbn,
 					&ip->i_ffs2_db[0]), osize, nsize, cred,
@@ -778,6 +805,7 @@ ffs_balloc_ufs2(struct vnode *vp, off_t off, int size, kauth_cred_t cred,
 				nsize = fragroundup(fs, size);
 			else
 				nsize = fs->fs_bsize;
+			mutex_enter(&ump->um_lock);
 			error = ffs_alloc(ip, lbn,
 			    ffs_blkpref_ufs2(ip, lbn, (int)lbn,
 				&ip->i_ffs2_db[0]), nsize, cred, &newb);
@@ -817,6 +845,7 @@ ffs_balloc_ufs2(struct vnode *vp, off_t off, int size, kauth_cred_t cred,
 	allocib = NULL;
 	allocblk = allociblk;
 	if (nb == 0) {
+		mutex_enter(&ump->um_lock);
 		pref = ffs_blkpref_ufs2(ip, lbn, 0, (int64_t *)0);
 		error = ffs_alloc(ip, lbn, pref, (int)fs->fs_bsize, cred,
 		    &newb);
@@ -855,7 +884,7 @@ ffs_balloc_ufs2(struct vnode *vp, off_t off, int size, kauth_cred_t cred,
 		error = bread(vp,
 		    indirs[i].in_lbn, (int)fs->fs_bsize, NOCRED, &bp);
 		if (error) {
-			brelse(bp);
+			brelse(bp, 0);
 			goto fail;
 		}
 		bap = (int64_t *)bp->b_data;
@@ -864,15 +893,16 @@ ffs_balloc_ufs2(struct vnode *vp, off_t off, int size, kauth_cred_t cred,
 			break;
 		i++;
 		if (nb != 0) {
-			brelse(bp);
+			brelse(bp, 0);
 			continue;
 		}
+		mutex_enter(&ump->um_lock);
 		if (pref == 0)
 			pref = ffs_blkpref_ufs2(ip, lbn, 0, (int64_t *)0);
 		error = ffs_alloc(ip, lbn, pref, (int)fs->fs_bsize, cred,
 		    &newb);
 		if (error) {
-			brelse(bp);
+			brelse(bp, 0);
 			goto fail;
 		}
 		nb = newb;
@@ -892,7 +922,7 @@ ffs_balloc_ufs2(struct vnode *vp, off_t off, int size, kauth_cred_t cred,
 			 */
 
 			if ((error = bwrite(nbp)) != 0) {
-				brelse(bp);
+				brelse(bp, 0);
 				goto fail;
 			}
 		}
@@ -923,11 +953,12 @@ ffs_balloc_ufs2(struct vnode *vp, off_t off, int size, kauth_cred_t cred,
 	 */
 
 	if (nb == 0) {
+		mutex_enter(&ump->um_lock);
 		pref = ffs_blkpref_ufs2(ip, lbn, indirs[num].in_off, &bap[0]);
 		error = ffs_alloc(ip, lbn, pref, (int)fs->fs_bsize, cred,
 		    &newb);
 		if (error) {
-			brelse(bp);
+			brelse(bp, 0);
 			goto fail;
 		}
 		nb = newb;
@@ -959,12 +990,12 @@ ffs_balloc_ufs2(struct vnode *vp, off_t off, int size, kauth_cred_t cred,
 		}
 		return (0);
 	}
-	brelse(bp);
+	brelse(bp, 0);
 	if (bpp != NULL) {
 		if (flags & B_CLRBUF) {
 			error = bread(vp, lbn, (int)fs->fs_bsize, NOCRED, &nbp);
 			if (error) {
-				brelse(nbp);
+				brelse(nbp, 0);
 				goto fail;
 			}
 		} else {
@@ -997,23 +1028,28 @@ fail:
 			}
 			bp = getblk(vp, indirs[i].in_lbn, (int)fs->fs_bsize, 0,
 			    0);
-			if (bp->b_flags & B_DELWRI) {
+			if (bp->b_oflags & BO_DELWRI) {
 				nb = fsbtodb(fs, cgtod(fs, dtog(fs,
 				    dbtofsb(fs, bp->b_blkno))));
 				bwrite(bp);
 				bp = getblk(ip->i_devvp, nb, (int)fs->fs_cgsize,
 				    0, 0);
-				if (bp->b_flags & B_DELWRI) {
+				if (bp->b_oflags & BO_DELWRI) {
 					bwrite(bp);
 				} else {
-					bp->b_flags |= B_INVAL;
-					brelse(bp);
+					brelse(bp, BC_INVAL);
 				}
 			} else {
-				bp->b_flags |= B_INVAL;
-				brelse(bp);
+				brelse(bp, BC_INVAL);
 			}
 		}
+
+		/* Now flush the dependencies to disk. */
+#ifdef notyet
+		/* XXX pages locked */
+		(void)softdep_sync_metadata(vp);
+#endif
+
 		if (DOINGSOFTDEP(vp) && unwindidx == 0) {
 			ip->i_flag |= IN_CHANGE | IN_UPDATE;
 			ffs_update(vp, NULL, NULL, UPDATE_WAIT);
@@ -1036,7 +1072,7 @@ fail:
 			    (int)fs->fs_bsize, NOCRED, &bp);
 			if (r) {
 				panic("Could not unwind indirect block, error %d", r);
-				brelse(bp);
+				brelse(bp, 0);
 			} else {
 				bap = (int64_t *)bp->b_data;
 				bap[indirs[unwindidx].in_off] = 0;
@@ -1046,8 +1082,7 @@ fail:
 		for (i = unwindidx + 1; i <= num; i++) {
 			bp = getblk(vp, indirs[i].in_lbn, (int)fs->fs_bsize, 0,
 			    0);
-			bp->b_flags |= B_INVAL;
-			brelse(bp);
+			brelse(bp, BC_INVAL);
 		}
 	}
 	for (deallocated = 0, blkp = allociblk; blkp < allocblk; blkp++) {
@@ -1064,5 +1099,14 @@ fail:
 		ip->i_ffs2_blocks -= btodb(deallocated);
 		ip->i_flag |= IN_CHANGE | IN_UPDATE;
 	}
+
+	/*
+	 * Flush all dependencies again so that the soft updates code
+	 * doesn't find any untracked changes.
+	 */
+#ifdef notyet
+	/* XXX pages locked */
+	(void)softdep_sync_metadata(vp);
+#endif
 	return (error);
 }

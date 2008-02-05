@@ -1,10 +1,10 @@
-/*	$NetBSD: miidevs.h,v 1.75 2007/08/28 01:11:25 msaitoh Exp $	*/
+/*	$NetBSD: miidevs.h,v 1.77 2007/12/29 13:08:53 wiz Exp $	*/
 
 /*
  * THIS FILE AUTOMATICALLY GENERATED.  DO NOT EDIT.
  *
  * generated from:
- *	NetBSD: miidevs,v 1.72 2007/08/28 01:11:05 msaitoh Exp
+ *	NetBSD: miidevs,v 1.74 2007/12/29 13:08:28 wiz Exp
  */
 
 /*-
@@ -263,6 +263,8 @@
 #define	MII_STR_xxMARVELL_E6060	"Marvell 88E6060 10/100 5-port PHY switch"
 #define	MII_MODEL_xxMARVELL_E1111	0x000c
 #define	MII_STR_xxMARVELL_E1111	"Marvell 88E1111 Gigabit PHY"
+#define	MII_MODEL_xxMARVELL_E1116	0x0021
+#define	MII_STR_xxMARVELL_E1116	"Marvell 88E1116 Gigabit PHY"
 
 /* Myson Technology PHYs */
 #define	MII_MODEL_xxMYSON_MTD972	0x0000
@@ -302,9 +304,9 @@
 #define	MII_MODEL_yyREALTEK_RTL8201L	0x0020
 #define	MII_STR_yyREALTEK_RTL8201L	"RTL8201L 10/100 media interface"
 #define	MII_MODEL_xxREALTEK_RTL8169S	0x0011
-#define	MII_STR_xxREALTEK_RTL8169S	"RTL8169S/8110S 1000BASE-T media interface"
+#define	MII_STR_xxREALTEK_RTL8169S	"RTL8169S/8110S/8211 1000BASE-T media interface"
 #define	MII_MODEL_REALTEK_RTL8169S	0x0011
-#define	MII_STR_REALTEK_RTL8169S	"RTL8169S/8110S 1000BASE-T media interface"
+#define	MII_STR_REALTEK_RTL8169S	"RTL8169S/8110S/8211 1000BASE-T media interface"
 
 /* Seeq PHYs */
 #define	MII_MODEL_SEEQ_80220	0x0003

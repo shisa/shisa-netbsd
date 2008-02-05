@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.own.mk,v 1.496 2007/07/03 16:29:24 joerg Exp $
+#	$NetBSD: bsd.own.mk,v 1.501 2008/01/29 14:14:54 nakayama Exp $
 
 .if !defined(_BSD_OWN_MK_)
 _BSD_OWN_MK_=1
@@ -39,17 +39,6 @@ NEED_OWN_INSTALL_TARGET?=	yes
 # should be set to "yes" for that port only.
 #
 TOOLCHAIN_MISSING?=	no
-
-#
-# Transitional for toolchain upgrade to GCC4.1
-#
-# not working:
-#	ns32k
-#
-.if \
-    ${MACHINE_ARCH} == "ns32k"
-HAVE_GCC?=	3
-.endif
 
 # default to GCC4
 HAVE_GCC?=	4
@@ -212,6 +201,7 @@ TOOL_AMIGAAOUT2BB=	${TOOLDIR}/bin/${_TOOL_PREFIX}amiga-aout2bb
 TOOL_AMIGAELF2BB=	${TOOLDIR}/bin/${_TOOL_PREFIX}amiga-elf2bb
 TOOL_AMIGATXLT=		${TOOLDIR}/bin/${_TOOL_PREFIX}amiga-txlt
 TOOL_ASN1_COMPILE=	${TOOLDIR}/bin/${_TOOL_PREFIX}asn1_compile
+TOOL_ATF_COMPILE=	${TOOLDIR}/bin/${_TOOL_PREFIX}atf-compile
 TOOL_BEBOXELF2PEF=	${TOOLDIR}/bin/${_TOOL_PREFIX}bebox-elf2pef
 TOOL_BEBOXMKBOOTIMAGE=	${TOOLDIR}/bin/${_TOOL_PREFIX}bebox-mkbootimage
 TOOL_CAP_MKDB=		${TOOLDIR}/bin/${_TOOL_PREFIX}cap_mkdb
@@ -261,7 +251,7 @@ TOOL_ROFF_DVI=		${TOOL_GROFF} -Tdvi
 TOOL_ROFF_HTML=		${TOOL_GROFF} -Tlatin1 -mdoc2html
 TOOL_ROFF_PS=		${TOOL_GROFF} -Tps
 TOOL_ROFF_RAW=		${TOOL_GROFF} -Z
-TOOL_RPCGEN=		CPP=${CPP:Q} ${TOOLDIR}/bin/${_TOOL_PREFIX}rpcgen
+TOOL_RPCGEN=		RPCGEN_CPP=${CPP:Q} ${TOOLDIR}/bin/${_TOOL_PREFIX}rpcgen
 TOOL_SED=		${TOOLDIR}/bin/${_TOOL_PREFIX}sed
 TOOL_SOELIM=		${TOOLDIR}/bin/${_TOOL_PREFIX}soelim
 TOOL_STAT=		${TOOLDIR}/bin/${_TOOL_PREFIX}stat
@@ -387,14 +377,9 @@ DEBUGMODE?=	${NONBINMODE}
 #
 # OBJECT_FMT:		currently either "ELF" or "a.out".
 #
-# All platforms are ELF, except for ns32k (which does not yet have
-# an ELF BFD back-end).
+# All platforms are ELF.
 #
-.if ${MACHINE_ARCH} == "ns32k"
-OBJECT_FMT?=	a.out		# allow overrides, to ease transition
-.else
 OBJECT_FMT=	ELF
-.endif
 
 #
 # If this platform's toolchain is missing, we obviously cannot build it.
@@ -428,13 +413,6 @@ NOPROFILE=	# defined
 .endif
 
 #
-# The hppa port is incomplete.
-#
-.if ${MACHINE_ARCH} == "hppa"
-MKGDB=		no
-.endif
-
-#
 # The ia64 port is incomplete.
 #
 .if ${MACHINE_ARCH} == "ia64"
@@ -448,15 +426,6 @@ MKGDB=		no
 #
 .if ${MACHINE_ARCH} == "mipsel" || ${MACHINE_ARCH} == "mipseb"
 MKPICLIB:=	no
-.endif
-
-#
-# Shared libraries are not supported on ns32k with current GNU tools.
-# Disable native gdb too.
-#
-.if ${MACHINE_ARCH} == "ns32k"
-NOPIC=		# defined
-MKGDB=		no
 .endif
 
 #
@@ -492,7 +461,6 @@ MACHINE_GNU_ARCH=${GNU_ARCH.${MACHINE_ARCH}:U${MACHINE_ARCH}}
 .if ${OBJECT_FMT} == "ELF" && \
     (${MACHINE_GNU_ARCH} == "arm" || \
      ${MACHINE_GNU_ARCH} == "armeb" || \
-     ${MACHINE_ARCH} == "ns32k" || \
      ${MACHINE_ARCH} == "i386" || \
      ${MACHINE_CPU} == "m68k" || \
      ${MACHINE_GNU_ARCH} == "sh" || \
@@ -690,9 +658,9 @@ USE_${var}?= yes
 #
 # USE_* options which default to "yes".
 #
-#.for var in 
-#USE_${var}?= yes
-#.endfor
+.for var in JEMALLOC
+USE_${var}?= yes
+.endfor
 
 #
 # USE_* options which default to "no".

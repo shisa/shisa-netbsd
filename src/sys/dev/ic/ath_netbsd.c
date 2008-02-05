@@ -1,4 +1,4 @@
-/*	$NetBSD: ath_netbsd.c,v 1.10 2007/03/04 06:01:49 christos Exp $ */
+/*	$NetBSD: ath_netbsd.c,v 1.13 2008/01/04 21:17:56 ad Exp $ */
 
 /*-
  * Copyright (c) 2003, 2004 David Young
@@ -28,7 +28,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ath_netbsd.c,v 1.10 2007/03/04 06:01:49 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ath_netbsd.c,v 1.13 2008/01/04 21:17:56 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/types.h>
@@ -37,13 +37,12 @@ __KERNEL_RCSID(0, "$NetBSD: ath_netbsd.c,v 1.10 2007/03/04 06:01:49 christos Exp
 #include <sys/sysctl.h>
 #include <sys/mbuf.h>
 #include <sys/malloc.h>
-#include <sys/lock.h>
 #include <sys/kernel.h>
 #include <sys/socket.h>
 #include <sys/sockio.h>
 #include <sys/sysctl.h>
 #include <sys/callout.h>
-#include <machine/bus.h>
+#include <sys/bus.h>
 #include <machine/stdarg.h>
 #include <sys/endian.h>
 #include <sys/device.h>
@@ -61,34 +60,15 @@ __KERNEL_RCSID(0, "$NetBSD: ath_netbsd.c,v 1.10 2007/03/04 06:01:49 christos Exp
 #include <dev/ic/athvar.h>
 
 void
-device_printf(struct device dv, const char *fmt, ...)
+device_printf(device_t dev, const char *fmt, ...)
 {
-        va_list ap;
+	va_list ap;
 
-        va_start(ap, fmt);
-        printf("%s: ", dv.dv_xname);
-        vprintf(fmt, ap);
-        va_end(ap);
+	va_start(ap, fmt);
+	printf("%s: ", device_xname(dev));
+	vprintf(fmt, ap);
+	va_end(ap);
 	return;
-}
-
-struct mbuf *
-m_defrag(struct mbuf *m0, int flags)
-{
-	struct mbuf *m;
-	MGETHDR(m, flags, MT_DATA);
-	if (m == NULL)
-		return NULL;
-
-	M_COPY_PKTHDR(m, m0);
-	MCLGET(m, flags);
-	if ((m->m_flags & M_EXT) == 0) {
-		m_free(m);
-		return NULL;
-	}
-	m_copydata(m0, 0, m0->m_pkthdr.len, mtod(m, void *));
-	m->m_len = m->m_pkthdr.len;
-	return m;
 }
 
 /*

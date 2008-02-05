@@ -1,4 +1,4 @@
-/*	$NetBSD: union_subr.c,v 1.27 2007/07/23 08:52:47 pooka Exp $	*/
+/*	$NetBSD: union_subr.c,v 1.31 2008/01/25 14:32:14 ad Exp $	*/
 
 /*
  * Copyright (c) 1994
@@ -72,7 +72,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: union_subr.c,v 1.27 2007/07/23 08:52:47 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: union_subr.c,v 1.31 2008/01/25 14:32:14 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -345,7 +345,7 @@ union_allocvp(vpp, mp, undvp, dvp, cnp, uppervp, lowervp, docache)
 	struct union_mount *um = MOUNTTOUNIONMOUNT(mp);
 	voff_t uppersz, lowersz;
 	int hash = 0;
-	int vflag;
+	int vflag, iflag;
 	int try;
 
 	if (uppervp == NULLVP && lowervp == NULLVP)
@@ -357,7 +357,8 @@ union_allocvp(vpp, mp, undvp, dvp, cnp, uppervp, lowervp, docache)
 	}
 
 	/* detect the root vnode (and aliases) */
-	vflag = VLAYER;
+	iflag = VI_LAYER;
+	vflag = 0;
 	if ((uppervp == um->um_uppervp) &&
 	    ((lowervp == NULLVP) || lowervp == um->um_lowervp)) {
 		if (lowervp == NULLVP) {
@@ -365,7 +366,8 @@ union_allocvp(vpp, mp, undvp, dvp, cnp, uppervp, lowervp, docache)
 			if (lowervp != NULLVP)
 				VREF(lowervp);
 		}
-		vflag = VROOT;
+		iflag = 0;
+		vflag = VV_ROOT;
 	}
 
 loop:
@@ -505,10 +507,10 @@ loop:
 
 	uppersz = lowersz = VNOVAL;
 	if (uppervp != NULLVP)
-		if (VOP_GETATTR(uppervp, &va, FSCRED, NULL) == 0)
+		if (VOP_GETATTR(uppervp, &va, FSCRED) == 0)
 			uppersz = va.va_size;
 	if (lowervp != NULLVP)
-		if (VOP_GETATTR(lowervp, &va, FSCRED, NULL) == 0)
+		if (VOP_GETATTR(lowervp, &va, FSCRED) == 0)
 			lowersz = va.va_size;
 
 	if (docache) {
@@ -539,7 +541,8 @@ loop:
 	MALLOC((*vpp)->v_data, void *, sizeof(struct union_node),
 		M_TEMP, M_WAITOK);
 
-	(*vpp)->v_flag |= vflag;
+	(*vpp)->v_vflag |= vflag;
+	(*vpp)->v_iflag |= iflag;
 	(*vpp)->v_vnlock = NULL;	/* Make upper layers call VOP_LOCK */
 	if (uppervp)
 		(*vpp)->v_type = uppervp->v_type;
@@ -653,10 +656,8 @@ union_copyfile(fvp, tvp, cred, l)
 	UIO_SETUP_SYSSPACE(&uio);
 
 	VOP_UNLOCK(fvp, 0);			/* XXX */
-	VOP_LEASE(fvp, l, cred, LEASE_READ);
 	vn_lock(fvp, LK_EXCLUSIVE | LK_RETRY);	/* XXX */
 	VOP_UNLOCK(tvp, 0);			/* XXX */
-	VOP_LEASE(tvp, l, cred, LEASE_WRITE);
 	vn_lock(tvp, LK_EXCLUSIVE | LK_RETRY);	/* XXX */
 
 	tbuf = malloc(MAXBSIZE, M_TEMP, M_WAITOK);
@@ -728,19 +729,19 @@ union_copyup(un, docopy, cred, l)
 		 */
 		vn_lock(lvp, LK_EXCLUSIVE | LK_RETRY);
 
-        	error = VOP_GETATTR(lvp, &lvattr, cred, l);
+        	error = VOP_GETATTR(lvp, &lvattr, cred);
 		if (error == 0)
-			error = VOP_OPEN(lvp, FREAD, cred, l);
+			error = VOP_OPEN(lvp, FREAD, cred);
 		if (error == 0) {
 			error = union_copyfile(lvp, uvp, cred, l);
-			(void) VOP_CLOSE(lvp, FREAD, cred, l);
+			(void) VOP_CLOSE(lvp, FREAD, cred);
 		}
 		if (error == 0) {
 			/* Copy permissions up too */
 			VATTR_NULL(&uvattr);
 			uvattr.va_mode = lvattr.va_mode;
 			uvattr.va_flags = lvattr.va_flags;
-        		error = VOP_SETATTR(uvp, &uvattr, cred, l);
+        		error = VOP_SETATTR(uvp, &uvattr, cred);
 		}
 		VOP_UNLOCK(lvp, 0);
 #ifdef UNION_DIAGNOSTIC
@@ -764,8 +765,8 @@ union_copyup(un, docopy, cred, l)
 
 		vn_lock(lvp, LK_EXCLUSIVE | LK_RETRY);
 		for (i = 0; i < un->un_openl; i++) {
-			(void) VOP_CLOSE(lvp, FREAD, cred, l);
-			(void) VOP_OPEN(uvp, FREAD, cred, l);
+			(void) VOP_CLOSE(lvp, FREAD, cred);
+			(void) VOP_OPEN(uvp, FREAD, cred);
 		}
 		un->un_openl = 0;
 		VOP_UNLOCK(lvp, 0);
@@ -807,7 +808,6 @@ union_relookup(um, dvp, vpp, cnp, cn, path, pathlen)
 
 	cn->cn_nameiop = CREATE;
 	cn->cn_flags = (LOCKPARENT|HASBUF|SAVENAME|ISLASTCN);
-	cn->cn_lwp = cnp->cn_lwp;
 	if (um->um_op == UNMNT_ABOVE)
 		cn->cn_cred = cnp->cn_cred;
 	else
@@ -849,7 +849,6 @@ union_mkshadow(um, dvp, cnp, vpp)
 {
 	int error;
 	struct vattr va;
-	struct lwp *l = cnp->cn_lwp;
 	struct componentname cn;
 
 	vn_lock(dvp, LK_EXCLUSIVE | LK_RETRY);
@@ -881,9 +880,6 @@ union_mkshadow(um, dvp, cnp, vpp)
 	va.va_type = VDIR;
 	va.va_mode = um->um_cmode;
 
-	/* VOP_LEASE: dvp is locked */
-	VOP_LEASE(dvp, l, cn.cn_cred, LEASE_WRITE);
-
 	vref(dvp);
 	error = VOP_MKDIR(dvp, vpp, &cn, &va);
 	return (error);
@@ -906,7 +902,6 @@ union_mkwhiteout(um, dvp, cnp, path)
 	char *path;
 {
 	int error;
-	struct lwp *l = cnp->cn_lwp;
 	struct vnode *wvp;
 	struct componentname cn;
 
@@ -923,9 +918,6 @@ union_mkwhiteout(um, dvp, cnp, path)
 		vput(wvp);
 		return (EEXIST);
 	}
-
-	/* VOP_LEASE: dvp is locked */
-	VOP_LEASE(dvp, l, l->l_cred, LEASE_WRITE);
 
 	error = VOP_WHITEOUT(dvp, &cn, CREATE);
 	if (error)
@@ -975,7 +967,6 @@ union_vn_create(vpp, un, l)
 	memcpy(cn.cn_pnbuf, un->un_path, cn.cn_namelen+1);
 	cn.cn_nameiop = CREATE;
 	cn.cn_flags = (LOCKPARENT|HASBUF|SAVENAME|ISLASTCN);
-	cn.cn_lwp = l;
 	cn.cn_cred = l->l_cred;
 	cn.cn_nameptr = cn.cn_pnbuf;
 	cn.cn_hash = un->un_hash;
@@ -1009,12 +1000,11 @@ union_vn_create(vpp, un, l)
 	VATTR_NULL(vap);
 	vap->va_type = VREG;
 	vap->va_mode = cmode;
-	VOP_LEASE(un->un_dirvp, l, cred, LEASE_WRITE);
 	vref(un->un_dirvp);
 	if ((error = VOP_CREATE(un->un_dirvp, &vp, &cn, vap)) != 0)
 		return (error);
 
-	if ((error = VOP_OPEN(vp, fmode, cred, l)) != 0) {
+	if ((error = VOP_OPEN(vp, fmode, cred)) != 0) {
 		vput(vp);
 		return (error);
 	}
@@ -1034,7 +1024,7 @@ union_vn_close(vp, fmode, cred, l)
 
 	if (fmode & FWRITE)
 		--vp->v_writecount;
-	return (VOP_CLOSE(vp, fmode, cred, l));
+	return (VOP_CLOSE(vp, fmode, cred));
 }
 
 void
@@ -1089,17 +1079,16 @@ union_lowervp(vp)
  * during a remove/rmdir operation.
  */
 int
-union_dowhiteout(un, cred, l)
+union_dowhiteout(un, cred)
 	struct union_node *un;
 	kauth_cred_t cred;
-	struct lwp *l;
 {
 	struct vattr va;
 
 	if (un->un_lowervp != NULLVP)
 		return (1);
 
-	if (VOP_GETATTR(un->un_uppervp, &va, cred, l) == 0 &&
+	if (VOP_GETATTR(un->un_uppervp, &va, cred) == 0 &&
 	    (va.va_flags & OPAQUE))
 		return (1);
 
@@ -1219,13 +1208,13 @@ union_readdirhook(struct vnode **vpp, struct file *fp, struct lwp *l)
 	 * If the directory is opaque,
 	 * then don't show lower entries
 	 */
-	error = VOP_GETATTR(vp, &va, fp->f_cred, l);
+	error = VOP_GETATTR(vp, &va, fp->f_cred);
 	if (error || (va.va_flags & OPAQUE)) {
 		vput(lvp);
 		return (error);
 	}
 
-	error = VOP_OPEN(lvp, FREAD, fp->f_cred, l);
+	error = VOP_OPEN(lvp, FREAD, fp->f_cred);
 	if (error) {
 		vput(lvp);
 		return (error);

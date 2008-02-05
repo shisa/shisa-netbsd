@@ -1,4 +1,4 @@
-/*	$NetBSD: hpcfb.c,v 1.42 2007/07/09 21:00:32 ad Exp $	*/
+/*	$NetBSD: hpcfb.c,v 1.46 2008/01/30 14:12:20 ad Exp $	*/
 
 /*-
  * Copyright (c) 1999
@@ -43,7 +43,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: hpcfb.c,v 1.42 2007/07/09 21:00:32 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: hpcfb.c,v 1.46 2008/01/30 14:12:20 ad Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_hpcfb.h"
@@ -55,7 +55,6 @@ __KERNEL_RCSID(0, "$NetBSD: hpcfb.c,v 1.42 2007/07/09 21:00:32 ad Exp $");
 #include <sys/signalvar.h>
 #include <sys/proc.h>
 #include <sys/kthread.h>
-#include <sys/lock.h>
 #include <sys/user.h>
 #include <sys/device.h>
 #include <sys/conf.h>
@@ -65,7 +64,7 @@ __KERNEL_RCSID(0, "$NetBSD: hpcfb.c,v 1.42 2007/07/09 21:00:32 ad Exp $");
 
 #include <uvm/uvm_extern.h>
 
-#include <machine/bus.h>
+#include <sys/bus.h>
 
 #include <dev/wscons/wsconsio.h>
 #include <dev/wscons/wsdisplayvar.h>
@@ -164,7 +163,6 @@ struct hpcfb_softc {
 	int sc_polling;
 	int sc_mapping;
 	struct proc *sc_thread;
-	struct lock sc_lock;
 	void *sc_wantedscreen;
 	void (*sc_switchcb)(void *, int, int);
 	void *sc_switchcbarg;
@@ -638,29 +636,26 @@ hpcfb_power(int why, void *arg)
 	switch (why) {
 	case PWR_STANDBY:
 		break;
-	case PWR_SOFTSUSPEND:
-		/* XXX, casting to 'struct wsdisplay_softc *' means
-		   that you should not call the method here... */
-		sc->sc_screen_resumed = wsdisplay_getactivescreen(
-			(struct wsdisplay_softc *)sc->sc_wsdisplay);
+	case PWR_SOFTSUSPEND: {
+		struct wsdisplay_softc *wsc = device_private(sc->sc_wsdisplay);
+
+		sc->sc_screen_resumed = wsdisplay_getactivescreen(wsc);
+
 		if (wsdisplay_switch(sc->sc_wsdisplay,
-		    WSDISPLAY_NULLSCREEN,
-		    1 /* waitok */) == 0) {
-			wsscreen_switchwait(
-				(struct wsdisplay_softc *)sc->sc_wsdisplay,
-				WSDISPLAY_NULLSCREEN);
+		    WSDISPLAY_NULLSCREEN, 1 /* waitok */) == 0) {
+			wsscreen_switchwait(wsc, WSDISPLAY_NULLSCREEN);
 		} else {
 			sc->sc_screen_resumed = WSDISPLAY_NULLSCREEN;
 		}
 
 		sc->sc_dc->dc_state &= ~HPCFB_DC_CURRENT;
 		break;
+	    }
 	case PWR_SOFTRESUME:
 		sc->sc_dc->dc_state |= HPCFB_DC_CURRENT;
 		if (sc->sc_screen_resumed != WSDISPLAY_NULLSCREEN)
 			wsdisplay_switch(sc->sc_wsdisplay,
-			    sc->sc_screen_resumed,
-			    1 /* waitok */);
+			    sc->sc_screen_resumed, 1 /* waitok */);
 		break;
 	}
 }

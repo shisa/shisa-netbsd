@@ -1,4 +1,4 @@
-/* $NetBSD: esa.c,v 1.41 2007/03/04 06:02:18 christos Exp $ */
+/* $NetBSD: esa.c,v 1.44 2008/01/27 01:57:03 jmcneill Exp $ */
 
 /*
  * Copyright (c) 2001, 2002, 2006 Jared D. McNeill <jmcneill@invisible.ca>
@@ -39,7 +39,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: esa.c,v 1.41 2007/03/04 06:02:18 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: esa.c,v 1.44 2008/01/27 01:57:03 jmcneill Exp $");
 
 #include <sys/types.h>
 #include <sys/errno.h>
@@ -53,8 +53,8 @@ __KERNEL_RCSID(0, "$NetBSD: esa.c,v 1.41 2007/03/04 06:02:18 christos Exp $");
 #include <sys/select.h>
 #include <sys/audioio.h>
 
-#include <machine/bus.h>
-#include <machine/intr.h>
+#include <sys/bus.h>
+#include <sys/intr.h>
 
 #include <dev/pci/pcidevs.h>
 #include <dev/pci/pcivar.h>
@@ -162,9 +162,8 @@ static void		esa_remove_list(struct esa_voice *, struct esa_list *,
 					int);
 
 /* power management */
-static void		esa_powerhook(int, void *);
-static int		esa_suspend(struct esa_softc *);
-static int		esa_resume(struct esa_softc *);
+static bool		esa_suspend(device_t);
+static bool		esa_resume(device_t);
 
 
 #define ESA_NENCODINGS 8
@@ -1136,11 +1135,8 @@ esa_attach(struct device *parent, struct device *self, void *aux)
 		    audio_attach_mi(&esa_hw_if, &sc->voice[i], &sc->sc_dev);
 	}
 
-	sc->powerhook = powerhook_establish(sc->sc_dev.dv_xname,
-	    esa_powerhook, sc);
-	if (sc->powerhook == NULL)
-		aprint_error("%s: WARNING: unable to establish powerhook\n",
-		    sc->sc_dev.dv_xname);
+	if (!pmf_device_register(self, esa_suspend, esa_resume))
+		aprint_error_dev(self, "couldn't establish power handler\n");
 
 	return;
 }
@@ -1637,33 +1633,14 @@ esa_remove_list(struct esa_voice *vc, struct esa_list *el, int index)
 	return;
 }
 
-static void
-esa_powerhook(int why, void *hdl)
+static bool
+esa_suspend(device_t dv)
 {
-	struct esa_softc *sc;
-
-	sc = (struct esa_softc *)hdl;
-	switch (why) {
-	case PWR_SUSPEND:
-	case PWR_STANDBY:
-		esa_suspend(sc);
-		break;
-	case PWR_RESUME:
-		esa_resume(sc);
-		sc->codec_if->vtbl->restore_ports(sc->codec_if);
-		break;
-	}
-}
-
-static int
-esa_suspend(struct esa_softc *sc)
-{
-	bus_space_tag_t iot;
-	bus_space_handle_t ioh;
+	struct esa_softc *sc = device_private(dv);
+	bus_space_tag_t iot = sc->sc_iot;
+	bus_space_handle_t ioh = sc->sc_ioh;
 	int i, index;
 
-	iot = sc->sc_iot;
-	ioh = sc->sc_ioh;
 	index = 0;
 
 	bus_space_write_2(iot, ioh, ESA_HOST_INT_CTRL, 0);
@@ -1681,27 +1658,34 @@ esa_suspend(struct esa_softc *sc)
 		sc->savemem[index++] = esa_read_assp(sc,
 		    ESA_MEMTYPE_INTERNAL_DATA, i);
 
-	return 0;
+	return true;
 }
 
-static int
-esa_resume(struct esa_softc *sc)
+static bool
+esa_resume(device_t dv)
 {
-	bus_space_tag_t iot;
-	bus_space_handle_t ioh;
+	struct esa_softc *sc = device_private(dv);
+	bus_space_tag_t iot = sc->sc_iot;
+	bus_space_handle_t ioh = sc->sc_ioh;
 	int i, index;
 	uint8_t reset_state;
+	pcireg_t data;
 
-	iot = sc->sc_iot;
-	ioh = sc->sc_ioh;
 	index = 0;
 
 	delay(10000);
+
+	data = pci_conf_read(sc->sc_pct, sc->sc_tag, PCI_LEGACY_AUDIO_CTRL);
+	pci_conf_write(sc->sc_pct, sc->sc_tag, PCI_LEGACY_AUDIO_CTRL,
+	    data | DISABLE_LEGACY);
+
+	bus_space_write_4(iot, ioh, ESA_PCI_ACPI_CONTROL, ESA_PCI_ACPI_D0);
 
 	esa_config(sc);
 
 	reset_state = esa_assp_halt(sc);
 
+	esa_init_codec(sc);
 	esa_codec_reset(sc);
 
 	/* restore ASSP */
@@ -1721,7 +1705,11 @@ esa_resume(struct esa_softc *sc)
 	esa_enable_interrupts(sc);
 	esa_amp_enable(sc);
 
-	return 0;
+	/* Finally, power up AC97 codec */
+	delay(1000);
+	sc->codec_if->vtbl->restore_ports(sc->codec_if);
+
+	return true;
 }
 
 static uint32_t

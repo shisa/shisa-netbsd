@@ -1,4 +1,4 @@
-/*	$NetBSD: fpu.h,v 1.1 2003/04/26 18:39:40 fvdl Exp $	*/
+/*	$NetBSD: fpu.h,v 1.4 2008/01/15 14:50:10 joerg Exp $	*/
 
 #ifndef	_AMD64_FPU_H_
 #define	_AMD64_FPU_H_
@@ -23,13 +23,13 @@ struct fxsave64 {
 	u_int64_t  fx_st[8][2];   /* 8 normal FP regs */
 	u_int64_t  fx_xmm[16][2]; /* 16 SSE2 registers */
 	u_int8_t   fx_unused3[96];
-} __attribute__((packed));
+} __packed;
 
 struct savefpu {
 	struct fxsave64 fp_fxsave;	/* see above */
 	u_int16_t fp_ex_sw;		/* saved status from last exception */
 	u_int16_t fp_ex_tw;		/* saved tag from last exception */
-};
+} __aligned(16);
 
 #ifdef _KERNEL
 
@@ -95,8 +95,8 @@ void fpudrop(void);
 void fpusave(struct lwp *);
 void fpudiscard(struct lwp *);
 void fputrap(struct trapframe *);
-void fpusave_lwp(struct lwp *, int);
-void fpusave_cpu(struct cpu_info *, int);
+void fpusave_lwp(struct lwp *, bool);
+void fpusave_cpu(bool);
 
 #endif
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: machdep.c,v 1.202 2007/09/11 16:00:06 martin Exp $ */
+/*	$NetBSD: machdep.c,v 1.215 2008/01/16 08:00:29 skrll Exp $ */
 
 /*-
  * Copyright (c) 1996, 1997, 1998 The NetBSD Foundation, Inc.
@@ -78,7 +78,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.202 2007/09/11 16:00:06 martin Exp $");
+__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.215 2008/01/16 08:00:29 skrll Exp $");
 
 #include "opt_ddb.h"
 #include "opt_multiprocessor.h"
@@ -558,6 +558,7 @@ sendsig(const ksiginfo_t *ksi, const sigset_t *mask)
 }
 
 int	waittime = -1;
+struct pcb dumppcb;
 
 void
 cpu_reboot(register int howto, char *user_boot_string)
@@ -688,7 +689,7 @@ cpu_dumpconf()
 	dumpsize = physmem;
 }
 
-#define	BYTES_PER_DUMP	(PAGE_SIZE)	/* must be a multiple of pagesize */
+#define	BYTES_PER_DUMP	MAXPHYS		/* must be a multiple of pagesize */
 static vaddr_t dumpspace;
 
 void *
@@ -710,11 +711,12 @@ dumpsys()
 	daddr_t blkno;
 	register int (*dump)(dev_t, daddr_t, void *, size_t);
 	int j, error = 0;
-	unsigned long todo;
+	uint64_t todo;
 	register struct mem_region *mp;
 
-	/* copy registers to memory */
-	snapshot(curpcb);
+	/* copy registers to dumppcb and flush windows */
+	memset(&dumppcb, 0, sizeof(struct pcb));
+	snapshot(&dumppcb);
 	stackdump();
 
 	if (dumpdev == NODEV)
@@ -734,7 +736,8 @@ dumpsys()
 		return;
 	}
 	if (dumplo <= 0) {
-		printf("\ndump to dev %u,%u not possible\n", major(dumpdev),
+		printf("\ndump to dev %u,%u not possible (partition"
+		    " too small?)\n", major(dumpdev),
 		    minor(dumpdev));
 		return;
 	}
@@ -742,9 +745,8 @@ dumpsys()
 	    minor(dumpdev), dumplo);
 
 	psize = (*bdev->d_psize)(dumpdev);
-	printf("dump ");
 	if (psize == -1) {
-		printf("area unavailable\n");
+		printf("dump area unavailable\n");
 		return;
 	}
 	blkno = dumplo;
@@ -759,18 +761,9 @@ dumpsys()
 
 	for (mp = &phys_installed[0], j = 0; j < phys_installed_size;
 			j++, mp = &phys_installed[j]) {
-		unsigned i = 0, n;
+		uint64_t i = 0, n, off;
 		paddr_t maddr = mp->start;
 
-#if 0
-		/* Remind me: why don't we dump page 0 ? */
-		if (maddr == 0) {
-			/* Skip first page at physical address 0 */
-			maddr += PAGE_SIZE;
-			i += PAGE_SIZE;
-			blkno += btodb(PAGE_SIZE);
-		}
-#endif
 		for (; i < mp->size; i += n) {
 			n = mp->size - i;
 			if (n > BYTES_PER_DUMP)
@@ -778,13 +771,15 @@ dumpsys()
 
 			/* print out how many MBs we still have to dump */
 			if ((todo % (1024*1024)) == 0)
-				printf("%ld ", todo / (1024*1024));
-			pmap_kenter_pa(dumpspace, maddr, VM_PROT_READ);
+				printf("\r%6" PRIu64 " M ",
+				    todo / (1024*1024));
+			for (off = 0; off < n; off += PAGE_SIZE)
+				pmap_kenter_pa(dumpspace+off, maddr+off,
+				    VM_PROT_READ);
 			pmap_update(pmap_kernel());
 			error = (*dump)(dumpdev, blkno,
-					(void *)dumpspace, (int)n);
+					(void *)dumpspace, (size_t)n);
 			pmap_kremove(dumpspace, n);
-			pmap_update(pmap_kernel());
 			if (error)
 				break;
 			maddr += n;
@@ -792,31 +787,32 @@ dumpsys()
 			blkno += btodb(n);
 		}
 	}
+	pmap_update(pmap_kernel());
 
 	switch (error) {
 
 	case ENXIO:
-		printf("device bad\n");
+		printf("- device bad\n");
 		break;
 
 	case EFAULT:
-		printf("device not ready\n");
+		printf("- device not ready\n");
 		break;
 
 	case EINVAL:
-		printf("area improper\n");
+		printf("- area improper\n");
 		break;
 
 	case EIO:
-		printf("i/o error\n");
+		printf("- i/o error\n");
 		break;
 
 	case 0:
-		printf("succeeded\n");
+		printf("\rdump succeeded\n");
 		break;
 
 	default:
-		printf("error %d\n", error);
+		printf("- error %d\n", error);
 		break;
 	}
 }
@@ -1473,8 +1469,28 @@ paddr_t
 _bus_dmamem_mmap(bus_dma_tag_t t, bus_dma_segment_t *segs, int nsegs, off_t off,
 	int prot, int flags)
 {
+	int i;
 
-	panic("_bus_dmamem_mmap: not implemented");
+	for (i = 0; i < nsegs; i++) {
+#ifdef DIAGNOSTIC
+		if (off & PGOFSET)
+			panic("_bus_dmamem_mmap: offset unaligned");
+		if (segs[i].ds_addr & PGOFSET)
+			panic("_bus_dmamem_mmap: segment unaligned");
+		if (segs[i].ds_len & PGOFSET)
+			panic("_bus_dmamem_mmap: segment size not multiple"
+			    " of page size");
+#endif
+		if (off >= segs[i].ds_len) {
+			off -= segs[i].ds_len;
+			continue;
+		}
+
+		return (atop(segs[i].ds_addr + off));
+	}
+
+	/* Page not found. */
+	return (-1);
 }
 
 
@@ -1956,4 +1972,11 @@ cpu_need_resched(struct cpu_info *ci, int flags)
 	if ((flags & RESCHED_IMMED) || ci->ci_index != cpu_number())
 		sparc64_send_ipi(ci->ci_cpuid, sparc64_ipi_nop);
 #endif
+}
+
+bool
+cpu_intr_p(void)
+{
+
+	return curcpu()->ci_idepth >= 0;
 }

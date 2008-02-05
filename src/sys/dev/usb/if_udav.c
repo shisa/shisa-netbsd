@@ -1,4 +1,4 @@
-/*	$NetBSD: if_udav.c,v 1.18 2007/07/12 21:24:02 xtraeme Exp $	*/
+/*	$NetBSD: if_udav.c,v 1.21 2008/01/19 22:10:20 dyoung Exp $	*/
 /*	$nabe: if_udav.c,v 1.3 2003/08/21 16:57:19 nabe Exp $	*/
 /*
  * Copyright (c) 2003
@@ -44,7 +44,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_udav.c,v 1.18 2007/07/12 21:24:02 xtraeme Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_udav.c,v 1.21 2008/01/19 22:10:20 dyoung Exp $");
 
 #include "opt_inet.h"
 #include "bpfilter.h"
@@ -52,11 +52,10 @@ __KERNEL_RCSID(0, "$NetBSD: if_udav.c,v 1.18 2007/07/12 21:24:02 xtraeme Exp $")
 
 #include <sys/param.h>
 #include <sys/systm.h>
-#include <sys/lock.h>
+#include <sys/mutex.h>
 #include <sys/mbuf.h>
 #include <sys/kernel.h>
 #include <sys/socket.h>
-
 #include <sys/device.h>
 #if NRND > 0
 #include <sys/rnd.h>
@@ -200,7 +199,7 @@ USB_ATTACH(udav)
 	}
 
 	usb_init_task(&sc->sc_tick_task, udav_tick_task, sc);
-	lockinit(&sc->sc_mii_lock, PZERO, "udavmii", 0, 0);
+	mutex_init(&sc->sc_mii_lock, MUTEX_DEFAULT, IPL_NONE);
 	usb_init_task(&sc->sc_stop_task, (void (*)(void *)) udav_stop_task, sc);
 
 	/* get control interface */
@@ -282,6 +281,7 @@ USB_ATTACH(udav)
 	mii->mii_writereg = udav_miibus_writereg;
 	mii->mii_statchg = udav_miibus_statchg;
 	mii->mii_flags = MIIF_AUTOTSLEEP;
+	sc->sc_ec.ec_mii = mii;
 	ifmedia_init(&mii->mii_media, 0,
 		     udav_ifmedia_change, udav_ifmedia_status);
 	mii_attach(self, mii, 0xffffffff, MII_PHY_ANY, MII_OFFSET_ANY, 0);
@@ -365,6 +365,8 @@ USB_DETACH(udav)
 
 	usbd_add_drv_event(USB_EVENT_DRIVER_DETACH, sc->sc_udev,
 			   USBDEV(sc->sc_dev));
+
+	mutex_destroy(&sc->sc_mii_lock);
 
 	return (0);
 }
@@ -613,8 +615,8 @@ udav_init(struct ifnet *ifp)
 {
 	struct udav_softc *sc = ifp->if_softc;
 	struct mii_data *mii = GET_MII(sc);
-	u_char *eaddr;
-	int s;
+	uint8_t eaddr[ETHER_ADDR_LEN];
+	int rc, s;
 
 	DPRINTF(("%s: %s: enter\n", USBDEVNAME(sc->sc_dev), __func__));
 
@@ -626,7 +628,7 @@ udav_init(struct ifnet *ifp)
 	/* Cancel pending I/O and free all TX/RX buffers */
 	udav_stop(ifp, 1);
 
-	eaddr = LLADDR(ifp->if_sadl);
+	memcpy(eaddr, CLLADDR(ifp->if_sadl), sizeof(eaddr));
 	udav_csr_write(sc, UDAV_PAR, eaddr, ETHER_ADDR_LEN);
 
 	/* Initialize network control register */
@@ -666,7 +668,10 @@ udav_init(struct ifnet *ifp)
 	UDAV_SETBIT(sc, UDAV_GPCR, UDAV_GPCR_GEP_CNTL0);
 	UDAV_CLRBIT(sc, UDAV_GPR, UDAV_GPR_GEPIO0);
 
-	mii_mediachg(mii);
+	if ((rc = mii_mediachg(mii)) == ENXIO)
+		rc = 0;
+	else if (rc != 0)
+		goto out;
 
 	if (sc->sc_pipe_tx == NULL || sc->sc_pipe_rx == NULL) {
 		if (udav_openpipes(sc)) {
@@ -678,11 +683,11 @@ udav_init(struct ifnet *ifp)
 	ifp->if_flags |= IFF_RUNNING;
 	ifp->if_flags &= ~IFF_OACTIVE;
 
-	splx(s);
-
 	usb_callout(sc->sc_stat_ch, hz, udav_tick, sc);
 
-	return (0);
+out:
+	splx(s);
+	return rc;
 }
 
 Static void
@@ -1211,8 +1216,6 @@ Static int
 udav_ioctl(struct ifnet *ifp, u_long cmd, void *data)
 {
 	struct udav_softc *sc = ifp->if_softc;
-	struct ifreq *ifr = (struct ifreq *)data;
-	struct mii_data *mii;
 	int s, error = 0;
 
 	DPRINTF(("%s: %s: enter\n", USBDEVNAME(sc->sc_dev), __func__));
@@ -1222,21 +1225,11 @@ udav_ioctl(struct ifnet *ifp, u_long cmd, void *data)
 
 	s = splnet();
 
-	switch (cmd) {
-	case SIOCGIFMEDIA:
-	case SIOCSIFMEDIA:
-		mii = GET_MII(sc);
-		error = ifmedia_ioctl(ifp, ifr, &mii->mii_media, cmd);
-		break;
-
-	default:
-		error = ether_ioctl(ifp, cmd, data);
-		if (error == ENETRESET) {
-			if (ifp->if_flags & IFF_RUNNING)
-				udav_setmulti(sc);
-			error = 0;
-		}
-		break;
+	error = ether_ioctl(ifp, cmd, data);
+	if (error == ENETRESET) {
+		if (ifp->if_flags & IFF_RUNNING)
+			udav_setmulti(sc);
+		error = 0;
 	}
 
 	splx(s);
@@ -1366,6 +1359,7 @@ udav_ifmedia_change(struct ifnet *ifp)
 {
 	struct udav_softc *sc = ifp->if_softc;
 	struct mii_data *mii = GET_MII(sc);
+	int rc;
 
 	DPRINTF(("%s: %s: enter\n", USBDEVNAME(sc->sc_dev), __func__));
 
@@ -1373,14 +1367,9 @@ udav_ifmedia_change(struct ifnet *ifp)
 		return (0);
 
 	sc->sc_link = 0;
-	if (mii->mii_instance) {
-		struct mii_softc *miisc;
-		for (miisc = LIST_FIRST(&mii->mii_phys); miisc != NULL;
-		     miisc = LIST_NEXT(miisc, mii_list))
-			mii_phy_reset(miisc);
-	}
-
-	return (mii_mediachg(mii));
+	if ((rc = mii_mediachg(mii)) == ENXIO)
+		return 0;
+	return rc;
 }
 
 /* Report current media status. */
@@ -1388,22 +1377,13 @@ Static void
 udav_ifmedia_status(struct ifnet *ifp, struct ifmediareq *ifmr)
 {
 	struct udav_softc *sc = ifp->if_softc;
-	struct mii_data *mii = GET_MII(sc);
 
 	DPRINTF(("%s: %s: enter\n", USBDEVNAME(sc->sc_dev), __func__));
 
 	if (sc->sc_dying)
 		return;
 
-	if ((ifp->if_flags & IFF_RUNNING) == 0) {
-		ifmr->ifm_active = IFM_ETHER | IFM_NONE;
-		ifmr->ifm_status = 0;
-		return;
-	}
-
-	mii_pollstat(mii);
-	ifmr->ifm_active = mii->mii_media_active;
-	ifmr->ifm_status = mii->mii_media_status;
+	ether_mediastatus(ifp, ifmr);
 }
 
 Static void
@@ -1476,7 +1456,7 @@ udav_lock_mii(struct udav_softc *sc)
 			__func__));
 
 	sc->sc_refcnt++;
-	lockmgr(&sc->sc_mii_lock, LK_EXCLUSIVE, NULL);
+	mutex_enter(&sc->sc_mii_lock);
 }
 
 Static void
@@ -1485,7 +1465,7 @@ udav_unlock_mii(struct udav_softc *sc)
 	DPRINTFN(0xff, ("%s: %s: enter\n", USBDEVNAME(sc->sc_dev),
 		       __func__));
 
-	lockmgr(&sc->sc_mii_lock, LK_RELEASE, NULL);
+	mutex_exit(&sc->sc_mii_lock);
 	if (--sc->sc_refcnt < 0)
 		usb_detach_wakeup(USBDEV(sc->sc_dev));
 }

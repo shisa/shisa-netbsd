@@ -1,4 +1,4 @@
-/*      $NetBSD: if_etherip.c,v 1.13 2007/09/16 02:19:44 dyoung Exp $        */
+/*      $NetBSD: if_etherip.c,v 1.16 2007/12/20 21:08:21 dyoung Exp $        */
 
 /*
  *  Copyright (c) 2006, Hans Rosenfeld <rosenfeld@grumpf.hope-2000.org>
@@ -86,6 +86,7 @@
  */
 
 #include <sys/cdefs.h>
+__KERNEL_RCSID(0, "$NetBSD: if_etherip.c,v 1.16 2007/12/20 21:08:21 dyoung Exp $");
 
 #include "opt_inet.h"
 #include "bpfilter.h"
@@ -102,6 +103,7 @@
 #include <sys/queue.h>
 #include <sys/kauth.h>
 #include <sys/socket.h>
+#include <sys/intr.h>
 
 #include <net/if.h>
 #include <net/if_dl.h>
@@ -348,7 +350,7 @@ etherip_start(struct ifnet *ifp)
 	struct etherip_softc *sc = (struct etherip_softc *)ifp->if_softc;
 
 	if(sc->sc_si)
-		softintr_schedule(sc->sc_si);
+		softint_schedule(sc->sc_si);
 }
 
 static void
@@ -517,7 +519,7 @@ etherip_set_tunnel(struct ifnet *ifp,
 	}
 
 	if (sc->sc_si) {
-		softintr_disestablish(sc->sc_si);
+		softint_disestablish(sc->sc_si);
 		sc->sc_si = NULL;
 	}
 
@@ -536,7 +538,7 @@ etherip_set_tunnel(struct ifnet *ifp,
 
 	ifp->if_flags |= IFF_RUNNING;
 
-	sc->sc_si = softintr_establish(IPL_SOFTNET, etheripintr, sc);
+	sc->sc_si = softint_establish(SOFTINT_NET, etheripintr, sc);
 	if (sc->sc_si == NULL)
 		error = ENOMEM;
 
@@ -555,7 +557,7 @@ etherip_delete_tunnel(struct ifnet *ifp)
 	s = splsoftnet();
 
 	if (sc->sc_si) {
-		softintr_disestablish(sc->sc_si);
+		softint_disestablish(sc->sc_si);
 		sc->sc_si = NULL;
 	}
 
@@ -578,7 +580,7 @@ etherip_init(struct ifnet *ifp)
 	struct etherip_softc *sc = ifp->if_softc;
 
 	if (sc->sc_si == NULL)
-		sc->sc_si = softintr_establish(IPL_SOFTNET, etheripintr, sc);
+		sc->sc_si = softint_establish(SOFTINT_NET, etheripintr, sc);
 
 	if (sc->sc_si == NULL)
 		return(ENOMEM);
@@ -687,11 +689,10 @@ etherip_sysctl_handler(SYSCTLFN_ARGS)
 		return EINVAL;
 
 	/* Commit change */
-	if (ether_nonstatic_aton(enaddr, addr) != 0 ||
-	    sockaddr_dl_setaddr(ifp->if_sadl, ifp->if_sadl->sdl_len,
-	                        enaddr, ETHER_ADDR_LEN) == NULL)
+	if (ether_nonstatic_aton(enaddr, addr) != 0)
 		return EINVAL;
 
+	if_set_sadl(ifp, enaddr, ETHER_ADDR_LEN);
 	return error;
 }
 

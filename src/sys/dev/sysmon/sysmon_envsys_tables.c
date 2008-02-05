@@ -1,11 +1,8 @@
-/* $NetBSD: sysmon_envsys_tables.c,v 1.1 2007/09/04 16:54:02 xtraeme Exp $ */
+/* $NetBSD: sysmon_envsys_tables.c,v 1.4 2007/12/07 11:47:50 xtraeme Exp $ */
 
 /*-
- * Copyright (c) 2007 The NetBSD Foundation, Inc.
+ * Copyright (c) 2007 Juan Romero Pardines.
  * All rights reserved.
- *
- * This code is derived from software contributed to The NetBSD Foundation
- * by Juan Romero Pardines.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -15,29 +12,21 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. All advertising materials mentioning features or use of this software
- *    must display the following acknowledgement:
- *      This product includes software developed by Juan Romero Pardines
- *      for the NetBSD Foundation, Inc. and its contributors.
- * 4. Neither the name of The NetBSD Foundation nor the names of its
- *    contributors may be used to endorse or promote products derived
- *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS
- * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
- * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
- * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS
- * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: sysmon_envsys_tables.c,v 1.1 2007/09/04 16:54:02 xtraeme Exp $");
+__KERNEL_RCSID(0, "$NetBSD: sysmon_envsys_tables.c,v 1.4 2007/12/07 11:47:50 xtraeme Exp $");
 
 #include <sys/types.h>
 
@@ -60,7 +49,8 @@ static const struct sme_description_table sme_units_description[] = {
 	{ ENVSYS_INDICATOR,	PENVSYS_TYPE_INDICATOR,	"Indicator" },
 	{ ENVSYS_INTEGER,	PENVSYS_TYPE_INDICATOR,	"Integer" },
 	{ ENVSYS_DRIVE,		PENVSYS_TYPE_DRIVE,	"Drive" },
-	{ ENVSYS_BATTERY_STATE,	PENVSYS_TYPE_BATTERY,	"Battery state" },
+	{ ENVSYS_BATTERY_CAPACITY, PENVSYS_TYPE_BATTERY,"Battery capacity" },
+	{ ENVSYS_BATTERY_CHARGE, -1,			"Battery charge" },
 	{ -1,			-1,			"unknown" }
 };
 
@@ -82,27 +72,28 @@ static const struct sme_description_table sme_state_description[] = {
  * Available drive state descriptions.
  */
 static const struct sme_description_table sme_drivestate_description[] = {
-	{ ENVSYS_DRIVE_EMPTY,		-1, 	"drive state is unknown" },
-	{ ENVSYS_DRIVE_READY,		-1, 	"drive is ready" },
-	{ ENVSYS_DRIVE_POWERUP,		-1, 	"drive is powering up" },
-	{ ENVSYS_DRIVE_ONLINE,		-1, 	"drive is online" },
-	{ ENVSYS_DRIVE_IDLE,		-1, 	"drive is idle" },
-	{ ENVSYS_DRIVE_ACTIVE,		-1, 	"drive is active" },
-	{ ENVSYS_DRIVE_REBUILD,		-1, 	"drive is rebuilding" },
-	{ ENVSYS_DRIVE_POWERDOWN,	-1, 	"drive is powering down" },
-	{ ENVSYS_DRIVE_FAIL,		-1, 	"drive failed" },
-	{ ENVSYS_DRIVE_PFAIL,		-1, 	"drive degraded" },
+	{ ENVSYS_DRIVE_EMPTY,		-1, 	"unknown" },
+	{ ENVSYS_DRIVE_READY,		-1, 	"ready" },
+	{ ENVSYS_DRIVE_POWERUP,		-1, 	"powering up" },
+	{ ENVSYS_DRIVE_ONLINE,		-1, 	"online" },
+	{ ENVSYS_DRIVE_IDLE,		-1, 	"idle" },
+	{ ENVSYS_DRIVE_ACTIVE,		-1, 	"active" },
+	{ ENVSYS_DRIVE_REBUILD,		-1, 	"rebuilding" },
+	{ ENVSYS_DRIVE_POWERDOWN,	-1, 	"powering down" },
+	{ ENVSYS_DRIVE_FAIL,		-1, 	"failed" },
+	{ ENVSYS_DRIVE_PFAIL,		-1, 	"degraded" },
+	{ ENVSYS_DRIVE_MIGRATING,	-1,	"migrating" },
 	{ -1,				-1, 	"unknown" }
 };
 
 /*
- * Available battery state descriptions.
+ * Available battery capacity descriptions.
  */
-static const struct sme_description_table sme_batterystate_description[] = {
-	{ ENVSYS_BATTERY_STATE_NORMAL,		-1,	"NORMAL" },
-	{ ENVSYS_BATTERY_STATE_WARNING,		-1, 	"WARNING" },
-	{ ENVSYS_BATTERY_STATE_CRITICAL,	-1, 	"CRITICAL" },
-	{ ENVSYS_BATTERY_STATE_LOW,		-1,	"LOW" },
+static const struct sme_description_table sme_batterycap_description[] = {
+	{ ENVSYS_BATTERY_CAPACITY_NORMAL,	-1,	"NORMAL" },
+	{ ENVSYS_BATTERY_CAPACITY_WARNING,	-1, 	"WARNING" },
+	{ ENVSYS_BATTERY_CAPACITY_CRITICAL,	-1, 	"CRITICAL" },
+	{ ENVSYS_BATTERY_CAPACITY_LOW,		-1,	"LOW" },
 	{ -1,					-1, 	"UNKNOWN" }
 };
 
@@ -115,7 +106,7 @@ sme_get_description_table(int type)
 	const struct sme_description_table *ud = sme_units_description;
 	const struct sme_description_table *sd = sme_state_description;
 	const struct sme_description_table *dd = sme_drivestate_description;
-	const struct sme_description_table *bd = sme_batterystate_description;
+	const struct sme_description_table *bd = sme_batterycap_description;
 
 	switch (type) {
 	case SME_DESC_UNITS:
@@ -124,7 +115,7 @@ sme_get_description_table(int type)
 		return sd;
 	case SME_DESC_DRIVE_STATES:
 		return dd;
-	case SME_DESC_BATTERY_STATES:
+	case SME_DESC_BATTERY_CAPACITY:
 		return bd;
 	default:
 		return NULL;

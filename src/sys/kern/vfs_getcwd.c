@@ -1,4 +1,4 @@
-/* $NetBSD: vfs_getcwd.c,v 1.35 2007/02/09 21:55:32 ad Exp $ */
+/* $NetBSD: vfs_getcwd.c,v 1.41 2007/12/20 23:03:13 dsl Exp $ */
 
 /*-
  * Copyright (c) 1999 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: vfs_getcwd.c,v 1.35 2007/02/09 21:55:32 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: vfs_getcwd.c,v 1.41 2007/12/20 23:03:13 dsl Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -119,7 +119,7 @@ getcwd_scandir(struct vnode **lvpp, struct vnode **uvpp, char **bpp,
 	 * current directory is still locked.
 	 */
 	if (bufp != NULL) {
-		error = VOP_GETATTR(lvp, &va, cred, l);
+		error = VOP_GETATTR(lvp, &va, cred);
 		if (error) {
 			vput(lvp);
 			*lvpp = NULL;
@@ -134,7 +134,6 @@ getcwd_scandir(struct vnode **lvpp, struct vnode **uvpp, char **bpp,
 	 */
 	cn.cn_nameiop = LOOKUP;
 	cn.cn_flags = ISLASTCN | ISDOTDOT | RDONLY;
-	cn.cn_lwp = l;
 	cn.cn_cred = cred;
 	cn.cn_pnbuf = NULL;
 	cn.cn_nameptr = "..";
@@ -250,7 +249,7 @@ unionread:
 	 * Deal with mount -o union, which unions only the
 	 * root directory of the mount.
 	 */
-	if ((uvp->v_flag & VROOT) &&
+	if ((uvp->v_vflag & VV_ROOT) &&
 	    (uvp->v_mount->mnt_flag & MNT_UNION)) {
 		struct vnode *tvp = uvp;
 
@@ -392,7 +391,7 @@ getcwd_common(struct vnode *lvp, struct vnode *rvp, char **bpp, char *bufp,
 		 * whether or not caller cares.
 		 */
 		if (flags & GETCWD_CHECK_ACCESS) {
-			error = VOP_ACCESS(lvp, perms, cred, l);
+			error = VOP_ACCESS(lvp, perms, cred);
 			if (error)
 				goto out;
 			perms = VEXEC|VREAD;
@@ -401,7 +400,7 @@ getcwd_common(struct vnode *lvp, struct vnode *rvp, char **bpp, char *bufp,
 		/*
 		 * step up if we're a covered vnode..
 		 */
-		while (lvp->v_flag & VROOT) {
+		while (lvp->v_vflag & VV_ROOT) {
 			struct vnode *tvp;
 
 			if (lvp == rvp)
@@ -513,18 +512,19 @@ proc_isunder(struct proc *p1, struct lwp *l2)
  */
 
 int
-sys___getcwd(struct lwp *l, void *v, register_t *retval)
+sys___getcwd(struct lwp *l, const struct sys___getcwd_args *uap, register_t *retval)
 {
-	struct sys___getcwd_args /* {
+	/* {
 		syscallarg(char *) bufp;
 		syscallarg(size_t) length;
-	} */ *uap = v;
+	} */
 
 	int     error;
 	char   *path;
 	char   *bp, *bend;
 	int     len = SCARG(uap, length);
 	int	lenused;
+	struct	cwdinfo *cwdi;
 
 	if (len > MAXPATHLEN * 4)
 		len = MAXPATHLEN * 4;
@@ -544,8 +544,11 @@ sys___getcwd(struct lwp *l, void *v, register_t *retval)
 	 * Since each entry takes up at least 2 bytes in the output buffer,
 	 * limit it to N/2 vnodes for an N byte buffer.
 	 */
-	error = getcwd_common(l->l_proc->p_cwdi->cwdi_cdir, NULL, &bp, path, 
+	cwdi = l->l_proc->p_cwdi;
+	rw_enter(&cwdi->cwdi_lock, RW_READER);
+	error = getcwd_common(cwdi->cwdi_cdir, NULL, &bp, path, 
 	    len/2, GETCWD_CHECK_ACCESS, l);
+	rw_exit(&cwdi->cwdi_lock);
 
 	if (error)
 		goto out;
@@ -557,4 +560,55 @@ sys___getcwd(struct lwp *l, void *v, register_t *retval)
 out:
 	free(path, M_TEMP);
 	return error;
+}
+
+/*
+ * Try to find a pathname for a vnode. Since there is no mapping
+ * vnode -> parent directory, this needs the NAMECACHE_ENTER_REVERSE
+ * option to work (to make cache_revlookup succeed).
+ */
+int
+vnode_to_path(char *path, size_t len, struct vnode *vp, struct lwp *curl,
+    struct proc *p)
+{
+	struct proc *curp = curl->l_proc;
+	int error, lenused, elen;
+	char *bp, *bend;
+	struct vnode *dvp;
+
+	bp = bend = &path[len];
+	*(--bp) = '\0';
+
+	error = vget(vp, LK_EXCLUSIVE | LK_RETRY);
+	if (error != 0)
+		return error;
+	error = cache_revlookup(vp, &dvp, &bp, path);
+	vput(vp);
+	if (error != 0)
+		return (error == -1 ? ENOENT : error);
+
+	error = vget(dvp, 0);
+	if (error != 0)
+		return error;
+	*(--bp) = '/';
+	/* XXX GETCWD_CHECK_ACCESS == 0x0001 */
+	error = getcwd_common(dvp, NULL, &bp, path, len / 2, 1, curl);
+
+	/*
+	 * Strip off emulation path for emulated processes looking at
+	 * the maps file of a process of the same emulation. (Won't
+	 * work if /emul/xxx is a symlink..)
+	 */
+	if (curp->p_emul == p->p_emul && curp->p_emul->e_path != NULL) {
+		elen = strlen(curp->p_emul->e_path);
+		if (!strncmp(bp, curp->p_emul->e_path, elen))
+			bp = &bp[elen];
+	}
+
+	lenused = bend - bp;
+
+	memcpy(path, bp, lenused);
+	path[lenused] = 0;
+
+	return 0;
 }

@@ -1,4 +1,4 @@
-/*	$NetBSD: svr4_machdep.c,v 1.25 2007/03/04 06:00:06 christos Exp $	*/
+/*	$NetBSD: svr4_machdep.c,v 1.27 2008/01/08 22:07:29 elad Exp $	*/
 
 /*-
  * Copyright (c) 1999 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: svr4_machdep.c,v 1.25 2007/03/04 06:00:06 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: svr4_machdep.c,v 1.27 2008/01/08 22:07:29 elad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -287,21 +287,18 @@ svr4_sendsig(const ksiginfo_t *ksi, const sigset_t *mask)
  * sysm68k()
  */
 int
-svr4_sys_sysarch(struct lwp *l, void *v, register_t *retval)
+svr4_sys_sysarch(struct lwp *l, const struct svr4_sys_sysarch_args *uap, register_t *retval)
 {
-	struct svr4_sys_sysarch_args /* {
+	/* {
 		syscallarg(int) op;
 		syscallarg(void *) a1;
-	} */ *uap = v;
+	} */
 	char tmp[MAXHOSTNAMELEN];
 	size_t len;
 	int error, name[2];
 
 	switch (SCARG(uap, op)) {
 	case SVR4_SYSARCH_SETNAME:
-		if ((error = kauth_authorize_generic(l->l_cred,
-		    KAUTH_GENERIC_ISSUSER, NULL)) != 0)
-			return (error);
 		if ((error = copyinstr(SCARG(uap, a1), tmp, sizeof (tmp), &len))
 		    != 0)
 			return error;

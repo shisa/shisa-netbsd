@@ -39,7 +39,7 @@
  * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGES.
  *
- * $Id: ahc_pci.c,v 1.59 2007/09/26 01:22:29 macallan Exp $
+ * $Id: ahc_pci.c,v 1.62 2008/01/28 16:08:38 macallan Exp $
  *
  * //depot/aic7xxx/aic7xxx/aic7xxx_pci.c#57 $
  *
@@ -50,7 +50,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ahc_pci.c,v 1.59 2007/09/26 01:22:29 macallan Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ahc_pci.c,v 1.62 2008/01/28 16:08:38 macallan Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -60,8 +60,8 @@ __KERNEL_RCSID(0, "$NetBSD: ahc_pci.c,v 1.59 2007/09/26 01:22:29 macallan Exp $"
 #include <sys/device.h>
 #include <sys/reboot.h>
 
-#include <machine/bus.h>
-#include <machine/intr.h>
+#include <sys/bus.h>
+#include <sys/intr.h>
 
 #include <dev/pci/pcireg.h>
 #include <dev/pci/pcivar.h>
@@ -709,6 +709,9 @@ static void ahc_probe_ext_scbram(struct ahc_softc *ahc);
 
 static void ahc_pci_intr(struct ahc_softc *);
 
+static bool ahc_pci_suspend(struct device *);
+static bool ahc_pci_resume(struct device *);
+
 static const struct ahc_pci_identity *
 ahc_find_pci_device(pcireg_t id, pcireg_t subid, u_int func)
 {
@@ -1005,8 +1008,8 @@ ahc_pci_attach(struct device *parent, struct device *self, void *aux)
 	 * that fail here but are perfectly capable of ultra speeds.
 	 */
 	override_ultra = FALSE;
-	prop_dictionary_get_bool(device_properties(self), "override_ultra",
-	    &override_ultra);
+	prop_dictionary_get_bool(device_properties(self),
+	    "aic7xxx-override-ultra", &override_ultra);
 
 	if (((ahc->features & AHC_ULTRA) != 0) && (!override_ultra)) {
 		uint32_t dvconfig;
@@ -1099,6 +1102,7 @@ ahc_pci_attach(struct device *parent, struct device *self, void *aux)
 	if (ahc_init(ahc))
 		goto error_out;
 
+	pmf_device_register(self, ahc_pci_suspend, ahc_pci_resume);
 	ahc_attach(ahc);
 
 	return;
@@ -1106,6 +1110,35 @@ ahc_pci_attach(struct device *parent, struct device *self, void *aux)
  error_out:
 	ahc_free(ahc);
 	return;
+}
+
+/*
+ * XXX we should call the real suspend and resume functions here
+ * but for some reason ahc_suspend() panics on shutdown
+ */
+
+static bool
+ahc_pci_suspend(struct device *dev)
+{
+	struct ahc_softc *sc = device_private(dev);
+#if 0
+	return (ahc_suspend(sc) == 0);
+#else
+	ahc_shutdown(sc);
+	return true;
+#endif
+}
+
+static bool
+ahc_pci_resume(struct device *dev)
+{
+#if 0
+	struct ahc_softc *sc = device_private(dev);
+
+	return (ahc_resume(sc) == 0);
+#else
+	return true;
+#endif
 }
 
 CFATTACH_DECL(ahc_pci, sizeof(struct ahc_softc),

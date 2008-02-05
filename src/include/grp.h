@@ -1,4 +1,4 @@
-/*	$NetBSD: grp.h,v 1.22 2005/05/24 17:36:29 kleink Exp $	*/
+/*	$NetBSD: grp.h,v 1.24 2007/10/19 15:58:52 christos Exp $	*/
 
 /*-
  * Copyright (c) 1989, 1993

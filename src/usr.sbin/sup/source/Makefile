@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.25 2007/07/20 16:39:05 christos Exp $
+#	$NetBSD: Makefile,v 1.28 2007/12/20 20:25:08 christos Exp $
 # Copyright (c) 1992,1991 Carnegie Mellon University
 # All Rights Reserved.
 # 
@@ -52,9 +52,10 @@ SITE1			!= uname -s | tr '[a-z]' '[A-Z]' | sed -e s/_.*//g
 SITE2			= $(shell uname -s | tr '[a-z]' '[A-Z]' \
 			    | sed -e s/_.*//g)
 SITE			= ${SITE1}${SITE2}
-TARDIR			= sup-0.0
+TARDIR			= sup-0.2
 
-LINUX_DEFINES		= -UMACH -DVAR_TMP -DHAS_DAEMON -DHAS_POSIX_DIR
+LINUX_DEFINES		= -UMACH -DVAR_TMP -DHAS_DAEMON -DHAS_POSIX_DIR \
+			  -DNEED_SETPROCTITLE
 NETBSD_DEFINES		= -UMACH -DVAR_TMP -DHAS_DAEMON -DHAS_POSIX_DIR \
 			    -DHAS_FPARSELN -DHAS_FGETLN -DHAS_VIS
 SOLARIS_DEFINES		= -UMACH -DVAR_TMP -DHAS_POSIX_DIR -DNEED_VSNPRINTF
@@ -81,7 +82,7 @@ SUPCL			= supcmain.o supcvers.o supcparse.o supcname.o \
 SUPS			= scm.o scmio.o stree.o log.o supmsg.o netcrypt.o
 EXTRA			= atoo.o errmsg.o expand.o ffilecopy.o filecopy.o \
 			  nxtarg.o path.o quit.o read_line.o run.o estrdup.o \
-			  skipto.o vprintf.o
+			  skipto.o vprintf.o setproctitle.o
 
 
 PROGRAMS		= sup supscan supfilesrv
@@ -92,6 +93,7 @@ AFS_LIBPATH		= /usr/afs/lib
 AFS_LIBS		= -L${AFS_LIBPATH}/afs -lkauth -lprot -L${AFS_LIBPATH} -lubik -lauth -lrxkad -lsys -ldes -lrx -llwp -lcmd -lcom_err -lc ${AFS_LIBPATH}/afs/util.a
 
 NETBSD_LIBS		= -lcrypt
+DRAGONFLY_LIBS		= -lcrypt
 LINUX_LIBS		= -lcrypt
 CYGWIN_LIBS		= -lcrypt
 CMUCS_LIBS		= -lsys
@@ -105,6 +107,8 @@ SOLARIS_LIBS		= -lsocket -lnsl
 SUNOS_LIBS		= 
 
 DEFS			= -UCMUCS -UCMU  ${${SITE}_DEFINES}
+#DEFS			+= -DDEFDIR=\"${PREFIX}/libdata/sup\"
+#DEFS			+= -DEE_XXX -DDEFSCAN=\"/var/\" -DDEFUSER=\"nobody\"
 LIBS			= ${EXTRALIBS}
 
 all: ${PROGRAMS}

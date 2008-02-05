@@ -1,4 +1,4 @@
-/*	$NetBSD: fd.c,v 1.75 2007/07/29 12:50:21 ad Exp $	*/
+/*	$NetBSD: fd.c,v 1.78 2008/01/02 11:48:37 ad Exp $	*/
 
 /*-
  * Copyright (c) 1998, 2003 The NetBSD Foundation, Inc.
@@ -88,7 +88,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: fd.c,v 1.75 2007/07/29 12:50:21 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: fd.c,v 1.78 2008/01/02 11:48:37 ad Exp $");
 
 #include "rnd.h"
 #include "opt_ddb.h"
@@ -131,8 +131,8 @@ __KERNEL_RCSID(0, "$NetBSD: fd.c,v 1.75 2007/07/29 12:50:21 ad Exp $");
 
 #include <dev/cons.h>
 
-#include <machine/cpu.h>
-#include <machine/bus.h>
+#include <sys/cpu.h>
+#include <sys/bus.h>
 
 #include "locators.h"
 
@@ -146,7 +146,7 @@ __KERNEL_RCSID(0, "$NetBSD: fd.c,v 1.75 2007/07/29 12:50:21 ad Exp $");
 #define	fd_cd	fdisa_cd
 #endif /* atari */
 
-#include <machine/intr.h>
+#include <sys/intr.h>
 
 #include <dev/isa/isavar.h>
 #include <dev/isa/isadmavar.h>
@@ -500,8 +500,7 @@ fdattach(parent, self, aux)
 	/*
 	 * Initialize and attach the disk structure.
 	 */
-	fd->sc_dk.dk_name = fd->sc_dev.dv_xname;
-	fd->sc_dk.dk_driver = &fddkdriver;
+	disk_init(&fd->sc_dk, fd->sc_dev.dv_xname, &fddkdriver);
 	disk_attach(&fd->sc_dk);
 
 	/*
@@ -1519,12 +1518,12 @@ fdformat(dev, finfo, l)
 	struct buf *bp;
 
 	/* set up a buffer header for fdstrategy() */
-	bp = getiobuf_nowait();
+	bp = getiobuf(NULL, false);
 	if (bp == NULL)
 		return ENOBUFS;
 
-	bp->b_vp = NULL;
-	bp->b_flags = B_BUSY | B_PHYS | B_FORMAT;
+	bp->b_cflags = BC_BUSY;
+	bp->b_flags = B_PHYS | B_FORMAT;
 	bp->b_proc = l->l_proc;
 	bp->b_dev = dev;
 

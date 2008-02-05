@@ -1,4 +1,4 @@
-/*	$NetBSD: util.h,v 1.47 2007/09/25 01:13:57 lukem Exp $	*/
+/*	$NetBSD: util.h,v 1.49 2007/12/14 16:36:19 christos Exp $	*/
 
 /*-
  * Copyright (c) 1995
@@ -50,14 +50,6 @@ typedef _BSD_TIME_T_    time_t;
 #define	PIDLOCK_NONBLOCK	1
 #define	PIDLOCK_USEHOSTNAME	2
 
-#define	HN_DECIMAL		0x01
-#define	HN_NOSPACE		0x02
-#define	HN_B			0x04
-#define	HN_DIVISOR_1000		0x08
-
-#define	HN_GETSCALE		0x10
-#define	HN_AUTOSCALE		0x20
-
 #define	PW_POLICY_BYSTRING	0
 #define	PW_POLICY_BYPASSWD	1
 #define	PW_POLICY_BYGROUP	2
@@ -73,15 +65,13 @@ struct sockaddr;
 
 typedef struct pw_policy *pw_policy_t; 
 
-char	       *flags_to_string(u_long, const char *);
+char	       *flags_to_string(unsigned long, const char *);
 pid_t		forkpty(int *, char *, struct termios *, struct winsize *);
 const char     *getbootfile(void);
 off_t		getlabeloffset(void);
 int		getlabelsector(void);
 int		getmaxpartitions(void);
 int		getrawpartition(void);
-int		humanize_number(char *, size_t, int64_t, const char *, int,
-		    int);
 void		login(const struct utmp *);
 void		loginx(const struct utmpx *);
 int		login_tty(int);
@@ -118,7 +108,7 @@ int		secure_path(const char *);
 int		snprintb(char *, size_t, const char *, uint64_t);
 int		sockaddr_snprintf(char *, size_t, const char *,
     const struct sockaddr *);
-int		string_to_flags(char **, u_long *, u_long *);
+int		string_to_flags(char **, unsigned long *, unsigned long *);
 int		ttyaction(const char *, const char *, const char *);
 int		ttylock(const char *, int, pid_t *);
 char	       *ttymsg(struct iovec *, int, const char *, int);

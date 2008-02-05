@@ -1,4 +1,4 @@
-/*	$NetBSD: umap_vfsops.c,v 1.69 2007/07/31 21:14:16 pooka Exp $	*/
+/*	$NetBSD: umap_vfsops.c,v 1.75 2008/01/28 14:31:19 dholland Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -41,7 +41,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: umap_vfsops.c,v 1.69 2007/07/31 21:14:16 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: umap_vfsops.c,v 1.75 2008/01/28 14:31:19 dholland Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -63,13 +63,13 @@ VFS_PROTOS(umapfs);
  * Mount umap layer
  */
 int
-umapfs_mount(mp, path, data, data_len, l)
+umapfs_mount(mp, path, data, data_len)
 	struct mount *mp;
 	const char *path;
 	void *data;
 	size_t *data_len;
-	struct lwp *l;
 {
+	struct lwp *l = curlwp;
 	struct nameidata nd;
 	struct umap_args *args = data;
 	struct vnode *lowerrootvp, *vp;
@@ -112,7 +112,7 @@ umapfs_mount(mp, path, data, data_len, l)
 	 * Find lower node
 	 */
 	NDINIT(&nd, LOOKUP, FOLLOW|LOCKLEAF,
-		UIO_USERSPACE, args->umap_target, l);
+		UIO_USERSPACE, args->umap_target);
 	if ((error = namei(&nd)) != 0)
 		return (error);
 
@@ -191,7 +191,7 @@ umapfs_mount(mp, path, data, data_len, l)
 	amp->umapm_bypass = umap_bypass;
 	amp->umapm_alloc = layer_node_alloc;	/* the default alloc is fine */
 	amp->umapm_vnodeop_p = umap_vnodeop_p;
-	simple_lock_init(&amp->umapm_hashlock);
+	mutex_init(&amp->umapm_hashlock, MUTEX_DEFAULT, IPL_NONE);
 	amp->umapm_node_hashtbl = hashinit(NUMAPNODECACHE, HASH_LIST, M_CACHE,
 	    M_WAITOK, &amp->umapm_node_hash);
 
@@ -211,13 +211,13 @@ umapfs_mount(mp, path, data, data_len, l)
 	/*
 	 * Unlock the node (either the lower or the alias)
 	 */
+	vp->v_vflag |= VV_ROOT;
 	VOP_UNLOCK(vp, 0);
 
 	/*
 	 * Keep a held reference to the root vnode.
 	 * It is vrele'd in umapfs_unmount.
 	 */
-	vp->v_flag |= VROOT;
 	amp->umapm_rootvp = vp;
 
 	error = set_statvfs_info(path, UIO_USERSPACE, args->umap_target,
@@ -233,9 +233,10 @@ umapfs_mount(mp, path, data, data_len, l)
  * Free reference to umap layer
  */
 int
-umapfs_unmount(struct mount *mp, int mntflags, struct lwp *l)
+umapfs_unmount(struct mount *mp, int mntflags)
 {
-	struct vnode *rtvp = MOUNTTOUMAPMOUNT(mp)->umapm_rootvp;
+	struct umap_mount *amp = MOUNTTOUMAPMOUNT(mp);
+	struct vnode *rtvp = amp->umapm_rootvp;
 	int error;
 	int flags = 0;
 
@@ -255,17 +256,14 @@ umapfs_unmount(struct mount *mp, int mntflags, struct lwp *l)
 	vprint("alias root of lower", rtvp);
 #endif
 	/*
-	 * Release reference on underlying root vnode
-	 */
-	vrele(rtvp);
-	/*
-	 * And blow it away for future re-use
+	 * Blow it away for future re-use
 	 */
 	vgone(rtvp);
 	/*
 	 * Finally, throw away the umap_mount structure
 	 */
-	free(mp->mnt_data, M_UFSMNT);	/* XXX */
+	mutex_destroy(&amp->umapm_hashlock);
+	free(amp, M_UFSMNT);	/* XXX */
 	mp->mnt_data = 0;
 	return (0);
 }
@@ -318,6 +316,8 @@ struct vfsops umapfs_vfsops = {
 	layerfs_snapshot,
 	vfs_stdextattrctl,
 	(void *)eopnotsupp,		/* vfs_suspendctl */
+	layerfs_renamelock_enter,
+	layerfs_renamelock_exit,
 	umapfs_vnodeopv_descs,
 	0,				/* vfs_refcount */
 	{ NULL, NULL },

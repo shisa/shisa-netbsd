@@ -1,4 +1,4 @@
-/*	$NetBSD: sched.h,v 1.37 2007/09/21 01:50:36 rmind Exp $	*/
+/*	$NetBSD: sched.h,v 1.46 2008/01/26 17:55:29 rmind Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2000, 2001, 2002, 2007 The NetBSD Foundation, Inc.
@@ -77,27 +77,60 @@
 #define	_SYS_SCHED_H_
 
 #include <sys/featuretest.h>
+#include <sys/types.h>
 
 #if defined(_KERNEL_OPT)
 #include "opt_multiprocessor.h"
 #include "opt_lockdebug.h"
-#include "opt_sched.h"
 #endif
 
 struct sched_param {
+	int	sched_class;
 	int	sched_priority;
+	int	_reserved1;
+	int	_reserved2;
 };
 
 /*
  * Scheduling policies required by IEEE Std 1003.1-2001
  */
-#define	SCHED_OTHER	0	/* Behavior can be FIFO or RR, or not */
+#define	SCHED_NONE	-1
+#define	SCHED_OTHER	0
 #define	SCHED_FIFO	1
 #define	SCHED_RR	2
 
-/* Other nonstandard policies: */
-
 #if defined(_NETBSD_SOURCE)
+
+/* XXX: Size of the CPU set bitmap */
+#define	CPUSET_SHIFT	5
+#define	CPUSET_MASK	31
+#if MAXCPUS > 32
+#define	CPUSET_SIZE	(MAXCPUS >> CPUSET_SHIFT)
+#else
+#define	CPUSET_SIZE	1
+#endif
+
+/* Bitmap of the CPUs */
+typedef struct {
+	uint32_t	bits[CPUSET_SIZE];
+} cpuset_t;
+
+#define	CPU_ZERO(c)	\
+	(memset(c, 0, sizeof(cpuset_t)))
+
+#define	CPU_ISSET(i, c)	\
+	((1 << (i & CPUSET_MASK)) & (c)->bits[i >> CPUSET_SHIFT])
+
+#define	CPU_SET(i, c)	\
+	((c)->bits[i >> CPUSET_SHIFT] |= 1 << (i & CPUSET_MASK))
+
+#define	CPU_CLR(i, c)	\
+	((c)->bits[i >> CPUSET_SHIFT] &= ~(1 << (i & CPUSET_MASK)))
+
+int	_sched_getaffinity(pid_t, lwpid_t, size_t, void *);
+int	_sched_setaffinity(pid_t, lwpid_t, size_t, void *);
+int	_sched_getparam(pid_t, lwpid_t, struct sched_param *);
+int	_sched_setparam(pid_t, lwpid_t, const struct sched_param *);
 
 /*
  * CPU states.
@@ -125,18 +158,21 @@ struct sched_param {
  * c:	cpu_lock
  */
 struct schedstate_percpu {
-	void		*spc_sched_info;/* (: scheduler-specific structure */
+	/* First set of data is likely to be accessed by other CPUs. */
 	kmutex_t	*spc_mutex;	/* (: lock on below, runnable LWPs */
 	kmutex_t	spc_lwplock;	/* (: general purpose lock for LWPs */
-	struct timeval	spc_runtime;	/* s: time curlwp started running */
-	volatile int	spc_flags;	/* m: flags; see below */
+	pri_t		spc_curpriority;/* m: usrpri of curlwp */
+	psetid_t	spc_psid;	/* (: processor-set ID */
+	time_t		spc_lastmod;	/* c: time of last cpu state change */
+
+	/* For the most part, this set of data is CPU-private. */
+	void		*spc_sched_info;/* (: scheduler-specific structure */
+	volatile int	spc_flags;	/* s: flags; see below */
 	u_int		spc_schedticks;	/* s: ticks for schedclock() */
 	uint64_t	spc_cp_time[CPUSTATES];/* s: CPU state statistics */
-	pri_t		spc_curpriority;/* m: usrpri of curlwp */
 	int		spc_ticks;	/* s: ticks until sched_tick() */
 	int		spc_pscnt;	/* s: prof/stat counter */
 	int		spc_psdiv;	/* s: prof/stat divisor */
-	time_t		spc_lastmod;	/* c: time of last cpu state change */
 };
 
 /* spc_flags */
@@ -162,11 +198,12 @@ struct schedstate_percpu {
 #define	CLONE_VFORK		0x00004000	/* parent blocks until child
 						   exits */
 
-#endif /* !_POSIX_SOURCE && !_XOPEN_SOURCE && !_ANSI_SOURCE */
+#endif /* _NETBSD_SOURCE */
 
 #ifdef _KERNEL
 
 extern int schedhz;			/* ideally: 16 */
+extern const int schedppq;
 
 struct proc;
 struct cpu_info;
@@ -181,12 +218,12 @@ void		sched_rqinit(void);
 void		sched_cpuattach(struct cpu_info *);
 void		sched_setup(void);
 
-/* Time-driven enevents */
+/* Time-driven events */
 void		sched_tick(struct cpu_info *);
 void		schedclock(struct lwp *);
 void		sched_schedclock(struct lwp *);
 void		sched_pstats(void *);
-void		sched_pstats_hook(struct proc *, int);
+void		sched_pstats_hook(struct lwp *);
 
 /* Runqueue-related functions */
 bool		sched_curcpu_runnable_p(void);
@@ -196,22 +233,28 @@ struct lwp *	sched_nextlwp(void);
 
 /* Priority adjustment */
 void		sched_nice(struct proc *, int);
-pri_t		sched_kpri(struct lwp *);
 
 /* Handlers of fork and exit */
 void		sched_proc_fork(struct proc *, struct proc *);
 void		sched_proc_exit(struct proc *, struct proc *);
-void		sched_lwp_fork(struct lwp *);
+void		sched_lwp_fork(struct lwp *, struct lwp *);
 void		sched_lwp_exit(struct lwp *);
+void		sched_lwp_collect(struct lwp *);
+
+void		sched_slept(struct lwp *);
+void		sched_wakeup(struct lwp *);
 
 void		setrunnable(struct lwp *);
 void		sched_setrunnable(struct lwp *);
+
+struct cpu_info *sched_takecpu(struct lwp *);
 void		sched_print_runqueue(void (*pr)(const char *, ...));
 
 /* Dispatching */
 void		preempt(void);
 int		mi_switch(struct lwp *);
-inline void	resched_cpu(struct lwp *);
+void		resched_cpu(struct lwp *);
+void		updatertime(lwp_t *, const struct bintime *);
 
 #endif	/* _KERNEL */
 #endif	/* _SYS_SCHED_H_ */

@@ -1,4 +1,4 @@
-/* $NetBSD: envsys.h,v 1.16 2007/09/04 16:54:02 xtraeme Exp $ */
+/* $NetBSD: envsys.h,v 1.20 2007/12/07 11:47:49 xtraeme Exp $ */
 
 /*-
  * Copyright (c) 1999, 2007 The NetBSD Foundation, Inc.
@@ -45,6 +45,7 @@
 
 #include <sys/ioccom.h>
 #include <sys/power.h>
+#include <sys/queue.h>
 
 /*
  * ENVironmental SYStem version 2 (aka ENVSYS 2)
@@ -53,8 +54,9 @@
 #define ENVSYS_MAXSENSORS	512
 #define ENVSYS_DESCLEN		32
 
-/* struct used by a device sensor */
+/* struct used by a sensor */
 struct envsys_data {
+	TAILQ_ENTRY(envsys_data)	sensors_head;
 	uint32_t	sensor;		/* sensor number */
 	uint32_t	units;		/* type of sensor */
 	uint32_t	state;		/* sensor state */
@@ -65,6 +67,7 @@ struct envsys_data {
 	int32_t		value_max;	/* max value */
 	int32_t		value_min;	/* min value */
 	int32_t		value_avg;	/* avg value */
+	int		upropset;	/* userland property set? */
 	bool		monitor;	/* monitoring enabled/disabled */
 	char		desc[ENVSYS_DESCLEN];	/* sensor description */
 };
@@ -85,7 +88,8 @@ enum envsys_units {
 	ENVSYS_INDICATOR,		/* Indicator */
 	ENVSYS_INTEGER,			/* Integer */
 	ENVSYS_DRIVE,			/* Drive */
-	ENVSYS_BATTERY_STATE,		/* Battery state */
+	ENVSYS_BATTERY_CAPACITY,	/* Battery capacity */
+	ENVSYS_BATTERY_CHARGE,		/* Battery charging/discharging */
 	ENVSYS_NSENSORS
 };
 
@@ -111,15 +115,16 @@ enum envsys_drive_states {
 	ENVSYS_DRIVE_REBUILD,		/* drive is rebuilding */
 	ENVSYS_DRIVE_POWERDOWN,		/* drive is powered down */
 	ENVSYS_DRIVE_FAIL,		/* drive failed */
-	ENVSYS_DRIVE_PFAIL		/* drive is degraded */
+	ENVSYS_DRIVE_PFAIL,		/* drive is degraded */
+	ENVSYS_DRIVE_MIGRATING		/* drive is migrating */
 };
 
-/* sensor battery states */
-enum envsys_battery_states {
-	ENVSYS_BATTERY_STATE_NORMAL	= 1,	/* normal cap in battery */
-	ENVSYS_BATTERY_STATE_WARNING,		/* warning cap in battery */
-	ENVSYS_BATTERY_STATE_CRITICAL,		/* critical cap in battery */
-	ENVSYS_BATTERY_STATE_LOW		/* low cap in battery */
+/* sensor battery capacity states */
+enum envsys_battery_capacity_states {
+	ENVSYS_BATTERY_CAPACITY_NORMAL	= 1,	/* normal cap in battery */
+	ENVSYS_BATTERY_CAPACITY_WARNING,	/* warning cap in battery */
+	ENVSYS_BATTERY_CAPACITY_CRITICAL,	/* critical cap in battery */
+	ENVSYS_BATTERY_CAPACITY_LOW		/* low cap in battery */
 };
 
 /* sensor flags */
@@ -137,10 +142,10 @@ enum envsys_battery_states {
 #define ENVSYS_FMONWARNOVER	0x00000200	/* monitor a warnover state */
 #define ENVSYS_FMONSTCHANGED	0x00000400	/* monitor a battery/drive state */
 #define ENVSYS_FMONNOTSUPP	0x00000800	/* monitoring not supported */
-#define ENVSYS_FNOTVALID 	0x00001000	/* sensor is invalid */
 
-#define ENVSYS_GETDICTIONARY		_IOWR('E', 0, struct plistref)
-#define ENVSYS_SETDICTIONARY		_IOWR('E', 1, struct plistref)
+#define ENVSYS_GETDICTIONARY	_IOWR('E', 0, struct plistref)
+#define ENVSYS_SETDICTIONARY	_IOWR('E', 1, struct plistref)
+#define ENVSYS_REMOVEPROPS	_IOWR('E', 2, struct plistref)
 
 /*
  * Compatibility with old interface. Only ENVSYS_GTREDATA
@@ -202,7 +207,7 @@ static const char * const envsysdrivestatus[] = {
 #define ENVSYS_FAVGVALID	0x00000010  /* avg for this sens is valid */
 #define ENVSYS_FFRACVALID	0x00000020  /* display fraction of max */
 
-#define ENVSYS_GTREDATA _IOWR('E', 2, envsys_tre_data_t)
+#define ENVSYS_GTREDATA 	_IOWR('E', 2, envsys_tre_data_t)
 
 /* set and check sensor info */
 
@@ -216,6 +221,6 @@ struct envsys_basic_info {
 };
 typedef struct envsys_basic_info envsys_basic_info_t;
 
-#define ENVSYS_GTREINFO _IOWR('E', 4, envsys_basic_info_t)
+#define ENVSYS_GTREINFO 	_IOWR('E', 4, envsys_basic_info_t)
 
 #endif /* _SYS_ENVSYS_H_ */

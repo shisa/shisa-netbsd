@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.32 2007/04/22 08:30:01 dsl Exp $
+#	$NetBSD: Makefile,v 1.34 2008/01/17 15:10:53 njoly Exp $
 
 .include "../Makefile.inc"
 
@@ -37,10 +37,19 @@ SRCS+=	linux_syscall.c linux_trap.c
 SRCS+=	linux_sigcode.S
 .endif
 
+.if ${MACHINE} == "amd64"
+.PATH:	$S/compat/linux/arch/${MACHINE}
+.PATH:	$S/arch/${MACHINE}/${MACHINE}
+.PATH:	$S/arch/x86/x86
+SRCS+=	linux_file64.c linux_futex.c linux_misc_notalpha.c linux_sig_notalpha.c
+SRCS+=	linux_syscall.c linux_trap.c
+SRCS+=	linux_sigcode.S
+.endif
+
 .if ${MACHINE_ARCH} == "m68k"
 SRCS+=	linux_ipccall.c linux_llseek.c linux_misc_notalpha.c		\
 	linux_oldselect.c linux_sig_notalpha.c 	\
-	linux_socketcall.c linux_oldmmap.c linux_file64.c
+	linux_socketcall.c linux_oldmmap.c linux_file64.c linux_uid16.c
 SRCS+=	linux_sig_machdep.S
 .endif
 

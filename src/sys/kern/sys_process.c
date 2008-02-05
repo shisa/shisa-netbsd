@@ -1,4 +1,4 @@
-/*	$NetBSD: sys_process.c,v 1.128 2007/09/21 19:14:13 dsl Exp $	*/
+/*	$NetBSD: sys_process.c,v 1.135 2008/01/23 15:04:40 elad Exp $	*/
 
 /*-
  * Copyright (c) 1982, 1986, 1989, 1993
@@ -89,7 +89,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: sys_process.c,v 1.128 2007/09/21 19:14:13 dsl Exp $");
+__KERNEL_RCSID(0, "$NetBSD: sys_process.c,v 1.135 2008/01/23 15:04:40 elad Exp $");
 
 #include "opt_coredump.h"
 #include "opt_ptrace.h"
@@ -117,14 +117,14 @@ __KERNEL_RCSID(0, "$NetBSD: sys_process.c,v 1.128 2007/09/21 19:14:13 dsl Exp $"
  * Process debugging system call.
  */
 int
-sys_ptrace(struct lwp *l, void *v, register_t *retval)
+sys_ptrace(struct lwp *l, const struct sys_ptrace_args *uap, register_t *retval)
 {
-	struct sys_ptrace_args /* {
+	/* {
 		syscallarg(int) req;
 		syscallarg(pid_t) pid;
 		syscallarg(void *) addr;
 		syscallarg(int) data;
-	} */ *uap = v;
+	} */
 	struct proc *p = l->l_proc;
 	struct lwp *lt;
 	struct proc *t;				/* target process */
@@ -134,6 +134,7 @@ sys_ptrace(struct lwp *l, void *v, register_t *retval)
 	struct ptrace_lwpinfo pl;
 	struct vmspace *vm;
 	int error, write, tmp, req, pheld;
+	int signo;
 	ksiginfo_t ksi;
 #ifdef COREDUMP
 	char *path;
@@ -149,20 +150,23 @@ sys_ptrace(struct lwp *l, void *v, register_t *retval)
 	mutex_enter(&proclist_lock);
 
 	/* "A foolish consistency..." XXX */
-	if (req == PT_TRACE_ME)
+	if (req == PT_TRACE_ME) {
 		t = p;
-	else {
+		mutex_enter(&t->p_mutex);
+	} else {
 		/* Find the process we're supposed to be operating on. */
 		if ((t = p_find(SCARG(uap, pid), PFIND_LOCKED)) == NULL) {
 			mutex_exit(&proclist_lock);
 			return (ESRCH);
 		}
 
-		/* XXX elad - this should be in pfind(). */
+		/* XXX-elad */
+		mutex_enter(&t->p_mutex);
 		error = kauth_authorize_process(l->l_cred, KAUTH_PROCESS_CANSEE,
-		    t, NULL, NULL, NULL);
+		    t, KAUTH_ARG(KAUTH_REQ_PROCESS_CANSEE_ENTRY), NULL, NULL);
 		if (error) {
 			mutex_exit(&proclist_lock);
+			mutex_exit(&t->p_mutex);
 			return (ESRCH);
 		}
 	}
@@ -171,12 +175,10 @@ sys_ptrace(struct lwp *l, void *v, register_t *retval)
 	 * Grab a reference on the process to prevent it from execing or
 	 * exiting.
 	 */
-	mutex_enter(&t->p_mutex);
-	error = proc_addref(t);
-	if (error != 0) {
-		mutex_exit(&t->p_mutex);
+	if (!rw_tryenter(&t->p_reflock, RW_READER)) {
 		mutex_exit(&proclist_lock);
-		return error;
+		mutex_exit(&t->p_mutex);
+		return EBUSY;
 	}
 
 	/* Make sure we can operate on it. */
@@ -315,13 +317,13 @@ sys_ptrace(struct lwp *l, void *v, register_t *retval)
 
 	if (error == 0)
 		error = kauth_authorize_process(l->l_cred,
-		    KAUTH_PROCESS_CANPTRACE, t, KAUTH_ARG(req),
+		    KAUTH_PROCESS_PTRACE, t, KAUTH_ARG(req),
 		    NULL, NULL);
 
 	if (error != 0) {
 		mutex_exit(&proclist_lock);
-		proc_delref(t);
 		mutex_exit(&t->p_mutex);
+		rw_exit(&t->p_reflock);
 		return error;
 	}
 
@@ -420,15 +422,12 @@ sys_ptrace(struct lwp *l, void *v, register_t *retval)
 			break;
 		case PIOD_WRITE_D:
 		case PIOD_WRITE_I:
-#if defined(__HAVE_RAS)
 			/*
 			 * Can't write to a RAS
 			 */
-			if (!LIST_EMPTY(&t->p_raslist) &&
-			    (ras_lookup(t, SCARG(uap, addr)) != (void *)-1)) {
+			if (ras_lookup(t, SCARG(uap, addr)) != (void *)-1) {
 				return (EACCES);
 			}
-#endif
 			uio.uio_rw = UIO_WRITE;
 			break;
 		default:
@@ -562,6 +561,7 @@ sys_ptrace(struct lwp *l, void *v, register_t *retval)
 			t->p_opptr = NULL;
 		}
 
+		signo = SCARG(uap, data);
 	sendsig:
 		/* Finally, deliver the requested signal (or none). */
 		mutex_enter(&proclist_mutex);
@@ -572,11 +572,11 @@ sys_ptrace(struct lwp *l, void *v, register_t *retval)
 			 * signal, make all efforts to ensure that at
 			 * an LWP runs to see it.
 			 */
-			t->p_xstat = SCARG(uap, data);
+			t->p_xstat = signo;
 			proc_unstop(t);
-		} else if (SCARG(uap, data) != 0) {
+		} else if (signo != 0) {
 			KSI_INIT_EMPTY(&ksi);
-			ksi.ksi_signo = SCARG(uap, data);
+			ksi.ksi_signo = signo;
 			kpsignal2(t, &ksi);
 		}
 		mutex_exit(&t->p_smutex);
@@ -585,7 +585,7 @@ sys_ptrace(struct lwp *l, void *v, register_t *retval)
 
 	case  PT_KILL:
 		/* just send the process a KILL signal. */
-		SCARG(uap, data) = SIGKILL;
+		signo = SIGKILL;
 		goto sendsig;	/* in PT_CONTINUE, above. */
 
 	case  PT_ATTACH:
@@ -607,7 +607,7 @@ sys_ptrace(struct lwp *l, void *v, register_t *retval)
 		mutex_enter(&t->p_smutex);
 		SET(t->p_slflag, PSL_TRACED);
 		mutex_exit(&t->p_smutex);
-		SCARG(uap, data) = SIGSTOP;
+		signo = SIGSTOP;
 		goto sendsig;
 
 	case PT_LWPINFO:
@@ -632,6 +632,8 @@ sys_ptrace(struct lwp *l, void *v, register_t *retval)
 			}
 			lt = LIST_NEXT(lt, l_sibling);
 		}
+		while (lt != NULL && lt->l_stat == LSZOMB)
+			lt = LIST_NEXT(lt, l_sibling);
 		pl.pl_lwpid = 0;
 		pl.pl_event = 0;
 		if (lt) {
@@ -741,16 +743,11 @@ sys_ptrace(struct lwp *l, void *v, register_t *retval)
 
 	if (lt != NULL)
 		lwp_delref(lt);
-
 	if (pheld) {
-		proc_delref(t);
 		mutex_exit(&t->p_mutex);
 		mutex_exit(&proclist_lock);
-	} else {
-		mutex_enter(&t->p_mutex);
-		proc_delref(t);
-		mutex_exit(&t->p_mutex);
 	}
+	rw_exit(&t->p_reflock);
 
 	return error;
 }
@@ -864,7 +861,7 @@ process_validfpregs(struct lwp *l)
 }
 #endif /* PTRACE */
 
-#if defined(KTRACE) || defined(PTRACE) || defined(SYSTRACE)
+#if defined(KTRACE) || defined(PTRACE)
 int
 process_domem(struct lwp *curl /*tracer*/,
     struct lwp *l /*traced*/,
@@ -908,12 +905,13 @@ process_domem(struct lwp *curl /*tracer*/,
 #endif
 	return (error);
 }
-#endif /* KTRACE || PTRACE || SYSTRACE */
+#endif /* KTRACE || PTRACE */
 
 #if defined(KTRACE) || defined(PTRACE)
 void
-process_stoptrace(struct lwp *l)
+process_stoptrace(void)
 {
+	struct lwp *l = curlwp;
 	struct proc *p = l->l_proc, *pp;
 
 	/* XXXSMP proc_stop -> child_psignal -> kpsignal2 -> pool_get */ 

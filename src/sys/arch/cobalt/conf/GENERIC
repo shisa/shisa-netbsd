@@ -1,4 +1,4 @@
-# $NetBSD: GENERIC,v 1.108 2007/06/04 08:55:20 martin Exp $
+# $NetBSD: GENERIC,v 1.111 2007/12/31 15:31:51 ad Exp $
 #
 # GENERIC machine description file
 # 
@@ -22,21 +22,15 @@ include 	"arch/cobalt/conf/std.cobalt"
 
 options 	INCLUDE_CONFIG_FILE	# embed config file in kernel binary
 
-#ident 		"GENERIC-$Revision: 1.108 $"
+#ident 		"GENERIC-$Revision: 1.111 $"
 
 maxusers	32
 
 # Standard system options
 options 	KTRACE		# system call tracing support
-#options 	SYSTRACE	# system call vetting via systrace(1)
 options 	SYSVMSG		# System V message queues
 options 	SYSVSEM		# System V semaphores
-#options 	SEMMNI=10	# number of semaphore identifiers
-#options 	SEMMNS=60	# number of semaphores in system
-#options 	SEMUME=10	# max number of undo entries per process
-#options 	SEMMNU=30	# number of undo structures in system
 options 	SYSVSHM		# System V shared memory
-#options 	SHMMAXPGS=1024	# 1024 pages is the default
 options 	P1003_1B_SEMAPHORE # p1003.1b semaphore support
 options 	LKM		# loadable kernel modules
 options 	NTP		# network time protocol

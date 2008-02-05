@@ -1,4 +1,4 @@
-/*	$NetBSD: magma.c,v 1.42 2007/08/12 17:53:01 macallan Exp $	*/
+/*	$NetBSD: magma.c,v 1.45 2007/11/19 18:51:50 ad Exp $	*/
 /*
  * magma.c
  *
@@ -38,7 +38,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: magma.c,v 1.42 2007/08/12 17:53:01 macallan Exp $");
+__KERNEL_RCSID(0, "$NetBSD: magma.c,v 1.45 2007/11/19 18:51:50 ad Exp $");
 
 #if 0
 #define MAGMA_DEBUG
@@ -61,9 +61,9 @@ __KERNEL_RCSID(0, "$NetBSD: magma.c,v 1.42 2007/08/12 17:53:01 macallan Exp $");
 #include <sys/conf.h>
 #include <sys/errno.h>
 #include <sys/kauth.h>
+#include <sys/intr.h>
 
-#include <machine/bus.h>
-#include <machine/intr.h>
+#include <sys/bus.h>
 #include <machine/autoconf.h>
 
 #include <dev/sbus/sbusvar.h>
@@ -492,7 +492,7 @@ magma_attach(parent, self, aux)
 
 	(void)bus_intr_establish(sa->sa_bustag, sa->sa_pri, IPL_SERIAL,
 				 magma_hard, sc);
-	sc->ms_sicookie = softintr_establish(IPL_SOFTSERIAL, magma_soft, sc);
+	sc->ms_sicookie = softint_establish(SOFTINT_SERIAL, magma_soft, sc);
 	if (sc->ms_sicookie == NULL) {
 		printf("\n%s: cannot establish soft int handler\n",
 			sc->ms_dev.dv_xname);
@@ -720,7 +720,7 @@ magma_hard(arg)
 
 	if (needsoftint)
 		/* trigger the soft interrupt */
-		softintr_schedule(sc->ms_sicookie);
+		softint_schedule(sc->ms_sicookie);
 
 	return(serviced);
 }
@@ -1224,22 +1224,7 @@ mtty_start(tp)
 	 * or delaying or stopped
 	 */
 	if( !ISSET(tp->t_state, TS_TTSTOP | TS_TIMEOUT | TS_BUSY) ) {
-
-		/* if we are sleeping and output has drained below
-		 * low water mark, awaken
-		 */
-		if( tp->t_outq.c_cc <= tp->t_lowat ) {
-			if( ISSET(tp->t_state, TS_ASLEEP) ) {
-				CLR(tp->t_state, TS_ASLEEP);
-				wakeup(&tp->t_outq);
-			}
-
-			selwakeup(&tp->t_wsel);
-		}
-
-		/* if something to send, start transmitting
-		 */
-		if( tp->t_outq.c_cc ) {
+		if (ttypull(tp)) {
 			mp->mp_txc = ndqb(&tp->t_outq, 0);
 			mp->mp_txp = tp->t_outq.c_cf;
 			SET(tp->t_state, TS_BUSY);

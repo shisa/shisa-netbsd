@@ -1,4 +1,4 @@
-.\"	$NetBSD: hier.7,v 1.75 2007/01/06 13:03:50 wiz Exp $
+.\"	$NetBSD: hier.7,v 1.80 2008/01/09 11:26:13 simonb Exp $
 .\"
 .\" Copyright (c) 1990, 1993, 1994
 .\"	The Regents of the University of California.  All rights reserved.
@@ -29,7 +29,7 @@
 .\"
 .\"	@(#)hier.7	8.5 (Berkeley) 6/1/94
 .\"
-.Dd January 6, 2007
+.Dd July 11, 2007
 .Dt HIER 7
 .Os
 .Sh NAME
@@ -412,6 +412,9 @@ standard C include files
 .Bl -tag -width "protocols/" -compact
 .It Sy arpa/
 include files for Internet service protocols
+.It Sy atf/
+include files for the Automated Testing Framework; see
+.Xr atf 1
 .It Sy g++/
 include files for the C++ compiler
 .It Sy machine/
@@ -595,6 +598,10 @@ timezone configuration information;
 see
 .Xr tzfile 5
 .El
+.It Sy tests/
+test programs; see
+.Xr atf-run 1
+for information on how to run them
 .El
 .Pp
 .It Sy /usr/src/
@@ -709,8 +716,6 @@ MIPS based evaluation boards
 PowerPC based evaluation boards and appliances
 .It Sy evbsh3/
 SH3/SH4 based evaluation boards
-.It Sy evbsh5/
-SH5 based evaluation boards
 .It Sy ews4800mips/
 NEC's MIPS based EWS4800 workstations
 .It Sy hp300/
@@ -759,14 +764,10 @@ Sony's MIPS-based NEWS workstations
 NeXT 68k "black" hardware
 .It Sy ofppc/
 Open Firmware PowerPC workstations
-.It Sy pc532/
-The NS32532-based PC532 computer
 .It Sy playstation2/
 SONY PlayStation 2
 .It Sy pmax/
 Digital MIPS-based DECstations and DECsystems
-.It Sy pmppc/
-Artesyn's PM/PPC board
 .It Sy powerpc/
 PowerPC processor support
 .It Sy prep/
@@ -779,8 +780,6 @@ Broadcom/SiByte evaluation boards
 Silicon Graphics' MIPS-based workstations
 .It Sy sh3/
 SH3/SH4 processor general support
-.It Sy sh5/
-SH5 processor general support
 .It Sy shark/
 Digital DNARD ("Shark")
 .It Sy sparc/
@@ -1015,6 +1014,9 @@ file system support
 .It Sy uvm/
 UVM virtual memory system
 .El
+.It Sy tests/
+source for test programs in
+.Pa /usr/tests
 .It Sy usr.bin/
 source for utilities/files in
 .Pa /usr/bin

@@ -1,4 +1,4 @@
-/*	$NetBSD: resize.c,v 1.15 2007/08/27 19:54:29 jdc Exp $	*/
+/*	$NetBSD: resize.c,v 1.17 2007/11/08 06:34:34 jdc Exp $	*/
 
 /*
  * Copyright (c) 2001
@@ -40,7 +40,7 @@
 #if 0
 static char sccsid[] = "@(#)resize.c   blymn 2001/08/26";
 #else
-__RCSID("$NetBSD: resize.c,v 1.15 2007/08/27 19:54:29 jdc Exp $");
+__RCSID("$NetBSD: resize.c,v 1.17 2007/11/08 06:34:34 jdc Exp $");
 #endif
 #endif				/* not lint */
 
@@ -49,6 +49,7 @@ __RCSID("$NetBSD: resize.c,v 1.15 2007/08/27 19:54:29 jdc Exp $");
 #include "curses.h"
 #include "curses_private.h"
 
+static int __resizeterm(WINDOW *win, int nlines, int ncols);
 static int __resizewin(WINDOW *win, int nlines, int ncols);
 
 /*
@@ -71,25 +72,52 @@ wresize(WINDOW *win, int req_nlines, int req_ncols)
 	nlines = req_nlines;
 	ncols = req_ncols;
 	if (win->orig == NULL) {
-		/* bound window to screen */
-		if (win->begy + nlines > LINES)
-			nlines = 0;
-		if (nlines <= 0)
-			nlines += LINES - win->begy;
-		if (win->begx + ncols > COLS)
-			ncols = 0;
-		if (ncols <= 0)
-			ncols += COLS - win->begx;
+		/* bound "our" windows by the screen size */
+		if (win == curscr || win == __virtscr || win == stdscr) {
+			if (nlines > LINES)
+				nlines = LINES;
+			if (nlines < 1)
+				nlines = 1;
+			if (ncols > COLS)
+				ncols = COLS;
+			if (ncols < 1)
+				ncols = 1;
+		} else {
+			if (win->begy > LINES)
+				win->begy = 0;
+			if (win->begy + nlines > LINES)
+				nlines = 0;
+			if (nlines <= 0)
+				nlines += LINES - win->begy;
+			if (nlines < 1)
+				nlines = 1;
+			if (win->begx > COLS)
+				win->begx = 0;
+			if (win->begx + ncols > COLS)
+				ncols = 0;
+			if (ncols <= 0)
+				ncols += COLS - win->begx;
+			if (ncols < 1)
+				ncols = 1;
+		}
 	} else {
 		/* subwins must fit inside the parent - check this */
+		if (win->begy > win->orig->begy + win->orig->maxy)
+			win->begy = win->orig->begy + win->orig->maxy - 1;
 		if (win->begy + nlines > win->orig->begy + win->orig->maxy)
 			nlines = 0;
 		if (nlines <= 0)
 			nlines += win->orig->begy + win->orig->maxy - win->begy;
+		if (nlines < 1)
+			nlines = 1;
+		if (win->begx > win->orig->begx + win->orig->maxx)
+			win->begx = win->orig->begx + win->orig->maxx - 1;
 		if (win->begx + ncols > win->orig->begx + win->orig->maxx)
 			ncols = 0;
 		if (ncols <= 0)
 			ncols += win->orig->begx + win->orig->maxx - win->begx;
+		if (ncols < 1)
+			ncols = 1;
 	}
 
 	if ((__resizewin(win, nlines, ncols)) == ERR)
@@ -118,7 +146,6 @@ resizeterm(int nlines, int ncols)
 {
 	WINDOW *win;
 	struct __winlist *list;
-	int newlines, newcols;
 
 	  /* don't worry if things have not changed... we would like to
 	     do this but some bastard programs update LINES and COLS before
@@ -130,25 +157,12 @@ resizeterm(int nlines, int ncols)
 	__CTRACE(__CTRACE_WINDOW, "resizeterm: (%d, %d)\n", nlines, ncols);
 #endif
 
-
-	for (list = _cursesi_screen->winlistp; list != NULL; list = list->nextp) {
-		win = list->winp;
-
-		newlines = win->reqy;
-		if (win->begy + newlines >= nlines)
-			newlines = 0;
-		if (newlines == 0)
-			newlines = nlines - win->begy;
-
-		newcols = win->reqx;
-		if (win->begx + newcols >= ncols)
-			newcols = 0;
-		if (newcols == 0)
-			newcols = ncols - win->begx;
-
-		if (__resizewin(win, newlines, newcols) != OK)
-			return ERR;
-	}
+	if (__resizeterm(curscr, nlines, ncols) == ERR)
+		return ERR;
+	if (__resizeterm(__virtscr, nlines, ncols) == ERR)
+		return ERR;
+	if (__resizeterm(stdscr, nlines, ncols) == ERR)
+		return ERR;
 
 	LINES = nlines;
 	COLS = ncols;
@@ -163,6 +177,30 @@ resizeterm(int nlines, int ncols)
 
 	wrefresh(curscr);
 	return OK;
+}
+
+/*
+ * __resizeterm
+ *	Setup window for resizing.
+ */
+static int
+__resizeterm(WINDOW *win, int nlines, int ncols)
+{
+	int newlines, newcols;
+
+	newlines = win->reqy;
+	if (win->begy + newlines >= nlines)
+		newlines = 0;
+	if (newlines == 0)
+		newlines = nlines - win->begy;
+
+	newcols = win->reqx;
+	if (win->begx + newcols >= ncols)
+		newcols = 0;
+	if (newcols == 0)
+		newcols = ncols - win->begx;
+
+	return __resizewin(win, newlines, newcols);
 }
 
 /*
@@ -306,15 +344,23 @@ __resizewin(WINDOW *win, int nlines, int ncols)
 		/* bound subwindows to new size and fixup their pointers */
 		for (swin = win->nextp; swin != win; swin = swin->nextp) {
 			y = swin->reqy;
+			if (swin->begy > win->begy + win->maxy)
+				swin->begy = win->begy + win->maxy - 1;
 			if (swin->begy + y > win->begy + win->maxy)
 				y = 0;
 			if (y <= 0)
 				y += win->begy + win->maxy - swin->begy;
+			if (y < 1)
+				y = 1;
 			x = swin->reqx;
+			if (swin->begx > win->begx + win->maxx)
+				swin->begx = win->begx + win->maxx - 1;
 			if (swin->begx + x > win->begx + win->maxx)
 				x = 0;
 			if (x <= 0)
 				x += win->begy + win->maxx - swin->begx;
+			if (x < 1)
+				x = 1;
 			__resizewin(swin, y, x);
 		}
 	}

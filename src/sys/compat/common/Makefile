@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.39 2007/05/29 21:32:27 christos Exp $
+#	$NetBSD: Makefile,v 1.41 2008/01/27 16:16:50 martin Exp $
 
 LIB=		compat
 NOPIC=		# defined
@@ -9,7 +9,7 @@ CPPFLAGS=	${COMPATCPPFLAGS} ${SKIP_AUTODEP::=}
 .PATH.c: ${COMPATDIR}
 
 # Common compatibility code, used by all emulations
-SRCS=	compat_exec.c compat_util.c compat_file.c
+SRCS=	compat_exec.c compat_util.c
 
 # Compatibility code for 4.3BSD
 SRCS+=	kern_exit_43.c kern_info_43.c kern_resource_43.c kern_sig_43.c \
@@ -34,7 +34,7 @@ SRCS+=	vfs_syscalls_20.c
 SRCS+=	vfs_syscalls_30.c uipc_syscalls_30.c
 
 # Compatibility code for NetBSD 4.0
-SRCS+=	uipc_syscalls_40.c
+SRCS+=	uipc_syscalls_40.c kern_descrip_40.c
 
 # really, all machines where sizeof(int) != sizeof(long) (LP64)
 .if (${MACHINE_ARCH} != "alpha" && ${MACHINE_ARCH} != "sparc64" \

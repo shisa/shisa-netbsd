@@ -1,4 +1,4 @@
-/*	$NetBSD: linux_cdrom.c,v 1.23 2007/06/30 22:18:17 dsl Exp $ */
+/*	$NetBSD: linux_cdrom.c,v 1.25 2007/12/20 23:02:53 dsl Exp $ */
 
 /*
  * Copyright (c) 1997 The NetBSD Foundation, Inc.
@@ -34,7 +34,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: linux_cdrom.c,v 1.23 2007/06/30 22:18:17 dsl Exp $");
+__KERNEL_RCSID(0, "$NetBSD: linux_cdrom.c,v 1.25 2007/12/20 23:02:53 dsl Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -53,6 +53,8 @@ __KERNEL_RCSID(0, "$NetBSD: linux_cdrom.c,v 1.23 2007/06/30 22:18:17 dsl Exp $")
 #include <compat/linux/common/linux_ioctl.h>
 #include <compat/linux/common/linux_signal.h>
 #include <compat/linux/common/linux_util.h>
+#include <compat/linux/common/linux_ipc.h>
+#include <compat/linux/common/linux_sem.h>
 #include <compat/linux/common/linux_cdrom.h>
 
 #include <compat/linux/linux_syscallargs.h>
@@ -91,15 +93,13 @@ bsd_to_linux_msf_lba(unsigned address_format, union msf_lba *bml,
 }
 
 int
-linux_ioctl_cdrom(l, uap, retval)
-	struct lwp *l;
-	struct linux_sys_ioctl_args /* {
+linux_ioctl_cdrom(struct lwp *l, const struct linux_sys_ioctl_args *uap, register_t *retval)
+{
+	/* {
 		syscallarg(int) fd;
 		syscallarg(u_long) com;
 		syscallarg(void *) data;
-	} */ *uap;
-	register_t *retval;
-{
+	} */
 	int error, idata;
 	u_long com, ncom;
 	struct file *fp;

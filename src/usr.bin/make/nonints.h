@@ -1,4 +1,4 @@
-/*	$NetBSD: nonints.h,v 1.43 2007/02/04 19:23:49 dsl Exp $	*/
+/*	$NetBSD: nonints.h,v 1.46 2007/10/15 01:07:34 sjg Exp $	*/
 
 /*-
  * Copyright (c) 1988, 1989, 1990, 1993
@@ -118,6 +118,8 @@ int PrintAddr(ClientData, ClientData);
 void Finish(int);
 #ifndef HAVE_EMALLOC
 char *estrdup(const char *);
+char *strndup(const char *, size_t);
+char *estrndup(const char *, size_t);
 void *emalloc(size_t);
 void *erealloc(void *, size_t);
 void enomem(void);
@@ -197,3 +199,5 @@ char *Var_GetHead(const char *);
 void Var_Init(void);
 void Var_End(void);
 void Var_Dump(GNode *);
+void Var_ExportVars(void);
+void Var_Export(char *, int);

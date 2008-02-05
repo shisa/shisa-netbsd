@@ -1,4 +1,4 @@
-/* $NetBSD: trap.c,v 1.47 2007/09/01 21:31:55 mhitch Exp $ */
+/* $NetBSD: trap.c,v 1.51 2007/12/31 13:38:51 ad Exp $ */
 
 /*
  * Copyright (c) 1982, 1986, 1990, 1993
@@ -78,12 +78,11 @@
 
 #include <sys/cdefs.h>			/* RCS ID & Copyright macro defns */
 
-__KERNEL_RCSID(0, "$NetBSD: trap.c,v 1.47 2007/09/01 21:31:55 mhitch Exp $");
+__KERNEL_RCSID(0, "$NetBSD: trap.c,v 1.51 2007/12/31 13:38:51 ad Exp $");
 
 #include "opt_ddb.h"
 #include "opt_kgdb.h"
 #include "opt_execfmt.h"
-#include "opt_compat_hpux.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -243,7 +242,6 @@ again:
 		}
 	}
 #endif
-	curcpu()->ci_schedstate.spc_curpriority = l->l_priority = l->l_usrpri;
 }
 
 /*
@@ -424,20 +422,7 @@ trap(fp, type, code, v)
 #endif
 
 	case T_ILLINST|T_USER:	/* illegal instruction fault */
-#ifdef COMPAT_HPUX
-		if (p->p_emul == &emul_hpux) {
-			ksi.ksi_addr = (void *)HPUX_ILL_ILLINST_TRAP;
-			ksi.ksi_signo = SIGILL;
-			break;
-		}
-		/* fall through */
-#endif
 	case T_PRIVINST|T_USER:	/* privileged instruction fault */
-#ifdef COMPAT_HPUX
-		if (p->p_emul == &emul_hpux)
-			ksi.ksi_addr = (void *)HPUX_ILL_PRIV_TRAP;
-		else
-#endif
 		ksi.ksi_addr = (void *)(int)fp->f_format;
 				/* XXX was ILL_PRIVIN_FAULT */
 		ksi.ksi_signo = SIGILL;
@@ -514,9 +499,6 @@ trap(fp, type, code, v)
 
 	case T_SSIR:		/* software interrupt */
 	case T_SSIR|T_USER:
-
-		softintr_dispatch();
-
 		/*
 		 * If this was not an AST trap, we are all done.
 		 */

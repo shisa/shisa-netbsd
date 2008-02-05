@@ -1,4 +1,4 @@
-/*	$NetBSD: cy.c,v 1.51 2007/07/09 21:00:35 ad Exp $	*/
+/*	$NetBSD: cy.c,v 1.54 2007/11/19 18:51:47 ad Exp $	*/
 
 /*
  * cy.c
@@ -16,7 +16,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: cy.c,v 1.51 2007/07/09 21:00:35 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: cy.c,v 1.54 2007/11/19 18:51:47 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/ioctl.h>
@@ -33,7 +33,7 @@ __KERNEL_RCSID(0, "$NetBSD: cy.c,v 1.51 2007/07/09 21:00:35 ad Exp $");
 #include <sys/callout.h>
 #include <sys/kauth.h>
 
-#include <machine/bus.h>
+#include <sys/bus.h>
 
 #include <dev/ic/cd1400reg.h>
 #include <dev/ic/cyreg.h>
@@ -372,25 +372,24 @@ cyopen(dev_t dev, int flag, int mode, struct lwp *l)
 			SET(tp->t_state, TS_CARR_ON);
 		else
 			CLR(tp->t_state, TS_CARR_ON);
-	} else {
-		s = spltty();
+		splx(s);
 	}
 
 	/* wait for carrier if necessary */
 	if (!ISSET(flag, O_NONBLOCK)) {
+		mutex_spin_enter(&tty_lock);
 		while (!ISSET(tp->t_cflag, CLOCAL) &&
 		    !ISSET(tp->t_state, TS_CARR_ON)) {
 			tp->t_wopen++;
-			error = ttysleep(tp, &tp->t_rawq, TTIPRI | PCATCH,
-			    "cydcd", 0);
+			error = ttysleep(tp, &tp->t_rawq.c_cv, true, 0);
 			tp->t_wopen--;
 			if (error != 0) {
-				splx(s);
+				mutex_spin_exit(&tty_lock);
 				return error;
 			}
 		}
+		mutex_spin_exit(&tty_lock);
 	}
-	splx(s);
 
 	return (*tp->t_linesw->l_open) (dev, tp);
 }
@@ -594,16 +593,8 @@ cystart(struct tty *tp)
 #endif
 
 	if (!ISSET(tp->t_state, TS_TTSTOP | TS_TIMEOUT | TS_BUSY)) {
-		if (tp->t_outq.c_cc <= tp->t_lowat) {
-			if (ISSET(tp->t_state, TS_ASLEEP)) {
-				CLR(tp->t_state, TS_ASLEEP);
-				wakeup(&tp->t_outq);
-			}
-			selwakeup(&tp->t_wsel);
-
-			if (tp->t_outq.c_cc == 0)
-				goto out;
-		}
+		if (!ttypull(tp))
+			goto out;
 		SET(tp->t_state, TS_BUSY);
 		cy_enable_transmitter(sc, cy);
 	}

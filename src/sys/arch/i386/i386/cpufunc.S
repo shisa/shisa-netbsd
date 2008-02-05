@@ -1,4 +1,4 @@
-/*	$NetBSD: cpufunc.S,v 1.2 2007/09/26 22:05:24 ad Exp $	*/
+/*	$NetBSD: cpufunc.S,v 1.6 2008/01/17 15:01:05 ad Exp $	*/
 
 /*-
  * Copyright (c) 1998, 2007 The NetBSD Foundation, Inc.
@@ -42,9 +42,11 @@
  * These are shared with NetBSD/xen.
  */
 
+#include <machine/asm.h>
+__KERNEL_RCSID(0, "$NetBSD: cpufunc.S,v 1.6 2008/01/17 15:01:05 ad Exp $");
+
 #include "opt_xen.h"
 
-#include <machine/asm.h>
 #include <machine/specialreg.h>
 #include <machine/segments.h>
 
@@ -143,7 +145,10 @@ ENTRY(rdpmc)
 	ret
 
 NENTRY(breakpoint)
+	pushl	%ebp
+	movl	%esp, %ebp
 	int	$0x03		/* paranoid, not 'int3' */
+	popl	%ebp
 	ret
 
 NENTRY(x86_atomic_testset_ul)
@@ -247,11 +252,12 @@ NENTRY(x86_pause)
 	pause
 	ret
 
-ENTRY(x86_cpuid)
+ENTRY(x86_cpuid2)
 	pushl	%ebx
 	pushl	%edi
 	movl	12(%esp), %eax
-	movl	16(%esp), %edi
+	movl	16(%esp), %ecx
+	movl	20(%esp), %edi
 	cpuid
 	movl	%eax, 0(%edi)
 	movl	%ebx, 4(%edi)
@@ -346,7 +352,6 @@ ENTRY(insb)
 	movl	8(%esp), %edx
 	movl	12(%esp), %edi
 	movl	16(%esp), %ecx
-	cld
 	rep
 	insb
 	popl	%edi
@@ -363,7 +368,6 @@ ENTRY(insw)
 	movl	8(%esp), %edx
 	movl	12(%esp), %edi
 	movl	16(%esp), %ecx
-	cld
 	rep
 	insw
 	popl	%edi
@@ -379,7 +383,6 @@ ENTRY(insl)
 	movl	8(%esp), %edx
 	movl	12(%esp), %edi
 	movl	16(%esp), %ecx
-	cld
 	rep
 	insl
 	popl	%edi
@@ -396,7 +399,6 @@ ENTRY(outsb)
 	movl	8(%esp), %edx
 	movl	12(%esp), %esi
 	movl	16(%esp), %ecx
-	cld
 	rep
 	outsb
 	popl	%esi
@@ -413,7 +415,6 @@ ENTRY(outsw)
 	movl	8(%esp), %edx
 	movl	12(%esp), %esi
 	movl	16(%esp), %ecx
-	cld
 	rep
 	outsw
 	popl	%esi
@@ -430,7 +431,6 @@ ENTRY(outsl)
 	movl	8(%esp), %edx
 	movl	12(%esp), %esi
 	movl	16(%esp), %ecx
-	cld
 	rep
 	outsl
 	popl	%esi

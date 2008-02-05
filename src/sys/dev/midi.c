@@ -1,4 +1,4 @@
-/*	$NetBSD: midi.c,v 1.55 2007/07/09 21:00:29 ad Exp $	*/
+/*	$NetBSD: midi.c,v 1.59 2007/12/16 19:01:35 christos Exp $	*/
 
 /*
  * Copyright (c) 1998 The NetBSD Foundation, Inc.
@@ -38,7 +38,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: midi.c,v 1.55 2007/07/09 21:00:29 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: midi.c,v 1.59 2007/12/16 19:01:35 christos Exp $");
 
 #include "midi.h"
 #include "sequencer.h"
@@ -59,6 +59,7 @@ __KERNEL_RCSID(0, "$NetBSD: midi.c,v 1.55 2007/07/09 21:00:29 ad Exp $");
 #include <sys/conf.h>
 #include <sys/audioio.h>
 #include <sys/midiio.h>
+#include <sys/intr.h>
 
 #include <dev/audio_if.h>
 #include <dev/midi_if.h>
@@ -150,6 +151,8 @@ midiattach(struct device *parent, struct device *self, void *aux)
 	const struct midi_hw_if *hwp = sa->hwif;
 	void *hdlp = sa->hdl;
 
+	aprint_naive("\n");
+
 	DPRINTFN(2, ("MIDI attach\n"));
 
 #ifdef DIAGNOSTIC
@@ -166,6 +169,10 @@ midiattach(struct device *parent, struct device *self, void *aux)
 	sc->hw_if = hwp;
 	sc->hw_hdl = hdlp;
 	midi_attach(sc, parent);
+        if (!device_pmf_is_registered(self))
+		if (!pmf_device_register(self, NULL, NULL))
+			aprint_error_dev(self,
+			    "couldn't establish power handler\n"); 
 }
 
 int
@@ -192,6 +199,8 @@ mididetach(struct device *self, int flags)
 
 	DPRINTFN(2,("midi_detach: sc=%p flags=%d\n", sc, flags));
 
+	pmf_device_deregister(self);
+
 	sc->dying = 1;
 
 	wakeup(&sc->wchan);
@@ -214,11 +223,11 @@ mididetach(struct device *self, int flags)
 	}
 
 	if (sc->sih_rd != NULL) {
-		softintr_disestablish(sc->sih_rd);
+		softint_disestablish(sc->sih_rd);
 		sc->sih_rd = NULL;
 	}
 	if (sc->sih_wr != NULL) {
-		softintr_disestablish(sc->sih_wr);
+		softint_disestablish(sc->sih_wr);
 		sc->sih_wr = NULL;
 	}
 
@@ -242,8 +251,8 @@ midi_attach(struct midi_softc *sc, struct device *parent)
 
 	sc->sc_dev = parent;
 
-	sc->sih_rd = softintr_establish(IPL_SOFTSERIAL, midi_softintr_rd, sc);
-	sc->sih_wr = softintr_establish(IPL_SOFTSERIAL, midi_softintr_wr, sc);
+	sc->sih_rd = softint_establish(SOFTINT_SERIAL, midi_softintr_rd, sc);
+	sc->sih_wr = softint_establish(SOFTINT_SERIAL, midi_softintr_wr, sc);
 
 	s = splaudio();
 	simple_lock(&hwif_register_lock);
@@ -272,7 +281,7 @@ midi_attach(struct midi_softc *sc, struct device *parent)
 			sc->dev.dv_xname, "rcv incomplete msgs");
 	}
 	
-	printf(": %s%s\n", mi.name,
+	aprint_normal(": %s%s\n", mi.name,
 	    (sc->props & (MIDI_PROP_OUT_INTR|MIDI_PROP_NO_OUTPUT)) ?
 	    "" : " (CPU-intensive output)");
 }
@@ -784,7 +793,7 @@ sxp_again:
 		MIDI_BUF_PRODUCER_WBACK(mb,buf);
 		MIDI_BUF_PRODUCER_WBACK(mb,idx);
 		MIDI_IN_UNLOCK(sc,s);
-		softintr_schedule(sc->sih_rd);
+		softint_schedule(sc->sih_rd);
 		break;
 	default: /* don't #ifdef this away, gcc will say FST_HUH not handled */
 		printf("midi_in: midi_fst returned %d?!\n", got);
@@ -1027,7 +1036,7 @@ midi_rcv_asense(void *arg)
 		sc->rcv_quiescent = 0;
 		sc->rcv_expect_asense = 0;
 		MIDI_IN_UNLOCK(sc,s);
-		softintr_schedule(sc->sih_rd);
+		softint_schedule(sc->sih_rd);
 		return;
 	}
 	
@@ -1304,7 +1313,7 @@ midi_intr_out(struct midi_softc *sc)
 		callout_schedule(&sc->xmt_asense_co, MIDI_XMT_ASENSE_PERIOD);
 	}
 	MIDI_OUT_UNLOCK(sc,s);
-	softintr_schedule(sc->sih_wr);
+	softint_schedule(sc->sih_wr);
 
 #if defined(AUDIO_DEBUG) || defined(DIAGNOSTIC)
 	if ( error )
@@ -1761,7 +1770,7 @@ midikqfilter(dev_t dev, struct knote *kn)
 		break;
 
 	default:
-		return (1);
+		return (EINVAL);
 	}
 
 	kn->kn_hook = sc;

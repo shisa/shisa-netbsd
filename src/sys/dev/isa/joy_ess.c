@@ -1,4 +1,7 @@
-/* $NetBSD: joy_ess.c,v 1.2 2005/12/11 12:22:03 christos Exp $ */
+/* $NetBSD: joy_ess.c,v 1.4 2007/12/11 11:56:46 lukem Exp $ */
+
+#include <sys/cdefs.h>
+__KERNEL_RCSID(0, "$NetBSD: joy_ess.c,v 1.4 2007/12/11 11:56:46 lukem Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -6,7 +9,7 @@
 #include <sys/device.h>
 #include <sys/audioio.h>
 #include <dev/audio_if.h>
-#include <machine/bus.h>
+#include <sys/bus.h>
 
 #include <dev/isa/isavar.h>
 #include <dev/isa/essvar.h>

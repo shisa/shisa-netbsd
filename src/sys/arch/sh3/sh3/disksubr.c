@@ -1,4 +1,4 @@
-/*	$NetBSD: disksubr.c,v 1.24 2007/07/29 12:15:39 ad Exp $	*/
+/*	$NetBSD: disksubr.c,v 1.27 2008/01/02 11:48:28 ad Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1988 Regents of the University of California.
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: disksubr.c,v 1.24 2007/07/29 12:15:39 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: disksubr.c,v 1.27 2008/01/02 11:48:28 ad Exp $");
 
 #include "opt_mbr.h"
 
@@ -410,7 +410,7 @@ readdisklabel(dev_t dev, void (*strat)(struct buf *), struct disklabel *lp,
 	bp->b_blkno = dospartoff + LABELSECTOR;
 	bp->b_cylinder = cyl;
 	bp->b_bcount = lp->d_secsize;
-	bp->b_flags &= ~(B_DONE);
+	bp->b_oflags &= ~(BO_DONE);
 	bp->b_flags |= B_READ;
 	(*strat)(bp);
 
@@ -485,7 +485,7 @@ readdisklabel(dev_t dev, void (*strat)(struct buf *), struct disklabel *lp,
 		i = 0;
 		do {
 			/* read a bad sector table */
-			bp->b_flags &= ~(B_DONE);
+			bp->b_oflags &= ~(BO_DONE);
 			bp->b_flags |= B_READ;
 			bp->b_blkno = lp->d_secperunit - lp->d_nsectors + i;
 			if (lp->d_secsize > DEV_BSIZE)
@@ -515,7 +515,7 @@ readdisklabel(dev_t dev, void (*strat)(struct buf *), struct disklabel *lp,
 	}
 
  done:
-	brelse(bp);
+	brelse(bp, 0);
 	return (msg);
 }
 
@@ -633,7 +633,7 @@ writedisklabel(dev_t dev, void (*strat)(struct buf *), struct disklabel *lp,
 	bp->b_blkno = dospartoff + LABELSECTOR;
 	bp->b_cylinder = cyl;
 	bp->b_bcount = lp->d_secsize;
-	bp->b_flags &= ~(B_DONE);
+	bp->b_oflags &= ~(BO_DONE);
 	bp->b_flags |= B_READ;
 	(*strat)(bp);
 
@@ -681,12 +681,13 @@ writedisklabel(dev_t dev, void (*strat)(struct buf *), struct disklabel *lp,
 	goto done;
 
  found:
-	bp->b_flags &= ~(B_READ|B_DONE);
+	bp->b_oflags &= ~(BO_DONE);
+	bp->b_flags &= ~(B_READ);
 	bp->b_flags |= B_WRITE;
 	(*strat)(bp);
 	error = biowait(bp);
 
  done:
-	brelse(bp);
+	brelse(bp, 0);
 	return (error);
 }

@@ -1,4 +1,4 @@
-/*	$NetBSD: linux_termios.c,v 1.31 2007/05/13 16:04:00 dsl Exp $	*/
+/*	$NetBSD: linux_termios.c,v 1.33 2007/12/20 23:02:57 dsl Exp $	*/
 
 /*-
  * Copyright (c) 1995, 1998 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: linux_termios.c,v 1.31 2007/05/13 16:04:00 dsl Exp $");
+__KERNEL_RCSID(0, "$NetBSD: linux_termios.c,v 1.33 2007/12/20 23:02:57 dsl Exp $");
 
 #if defined(_KERNEL_OPT)
 #include "opt_ptm.h"
@@ -59,6 +59,8 @@ __KERNEL_RCSID(0, "$NetBSD: linux_termios.c,v 1.31 2007/05/13 16:04:00 dsl Exp $
 #include <compat/linux/common/linux_signal.h>
 #include <compat/linux/common/linux_util.h>
 #include <compat/linux/common/linux_termios.h>
+#include <compat/linux/common/linux_ipc.h>
+#include <compat/linux/common/linux_sem.h>
 
 #include <compat/linux/linux_syscallargs.h>
 
@@ -69,15 +71,13 @@ __KERNEL_RCSID(0, "$NetBSD: linux_termios.c,v 1.31 2007/05/13 16:04:00 dsl Exp $
 #endif
 
 int
-linux_ioctl_termios(l, uap, retval)
-	struct lwp *l;
-	struct linux_sys_ioctl_args /* {
+linux_ioctl_termios(struct lwp *l, const struct linux_sys_ioctl_args *uap, register_t *retval)
+{
+	/* {
 		syscallarg(int) fd;
 		syscallarg(u_long) com;
 		syscallarg(void *) data;
-	} */ *uap;
-	register_t *retval;
-{
+	} */
 	struct file *fp;
 	struct filedesc *fdp;
 	u_long com;

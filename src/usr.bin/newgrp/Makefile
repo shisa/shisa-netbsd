@@ -1,12 +1,16 @@
-#	$NetBSD: Makefile,v 1.1 2007/06/21 14:09:23 ginsbach Exp $
+#	$NetBSD: Makefile,v 1.3 2007/10/27 15:36:21 christos Exp $
 #
 
 .include <bsd.own.mk>
 
 PROG=	newgrp
+SRCS=	newgrp.c grutil.c
 BINOWN=	root
 BINMODE=4555
+WARNS=	4
 
+CPPFLAGS+=-DGRUTIL_ACCEPT_GROUP_NUMBERS
+CPPFLAGS+=-DGRUTIL_ALLOW_GROUP_ERRORS	# for POSIX.1 compliance
 CPPFLAGS+=-DLOGIN_CAP
 
 DPADD+=	${LIBCRYPT} ${LIBUTIL}

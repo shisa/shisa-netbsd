@@ -1,4 +1,4 @@
-/*	$NetBSD: ofw_irq.S,v 1.8 2007/08/13 02:04:51 tsutsui Exp $	*/
+/*	$NetBSD: ofw_irq.S,v 1.10 2008/01/06 03:45:27 matt Exp $	*/
 
 /*
  * Copyright (c) 1994-1998 Mark Brinicombe.
@@ -79,7 +79,7 @@ Lcurrent_spl_level:
 	.word	_C_LABEL(current_spl_level)
 
 Lcurrent_intr_depth:
-	.word	_C_LABEL(current_intr_depth)
+	.word	_C_LABEL(cpu_info_store) + CI_IDEPTH
 
 Lspl_masks:
 	.word	_C_LABEL(spl_masks)

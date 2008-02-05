@@ -1,4 +1,4 @@
-/*	$NetBSD: svr4_sigcode.S,v 1.9 2005/12/11 12:17:41 christos Exp $	*/
+/*	$NetBSD: svr4_sigcode.S,v 1.11 2007/12/11 23:06:14 lukem Exp $	*/
 
 /*-
  * Copyright (c) 1998 The NetBSD Foundation, Inc.
@@ -70,6 +70,9 @@
  *	@(#)locore.s	7.3 (Berkeley) 5/13/91
  */
 
+#include <machine/asm.h>
+__KERNEL_RCSID(0, "$NetBSD: svr4_sigcode.S,v 1.11 2007/12/11 23:06:14 lukem Exp $");
+
 #if defined(_KERNEL_OPT)
 #include "opt_vm86.h"
 #include "opt_multiprocessor.h"
@@ -80,7 +83,6 @@
 #include <machine/segments.h>
 #include <machine/trap.h>
 #include <compat/svr4/svr4_syscall.h>
-#include <machine/asm.h>
 #include <machine/frameasm.h>
 
 /*
@@ -118,7 +120,7 @@ IDTVEC(svr4_fasttrap)
 	call	_C_LABEL(trap)
 	addl	$4,%esp
 	jmp	2b
-1:	CHECK_DEFERRED_SWITCH(%eax)
+1:	CHECK_DEFERRED_SWITCH
 	jnz	9f
 	INTRFASTEXIT
 9:	sti

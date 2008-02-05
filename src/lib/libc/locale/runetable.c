@@ -1,4 +1,4 @@
-/*	$NetBSD: runetable.c,v 1.14 2007/01/17 23:24:22 hubertf Exp $	*/
+/*	$NetBSD: runetable.c,v 1.16 2007/11/06 19:24:19 martin Exp $	*/
 
 /*-
  * Copyright (c) 1993
@@ -39,11 +39,12 @@
 #if 0
 static char sccsid[] = "@(#)table.c	8.1 (Berkeley) 6/27/93";
 #else
-__RCSID("$NetBSD: runetable.c,v 1.14 2007/01/17 23:24:22 hubertf Exp $");
+__RCSID("$NetBSD: runetable.c,v 1.16 2007/11/06 19:24:19 martin Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
 #include <stdlib.h>
+#define _CTYPE_PRIVATE
 #include <ctype.h>
 #include <locale.h>
 #include <assert.h>
@@ -186,6 +187,40 @@ _RuneLocale _DefaultRuneLocale = {
 		_CTYPE_P|_CTYPE_R|_CTYPE_G|_CTYPE_SW1,
 		_CTYPE_P|_CTYPE_R|_CTYPE_G|_CTYPE_SW1,
 		_CTYPE_C,
+#ifdef ALL_80_TO_FF_SW1
+	/*80*/	_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+		_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+		_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+		_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+	/*90*/	_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+		_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+		_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+		_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+	/*a0*/	_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+		_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+		_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+		_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+	/*b0*/	_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+		_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+		_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+		_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+	/*c0*/	_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+		_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+		_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+		_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+	/*d0*/	_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+		_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+		_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+		_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+	/*e0*/	_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+		_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+		_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+		_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+	/*f0*/	_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+		_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+		_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+		_CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1, _CTYPE_SW1,
+#endif
     },
     {	0x00,	0x01,	0x02,	0x03,	0x04,	0x05,	0x06,	0x07,
      	0x08,	0x09,	0x0a,	0x0b,	0x0c,	0x0d,	0x0e,	0x0f,
@@ -276,7 +311,10 @@ _RuneLocale _DefaultRuneLocale = {
 	    { "space", _CTYPE_S },
 	    { "upper", _CTYPE_U },
 	    { "xdigit", _CTYPE_X },
-    }
+    },
+    _C_ctype_,
+    _C_tolower_,
+    _C_toupper_
 };
 
 _RuneLocale *_CurrentRuneLocale = &_DefaultRuneLocale;

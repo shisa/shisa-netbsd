@@ -1,4 +1,4 @@
-/*	$NetBSD: bfs_sysvbfs.c,v 1.6 2007/02/22 06:37:00 thorpej Exp $	*/
+/*	$NetBSD: bfs_sysvbfs.c,v 1.8 2007/12/15 00:39:35 perry Exp $	*/
 
 /*-
  * Copyright (c) 2004 The NetBSD Foundation, Inc.
@@ -38,7 +38,7 @@
 
 #include <sys/cdefs.h>
 
-__KERNEL_RCSID(0, "$NetBSD: bfs_sysvbfs.c,v 1.6 2007/02/22 06:37:00 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: bfs_sysvbfs.c,v 1.8 2007/12/15 00:39:35 perry Exp $");
 
 #include <sys/param.h>
 #include <sys/types.h>
@@ -113,15 +113,15 @@ bc_read(void *self, uint8_t *buf, daddr_t block)
 	if (bread(bio->vp, block, DEV_BSIZE, bio->cred, &bp) != 0)
 		goto error_exit;
 	memcpy(buf, bp->b_data, DEV_BSIZE);
-	brelse(bp);
+	brelse(bp, 0);
 
 	return true;
  error_exit:
-	printf("%s: block %lld read failed.\n", __FUNCTION__, 
+	printf("%s: block %lld read failed.\n", __func__, 
 	    (long long int)block);
 
 	if (bp != NULL)
-		brelse(bp);
+		brelse(bp, 0);
 	return false;
 }
 
@@ -147,7 +147,7 @@ bc_write(void *self, uint8_t *buf, daddr_t block)
 	struct buf *bp;
 
 #if 0
-	printf("%s: block=%lld\n", __FUNCTION__, block);
+	printf("%s: block=%lld\n", __func__, block);
 #endif
 	if ((bp = getblk(bio->vp, block, DEV_BSIZE, 0, 0)) == 0) {
 		printf("getblk failed.\n");

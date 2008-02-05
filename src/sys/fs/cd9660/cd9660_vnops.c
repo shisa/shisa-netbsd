@@ -1,4 +1,4 @@
-/*	$NetBSD: cd9660_vnops.c,v 1.28 2007/07/29 21:17:41 rumble Exp $	*/
+/*	$NetBSD: cd9660_vnops.c,v 1.32 2008/01/25 14:32:12 ad Exp $	*/
 
 /*-
  * Copyright (c) 1994
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: cd9660_vnops.c,v 1.28 2007/07/29 21:17:41 rumble Exp $");
+__KERNEL_RCSID(0, "$NetBSD: cd9660_vnops.c,v 1.32 2008/01/25 14:32:12 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -84,63 +84,6 @@ struct isoreaddir {
 int	iso_uiodir(struct isoreaddir *, struct dirent *, off_t);
 int	iso_shipdir(struct isoreaddir *);
 
-#if 0
-/*
- * Mknod vnode call
- *  Actually remap the device number
- */
-int
-cd9660_mknod(ndp, vap, cred, p)
-	struct nameidata *ndp;
-	kauth_cred_t cred;
-	struct vattr *vap;
-	struct proc *p;
-{
-#ifndef	ISODEVMAP
-	PNBUF_PUT(ndp->ni_pnbuf);
-	vput(ndp->ni_dvp);
-	vput(ndp->ni_vp);
-	return (EINVAL);
-#else
-	struct vnode *vp;
-	struct iso_node *ip;
-	struct iso_dnode *dp;
-
-	vp = ndp->ni_vp;
-	ip = VTOI(vp);
-
-	if (ip->i_mnt->iso_ftype != ISO_FTYPE_RRIP
-	    || vap->va_type != vp->v_type
-	    || (vap->va_type != VCHR && vap->va_type != VBLK)) {
-		PNBUF_PUT(ndp->ni_pnbuf);
-		vput(ndp->ni_dvp);
-		vput(ndp->ni_vp);
-		return (EINVAL);
-	}
-
-	dp = iso_dmap(ip->i_dev, ip->i_number, 1);
-	if (ip->inode.iso_rdev == vap->va_rdev ||
-	    vap->va_rdev == (dev_t)VNOVAL) {
-		/* same as the unmapped one, delete the mapping */
-		LIST_REMOVE(dp, d_hash);
-		FREE(dp, M_CACHE);
-	} else
-		/* enter new mapping */
-		dp->d_dev = vap->va_rdev;
-
-	/*
-	 * Remove inode so that it will be reloaded by iget and
-	 * checked to see if it is an alias of an existing entry
-	 * in the inode cache.
-	 */
-	vput(vp);
-	vp->v_type = VNON;
-	vgone(vp);
-	return (0);
-#endif
-}
-#endif
-
 /*
  * Check mode permission on inode pointer. Mode is READ, WRITE or EXEC.
  * The mode is shifted to select the owner/group/other fields. The
@@ -154,7 +97,6 @@ cd9660_access(v)
 		struct vnode *a_vp;
 		int  a_mode;
 		kauth_cred_t a_cred;
-		struct lwp *a_l;
 	} */ *ap = v;
 	struct vnode *vp = ap->a_vp;
 	struct iso_node *ip = VTOI(vp);
@@ -187,7 +129,6 @@ cd9660_getattr(v)
 		struct vnode *a_vp;
 		struct vattr *a_vap;
 		kauth_cred_t a_cred;
-		struct lwp *a_l;
 	} */ *ap = v;
 	struct vnode *vp = ap->a_vp;
 	struct iso_node *ip = VTOI(vp);
@@ -311,12 +252,12 @@ cd9660_read(v)
 		}
 		n = MIN(n, size - bp->b_resid);
 		if (error) {
-			brelse(bp);
+			brelse(bp, 0);
 			return (error);
 		}
 
 		error = uiomove((char *)bp->b_data + on, (int)n, uio);
-		brelse(bp);
+		brelse(bp, 0);
 	} while (error == 0 && uio->uio_resid > 0 && n != 0);
 
 out:
@@ -482,7 +423,7 @@ cd9660_readdir(v)
 		 */
 		if ((idp->curroff & bmask) == 0) {
 			if (bp != NULL)
-				brelse(bp);
+				brelse(bp, 0);
 			error = cd9660_blkatoff(vdp, (off_t)idp->curroff,
 					     NULL, &bp);
 			if (error)
@@ -598,7 +539,7 @@ cd9660_readdir(v)
 	}
 
 	if (bp)
-		brelse (bp);
+		brelse(bp, 0);
 
 	uio->uio_offset = idp->uio_off;
 	*ap->a_eofflag = idp->eofflag;
@@ -651,7 +592,7 @@ cd9660_readlink(v)
 		      (imp->im_bshift - DEV_BSHIFT),
 		      imp->logical_block_size, NOCRED, &bp);
 	if (error) {
-		brelse(bp);
+		brelse(bp, 0);
 		return (EINVAL);
 	}
 
@@ -666,7 +607,7 @@ cd9660_readlink(v)
 	 */
 	if ((ip->i_number & imp->im_bmask) + isonum_711(dirp->length)
 	    > imp->logical_block_size) {
-		brelse(bp);
+		brelse(bp, 0);
 		return (EINVAL);
 	}
 
@@ -689,13 +630,13 @@ cd9660_readlink(v)
 		if (use_pnbuf) {
 			PNBUF_PUT(symname);
 		}
-		brelse(bp);
+		brelse(bp, 0);
 		return (EINVAL);
 	}
 	/*
 	 * Don't forget before you leave from home ;-)
 	 */
-	brelse(bp);
+	brelse(bp, 0);
 
 	/*
 	 * return with the symbolic name to caller's.
@@ -890,7 +831,6 @@ cd9660_setattr(v)
 #define	cd9660_create	genfs_eopnotsupp
 #define	cd9660_mknod	genfs_eopnotsupp
 #define	cd9660_write	genfs_eopnotsupp
-#define	cd9660_lease_check	genfs_lease_check
 #define	cd9660_fsync	genfs_nullop
 #define	cd9660_remove	genfs_eopnotsupp
 #define	cd9660_rename	genfs_eopnotsupp
@@ -916,7 +856,6 @@ const struct vnodeopv_entry_desc cd9660_vnodeop_entries[] = {
 	{ &vop_setattr_desc, cd9660_setattr },		/* setattr */
 	{ &vop_read_desc, cd9660_read },		/* read */
 	{ &vop_write_desc, cd9660_write },		/* write */
-	{ &vop_lease_desc, cd9660_lease_check },	/* lease */
 	{ &vop_fcntl_desc, genfs_fcntl },		/* fcntl */
 	{ &vop_ioctl_desc, cd9660_ioctl },		/* ioctl */
 	{ &vop_poll_desc, cd9660_poll },		/* poll */
@@ -967,7 +906,6 @@ const struct vnodeopv_entry_desc cd9660_specop_entries[] = {
 	{ &vop_setattr_desc, cd9660_setattr },		/* setattr */
 	{ &vop_read_desc, spec_read },			/* read */
 	{ &vop_write_desc, spec_write },		/* write */
-	{ &vop_lease_desc, spec_lease_check },		/* lease */
 	{ &vop_fcntl_desc, genfs_fcntl },		/* fcntl */
 	{ &vop_ioctl_desc, spec_ioctl },		/* ioctl */
 	{ &vop_poll_desc, spec_poll },			/* poll */
@@ -1016,7 +954,6 @@ const struct vnodeopv_entry_desc cd9660_fifoop_entries[] = {
 	{ &vop_setattr_desc, cd9660_setattr },		/* setattr */
 	{ &vop_read_desc, fifo_read },			/* read */
 	{ &vop_write_desc, fifo_write },		/* write */
-	{ &vop_lease_desc, fifo_lease_check },		/* lease */
 	{ &vop_fcntl_desc, genfs_fcntl },		/* fcntl */
 	{ &vop_ioctl_desc, fifo_ioctl },		/* ioctl */
 	{ &vop_poll_desc, fifo_poll },			/* poll */

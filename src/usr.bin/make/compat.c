@@ -1,4 +1,4 @@
-/*	$NetBSD: compat.c,v 1.67 2007/04/05 14:11:35 christos Exp $	*/
+/*	$NetBSD: compat.c,v 1.69 2008/01/19 06:52:13 sjg Exp $	*/
 
 /*
  * Copyright (c) 1988, 1989, 1990 The Regents of the University of California.
@@ -70,14 +70,14 @@
  */
 
 #ifndef MAKE_NATIVE
-static char rcsid[] = "$NetBSD: compat.c,v 1.67 2007/04/05 14:11:35 christos Exp $";
+static char rcsid[] = "$NetBSD: compat.c,v 1.69 2008/01/19 06:52:13 sjg Exp $";
 #else
 #include <sys/cdefs.h>
 #ifndef lint
 #if 0
 static char sccsid[] = "@(#)compat.c	8.2 (Berkeley) 3/19/94";
 #else
-__RCSID("$NetBSD: compat.c,v 1.67 2007/04/05 14:11:35 christos Exp $");
+__RCSID("$NetBSD: compat.c,v 1.69 2008/01/19 06:52:13 sjg Exp $");
 #endif
 #endif /* not lint */
 #endif
@@ -259,7 +259,7 @@ CompatRunCommand(ClientData cmdp, ClientData gnp)
     while ((*cmd == '@') || (*cmd == '-') || (*cmd == '+')) {
 	switch (*cmd) {
 	case '@':
-	    silent = TRUE;
+	    silent = DEBUG(LOUD) ? FALSE : TRUE;
 	    break;
 	case '-':
 	    errCheck = FALSE;
@@ -354,6 +354,7 @@ CompatRunCommand(ClientData cmdp, ClientData gnp)
     }
     if (cpid == 0) {
 	Check_Cwd(av);
+	Var_ExportVars();
 	if (local)
 	    (void)execvp(av[0], (char *const *)UNCONST(av));
 	else

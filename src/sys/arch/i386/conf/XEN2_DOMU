@@ -1,4 +1,4 @@
-# $NetBSD: XEN2_DOMU,v 1.9 2007/09/06 11:10:32 martti Exp $
+# $NetBSD: XEN2_DOMU,v 1.13 2008/01/07 08:39:07 martti Exp $
 
 include 	"arch/xen/conf/std.xen"
 
@@ -14,8 +14,7 @@ maxusers	32		# estimated number of users
 options 	XEN
 #options 	DOM0OPS
 
-options 	I686_CPU
-makeoptions	CPUFLAGS="-march=i686"
+makeoptions 	CPUFLAGS="-march=i686"
 
 #options 	VM86		# virtual 8086 emulation
 #options 	USER_LDT	# user-settable LDT; used by WINE
@@ -31,7 +30,6 @@ options 	RTC_OFFSET=0	# hardware clock is this many mins. west of GMT
 options 	NTP		# NTP phase/frequency locked loop
 
 options 	KTRACE		# system call tracing via ktrace(1)
-#options 	SYSTRACE	# system call vetting via systrace(1)
 
 options 	SYSVMSG		# System V-like message queues
 options 	SYSVSEM		# System V-like semaphores
@@ -57,7 +55,7 @@ options 	DDB_ONPANIC=1	# see also sysctl(8): `ddb.onpanic'
 options 	DDB_HISTORY_SIZE=512	# enable history editing in DDB
 #options 	KGDB		# remote debugger
 #options 	KGDB_DEVNAME="\"com\"",KGDB_DEVADDR=0x2f8,KGDB_DEVRATE=57600
-#makeoptions	DEBUG="-g"	# compile full symbol table
+#makeoptions 	DEBUG="-g"	# compile full symbol table
 
 # Compatibility options
 options 	COMPAT_NOMID	# NetBSD 0.8, 386BSD, and BSDI

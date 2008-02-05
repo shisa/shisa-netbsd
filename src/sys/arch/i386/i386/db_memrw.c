@@ -1,4 +1,4 @@
-/*	$NetBSD: db_memrw.c,v 1.20 2007/08/29 23:38:04 ad Exp $	*/
+/*	$NetBSD: db_memrw.c,v 1.23 2008/01/11 20:00:13 bouyer Exp $	*/
 
 /*-
  * Copyright (c) 1996, 2000 The NetBSD Foundation, Inc.
@@ -56,9 +56,9 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: db_memrw.c,v 1.20 2007/08/29 23:38:04 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: db_memrw.c,v 1.23 2008/01/11 20:00:13 bouyer Exp $");
 
-#include "opt_largepages.h"
+#include "opt_xen.h"
 
 #include <sys/param.h>
 #include <sys/proc.h>
@@ -68,7 +68,7 @@ __KERNEL_RCSID(0, "$NetBSD: db_memrw.c,v 1.20 2007/08/29 23:38:04 ad Exp $");
 
 #include <machine/db_machdep.h>
 #if defined(XEN)
-#include <machine/xenpmap.h>
+#include <xen/xenpmap.h>
 #endif
 
 #include <ddb/db_access.h>
@@ -119,11 +119,7 @@ db_write_text(vaddr_t addr, size_t size, const char *data)
 		 * Get the PTE for the page.
 		 */
 		pte = kvtopte(addr);
-#if defined(XEN)
-		oldpte = PTE_GET_MA(pte);
-#else
 		oldpte = *pte;
-#endif
 
 		if ((oldpte & PG_V) == 0) {
 			printf(" address %p not a valid page\n", dst);
@@ -133,11 +129,9 @@ db_write_text(vaddr_t addr, size_t size, const char *data)
 		/*
 		 * Get the VA for the page.
 		 */
-#ifdef LARGEPAGES
 		if (oldpte & PG_PS)
 			pgva = (vaddr_t)dst & PG_LGFRAME;
 		else
-#endif
 			pgva = x86_trunc_page(dst);
 
 		/*
@@ -145,22 +139,17 @@ db_write_text(vaddr_t addr, size_t size, const char *data)
 		 * with this mapping and subtract it from the
 		 * total size.
 		 */
-#ifdef LARGEPAGES
 		if (oldpte & PG_PS)
-			limit = NBPD - ((vaddr_t)dst & (NBPD - 1));
+			limit = NBPD_L2 - ((vaddr_t)dst & (NBPD_L2 - 1));
 		else
-#endif
 			limit = PAGE_SIZE - ((vaddr_t)dst & PGOFSET);
 		if (limit > size)
 			limit = size;
 		size -= limit;
 
 		tmppte = (oldpte & ~PG_KR) | PG_KW;
-#if defined(XEN)
-		PTE_SET_MA(pte, (pt_entry_t *)vtomach((vaddr_t)pte), tmppte);
-#else
-		*pte = tmppte;
-#endif
+		pmap_pte_set(pte, tmppte);
+		pmap_pte_flush();
 		pmap_update_pg(pgva);
 		/*
 		 * MULTIPROCESSOR: no shootdown required as the PTE continues to
@@ -177,12 +166,8 @@ db_write_text(vaddr_t addr, size_t size, const char *data)
 		/*
 		 * Restore the old PTE.
 		 */
-#if defined(XEN)
-		PTE_SET_MA(pte, (pt_entry_t *)vtomach((vaddr_t)pte), oldpte);
-#else
-		*pte = oldpte;
-#endif
-
+		pmap_pte_set(pte, oldpte);
+		pmap_pte_flush();
 #if 0 
 		/*
 		 * XXXSMP Not clear if this is needed for 100% correctness.
@@ -208,13 +193,13 @@ db_write_text(vaddr_t addr, size_t size, const char *data)
 void
 db_write_bytes(vaddr_t addr, size_t size, const char *data)
 {
-	extern char etext;
+	extern char __data_start;
 	char *dst;
 
 	dst = (char *)addr;
 
 	/* If any part is in kernel text, use db_write_text() */
-	if (addr >= KERNBASE && addr < (vaddr_t)&etext) {
+	if (addr >= KERNBASE && addr < (vaddr_t)&__data_start) {
 		db_write_text(addr, size, data);
 		return;
 	}

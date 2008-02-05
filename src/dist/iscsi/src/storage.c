@@ -1,4 +1,4 @@
-/* $NetBSD: storage.c,v 1.6 2007/06/16 23:13:26 agc Exp $ */
+/* $NetBSD: storage.c,v 1.10 2007/12/18 20:31:50 agc Exp $ */
 
 /*
  * Copyright © 2006 Alistair Crooks.  All rights reserved.
@@ -29,6 +29,9 @@
  */
 #include "config.h"
 
+#include <sys/types.h>
+#include <sys/stat.h>
+
 #ifdef HAVE_INTTYPES_H
 #include <inttypes.h>
 #endif
@@ -49,7 +52,7 @@
 #include <unistd.h>
 
 #include "iscsi.h"
-#include "util.h"
+#include "iscsiutil.h"
 #include "target.h"
 #include "device.h"
 
@@ -96,7 +99,8 @@ find_extent(extv_t *evp, char *s)
 static int
 do_extent(conffile_t *cf, extv_t *evp, ent_t *ep)
 {
-	char	*cp;
+	struct stat	 st;
+	char		*cp;
 
 	if (find_extent(evp, ep->sv.v[EXTENT_NAME_COL]) != NULL) {
 		(void) fprintf(stderr, "%s:%d: ", conffile_get_name(cf), conffile_get_lineno(cf));
@@ -107,21 +111,27 @@ do_extent(conffile_t *cf, extv_t *evp, ent_t *ep)
 	evp->v[evp->c].extent = strdup(ep->sv.v[EXTENT_NAME_COL]);
 	evp->v[evp->c].dev = strdup(ep->sv.v[EXTENT_DEVICE_COL]);
 	evp->v[evp->c].sacred = strtoll(ep->sv.v[EXTENT_SACRED_COL], NULL, 10);
-	evp->v[evp->c].len = strtoll(ep->sv.v[EXTENT_LENGTH_COL], &cp, 10);
-	if (cp != NULL) {
-		switch(tolower((unsigned)*cp)) {
-		case 't':
-			evp->v[evp->c].len *= (uint64_t)(1024ULL * 1024ULL * 1024ULL * 1024ULL);
-			break;
-		case 'g':
-			evp->v[evp->c].len *= (uint64_t)(1024ULL * 1024ULL * 1024ULL);
-			break;
-		case 'm':
-			evp->v[evp->c].len *= (uint64_t)(1024ULL * 1024ULL);
-			break;
-		case 'k':
-			evp->v[evp->c].len *= (uint64_t)1024ULL;
-			break;
+	if (strcasecmp(ep->sv.v[EXTENT_LENGTH_COL], "size") == 0) {
+		if (stat(ep->sv.v[EXTENT_DEVICE_COL], &st) == 0) {
+			evp->v[evp->c].len = st.st_size;
+		}
+	} else {
+		evp->v[evp->c].len = strtoll(ep->sv.v[EXTENT_LENGTH_COL], &cp, 10);
+		if (cp != NULL) {
+			switch(tolower((unsigned)*cp)) {
+			case 't':
+				evp->v[evp->c].len *= (uint64_t)(1024ULL * 1024ULL * 1024ULL * 1024ULL);
+				break;
+			case 'g':
+				evp->v[evp->c].len *= (uint64_t)(1024ULL * 1024ULL * 1024ULL);
+				break;
+			case 'm':
+				evp->v[evp->c].len *= (uint64_t)(1024ULL * 1024ULL);
+				break;
+			case 'k':
+				evp->v[evp->c].len *= (uint64_t)1024ULL;
+				break;
+			}
 		}
 	}
 	evp->c += 1;
@@ -243,12 +253,20 @@ do_target(conffile_t *cf, targv_t *tvp, devv_t *devvp, extv_t *evp, ent_t *ep)
 	disc_extent_t	*xp;
 	disc_device_t	*dp;
 	const char	*flags;
+	char		 tgt[256];
+	char		*iqn;
 	int		 netmaskcol;
 	int		 devcol;
 
-	if (find_target(tvp, ep->sv.v[TARGET_NAME_COL]) != NULL) {
+	if ((iqn = strchr(ep->sv.v[TARGET_NAME_COL], '=')) == NULL) {
+		(void) strlcpy(tgt, ep->sv.v[TARGET_NAME_COL], sizeof(tgt));
+	} else {
+		(void) snprintf(tgt, sizeof(tgt), "%.*s", (int)(iqn - ep->sv.v[TARGET_NAME_COL]), ep->sv.v[TARGET_NAME_COL]);
+		iqn += 1;
+	}
+	if (find_target(tvp, tgt) != NULL) {
 		(void) fprintf(stderr, "%s:%d: ", conffile_get_name(cf), conffile_get_lineno(cf));
-		(void) fprintf(stderr, "Error: attempt to re-define target `%s'\n", ep->sv.v[TARGET_NAME_COL]);
+		(void) fprintf(stderr, "Error: attempt to re-define target `%s'\n", tgt);
 		return 0;
 	}
 	ALLOC(disc_target_t, tvp->v, tvp->size, tvp->c, 14, 14, "do_target", exit(EXIT_FAILURE));
@@ -263,10 +281,13 @@ do_target(conffile_t *cf, targv_t *tvp, devv_t *devvp, extv_t *evp, ent_t *ep)
 		flags = ep->sv.v[TARGET_V2_FLAGS_COL];
 		netmaskcol = TARGET_V2_NETMASK_COL;
 	}
+	if (iqn != NULL) {
+		tvp->v[tvp->c].iqn = strdup(iqn);
+	}
 	if ((dp = find_device(devvp, ep->sv.v[devcol])) != NULL) {
 		tvp->v[tvp->c].de.type = DE_DEVICE;
 		tvp->v[tvp->c].de.u.dp = dp;
-		tvp->v[tvp->c].target = strdup(ep->sv.v[TARGET_NAME_COL]);
+		tvp->v[tvp->c].target = strdup(tgt);
 		tvp->v[tvp->c].mask = strdup(ep->sv.v[netmaskcol]);
 		if (strcmp(flags, "readonly") == 0 || strcmp(flags, "ro") == 0 || strcmp(flags, "r") == 0) {
 			tvp->v[tvp->c].flags |= TARGET_READONLY;
@@ -277,7 +298,7 @@ do_target(conffile_t *cf, targv_t *tvp, devv_t *devvp, extv_t *evp, ent_t *ep)
 	if ((xp = find_extent(evp, ep->sv.v[devcol])) != NULL) {
 		tvp->v[tvp->c].de.type = DE_EXTENT;
 		tvp->v[tvp->c].de.u.xp = xp;
-		tvp->v[tvp->c].target = strdup(ep->sv.v[TARGET_NAME_COL]);
+		tvp->v[tvp->c].target = strdup(tgt);
 		tvp->v[tvp->c].mask = strdup(ep->sv.v[netmaskcol]);
 		if (strcmp(flags, "readonly") == 0 || strcmp(flags, "ro") == 0 || strcmp(flags, "r") == 0) {
 			tvp->v[tvp->c].flags |= TARGET_READONLY;
@@ -377,7 +398,8 @@ read_conf_file(const char *cf, targv_t *tvp, devv_t *dvp, extv_t *evp)
 			do_extent(&conf, evp, &e);
 		} else if (strncmp(e.sv.v[0], "device", 6) == 0) {
 			do_device(&conf, dvp, evp, &e);
-		} else if (strncmp(e.sv.v[0], "target", 6) == 0) {
+		} else if (strncmp(e.sv.v[0], "target", 6) == 0 ||
+			   strncmp(e.sv.v[0], "lun", 3) == 0) {
 			do_target(&conf, tvp, dvp, evp, &e);
 		}
 		e.sv.c = 0;

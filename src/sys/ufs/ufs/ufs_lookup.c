@@ -1,4 +1,4 @@
-/*	$NetBSD: ufs_lookup.c,v 1.92 2007/09/25 15:13:14 pooka Exp $	*/
+/*	$NetBSD: ufs_lookup.c,v 1.96 2007/12/08 19:29:56 pooka Exp $	*/
 
 /*
  * Copyright (c) 1989, 1993
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ufs_lookup.c,v 1.92 2007/09/25 15:13:14 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ufs_lookup.c,v 1.96 2007/12/08 19:29:56 pooka Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_ffs.h"
@@ -54,7 +54,7 @@ __KERNEL_RCSID(0, "$NetBSD: ufs_lookup.c,v 1.92 2007/09/25 15:13:14 pooka Exp $"
 #include <sys/kernel.h>
 #include <sys/kauth.h>
 #include <sys/fstrans.h>
-#include <sys/lwp.h>
+#include <sys/proc.h>
 #include <sys/kmem.h>
 
 #include <ufs/ufs/inode.h>
@@ -154,7 +154,7 @@ ufs_lookup(void *v)
 	/*
 	 * Check accessiblity of directory.
 	 */
-	if ((error = VOP_ACCESS(vdp, VEXEC, cred, cnp->cn_lwp)) != 0)
+	if ((error = VOP_ACCESS(vdp, VEXEC, cred)) != 0)
 		return (error);
 
 	if ((flags & ISLASTCN) && (vdp->v_mount->mnt_flag & MNT_RDONLY) &&
@@ -266,7 +266,7 @@ searchloop:
 		 */
 		if ((dp->i_offset & bmask) == 0) {
 			if (bp != NULL)
-				brelse(bp);
+				brelse(bp, 0);
 			error = ufs_blkatoff(vdp, (off_t)dp->i_offset, NULL,
 			    &bp);
 			if (error)
@@ -410,7 +410,7 @@ notfound:
 		goto searchloop;
 	}
 	if (bp != NULL)
-		brelse(bp);
+		brelse(bp, 0);
 	/*
 	 * If creating, and at end of pathname and current
 	 * directory has not been removed, then can consider
@@ -425,7 +425,7 @@ notfound:
 		 * Access for write is interpreted as allowing
 		 * creation of files in the directory.
 		 */
-		error = VOP_ACCESS(vdp, VWRITE, cred, cnp->cn_lwp);
+		error = VOP_ACCESS(vdp, VWRITE, cred);
 		if (error)
 			goto out;
 		/*
@@ -495,7 +495,7 @@ found:
 		DIP_ASSIGN(dp, size, dp->i_size);
 		dp->i_flag |= IN_CHANGE | IN_UPDATE;
 	}
-	brelse(bp);
+	brelse(bp, 0);
 
 	/*
 	 * Found component in pathname.
@@ -514,7 +514,7 @@ found:
 		/*
 		 * Write access to directory required to delete files.
 		 */
-		error = VOP_ACCESS(vdp, VWRITE, cred, cnp->cn_lwp);
+		error = VOP_ACCESS(vdp, VWRITE, cred);
 		if (error)
 			goto out;
 		/*
@@ -567,7 +567,7 @@ found:
 	 * regular file, or empty directory.
 	 */
 	if (nameiop == RENAME && (flags & ISLASTCN)) {
-		error = VOP_ACCESS(vdp, VWRITE, cred, cnp->cn_lwp);
+		error = VOP_ACCESS(vdp, VWRITE, cred);
 		if (error)
 			goto out;
 		/*
@@ -763,7 +763,7 @@ ufs_direnter(struct vnode *dvp, struct vnode *tvp, struct direct *dirp,
 
 	error = 0;
 	cr = cnp->cn_cred;
-	l = cnp->cn_lwp;
+	l = curlwp;
 
 	dp = VTOI(dvp);
 	newentrysize = DIRSIZ(0, dirp, 0);
@@ -847,7 +847,7 @@ ufs_direnter(struct vnode *dvp, struct vnode *tvp, struct direct *dirp,
 				return (error);
 			if (tvp != NULL)
 				VOP_UNLOCK(tvp, 0);
-			error = VOP_FSYNC(dvp, l->l_cred, FSYNC_WAIT, 0, 0, l);
+			error = VOP_FSYNC(dvp, l->l_cred, FSYNC_WAIT, 0, 0);
 			if (tvp != 0)
 				vn_lock(tvp, LK_EXCLUSIVE | LK_RETRY);
 			return (error);
@@ -1009,7 +1009,7 @@ ufs_direnter(struct vnode *dvp, struct vnode *tvp, struct direct *dirp,
 		if (dp->i_dirhash != NULL)
 			ufsdirhash_dirtrunc(dp, dp->i_endoff);
 #endif
-		(void) UFS_TRUNCATE(dvp, (off_t)dp->i_endoff, IO_SYNC, cr, l);
+		(void) UFS_TRUNCATE(dvp, (off_t)dp->i_endoff, IO_SYNC, cr);
 		if (DOINGSOFTDEP(dvp) && (tvp != NULL))
 			vn_lock(tvp, LK_EXCLUSIVE | LK_RETRY);
 	}
@@ -1357,7 +1357,7 @@ ufs_blkatoff(struct vnode *vp, off_t offset, char **res, struct buf **bpp)
 	error = breadn(vp, blks[0], blksizes[0], &blks[1], &blksizes[1],
 	    run - 1, NOCRED, &bp);
 	if (error != 0) {
-		brelse(bp);
+		brelse(bp, 0);
 		*bpp = NULL;
 		goto out;
 	}

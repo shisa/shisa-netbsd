@@ -1,4 +1,4 @@
-/*	$NetBSD: rot13fs.c,v 1.12 2007/07/17 11:34:54 pooka Exp $	*/
+/*	$NetBSD: rot13fs.c,v 1.16 2007/11/30 19:02:38 pooka Exp $	*/
 
 /*
  * Copyright (c) 2007  Antti Kantee.  All Rights Reserved.
@@ -100,7 +100,8 @@ main(int argc, char *argv[])
 	struct puffs_node *pn_root;
 	struct stat sb;
 	mntoptparse_t mp;
-	int mntflags, pflags, lflags;
+	int mntflags, pflags;
+	int detach;
 	int ch;
 	int i;
 
@@ -110,7 +111,8 @@ main(int argc, char *argv[])
 		usage();
 
 	flipflop = dorot13;
-	pflags = lflags = mntflags = 0;
+	pflags = mntflags = 0;
+	detach = 1;
 	while ((ch = getopt(argc, argv, "fo:s")) != -1) {
 		switch (ch) {
 		case 'f':
@@ -123,7 +125,7 @@ main(int argc, char *argv[])
 			freemntopts(mp);
 			break;
 		case 's':
-			lflags |= PUFFSLOOP_NODAEMON;
+			detach = 0;
 			break;
 		}
 	}
@@ -132,7 +134,7 @@ main(int argc, char *argv[])
 	argc -= optind;
 
 	if (pflags & PUFFS_FLAG_OPDUMP)
-		lflags = PUFFSLOOP_NODAEMON;
+		detach = 0;
 
 	if (argc != 2)
 		usage();
@@ -174,14 +176,20 @@ main(int argc, char *argv[])
 	for (i = 0; i < 26; i++)
 		tbl[i + 'A'] = 'A' + ((i + 13) % 26);
 
+	if (detach)
+		if (puffs_daemon(pu, 1, 1) == -1)
+			err(1, "puffs_daemon");
+
 	if (puffs_mount(pu, argv[1], mntflags, pn_root) == -1)
 		err(1, "puffs_mount");
+	if (puffs_mainloop(pu) == -1)
+		err(1, "mainloop");
 
-	return puffs_mainloop(pu, lflags);
+	return 0;
 }
 
 int
-rot13_node_readdir(struct puffs_cc *pcc, void *opc, struct dirent *dent,
+rot13_node_readdir(struct puffs_usermount *pu, void *opc, struct dirent *dent,
 	off_t *readoff, size_t *reslen, const struct puffs_cred *pcr,
 	int *eofflag, off_t *cookies, size_t *ncookies)
 {
@@ -192,7 +200,7 @@ rot13_node_readdir(struct puffs_cc *pcc, void *opc, struct dirent *dent,
 	dp = dent;
 	rl = *reslen;
 
-	rv = puffs_null_node_readdir(pcc, opc, dent, readoff, reslen, pcr,
+	rv = puffs_null_node_readdir(pu, opc, dent, readoff, reslen, pcr,
 	    eofflag, cookies, ncookies);
 	if (rv)
 		return rv;
@@ -207,14 +215,15 @@ rot13_node_readdir(struct puffs_cc *pcc, void *opc, struct dirent *dent,
 }
 
 int
-rot13_node_read(struct puffs_cc *pcc, void *opc, uint8_t *buf, off_t offset,
-	size_t *resid, const struct puffs_cred *pcr, int ioflag)
+rot13_node_read(struct puffs_usermount *pu, void *opc,
+	uint8_t *buf, off_t offset, size_t *resid,
+	const struct puffs_cred *pcr, int ioflag)
 {
 	uint8_t *prebuf = buf;
 	size_t preres = *resid;
 	int rv;
 
-	rv = puffs_null_node_read(pcc, opc, buf, offset, resid, pcr, ioflag);
+	rv = puffs_null_node_read(pu, opc, buf, offset, resid, pcr, ioflag);
 	if (rv)
 		return rv;
 
@@ -224,10 +233,11 @@ rot13_node_read(struct puffs_cc *pcc, void *opc, uint8_t *buf, off_t offset,
 }
 
 int
-rot13_node_write(struct puffs_cc *pcc, void *opc, uint8_t *buf, off_t offset,
-	size_t *resid, const struct puffs_cred *pcr, int ioflag)
+rot13_node_write(struct puffs_usermount *pu, void *opc,
+	uint8_t *buf, off_t offset, size_t *resid,
+	const struct puffs_cred *pcr, int ioflag)
 {
 
 	flipflop(buf, *resid);
-	return puffs_null_node_write(pcc, opc, buf, offset, resid, pcr, ioflag);
+	return puffs_null_node_write(pu, opc, buf, offset, resid, pcr, ioflag);
 }

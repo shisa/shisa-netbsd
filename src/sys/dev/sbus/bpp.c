@@ -1,4 +1,4 @@
-/*	$NetBSD: bpp.c,v 1.29 2007/03/04 07:54:11 christos Exp $ */
+/*	$NetBSD: bpp.c,v 1.31 2007/12/05 17:19:51 pooka Exp $ */
 
 /*-
  * Copyright (c) 1998 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: bpp.c,v 1.29 2007/03/04 07:54:11 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: bpp.c,v 1.31 2007/12/05 17:19:51 pooka Exp $");
 
 #include <sys/param.h>
 #include <sys/ioctl.h>
@@ -54,8 +54,8 @@ __KERNEL_RCSID(0, "$NetBSD: bpp.c,v 1.29 2007/03/04 07:54:11 christos Exp $");
 #include <sys/errno.h>
 #include <sys/device.h>
 
-#include <machine/bus.h>
-#include <machine/intr.h>
+#include <sys/bus.h>
+#include <sys/intr.h>
 #include <machine/autoconf.h>
 
 #include <dev/ic/lsi64854reg.h>
@@ -573,7 +573,7 @@ bppkqfilter(dev_t dev, struct knote *kn)
 		break;
 
 	default:
-		return (1);
+		return (EINVAL);
 	}
 
 	kn->kn_hook = sc;

@@ -1,7 +1,7 @@
-/* $NetBSD: dksubr.c,v 1.31 2007/07/29 12:50:18 ad Exp $ */
+/* $NetBSD: dksubr.c,v 1.34 2008/01/30 15:30:12 ad Exp $ */
 
 /*-
- * Copyright (c) 1996, 1997, 1998, 1999, 2002 The NetBSD Foundation, Inc.
+ * Copyright (c) 1996, 1997, 1998, 1999, 2002, 2008 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
  * This code is derived from software contributed to The NetBSD Foundation
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: dksubr.c,v 1.31 2007/07/29 12:50:18 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: dksubr.c,v 1.34 2008/01/30 15:30:12 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -637,7 +637,7 @@ dk_lookup(const char *path, struct lwp *l, struct vnode **vpp,
 	if (l == NULL)
 		return ESRCH;	/* Is ESRCH the best choice? */
 
-	NDINIT(&nd, LOOKUP, FOLLOW, segflg, path, l);
+	NDINIT(&nd, LOOKUP, FOLLOW, segflg, path);
 	if ((error = vn_open(&nd, FREAD | FWRITE, 0)) != 0) {
 		DPRINTF((DKDB_FOLLOW|DKDB_INIT),
 		    ("dk_lookup: vn_open error = %d\n", error));
@@ -645,7 +645,7 @@ dk_lookup(const char *path, struct lwp *l, struct vnode **vpp,
 	}
 
 	vp = nd.ni_vp;
-	if ((error = VOP_GETATTR(vp, &va, l->l_cred, l)) != 0) {
+	if ((error = VOP_GETATTR(vp, &va, l->l_cred)) != 0) {
 		DPRINTF((DKDB_FOLLOW|DKDB_INIT),
 		    ("dk_lookup: getattr error = %d\n", error));
 		goto out;
@@ -654,12 +654,6 @@ dk_lookup(const char *path, struct lwp *l, struct vnode **vpp,
 	/* XXX: eventually we should handle VREG, too. */
 	if (va.va_type != VBLK) {
 		error = ENOTBLK;
-		goto out;
-	}
-
-	/* XXX: wedges have a writecount of 1; this is disgusting */
-	if (vp->v_usecount > 1 + (major(va.va_rdev) == 168)) {
-		error = EBUSY;
 		goto out;
 	}
 

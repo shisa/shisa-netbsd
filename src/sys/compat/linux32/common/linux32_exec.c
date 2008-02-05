@@ -1,4 +1,4 @@
-/*	$NetBSD: linux32_exec.c,v 1.6 2007/03/05 14:13:10 christos Exp $ */
+/*	$NetBSD: linux32_exec.c,v 1.9 2007/12/08 18:36:11 dsl Exp $ */
 
 /*-
  * Copyright (c) 1994-2007 The NetBSD Foundation, Inc.
@@ -38,7 +38,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: linux32_exec.c,v 1.6 2007/03/05 14:13:10 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: linux32_exec.c,v 1.9 2007/12/08 18:36:11 dsl Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -57,7 +57,7 @@ __KERNEL_RCSID(0, "$NetBSD: linux32_exec.c,v 1.6 2007/03/05 14:13:10 christos Ex
 
 #include <uvm/uvm_extern.h>
 
-#include <machine/cpu.h>
+#include <sys/cpu.h>
 #include <machine/reg.h>
 
 #include <compat/linux/common/linux_types.h>
@@ -78,16 +78,16 @@ extern char linux32_esigcode[1];
 extern struct sysent linux32_sysent[];
 extern const char * const linux32_syscallnames[];
 
-static void linux32_e_proc_exec __P((struct proc *, struct exec_package *));
-static void linux32_e_proc_fork __P((struct proc *, struct proc *, int));
-static void linux32_e_proc_exit __P((struct proc *));
-static void linux32_e_proc_init __P((struct proc *, struct proc *, int));
+static void linux32_e_proc_exec(struct proc *, struct exec_package *);
+static void linux32_e_proc_fork(struct proc *, struct proc *, int);
+static void linux32_e_proc_exit(struct proc *);
+static void linux32_e_proc_init(struct proc *, struct proc *, int);
 
 #ifdef LINUX32_NPTL
 void linux32_userret(void);
 void linux_nptl_proc_fork(struct proc *, struct proc *, void (*luserret)(void));
-void linux_nptl_proc_exit __P((struct proc *));
-void linux_nptl_proc_init __P((struct proc *, struct proc *));
+void linux_nptl_proc_exit(struct proc *);
+void linux_nptl_proc_init(struct proc *, struct proc *);
 #endif
 
 /*
@@ -214,9 +214,7 @@ linux32_e_proc_init(p, parent, forkflags)
  * the executed process is of same emulation as original forked one.
  */
 static void
-linux32_e_proc_exec(p, epp)
-	struct proc *p;
-	struct exec_package *epp;
+linux32_e_proc_exec(struct proc *p, struct exec_package *epp)
 {
 	/* exec, use our vmspace */
 	linux32_e_proc_init(p, NULL, 0);
@@ -226,8 +224,7 @@ linux32_e_proc_exec(p, epp)
  * Emulation per-process exit hook.
  */
 static void
-linux32_e_proc_exit(p)
-	struct proc *p;
+linux32_e_proc_exit(struct proc *p)
 {
 	struct linux_emuldata *e = p->p_emuldata;
 

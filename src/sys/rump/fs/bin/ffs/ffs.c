@@ -1,4 +1,4 @@
-/*	$NetBSD: ffs.c,v 1.4 2007/08/27 23:15:26 pooka Exp $	*/
+/*	$NetBSD: ffs.c,v 1.6 2007/11/07 15:51:07 pooka Exp $	*/
 
 /*
  * Copyright (c) 2007 Antti Kantee.  All Rights Reserved.

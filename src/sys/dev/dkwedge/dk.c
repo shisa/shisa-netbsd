@@ -1,4 +1,4 @@
-/*	$NetBSD: dk.c,v 1.28 2007/07/29 12:50:20 ad Exp $	*/
+/*	$NetBSD: dk.c,v 1.33 2008/01/30 15:42:52 ad Exp $	*/
 
 /*-
  * Copyright (c) 2004, 2005, 2006, 2007 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: dk.c,v 1.28 2007/07/29 12:50:20 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: dk.c,v 1.33 2008/01/30 15:42:52 ad Exp $");
 
 #include "opt_dkwedge.h"
 
@@ -150,7 +150,8 @@ dkwedge_attach(struct device *parent, struct device *self,
     void *aux)
 {
 
-	/* Nothing to do. */
+	if (!pmf_device_register(self, NULL, NULL))
+		aprint_error_dev(self, "couldn't establish power handler\n");
 }
 
 /*
@@ -162,6 +163,7 @@ static int
 dkwedge_detach(struct device *self, int flags)
 {
 
+	pmf_device_deregister(self);
 	/* Always succeeds. */
 	return (0);
 }
@@ -400,7 +402,6 @@ dkwedge_add(struct dkwedge_info *dkw)
 		free(sc, M_DKWEDGE);
 		return (ENOMEM);
 	}
-	sc->sc_dk.dk_name = sc->sc_dev->dv_xname;
 
 	/* Return the devname to the caller. */
 	strcpy(dkw->dkw_devname, sc->sc_dev->dv_xname);
@@ -410,6 +411,7 @@ dkwedge_add(struct dkwedge_info *dkw)
 	 * of state to RUNNING atomic.
 	 */
 
+	disk_init(&sc->sc_dk, sc->sc_dev->dv_xname, NULL);
 	disk_attach(&sc->sc_dk);
 
 	/* Disk wedge is ready for use! */
@@ -810,7 +812,7 @@ dkwedge_discover(struct disk *pdk)
 		goto out;
 	}
 
-	error = VOP_OPEN(vp, FREAD, NOCRED, 0);
+	error = VOP_OPEN(vp, FREAD, NOCRED);
 	if (error) {
 		aprint_error("%s: unable to open device, error = %d\n",
 		    pdk->dk_name, error);
@@ -854,7 +856,7 @@ dkwedge_read(struct disk *pdk, struct vnode *vp, daddr_t blkno,
 {
 	struct buf b;
 
-	BUF_INIT(&b);
+	buf_init(&b);
 
 	b.b_vp = vp;
 	b.b_dev = vp->v_rdev;
@@ -923,13 +925,15 @@ dkopen(dev_t dev, int flags, int fmt, struct lwp *l)
 				vrele(vp);
 				goto popen_fail;
 			}
-			error = VOP_OPEN(vp, FREAD | FWRITE, NOCRED, 0);
+			error = VOP_OPEN(vp, FREAD | FWRITE, NOCRED);
 			if (error) {
 				vput(vp);
 				goto popen_fail;
 			}
 			/* VOP_OPEN() doesn't do this for us. */
+			mutex_enter(&vp->v_interlock);
 			vp->v_writecount++;
+			mutex_exit(&vp->v_interlock);
 			VOP_UNLOCK(vp, 0);
 			sc->sc_parent->dk_rawvp = vp;
 		}
@@ -1035,6 +1039,7 @@ dkstrategy(struct buf *bp)
 static void
 dkstart(struct dkwedge_softc *sc)
 {
+	struct vnode *vp;
 	struct buf *bp, *nbp;
 
 	/* Do as much work as has been enqueued. */
@@ -1054,7 +1059,7 @@ dkstart(struct dkwedge_softc *sc)
 		/* Instrumentation. */
 		disk_busy(&sc->sc_dk);
 
-		nbp = getiobuf_nowait();
+		nbp = getiobuf(sc->sc_parent->dk_rawvp, false);
 		if (nbp == NULL) {
 			/*
 			 * No resources to run this request; leave the
@@ -1068,21 +1073,25 @@ dkstart(struct dkwedge_softc *sc)
 
 		(void) BUFQ_GET(sc->sc_bufq);
 
-		BUF_INIT(nbp);
 		nbp->b_data = bp->b_data;
-		nbp->b_flags = bp->b_flags | B_CALL;
+		nbp->b_flags = bp->b_flags;
+		nbp->b_oflags = bp->b_oflags;
+		nbp->b_cflags = bp->b_cflags;
 		nbp->b_iodone = dkiodone;
 		nbp->b_proc = bp->b_proc;
 		nbp->b_blkno = bp->b_rawblkno;
 		nbp->b_dev = sc->sc_parent->dk_rawvp->v_rdev;
-		nbp->b_vp = sc->sc_parent->dk_rawvp;
 		nbp->b_bcount = bp->b_bcount;
 		nbp->b_private = bp;
 		BIO_COPYPRIO(nbp, bp);
 
-		if ((nbp->b_flags & B_READ) == 0)
-			V_INCR_NUMOUTPUT(nbp->b_vp);
-		VOP_STRATEGY(nbp->b_vp, nbp);
+		vp = nbp->b_vp;
+		if ((nbp->b_flags & B_READ) == 0) {
+			mutex_enter(&vp->v_interlock);
+			vp->v_numoutput++;
+			mutex_exit(&vp->v_interlock);
+		}
+		VOP_STRATEGY(vp, nbp);
 	}
 }
 
@@ -1193,7 +1202,7 @@ dkioctl(dev_t dev, u_long cmd, void *data, int flag, struct lwp *l)
 		else
 			error = VOP_IOCTL(sc->sc_parent->dk_rawvp,
 					  cmd, data, flag,
-					  l != NULL ? l->l_cred : NOCRED, l);
+					  l != NULL ? l->l_cred : NOCRED);
 		break;
 	case DIOCGWEDGEINFO:
 	    {

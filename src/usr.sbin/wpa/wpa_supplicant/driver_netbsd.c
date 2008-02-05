@@ -1,4 +1,4 @@
-/*	$NetBSD: driver_netbsd.c,v 1.3 2007/05/27 03:15:34 christos Exp $	*/
+/*	$NetBSD: driver_netbsd.c,v 1.5 2008/01/26 21:50:22 christos Exp $	*/
 
 /*
  * WPA Supplicant - driver interaction with BSD net80211 layer
@@ -27,9 +27,9 @@
 #include "common.h"
 #include "driver.h"
 #include "eloop.h"
-#include "wpa_supplicant.h"
+#include "ieee802_11_defs.h"
 #include "l2_packet.h"
-#include "wpa.h"			/* XXX for RSN_INFO_ELEM */
+#include "wpa.h"
 
 #include <sys/socket.h>
 #include <net/if.h>
@@ -228,7 +228,7 @@ wpa_driver_bsd_set_wpa_internal(void *priv, int wpa, int privacy)
 	int ret = 0;
 
 	wpa_printf(MSG_DEBUG, "%s: wpa=%d privacy=%d",
-		__FUNCTION__, wpa, privacy);
+		__func__, wpa, privacy);
 
 	if (!wpa && wpa_driver_bsd_set_wpa_ie(drv, NULL, 0) < 0)
 		ret = -1;
@@ -243,7 +243,7 @@ wpa_driver_bsd_set_wpa_internal(void *priv, int wpa, int privacy)
 static int
 wpa_driver_bsd_set_wpa(void *priv, int enabled)
 {
-	wpa_printf(MSG_DEBUG, "%s: enabled=%d", __FUNCTION__, enabled);
+	wpa_printf(MSG_DEBUG, "%s: enabled=%d", __func__, enabled);
 
 	return wpa_driver_bsd_set_wpa_internal(priv, enabled ? 3 : 0, enabled);
 }
@@ -427,7 +427,7 @@ wpa_driver_bsd_associate(void *priv, struct wpa_driver_associate_params *params)
 
 	if (params->wpa_ie_len &&
 	    set80211param(drv, IEEE80211_IOC_WPA,
-			  params->wpa_ie[0] == RSN_INFO_ELEM ? 2 : 1) < 0)
+			  params->wpa_ie[0] == WLAN_EID_RSN ? 2 : 1) < 0)
 		return -1;
 
 	memset(&mlme, 0, sizeof(mlme));

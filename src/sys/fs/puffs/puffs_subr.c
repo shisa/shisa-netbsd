@@ -1,4 +1,4 @@
-/*	$NetBSD: puffs_subr.c,v 1.53 2007/09/27 23:21:08 pooka Exp $	*/
+/*	$NetBSD: puffs_subr.c,v 1.64 2008/01/28 21:06:37 pooka Exp $	*/
 
 /*
  * Copyright (c) 2006, 2007  Antti Kantee.  All Rights Reserved.
@@ -29,13 +29,14 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: puffs_subr.c,v 1.53 2007/09/27 23:21:08 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: puffs_subr.c,v 1.64 2008/01/28 21:06:37 pooka Exp $");
 
 #include <sys/param.h>
 #include <sys/malloc.h>
 #include <sys/mount.h>
 #include <sys/namei.h>
 #include <sys/poll.h>
+#include <sys/proc.h>
 
 #include <fs/puffs/puffs_msgif.h>
 #include <fs/puffs/puffs_sys.h>
@@ -46,12 +47,11 @@ int puffsdebug;
 
 void
 puffs_makecn(struct puffs_kcn *pkcn, struct puffs_kcred *pkcr,
-	struct puffs_kcid *pkcid, const struct componentname *cn, int full)
+	const struct componentname *cn, int full)
 {
 
 	pkcn->pkcn_nameiop = cn->cn_nameiop;
 	pkcn->pkcn_flags = cn->cn_flags;
-	puffs_cidcvt(pkcid, cn->cn_lwp);
 
 	if (full) {
 		(void)strcpy(pkcn->pkcn_name, cn->cn_nameptr);
@@ -87,49 +87,66 @@ puffs_credcvt(struct puffs_kcred *pkcr, const kauth_cred_t cred)
 }
 
 void
-puffs_cidcvt(struct puffs_kcid *pkcid, const struct lwp *l)
+puffs_parkdone_asyncbioread(struct puffs_mount *pmp,
+	struct puffs_req *preq, void *arg)
 {
-
-	if (l) {
-		pkcid->pkcid_type = PUFFCID_TYPE_REAL;
-		pkcid->pkcid_pid = l->l_proc->p_pid;
-		pkcid->pkcid_lwpid = l->l_lid;
-	} else {
-		pkcid->pkcid_type = PUFFCID_TYPE_FAKE;
-		pkcid->pkcid_pid = 0;
-		pkcid->pkcid_lwpid = 0;
-	}
-}
-
-void
-puffs_parkdone_asyncbioread(struct puffs_req *preq, void *arg)
-{
-	struct puffs_vnreq_read *read_argp = (void *)preq;
+	struct puffs_vnmsg_read *read_msg = (void *)preq;
 	struct buf *bp = arg;
 	size_t moved;
 
-	bp->b_error = preq->preq_rv;
-	if (bp->b_error == 0) {
-		moved = bp->b_bcount - read_argp->pvnr_resid;
-		bp->b_resid = read_argp->pvnr_resid;
+	DPRINTF(("%s\n", __func__));
 
-		memcpy(bp->b_data, read_argp->pvnr_data, moved);
+	bp->b_error = checkerr(pmp, preq->preq_rv, __func__);
+	if (bp->b_error == 0) {
+		if (read_msg->pvnr_resid > bp->b_bcount) {
+			puffs_senderr(pmp, PUFFS_ERR_READ, E2BIG,
+			    "resid grew", preq->preq_cookie);
+			bp->b_error = E2BIG;
+		} else {
+			moved = bp->b_bcount - read_msg->pvnr_resid;
+			bp->b_resid = read_msg->pvnr_resid;
+
+			memcpy(bp->b_data, read_msg->pvnr_data, moved);
+		}
 	}
 
 	biodone(bp);
-	free(preq, M_PUFFS);
+}
+
+void
+puffs_parkdone_asyncbiowrite(struct puffs_mount *pmp,
+	struct puffs_req *preq, void *arg)
+{
+	struct puffs_vnmsg_write *write_msg = (void *)preq;
+	struct buf *bp = arg;
+
+	DPRINTF(("%s\n", __func__));
+
+	bp->b_error = checkerr(pmp, preq->preq_rv, __func__);
+	if (bp->b_error == 0) {
+		if (write_msg->pvnr_resid > bp->b_bcount) {
+			puffs_senderr(pmp, PUFFS_ERR_WRITE, E2BIG,
+			    "resid grew", preq->preq_cookie);
+			bp->b_error = E2BIG;
+		} else {
+			bp->b_resid = write_msg->pvnr_resid;
+		}
+	}
+
+	biodone(bp);
 }
 
 /* XXX: userspace can leak kernel resources */
 void
-puffs_parkdone_poll(struct puffs_req *preq, void *arg)
+puffs_parkdone_poll(struct puffs_mount *pmp, struct puffs_req *preq, void *arg)
 {
-	struct puffs_vnreq_poll *poll_argp = (void *)preq;
+	struct puffs_vnmsg_poll *poll_msg = (void *)preq;
 	struct puffs_node *pn = arg;
-	int revents;
+	int revents, error;
 
-	if (preq->preq_rv == 0)
-		revents = poll_argp->pvnr_events;
+	error = checkerr(pmp, preq->preq_rv, __func__);
+	if (error)
+		revents = poll_msg->pvnr_events;
 	else
 		revents = POLLERR;
 
@@ -138,7 +155,6 @@ puffs_parkdone_poll(struct puffs_req *preq, void *arg)
 	mutex_exit(&pn->pn_mtx);
 
 	selnotify(&pn->pn_sel, 0);
-	free(preq, M_PUFFS);
 
 	puffs_releasenode(pn);
 }
@@ -178,6 +194,23 @@ puffs_gop_markupdate(struct vnode *vp, int flags)
 	if (flags & GOP_UPDATE_MODIFIED)
 		uflags |= PUFFS_UPDATEMTIME;
 
-	puffs_updatenode(vp, uflags);
+	puffs_updatenode(VPTOPP(vp), uflags, 0);
 }
 
+void
+puffs_senderr(struct puffs_mount *pmp, int type, int error,
+	const char *str, puffs_cookie_t ck)
+{
+	struct puffs_msgpark *park;
+	struct puffs_error *perr;
+
+	puffs_msgmem_alloc(sizeof(struct puffs_error), &park, (void *)&perr, 1);
+	puffs_msg_setfaf(park);
+	puffs_msg_setinfo(park, PUFFSOP_ERROR, type, ck);
+
+	perr->perr_error = error;
+	strlcpy(perr->perr_str, str, sizeof(perr->perr_str));
+
+	puffs_msg_enqueue(pmp, park);
+	puffs_msgmem_release(park);
+}

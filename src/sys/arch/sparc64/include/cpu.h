@@ -1,4 +1,4 @@
-/*	$NetBSD: cpu.h,v 1.66 2007/09/11 16:00:05 martin Exp $ */
+/*	$NetBSD: cpu.h,v 1.69 2008/01/15 10:35:33 martin Exp $ */
 
 /*
  * Copyright (c) 1992, 1993
@@ -134,6 +134,7 @@ struct cpu_info {
 	int			ci_flags;
 	int			ci_want_ast;
 	int			ci_want_resched;
+	int			ci_idepth;
 
 	struct cpu_data		ci_data;	/* MI per-cpu data */
 
@@ -203,13 +204,13 @@ void	cpu_boot_secondary_processors(void);
 
 /*
  * Call a function on other cpus:
- *	multicast - send to everyone in the cpuset_t
+ *	multicast - send to everyone in the sparc64_cpuset_t
  *	broadcast - send to to all cpus but ourselves
  *	send - send to just this cpu
  */
 typedef void (* ipifunc_t)(void *);
 
-void	sparc64_multicast_ipi (cpuset_t, ipifunc_t);
+void	sparc64_multicast_ipi (sparc64_cpuset_t, ipifunc_t);
 void	sparc64_broadcast_ipi (ipifunc_t);
 void	sparc64_send_ipi (int, ipifunc_t);
 #endif

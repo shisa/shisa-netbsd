@@ -1,4 +1,4 @@
-/*	$NetBSD: pstat.c,v 1.100 2007/07/17 21:50:07 christos Exp $	*/
+/*	$NetBSD: pstat.c,v 1.106 2008/01/24 17:32:58 ad Exp $	*/
 
 /*-
  * Copyright (c) 1980, 1991, 1993, 1994
@@ -39,7 +39,7 @@ __COPYRIGHT("@(#) Copyright (c) 1980, 1991, 1993, 1994\n\
 #if 0
 static char sccsid[] = "@(#)pstat.c	8.16 (Berkeley) 5/9/95";
 #else
-__RCSID("$NetBSD: pstat.c,v 1.100 2007/07/17 21:50:07 christos Exp $");
+__RCSID("$NetBSD: pstat.c,v 1.106 2008/01/24 17:32:58 ad Exp $");
 #endif
 #endif /* not lint */
 
@@ -55,7 +55,6 @@ __RCSID("$NetBSD: pstat.c,v 1.100 2007/07/17 21:50:07 christos Exp $");
 #include <sys/mount.h>
 #undef NFS
 #include <sys/uio.h>
-#include <sys/namei.h>
 #include <miscfs/genfs/layer.h>
 #include <miscfs/union/union.h>
 #undef _KERNEL
@@ -351,7 +350,8 @@ vnodemode(void)
 	}
 
  out:
-	free(e_vnodebase);
+	if (e_vnodebase)
+		free(e_vnodebase);
 }
 
 int
@@ -373,18 +373,15 @@ getflags(const struct flagbit_desc *fd, char *p, u_int flags)
 }
 
 const struct flagbit_desc vnode_flags[] = {
-	{ VROOT,	'R' },
-	{ VTEXT,	'T' },
-	{ VSYSTEM,	'S' },
-	{ VISTTY,	'I' },
-	{ VEXECMAP,	'E' },
-	{ VXLOCK,	'L' },
-	{ VXWANT,	'W' },
-	{ VBWAIT,	'B' },
-	{ VALIASED,	'A' },
-	{ VDIROP,	'D' },
-	{ VLAYER,	'Y' },
-	{ VONWORKLST,	'O' },
+	{ VV_ROOT,	'R' },
+	{ VI_TEXT,	'T' },
+	{ VV_SYSTEM,	'S' },
+	{ VV_ISTTY,	'I' },
+	{ VI_EXECMAP,	'E' },
+	{ VI_XLOCK,	'L' },
+	{ VU_DIROP,	'D' },
+	{ VI_LAYER,	'Y' },
+	{ VI_ONWORKLST,	'O' },
 	{ 0,		'\0' },
 };
 
@@ -430,7 +427,8 @@ vnode_print(struct vnode *avnode, struct vnode *vp)
 	/*
 	 * gather flags
 	 */
-	(void)getflags(vnode_flags, flags, vp->v_flag);
+	(void)getflags(vnode_flags, flags,
+	    vp->v_uflag | vp->v_iflag | vp->v_vflag);
 
 	ovflw = 0;
 	PRWORD(ovflw, "%*lx", PTRSTRWIDTH, 0, (long)avnode);
@@ -700,6 +698,10 @@ loadvnodes(int *avnodes)
 	size_t copysize;
 	char *vnodebase;
 
+	if (totalflag) {
+		KGET(V_NUMV, *avnodes);
+		return NULL;
+	}
 	if (memf != NULL) {
 		/*
 		 * do it by hand
@@ -785,7 +787,6 @@ static const struct flagbit_desc ttystates[] = {
 	{ TS_TIMEOUT,	'T'},
 	{ TS_FLUSH,	'F'},
 	{ TS_BUSY,	'B'},
-	{ TS_ASLEEP,	'A'},
 	{ TS_XCLUDE,	'X'},
 	{ TS_TTSTOP,	'S'},
 	{ TS_TBLOCK,	'K'},

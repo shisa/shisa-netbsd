@@ -1,4 +1,4 @@
-/*	$NetBSD: disksubr.c,v 1.25 2007/07/29 12:15:35 ad Exp $	*/
+/*	$NetBSD: disksubr.c,v 1.28 2008/01/02 11:48:22 ad Exp $	*/
 /*	$OpenBSD: disksubr.c,v 1.14 1997/05/08 00:14:29 deraadt Exp $	*/
 /*	NetBSD: disksubr.c,v 1.40 1999/05/06 15:45:51 christos Exp	*/
 
@@ -34,7 +34,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: disksubr.c,v 1.25 2007/07/29 12:15:35 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: disksubr.c,v 1.28 2008/01/02 11:48:22 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -270,7 +270,7 @@ nombrpart:
 	bp->b_blkno = dospartoff + LABELSECTOR;
 	bp->b_cylinder = cyl;
 	bp->b_bcount = lp->d_secsize;
-	bp->b_flags &= ~(B_DONE);
+	bp->b_oflags &= ~(BO_DONE);
 	bp->b_flags |= B_READ;
 	(*strat)(bp);
 
@@ -321,7 +321,7 @@ nombrpart:
 		i = 0;
 		do {
 			/* read a bad sector table */
-			bp->b_flags &= ~(B_DONE);
+			bp->b_oflags &= ~(BO_DONE);
 			bp->b_flags |= B_READ;
 			bp->b_blkno = lp->d_secperunit - lp->d_nsectors + i;
 			if (lp->d_secsize > DEV_BSIZE)
@@ -351,7 +351,7 @@ nombrpart:
 	}
 
 done:
-	brelse(bp);
+	brelse(bp, 0);
 	return msg;
 }
 
@@ -475,7 +475,7 @@ nombrpart:
 	bp->b_blkno = dospartoff + LABELSECTOR;
 	bp->b_cylinder = cyl;
 	bp->b_bcount = lp->d_secsize;
-	bp->b_flags &= ~(B_DONE);
+	bp->b_oflags &= ~(BO_DONE);
 	bp->b_flags |= B_READ;
 	(*strat)(bp);
 
@@ -489,7 +489,8 @@ nombrpart:
 		if (dlp->d_magic == DISKMAGIC && dlp->d_magic2 == DISKMAGIC &&
 		    dkcksum(dlp) == 0) {
 			*dlp = *lp;
-			bp->b_flags &= ~(B_READ|B_DONE);
+			bp->b_oflags &= ~(BO_DONE);
+			bp->b_flags &= ~(B_READ);
 			bp->b_flags |= B_WRITE;
 			(*strat)(bp);
 			error = biowait(bp);
@@ -499,6 +500,6 @@ nombrpart:
 	error = ESRCH;
 
 done:
-	brelse(bp);
+	brelse(bp, 0);
 	return error;
 }

@@ -1,4 +1,4 @@
-/*	$NetBSD: vfs_vnops.c,v 1.140 2007/07/22 19:16:05 pooka Exp $	*/
+/*	$NetBSD: vfs_vnops.c,v 1.154 2008/01/30 09:50:22 ad Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1989, 1993
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: vfs_vnops.c,v 1.140 2007/07/22 19:16:05 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: vfs_vnops.c,v 1.154 2008/01/30 09:50:22 ad Exp $");
 
 #include "fs_union.h"
 #include "veriexec.h"
@@ -58,6 +58,9 @@ __KERNEL_RCSID(0, "$NetBSD: vfs_vnops.c,v 1.140 2007/07/22 19:16:05 pooka Exp $"
 #include <sys/poll.h>
 #include <sys/kauth.h>
 #include <sys/syslog.h>
+#include <sys/fstrans.h>
+#include <sys/atomic.h>
+#include <sys/filedesc.h>
 
 #include <miscfs/specfs/specdev.h>
 
@@ -97,7 +100,7 @@ int
 vn_open(struct nameidata *ndp, int fmode, int cmode)
 {
 	struct vnode *vp;
-	struct lwp *l = ndp->ni_cnd.cn_lwp;
+	struct lwp *l = curlwp;
 	kauth_cred_t cred = l->l_cred;
 	struct vattr va;
 	int error;
@@ -139,7 +142,6 @@ vn_open(struct nameidata *ndp, int fmode, int cmode)
 			va.va_mode = cmode;
 			if (fmode & O_EXCL)
 				 va.va_vaflags |= VA_EXCLUSIVE;
-			VOP_LEASE(ndp->ni_dvp, l, cred, LEASE_WRITE);
 			error = VOP_CREATE(ndp->ni_dvp, &ndp->ni_vp,
 					   &ndp->ni_cnd, &va);
 			if (error)
@@ -173,37 +175,28 @@ vn_open(struct nameidata *ndp, int fmode, int cmode)
 	}
 
 	if ((fmode & O_CREAT) == 0) {
-		if (fmode & FREAD) {
-			if ((error = VOP_ACCESS(vp, VREAD, cred, l)) != 0)
-				goto bad;
-		}
-
-		if (fmode & (FWRITE | O_TRUNC)) {
-			if (vp->v_type == VDIR) {
-				error = EISDIR;
-				goto bad;
-			}
-			if ((error = vn_writechk(vp)) != 0 ||
-			    (error = VOP_ACCESS(vp, VWRITE, cred, l)) != 0)
-				goto bad;
-		}
+		error = vn_openchk(vp, cred, fmode);
+		if (error != 0)
+			goto bad;
 	}
 
 	if (fmode & O_TRUNC) {
 		VOP_UNLOCK(vp, 0);			/* XXX */
 
-		VOP_LEASE(vp, l, cred, LEASE_WRITE);
 		vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);	/* XXX */
 		VATTR_NULL(&va);
 		va.va_size = 0;
-		error = VOP_SETATTR(vp, &va, cred, l);
+		error = VOP_SETATTR(vp, &va, cred);
 		if (error != 0)
 			goto bad;
 	}
-	if ((error = VOP_OPEN(vp, fmode, cred, l)) != 0)
+	if ((error = VOP_OPEN(vp, fmode, cred)) != 0)
 		goto bad;
-	if (fmode & FWRITE)
+	if (fmode & FWRITE) {
+		mutex_enter(&vp->v_interlock);
 		vp->v_writecount++;
+		mutex_exit(&vp->v_interlock);
+	}
 
 bad:
 	if (error)
@@ -225,9 +218,33 @@ vn_writechk(struct vnode *vp)
 	 * If the vnode is in use as a process's text,
 	 * we can't allow writing.
 	 */
-	if (vp->v_flag & VTEXT)
+	if (vp->v_iflag & VI_TEXT)
 		return (ETXTBSY);
 	return (0);
+}
+
+int
+vn_openchk(struct vnode *vp, kauth_cred_t cred, int fflags)
+{
+	int permbits = 0;
+	int error;
+
+	if ((fflags & FREAD) != 0) {
+		permbits = VREAD;
+	}
+	if ((fflags & (FWRITE | O_TRUNC)) != 0) {
+		permbits |= VWRITE;
+		if (vp->v_type == VDIR) {
+			error = EISDIR;
+			goto bad;
+		}
+		error = vn_writechk(vp);
+		if (error != 0)
+			goto bad;
+	}
+	error = VOP_ACCESS(vp, permbits, cred);
+bad:
+	return error;
 }
 
 /*
@@ -236,11 +253,14 @@ vn_writechk(struct vnode *vp)
 void
 vn_markexec(struct vnode *vp)
 {
-	if ((vp->v_flag & VEXECMAP) == 0) {
-		uvmexp.filepages -= vp->v_uobj.uo_npages;
-		uvmexp.execpages += vp->v_uobj.uo_npages;
+
+	KASSERT(mutex_owned(&vp->v_interlock));
+
+	if ((vp->v_iflag & VI_EXECMAP) == 0) {
+		atomic_add_int(&uvmexp.filepages, -vp->v_uobj.uo_npages);
+		atomic_add_int(&uvmexp.execpages, vp->v_uobj.uo_npages);
 	}
-	vp->v_flag |= VEXECMAP;
+	vp->v_iflag |= VI_EXECMAP;
 }
 
 /*
@@ -251,12 +271,15 @@ int
 vn_marktext(struct vnode *vp)
 {
 
+	mutex_enter(&vp->v_interlock);
 	if (vp->v_writecount != 0) {
-		KASSERT((vp->v_flag & VTEXT) == 0);
+		KASSERT((vp->v_iflag & VI_TEXT) == 0);
+		mutex_exit(&vp->v_interlock);
 		return (ETXTBSY);
 	}
-	vp->v_flag |= VTEXT;
+	vp->v_iflag |= VI_TEXT;
 	vn_markexec(vp);
+	mutex_exit(&vp->v_interlock);
 	return (0);
 }
 
@@ -270,10 +293,11 @@ vn_close(struct vnode *vp, int flags, kauth_cred_t cred, struct lwp *l)
 {
 	int error;
 
+	mutex_enter(&vp->v_interlock);
 	if (flags & FWRITE)
 		vp->v_writecount--;
-	vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);
-	error = VOP_CLOSE(vp, flags, cred, l);
+	vn_lock(vp, LK_EXCLUSIVE | LK_RETRY | LK_INTERLOCK);
+	error = VOP_CLOSE(vp, flags, cred);
 	vput(vp);
 	return (error);
 }
@@ -356,7 +380,9 @@ unionread:
 	auio.uio_offset = fp->f_offset;
 	error = VOP_READDIR(vp, &auio, fp->f_cred, &eofflag, cookies,
 		    ncookies);
+	FILE_LOCK(fp);
 	fp->f_offset = auio.uio_offset;
+	FILE_UNLOCK(fp);
 	VOP_UNLOCK(vp, 0);
 	if (error)
 		return (error);
@@ -373,13 +399,15 @@ unionread:
 	}
 #endif /* UNION || LKM */
 
-	if (count == auio.uio_resid && (vp->v_flag & VROOT) &&
+	if (count == auio.uio_resid && (vp->v_vflag & VV_ROOT) &&
 	    (vp->v_mount->mnt_flag & MNT_UNION)) {
 		struct vnode *tvp = vp;
 		vp = vp->v_mount->mnt_vnodecovered;
 		VREF(vp);
+		FILE_LOCK(fp);
 		fp->f_data = vp;
 		fp->f_offset = 0;
+		FILE_UNLOCK(fp);
 		vrele(tvp);
 		goto unionread;
 	}
@@ -396,9 +424,8 @@ vn_read(struct file *fp, off_t *offset, struct uio *uio, kauth_cred_t cred,
 {
 	struct vnode *vp = (struct vnode *)fp->f_data;
 	int count, error, ioflag;
-	struct lwp *l = curlwp;
 
-	VOP_LEASE(vp, l, cred, LEASE_READ);
+	FILE_LOCK(fp);
 	ioflag = IO_ADV_ENCODE(fp->f_advice);
 	if (fp->f_flag & FNONBLOCK)
 		ioflag |= IO_NDELAY;
@@ -408,6 +435,7 @@ vn_read(struct file *fp, off_t *offset, struct uio *uio, kauth_cred_t cred,
 		ioflag |= IO_ALTSEMANTICS;
 	if (fp->f_flag & FDIRECT)
 		ioflag |= IO_DIRECT;
+	FILE_UNLOCK(fp);
 	vn_lock(vp, LK_SHARED | LK_RETRY);
 	uio->uio_offset = *offset;
 	count = uio->uio_resid;
@@ -426,9 +454,10 @@ vn_write(struct file *fp, off_t *offset, struct uio *uio, kauth_cred_t cred,
     int flags)
 {
 	struct vnode *vp = (struct vnode *)fp->f_data;
-	int count, error, ioflag = IO_UNIT;
-	struct lwp *l = curlwp;
+	int count, error, ioflag;
 
+	FILE_LOCK(fp);
+	ioflag = IO_ADV_ENCODE(fp->f_advice) | IO_UNIT;
 	if (vp->v_type == VREG && (fp->f_flag & O_APPEND))
 		ioflag |= IO_APPEND;
 	if (fp->f_flag & FNONBLOCK)
@@ -442,7 +471,7 @@ vn_write(struct file *fp, off_t *offset, struct uio *uio, kauth_cred_t cred,
 		ioflag |= IO_ALTSEMANTICS;
 	if (fp->f_flag & FDIRECT)
 		ioflag |= IO_DIRECT;
-	VOP_LEASE(vp, l, cred, LEASE_WRITE);
+	FILE_UNLOCK(fp);
 	vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);
 	uio->uio_offset = *offset;
 	count = uio->uio_resid;
@@ -475,7 +504,7 @@ vn_stat(struct vnode *vp, struct stat *sb, struct lwp *l)
 	int error;
 	mode_t mode;
 
-	error = VOP_GETATTR(vp, &va, l->l_cred, l);
+	error = VOP_GETATTR(vp, &va, l->l_cred);
 	if (error)
 		return (error);
 	/*
@@ -535,7 +564,7 @@ vn_fcntl(struct file *fp, u_int com, void *data, struct lwp *l)
 	struct vnode *vp = ((struct vnode *)fp->f_data);
 	int error;
 
-	error = VOP_FCNTL(vp, com, data, fp->f_flag, l->l_cred, l);
+	error = VOP_FCNTL(vp, com, data, fp->f_flag, l->l_cred);
 	return (error);
 }
 
@@ -555,7 +584,7 @@ vn_ioctl(struct file *fp, u_long com, void *data, struct lwp *l)
 	case VREG:
 	case VDIR:
 		if (com == FIONREAD) {
-			error = VOP_GETATTR(vp, &vattr, l->l_cred, l);
+			error = VOP_GETATTR(vp, &vattr, l->l_cred);
 			if (error)
 				return (error);
 			*(int *)data = vattr.va_size - fp->f_offset;
@@ -594,8 +623,7 @@ vn_ioctl(struct file *fp, u_long com, void *data, struct lwp *l)
 	case VFIFO:
 	case VCHR:
 	case VBLK:
-		error = VOP_IOCTL(vp, com, data, fp->f_flag,
-		    l->l_cred, l);
+		error = VOP_IOCTL(vp, com, data, fp->f_flag, l->l_cred);
 		if (error == 0 && com == TIOCSCTTY) {
 			VREF(vp);
 			mutex_enter(&proclist_lock);
@@ -619,7 +647,7 @@ static int
 vn_poll(struct file *fp, int events, struct lwp *l)
 {
 
-	return (VOP_POLL(((struct vnode *)fp->f_data), events, l));
+	return (VOP_POLL(((struct vnode *)fp->f_data), events));
 }
 
 /*
@@ -643,24 +671,23 @@ vn_lock(struct vnode *vp, int flags)
 
 #if 0
 	KASSERT(vp->v_usecount > 0 || (flags & LK_INTERLOCK) != 0
-	    || (vp->v_flag & VONWORKLST) != 0);
+	    || (vp->v_iflag & VI_ONWORKLST) != 0);
 #endif
 	KASSERT((flags &
-	    ~(LK_INTERLOCK|LK_SHARED|LK_EXCLUSIVE|LK_DRAIN|LK_NOWAIT|LK_RETRY|
-	    LK_SETRECURSE|LK_CANRECURSE))
+	    ~(LK_INTERLOCK|LK_SHARED|LK_EXCLUSIVE|LK_NOWAIT|LK_RETRY|
+	    LK_CANRECURSE))
 	    == 0);
 
 	do {
 		if ((flags & LK_INTERLOCK) == 0)
-			simple_lock(&vp->v_interlock);
-		if (vp->v_flag & VXLOCK) {
+			mutex_enter(&vp->v_interlock);
+		if (vp->v_iflag & VI_XLOCK) {
 			if (flags & LK_NOWAIT) {
-				simple_unlock(&vp->v_interlock);
+				mutex_exit(&vp->v_interlock);
 				return EBUSY;
 			}
-			vp->v_flag |= VXWANT;
-			ltsleep(vp, PINOD | PNORELOCK,
-			    "vn_lock", 0, &vp->v_interlock);
+			vwait(vp, VI_XLOCK);
+			mutex_exit(&vp->v_interlock);
 			error = ENOENT;
 		} else {
 			error = VOP_LOCK(vp,
@@ -690,11 +717,12 @@ vn_closefile(struct file *fp, struct lwp *l)
 u_int
 vn_setrecurse(struct vnode *vp)
 {
-	struct lock *lkp = &vp->v_lock;
-	u_int retval = lkp->lk_flags & LK_CANRECURSE;
+	struct vnlock *lkp;
 
-	lkp->lk_flags |= LK_CANRECURSE;
-	return retval;
+	lkp = (vp->v_vnlock != NULL ? vp->v_vnlock : &vp->v_lock);
+	atomic_inc_uint(&lkp->vl_canrecurse);
+
+	return 0;
 }
 
 /*
@@ -703,67 +731,10 @@ vn_setrecurse(struct vnode *vp)
 void
 vn_restorerecurse(struct vnode *vp, u_int flags)
 {
-	struct lock *lkp = &vp->v_lock;
+	struct vnlock *lkp;
 
-	lkp->lk_flags &= ~LK_CANRECURSE;
-	lkp->lk_flags |= flags;
-}
-
-int
-vn_cow_establish(struct vnode *vp,
-    int (*func)(void *, struct buf *), void *cookie)
-{
-	int s;
-	struct spec_cow_entry *e;
-
-	MALLOC(e, struct spec_cow_entry *, sizeof(struct spec_cow_entry),
-	    M_DEVBUF, M_WAITOK);
-	e->ce_func = func;
-	e->ce_cookie = cookie;
-
-	SPEC_COW_LOCK(vp->v_specinfo, s);
-	vp->v_spec_cow_req++;
-	while (vp->v_spec_cow_count > 0)
-		ltsleep(&vp->v_spec_cow_req, PRIBIO, "cowlist", 0,
-		    &vp->v_spec_cow_slock);
-
-	SLIST_INSERT_HEAD(&vp->v_spec_cow_head, e, ce_list);
-
-	vp->v_spec_cow_req--;
-	if (vp->v_spec_cow_req == 0)
-		wakeup(&vp->v_spec_cow_req);
-	SPEC_COW_UNLOCK(vp->v_specinfo, s);
-
-	return 0;
-}
-
-int
-vn_cow_disestablish(struct vnode *vp,
-    int (*func)(void *, struct buf *), void *cookie)
-{
-	int s;
-	struct spec_cow_entry *e;
-
-	SPEC_COW_LOCK(vp->v_specinfo, s);
-	vp->v_spec_cow_req++;
-	while (vp->v_spec_cow_count > 0)
-		ltsleep(&vp->v_spec_cow_req, PRIBIO, "cowlist", 0,
-		    &vp->v_spec_cow_slock);
-
-	SLIST_FOREACH(e, &vp->v_spec_cow_head, ce_list)
-		if (e->ce_func == func && e->ce_cookie == cookie) {
-			SLIST_REMOVE(&vp->v_spec_cow_head, e,
-			    spec_cow_entry, ce_list);
-			FREE(e, M_DEVBUF);
-			break;
-		}
-
-	vp->v_spec_cow_req--;
-	if (vp->v_spec_cow_req == 0)
-		wakeup(&vp->v_spec_cow_req);
-	SPEC_COW_UNLOCK(vp->v_specinfo, s);
-
-	return e ? 0 : EINVAL;
+	lkp = (vp->v_vnlock != NULL ? vp->v_vnlock : &vp->v_lock);
+	atomic_dec_uint(&lkp->vl_canrecurse);
 }
 
 /*
@@ -792,8 +763,7 @@ vn_extattr_get(struct vnode *vp, int ioflg, int attrnamespace,
 	if ((ioflg & IO_NODELOCKED) == 0)
 		vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);
 
-	error = VOP_GETEXTATTR(vp, attrnamespace, attrname, &auio, NULL, NULL,
-	    l);
+	error = VOP_GETEXTATTR(vp, attrnamespace, attrname, &auio, NULL, NULL);
 
 	if ((ioflg & IO_NODELOCKED) == 0)
 		VOP_UNLOCK(vp, 0);
@@ -829,7 +799,7 @@ vn_extattr_set(struct vnode *vp, int ioflg, int attrnamespace,
 		vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);
 	}
 
-	error = VOP_SETEXTATTR(vp, attrnamespace, attrname, &auio, NULL, l);
+	error = VOP_SETEXTATTR(vp, attrnamespace, attrname, &auio, NULL);
 
 	if ((ioflg & IO_NODELOCKED) == 0) {
 		VOP_UNLOCK(vp, 0);
@@ -848,10 +818,9 @@ vn_extattr_rm(struct vnode *vp, int ioflg, int attrnamespace,
 		vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);
 	}
 
-	error = VOP_DELETEEXTATTR(vp, attrnamespace, attrname, NULL, l);
+	error = VOP_DELETEEXTATTR(vp, attrnamespace, attrname, NULL);
 	if (error == EOPNOTSUPP)
-		error = VOP_SETEXTATTR(vp, attrnamespace, attrname, NULL,
-		    NULL, l);
+		error = VOP_SETEXTATTR(vp, attrnamespace, attrname, NULL, NULL);
 
 	if ((ioflg & IO_NODELOCKED) == 0) {
 		VOP_UNLOCK(vp, 0);
@@ -865,23 +834,23 @@ vn_ra_allocctx(struct vnode *vp)
 {
 	struct uvm_ractx *ra = NULL;
 
+	KASSERT(mutex_owned(&vp->v_interlock));
+
 	if (vp->v_type != VREG) {
 		return;
 	}
 	if (vp->v_ractx != NULL) {
 		return;
 	}
-	simple_lock(&vp->v_interlock);
 	if (vp->v_ractx == NULL) {
-		simple_unlock(&vp->v_interlock);
+		mutex_exit(&vp->v_interlock);
 		ra = uvm_ra_allocctx();
-		simple_lock(&vp->v_interlock);
+		mutex_enter(&vp->v_interlock);
 		if (ra != NULL && vp->v_ractx == NULL) {
 			vp->v_ractx = ra;
 			ra = NULL;
 		}
 	}
-	simple_unlock(&vp->v_interlock);
 	if (ra != NULL) {
 		uvm_ra_freectx(ra);
 	}

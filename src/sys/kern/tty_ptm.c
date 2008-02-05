@@ -1,4 +1,4 @@
-/*	$NetBSD: tty_ptm.c,v 1.19 2007/03/26 22:52:44 hubertf Exp $	*/
+/*	$NetBSD: tty_ptm.c,v 1.23 2008/01/24 17:32:54 ad Exp $	*/
 
 /*-
  * Copyright (c) 2004 The NetBSD Foundation, Inc.
@@ -34,7 +34,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: tty_ptm.c,v 1.19 2007/03/26 22:52:44 hubertf Exp $");
+__KERNEL_RCSID(0, "$NetBSD: tty_ptm.c,v 1.23 2008/01/24 17:32:54 ad Exp $");
 
 #include "opt_ptm.h"
 
@@ -58,6 +58,8 @@ __KERNEL_RCSID(0, "$NetBSD: tty_ptm.c,v 1.19 2007/03/26 22:52:44 hubertf Exp $")
 #include <sys/malloc.h>
 #include <sys/pty.h>
 #include <sys/kauth.h>
+
+#include <miscfs/specfs/specdev.h>
 
 #ifdef DEBUG_PTM
 #define DPRINTF(a)	printf a
@@ -119,7 +121,7 @@ pty_vn_open(struct vnode *vp, struct lwp *l)
 		return EINVAL;
 	}
 
-	error = VOP_OPEN(vp, FREAD|FWRITE, lwp0.l_cred, l);
+	error = VOP_OPEN(vp, FREAD|FWRITE, lwp0.l_cred);
 
 	if (error) {
 		vput(vp);
@@ -215,7 +217,7 @@ pty_grant_slave(struct lwp *l, dev_t dev)
 		struct vattr vattr;
 		(*ptm->getvattr)(ptm, l, &vattr);
 		/* Do the VOP_SETATTR() as root. */
-		error = VOP_SETATTR(vp, &vattr, lwp0.l_cred, l);
+		error = VOP_SETATTR(vp, &vattr, lwp0.l_cred);
 		if (error) {
 			DPRINTF(("setattr %d\n", error));
 			VOP_UNLOCK(vp, 0);
@@ -224,9 +226,7 @@ pty_grant_slave(struct lwp *l, dev_t dev)
 		}
 	}
 	VOP_UNLOCK(vp, 0);
-	if (vp->v_usecount > 1 ||
-	    (vp->v_flag & (VALIASED | VLAYER)))
-		VOP_REVOKE(vp, REVOKEALL);
+	VOP_REVOKE(vp, REVOKEALL);
 
 	/*
 	 * The vnode is useless after the revoke, we need to get it again.

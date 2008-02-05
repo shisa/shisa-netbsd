@@ -1,6 +1,3 @@
-/*	$NetBSD: types.h,v 1.4 2007/07/14 21:48:22 ad Exp $	*/
+/*	$NetBSD: types.h,v 1.6 2008/01/20 18:09:08 joerg Exp $	*/
 
 #include <m68k/types.h>
-
-#define __HAVE_TIMECOUNTER
-#define __HAVE_GENERIC_TODR

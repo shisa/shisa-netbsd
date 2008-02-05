@@ -1,4 +1,4 @@
-/*	$NetBSD: linux32_sched.c,v 1.3 2007/02/09 21:55:21 ad Exp $ */
+/*	$NetBSD: linux32_sched.c,v 1.6 2007/12/20 23:02:58 dsl Exp $ */
 
 /*-
  * Copyright (c) 2006 Emmanuel Dreyfus, all rights reserved.
@@ -33,7 +33,7 @@
 
 #include <sys/cdefs.h>
 
-__KERNEL_RCSID(0, "$NetBSD: linux32_sched.c,v 1.3 2007/02/09 21:55:21 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: linux32_sched.c,v 1.6 2007/12/20 23:02:58 dsl Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -70,15 +70,12 @@ __KERNEL_RCSID(0, "$NetBSD: linux32_sched.c,v 1.3 2007/02/09 21:55:21 ad Exp $")
 #include <compat/linux32/linux32_syscallargs.h>
 
 int
-linux32_sys_clone(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+linux32_sys_clone(struct lwp *l, const struct linux32_sys_clone_args *uap, register_t *retval)
 {
-	struct linux32_sys_clone_args /* {
+	/* {
 		syscallarg(int) flags;
 		syscallarg(netbsd32_voidp) stack;
-	} */ *uap = v;
+	} */
 	struct linux_sys_clone_args ua;
 	
 	NETBSD32TO64_UAP(flags);
@@ -92,16 +89,26 @@ linux32_sys_clone(l, v, retval)
 }
 
 int
-linux32_sys_sched_setscheduler(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+linux32_sys_sched_getscheduler(struct lwp *l, const struct linux32_sys_sched_getscheduler_args *uap, register_t *retval)
 {
-	struct linux32_sys_sched_setscheduler_args /* {
+	/* {
+		syscallarg(pid_t) pid;
+	} */
+	struct linux_sys_sched_getscheduler_args ua;
+
+	NETBSD32TO64_UAP(pid);
+
+	return linux_sys_sched_getscheduler(l, &ua, retval);
+}
+
+int
+linux32_sys_sched_setscheduler(struct lwp *l, const struct linux32_sys_sched_setscheduler_args *uap, register_t *retval)
+{
+	/* {
 		syscallarg(int) pid;
 		syscallarg(int) policy;
 		syscallarg(const linux32_sched_paramp_t) sp;
-	} */ *uap = v;
+	} */
 	struct linux_sys_sched_setscheduler_args ua;
 
 	NETBSD32TO64_UAP(pid);
@@ -112,15 +119,12 @@ linux32_sys_sched_setscheduler(l, v, retval)
 }
 
 int
-linux32_sys_sched_getparam(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+linux32_sys_sched_getparam(struct lwp *l, const struct linux32_sys_sched_getparam_args *uap, register_t *retval)
 {
-	struct linux32_sys_sched_getparam_args /* {
+	/* {
 		syscallarg(pid_t) pid;
 		syscallarg(linux32_sched_paramp_t *) sp;
-	} */ *uap = v;
+	} */
 	struct linux_sys_sched_getparam_args ua;
 
 	NETBSD32TO64_UAP(pid);
@@ -129,3 +133,15 @@ linux32_sys_sched_getparam(l, v, retval)
 	return linux_sys_sched_getparam(l, &ua, retval);
 }
 
+int
+linux32_sys_exit_group(struct lwp *l, const struct linux32_sys_exit_group_args *uap, register_t *retval)
+{
+	/* {
+		syscallarg(int) error_code;
+	} */
+	struct linux_sys_exit_group_args ua;
+
+	NETBSD32TO64_UAP(error_code);
+
+	return linux_sys_exit_group(l, &ua, retval);
+}

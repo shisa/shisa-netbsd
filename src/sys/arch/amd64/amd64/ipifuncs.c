@@ -1,4 +1,4 @@
-/*	$NetBSD: ipifuncs.c,v 1.11 2007/09/26 19:48:35 ad Exp $ */
+/*	$NetBSD: ipifuncs.c,v 1.16 2008/01/15 14:50:09 joerg Exp $ */
 
 /*-
  * Copyright (c) 2000 The NetBSD Foundation, Inc.
@@ -40,7 +40,7 @@
 
 
 #include <sys/cdefs.h>			/* RCS ID & Copyright macro defns */
-__KERNEL_RCSID(0, "$NetBSD: ipifuncs.c,v 1.11 2007/09/26 19:48:35 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ipifuncs.c,v 1.16 2008/01/15 14:50:09 joerg Exp $");
 
 /*
  * Interprocessor interrupt handlers.
@@ -56,7 +56,6 @@ __KERNEL_RCSID(0, "$NetBSD: ipifuncs.c,v 1.11 2007/09/26 19:48:35 ad Exp $");
 #include <uvm/uvm_extern.h>
 
 #include <machine/intr.h>
-#include <machine/atomic.h>
 #include <machine/cpuvar.h>
 #include <machine/i82093var.h>
 #include <machine/i82489reg.h>
@@ -69,6 +68,8 @@ __KERNEL_RCSID(0, "$NetBSD: ipifuncs.c,v 1.11 2007/09/26 19:48:35 ad Exp $");
 
 #include <ddb/db_output.h>
 
+#include "acpi.h"
+
 void x86_64_ipi_halt(struct cpu_info *);
 
 void x86_64_ipi_synch_fpu(struct cpu_info *);
@@ -80,6 +81,12 @@ void x86_64_reload_mtrr(struct cpu_info *);
 #define x86_64_reload_mtrr NULL
 #endif
 
+#if NACPI > 0
+void acpi_cpu_sleep(struct cpu_info *);
+#else
+#define	acpi_cpu_sleep NULL
+#endif
+
 void (*ipifunc[X86_NIPI])(struct cpu_info *) =
 {
 	x86_64_ipi_halt,
@@ -88,7 +95,8 @@ void (*ipifunc[X86_NIPI])(struct cpu_info *) =
 	x86_64_ipi_synch_fpu,
 	x86_64_reload_mtrr,
 	gdt_reload_cpu,
-	msr_write_ipi
+	msr_write_ipi,
+	acpi_cpu_sleep,
 };
 
 void
@@ -104,13 +112,13 @@ x86_64_ipi_halt(struct cpu_info *ci)
 void
 x86_64_ipi_flush_fpu(struct cpu_info *ci)
 {
-	fpusave_cpu(ci, 0);
+	fpusave_cpu(false);
 }
 
 void
 x86_64_ipi_synch_fpu(struct cpu_info *ci)
 {
-	fpusave_cpu(ci, 1);
+	fpusave_cpu(true);
 }
 
 #ifdef MTRR

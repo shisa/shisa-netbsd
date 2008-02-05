@@ -1,4 +1,4 @@
-/* $NetBSD: if_pppoe.c,v 1.80 2007/09/09 09:58:55 martin Exp $ */
+/* $NetBSD: if_pppoe.c,v 1.82 2007/12/25 18:33:45 perry Exp $ */
 
 /*-
  * Copyright (c) 2002 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_pppoe.c,v 1.80 2007/09/09 09:58:55 martin Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_pppoe.c,v 1.82 2007/12/25 18:33:45 perry Exp $");
 
 #include "pppoe.h"
 #include "bpfilter.h"
@@ -54,6 +54,8 @@ __KERNEL_RCSID(0, "$NetBSD: if_pppoe.c,v 1.80 2007/09/09 09:58:55 martin Exp $")
 #include <sys/proc.h>
 #include <sys/ioctl.h>
 #include <sys/kauth.h>
+#include <sys/intr.h>
+
 #include <net/if.h>
 #include <net/if_types.h>
 #include <net/if_ether.h>
@@ -65,7 +67,6 @@ __KERNEL_RCSID(0, "$NetBSD: if_pppoe.c,v 1.80 2007/09/09 09:58:55 martin Exp $")
 #include <net/bpf.h>
 #endif
 
-#include <machine/intr.h>
 
 #undef PPPOE_DEBUG		/* XXX - remove this or make it an option */
 /* #define PPPOE_DEBUG 1 */
@@ -75,12 +76,12 @@ struct pppoehdr {
 	u_int8_t code;
 	u_int16_t session;
 	u_int16_t plen;
-} __attribute__((__packed__));
+} __packed;
 
 struct pppoetag {
 	u_int16_t tag;
 	u_int16_t len;
-} __attribute__((__packed__));
+} __packed;
 
 #define PPPOE_HEADERLEN	sizeof(struct pppoehdr)
 #define	PPPOE_OVERHEAD	(PPPOE_HEADERLEN + 2)
@@ -215,7 +216,7 @@ pppoeattach(int count)
 	LIST_INIT(&pppoe_softc_list);
 	if_clone_attach(&pppoe_cloner);
 
-	pppoe_softintr = softintr_establish(IPL_SOFTNET, pppoe_softintr_handler, NULL);
+	pppoe_softintr = softint_establish(SOFTINT_NET, pppoe_softintr_handler, NULL);
 }
 
 static int

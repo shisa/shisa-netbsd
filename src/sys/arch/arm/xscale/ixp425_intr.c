@@ -1,4 +1,4 @@
-/*	$NetBSD: ixp425_intr.c,v 1.15 2006/11/24 21:20:05 wiz Exp $ */
+/*	$NetBSD: ixp425_intr.c,v 1.18 2008/01/08 02:07:52 matt Exp $ */
 
 /*
  * Copyright (c) 2003
@@ -68,7 +68,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ixp425_intr.c,v 1.15 2006/11/24 21:20:05 wiz Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ixp425_intr.c,v 1.18 2008/01/08 02:07:52 matt Exp $");
 
 #ifndef EVBARM_SPL_NOINLINE
 #define	EVBARM_SPL_NOINLINE
@@ -110,6 +110,7 @@ volatile uint32_t intr_enabled;
 /* Mask if interrupts steered to FIQs. */
 uint32_t intr_steer;
 
+#ifdef __HAVE_FAST_SOFTINTS
 /*
  * Map a software interrupt queue index
  *
@@ -135,13 +136,13 @@ static const uint32_t si_to_irqbit[SI_NQUEUES] = {
 /*
  * Map a software interrupt queue to an interrupt priority level.
  */
-static const int si_to_ipl[SI_NQUEUES] = {
-	IPL_SOFT,		/* SI_SOFT */
-	IPL_SOFTCLOCK,		/* SI_SOFTCLOCK */
-	IPL_SOFTNET,		/* SI_SOFTNET */
-	IPL_SOFTSERIAL,		/* SI_SOFTSERIAL */
+static const int si_to_ipl[] = {
+	[SI_SOFTCLOCK] =	IPL_SOFTCLOCK,
+	[SI_SOFTBIO] =		IPL_SOFTBIO,
+	[SI_SOFTNET] =		IPL_SOFTNET,
+	[SI_SOFTSERIAL] =	IPL_SOFTSERIAL,
 };
-
+#endif /* __HAVE_FAST_SOFTINTS */
 void	ixp425_intr_dispatch(struct clockframe *frame);
 
 static inline uint32_t
@@ -224,73 +225,29 @@ ixp425_intr_calculate_masks(void)
 		ixp425_imask[ipl] = irqs;
 	}
 
-	ixp425_imask[IPL_NONE] = 0;
+	KASSERT(ixp425_imask[IPL_NONE] == 0);
 
+#ifdef __HAVE_FAST_SOFTINTS
 	/*
 	 * Initialize the soft interrupt masks to block themselves.
 	 */
-	ixp425_imask[IPL_SOFT] = SI_TO_IRQBIT(SI_SOFT);
 	ixp425_imask[IPL_SOFTCLOCK] = SI_TO_IRQBIT(SI_SOFTCLOCK);
+	ixp425_imask[IPL_SOFTBIO] = SI_TO_IRQBIT(SI_SOFTBIO);
 	ixp425_imask[IPL_SOFTNET] = SI_TO_IRQBIT(SI_SOFTNET);
 	ixp425_imask[IPL_SOFTSERIAL] = SI_TO_IRQBIT(SI_SOFTSERIAL);
-
-	/*
-	 * splsoftclock() is the only interface that users of the
-	 * generic software interrupt facility have to block their
-	 * soft intrs, so splsoftclock() must also block IPL_SOFT.
-	 */
-	ixp425_imask[IPL_SOFTCLOCK] |= ixp425_imask[IPL_SOFT];
-
-	/*
-	 * splsoftnet() must also block splsoftclock(), since we don't
-	 * want timer-driven network events to occur while we're
-	 * processing incoming packets.
-	 */
-	ixp425_imask[IPL_SOFTNET] |= ixp425_imask[IPL_SOFTCLOCK];
+#endif
 
 	/*
 	 * Enforce a hierarchy that gives "slow" device (or devices with
 	 * limited input buffer space/"real-time" requirements) a better
 	 * chance at not dropping data.
 	 */
-	ixp425_imask[IPL_BIO] |= ixp425_imask[IPL_SOFTNET];
-	ixp425_imask[IPL_NET] |= ixp425_imask[IPL_BIO];
-	ixp425_imask[IPL_SOFTSERIAL] |= ixp425_imask[IPL_NET];
-	ixp425_imask[IPL_TTY] |= ixp425_imask[IPL_SOFTSERIAL];
-
-	/*
-	 * splvm() blocks all interrupts that use the kernel memory
-	 * allocation facilities.
-	 */
-	ixp425_imask[IPL_VM] |= ixp425_imask[IPL_TTY];
-
-	/*
-	 * Audio devices are not allowed to perform memory allocation
-	 * in their interrupt routines, and they have fairly "real-time"
-	 * requirements, so give them a high interrupt priority.
-	 */
-	ixp425_imask[IPL_AUDIO] |= ixp425_imask[IPL_VM];
-
-	/*
-	 * splclock() must block anything that uses the scheduler.
-	 */
-	ixp425_imask[IPL_CLOCK] |= ixp425_imask[IPL_AUDIO];
-
-	/*
-	 * No separate statclock on the IQ80310.
-	 */
-	ixp425_imask[IPL_STATCLOCK] |= ixp425_imask[IPL_CLOCK];
-
-	/*
-	 * splhigh() must block "everything".
-	 */
-	ixp425_imask[IPL_HIGH] |= ixp425_imask[IPL_STATCLOCK];
-
-	/*
-	 * XXX We need serial drivers to run at the absolute highest priority
-	 * in order to avoid overruns, so serial > high.
-	 */
-	ixp425_imask[IPL_SERIAL] |= ixp425_imask[IPL_HIGH];
+	ixp425_imask[IPL_SOFTBIO] |= ixp425_imask[IPL_SOFTCLOCK];
+	ixp425_imask[IPL_SOFTNET] |= ixp425_imask[IPL_SOFTBIO];
+	ixp425_imask[IPL_SOFTSERIAL] |= ixp425_imask[IPL_SOFTNET];
+	ixp425_imask[IPL_VM] |= ixp425_imask[IPL_SOFTSERIAL];
+	ixp425_imask[IPL_SCHED] |= ixp425_imask[IPL_VM];
+	ixp425_imask[IPL_HIGH] |= ixp425_imask[IPL_SCHED];
 
 	/*
 	 * Now compute which IRQs must be blocked when servicing any
@@ -308,6 +265,7 @@ ixp425_intr_calculate_masks(void)
 	}
 }
 
+#ifdef __HAVE_FAST_SOFTINTS
 void
 ixp425_do_pending(void)
 {
@@ -340,6 +298,7 @@ ixp425_do_pending(void)
 
 	restore_interrupts(oldirqstate);
 }
+#endif
 
 void
 splx(int new)
@@ -362,6 +321,7 @@ _splraise(int ipl)
 	return (ixp425_splraise(ipl));
 }
 
+#ifdef __HAVE_FAST_SOFTINTS
 void
 _setsoftintr(int si)
 {
@@ -375,6 +335,7 @@ _setsoftintr(int si)
 	if ((ixp425_ipending & INT_SWMASK) & ~current_spl_level)
 		ixp425_do_pending();
 }
+#endif /* __HAVE_FAST_SOFTINTS */
 
 /*
  * ixp425_icu_init:
@@ -482,9 +443,11 @@ ixp425_intr_dispatch(struct clockframe *frame)
 	struct intrq *iq;
 	struct intrhand *ih;
 	int oldirqstate, pcpl, irq, ibit, hwpend;
+	struct cpu_info *ci;
 
+	ci = curcpu();
+	ci->ci_idepth++;
 	pcpl = current_spl_level;
-
 	hwpend = ixp425_irq_read();
 
 	/*
@@ -547,11 +510,14 @@ ixp425_intr_dispatch(struct clockframe *frame)
 		 */
 		hwpend |= ((ixp425_ipending & IXP425_INT_HWMASK) & ~pcpl);
 	}
+	ci->ci_idepth--;
 
+#ifdef __HAVE_FAST_SOFTINTS
 	/* Check for pendings soft intrs. */
 	if ((ixp425_ipending & INT_SWMASK) & ~current_spl_level) {
 		oldirqstate = enable_interrupts(I32_bit);
 		ixp425_do_pending();
 		restore_interrupts(oldirqstate);
 	}
+#endif
 }

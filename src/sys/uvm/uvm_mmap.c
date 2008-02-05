@@ -1,4 +1,4 @@
-/*	$NetBSD: uvm_mmap.c,v 1.115 2007/09/23 16:05:40 yamt Exp $	*/
+/*	$NetBSD: uvm_mmap.c,v 1.121 2008/01/02 11:49:18 ad Exp $	*/
 
 /*
  * Copyright (c) 1997 Charles D. Cranor and Washington University.
@@ -51,7 +51,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: uvm_mmap.c,v 1.115 2007/09/23 16:05:40 yamt Exp $");
+__KERNEL_RCSID(0, "$NetBSD: uvm_mmap.c,v 1.121 2008/01/02 11:49:18 ad Exp $");
 
 #include "opt_compat_netbsd.h"
 #include "opt_pax.h"
@@ -115,13 +115,11 @@ range_test(vaddr_t addr, vsize_t size, bool ismmap)
 
 /* ARGSUSED */
 int
-sys_sbrk(struct lwp *l, void *v, register_t *retval)
+sys_sbrk(struct lwp *l, const struct sys_sbrk_args *uap, register_t *retval)
 {
-#if 0
-	struct sys_sbrk_args /* {
+	/* {
 		syscallarg(intptr_t) incr;
-	} */ *uap = v;
-#endif
+	} */
 
 	return (ENOSYS);
 }
@@ -132,13 +130,11 @@ sys_sbrk(struct lwp *l, void *v, register_t *retval)
 
 /* ARGSUSED */
 int
-sys_sstk(struct lwp *l, void *v, register_t *retval)
+sys_sstk(struct lwp *l, const struct sys_sstk_args *uap, register_t *retval)
 {
-#if 0
-	struct sys_sstk_args /* {
+	/* {
 		syscallarg(int) incr;
-	} */ *uap = v;
-#endif
+	} */
 
 	return (ENOSYS);
 }
@@ -149,13 +145,13 @@ sys_sstk(struct lwp *l, void *v, register_t *retval)
 
 /* ARGSUSED */
 int
-sys_mincore(struct lwp *l, void *v, register_t *retval)
+sys_mincore(struct lwp *l, const struct sys_mincore_args *uap, register_t *retval)
 {
-	struct sys_mincore_args /* {
+	/* {
 		syscallarg(void *) addr;
 		syscallarg(size_t) len;
 		syscallarg(char *) vec;
-	} */ *uap = v;
+	} */
 	struct proc *p = l->l_proc;
 	struct vm_page *pg;
 	char *vec, pgi;
@@ -235,7 +231,7 @@ sys_mincore(struct lwp *l, void *v, register_t *retval)
 		if (amap != NULL)
 			amap_lock(amap);
 		if (uobj != NULL)
-			simple_lock(&uobj->vmobjlock);
+			mutex_enter(&uobj->vmobjlock);
 
 		for (/* nothing */; start < lim; start += PAGE_SIZE, vec++) {
 			pgi = 0;
@@ -271,7 +267,7 @@ sys_mincore(struct lwp *l, void *v, register_t *retval)
 			(void) subyte(vec, pgi);
 		}
 		if (uobj != NULL)
-			simple_unlock(&uobj->vmobjlock);
+			mutex_exit(&uobj->vmobjlock);
 		if (amap != NULL)
 			amap_unlock(amap);
 	}
@@ -292,12 +288,9 @@ sys_mincore(struct lwp *l, void *v, register_t *retval)
  */
 
 int
-sys_mmap(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+sys_mmap(struct lwp *l, const struct sys_mmap_args *uap, register_t *retval)
 {
-	struct sys_mmap_args /* {
+	/* {
 		syscallarg(void *) addr;
 		syscallarg(size_t) len;
 		syscallarg(int) prot;
@@ -305,7 +298,7 @@ sys_mmap(l, v, retval)
 		syscallarg(int) fd;
 		syscallarg(long) pad;
 		syscallarg(off_t) pos;
-	} */ *uap = v;
+	} */
 	struct proc *p = l->l_proc;
 	vaddr_t addr;
 	struct vattr va;
@@ -315,10 +308,13 @@ sys_mmap(l, v, retval)
 	int flags, fd;
 	vaddr_t defaddr;
 	struct filedesc *fdp = p->p_fd;
-	struct file *fp;
+	struct file *fp = NULL;
 	struct vnode *vp;
 	void *handle;
 	int error;
+#ifdef PAX_ASLR
+	vaddr_t orig_addr;
+#endif /* PAX_ASLR */
 
 	/*
 	 * first, extract syscall args from the uap.
@@ -330,6 +326,10 @@ sys_mmap(l, v, retval)
 	flags = SCARG(uap, flags);
 	fd = SCARG(uap, fd);
 	pos = SCARG(uap, pos);
+
+#ifdef PAX_ASLR
+	orig_addr = addr;
+#endif /* PAX_ASLR */
 
 	/*
 	 * Fixup the old deprecated MAP_COPY into MAP_PRIVATE, and
@@ -389,27 +389,32 @@ sys_mmap(l, v, retval)
 
 		if ((fp = fd_getfile(fdp, fd)) == NULL)
 			return (EBADF);
-
-		simple_unlock(&fp->f_slock);
-
-		if (fp->f_type != DTYPE_VNODE)
+		if (fp->f_type != DTYPE_VNODE) {
+			mutex_exit(&fp->f_lock);
 			return (ENODEV);		/* only mmap vnodes! */
+		}
 		vp = (struct vnode *)fp->f_data;	/* convert to vnode */
 
 		if (vp->v_type != VREG && vp->v_type != VCHR &&
-		    vp->v_type != VBLK)
+		    vp->v_type != VBLK) {
+			mutex_exit(&fp->f_lock);
 			return (ENODEV);  /* only REG/CHR/BLK support mmap */
-
-		if (vp->v_type != VCHR && pos < 0)
+		}
+		if (vp->v_type != VCHR && pos < 0) {
+			mutex_exit(&fp->f_lock);
 			return (EINVAL);
-
-		if (vp->v_type != VCHR && (pos + size) < pos)
+		}
+		if (vp->v_type != VCHR && (pos + size) < pos) {
+			mutex_exit(&fp->f_lock);
 			return (EOVERFLOW);		/* no offset wrapping */
+		}
 
 		/* special case: catch SunOS style /dev/zero */
 		if (vp->v_type == VCHR
 		    && (vp->v_rdev == zerodev || COMPAT_ZERODEV(vp->v_rdev))) {
 			flags |= MAP_ANON;
+			mutex_exit(&fp->f_lock);
+			fp = NULL;
 			goto is_anon;
 		}
 
@@ -450,8 +455,11 @@ sys_mmap(l, v, retval)
 		/* check read access */
 		if (fp->f_flag & FREAD)
 			maxprot |= VM_PROT_READ;
-		else if (prot & PROT_READ)
+		else if (prot & PROT_READ) {
+			mutex_exit(&fp->f_lock);
 			return (EACCES);
+		}
+		FILE_USE(fp);
 
 		/* check write access, shared case first */
 		if (flags & MAP_SHARED) {
@@ -463,16 +471,22 @@ sys_mmap(l, v, retval)
 			 */
 			if (fp->f_flag & FWRITE) {
 				if ((error =
-				    VOP_GETATTR(vp, &va, l->l_cred, l)))
+				    VOP_GETATTR(vp, &va, l->l_cred))) {
+				    	FILE_UNUSE(fp, l);
 					return (error);
+				}
 				if ((va.va_flags &
 				    (SF_SNAPSHOT|IMMUTABLE|APPEND)) == 0)
 					maxprot |= VM_PROT_WRITE;
-				else if (prot & PROT_WRITE)
+				else if (prot & PROT_WRITE) {
+				    	FILE_UNUSE(fp, l);
 					return (EPERM);
+				}
 			}
-			else if (prot & PROT_WRITE)
+			else if (prot & PROT_WRITE) {
+			    	FILE_UNUSE(fp, l);
 				return (EACCES);
+			}
 		} else {
 			/* MAP_PRIVATE mappings can always write to */
 			maxprot |= VM_PROT_WRITE;
@@ -504,6 +518,8 @@ sys_mmap(l, v, retval)
 		if (size >
 		    (p->p_rlimit[RLIMIT_DATA].rlim_cur -
 		     ctob(p->p_vmspace->vm_dsize))) {
+		     	if (fp != NULL)
+			    	FILE_UNUSE(fp, l);
 			return (ENOMEM);
 		}
 	}
@@ -523,8 +539,11 @@ sys_mmap(l, v, retval)
 			 * Don't allow executable mappings if we can't
 			 * indirectly execute the file.
 			 */
-			if (prot & VM_PROT_EXECUTE)
+			if (prot & VM_PROT_EXECUTE) {
+			     	if (fp != NULL)
+				    	FILE_UNUSE(fp, l);
 				return (EPERM);
+			}
 
 			/*
 			 * Strip the executable bit from 'maxprot' to make sure
@@ -539,6 +558,10 @@ sys_mmap(l, v, retval)
 	pax_mprotect(l, &prot, &maxprot);
 #endif /* PAX_MPROTECT */
 
+#ifdef PAX_ASLR
+	pax_aslr(l, &addr, orig_addr, flags);
+#endif /* PAX_ASLR */
+
 	/*
 	 * now let kernel internal function uvm_mmap do the work.
 	 */
@@ -550,6 +573,9 @@ sys_mmap(l, v, retval)
 		/* remember to add offset */
 		*retval = (register_t)(addr + pageoff);
 
+     	if (fp != NULL)
+	    	FILE_UNUSE(fp, l);
+
 	return (error);
 }
 
@@ -558,13 +584,13 @@ sys_mmap(l, v, retval)
  */
 
 int
-sys___msync13(struct lwp *l, void *v, register_t *retval)
+sys___msync13(struct lwp *l, const struct sys___msync13_args *uap, register_t *retval)
 {
-	struct sys___msync13_args /* {
+	/* {
 		syscallarg(void *) addr;
 		syscallarg(size_t) len;
 		syscallarg(int) flags;
-	} */ *uap = v;
+	} */
 	struct proc *p = l->l_proc;
 	vaddr_t addr;
 	vsize_t size, pageoff;
@@ -650,12 +676,12 @@ sys___msync13(struct lwp *l, void *v, register_t *retval)
  */
 
 int
-sys_munmap(struct lwp *l, void *v, register_t *retval)
+sys_munmap(struct lwp *l, const struct sys_munmap_args *uap, register_t *retval)
 {
-	struct sys_munmap_args /* {
+	/* {
 		syscallarg(void *) addr;
 		syscallarg(size_t) len;
-	} */ *uap = v;
+	} */
 	struct proc *p = l->l_proc;
 	vaddr_t addr;
 	vsize_t size, pageoff;
@@ -712,13 +738,13 @@ sys_munmap(struct lwp *l, void *v, register_t *retval)
  */
 
 int
-sys_mprotect(struct lwp *l, void *v, register_t *retval)
+sys_mprotect(struct lwp *l, const struct sys_mprotect_args *uap, register_t *retval)
 {
-	struct sys_mprotect_args /* {
+	/* {
 		syscallarg(void *) addr;
 		syscallarg(size_t) len;
 		syscallarg(int) prot;
-	} */ *uap = v;
+	} */
 	struct proc *p = l->l_proc;
 	vaddr_t addr;
 	vsize_t size, pageoff;
@@ -756,13 +782,13 @@ sys_mprotect(struct lwp *l, void *v, register_t *retval)
  */
 
 int
-sys_minherit(struct lwp *l, void *v, register_t *retval)
+sys_minherit(struct lwp *l, const struct sys_minherit_args *uap, register_t *retval)
 {
-	struct sys_minherit_args /* {
+	/* {
 		syscallarg(void *) addr;
 		syscallarg(int) len;
 		syscallarg(int) inherit;
-	} */ *uap = v;
+	} */
 	struct proc *p = l->l_proc;
 	vaddr_t addr;
 	vsize_t size, pageoff;
@@ -797,13 +823,13 @@ sys_minherit(struct lwp *l, void *v, register_t *retval)
 
 /* ARGSUSED */
 int
-sys_madvise(struct lwp *l, void *v, register_t *retval)
+sys_madvise(struct lwp *l, const struct sys_madvise_args *uap, register_t *retval)
 {
-	struct sys_madvise_args /* {
+	/* {
 		syscallarg(void *) addr;
 		syscallarg(size_t) len;
 		syscallarg(int) behav;
-	} */ *uap = v;
+	} */
 	struct proc *p = l->l_proc;
 	vaddr_t addr;
 	vsize_t size, pageoff;
@@ -899,12 +925,12 @@ sys_madvise(struct lwp *l, void *v, register_t *retval)
  */
 
 int
-sys_mlock(struct lwp *l, void *v, register_t *retval)
+sys_mlock(struct lwp *l, const struct sys_mlock_args *uap, register_t *retval)
 {
-	struct sys_mlock_args /* {
+	/* {
 		syscallarg(const void *) addr;
 		syscallarg(size_t) len;
-	} */ *uap = v;
+	} */
 	struct proc *p = l->l_proc;
 	vaddr_t addr;
 	vsize_t size, pageoff;
@@ -949,12 +975,12 @@ sys_mlock(struct lwp *l, void *v, register_t *retval)
  */
 
 int
-sys_munlock(struct lwp *l, void *v, register_t *retval)
+sys_munlock(struct lwp *l, const struct sys_munlock_args *uap, register_t *retval)
 {
-	struct sys_munlock_args /* {
+	/* {
 		syscallarg(const void *) addr;
 		syscallarg(size_t) len;
-	} */ *uap = v;
+	} */
 	struct proc *p = l->l_proc;
 	vaddr_t addr;
 	vsize_t size, pageoff;
@@ -992,11 +1018,11 @@ sys_munlock(struct lwp *l, void *v, register_t *retval)
  */
 
 int
-sys_mlockall(struct lwp *l, void *v, register_t *retval)
+sys_mlockall(struct lwp *l, const struct sys_mlockall_args *uap, register_t *retval)
 {
-	struct sys_mlockall_args /* {
+	/* {
 		syscallarg(int) flags;
-	} */ *uap = v;
+	} */
 	struct proc *p = l->l_proc;
 	int error, flags;
 
@@ -1016,7 +1042,7 @@ sys_mlockall(struct lwp *l, void *v, register_t *retval)
  */
 
 int
-sys_munlockall(struct lwp *l, void *v, register_t *retval)
+sys_munlockall(struct lwp *l, const void *v, register_t *retval)
 {
 	struct proc *p = l->l_proc;
 
@@ -1129,7 +1155,7 @@ uvm_mmap(map, addr, size, prot, maxprot, flags, handle, foff, locklimit)
 			return (EACCES);
 
 		if (vp->v_type != VCHR) {
-			error = VOP_MMAP(vp, prot, curlwp->l_cred, curlwp);
+			error = VOP_MMAP(vp, prot, curlwp->l_cred);
 			if (error) {
 				return error;
 			}
@@ -1140,8 +1166,11 @@ uvm_mmap(map, addr, size, prot, maxprot, flags, handle, foff, locklimit)
 			 * If the vnode is being mapped with PROT_EXEC,
 			 * then mark it as text.
 			 */
-			if (prot & PROT_EXEC)
+			if (prot & PROT_EXEC) {
+				mutex_enter(&vp->v_interlock);
 				vn_markexec(vp);
+				mutex_exit(&vp->v_interlock);
+			}
 		} else {
 			int i = maxprot;
 
@@ -1170,19 +1199,22 @@ uvm_mmap(map, addr, size, prot, maxprot, flags, handle, foff, locklimit)
 		 * with direct I/O.
 		 */
 
-		needwritemap = (vp->v_flag & VWRITEMAP) == 0 &&
+		mutex_enter(&vp->v_interlock);
+		needwritemap = (vp->v_iflag & VI_WRMAP) == 0 &&
 			(flags & MAP_SHARED) != 0 &&
 			(maxprot & VM_PROT_WRITE) != 0;
-		if ((vp->v_flag & VMAPPED) == 0 || needwritemap) {
-			vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);
-			simple_lock(&vp->v_interlock);
-			vp->v_flag |= VMAPPED;
+		if ((vp->v_iflag & VI_MAPPED) == 0 || needwritemap) {
+			vn_lock(vp, LK_EXCLUSIVE | LK_RETRY | LK_INTERLOCK);
+			mutex_enter(&vp->v_interlock);
+			vp->v_iflag |= VI_MAPPED;
+			vp->v_vflag |= VV_MAPPED;
 			if (needwritemap) {
-				vp->v_flag |= VWRITEMAP;
+				vp->v_iflag |= VI_WRMAP;
 			}
-			simple_unlock(&vp->v_interlock);
+			mutex_exit(&vp->v_interlock);
 			VOP_UNLOCK(vp, 0);
-		}
+		} else
+			mutex_exit(&vp->v_interlock);
 	}
 
 	uvmflag = UVM_MAPFLAG(prot, maxprot,

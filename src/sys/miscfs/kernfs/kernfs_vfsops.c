@@ -1,4 +1,4 @@
-/*	$NetBSD: kernfs_vfsops.c,v 1.81 2007/07/31 21:14:16 pooka Exp $	*/
+/*	$NetBSD: kernfs_vfsops.c,v 1.83 2008/01/28 14:31:18 dholland Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993, 1995
@@ -39,7 +39,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kernfs_vfsops.c,v 1.81 2007/07/31 21:14:16 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kernfs_vfsops.c,v 1.83 2008/01/28 14:31:18 dholland Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_compat_netbsd.h"
@@ -58,6 +58,7 @@ __KERNEL_RCSID(0, "$NetBSD: kernfs_vfsops.c,v 1.81 2007/07/31 21:14:16 pooka Exp
 #include <sys/syslog.h>
 #include <sys/kauth.h>
 
+#include <miscfs/genfs/genfs.h>
 #include <miscfs/specfs/specdev.h>
 #include <miscfs/kernfs/kernfs.h>
 
@@ -115,9 +116,9 @@ kernfs_get_rrootdev()
  * Mount the Kernel params filesystem
  */
 int
-kernfs_mount(struct mount *mp, const char *path, void *data, size_t *data_len,
-    struct lwp *l)
+kernfs_mount(struct mount *mp, const char *path, void *data, size_t *data_len)
 {
+	struct lwp *l = curlwp;
 	int error = 0;
 	struct kernfs_mount *fmp;
 
@@ -157,15 +158,14 @@ kernfs_mount(struct mount *mp, const char *path, void *data, size_t *data_len,
 }
 
 int
-kernfs_start(struct mount *mp, int flags,
-    struct lwp *l)
+kernfs_start(struct mount *mp, int flags)
 {
 
 	return (0);
 }
 
 int
-kernfs_unmount(struct mount *mp, int mntflags, struct lwp *l)
+kernfs_unmount(struct mount *mp, int mntflags)
 {
 	int error;
 	int flags = 0;
@@ -195,15 +195,7 @@ kernfs_root(mp, vpp)
 }
 
 int
-kernfs_quotactl(struct mount *mp, int cmd, uid_t uid,
-    void *arg, struct lwp *l)
-{
-
-	return (EOPNOTSUPP);
-}
-
-int
-kernfs_statvfs(struct mount *mp, struct statvfs *sbp, struct lwp *l)
+kernfs_statvfs(struct mount *mp, struct statvfs *sbp)
 {
 
 	sbp->f_bsize = DEV_BSIZE;
@@ -224,7 +216,7 @@ kernfs_statvfs(struct mount *mp, struct statvfs *sbp, struct lwp *l)
 /*ARGSUSED*/
 int
 kernfs_sync(struct mount *mp, int waitfor,
-    kauth_cred_t uc, struct lwp *l)
+    kauth_cred_t uc)
 {
 
 	return (0);
@@ -277,7 +269,7 @@ struct vfsops kernfs_vfsops = {
 	kernfs_start,
 	kernfs_unmount,
 	kernfs_root,
-	kernfs_quotactl,
+	(void *)eopnotsupp,		/* vfs_quotactl */
 	kernfs_statvfs,
 	kernfs_sync,
 	kernfs_vget,
@@ -290,6 +282,8 @@ struct vfsops kernfs_vfsops = {
 	(int (*)(struct mount *, struct vnode *, struct timespec *)) eopnotsupp,
 	vfs_stdextattrctl,
 	(void *)eopnotsupp,		/* vfs_suspendctl */
+	genfs_renamelock_enter,
+	genfs_renamelock_exit,
 	kernfs_vnodeopv_descs,
 	0,
 	{ NULL, NULL },

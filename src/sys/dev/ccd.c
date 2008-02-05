@@ -1,4 +1,4 @@
-/*	$NetBSD: ccd.c,v 1.122 2007/07/29 12:50:17 ad Exp $	*/
+/*	$NetBSD: ccd.c,v 1.126 2008/01/02 11:48:36 ad Exp $	*/
 
 /*-
  * Copyright (c) 1996, 1997, 1998, 1999, 2007 The NetBSD Foundation, Inc.
@@ -125,7 +125,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ccd.c,v 1.122 2007/07/29 12:50:17 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ccd.c,v 1.126 2008/01/02 11:48:36 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -261,9 +261,8 @@ ccdattach(int num)
 	for (i = 0; i < num; i++) {
 		cs = &ccd_softc[i];
 		snprintf(cs->sc_xname, sizeof(cs->sc_xname), "ccd%d", i);
-		cs->sc_dkdev.dk_name = cs->sc_xname;	/* XXX */
-		mutex_init(&cs->sc_lock, MUTEX_DRIVER, IPL_NONE);
-		pseudo_disk_init(&cs->sc_dkdev);
+		mutex_init(&cs->sc_lock, MUTEX_DEFAULT, IPL_NONE);
+		disk_init(&cs->sc_dkdev, cs->sc_xname, NULL); /* XXX */
 	}
 }
 
@@ -326,7 +325,7 @@ ccdinit(struct ccd_softc *cs, char **cpaths, struct vnode **vpp,
 		/*
 		 * XXX: Cache the component's dev_t.
 		 */
-		if ((error = VOP_GETATTR(vpp[ix], &va, l->l_cred, l)) != 0) {
+		if ((error = VOP_GETATTR(vpp[ix], &va, l->l_cred)) != 0) {
 #ifdef DEBUG
 			if (ccddebug & (CCDB_FOLLOW|CCDB_INIT))
 				printf("%s: %s: getattr failed %s = %d\n",
@@ -341,7 +340,7 @@ ccdinit(struct ccd_softc *cs, char **cpaths, struct vnode **vpp,
 		 * Get partition information for the component.
 		 */
 		error = VOP_IOCTL(vpp[ix], DIOCGPART, &dpart,
-		    FREAD, l->l_cred, l);
+		    FREAD, l->l_cred);
 		if (error) {
 #ifdef DEBUG
 			if (ccddebug & (CCDB_FOLLOW|CCDB_INIT))
@@ -838,8 +837,10 @@ ccdbuffer(struct ccd_softc *cs, struct buf *bp, daddr_t bn, void *addr,
 	cbp = CCD_GETBUF();
 	if (cbp == NULL)
 		return (NULL);
-	BUF_INIT(&cbp->cb_buf);
-	cbp->cb_buf.b_flags = bp->b_flags | B_CALL;
+	buf_init(&cbp->cb_buf);
+	cbp->cb_buf.b_flags = bp->b_flags;
+	cbp->cb_buf.b_oflags = bp->b_oflags;
+	cbp->cb_buf.b_cflags = bp->b_cflags;
 	cbp->cb_buf.b_iodone = ccdiodone;
 	cbp->cb_buf.b_proc = bp->b_proc;
 	cbp->cb_buf.b_dev = ci->ci_dev;
@@ -925,6 +926,7 @@ ccdiodone(struct buf *vbp)
 		       cs->sc_xname, bp->b_error, cbp->cb_comp);
 	}
 	count = cbp->cb_buf.b_bcount;
+	buf_destroy(&cbp->cb_buf);
 	CCD_PUTBUF(cbp);
 
 	/*
@@ -1135,7 +1137,7 @@ ccdioctl(dev_t dev, u_long cmd, void *data, int flag, struct lwp *l)
 		bufq_alloc(&cs->sc_bufq, "fcfs", 0);
 
 		/* Attach the disk. */
-		pseudo_disk_attach(&cs->sc_dkdev);
+		disk_attach(&cs->sc_dkdev);
 
 		/* Try and read the disklabel. */
 		ccdgetdisklabel(dev);
@@ -1194,7 +1196,7 @@ ccdioctl(dev_t dev, u_long cmd, void *data, int flag, struct lwp *l)
 		cs->sc_flags &= ~(CCDF_INITED|CCDF_VLABEL);
 
 		/* Detatch the disk. */
-		pseudo_disk_detach(&cs->sc_dkdev);
+		disk_detach(&cs->sc_dkdev);
 		break;
 
 	case DIOCGDINFO:
@@ -1229,7 +1231,7 @@ ccdioctl(dev_t dev, u_long cmd, void *data, int flag, struct lwp *l)
 		 */
 		for (error = 0, i = 0; i < cs->sc_nccdisks; i++) {
 			j = VOP_IOCTL(cs->sc_cinfo[i].ci_vp, cmd, data,
-				      flag, uc, l);
+				      flag, uc);
 			if (j != 0 && error == 0)
 				error = j;
 		}

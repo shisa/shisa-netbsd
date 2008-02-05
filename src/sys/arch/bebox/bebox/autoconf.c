@@ -1,4 +1,4 @@
-/*	$NetBSD: autoconf.c,v 1.15 2005/12/11 12:17:02 christos Exp $	*/
+/*	$NetBSD: autoconf.c,v 1.18 2007/12/09 03:33:29 ober Exp $	*/
 
 /*-
  * Copyright (c) 1990 The Regents of the University of California.
@@ -44,7 +44,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.15 2005/12/11 12:17:02 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.18 2007/12/09 03:33:29 ober Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -53,28 +53,27 @@ __KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.15 2005/12/11 12:17:02 christos Exp $
 #include <sys/conf.h>
 #include <sys/reboot.h>
 #include <sys/device.h>
+#include <sys/malloc.h>
+#include <sys/queue.h>
 
+#include <machine/pte.h>
 #include <machine/intr.h>
-#include <powerpc/pte.h>
 
-void findroot __P((void));
+void genppc_cpu_configure(void);
+static void findroot(void);
 
 /*
  * Determine i/o configuration for a machine.
  */
+
 void
 cpu_configure()
 {
-	/* startrtclock(); */
 
 	if (config_rootfound("mainbus", NULL) == NULL)
 		panic("configure: mainbus not configured");
-
-	printf("biomask %x netmask %x ttymask %x\n",
-	    (u_short)imask[IPL_BIO], (u_short)imask[IPL_NET],
-	    (u_short)imask[IPL_TTY]);
-
-	spl0();
+	
+	genppc_cpu_configure();
 }
 
 void
@@ -82,7 +81,7 @@ cpu_rootconf()
 {
 	findroot();
 
-	printf("boot device: %s\n",
+	aprint_normal("boot device: %s\n",
 	    booted_device ? booted_device->dv_xname : "<unknown>");
 
 	setroot(booted_device, booted_partition);
@@ -98,28 +97,24 @@ u_long	bootdev = 0;		/* should be dev_t, but not until 32 bits */
 void
 findroot(void)
 {
-	int majdev, unit, part;
+	int unit, part;
 	struct device *dv;
-	const char *name;
 	char buf[32];
-
-#if 0
-	printf("howto %x bootdev %x ", boothowto, bootdev);
-#endif
+	const char *name;
 
 	if ((bootdev & B_MAGICMASK) != (u_long)B_DEVMAGIC)
 		return;
-
-	majdev = (bootdev >> B_TYPESHIFT) & B_TYPEMASK;
-	name = devsw_blk2name(majdev);
+	
+	name = devsw_blk2name((bootdev >> B_TYPESHIFT) & B_TYPEMASK);
 	if (name == NULL)
 		return;
-
+	
 	part = (bootdev >> B_PARTITIONSHIFT) & B_PARTITIONMASK;
 	unit = (bootdev >> B_UNITSHIFT) & B_UNITMASK;
-
+	
 	sprintf(buf, "%s%d", name, unit);
-	for (dv = alldevs.tqh_first; dv != NULL; dv = dv->dv_list.tqe_next) {
+	for (dv = TAILQ_FIRST(&alldevs); dv != NULL;
+	     dv = TAILQ_NEXT(dv, dv_list)) {
 		if (strcmp(buf, dv->dv_xname) == 0) {
 			booted_device = dv;
 			booted_partition = part;
@@ -127,3 +122,10 @@ findroot(void)
 		}
 	}
 }
+
+void
+device_register(struct device *dev, void *aux)
+{
+	/* do nothing */
+}
+

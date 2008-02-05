@@ -1,4 +1,4 @@
-/*	$NetBSD: filecore_vnops.c,v 1.22 2007/09/24 00:42:13 rumble Exp $	*/
+/*	$NetBSD: filecore_vnops.c,v 1.25 2008/01/25 14:32:12 ad Exp $	*/
 
 /*-
  * Copyright (c) 1994 The Regents of the University of California.
@@ -66,7 +66,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: filecore_vnops.c,v 1.22 2007/09/24 00:42:13 rumble Exp $");
+__KERNEL_RCSID(0, "$NetBSD: filecore_vnops.c,v 1.25 2008/01/25 14:32:12 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -104,7 +104,6 @@ filecore_access(v)
 		struct vnode *a_vp;
 		int  a_mode;
 		kauth_cred_t a_cred;
-		struct lwp *a_l;
 	} */ *ap = v;
 	struct vnode *vp = ap->a_vp;
 	struct filecore_node *ip = VTOI(vp);
@@ -138,7 +137,6 @@ filecore_getattr(v)
 		struct vnode *a_vp;
 		struct vattr *a_vap;
 		kauth_cred_t a_cred;
-		struct lwp *a_l;
 	} */ *ap = v;
 	struct vnode *vp = ap->a_vp;
 	struct filecore_node *ip = VTOI(vp);
@@ -251,7 +249,7 @@ filecore_read(v)
 #ifdef FILECORE_DEBUG_BR
 			printf("brelse(%p) vn1\n", bp);
 #endif
-			brelse(bp);
+			brelse(bp, 0);
 			return (error);
 		}
 
@@ -259,7 +257,7 @@ filecore_read(v)
 #ifdef FILECORE_DEBUG_BR
 		printf("brelse(%p) vn2\n", bp);
 #endif
-		brelse(bp);
+		brelse(bp, 0);
 	} while (error == 0 && uio->uio_resid > 0 && n != 0);
 
 out:
@@ -309,7 +307,7 @@ filecore_readdir(v)
 
 	error = filecore_dbread(dp, &bp);
 	if (error) {
-		brelse(bp);
+		brelse(bp, 0);
 		return error;
 	}
 
@@ -383,7 +381,7 @@ out:
 #ifdef FILECORE_DEBUG_BR
 	printf("brelse(%p) vn3\n", bp);
 #endif
-	brelse (bp);
+	brelse (bp, 0);
 
 	free(de, M_FILECORETMP);
 
@@ -539,7 +537,6 @@ filecore_pathconf(v)
 #define	filecore_mknod	genfs_eopnotsupp
 #define	filecore_write	genfs_eopnotsupp
 #define	filecore_setattr	genfs_eopnotsupp
-#define	filecore_lease_check	genfs_lease_check
 #define	filecore_fcntl	genfs_fcntl
 #define	filecore_ioctl	genfs_enoioctl
 #define	filecore_fsync	genfs_nullop
@@ -567,7 +564,6 @@ const struct vnodeopv_entry_desc filecore_vnodeop_entries[] = {
 	{ &vop_setattr_desc, filecore_setattr },	/* setattr */
 	{ &vop_read_desc, filecore_read },		/* read */
 	{ &vop_write_desc, filecore_write },		/* write */
-	{ &vop_lease_desc, filecore_lease_check },	/* lease */
 	{ &vop_fcntl_desc, filecore_fcntl },		/* fcntl */
 	{ &vop_ioctl_desc, filecore_ioctl },		/* ioctl */
 	{ &vop_poll_desc, filecore_poll },		/* poll */

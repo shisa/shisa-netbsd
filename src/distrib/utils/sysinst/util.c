@@ -1,4 +1,4 @@
-/*	$NetBSD: util.c,v 1.147 2006/11/24 00:53:47 hubertf Exp $	*/
+/*	$NetBSD: util.c,v 1.150 2008/01/28 02:47:12 rumble Exp $	*/
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.
@@ -115,6 +115,7 @@ distinfo dist_list[] = {
 	{"games",		SET_GAMES,		MSG_set_games, NULL},
 	{"man",			SET_MAN_PAGES,		MSG_set_man_pages, NULL},
 	{"misc",		SET_MISC,		MSG_set_misc, NULL},
+	{"tests",		SET_TESTS,		MSG_set_tests, NULL},
 	{"text",		SET_TEXT_TOOLS,		MSG_set_text_tools, NULL},
 
 	{NULL,			SET_GROUP,		MSG_set_X11, NULL},
@@ -188,6 +189,9 @@ init_set_status(int minimal)
 	i = strlen(msg_some); if (i > len) {len = i; longest = msg_some; }
 	i = strlen(msg_none); if (i > len) {len = i; longest = msg_none; }
 	select_menu_width = snprintf(NULL, 0, msg_cur_distsets_row, "",longest);
+
+	/* Give the md code a chance to choose the right kernel, etc. */
+	md_init_set_status(minimal);
 }
 
 int
@@ -685,6 +689,18 @@ extract_file(distinfo *dist, int update, int verbose)
 	}
 
 	if (update && dist->set == SET_ETC) {
+		int oldsendmail;
+		oldsendmail = run_program(RUN_DISPLAY | RUN_CHROOT |
+					  RUN_ERROR_OK | RUN_PROGRESS,
+					  "/usr/sbin/postinstall -s /.sysinst -d / check mailerconf");
+		if (oldsendmail == 1) {
+			msg_display(MSG_oldsendmail);
+			process_menu(MENU_yesno, NULL);
+			if (yesno) {
+				run_program(RUN_DISPLAY | RUN_CHROOT,
+					    "/usr/sbin/postinstall -s /.sysinst -d / fix mailerconf");
+			}
+		}
 		run_program(RUN_DISPLAY | RUN_CHROOT,
 			"/usr/sbin/postinstall -s /.sysinst -d / fix");
 	}

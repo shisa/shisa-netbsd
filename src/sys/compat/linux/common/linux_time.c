@@ -1,4 +1,4 @@
-/*	$NetBSD: linux_time.c,v 1.18 2007/05/13 11:04:11 dsl Exp $ */
+/*	$NetBSD: linux_time.c,v 1.22 2007/12/20 23:02:57 dsl Exp $ */
 
 /*-
  * Copyright (c) 2001 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: linux_time.c,v 1.18 2007/05/13 11:04:11 dsl Exp $");
+__KERNEL_RCSID(0, "$NetBSD: linux_time.c,v 1.22 2007/12/20 23:02:57 dsl Exp $");
 
 #include <sys/param.h>
 #include <sys/ucred.h>
@@ -56,6 +56,8 @@ __KERNEL_RCSID(0, "$NetBSD: linux_time.c,v 1.18 2007/05/13 11:04:11 dsl Exp $");
 #include <compat/linux/common/linux_signal.h>
 #include <compat/linux/common/linux_machdep.h>
 #include <compat/linux/common/linux_sched.h>
+#include <compat/linux/common/linux_ipc.h>
+#include <compat/linux/common/linux_sem.h>
 
 #include <compat/linux/linux_syscallargs.h>
 
@@ -82,19 +84,16 @@ static int linux_to_native_clockid(clockid_t *, clockid_t);
 struct timezone linux_sys_tz;
 
 int
-linux_sys_gettimeofday(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+linux_sys_gettimeofday(struct lwp *l, const struct linux_sys_gettimeofday_args *uap, register_t *retval)
 {
-	struct linux_sys_gettimeofday_args /* {
+	/* {
 		syscallarg(struct timeval *) tz;
 		syscallarg(struct timezone *) tzp;
-	} */ *uap = v;
+	} */
 	int error = 0;
 
 	if (SCARG(uap, tp)) {
-		error = sys_gettimeofday (l, v, retval);
+		error = sys_gettimeofday(l, (const void *)uap, retval);
 		if (error)
 			return (error);
 	}
@@ -109,19 +108,16 @@ linux_sys_gettimeofday(l, v, retval)
 }
 
 int
-linux_sys_settimeofday(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+linux_sys_settimeofday(struct lwp *l, const struct linux_sys_settimeofday_args *uap, register_t *retval)
 {
-	struct linux_sys_settimeofday_args /* {
+	/* {
 		syscallarg(struct timeval *) tp;
 		syscallarg(struct timezone *) tzp;
-	} */ *uap = v;
+	} */
 	int error = 0;
 
 	if (SCARG(uap, tp)) {
-		error = sys_settimeofday(l, v, retval);
+		error = sys_settimeofday(l, (const void *)uap, retval);
 		if (error)
 			return (error);
 	}
@@ -176,15 +172,12 @@ linux_to_native_clockid(clockid_t *n, clockid_t l)
 }
 
 int
-linux_sys_clock_gettime(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+linux_sys_clock_gettime(struct lwp *l, const struct linux_sys_clock_gettime_args *uap, register_t *retval)
 {
-	struct linux_sys_clock_gettime_args /* {
+	/* {
 		syscallarg(clockid_t) which;
 		syscallarg(struct linux_timespec *)tp;
-	} */ *uap = v;
+	} */
 	struct timespec ts;
 	struct linux_timespec lts;
 
@@ -204,15 +197,12 @@ linux_sys_clock_gettime(l, v, retval)
 }
 
 int
-linux_sys_clock_settime(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+linux_sys_clock_settime(struct lwp *l, const struct linux_sys_clock_settime_args *uap, register_t *retval)
 {
-	struct linux_sys_clock_settime_args /* {
+	/* {
 		syscallarg(clockid_t) which;
 		syscallarg(struct linux_timespec *)tp;
-	} */ *uap = v;
+	} */
 	struct timespec ts;
 	struct linux_timespec lts;
 	int error;
@@ -230,24 +220,16 @@ linux_sys_clock_settime(l, v, retval)
 
 	linux_to_native_timespec(&ts, &lts);
 
-	error = kauth_authorize_system(l->l_cred, KAUTH_SYSTEM_TIME,
-	    KAUTH_REQ_SYSTEM_TIME_SYSTEM, NULL, NULL, NULL);
-	if (error != 0)
-		return (error);
-
 	return settime(l->l_proc, &ts);
 }
 
 int
-linux_sys_clock_getres(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+linux_sys_clock_getres(struct lwp *l, const struct linux_sys_clock_getres_args *uap, register_t *retval)
 {
-	struct linux_sys_clock_gettime_args /* {
+	/* {
 		syscallarg(clockid_t) which;
 		syscallarg(struct linux_timespec *)tp;
-	} */ *uap = v;
+	} */
 	struct timespec ts;
 	struct linux_timespec lts;
 	int error;
@@ -264,17 +246,14 @@ linux_sys_clock_getres(l, v, retval)
 }
 
 int
-linux_sys_clock_nanosleep(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+linux_sys_clock_nanosleep(struct lwp *l, const struct linux_sys_clock_nanosleep_args *uap, register_t *retval)
 {
-	struct linux_sys_clock_nanosleep_args /* {
+	/* {
 		syscallarg(clockid_t) which;
 		syscallarg(int) flags;
 		syscallarg(struct linux_timespec) *rqtp;
 		syscallarg(struct linux_timespec) *rmtp;
-	} */ *uap = v;
+	} */
 	struct linux_timespec lrqts, lrmts;
 	struct timespec rqts, rmts;
 	int error, error1;

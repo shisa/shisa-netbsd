@@ -1,4 +1,4 @@
-/*	$NetBSD: fwdma.c,v 1.8 2007/03/11 22:11:02 ad Exp $	*/
+/*	$NetBSD: fwdma.c,v 1.12 2008/01/04 21:17:59 ad Exp $	*/
 /*-
  * Copyright (c) 2003
  * 	Hidetoshi Shimokawa. All rights reserved.
@@ -35,8 +35,9 @@
  */
 
 #include <sys/cdefs.h>
-#ifdef __FBSDID
-__FBSDID("$FreeBSD: /repoman/r/ncvs/src/sys/dev/firewire/fwdma.c,v 1.7 2005/01/06 01:42:41 imp Exp $");
+__KERNEL_RCSID(0, "$NetBSD: fwdma.c,v 1.12 2008/01/04 21:17:59 ad Exp $");
+#if defined(__FreeBSD__)
+__FBSDID("$FreeBSD: src/sys/dev/firewire/fwdma.c,v 1.9 2007/06/06 14:31:36 simokawa Exp $");
 #endif
 
 #if defined(__FreeBSD__)
@@ -47,12 +48,11 @@ __FBSDID("$FreeBSD: /repoman/r/ncvs/src/sys/dev/firewire/fwdma.c,v 1.7 2005/01/0
 #include <sys/conf.h>
 #include <sys/malloc.h>
 #if defined(__FreeBSD__) && __FreeBSD_version >= 501102 
-#include <sys/lock.h>
 #include <sys/mutex.h>
 #endif
 
 #include <sys/bus.h>
-#include <machine/bus.h>
+#include <sys/bus.h>
 
 #ifdef __DragonFly__
 #include <bus/firewire/fw_port.h>
@@ -73,7 +73,7 @@ __FBSDID("$FreeBSD: /repoman/r/ncvs/src/sys/dev/firewire/fwdma.c,v 1.7 2005/01/0
 #include <sys/kernel.h>
 #include <sys/malloc.h>
 
-#include <machine/bus.h>
+#include <sys/bus.h>
 
 #include <dev/ieee1394/fw_port.h>
 #include <dev/ieee1394/firewire.h>
@@ -111,7 +111,7 @@ fwdma_malloc(struct firewire_comm *fc, int alignment, bus_size_t size,
 		/*maxsegsz*/ BUS_SPACE_MAXSIZE_32BIT,
 		/*flags*/ BUS_DMA_ALLOCNOW,
 		/*lockfunc*/busdma_lock_mutex,
-		/*lockarg*/&Giant,
+		/*lockarg*/FW_GMTX(fc),
 		&dma->fw_dma_tag);
 	if (err) {
 		printf("fwdma_malloc: failed(1)\n");
@@ -219,7 +219,7 @@ fwdma_malloc_multiseg(struct firewire_comm *fc, int alignment,
 			/*maxsegsz*/ BUS_SPACE_MAXSIZE_32BIT,
 			/*flags*/ BUS_DMA_ALLOCNOW,
 			/*lockfunc*/busdma_lock_mutex,
-			/*lockarg*/&Giant,
+			/*lockarg*/FW_GMTX(fc),
 			&am->fw_dma_tag)) {
 		printf("fwdma_malloc_multiseg: tag_create failed\n");
 		free(am, M_FW);

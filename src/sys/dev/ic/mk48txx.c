@@ -1,4 +1,4 @@
-/*	$NetBSD: mk48txx.c,v 1.21 2006/10/01 06:02:53 tsutsui Exp $ */
+/*	$NetBSD: mk48txx.c,v 1.24 2008/01/10 15:31:27 tsutsui Exp $ */
 /*-
  * Copyright (c) 2000 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -40,14 +40,14 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mk48txx.c,v 1.21 2006/10/01 06:02:53 tsutsui Exp $");
+__KERNEL_RCSID(0, "$NetBSD: mk48txx.c,v 1.24 2008/01/10 15:31:27 tsutsui Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/device.h>
 #include <sys/errno.h>
 
-#include <machine/bus.h>
+#include <sys/bus.h>
 #include <dev/clock_subr.h>
 #include <dev/ic/mk48txxreg.h>
 #include <dev/ic/mk48txxvar.h>
@@ -76,15 +76,15 @@ mk48txx_attach(struct mk48txx_softc *sc)
 	todr_chip_handle_t handle;
 	int i;
 
-	printf(": %s", sc->sc_model);
+	aprint_normal(": %s", sc->sc_model);
 
-	i = sizeof(mk48txx_models) / sizeof(mk48txx_models[0]);
+	i = __arraycount(mk48txx_models);
 	while (--i >= 0) {
 		if (strcmp(sc->sc_model, mk48txx_models[i].name) == 0)
 			break;
 	}
 	if (i < 0)
-		panic("mk48txx_attach: unsupported model");
+		panic("%s: unsupported model", __func__);
 
 	sc->sc_nvramsz = mk48txx_models[i].nvramsz;
 	sc->sc_clkoffset = mk48txx_models[i].clkoff;
@@ -95,12 +95,13 @@ mk48txx_attach(struct mk48txx_softc *sc)
 	handle->todr_settime = NULL;
 	handle->todr_gettime_ymdhms = mk48txx_gettime_ymdhms;
 	handle->todr_settime_ymdhms = mk48txx_settime_ymdhms;
-	handle->todr_setwen = NULL;
 
 	if (sc->sc_nvrd == NULL)
 		sc->sc_nvrd = mk48txx_def_nvrd;
 	if (sc->sc_nvwr == NULL)
 		sc->sc_nvwr = mk48txx_def_nvwr;
+
+	todr_attach(handle);
 }
 
 /*

@@ -1,4 +1,7 @@
-/* $NetBSD: joy_eap.c,v 1.6 2006/11/16 01:33:09 christos Exp $ */
+/* $NetBSD: joy_eap.c,v 1.8 2007/12/11 11:25:53 lukem Exp $ */
+
+#include <sys/cdefs.h>
+__KERNEL_RCSID(0, "$NetBSD: joy_eap.c,v 1.8 2007/12/11 11:25:53 lukem Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -6,7 +9,7 @@
 #include <sys/device.h>
 #include <sys/audioio.h>
 #include <dev/audio_if.h>
-#include <machine/bus.h>
+#include <sys/bus.h>
 
 #include <dev/pci/eapreg.h>
 #include <dev/pci/eapvar.h>

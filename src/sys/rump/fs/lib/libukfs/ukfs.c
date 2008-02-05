@@ -1,4 +1,4 @@
-/*	$NetBSD: ukfs.c,v 1.11 2007/09/18 19:59:21 pooka Exp $	*/
+/*	$NetBSD: ukfs.c,v 1.18 2008/01/27 20:01:29 pooka Exp $	*/
 
 /*
  * Copyright (c) 2007 Antti Kantee.  All Rights Reserved.
@@ -87,24 +87,28 @@ struct ukfs *
 ukfs_mount(const char *vfsname, const char *devpath, const char *mountpath,
 	int mntflags, void *arg, size_t alen)
 {
-	struct ukfs *fs;
+	struct ukfs *fs = NULL;
 	struct vfsops *vfsops;
 	struct mount *mp;
 	int rv = 0;
 
 	vfsops = rump_vfs_getopsbyname(vfsname);
-	if (vfsops == NULL)
-		return NULL;
+	if (vfsops == NULL) {
+		rv = ENOENT;
+		goto out;
+	}
 
 	mp = rump_mnt_init(vfsops, mntflags);
 
 	fs = malloc(sizeof(struct ukfs));
-	if (fs == NULL)
-		return NULL;
+	if (fs == NULL) {
+		rv = ENOMEM;
+		goto out;
+	}
 	memset(fs, 0, sizeof(struct ukfs));
 
 	rump_fakeblk_register(devpath);
-	rv = rump_mnt_mount(mp, mountpath, arg, &alen, curlwp);
+	rv = rump_mnt_mount(mp, mountpath, arg, &alen);
 	if (rv) {
 		warnx("VFS_MOUNT %d", rv);
 		goto out;
@@ -114,9 +118,10 @@ ukfs_mount(const char *vfsname, const char *devpath, const char *mountpath,
 
  out:
 	if (rv) {
-		if (fs->ukfs_mp)
+		if (fs && fs->ukfs_mp)
 			rump_mnt_destroy(fs->ukfs_mp);
-		free(fs);
+		if (fs)
+			free(fs);
 		errno = rv;
 		fs = NULL;
 	}
@@ -130,11 +135,12 @@ ukfs_release(struct ukfs *fs, int dounmount)
 	int rv;
 
 	if (dounmount) {
-		rv = rump_vfs_sync(fs->ukfs_mp, 1, NULL, curlwp);
-		rv += rump_vfs_unmount(fs->ukfs_mp, 0, curlwp);
+		rv = rump_vfs_sync(fs->ukfs_mp, 1, NULL);
+		rv |= rump_vfs_unmount(fs->ukfs_mp, 0);
 		assert(rv == 0);
 	}
 
+	rump_vfs_syncwait(fs->ukfs_mp);
 	rump_mnt_destroy(fs->ukfs_mp);
 
 	free(fs);
@@ -149,16 +155,16 @@ ukfs_release(struct ukfs *fs, int dounmount)
 void
 ukfs_ll_recycle(struct vnode *vp)
 {
+	bool recycle;
 
 	/* XXXXX */
 	if (vp == NULL || rump_vp_getref(vp))
 		return;
 
 	VLE(vp);
-	RUMP_VOP_FSYNC(vp, NULL, 0, 0, 0, curlwp);
-	RUMP_VOP_INACTIVE(vp, curlwp);
-	rump_recyclenode(vp);
-	rump_putnode(vp);
+	RUMP_VOP_FSYNC(vp, NULL, 0, 0, 0);
+	RUMP_VOP_INACTIVE(vp, &recycle);
+	rump_vp_recycle_nokidding(vp);
 }
 
 /*

@@ -1,4 +1,4 @@
-/* $NetBSD: if_ti.c,v 1.77 2007/09/07 23:05:27 tnn Exp $ */
+/* $NetBSD: if_ti.c,v 1.79 2007/11/07 00:23:19 ad Exp $ */
 
 /*
  * Copyright (c) 1997, 1998, 1999
@@ -81,7 +81,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_ti.c,v 1.77 2007/09/07 23:05:27 tnn Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_ti.c,v 1.79 2007/11/07 00:23:19 ad Exp $");
 
 #include "bpfilter.h"
 #include "opt_inet.h"
@@ -117,7 +117,7 @@ __KERNEL_RCSID(0, "$NetBSD: if_ti.c,v 1.77 2007/09/07 23:05:27 tnn Exp $");
 #endif
 
 
-#include <machine/bus.h>
+#include <sys/bus.h>
 
 #include <dev/pci/pcireg.h>
 #include <dev/pci/pcivar.h>
@@ -690,7 +690,7 @@ ti_jfree(struct mbuf *m, void *tbuf, size_t size, void *arg)
 	SIMPLEQ_INSERT_HEAD(&sc->ti_jfree_listhead, entry, jpool_entries);
 
 	if (__predict_true(m != NULL))
-		pool_cache_put(&mbpool_cache, m);
+		pool_cache_put(mb_cache, m);
 	splx(s);
 }
 

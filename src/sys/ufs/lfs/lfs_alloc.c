@@ -1,4 +1,4 @@
-/*	$NetBSD: lfs_alloc.c,v 1.101 2007/07/10 09:50:08 hannken Exp $	*/
+/*	$NetBSD: lfs_alloc.c,v 1.106 2008/01/30 09:50:26 ad Exp $	*/
 
 /*-
  * Copyright (c) 1999, 2000, 2001, 2002, 2003, 2007 The NetBSD Foundation, Inc.
@@ -67,7 +67,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: lfs_alloc.c,v 1.101 2007/07/10 09:50:08 hannken Exp $");
+__KERNEL_RCSID(0, "$NetBSD: lfs_alloc.c,v 1.106 2008/01/30 09:50:26 ad Exp $");
 
 #if defined(_KERNEL_OPT)
 #include "opt_quota.h"
@@ -239,7 +239,7 @@ lfs_valloc(struct vnode *pvp, int mode, kauth_cred_t cred,
 	     (long long)new_ino, (long long)ifp->if_nextfree));
 
 	new_gen = ifp->if_version; /* version was updated by vfree */
-	brelse(bp);
+	brelse(bp, 0);
 
 	/* Extend IFILE so that the next lfs_valloc will succeed. */
 	if (fs->lfs_freehd == LFS_UNUSED_INUM) {
@@ -256,9 +256,9 @@ lfs_valloc(struct vnode *pvp, int mode, kauth_cred_t cred,
 #endif /* DIAGNOSTIC */
 
 	/* Set superblock modified bit and increment file count. */
-	simple_lock(&fs->lfs_interlock);
+	mutex_enter(&lfs_lock);
 	fs->lfs_fmod = 1;
-	simple_unlock(&fs->lfs_interlock);
+	mutex_exit(&lfs_lock);
 	++fs->lfs_nfiles;
 
 	VOP_UNLOCK(fs->lfs_ivnode, 0);
@@ -285,7 +285,9 @@ lfs_ialloc(struct lfs *fs, struct vnode *pvp, ino_t new_ino, int new_gen,
 	lfs_vcreate(pvp->v_mount, new_ino, vp);
 
 	ip = VTOI(vp);
+	mutex_enter(&lfs_lock);
 	LFS_SET_UINO(ip, IN_CHANGE);
+	mutex_exit(&lfs_lock);
 	/* on-disk structure has been zeroed out by lfs_vcreate */
 	ip->i_din.ffs1_din->di_inumber = new_ino;
 
@@ -349,10 +351,6 @@ lfs_vcreate(struct mount *mp, ino_t ino, struct vnode *vp)
 	LIST_INIT(&ip->i_lfs_segdhd);
 #ifdef QUOTA
 	ufsquota_init(ip);
-#endif
-#ifdef DEBUG
-	if (ino == LFS_IFILE_INUM)
-		vp->v_vnlock->lk_wmesg = "inlock";
 #endif
 }
 
@@ -434,7 +432,6 @@ lfs_vfree(struct vnode *vp, ino_t ino, int mode)
 	struct lfs *fs;
 	daddr_t old_iaddr;
 	ino_t otail;
-	int s;
 
 	/* Get the inode number and file system. */
 	ip = VTOI(vp);
@@ -445,28 +442,25 @@ lfs_vfree(struct vnode *vp, ino_t ino, int mode)
 	DLOG((DLOG_ALLOC, "lfs_vfree: free ino %lld\n", (long long)ino));
 
 	/* Drain of pending writes */
-	simple_lock(&vp->v_interlock);
-	s = splbio();
-	if (fs->lfs_version > 1 && WRITEINPROG(vp))
-		ltsleep(vp, (PRIBIO+1), "lfs_vfree", 0, &vp->v_interlock);
-	splx(s);
-	simple_unlock(&vp->v_interlock);
+	mutex_enter(&vp->v_interlock);
+	while (fs->lfs_version > 1 && WRITEINPROG(vp)) {
+		cv_wait(&vp->v_cv, &vp->v_interlock);
+	}
+	mutex_exit(&vp->v_interlock);
 
 	lfs_seglock(fs, SEGM_PROT);
 	vn_lock(fs->lfs_ivnode, LK_EXCLUSIVE);
 
 	lfs_unmark_vnode(vp);
-	if (vp->v_flag & VDIROP) {
-		vp->v_flag &= ~VDIROP;
-		simple_lock(&fs->lfs_interlock);
-		simple_lock(&lfs_subsys_lock);
+	mutex_enter(&lfs_lock);
+	if (vp->v_uflag & VU_DIROP) {
+		vp->v_uflag &= ~VU_DIROP;
 		--lfs_dirvcount;
-		simple_unlock(&lfs_subsys_lock);
 		--fs->lfs_dirvcount;
 		TAILQ_REMOVE(&fs->lfs_dchainhd, ip, i_lfs_dchain);
-		simple_unlock(&fs->lfs_interlock);
 		wakeup(&fs->lfs_dirvcount);
 		wakeup(&lfs_dirvcount);
+		mutex_exit(&lfs_lock);
 		lfs_vunref(vp);
 
 		/*
@@ -487,10 +481,13 @@ lfs_vfree(struct vnode *vp, ino_t ino, int mode)
 		/*
 		 * If it's not a dirop, we can finalize right away.
 		 */
+		mutex_exit(&lfs_lock);
 		lfs_finalize_ino_seguse(fs, ip);
 	}
 
+	mutex_enter(&lfs_lock);
 	LFS_CLR_UINO(ip, IN_ACCESSED|IN_CLEANING|IN_MODIFIED);
+	mutex_exit(&lfs_lock);
 	ip->i_flag &= ~IN_ALLMOD;
 	ip->i_lfs_iflags |= LFSI_DELETED;
 	
@@ -582,9 +579,9 @@ lfs_vfree(struct vnode *vp, ino_t ino, int mode)
 	}
 
 	/* Set superblock modified bit and decrement file count. */
-	simple_lock(&fs->lfs_interlock);
+	mutex_enter(&lfs_lock);
 	fs->lfs_fmod = 1;
-	simple_unlock(&fs->lfs_interlock);
+	mutex_exit(&lfs_lock);
 	--fs->lfs_nfiles;
 
 	VOP_UNLOCK(fs->lfs_ivnode, 0);
@@ -633,7 +630,7 @@ lfs_order_freelist(struct lfs *fs)
 		/* Address orphaned files */
 		if (ifp->if_nextfree == LFS_ORPHAN_NEXTFREE &&
 		    VFS_VGET(fs->lfs_ivnode->v_mount, ino, &vp) == 0) {
-			lfs_truncate(vp, 0, 0, NOCRED, curlwp);
+			lfs_truncate(vp, 0, 0, NOCRED);
 			vput(vp);
 			LFS_SEGENTRY(sup, fs, dtosn(fs, ifp->if_daddr), bp);
 			KASSERT(sup->su_nbytes >= DINODE1_SIZE);
@@ -651,7 +648,7 @@ lfs_order_freelist(struct lfs *fs)
 			if (firstino == LFS_UNUSED_INUM)
 				firstino = ino;
 			else {
-				brelse(bp);
+				brelse(bp, 0);
 
 				LFS_IENTRY(ifp, fs, lastino, bp);
 				ifp->if_nextfree = ino;
@@ -665,7 +662,7 @@ lfs_order_freelist(struct lfs *fs)
 		}
 
 		if ((ino + 1) % fs->lfs_ifpb == 0)
-			brelse(bp);
+			brelse(bp, 0);
 	}
 
 	LFS_PUT_HEADFREE(fs, cip, bp, firstino);

@@ -1,4 +1,4 @@
-/*	$NetBSD: cpu.h,v 1.45 2007/08/04 09:49:51 ad Exp $	*/
+/*	$NetBSD: cpu.h,v 1.49 2008/01/06 03:11:42 matt Exp $	*/
 
 /*
  * Copyright (c) 1994-1996 Mark Brinicombe.
@@ -139,14 +139,13 @@ extern int cpu_do_powersave;
  * CLKF_INTR: True if we took the interrupt from inside another
  * interrupt handler.
  */
-extern int current_intr_depth;
 #ifdef __PROG32
 /* Hack to treat FPE time as interrupt time so we can measure it */
 #define CLKF_INTR(frame)						\
-	((current_intr_depth > 1) ||					\
+	((curcpu()->ci_idepth > 1) ||					\
 	    (frame->cf_if.if_spsr & PSR_MODE) == PSR_UND32_MODE)
 #else
-#define CLKF_INTR(frame)	(current_intr_depth > 1) 
+#define CLKF_INTR(frame)	(curcpu()->ci_idepth > 1) 
 #endif
 
 /*
@@ -219,6 +218,8 @@ struct cpu_info {
 	struct evcnt ci_arm700bugcount;
 	int32_t ci_mtx_count;
 	int ci_mtx_oldspl;
+	int ci_want_resched;
+	int ci_idepth;
 #ifdef MULTIPROCESSOR
 	MP_CPU_INFO_MEMBERS
 #endif
@@ -251,22 +252,11 @@ extern int astpending;
 #define cpu_signotify(l)            setsoftast()
 
 /*
- * Preempt the current process if in interrupt from user mode,
- * or after the current trap/syscall if in system mode.
- */
-extern int want_resched;	/* resched() was called */
-
-/*
  * Give a profiling tick to the current process when the user profiling
  * buffer pages are invalid.  On the i386, request an ast to send us
  * through trap(), marking the proc as needing a profiling tick.
  */
 #define	cpu_need_proftick(l)	((l)->l_pflag |= LP_OWEUPC, setsoftast())
-
-/*
- * reset want_resched, it's been processed.
- */
-#define	cpu_did_resched()	do { want_resched = 0; } while(0)
 
 #ifndef acorn26
 /*

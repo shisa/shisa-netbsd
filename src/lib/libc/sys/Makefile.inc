@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile.inc,v 1.176 2007/07/17 17:42:07 joerg Exp $
+#	$NetBSD: Makefile.inc,v 1.185 2008/01/27 16:18:22 martin Exp $
 #	@(#)Makefile.inc	8.3 (Berkeley) 10/24/94
 
 # sys sources
@@ -22,18 +22,29 @@ DPSRCS+=	${_LSRC:MLintSys*.c}
 CLEANFILES+=	${_LSRC:MLintSys*.c}
 .endif
 
-# for -fstack-protector
-SRCS+=	stack_protector.c
-
 # glue to offer userland wrappers for some syscalls
-SRCS+=	sigtimedwait.c sigwait.c sigwaitinfo.c statvfs.c
+SRCS+=	posix_fadvise.c sigtimedwait.c sigwait.c sigwaitinfo.c statvfs.c \
+	swapon.c
 
 # glue to provide compatibility between GCC 1.X and 2.X and for compat
 # with old syscall interfaces.
-SRCS+=	adjtime.c clock_settime.c ftruncate.c \
+GLUE+=	adjtime.c clock_settime.c ftruncate.c \
 	lseek.c mmap.c ntp_adjtime.c pread.c preadv.c pwrite.c \
 	pwritev.c settimeofday.c \
-	swapon.c truncate.c
+	truncate.c
+
+# 'glue' files might .c or .S depending on the architecture
+.for glue in ${GLUE}
+.if exists(${glue:.c=.S})
+# Build the ASM glue file
+SRCS+=${glue:.c=.S}
+.else
+# Build the C glue file
+SRCS+= ${glue}
+# and an asm entry for __<syscall>
+ASM_GLUE+= __${glue:.c=.S}
+.endif
+.endfor
 
 # glue to syscalls that may pass structs or unions, which cannot be
 # handled portably and easily by the syscall interface. The glue
@@ -73,12 +84,13 @@ ASM=	access.S acct.S \
 		_lwp_self.S _lwp_wait.S _lwp_unpark.S _lwp_unpark_all.S \
 		_lwp_suspend.S _lwp_continue.S _lwp_wakeup.S _lwp_detach.S \
 		_lwp_getprivate.S _lwp_setprivate.S \
+		_lwp_setname.S _lwp_getname.S _lwp_ctl.S \
 	madvise.S mincore.S minherit.S mkdir.S mkfifo.S mknod.S \
-		mlock.S mlockall.S __mount50.S mprotect.S __msgctl13.S \
+		mlock.S mlockall.S modctl.S __mount50.S mprotect.S __msgctl13.S \
 		mremap.S msgget.S munlock.S munlockall.S munmap.S \
 	nfssvc.S __ntp_gettime30.S \
 	pathconf.S pmc_get_info.S pmc_control.S __posix_chown.S \
-		posix_fadvise.S \
+		__posix_fadvise50.S \
 		__posix_fchown.S __posix_lchown.S __posix_rename.S profil.S \
 	quotactl.S \
 	rasctl.S reboot.S recvfrom.S recvmsg.S rename.S revoke.S \
@@ -97,11 +109,14 @@ ASM=	access.S acct.S \
 	umask.S undelete.S unlink.S unmount.S utimes.S utrace.S uuidgen.S \
 	vadvise.S
 
-WEAKASM= accept.S close.S connect.S execve.S \
+WEAKASM= accept.S aio_suspend.S close.S connect.S execve.S \
 	fcntl.S fdatasync.S fsync.S fsync_range.S \
-	kill.S msgrcv.S msgsnd.S __msync13.S \
+	kill.S mq_receive.S mq_send.S mq_timedreceive.S mq_timedsend.S \
+	msgrcv.S msgsnd.S __msync13.S \
 	nanosleep.S open.S poll.S pollts.S pselect.S read.S readlink.S readv.S \
-	sched_yield.S select.S __sigprocmask14.S __sigsuspend14.S sysarch.S \
+	_sched_setparam.S _sched_getparam.S _sched_setaffinity.S \
+	_sched_getaffinity.S sched_yield.S \
+	select.S __sigprocmask14.S __sigsuspend14.S sysarch.S \
 	wait4.S write.S writev.S
 
 NOERR=	getegid.S geteuid.S getgid.S getpid.S getppid.S getuid.S \
@@ -109,8 +124,8 @@ NOERR=	getegid.S geteuid.S getgid.S getpid.S getppid.S getuid.S \
 
 PSEUDONOERR=	_exit.S
 
-SRCS+=		${ASM} ${WEAKASM} ${NOERR} ${PSEUDONOERR}
-CLEANFILES+=	${ASM} ${WEAKASM} ${NOERR} ${PSEUDONOERR}
+SRCS+=		${ASM} ${WEAKASM} ${NOERR} ${PSEUDONOERR} ${ASM_GLUE}
+CLEANFILES+=	${ASM} ${WEAKASM} ${NOERR} ${PSEUDONOERR} ${ASM_GLUE}
 
 ASMDEPS=	${.CURDIR}/sys/Makefile.inc ${ARCHDIR}/SYS.h \
 		${DESTDIR}/usr/include/sys/syscall.h
@@ -120,6 +135,10 @@ _LINTASM=	${ASM:Nsa_*.S} ${WEAKASM:Nsa_*.S}
 ${ASM}: ${ASMDEPS}
 	${_MKTARGET_CREATE}
 	printf '#include "SYS.h"\nRSYSCALL(${.PREFIX})\n' >${.TARGET}
+
+${ASM_GLUE}: ${ASMDEPS}
+	${_MKTARGET_CREATE}
+	printf '#include "SYS.h"\nPSEUDO(${.PREFIX},${.PREFIX:S/__//})\n' >${.TARGET}
 
 ${WEAKASM}: ${ASMDEPS}
 	${_MKTARGET_CREATE}
@@ -164,9 +183,12 @@ MAN+=	accept.2 access.2 acct.2 adjtime.2 bind.2 brk.2 chdir.2 \
 	getsockopt.2 gettimeofday.2 getuid.2 intro.2 ioctl.2 issetugid.2 \
 	kill.2 kqueue.2 ktrace.2 \
 	lfs_bmapv.2 lfs_markv.2 lfs_segclean.2 lfs_segwait.2 \
-	link.2 listen.2 lseek.2 _lwp_create.2 _lwp_detach.2 _lwp_exit.2 \
-	_lwp_self.2 _lwp_suspend.2 _lwp_wakeup.2 _lwp_wait.2 _lwp_kill.2 \
-	_lwp_getprivate.2 _lwp_park.2 _lwp_unpark.2 _lwp_unpark_all.2 \
+	link.2 listen.2 lseek.2 \
+	_lwp_create.2 _lwp_ctl.2 _lwp_detach.2 _lwp_exit.2 \
+	_lwp_self.2 _lwp_setname.2 \
+	_lwp_suspend.2 _lwp_wakeup.2 _lwp_wait.2 _lwp_kill.2 \
+	_lwp_getname.2 _lwp_getprivate.2 \
+	_lwp_park.2 _lwp_unpark.2 _lwp_unpark_all.2 \
 	mkdir.2 mkfifo.2 mknod.2 \
 	madvise.2 mincore.2 minherit.2 mlock.2 mlockall.2 mmap.2 mount.2 \
 	mprotect.2 mremap.2 msgctl.2 msgget.2 msgrcv.2 msgsnd.2 msync.2 \

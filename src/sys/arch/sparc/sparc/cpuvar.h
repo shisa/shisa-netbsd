@@ -1,4 +1,4 @@
-/*	$NetBSD: cpuvar.h,v 1.71 2007/05/17 14:51:30 yamt Exp $ */
+/*	$NetBSD: cpuvar.h,v 1.74 2008/01/08 21:32:10 martin Exp $ */
 
 /*
  *  Copyright (c) 1996 The NetBSD Foundation, Inc.
@@ -194,6 +194,7 @@ struct cpu_info {
 #else
 #define HASSUN4_MMU3L	(0)
 #endif
+	int		ci_idepth;		/* Interrupt depth */
 
 	/*
 	 * The following pointers point to processes that are somehow
@@ -421,7 +422,11 @@ struct cpu_info {
 
 
 #define CPU_INFO_ITERATOR		int
+#ifdef MULTIPROCESSOR
 #define CPU_INFO_FOREACH(cii, ci)	cii = 0; ci = cpus[cii], cii < sparc_ncpus; cii++
+#else
+#define	CPU_INFO_FOREACH(cii, ci)	(void)cii, ci = curcpu(); ci != NULL; ci = NULL
+#endif
 
 /*
  * Useful macros.

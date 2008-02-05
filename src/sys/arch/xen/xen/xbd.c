@@ -1,4 +1,4 @@
-/* $NetBSD: xbd.c,v 1.38 2007/07/22 08:50:27 ad Exp $ */
+/* $NetBSD: xbd.c,v 1.42 2008/01/05 00:31:56 ad Exp $ */
 
 /*
  *
@@ -33,7 +33,7 @@
 
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: xbd.c,v 1.38 2007/07/22 08:50:27 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: xbd.c,v 1.42 2008/01/05 00:31:56 ad Exp $");
 
 #include "xbd_hypervisor.h"
 #include "rnd.h"
@@ -53,7 +53,7 @@ __KERNEL_RCSID(0, "$NetBSD: xbd.c,v 1.38 2007/07/22 08:50:27 ad Exp $");
 #include <sys/disklabel.h>
 #include <sys/fcntl.h>
 #include <sys/vnode.h>
-#include <sys/lock.h>
+#include <sys/simplelock.h>
 #include <sys/conf.h>
 #include <sys/queue.h>
 #include <sys/stat.h>
@@ -66,12 +66,12 @@ __KERNEL_RCSID(0, "$NetBSD: xbd.c,v 1.38 2007/07/22 08:50:27 ad Exp $");
 #endif
 
 #include <dev/dkvar.h>
-#include <machine/xbdvar.h>
+#include <xen/xbdvar.h>
 
-#include <machine/xen.h>
-#include <machine/hypervisor.h>
-#include <machine/evtchn.h>
-#include <machine/ctrl_if.h>
+#include <xen/xen.h>
+#include <xen/hypervisor.h>
+#include <xen/evtchn.h>
+#include <xen/ctrl_if.h>
 
 
 static void	control_send(blkif_request_t *, blkif_response_t *);
@@ -1148,7 +1148,7 @@ xbd_attach(struct device *parent, struct device *self, void *aux)
 
 	simple_lock_init(&xs->sc_slock);
 	dk_sc_init(&xs->sc_dksc, xs, xs->sc_dev.dv_xname);
-	xs->sc_dksc.sc_dkdev.dk_driver = &xbddkdriver;
+	disk_init(&xs->sc_dksc.sc_dkdev, xs->sc_dev.dv_xname, &xbddkdriver);
 	xbdinit(xs, xbda->xa_xd, xbda->xa_dkintf);
 
 #if NRND > 0

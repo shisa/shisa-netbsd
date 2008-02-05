@@ -1,4 +1,4 @@
-/*	$NetBSD: trap.c,v 1.129 2007/09/01 21:31:56 mhitch Exp $	*/
+/*	$NetBSD: trap.c,v 1.132 2007/12/03 15:33:54 ad Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1990, 1993
@@ -77,7 +77,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: trap.c,v 1.129 2007/09/01 21:31:56 mhitch Exp $");
+__KERNEL_RCSID(0, "$NetBSD: trap.c,v 1.132 2007/12/03 15:33:54 ad Exp $");
 
 #include "opt_ddb.h"
 #include "opt_execfmt.h"
@@ -254,7 +254,6 @@ again:
 		}
 	}
 #endif
-	curcpu()->ci_schedstate.spc_curpriority = l->l_priority = l->l_usrpri;
 }
 
 /*
@@ -532,9 +531,6 @@ copyfault:
 
 	case T_SSIR:		/* Software interrupt */
 	case T_SSIR|T_USER:
-
-		softintr_dispatch();
-
 		/*
 		 * If this was not an AST trap, we are all done.
 		 */

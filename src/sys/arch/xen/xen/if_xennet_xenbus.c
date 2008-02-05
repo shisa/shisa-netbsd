@@ -1,4 +1,4 @@
-/*      $NetBSD: if_xennet_xenbus.c,v 1.18 2007/08/26 22:32:46 dyoung Exp $      */
+/*      $NetBSD: if_xennet_xenbus.c,v 1.23 2008/01/23 19:46:46 bouyer Exp $      */
 
 /*
  * Copyright (c) 2006 Manuel Bouyer.
@@ -61,7 +61,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_xennet_xenbus.c,v 1.18 2007/08/26 22:32:46 dyoung Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_xennet_xenbus.c,v 1.23 2008/01/23 19:46:46 bouyer Exp $");
 
 #include "opt_xen.h"
 #include "opt_nfs_boot.h"
@@ -74,6 +74,7 @@ __KERNEL_RCSID(0, "$NetBSD: if_xennet_xenbus.c,v 1.18 2007/08/26 22:32:46 dyoung
 #include <sys/kernel.h>
 #include <sys/proc.h>
 #include <sys/systm.h>
+#include <sys/intr.h>
 #if NRND > 0
 #include <sys/rnd.h>
 #endif
@@ -96,17 +97,17 @@ __KERNEL_RCSID(0, "$NetBSD: if_xennet_xenbus.c,v 1.18 2007/08/26 22:32:46 dyoung
 #include <nfs/nfs.h>
 #include <nfs/nfsmount.h>
 #include <nfs/nfsdiskless.h>
-#include <machine/if_xennetvar.h>
+#include <xen/if_xennetvar.h>
 #endif /* defined(NFS_BOOT_BOOTSTATIC) */
 
-#include <machine/xennet_checksum.h>
+#include <xen/xennet_checksum.h>
 
 #include <uvm/uvm.h>
 
-#include <machine/xen3-public/io/ring.h>
+#include <xen/xen3-public/io/ring.h>
 
-#include <machine/granttables.h>
-#include <machine/xenbus.h>
+#include <xen/granttables.h>
+#include <xen/xenbus.h>
 #include "locators.h"
 
 #undef XENNET_DEBUG_DUMP
@@ -182,7 +183,7 @@ struct xennet_xenbus_softc {
 
 /* too big to be on stack */
 static multicall_entry_t rx_mcl[NET_RX_RING_SIZE+1];
-static paddr_t xennet_pages[NET_RX_RING_SIZE];
+static u_long xennet_pages[NET_RX_RING_SIZE];
 
 static int  xennet_xenbus_match(struct device *, struct cfdata *, void *);
 static void xennet_xenbus_attach(struct device *, struct device *, void *);
@@ -336,7 +337,7 @@ xennet_xenbus_attach(struct device *parent, struct device *self, void *aux)
 	IFQ_SET_READY(&ifp->if_snd);
 	if_attach(ifp);
 	ether_ifattach(ifp, sc->sc_enaddr);
-	sc->sc_softintr = softintr_establish(IPL_SOFTNET, xennet_softstart, sc);
+	sc->sc_softintr = softint_establish(SOFTINT_NET, xennet_softstart, sc);
 	if (sc->sc_softintr == NULL)
 		panic(" xennet: can't establish soft interrupt");
 
@@ -385,7 +386,7 @@ xennet_xenbus_detach(struct device *self, int flags)
 	xengnt_revoke_access(sc->sc_rx_ring_gntref);
 	uvm_km_free(kernel_map, (vaddr_t)sc->sc_rx_ring.sring, PAGE_SIZE,
 	    UVM_KMF_WIRED);
-	softintr_disestablish(sc->sc_softintr);
+	softint_disestablish(sc->sc_softintr);
 	event_remove_handler(sc->sc_evtchn, &xennet_handler, sc);
 	splx(s0);
 	DPRINTF(("%s: xennet_xenbus_detach done\n", sc->sc_dev.dv_xname));
@@ -609,12 +610,13 @@ xennet_free_rx_buffer(struct xennet_xenbus_softc *sc)
 			ma = xengnt_revoke_transfer(rxreq->rxreq_gntref);
 			rxreq->rxreq_gntref = GRANT_INVALID_REF;
 			if (ma == 0) {
+				u_long pfn;
 				struct xen_memory_reservation xenres;
 				/*
 				 * transfer not complete, we lost the page.
 				 * Get one from hypervisor
 				 */
-				xenres.extent_start = &ma;
+				xenres.extent_start = &pfn;
 				xenres.nr_extents = 1;
 				xenres.extent_order = 0;
 				xenres.address_bits = 31;
@@ -624,6 +626,7 @@ xennet_free_rx_buffer(struct xennet_xenbus_softc *sc)
 					panic("xennet_free_rx_buffer: "
 					    "can't get memory back");
 				}
+				ma = pfn;
 				KASSERT(ma != 0);
 			}
 			pa = rxreq->rxreq_pa;
@@ -667,7 +670,7 @@ xennet_rx_mbuf_free(struct mbuf *m, void *buf, size_t size, void *arg)
 	}
 
 	if (m)
-		pool_cache_put(&mbpool_cache, m);
+		pool_cache_put(mb_cache, m);
 	splx(s);
 }
 
@@ -892,7 +895,7 @@ xennet_start(struct ifnet *ifp)
 	 * stack will enqueue all pending mbufs in the interface's send queue
 	 * before it is processed by xennet_softstart().
 	 */
-	softintr_schedule(sc->sc_softintr);
+	softint_schedule(sc->sc_softintr);
 	return;
 }
 

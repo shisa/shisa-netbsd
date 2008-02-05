@@ -1,4 +1,4 @@
-/*	$NetBSD: hfs_vfsops.c,v 1.9 2007/07/31 21:14:17 pooka Exp $	*/
+/*	$NetBSD: hfs_vfsops.c,v 1.16 2008/01/28 14:31:16 dholland Exp $	*/
 
 /*-
  * Copyright (c) 2005, 2007 The NetBSD Foundation, Inc.
@@ -99,7 +99,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: hfs_vfsops.c,v 1.9 2007/07/31 21:14:17 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: hfs_vfsops.c,v 1.16 2008/01/28 14:31:16 dholland Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_compat_netbsd.h"
@@ -128,6 +128,7 @@ __KERNEL_RCSID(0, "$NetBSD: hfs_vfsops.c,v 1.9 2007/07/31 21:14:17 pooka Exp $")
 #include <sys/kauth.h>
 #include <sys/stat.h>
 
+#include <miscfs/genfs/genfs.h>
 #include <miscfs/specfs/specdev.h>
 
 #include <fs/hfs/hfs.h>
@@ -135,7 +136,7 @@ __KERNEL_RCSID(0, "$NetBSD: hfs_vfsops.c,v 1.9 2007/07/31 21:14:17 pooka Exp $")
 
 MALLOC_JUSTDEFINE(M_HFSMNT, "hfs mount", "hfs mount structures");
 
-extern struct lock hfs_hashlock;
+extern kmutex_t hfs_hashlock;
 
 const struct vnodeopv_desc * const hfs_vnodeopv_descs[] = {
 	&hfs_vnodeop_opv_desc,
@@ -151,7 +152,7 @@ struct vfsops hfs_vfsops = {
 	hfs_start,
 	hfs_unmount,
 	hfs_root,
-	hfs_quotactl,
+	(void *)eopnotsupp,		/* vfs_quotactl */
 	hfs_statvfs,
 	hfs_sync,
 	hfs_vget,
@@ -162,8 +163,10 @@ struct vfsops hfs_vfsops = {
 	hfs_done,
 	NULL,				/* vfs_mountroot */
 	NULL,				/* vfs_snapshot */
-	hfs_extattrctl,
+	vfs_stdextattrctl,
 	(void *)eopnotsupp,		/* vfs_suspendctl */
+	genfs_renamelock_enter,
+	genfs_renamelock_exit,
 	hfs_vnodeopv_descs,
 	0,
 	{ NULL, NULL },
@@ -175,9 +178,9 @@ static const struct genfs_ops hfs_genfsops = {
 };
 
 int
-hfs_mount(struct mount *mp, const char *path, void *data, size_t *data_len,
-    struct lwp *l)
+hfs_mount(struct mount *mp, const char *path, void *data, size_t *data_len)
 {
+	struct lwp *l = curlwp;
 	struct nameidata nd;
 	struct hfs_args *args = data;
 	struct vnode *devvp;
@@ -217,7 +220,7 @@ hfs_mount(struct mount *mp, const char *path, void *data, size_t *data_len,
 		/*
 		 * Look up the name and verify that it's sane.
 		 */
-		NDINIT(&nd, LOOKUP, FOLLOW, UIO_USERSPACE, args->fspec, l);
+		NDINIT(&nd, LOOKUP, FOLLOW, UIO_USERSPACE, args->fspec);
 		if ((error = namei(&nd)) != 0)
 			return error;
 		devvp = nd.ni_vp;
@@ -264,7 +267,7 @@ hfs_mount(struct mount *mp, const char *path, void *data, size_t *data_len,
 			(mp->mnt_flag & MNT_RDONLY) == 0)
 			accessmode |= VWRITE;
 		vn_lock(devvp, LK_EXCLUSIVE | LK_RETRY);
-		error = VOP_ACCESS(devvp, accessmode, l->l_cred, l);
+		error = VOP_ACCESS(devvp, accessmode, l->l_cred);
 		VOP_UNLOCK(devvp, 0);
 	}
 
@@ -274,19 +277,6 @@ hfs_mount(struct mount *mp, const char *path, void *data, size_t *data_len,
 	if (update) {
 		printf("HFS: live remounting not yet supported!\n");
 		error = EINVAL;
-		goto error;
-	}
-
-	/*
-	 * Disallow multiple mounts of the same device.
-	 * Disallow mounting of a device that is currently in use
-	 * (except for root, which might share swap device for miniroot).
-	 * Flush out any old buffers remaining from a previous use.
-	 */
-	if ((error = vfs_mountedon(devvp)) != 0)
-		goto error;
-	if (vcount(devvp) > 1 && devvp != rootvp) {
-		error = EBUSY;
 		goto error;
 	}
 
@@ -323,7 +313,7 @@ error:
 }
 
 int
-hfs_start(struct mount *mp, int flags, struct lwp *l)
+hfs_start(struct mount *mp, int flags)
 {
 
 #ifdef HFS_DEBUG	
@@ -403,7 +393,7 @@ error:
 }
 
 int
-hfs_unmount(struct mount *mp, int mntflags, struct lwp *l)
+hfs_unmount(struct mount *mp, int mntflags)
 {
 	hfs_callback_args cbargs;
 	hfs_libcb_argsread argsclose;
@@ -425,7 +415,7 @@ hfs_unmount(struct mount *mp, int mntflags, struct lwp *l)
 		return error;
 
 	hfslib_init_cbargs(&cbargs);
-	argsclose.l = l;
+	argsclose.l = curlwp;
 	cbargs.closevol = (void*)&argsclose;
 	hfslib_close_volume(&hmp->hm_vol, &cbargs);
 	
@@ -456,19 +446,7 @@ hfs_root(struct mount *mp, struct vnode **vpp)
 }
 
 int
-hfs_quotactl(struct mount *mp, int cmds, uid_t uid, void *arg,
-    struct lwp *l)
-{
-
-#ifdef HFS_DEBUG	
-	printf("vfsop = hfs_quotactl()\n");
-#endif /* HFS_DEBUG */
-
-	return EOPNOTSUPP;
-}
-
-int
-hfs_statvfs(struct mount *mp, struct statvfs *sbp, struct lwp *l)
+hfs_statvfs(struct mount *mp, struct statvfs *sbp)
 {
 	hfs_volume_header_t *vh;
 	
@@ -493,7 +471,7 @@ hfs_statvfs(struct mount *mp, struct statvfs *sbp, struct lwp *l)
 }
 
 int
-hfs_sync(struct mount *mp, int waitfor, kauth_cred_t cred, struct lwp *l)
+hfs_sync(struct mount *mp, int waitfor, kauth_cred_t cred)
 {
 
 #ifdef HFS_DEBUG	
@@ -543,6 +521,7 @@ hfs_vget_internal(struct mount *mp, ino_t ino, uint8_t fork,
 	if (fork != HFS_RSRCFORK)
 	    fork = HFS_DATAFORK;
 
+ retry:
 	/* Check if this vnode has already been allocated. If so, just return it. */
 	if ((*vpp = hfs_nhashget(dev, cnid, fork, LK_EXCLUSIVE)) != NULL)
 		return 0;
@@ -550,25 +529,24 @@ hfs_vget_internal(struct mount *mp, ino_t ino, uint8_t fork,
 	/* Allocate a new vnode/inode. */
 	if ((error = getnewvnode(VT_HFS, mp, hfs_vnodeop_p, &vp)) != 0)
 		goto error;
+	MALLOC(hnode, struct hfsnode *, sizeof(struct hfsnode), M_TEMP,
+		M_WAITOK + M_ZERO);
 
 	/*
 	 * If someone beat us to it while sleeping in getnewvnode(),
 	 * push back the freshly allocated vnode we don't need, and return.
 	 */
+	mutex_enter(&hfs_hashlock);
+	if (hfs_nhashget(dev, cnid, fork, 0) != NULL) {
+		mutex_exit(&hfs_hashlock);
+		ungetnewvnode(vp);
+		FREE(hnode, M_TEMP);
+		goto retry;
+	}
 
-	do {
-		if ((*vpp = hfs_nhashget(dev, cnid, fork, LK_EXCLUSIVE))
-		    != NULL) {
-			ungetnewvnode(vp);
-			return 0;
-		}
-	} while (lockmgr(&hfs_hashlock, LK_EXCLUSIVE|LK_SLEEPFAIL, 0));
-
-	vp->v_flag |= VLOCKSWORK;
-	
-	MALLOC(hnode, struct hfsnode *, sizeof(struct hfsnode), M_TEMP,
-		M_WAITOK + M_ZERO);
+	vp->v_vflag |= VV_LOCKSWORK;	
 	vp->v_data = hnode;
+	genfs_node_init(vp, &hfs_genfsops);
 	
 	hnode->h_vnode = vp;
 	hnode->h_hmp = hmp;
@@ -588,7 +566,7 @@ hfs_vget_internal(struct mount *mp, ino_t ino, uint8_t fork,
 	hnode->h_fork = fork;
 
 	hfs_nhashinsert(hnode);
-	lockmgr(&hfs_hashlock, LK_RELEASE, 0);
+	mutex_exit(&hfs_hashlock);
 
 
 	/*
@@ -616,12 +594,10 @@ hfs_vget_internal(struct mount *mp, ino_t ino, uint8_t fork,
 
 	/*
 	 * Initialize the vnode from the hfsnode, check for aliases.
-	 * Note that the underlying vnode may have changed.
+	 * Note that the underlying vnode may change.
 	 */
-
 	hfs_vinit(mp, hfs_specop_p, hfs_fifoop_p, &vp);
 
-	genfs_node_init(vp, &hfs_genfsops);
 	hnode->h_devvp = hmp->hm_devvp;	
 	VREF(hnode->h_devvp);  /* Increment the ref count to the volume's device. */
 
@@ -722,17 +698,6 @@ hfs_mountroot(void)
 
 #ifdef HFS_DEBUG	
 	printf("vfsop = hfs_mountroot()\n");
-#endif /* HFS_DEBUG */
-
-	return EOPNOTSUPP;
-}
-
-int hfs_extattrctl(struct mount *mp, int cmd, struct vnode *vp,
-    int attrnamespace, const char *attrname, struct lwp *l)
-{
-
-#ifdef HFS_DEBUG	
-	printf("vfsop = hfs_checkexp()\n");
 #endif /* HFS_DEBUG */
 
 	return EOPNOTSUPP;

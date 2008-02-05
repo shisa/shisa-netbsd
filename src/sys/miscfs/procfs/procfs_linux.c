@@ -1,4 +1,4 @@
-/*      $NetBSD: procfs_linux.c,v 1.39 2007/05/26 16:21:04 agc Exp $      */
+/*      $NetBSD: procfs_linux.c,v 1.48 2008/01/30 11:47:02 ad Exp $      */
 
 /*
  * Copyright (c) 2001 Wasabi Systems, Inc.
@@ -36,7 +36,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: procfs_linux.c,v 1.39 2007/05/26 16:21:04 agc Exp $");
+__KERNEL_RCSID(0, "$NetBSD: procfs_linux.c,v 1.48 2008/01/30 11:47:02 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -95,13 +95,24 @@ get_proc_size_info(struct lwp *l, unsigned long *stext, unsigned long *etext, un
 			break;
 		}
 	}
+#ifdef LINUX_USRSTACK32
+	if (strcmp(p->p_emul->e_name, "linux32") == 0 &&
+	    LINUX_USRSTACK32 < USRSTACK32)
+		*sstack = (unsigned long)LINUX_USRSTACK32;
+	else
+#endif
 #ifdef LINUX_USRSTACK
 	if (strcmp(p->p_emul->e_name, "linux") == 0 &&
 	    LINUX_USRSTACK < USRSTACK)
-		*sstack = (unsigned long) LINUX_USRSTACK;
+		*sstack = (unsigned long)LINUX_USRSTACK;
 	else
 #endif
-		*sstack = (unsigned long) USRSTACK;
+#ifdef	USRSTACK32
+	if (strstr(p->p_emul->e_name, "32") != NULL)
+		*sstack = (unsigned long)USRSTACK32;
+	else
+#endif
+		*sstack = (unsigned long)USRSTACK;
 
 	/*
 	 * jdk 1.6 compares low <= addr && addr < high
@@ -176,6 +187,7 @@ procfs_dodevices(struct lwp *curl, struct proc *p,
 	char *bf;
 	int offset = 0;
 	int i, error = ENAMETOOLONG;
+	extern kmutex_t devsw_lock;
 
 	/* XXX elad - may need filtering. */
 
@@ -185,6 +197,7 @@ procfs_dodevices(struct lwp *curl, struct proc *p,
 	if (offset >= LBFSZ)
 		goto out;
 
+	mutex_enter(&devsw_lock);
 	for (i = 0; i < max_devsw_convs; i++) {
 		if ((devsw_conv[i].d_name == NULL) || 
 		    (devsw_conv[i].d_cmajor == -1))
@@ -192,13 +205,17 @@ procfs_dodevices(struct lwp *curl, struct proc *p,
 
 		offset += snprintf(&bf[offset], LBFSZ - offset, 
 		    "%3d %s\n", devsw_conv[i].d_cmajor, devsw_conv[i].d_name);
-		if (offset >= LBFSZ)
+		if (offset >= LBFSZ) {
+			mutex_exit(&devsw_lock);
 			goto out;
+		}
 	}
 
 	offset += snprintf(&bf[offset], LBFSZ - offset, "\nBlock devices:\n");
-	if (offset >= LBFSZ)
+	if (offset >= LBFSZ) {
+		mutex_exit(&devsw_lock);
 		goto out;
+	}
 
 	for (i = 0; i < max_devsw_convs; i++) {
 		if ((devsw_conv[i].d_name == NULL) || 
@@ -207,9 +224,12 @@ procfs_dodevices(struct lwp *curl, struct proc *p,
 
 		offset += snprintf(&bf[offset], LBFSZ - offset, 
 		    "%3d %s\n", devsw_conv[i].d_bmajor, devsw_conv[i].d_name);
-		if (offset >= LBFSZ)
+		if (offset >= LBFSZ) {
+			mutex_exit(&devsw_lock);
 			goto out;
+		}
 	}
+	mutex_exit(&devsw_lock);
 
 	error = uiomove_frombuf(bf, offset, uio);
 out:
@@ -225,7 +245,6 @@ int
 procfs_docpustat(struct lwp *curl, struct proc *p,
     struct pfsnode *pfs, struct uio *uio)
 {
-	struct timeval	 runtime;
 	char		*bf;
 	int	 	 error;
 	int	 	 len;
@@ -269,7 +288,6 @@ procfs_docpustat(struct lwp *curl, struct proc *p,
 		i += 1;
 	}
 
-	timersub(&curcpu()->ci_schedstate.spc_runtime, &boottime, &runtime);
 	len += snprintf(&bf[len], LBFSZ - len,
 			"disk 0 0 0 0\n"
 			"page %u %u\n"
@@ -512,7 +530,7 @@ procfs_douptime(struct lwp *curl, struct proc *p,
 
 	bf = malloc(LBFSZ, M_TEMP, M_WAITOK);
 
-	timersub(&curcpu()->ci_schedstate.spc_runtime, &boottime, &runtime);
+	microuptime(&runtime);
 	idle = curcpu()->ci_schedstate.spc_cp_time[CP_IDLE];
 	len = snprintf(bf, LBFSZ,
 	    "%lu.%02lu %" PRIu64 ".%02" PRIu64 "\n",
@@ -539,13 +557,11 @@ procfs_domounts(struct lwp *curl, struct proc *p,
 	struct statvfs *sfs;
 	int error = 0;
 
-	/* XXX elad - may need filtering. */
-
 	bf = malloc(LBFSZ, M_TEMP, M_WAITOK);
-	simple_lock(&mountlist_slock);
+	mutex_enter(&mountlist_lock);
 	for (mp = CIRCLEQ_FIRST(&mountlist); mp != (void *)&mountlist;
 	     mp = nmp) {
-		if (vfs_busy(mp, LK_NOWAIT, &mountlist_slock)) {
+		if (vfs_trybusy(mp, RW_READER, &mountlist_lock)) {
 			nmp = CIRCLEQ_NEXT(mp, mnt_list);
 			continue;
 		}
@@ -575,11 +591,11 @@ procfs_domounts(struct lwp *curl, struct proc *p,
 		memcpy(mtab + mtabsz, bf, len);
 		mtabsz += len;
 
-		simple_lock(&mountlist_slock);
+		mutex_enter(&mountlist_lock);
 		nmp = CIRCLEQ_NEXT(mp, mnt_list);
-		vfs_unbusy(mp);
+		vfs_unbusy(mp, false);
 	}
-	simple_unlock(&mountlist_slock);
+	mutex_exit(&mountlist_lock);
 	free(bf, M_TEMP);
 
 	if (mtabsz > 0) {

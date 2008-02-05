@@ -1,4 +1,4 @@
-/*	$NetBSD: if_bm.c,v 1.33 2007/09/01 07:32:23 dyoung Exp $	*/
+/*	$NetBSD: if_bm.c,v 1.36 2008/01/19 22:10:15 dyoung Exp $	*/
 
 /*-
  * Copyright (C) 1998, 1999, 2000 Tsubai Masanari.  All rights reserved.
@@ -27,7 +27,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_bm.c,v 1.33 2007/09/01 07:32:23 dyoung Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_bm.c,v 1.36 2008/01/19 22:10:15 dyoung Exp $");
 
 #include "opt_inet.h"
 #include "bpfilter.h"
@@ -81,7 +81,8 @@ struct bmac_softc {
 	struct ethercom sc_ethercom;
 #define sc_if sc_ethercom.ec_if
 	struct callout sc_tick_ch;
-	vaddr_t sc_regs;
+	bus_space_tag_t sc_iot;
+	bus_space_handle_t sc_ioh;
 	dbdma_regmap_t *sc_txdma;
 	dbdma_regmap_t *sc_rxdma;
 	dbdma_command_t *sc_txcmd;
@@ -97,85 +98,67 @@ struct bmac_softc {
 #define BMAC_BMACPLUS	0x01
 #define BMAC_DEBUGFLAG	0x02
 
-extern u_int *heathrow_FCR;
+extern volatile uint32_t *heathrow_FCR;
 
-static inline int bmac_read_reg __P((struct bmac_softc *, int));
-static inline void bmac_write_reg __P((struct bmac_softc *, int, int));
-static inline void bmac_set_bits __P((struct bmac_softc *, int, int));
-static inline void bmac_reset_bits __P((struct bmac_softc *, int, int));
+int bmac_match(struct device *, struct cfdata *, void *);
+void bmac_attach(struct device *, struct device *, void *);
+void bmac_reset_chip(struct bmac_softc *);
+void bmac_init(struct bmac_softc *);
+void bmac_init_dma(struct bmac_softc *);
+int bmac_intr(void *);
+int bmac_rint(void *);
+void bmac_reset(struct bmac_softc *);
+void bmac_stop(struct bmac_softc *);
+void bmac_start(struct ifnet *);
+void bmac_transmit_packet(struct bmac_softc *, void *, int);
+int bmac_put(struct bmac_softc *, void *, struct mbuf *);
+struct mbuf *bmac_get(struct bmac_softc *, void *, int);
+void bmac_watchdog(struct ifnet *);
+int bmac_ioctl(struct ifnet *, u_long, void *);
+void bmac_setladrf(struct bmac_softc *);
 
-int bmac_match __P((struct device *, struct cfdata *, void *));
-void bmac_attach __P((struct device *, struct device *, void *));
-void bmac_reset_chip __P((struct bmac_softc *));
-void bmac_init __P((struct bmac_softc *));
-void bmac_init_dma __P((struct bmac_softc *));
-int bmac_intr __P((void *));
-int bmac_rint __P((void *));
-void bmac_reset __P((struct bmac_softc *));
-void bmac_stop __P((struct bmac_softc *));
-void bmac_start __P((struct ifnet *));
-void bmac_transmit_packet __P((struct bmac_softc *, void *, int));
-int bmac_put __P((struct bmac_softc *, void *, struct mbuf *));
-struct mbuf *bmac_get __P((struct bmac_softc *, void *, int));
-void bmac_watchdog __P((struct ifnet *));
-int bmac_ioctl __P((struct ifnet *, u_long, void *));
-int bmac_mediachange __P((struct ifnet *));
-void bmac_mediastatus __P((struct ifnet *, struct ifmediareq *));
-void bmac_setladrf __P((struct bmac_softc *));
-
-int bmac_mii_readreg __P((struct device *, int, int));
-void bmac_mii_writereg __P((struct device *, int, int, int));
-void bmac_mii_statchg __P((struct device *));
-void bmac_mii_tick __P((void *));
-u_int32_t bmac_mbo_read __P((struct device *));
-void bmac_mbo_write __P((struct device *, u_int32_t));
+int bmac_mii_readreg(struct device *, int, int);
+void bmac_mii_writereg(struct device *, int, int, int);
+void bmac_mii_statchg(struct device *);
+void bmac_mii_tick(void *);
+u_int32_t bmac_mbo_read(struct device *);
+void bmac_mbo_write(struct device *, u_int32_t);
 
 CFATTACH_DECL(bm, sizeof(struct bmac_softc),
     bmac_match, bmac_attach, NULL, NULL);
 
-struct mii_bitbang_ops bmac_mbo = {
+const struct mii_bitbang_ops bmac_mbo = {
 	bmac_mbo_read, bmac_mbo_write,
 	{ MIFDO, MIFDI, MIFDC, MIFDIR, 0 }
 };
 
-int
-bmac_read_reg(sc, off)
-	struct bmac_softc *sc;
-	int off;
+static inline uint16_t
+bmac_read_reg(struct bmac_softc *sc, bus_size_t off)
 {
-	return in16rb(sc->sc_regs + off);
+	return bus_space_read_2(sc->sc_iot, sc->sc_ioh, off);
 }
 
-void
-bmac_write_reg(sc, off, val)
-	struct bmac_softc *sc;
-	int off, val;
+static inline void
+bmac_write_reg(struct bmac_softc *sc, bus_size_t off, uint16_t val)
 {
-	out16rb(sc->sc_regs + off, val);
+	bus_space_write_2(sc->sc_iot, sc->sc_ioh, off, val);
 }
 
-void
-bmac_set_bits(sc, off, val)
-	struct bmac_softc *sc;
-	int off, val;
+static inline void
+bmac_set_bits(struct bmac_softc *sc, bus_size_t off, uint16_t val)
 {
 	val |= bmac_read_reg(sc, off);
 	bmac_write_reg(sc, off, val);
 }
 
-void
-bmac_reset_bits(sc, off, val)
-	struct bmac_softc *sc;
-	int off, val;
+static inline void
+bmac_reset_bits(struct bmac_softc *sc, bus_size_t off, uint16_t val)
 {
 	bmac_write_reg(sc, off, bmac_read_reg(sc, off) & ~val);
 }
 
 int
-bmac_match(parent, cf, aux)
-	struct device *parent;
-	struct cfdata *cf;
-	void *aux;
+bmac_match(struct device *parent, struct cfdata *cf, void *aux)
 {
 	struct confargs *ca = aux;
 
@@ -191,9 +174,7 @@ bmac_match(parent, cf, aux)
 }
 
 void
-bmac_attach(parent, self, aux)
-	struct device *parent, *self;
-	void *aux;
+bmac_attach(struct device *parent, struct device *self, void *aux)
 {
 	struct confargs *ca = aux;
 	struct bmac_softc *sc = (void *)self;
@@ -217,7 +198,12 @@ bmac_attach(parent, self, aux)
 	ca->ca_reg[2] += ca->ca_baseaddr;
 	ca->ca_reg[4] += ca->ca_baseaddr;
 
-	sc->sc_regs = (vaddr_t)mapiodev(ca->ca_reg[0], PAGE_SIZE);
+	sc->sc_iot = ca->ca_tag;
+	if (bus_space_map(sc->sc_iot, ca->ca_reg[0], ca->ca_reg[1], 0,
+	    &sc->sc_ioh) != 0) {
+		aprint_error(": couldn't map %#x", ca->ca_reg[0]);
+		return;
+	}
 
 	bmac_write_reg(sc, INTDISABLE, NoEventsMask);
 
@@ -243,8 +229,8 @@ bmac_attach(parent, self, aux)
 	printf(" irq %d,%d: address %s\n", ca->ca_intr[0], ca->ca_intr[2],
 		ether_sprintf(laddr));
 
-	intr_establish(ca->ca_intr[0], IST_LEVEL, IPL_NET, bmac_intr, sc);
-	intr_establish(ca->ca_intr[2], IST_LEVEL, IPL_NET, bmac_rint, sc);
+	intr_establish(ca->ca_intr[0], IST_EDGE, IPL_NET, bmac_intr, sc);
+	intr_establish(ca->ca_intr[2], IST_EDGE, IPL_NET, bmac_rint, sc);
 
 	memcpy(ifp->if_xname, sc->sc_dev.dv_xname, IFNAMSIZ);
 	ifp->if_softc = sc;
@@ -260,7 +246,8 @@ bmac_attach(parent, self, aux)
 	mii->mii_writereg = bmac_mii_writereg;
 	mii->mii_statchg = bmac_mii_statchg;
 
-	ifmedia_init(&mii->mii_media, 0, bmac_mediachange, bmac_mediastatus);
+	sc->sc_ethercom.ec_mii = mii;
+	ifmedia_init(&mii->mii_media, 0, ether_mediachange, ether_mediastatus);
 	mii_attach(&sc->sc_dev, mii, 0xffffffff, MII_PHY_ANY,
 		      MII_OFFSET_ANY, 0);
 
@@ -433,7 +420,7 @@ bmac_init_dma(sc)
 	}
 	DBDMA_BUILD(cmd, DBDMA_CMD_NOP, 0, 0, 0,
 		DBDMA_INT_NEVER, DBDMA_WAIT_NEVER, DBDMA_BRANCH_ALWAYS);
-	dbdma_st32(&cmd->d_cmddep, vtophys((vaddr_t)sc->sc_rxcmd));
+	out32rb(&cmd->d_cmddep, vtophys((vaddr_t)sc->sc_rxcmd));
 
 	sc->sc_rxlast = 0;
 
@@ -484,8 +471,8 @@ bmac_rint(v)
 		if (i == BMAC_RXBUFS)
 			i = 0;
 		cmd = &sc->sc_rxcmd[i];
-		status = dbdma_ld16(&cmd->d_status);
-		resid = dbdma_ld16(&cmd->d_resid);
+		status = in16rb(&cmd->d_status);
+		resid = in16rb(&cmd->d_resid);
 
 #ifdef BMAC_DEBUG
 		if (status != 0 && status != 0x8440 && status != 0x9440)
@@ -494,7 +481,7 @@ bmac_rint(v)
 
 		if ((status & DBDMA_CNTRL_ACTIVE) == 0)	/* 0x9440 | 0x8440 */
 			continue;
-		count = dbdma_ld16(&cmd->d_count);
+		count = in16rb(&cmd->d_count);
 		datalen = count - resid - 2;		/* 2 == framelen */
 		if (datalen < sizeof(struct ether_header)) {
 			printf("%s: short packet len = %d\n",
@@ -536,7 +523,7 @@ next:
 		cmd->d_resid = 0;
 		sc->sc_rxlast = i + 1;
 	}
-	bmac_mediachange(ifp);
+	ether_mediachange(ifp);
 
 	dbdma_continue(sc->sc_rxdma);
 
@@ -740,7 +727,6 @@ bmac_ioctl(ifp, cmd, data)
 {
 	struct bmac_softc *sc = ifp->if_softc;
 	struct ifaddr *ifa = (struct ifaddr *)data;
-	struct ifreq *ifr = (struct ifreq *)data;
 	int s, error = 0;
 
 	s = splnet();
@@ -795,6 +781,8 @@ bmac_ioctl(ifp, cmd, data)
 
 	case SIOCADDMULTI:
 	case SIOCDELMULTI:
+	case SIOCGIFMEDIA:
+	case SIOCSIFMEDIA:
 		if ((error = ether_ioctl(ifp, cmd, data)) == ENETRESET) {
 			/*
 			 * Multicast list has changed; set the hardware filter
@@ -807,40 +795,12 @@ bmac_ioctl(ifp, cmd, data)
 			error = 0;
 		}
 		break;
-
-	case SIOCGIFMEDIA:
-	case SIOCSIFMEDIA:
-		error = ifmedia_ioctl(ifp, ifr, &sc->sc_mii.mii_media, cmd);
-		break;
-
 	default:
 		error = EINVAL;
 	}
 
 	splx(s);
 	return error;
-}
-
-int
-bmac_mediachange(ifp)
-	struct ifnet *ifp;
-{
-	struct bmac_softc *sc = ifp->if_softc;
-
-	return mii_mediachg(&sc->sc_mii);
-}
-
-void
-bmac_mediastatus(ifp, ifmr)
-	struct ifnet *ifp;
-	struct ifmediareq *ifmr;
-{
-	struct bmac_softc *sc = ifp->if_softc;
-
-	mii_pollstat(&sc->sc_mii);
-
-	ifmr->ifm_status = sc->sc_mii.mii_media_status;
-	ifmr->ifm_active = sc->sc_mii.mii_media_active;
 }
 
 /*

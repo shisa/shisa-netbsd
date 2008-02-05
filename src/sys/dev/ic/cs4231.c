@@ -1,4 +1,4 @@
-/*	$NetBSD: cs4231.c,v 1.18 2005/12/11 12:21:26 christos Exp $	*/
+/*	$NetBSD: cs4231.c,v 1.20 2007/12/11 00:21:51 martin Exp $	*/
 
 /*-
  * Copyright (c) 1998, 1999 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: cs4231.c,v 1.18 2005/12/11 12:21:26 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: cs4231.c,v 1.20 2007/12/11 00:21:51 martin Exp $");
 
 #include "audio.h"
 #if NAUDIO > 0
@@ -49,7 +49,7 @@ __KERNEL_RCSID(0, "$NetBSD: cs4231.c,v 1.18 2005/12/11 12:21:26 christos Exp $")
 #include <sys/malloc.h>
 
 #include <machine/autoconf.h>
-#include <machine/cpu.h>
+#include <sys/cpu.h>
 
 #include <sys/audioio.h>
 #include <dev/audio_if.h>
@@ -382,7 +382,7 @@ cs4231_getdev(void *addr, struct audio_device *retp)
 	return 0;
 }
 
-static ad1848_devmap_t csmapping[] = {
+static const ad1848_devmap_t csmapping[] = {
 	{ CSAUDIO_DAC_LVL, AD1848_KIND_LVL, AD1848_AUX1_CHANNEL },
 	{ CSAUDIO_LINE_IN_LVL, AD1848_KIND_LVL, AD1848_LINE_CHANNEL },
 	{ CSAUDIO_MONO_LVL, AD1848_KIND_LVL, AD1848_MONO_CHANNEL },

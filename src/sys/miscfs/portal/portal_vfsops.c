@@ -1,4 +1,4 @@
-/*	$NetBSD: portal_vfsops.c,v 1.65 2007/07/31 21:14:16 pooka Exp $	*/
+/*	$NetBSD: portal_vfsops.c,v 1.70 2008/01/28 14:31:19 dholland Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993, 1995
@@ -40,7 +40,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: portal_vfsops.c,v 1.65 2007/07/31 21:14:16 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: portal_vfsops.c,v 1.70 2008/01/28 14:31:19 dholland Exp $");
 
 #if defined(_KERNEL_OPT)
 #include "opt_compat_netbsd.h"
@@ -66,6 +66,8 @@ __KERNEL_RCSID(0, "$NetBSD: portal_vfsops.c,v 1.65 2007/07/31 21:14:16 pooka Exp
 #include <sys/un.h>
 #include <sys/kauth.h>
 
+#include <miscfs/genfs/genfs.h>
+
 #include <miscfs/portal/portal.h>
 
 VFS_PROTOS(portal);
@@ -88,10 +90,9 @@ portal_mount(
     struct mount *mp,
     const char *path,
     void *data,
-    size_t *data_len,
-    struct lwp *l
-)
+    size_t *data_len)
 {
+	struct lwp *l = curlwp;
 	struct file *fp;
 	struct portal_args *args = data;
 	struct portalmount *fmp;
@@ -123,28 +124,31 @@ portal_mount(
 	if ((error = getsock(p->p_fd, args->pa_socket, &fp)) != 0)
 		return (error);
 	so = (struct socket *) fp->f_data;
-	FILE_UNUSE(fp, NULL);
-	if (so->so_proto->pr_domain->dom_family != AF_LOCAL)
+	if (so->so_proto->pr_domain->dom_family != AF_LOCAL) {
+		FILE_UNUSE(fp, NULL);
 		return (ESOCKTNOSUPPORT);
+	}
 
 	error = getnewvnode(VT_PORTAL, mp, portal_vnodeop_p, &rvp); /* XXX */
-	if (error)
+	if (error) {
+		FILE_UNUSE(fp, NULL);
 		return (error);
+	}
 	MALLOC(rvp->v_data, void *, sizeof(struct portalnode),
 		M_TEMP, M_WAITOK);
 
 	fmp = (struct portalmount *) malloc(sizeof(struct portalmount),
 				 M_UFSMNT, M_WAITOK);	/* XXX */
 	rvp->v_type = VDIR;
-	rvp->v_flag |= VROOT;
+	rvp->v_vflag |= VV_ROOT;
 	VTOPORTAL(rvp)->pt_arg = 0;
 	VTOPORTAL(rvp)->pt_size = 0;
 	VTOPORTAL(rvp)->pt_fileid = PORTAL_ROOTFILEID;
 	fmp->pm_root = rvp;
 	fmp->pm_server = fp;
-	simple_lock(&fp->f_slock);
+	mutex_enter(&fp->f_lock);
 	fp->f_count++;
-	simple_unlock(&fp->f_slock);
+	mutex_exit(&fp->f_lock);
 
 	mp->mnt_stat.f_namemax = MAXNAMLEN;
 	mp->mnt_flag |= MNT_LOCAL;
@@ -156,15 +160,14 @@ portal_mount(
 }
 
 int
-portal_start(struct mount *mp, int flags,
-    struct lwp *l)
+portal_start(struct mount *mp, int flags)
 {
 
 	return (0);
 }
 
 int
-portal_unmount(struct mount *mp, int mntflags, struct lwp *l)
+portal_unmount(struct mount *mp, int mntflags)
 {
 	struct vnode *rtvp = VFSTOPORTAL(mp)->pm_root;
 	int error, flags = 0;
@@ -178,11 +181,7 @@ portal_unmount(struct mount *mp, int mntflags, struct lwp *l)
 		return (error);
 
 	/*
-	 * Release reference on underlying root vnode
-	 */
-	vrele(rtvp);
-	/*
-	 * And blow it away for future re-use
+	 * Blow it away for future re-use
 	 */
 	vgone(rtvp);
 	/*
@@ -190,7 +189,7 @@ portal_unmount(struct mount *mp, int mntflags, struct lwp *l)
 	 * daemon to wake up, and then the accept will get ECONNABORTED
 	 * which it interprets as a request to go and bury itself.
 	 */
-	simple_lock(&VFSTOPORTAL(mp)->pm_server->f_slock);
+	mutex_enter(&VFSTOPORTAL(mp)->pm_server->f_lock);
 	FILE_USE(VFSTOPORTAL(mp)->pm_server);
 	soshutdown((struct socket *) VFSTOPORTAL(mp)->pm_server->f_data, 2);
 	/*
@@ -224,15 +223,7 @@ portal_root(mp, vpp)
 }
 
 int
-portal_quotactl(struct mount *mp, int cmd, uid_t uid,
-    void *arg, struct lwp *l)
-{
-
-	return (EOPNOTSUPP);
-}
-
-int
-portal_statvfs(struct mount *mp, struct statvfs *sbp, struct lwp *l)
+portal_statvfs(struct mount *mp, struct statvfs *sbp)
 {
 
 	sbp->f_bsize = DEV_BSIZE;
@@ -253,7 +244,7 @@ portal_statvfs(struct mount *mp, struct statvfs *sbp, struct lwp *l)
 /*ARGSUSED*/
 int
 portal_sync(struct mount *mp, int waitfor,
-    kauth_cred_t uc, struct lwp *l)
+    kauth_cred_t uc)
 {
 
 	return (0);
@@ -302,7 +293,7 @@ struct vfsops portal_vfsops = {
 	portal_start,
 	portal_unmount,
 	portal_root,
-	portal_quotactl,
+	(void *)eopnotsupp,		/* vfs_quotactl */
 	portal_statvfs,
 	portal_sync,
 	portal_vget,
@@ -315,6 +306,8 @@ struct vfsops portal_vfsops = {
 	(int (*)(struct mount *, struct vnode *, struct timespec *)) eopnotsupp,
 	vfs_stdextattrctl,
 	(void *)eopnotsupp,		/* vfs_suspendctl */
+	genfs_renamelock_enter,
+	genfs_renamelock_exit,
 	portal_vnodeopv_descs,
 	0,
 	{ NULL, NULL },

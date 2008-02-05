@@ -1,4 +1,4 @@
-/*	$NetBSD: at24cxx.c,v 1.7 2007/01/12 08:47:43 imp Exp $	*/
+/*	$NetBSD: at24cxx.c,v 1.9 2007/12/11 05:38:12 lukem Exp $	*/
 
 /*
  * Copyright (c) 2003 Wasabi Systems, Inc.
@@ -35,6 +35,9 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <sys/cdefs.h>
+__KERNEL_RCSID(0, "$NetBSD: at24cxx.c,v 1.9 2007/12/11 05:38:12 lukem Exp $");
+
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/device.h>
@@ -45,7 +48,7 @@
 #include <sys/proc.h>
 #include <sys/event.h>
 
-#include <machine/bus.h>
+#include <sys/bus.h>
 
 #include <dev/i2c/i2cvar.h>
 #include <dev/i2c/at24cxxvar.h>

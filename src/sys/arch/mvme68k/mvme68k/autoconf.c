@@ -1,4 +1,4 @@
-/*	$NetBSD: autoconf.c,v 1.42 2006/02/26 05:31:54 thorpej Exp $	*/
+/*	$NetBSD: autoconf.c,v 1.44 2008/01/12 09:54:28 tsutsui Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1990, 1993
@@ -83,7 +83,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.42 2006/02/26 05:31:54 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.44 2008/01/12 09:54:28 tsutsui Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -116,21 +116,20 @@ __KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.42 2006/02/26 05:31:54 thorpej Exp $"
  * Determine mass storage and memory configuration for a machine.
  */
 void
-cpu_configure()
+cpu_configure(void)
 {
 
 	booted_device = NULL;	/* set by device drivers (if found) */
 
 	/* Initialise interrupt handlers */
 	isrinit();
-	softintr_init();
 
 	if (config_rootfound("mainbus", NULL) == NULL)
 		panic("autoconfig failed, no root");
 }
 
 void
-cpu_rootconf()
+cpu_rootconf(void)
 {
 
 	printf("boot device: %s",
@@ -145,9 +144,7 @@ cpu_rootconf()
 }
 
 void
-device_register(dev, aux)
-	struct device *dev;
-	void *aux;
+device_register(struct device *dev, void *aux)
 {
 	static struct device *controller;
 	static int foundboot;

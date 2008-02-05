@@ -1,10 +1,30 @@
-/*	$NetBSD: frameasm.h,v 1.7 2007/02/09 21:55:05 ad Exp $	*/
+/*	$NetBSD: frameasm.h,v 1.11 2008/01/11 20:00:15 bouyer Exp $	*/
 
 #ifndef _I386_FRAMEASM_H_
 #define _I386_FRAMEASM_H_
 
 #ifdef _KERNEL_OPT
 #include "opt_multiprocessor.h"
+#include "opt_xen.h"
+#endif
+
+#if !defined(XEN)
+#define CLI(reg)        cli
+#define STI(reg)        sti
+#else
+/* XXX assym.h */
+#define TRAP_INSTR      int $0x82
+#define XEN_BLOCK_EVENTS(reg)   movb $1,EVTCHN_UPCALL_MASK(reg)
+#define XEN_UNBLOCK_EVENTS(reg) movb $0,EVTCHN_UPCALL_MASK(reg)
+#define XEN_TEST_PENDING(reg)   testb $0xFF,EVTCHN_UPCALL_PENDING(reg)
+
+#define CLI(reg)        movl    _C_LABEL(HYPERVISOR_shared_info),reg ;  \
+                        XEN_BLOCK_EVENTS(reg)
+#define STI(reg)        movl    _C_LABEL(HYPERVISOR_shared_info),reg ;  \
+			XEN_UNBLOCK_EVENTS(reg)
+#define STIC(reg)       movl    _C_LABEL(HYPERVISOR_shared_info),reg ;  \
+			XEN_UNBLOCK_EVENTS(reg)  ; \
+			testb $0xff,EVTCHN_UPCALL_PENDING(reg)
 #endif
 
 #ifndef TRAPLOG
@@ -63,6 +83,7 @@
 	movl	$GSEL(GCPU_SEL, SEL_KPL),%eax	; \
 	movl	%ecx,TF_ECX(%esp)	; \
 	movl	%eax,%fs	; \
+	cld			; \
 	TLOG
 
 /*
@@ -83,13 +104,21 @@
 	addl	$(TF_PUSHSIZE+8),%esp	; \
 	iret
 
-#define	DO_DEFERRED_SWITCH(reg) \
+#define	DO_DEFERRED_SWITCH \
 	cmpl	$0, CPUVAR(WANT_PMAPLOAD)		; \
 	jz	1f					; \
 	call	_C_LABEL(pmap_load)			; \
 	1:
 
-#define	CHECK_DEFERRED_SWITCH(reg) \
+#define	DO_DEFERRED_SWITCH_RETRY \
+	1:						; \
+	cmpl	$0, CPUVAR(WANT_PMAPLOAD)		; \
+	jz	1f					; \
+	call	_C_LABEL(pmap_load)			; \
+	jmp	1b					; \
+	1:
+
+#define	CHECK_DEFERRED_SWITCH \
 	cmpl	$0, CPUVAR(WANT_PMAPLOAD)
 
 #define	CHECK_ASTPENDING(reg)	movl	CPUVAR(CURLWP),reg	; \

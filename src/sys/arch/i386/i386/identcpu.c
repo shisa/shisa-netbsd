@@ -1,7 +1,7 @@
-/*	$NetBSD: identcpu.c,v 1.75 2007/09/26 19:48:36 ad Exp $	*/
+/*	$NetBSD: identcpu.c,v 1.87 2008/01/15 16:11:29 ad Exp $	*/
 
 /*-
- * Copyright (c) 1999, 2000, 2001 The NetBSD Foundation, Inc.
+ * Copyright (c) 1999, 2000, 2001, 2006, 2007 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
  * This code is derived from software contributed to The NetBSD Foundation
@@ -37,13 +37,14 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: identcpu.c,v 1.75 2007/09/26 19:48:36 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: identcpu.c,v 1.87 2008/01/15 16:11:29 ad Exp $");
 
-#include "opt_cputype.h"
 #include "opt_enhanced_speedstep.h"
 #include "opt_intel_odcm.h"
+#include "opt_intel_coretemp.h"
 #include "opt_powernow_k7.h"
 #include "opt_powernow_k8.h"
+#include "opt_xen.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -264,7 +265,7 @@ const struct cpu_cpuid_nameclass i386_cpuid_cpus[] = {
 				"Pentium Pro, II or III"	/* Default */
 			},
 			NULL,
-			NULL,
+			intel_family_new_probe,
 			NULL,
 		},
 		/* Family > 6 */
@@ -586,9 +587,9 @@ cyrix6x86_cpu_setup(ci)
 	 * model device is detected. Ideally, this work-around should not
 	 * even be in here, it should be in there. XXX
 	 */
-
-	extern int clock_broken_latch;
 	u_char c3;
+#ifndef XEN
+	extern int clock_broken_latch;
 
 	switch (ci->ci_signature) {
 	case 0x440:     /* Cyrix MediaGX */
@@ -596,6 +597,7 @@ cyrix6x86_cpu_setup(ci)
 		clock_broken_latch = 1;
 		break;
 	}
+#endif
 
 	/* set up various cyrix registers */
 	/*
@@ -641,12 +643,10 @@ cyrix6x86_cpu_setup(ci)
 void
 winchip_cpu_setup(struct cpu_info *ci)
 {
-#if defined(I586_CPU)
 	switch (CPUID2MODEL(ci->ci_signature)) { /* model */
 	case 4:	/* WinChip C6 */
 		disable_tsc(ci);
 	}
-#endif
 }
 
 void
@@ -908,6 +908,8 @@ cpu_probe_base_features(struct cpu_info *ci)
 	uint32_t miscbytes;
 	uint32_t brand[12];
 
+	ci->ci_initapicid = 0;
+
 	if (ci->ci_cpuid_level < 0)
 		return;
 
@@ -944,6 +946,8 @@ cpu_probe_base_features(struct cpu_info *ci)
 	/* CLFLUSH line size is next 8 bits */
 	if (ci->ci_feature_flags & CPUID_CFLUSH)
 		ci->ci_cflush_lsize = ((miscbytes >> 8) & 0xff) << 3;
+
+	ci->ci_initapicid = (miscbytes >> 24) & 0xff;
 
 	if (ci->ci_cpuid_level < 2)
 		return;
@@ -1002,7 +1006,7 @@ cpu_probe_features(struct cpu_info *ci)
 	if (ci->ci_cpuid_level < 1)
 		return;
 
-	xmax = sizeof (i386_cpuid_cpus) / sizeof (i386_cpuid_cpus[0]);
+	xmax = sizeof(__arraycount(i386_cpuid_cpus));
 	for (i = 0; i < xmax; i++) {
 		if (!strncmp((char *)ci->ci_vendor,
 		    i386_cpuid_cpus[i].cpu_id, 12)) {
@@ -1063,7 +1067,7 @@ amd_family6_probe(struct cpu_info *ci)
 	if (*cpu_brand_string == '\0')
 		return;
 	
-	for (i = 1; i < sizeof(amd_brand) / sizeof(amd_brand[0]); i++)
+	for (i = 1; i < sizeof(__arraycount(amd_brand)); i++)
 		if ((p = strstr(cpu_brand_string, amd_brand[i])) != NULL) {
 			ci->ci_brand_id = i;
 			strlcpy(amd_brand_name, p, sizeof(amd_brand_name));
@@ -1275,11 +1279,6 @@ transmeta_cpu_setup(struct cpu_info *ci)
 		tmx86_has_longrun = 1;
 }
 
-static const char n_support[] __attribute__((__unused__)) =
-    "NOTICE: this kernel does not support %s CPU class\n";
-static const char n_lower[] __attribute__((__unused__)) =
-    "NOTICE: lowering CPU class to %s\n";
-
 void
 identifycpu(struct cpu_info *ci)
 {
@@ -1400,21 +1399,7 @@ identifycpu(struct cpu_info *ci)
 	cpu_class = class;
 	ci->ci_cpu_class = class;
 
-#if defined(I586_CPU) || defined(I686_CPU)
-	/*
-	 * If we have a cycle counter, compute the approximate
-	 * CPU speed in MHz.
-	 * XXX this needs to run on the CPU being probed..
-	 */
-	if (ci->ci_feature_flags & CPUID_TSC) {
-		uint64_t last_tsc;
-
-		last_tsc = rdtsc();
-		delay(100000);
-		ci->ci_tsc_freq = (rdtsc() - last_tsc) * 10;
-	}
-	/* XXX end XXX */
-#endif
+	cpu_get_tsc_freq(ci);
 
 	snprintf(cpu_model, sizeof(cpu_model), "%s%s%s%s%s%s%s (%s-class)",
 	    vendorname,
@@ -1519,73 +1504,8 @@ identifycpu(struct cpu_info *ci)
 		    ci->ci_cpu_serial[2] / 65536, ci->ci_cpu_serial[2] % 65536);
 	}
 
-	/*
-	 * Now that we have told the user what they have,
-	 * let them know if that machine type isn't configured.
-	 */
-	switch (cpu_class) {
-#if !defined(I386_CPU) && !defined(I486_CPU) && !defined(I586_CPU) && !defined(I686_CPU)
-#error No CPU classes configured.
-#endif
-#ifndef I686_CPU
-	case CPUCLASS_686:
-		aprint_error(n_support, "Pentium Pro");
-#ifdef I586_CPU
-		aprint_error(n_lower, "i586");
-		cpu_class = CPUCLASS_586;
-		break;
-#endif
-#endif
-#ifndef I586_CPU
-	case CPUCLASS_586:
-		aprint_error(n_support, "Pentium");
-#ifdef I486_CPU
-		aprint_error(n_lower, "i486");
-		cpu_class = CPUCLASS_486;
-		break;
-#endif
-#endif
-#ifndef I486_CPU
-	case CPUCLASS_486:
-		aprint_error(n_support, "i486");
-#ifdef I386_CPU
-		aprint_error(n_lower, "i386");
-		cpu_class = CPUCLASS_386;
-		break;
-#endif
-#endif
-#ifndef I386_CPU
-	case CPUCLASS_386:
-		aprint_error(n_support, "i386");
-		panic("no appropriate CPU class available");
-#endif
-	default:
-		break;
-	}
-
-	/*
-	 * Now plug in optimized versions of various routines we
-	 * might have.
-	 */
-	switch (cpu_class) {
-#if defined(I686_CPU)
-	case CPUCLASS_686:
-		copyout_func = i486_copyout;
-		break;
-#endif
-#if defined(I586_CPU)
-	case CPUCLASS_586:
-		copyout_func = i486_copyout;
-		break;
-#endif
-#if defined(I486_CPU)
-	case CPUCLASS_486:
-		copyout_func = i486_copyout;
-		break;
-#endif
-	default:
-		/* We just inherit the default i386 versions. */
-		break;
+	if (cpu_class == CPUCLASS_386) {
+		panic("NetBSD requires an 80486 or later processor");
 	}
 
 	if (cpu == CPU_486DLC) {
@@ -1600,7 +1520,14 @@ identifycpu(struct cpu_info *ci)
 #endif
 	}
 
-#if defined(I686_CPU)
+	/*
+	 * Everything past this point requires a Pentium or later.
+	 */
+	if (ci->ci_cpuid_level < 0)
+		return;
+
+	identifycpu_cpuids(ci);
+
 	/*
 	 * If we have FXSAVE/FXRESTOR, use them.
 	 */
@@ -1617,7 +1544,6 @@ identifycpu(struct cpu_info *ci)
 			i386_has_sse2 = 1;
 	} else
 		i386_use_fxsave = 0;
-#endif /* I686_CPU */
 
 #ifdef ENHANCED_SPEEDSTEP
 	if (cpu_feature2 & CPUID2_EST) {
@@ -1628,6 +1554,11 @@ identifycpu(struct cpu_info *ci)
 			    cpuname);
 	}
 #endif /* ENHANCED_SPEEDSTEP */
+
+#ifdef INTEL_CORETEMP
+	if (cpu_vendor == CPUVENDOR_INTEL && ci->ci_cpuid_level >= 0x06)
+		coretemp_register(ci);
+#endif
 
 #if defined(POWERNOW_K7) || defined(POWERNOW_K8)
 	if (cpu_vendor == CPUVENDOR_AMD && powernow_probe(ci)) {
@@ -1651,7 +1582,4 @@ identifycpu(struct cpu_info *ci)
 #ifdef INTEL_ONDEMAND_CLOCKMOD
 	clockmod_init();
 #endif
-	x86_errata(ci, cpu_vendor);
-	x86_patch();
-
 }

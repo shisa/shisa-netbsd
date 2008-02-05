@@ -1,4 +1,4 @@
-/* $NetBSD: aiboost.c,v 1.13 2007/08/30 18:29:11 xtraeme Exp $ */
+/* $NetBSD: aiboost.c,v 1.21 2008/01/29 19:35:05 xtraeme Exp $ */
 
 /*-
  * Copyright (c) 2007 Juan Romero Pardines
@@ -28,13 +28,13 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: aiboost.c,v 1.13 2007/08/30 18:29:11 xtraeme Exp $");
+__KERNEL_RCSID(0, "$NetBSD: aiboost.c,v 1.21 2008/01/29 19:35:05 xtraeme Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/device.h>
-#include <sys/malloc.h>
-#include <sys/rwlock.h>
+#include <sys/mutex.h>
+#include <sys/kmem.h>
 
 #include <dev/acpi/acpica.h>
 #include <dev/acpi/acpireg.h>
@@ -48,8 +48,6 @@ __KERNEL_RCSID(0, "$NetBSD: aiboost.c,v 1.13 2007/08/30 18:29:11 xtraeme Exp $")
 #define DPRINTF(x)
 #endif
 
-#define AIBOOST_MAX_SENSORS	15
-
 struct aiboost_elem {
 	ACPI_HANDLE h;
 	UINT32 id;
@@ -62,12 +60,11 @@ struct aiboost_comp {
 };
 
 struct aiboost_softc {
-	struct device sc_dev;
 	struct acpi_devnode *sc_node;	/* ACPI devnode */
 	struct aiboost_comp *sc_aitemp, *sc_aivolt, *sc_aifan;
-	struct sysmon_envsys sc_sme;
-	struct envsys_data sc_data[AIBOOST_MAX_SENSORS];
-	krwlock_t sc_rwlock;
+	struct sysmon_envsys *sc_sme;
+	envsys_data_t *sc_sensor;
+	kmutex_t sc_mtx;
 };
 
 static ACPI_STATUS aiboost_getcomp(ACPI_HANDLE *,
@@ -77,15 +74,14 @@ static int	aiboost_get_value(ACPI_HANDLE, const char *, UINT32);
 
 /* sysmon_envsys(9) glue */
 static void	aiboost_setup_sensors(struct aiboost_softc *);
-static int	aiboost_gtredata(struct sysmon_envsys *, envsys_data_t *);
-static void	aiboost_refresh_sensors(struct aiboost_softc *,
+static void	aiboost_refresh_sensors(struct sysmon_envsys *,
 					envsys_data_t *);
 
 /* autoconf(9) glue */
-static int	aiboost_acpi_match(struct device *, struct cfdata *, void *);
-static void	aiboost_acpi_attach(struct device *, struct device *, void *);
+static int	aiboost_acpi_match(device_t, struct cfdata *, void *);
+static void	aiboost_acpi_attach(device_t, device_t, void *);
 
-CFATTACH_DECL(aiboost, sizeof(struct aiboost_softc), aiboost_acpi_match,
+CFATTACH_DECL_NEW(aiboost, sizeof(struct aiboost_softc), aiboost_acpi_match,
     aiboost_acpi_attach, NULL, NULL);
 
 /*
@@ -98,7 +94,7 @@ static const char * const aiboost_acpi_ids[] = {
 };
 
 static int
-aiboost_acpi_match(struct device *parent, struct cfdata *match, void *aux)
+aiboost_acpi_match(device_t parent, struct cfdata *match, void *aux)
 {
 	struct acpi_attach_args *aa = aux;
 
@@ -109,12 +105,13 @@ aiboost_acpi_match(struct device *parent, struct cfdata *match, void *aux)
 }
 
 static void
-aiboost_acpi_attach(struct device *parent, struct device *self, void *aux)
+aiboost_acpi_attach(device_t parent, device_t self, void *aux)
 {
-	struct aiboost_softc *sc = (struct aiboost_softc *)self;
+	struct aiboost_softc *sc = device_private(self);
 	struct acpi_attach_args *aa = aux;
 	ACPI_HANDLE *handl;
-	int i, maxsens;
+	int i, maxsens, error = 0;
+	size_t len;
 
 	sc->sc_node = aa->aa_node;
 	handl = sc->sc_node->ad_handle;
@@ -122,8 +119,7 @@ aiboost_acpi_attach(struct device *parent, struct device *self, void *aux)
 	aprint_naive("\n");
 	aprint_normal("\n");
 
-	aprint_normal("%s: ASUS AI Boost Hardware monitor\n",
-	    sc->sc_dev.dv_xname);
+	aprint_normal_dev(self, "ASUS AI Boost Hardware monitor\n");
 
 	if (ACPI_FAILURE(aiboost_getcomp(handl, "TSIF", &sc->sc_aitemp)))
 		return;
@@ -134,30 +130,54 @@ aiboost_acpi_attach(struct device *parent, struct device *self, void *aux)
 	if (ACPI_FAILURE(aiboost_getcomp(handl, "FSIF", &sc->sc_aifan)))
 		return;
 
-	rw_init(&sc->sc_rwlock);
+	mutex_init(&sc->sc_mtx, MUTEX_DEFAULT, IPL_NONE);
 	/* Initialize sensors */
 	maxsens = sc->sc_aivolt->num + sc->sc_aitemp->num + sc->sc_aifan->num;
 	DPRINTF(("%s: maxsens=%d\n", __func__, maxsens));
 
-	for (i = 0; i < maxsens; i++) {
-		sc->sc_data[i].sensor = i;
-		sc->sc_data[i].state = ENVSYS_SVALID;
-	}
+	sc->sc_sme = sysmon_envsys_create();
+	len = sizeof(envsys_data_t) * maxsens;
+	sc->sc_sensor = kmem_zalloc(len, KM_NOSLEEP);
+	if (!sc->sc_sensor)
+		goto bad2;
 
+	/*
+	 * Set properties in sensors.
+	 */
 	aiboost_setup_sensors(sc);
 
 	/*
-	 * Hook into the system monitor.
+	 * Add the sensors into the sysmon_envsys device.
 	 */
-	sc->sc_sme.sme_name = sc->sc_dev.dv_xname;
-	sc->sc_sme.sme_sensor_data = sc->sc_data;
-	sc->sc_sme.sme_cookie = sc;
-	sc->sc_sme.sme_gtredata = aiboost_gtredata;
-	sc->sc_sme.sme_nsensors = maxsens;
+	for (i = 0; i < maxsens; i++) {
+		if (sysmon_envsys_sensor_attach(sc->sc_sme,
+						&sc->sc_sensor[i]))
+			goto bad;
+	}
 
-	if (sysmon_envsys_register(&sc->sc_sme))
-		aprint_error("%s: unable to register with sysmon\n",
-		    sc->sc_dev.dv_xname);
+	/*
+	 * Register the sysmon_envsys device.
+	 */
+	sc->sc_sme->sme_name = device_xname(self);
+	sc->sc_sme->sme_cookie = sc;
+	sc->sc_sme->sme_refresh = aiboost_refresh_sensors;
+
+	if ((error = sysmon_envsys_register(sc->sc_sme))) {
+		aprint_error_dev(self, "unable to register with sysmon "
+		    "(error=%d)\n", error);
+		goto bad;
+	}
+
+	if (!pmf_device_register(self, NULL, NULL))
+		aprint_error_dev(self, "couldn't establish power handler\n");
+
+	return;
+
+bad:
+	kmem_free(sc->sc_sensor, len);
+bad2:
+	sysmon_envsys_destroy(sc->sc_sme);
+	mutex_destroy(&sc->sc_mtx);
 }
 
 #define COPYDESCR(x, y)				\
@@ -172,10 +192,10 @@ aiboost_setup_sensors(struct aiboost_softc *sc)
 
 	/* Temperatures */
 	for (i = 0; i < sc->sc_aitemp->num; i++) {
-		sc->sc_data[i].units = ENVSYS_STEMP;
-		COPYDESCR(sc->sc_data[i].desc, sc->sc_aitemp->elem[i].desc);
+		sc->sc_sensor[i].units = ENVSYS_STEMP;
+		COPYDESCR(sc->sc_sensor[i].desc, sc->sc_aitemp->elem[i].desc);
 		DPRINTF(("%s: data[%d].desc=%s elem[%d].desc=%s\n", __func__,
-		    i, sc->sc_data[i].desc, i, sc->sc_aitemp->elem[i].desc));
+		    i, sc->sc_sensor[i].desc, i, sc->sc_aitemp->elem[i].desc));
 	}
 
 	/* skip temperatures */
@@ -183,10 +203,10 @@ aiboost_setup_sensors(struct aiboost_softc *sc)
 
 	/* Voltages */
 	for (i = 0; i < sc->sc_aivolt->num; i++, j++) {
-		sc->sc_data[j].units = ENVSYS_SVOLTS_DC;
-		COPYDESCR(sc->sc_data[j].desc, sc->sc_aivolt->elem[i].desc);
+		sc->sc_sensor[j].units = ENVSYS_SVOLTS_DC;
+		COPYDESCR(sc->sc_sensor[j].desc, sc->sc_aivolt->elem[i].desc);
 		DPRINTF(("%s: data[%d].desc=%s elem[%d].desc=%s\n", __func__,
-		    j, sc->sc_data[j].desc, i, sc->sc_aivolt->elem[i].desc));
+		    j, sc->sc_sensor[j].desc, i, sc->sc_aivolt->elem[i].desc));
 	}
 
 	/* skip voltages */
@@ -194,21 +214,22 @@ aiboost_setup_sensors(struct aiboost_softc *sc)
 
 	/* Fans */
 	for (i = 0; i < sc->sc_aifan->num; i++, j++) {
-		sc->sc_data[j].units = ENVSYS_SFANRPM;
-		COPYDESCR(sc->sc_data[j].desc, sc->sc_aifan->elem[i].desc);
+		sc->sc_sensor[j].units = ENVSYS_SFANRPM;
+		COPYDESCR(sc->sc_sensor[j].desc, sc->sc_aifan->elem[i].desc);
 		DPRINTF(("%s: data[%d].desc=%s elem[%d].desc=%s\n", __func__,
-		    j, sc->sc_data[j].desc, i, sc->sc_aifan->elem[i].desc));
+		    j, sc->sc_sensor[j].desc, i, sc->sc_aifan->elem[i].desc));
 		    
 	}
 }
 
 static void
-aiboost_refresh_sensors(struct aiboost_softc *sc, envsys_data_t *edata)
+aiboost_refresh_sensors(struct sysmon_envsys *sme, envsys_data_t *edata)
 {
+	struct aiboost_softc *sc = sme->sme_cookie;
 	ACPI_HANDLE *h = sc->sc_node->ad_handle;
 	int i, j, val;
 
-	rw_enter(&sc->sc_rwlock, RW_READER);
+	mutex_enter(&sc->sc_mtx);
 	j = 0;
 	i = edata->sensor; /* sensor number */
 
@@ -253,20 +274,7 @@ aiboost_refresh_sensors(struct aiboost_softc *sc, envsys_data_t *edata)
 
 	edata->state = ENVSYS_SVALID;
 out:
-	rw_exit(&sc->sc_rwlock);
-}
-
-static int
-aiboost_gtredata(struct sysmon_envsys *sme, envsys_data_t *edata)
-{
-	struct aiboost_softc *sc = sme->sme_cookie;
-
-	/* 
-	 * Refresh our stored data for the sensor specified
-	 * on edata->sensor.
-	 */
-	aiboost_refresh_sensors(sc, edata);
-	return 0;
+	mutex_exit(&sc->sc_mtx);
 }
 
 static int
@@ -304,7 +312,7 @@ aiboost_getcomp(ACPI_HANDLE *h, const char *name, struct aiboost_comp **comp)
 	struct aiboost_comp *c = NULL;
 	int i;
 	const char *str = NULL;
-	size_t length;
+	size_t length, clen = 0;
 
 	status = acpi_eval_struct(h, name, &buf);
 	if (ACPI_FAILURE(status)) {
@@ -324,8 +332,12 @@ aiboost_getcomp(ACPI_HANDLE *h, const char *name, struct aiboost_comp **comp)
 		goto error;
 	}
 
-	c = malloc(sizeof(struct aiboost_comp) + sizeof(struct aiboost_elem) *
-		   (elem->Integer.Value - 1), M_DEVBUF, M_ZERO|M_WAITOK);
+	clen = sizeof(struct aiboost_comp) + sizeof(struct aiboost_elem) *
+	    (elem->Integer.Value - 1);
+	c = kmem_zalloc(clen, KM_NOSLEEP);
+	if (!c)
+		goto error;
+
 	*comp = c;
 	c->num = elem->Integer.Value;
 
@@ -394,7 +406,7 @@ error:
 	if (buf2.Pointer)
 		AcpiOsFree(buf2.Pointer);
 	if (c)
-		free(c, M_DEVBUF);
+		kmem_free(c, clen);
 
 	return AE_BAD_DATA;
 }

@@ -1,10 +1,10 @@
-/*	$NetBSD: object.c,v 1.10 2001/02/05 00:57:34 christos Exp $	*/
+/*	$NetBSD: object.c,v 1.12 2008/01/28 05:38:54 dholland Exp $	*/
 
 /* object.c		Larn is copyrighted 1986 by Noah Morgan. */
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: object.c,v 1.10 2001/02/05 00:57:34 christos Exp $");
+__RCSID("$NetBSD: object.c,v 1.12 2008/01/28 05:38:54 dholland Exp $");
 #endif				/* not lint */
 #include "header.h"
 #include "extern.h"
@@ -498,13 +498,12 @@ lookforobject()
 	function to say what object we found and ask if player wants to take it
  */
 void
-finditem(itm)
-	int             itm;
+finditem(int theitem)
 {
 	int             tmp, i;
-	lprintf("\n\nYou have found %s ", objectname[itm]);
+	lprintf("\n\nYou have found %s ", objectname[theitem]);
 	tmp = iarg[playerx][playery];
-	switch (itm) {
+	switch (theitem) {
 	case ODIAMOND:
 	case ORUBY:
 	case OEMERALD:
@@ -517,9 +516,9 @@ finditem(itm)
 
 	default:
 		if (tmp > 0)
-			lprintf("+ %d", (long) tmp);
+			lprintf("+ %ld", (long) tmp);
 		else if (tmp < 0)
-			lprintf(" %d", (long) tmp);
+			lprintf(" %ld", (long) tmp);
 	}
 	lprcat("\nDo you want to (t) take it");
 	iopts();
@@ -528,7 +527,7 @@ finditem(itm)
 		i = lgetchar();
 	if (i == 't') {
 		lprcat("take");
-		if (take(itm, tmp) == 0)
+		if (take(theitem, tmp) == 0)
 			forget();
 		return;
 	}
@@ -571,7 +570,7 @@ ostairs(dir)
 				lprcat("\nI hope you feel better.  Showing anger rids you of frustration.");
 			else {
 				k = rnd((level + 1) << 1);
-				lprintf("\nYou hurt your foot dumb dumb!  You suffer %d hit points", (long) k);
+				lprintf("\nYou hurt your foot dumb dumb!  You suffer %ld hit points", (long) k);
 				lastnum = 276;
 				losehp(k);
 				bottomline();
@@ -996,9 +995,9 @@ read_scroll(typ)
 	case 7:
 		gltime += (i = rnd(1000) - 850);	/* time warp */
 		if (i >= 0)
-			lprintf("\nYou went forward in time by %d mobuls", (long) ((i + 99) / 100));
+			lprintf("\nYou went forward in time by %ld mobuls", (long) ((i + 99) / 100));
 		else
-			lprintf("\nYou went backward in time by %d mobuls", (long) (-(i + 99) / 100));
+			lprintf("\nYou went backward in time by %ld mobuls", (long) (-(i + 99) / 100));
 		adjusttime((long) i);	/* adjust time for time warping */
 		return;
 
@@ -1122,7 +1121,7 @@ opit()
 					lprcat("\nYou fell into a pit!  Your fall is cushioned by an unknown force\n");
 				} else {
 					i = rnd(level * 3 + 3);
-					lprintf("\nYou fell into a pit!  You suffer %d hit points damage", (long) i);
+					lprintf("\nYou fell into a pit!  You suffer %ld hit points damage", (long) i);
 					lastnum = 261;	/* if he dies scoreboard
 							 * will say so */
 				}
@@ -1217,9 +1216,10 @@ readbook(lev)
 }
 
 void
-ocookie()
+ocookie(void)
 {
-	char           *p;
+	const char *p;
+
 	lprcat("\nDo you (e) eat it, (t) take it");
 	iopts();
 	while (1)
@@ -1265,7 +1265,7 @@ ogold(arg)
 		i *= 1000;
 	else if (arg == ODGOLD)
 		i *= 10;
-	lprintf("\nIt is worth %d!", (long) i);
+	lprintf("\nIt is worth %ld!", (long) i);
 	c[GOLD] += i;
 	bottomgold();
 	item[playerx][playery] = know[playerx][playery] = 0;	/* destroy gold	 */
@@ -1314,7 +1314,7 @@ ohome()
 			died(269);
 		}
 		lprcat("\nThe diagnosis is confirmed as dianthroritis.  He guesses that\n");
-		lprintf("your daughter has only %d mobuls left in this world.  It's up to you,\n", (long) ((TIMELIMIT - gltime + 99) / 100));
+		lprintf("your daughter has only %ld mobuls left in this world.  It's up to you,\n", (long) ((TIMELIMIT - gltime + 99) / 100));
 		lprintf("%s, to find the only hope for your daughter, the very rare\n", logname);
 		lprcat("potion of cure dianthroritis.  It is rumored that only deep in the\n");
 		lprcat("depths of the caves can this potion be found.\n\n\n");

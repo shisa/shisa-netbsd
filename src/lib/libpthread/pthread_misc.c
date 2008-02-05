@@ -1,7 +1,7 @@
-/*	$NetBSD: pthread_misc.c,v 1.2 2007/08/16 13:54:17 ad Exp $	*/
+/*	$NetBSD: pthread_misc.c,v 1.5 2008/01/26 17:55:30 rmind Exp $	*/
 
 /*-
- * Copyright (c) 2001, 2006, 2007 The NetBSD Foundation, Inc.
+ * Copyright (c) 2001, 2006, 2007, 2008 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
  * This code is derived from software contributed to The NetBSD Foundation
@@ -37,46 +37,104 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: pthread_misc.c,v 1.2 2007/08/16 13:54:17 ad Exp $");
+__RCSID("$NetBSD: pthread_misc.c,v 1.5 2008/01/26 17:55:30 rmind Exp $");
+
+#include <errno.h>
+#include <string.h>
+#include <unistd.h>
 
 #include <sys/types.h>
+#include <sys/pset.h>
 #include <sys/signal.h>
 #include <sys/time.h>
 
-#include <errno.h>
 #include <lwp.h>
+#include <sched.h>
 
 #include "pthread.h"
 #include "pthread_int.h"
 
+int	pthread__sched_yield(void);
+
 int	_sys___sigprocmask14(int, const sigset_t *, sigset_t *);
 int	_sys_nanosleep(const struct timespec *, struct timespec *);
+int	_sys_sched_yield(void);
 
 __strong_alias(_nanosleep, nanosleep)
 __strong_alias(__libc_thr_sigsetmask,pthread_sigmask)
 __strong_alias(__sigprocmask14,pthread_sigmask)
-__strong_alias(__libc_thr_yield,_sys_sched_yield)
+__strong_alias(__libc_thr_yield,pthread__sched_yield)
 
-/*ARGSUSED*/
 int
 pthread_getschedparam(pthread_t thread, int *policy, struct sched_param *param)
 {
-	if (param == NULL || policy == NULL)
-		return EINVAL;
-	param->sched_priority = 0;
-	*policy = SCHED_RR;
+
+	if (pthread__find(thread) != 0)
+		return ESRCH;
+
+	if (_sched_getparam(getpid(), thread->pt_lid, param) < 0)
+		return errno;
+
+	*policy = param->sched_class;
 	return 0;
 }
 
-/*ARGSUSED*/
 int
 pthread_setschedparam(pthread_t thread, int policy, 
     const struct sched_param *param)
 {
-	if (param == NULL || policy < SCHED_FIFO || policy > SCHED_RR)
-		return EINVAL;
-	if (param->sched_priority > 0 || policy != SCHED_RR)
-		return ENOTSUP;
+	struct sched_param sp;
+
+	if (pthread__find(thread) != 0)
+		return ESRCH;
+
+	memcpy(&sp, param, sizeof(struct sched_param));
+	sp.sched_class = policy;
+	if (_sched_setparam(getpid(), thread->pt_lid, &sp) < 0)
+		return errno;
+
+	return 0;
+}
+
+int
+pthread_getaffinity_np(pthread_t thread, size_t size, cpuset_t *cpuset)
+{
+
+	if (pthread__find(thread) != 0)
+		return ESRCH;
+
+	if (_sched_getaffinity(getpid(), thread->pt_lid, size, cpuset) < 0)
+		return errno;
+
+	return 0;
+}
+
+int
+pthread_setaffinity_np(pthread_t thread, size_t size, cpuset_t *cpuset)
+{
+
+	if (pthread__find(thread) != 0)
+		return ESRCH;
+
+	if (_sched_setaffinity(getpid(), thread->pt_lid, size, cpuset) < 0)
+		return errno;
+
+	return 0;
+}
+
+int
+pthread_setschedprio(pthread_t thread, int prio)
+{
+	struct sched_param sp;
+
+	if (pthread__find(thread) != 0)
+		return ESRCH;
+
+	sp.sched_class = SCHED_NONE;
+	sp.sched_priority = prio;
+	if (_sched_setparam(getpid(), thread->pt_lid, &sp) < 0)
+		return errno;
+
 	return 0;
 }
 
@@ -108,4 +166,23 @@ nanosleep(const struct timespec *rqtp, struct timespec *rmtp)
 	 * to _lwp_nanosleep() and allow it to recycle our kernel stack.
 	 */
 	return  _sys_nanosleep(rqtp, rmtp);
+}
+
+int
+pthread__sched_yield(void)
+{
+	pthread_t self;
+	int error;
+
+	self = pthread__self();
+
+#ifdef PTHREAD__HAVE_ATOMIC
+	/* Memory barrier for unlocked mutex release. */
+	pthread__membar_producer();
+#endif
+	self->pt_blocking++;
+	error = _sys_sched_yield();
+	self->pt_blocking--;
+
+	return error;
 }

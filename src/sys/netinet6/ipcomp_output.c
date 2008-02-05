@@ -1,4 +1,4 @@
-/*	$NetBSD: ipcomp_output.c,v 1.22 2007/09/22 11:32:06 degroote Exp $	*/
+/*	$NetBSD: ipcomp_output.c,v 1.25 2007/12/09 18:27:39 degroote Exp $	*/
 /*	$KAME: ipcomp_output.c,v 1.24 2001/07/26 06:53:18 jinmei Exp $	*/
 
 /*
@@ -35,7 +35,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ipcomp_output.c,v 1.22 2007/09/22 11:32:06 degroote Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ipcomp_output.c,v 1.25 2007/12/09 18:27:39 degroote Exp $");
 
 #include "opt_inet.h"
 
@@ -55,7 +55,7 @@ __KERNEL_RCSID(0, "$NetBSD: ipcomp_output.c,v 1.22 2007/09/22 11:32:06 degroote 
 #include <net/route.h>
 #include <net/netisr.h>
 #include <net/zlib.h>
-#include <machine/cpu.h>
+#include <sys/cpu.h>
 
 #include <netinet/in.h>
 #include <netinet/in_systm.h>
@@ -78,8 +78,8 @@ __KERNEL_RCSID(0, "$NetBSD: ipcomp_output.c,v 1.22 2007/09/22 11:32:06 degroote 
 
 #include <net/net_osdep.h>
 
-static int ipcomp_output __P((struct mbuf *, u_char *, struct mbuf *,
-	struct ipsecrequest *, int));
+static int ipcomp_output(struct mbuf *, u_char *, struct mbuf *,
+	struct ipsecrequest *, int);
 
 /*
  * Modify the packet so that the payload is compressed.
@@ -241,11 +241,7 @@ ipcomp_output(struct mbuf *m, u_char *nexthdrp, struct mbuf *md,
 #ifdef INET
 	case AF_INET:
 		ip = mtod(m, struct ip *);
-#ifdef _IP_VHL
-		hlen = IP_VHL_HL(ip->ip_vhl) << 2;
-#else
 		hlen = ip->ip_hl << 2;
-#endif
 		break;
 #endif
 #ifdef INET6

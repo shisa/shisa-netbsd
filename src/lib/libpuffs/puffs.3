@@ -1,6 +1,6 @@
-.\"	$NetBSD: puffs.3,v 1.29 2007/09/24 00:22:25 pooka Exp $
+.\"	$NetBSD: puffs.3,v 1.39 2008/01/28 18:35:50 pooka Exp $
 .\"
-.\" Copyright (c) 2006, 2007 Antti Kantee.  All rights reserved.
+.\" Copyright (c) 2006, 2007, 2008 Antti Kantee.  All rights reserved.
 .\"
 .\" Redistribution and use in source and binary forms, with or without
 .\" modification, are permitted provided that the following conditions
@@ -23,7 +23,7 @@
 .\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 .\" SUCH DAMAGE.
 .\"
-.Dd July 18, 2007
+.Dd January 28, 2008
 .Dt PUFFS 3
 .Os
 .Sh NAME
@@ -76,13 +76,22 @@
 .Ft void
 .Fn puffs_ml_settimeout "struct puffs_usermount *pu" "struct timespec *ts"
 .Ft int
-.Fn puffs_mainloop "struct puffs_usermount *pu" "int flags"
+.Fn puffs_daemon "struct puffs_usermount *pu" "int nochdir" "int noclose"
+.Ft int
+.Fn puffs_mainloop "struct puffs_usermount *pu"
+.Ft int
+.Fo puffs_dispatch_create
+.Fa "struct puffs_usermount *pu" "struct puffs_framebuf *pb"
+.Fa "struct puffs_cc **pccp"
+.Fc
+.Ft int
+.Fn puffs_dispatch_exec .Fa "struct puffs_cc *pcc" "struct puffs_framebuf **pbp"
 .Sh DESCRIPTION
 .Em IMPORTANT NOTE!
 This document describes interfaces which are not yet guaranteed to be
 stable.
 In case you update your system sources, please recompile everything
-and fix complation errors.
+and fix compilation errors.
 If your sources are out-of-sync, incorrect operation may result.
 The interfaces in this document will most likely be hugely simplified
 in later versions or made transparent to the implementation.
@@ -107,10 +116,6 @@ in conjuction with
 .Fn puffs_mainloop ,
 it is possible to handle I/O to and from file descriptors.
 This is suited e.g. for distributed file servers.
-Alternatively, control can be kept with the caller and operations
-handled manually using
-.Xr puffs_req 3
-directly.
 .Ss Library operation
 Operations on the library always require a pointer to the opaque context
 identifier,
@@ -155,7 +160,7 @@ and
 .Xr df 1 .
 .Ar puffsname
 is the file system type.
-It will always be predended with the string "puffs|".
+It will always be prepended with the string "puffs|".
 If possible, file server binaries should be named using the format
 "mount_myfsnamehere" and this value should equal "myfsnamehere".
 A file system specific context pointer can optionally be given in
@@ -187,7 +192,7 @@ This flag requests that all operations are sent to userspace.
 Normally the kernel shortcircuits unimplemented operations.
 This flag is mostly useful for debugging purposes.
 .It Dv PUFFS_KFLAG_WTCACHE
-Set the file system cache behaviour as write-through.
+Set the file system cache behavior as write-through.
 This means that all writes are immediately issued to the file server
 instead of being flushed in file system sync.
 This is useful especially for distributed file systems.
@@ -209,7 +214,7 @@ This flag affects only the parameter
 .Fn puffs_node_lookup .
 If this flag is not given, only the next pathname component under
 lookup is found from
-.Ar pcn->pcn_name .
+.Ar pcn-\*[Gt]pcn_name .
 If this flag is given, the full path the kernel was
 asked to resolve can be found from there.
 .It Dv PUFFS_FLAG_BUILDPATH
@@ -254,11 +259,14 @@ and
 .Xr kqueue 2
 are all examples of acceptable operations.
 .It Fn puffs_setblockingmode "pu" "mode"
-Sets the library to blocking or non-blocking mode.
+Sets the file system upstream access to blocking or non-blocking mode.
 Acceptable values for the argument are
 .Dv PUFFSDEV_BLOCK
 and
 .Dv PUFFSDEV_NONBLOCK .
+.Pp
+This routine can be called only after calling
+.Fn puffs_mount .
 .It Fn puffs_getstate "pu"
 Returns the state of the file system.
 It is maintained by the framework and is mostly useful for the framework
@@ -269,11 +277,14 @@ Possible values are
 .Dv PUFFS_STATE_UNMOUNTING
 and
 .Dv PUFFS_STATE_UNMOUNTED .
-.It Fn puffs_setstacksize "stacksize"
+.It Fn puffs_setstacksize "pu" "stacksize"
 Sets the stack size used when running callbacks.
-The default is one megabyte of stack space per request.
-See
-.Xr puffs_cc 3 .
+The default is
+.Dv PUFFS_STACKSIZE_DEFAULT
+bytes of stack space per request.
+The minimum stacksize is architecture-dependent and can be specified
+by using the opaque constant
+.Dv PUFFS_STACKSIZE_MIN .
 .It Fn puffs_setroot "pu" "node"
 Sets the root node of mount
 .Fa pu
@@ -306,16 +317,18 @@ It is legal to call this function only between
 .Fn puffs_init
 and
 .Fn puffs_mount .
+.Pp
+.Em NOTE
+This does not currently work.
 .It Fn puffs_getmaxreqlen "pu"
 Returns the maximum request length the kernel will need for a single
 request.
-This information can be used to allocate the request buffer and
-.B must
-be passed as the parameter to
-.Fn puffs_req_makeget .
+.Pp
+.Em NOTE
+This does not currently work.
 .It Fn puffs_setfhsize "pu" "fhsize" "flags"
 Sets the desired file handle size.
-This must be called if the file system wishes to support nfs exporting
+This must be called if the file system wishes to support NFS exporting
 file systems of the
 .Fn fh*
 family of function calls.
@@ -410,21 +423,55 @@ is
 This can be used to roughly control how often the loop callback
 .Fn lfn
 is called
+.It Fn puffs_daemon pu nochdir noclose
+Detach from the console like
+.Fn daemon 3 .
+This call synchronizes with
+.Fn puffs_mount
+and the foreground process does not exit before the file system mount
+call has returned from the kernel.
 .It Fn puffs_mainloop pu flags
 Handle all requests automatically until the file system is unmounted.
-It returns 0 if the file system was succesfully unmounted or \-1 if it
+It returns 0 if the file system was successfully unmounted or \-1 if it
 was killed in action.
-Unless
-.Fa flags
-is used to pass
-.Dv PUFFSLOOP_NODAEMON ,
-.Fn puffs_mainloop
-will also detach from the terminal.
 .Pp
 In case
 .Xr puffs_framebuf 3
 has been initialized, I/O from the relevant descriptors is processed
 automatically by the eventloop.
+.It Fn puffs_dispatch_create pu pb pccp
+.It Fn puffs_dispatch_exec pcc pbp
+In case the use of
+.Fn puffs_mainloop
+is not possible, requests may be dispatched manually.
+However, as this is less efficient than using the mainloop,
+it should never be the first preference.
+.Pp
+Calling 
+.Fn puffs_dispatch_create
+creates a dispatch request.
+The argument
+.Ar pb
+should contains a valid request and upon success
+.Ar pccp
+will contain a valid request context.
+This context is passed to
+.Fn puffs_dispatch_exec
+to execute the request.
+If the request yielded before completing, the routine returns 0,
+otherwise 1.
+When the routine completes,
+.Ar pcc
+is made invalid and a pointer to the processed buffer is placed in
+.Ar pbp .
+It is the responsibility of the caller to send the response (if
+necessary) and destroy the buffer.
+.Pp
+See
+.Xr puffs_cc 3
+and
+.Xr puffs_framebuf 3
+for further information.
 .El
 .Ss Cookies
 Every file (regular file, directory, device node, ...) instance is
@@ -445,7 +492,7 @@ address as a cookie and store file system specific data in the private
 portion of
 .Vt struct puffs_node .
 The library assumes this by default.
-If it is not desireable, the file system implementation can call
+If it is not desirable, the file system implementation can call
 .Fn puffs_set_cookiemap
 to provide an alternative cookie-to-node mapping function.
 .Sh SEE ALSO
@@ -457,7 +504,6 @@ to provide an alternative cookie-to-node mapping function.
 .Xr puffs_node 3 ,
 .Xr puffs_ops 3 ,
 .Xr puffs_path 3 ,
-.Xr puffs_req 3 ,
 .Xr puffs_suspend 3 ,
 .Xr refuse 3 ,
 .Xr puffs 4
@@ -467,6 +513,13 @@ to provide an alternative cookie-to-node mapping function.
 .%J Proceedings of AsiaBSDCon 2007
 .%P pp. 29-42
 .%T puffs - Pass-to-Userspace Framework File System
+.Re
+.Rs
+.%A Antti Kantee
+.%D September 2007
+.%I Helsinki University of Technology
+.%R Tech Report TKK-TKO-B157
+.%T Using puffs for Implementing Client-Server Distributed File Systems
 .Re
 .Rs
 .%A Antti Kantee

@@ -1,4 +1,4 @@
-/*	$NetBSD: qd.c,v 1.38 2007/07/29 12:15:44 ad Exp $	*/
+/*	$NetBSD: qd.c,v 1.41 2007/12/05 17:19:50 pooka Exp $	*/
 
 /*-
  * Copyright (c) 1988 Regents of the University of California.
@@ -58,7 +58,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: qd.c,v 1.38 2007/07/29 12:15:44 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: qd.c,v 1.41 2007/12/05 17:19:50 pooka Exp $");
 
 #include "opt_ddb.h"
 
@@ -77,12 +77,12 @@ __KERNEL_RCSID(0, "$NetBSD: qd.c,v 1.38 2007/07/29 12:15:44 ad Exp $");
 
 #include <dev/cons.h>
 
-#include <machine/bus.h>
+#include <sys/bus.h>
 #include <machine/scb.h>
 
 #ifdef __vax__
 #include <machine/sid.h>
-#include <machine/cpu.h>
+#include <sys/cpu.h>
 #include <machine/pte.h>
 #endif
 
@@ -1623,7 +1623,7 @@ qdkqfilter(dev_t dev, struct knote *kn)
 		break;
 
 	default:
-		return (1);
+		return (EINVAL);
 	}
 
 	kn->kn_hook = (void *)(intptr_t) dev;
@@ -1808,17 +1808,7 @@ void qdstart(tp)
 		if (unit == 0)
 			blitc(which_unit, (u_char)c);
 	}
-	/*
-	* If there are sleepers, and output has drained below low
-	* water mark, wake up the sleepers.
-	*/
-	if (tp->t_outq.c_cc <= tp->t_lowat) {
-		if (tp->t_state & TS_ASLEEP){
-			tp->t_state &= ~TS_ASLEEP;
-			wakeup((void *) &tp->t_outq);
-		}
-	}
-
+	ttypull(tp);
 	tp->t_state &= ~TS_BUSY;
 
 out:

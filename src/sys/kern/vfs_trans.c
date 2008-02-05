@@ -1,4 +1,4 @@
-/*	$NetBSD: vfs_trans.c,v 1.11 2007/07/26 22:57:36 pooka Exp $	*/
+/*	$NetBSD: vfs_trans.c,v 1.16 2008/01/02 11:48:57 ad Exp $	*/
 
 /*-
  * Copyright (c) 2007 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: vfs_trans.c,v 1.11 2007/07/26 22:57:36 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: vfs_trans.c,v 1.16 2008/01/02 11:48:57 ad Exp $");
 
 /*
  * File system transaction operations.
@@ -51,7 +51,7 @@ __KERNEL_RCSID(0, "$NetBSD: vfs_trans.c,v 1.11 2007/07/26 22:57:36 pooka Exp $")
 
 #include <sys/param.h>
 #include <sys/systm.h>
-#include <sys/malloc.h>
+#include <sys/kmem.h>
 #include <sys/mount.h>
 #include <sys/rwlock.h>
 #include <sys/vnode.h>
@@ -59,8 +59,14 @@ __KERNEL_RCSID(0, "$NetBSD: vfs_trans.c,v 1.11 2007/07/26 22:57:36 pooka Exp $")
 #include <sys/fstrans.h>
 #include <sys/proc.h>
 
+#include <miscfs/specfs/specdev.h>
 #include <miscfs/syncfs/syncfs.h>
 
+struct fscow_handler {
+	SLIST_ENTRY(fscow_handler) ch_list;
+	int (*ch_func)(void *, struct buf *, bool);
+	void *ch_arg;
+};
 struct fstrans_lwp_info {
 	struct fstrans_lwp_info *fli_succ;
 	struct mount *fli_mount;
@@ -71,19 +77,17 @@ struct fstrans_mount_info {
 	enum fstrans_state fmi_state;
 	krwlock_t fmi_shared_lock;
 	krwlock_t fmi_lazy_lock;
+	krwlock_t fmi_cow_lock;
+	SLIST_HEAD(, fscow_handler) fmi_cow_handler;
 };
 
 static specificdata_key_t lwp_data_key;
-static specificdata_key_t mount_data_key;
 static kmutex_t vfs_suspend_lock;	/* Serialize suspensions. */
-static kmutex_t fstrans_init_lock;
 
 POOL_INIT(fstrans_pl, sizeof(struct fstrans_lwp_info), 0, 0, 0,
     "fstrans", NULL, IPL_NONE);
 
 static void fstrans_lwp_dtor(void *);
-static void fstrans_mount_dtor(void *);
-static struct fstrans_mount_info *fstrans_mount_init(struct mount *);
 
 /*
  * Initialize
@@ -95,11 +99,8 @@ fstrans_init(void)
 
 	error = lwp_specific_key_create(&lwp_data_key, fstrans_lwp_dtor);
 	KASSERT(error == 0);
-	error = mount_specific_key_create(&mount_data_key, fstrans_mount_dtor);
-	KASSERT(error == 0);
 
 	mutex_init(&vfs_suspend_lock, MUTEX_DEFAULT, IPL_NONE);
-	mutex_init(&fstrans_init_lock, MUTEX_DEFAULT, IPL_NONE);
 }
 
 /*
@@ -119,43 +120,46 @@ fstrans_lwp_dtor(void *arg)
 }
 
 /*
+ * Allocate mount state
+ */
+int
+fstrans_mount(struct mount *mp)
+{
+	struct fstrans_mount_info *new;
+
+	if ((new = kmem_alloc(sizeof(*new), KM_SLEEP)) == NULL)
+		return ENOMEM;
+	new->fmi_state = FSTRANS_NORMAL;
+	rw_init(&new->fmi_lazy_lock);
+	rw_init(&new->fmi_shared_lock);
+	SLIST_INIT(&new->fmi_cow_handler);
+	rw_init(&new->fmi_cow_lock);
+
+	mp->mnt_transinfo = new;
+	mp->mnt_iflag |= IMNT_HAS_TRANS;
+
+	return 0;
+}
+
+/*
  * Deallocate mount state
  */
-static void
-fstrans_mount_dtor(void *arg)
+void
+fstrans_unmount(struct mount *mp)
 {
-	struct fstrans_mount_info *fmi = arg;
+	struct fstrans_mount_info *fmi;
+
+	if ((fmi = mp->mnt_transinfo) == NULL)
+		return;
 
 	KASSERT(fmi->fmi_state == FSTRANS_NORMAL);
 	rw_destroy(&fmi->fmi_lazy_lock);
 	rw_destroy(&fmi->fmi_shared_lock);
-	free(fmi, M_MOUNT);
-}
-
-/*
- * Create mount info for this mount
- */
-static struct fstrans_mount_info *
-fstrans_mount_init(struct mount *mp)
-{
-	struct fstrans_mount_info *new;
-
-	mutex_enter(&fstrans_init_lock);
-
-	if ((new = mount_getspecific(mp, mount_data_key)) != NULL) {
-		mutex_exit(&fstrans_init_lock);
-		return new;
-	}
-
-	new = malloc(sizeof(*new), M_MOUNT, M_WAITOK);
-	new->fmi_state = FSTRANS_NORMAL;
-	rw_init(&new->fmi_lazy_lock);
-	rw_init(&new->fmi_shared_lock);
-
-	mount_setspecific(mp, mount_data_key, new);
-	mutex_exit(&fstrans_init_lock);
-
-	return new;
+	KASSERT(SLIST_EMPTY(&fmi->fmi_cow_handler));
+	rw_destroy(&fmi->fmi_cow_lock);
+	kmem_free(fmi, sizeof(*fmi));
+	mp->mnt_iflag &= ~IMNT_HAS_TRANS;
+	mp->mnt_transinfo = NULL;
 }
 
 /*
@@ -203,8 +207,7 @@ _fstrans_start(struct mount *mp, enum fstrans_lock_type lock_type, int wait)
 	KASSERT(new_fli->fli_mount == NULL);
 	KASSERT(new_fli->fli_count == 0);
 
-	if ((fmi = mount_getspecific(mp, mount_data_key)) == NULL)
-		fmi = fstrans_mount_init(mp);
+	fmi = mp->mnt_transinfo;
 
 	if (lock_type == FSTRANS_LAZY)
 		lock_p = &fmi->fmi_lazy_lock;
@@ -249,7 +252,7 @@ fstrans_done(struct mount *mp)
 	KASSERT(fli->fli_mount == mp);
 	KASSERT(fli->fli_count == 0);
 	fli->fli_mount = NULL;
-	fmi = mount_getspecific(mp, mount_data_key);
+	fmi = mp->mnt_transinfo;
 	KASSERT(fmi != NULL);
 	if (fli->fli_lock_type == FSTRANS_LAZY)
 		rw_exit(&fmi->fmi_lazy_lock);
@@ -290,8 +293,7 @@ fstrans_setstate(struct mount *mp, enum fstrans_state new_state)
 {
 	struct fstrans_mount_info *fmi;
 
-	if ((fmi = mount_getspecific(mp, mount_data_key)) == NULL)
-		fmi = fstrans_mount_init(mp);
+	fmi = mp->mnt_transinfo;
 
 	switch (new_state) {
 	case FSTRANS_SUSPENDING:
@@ -338,8 +340,7 @@ fstrans_getstate(struct mount *mp)
 {
 	struct fstrans_mount_info *fmi;
 
-	if ((fmi = mount_getspecific(mp, mount_data_key)) == NULL)
-		return FSTRANS_NORMAL;
+	fmi = mp->mnt_transinfo;
 
 	return fmi->fmi_state;
 }
@@ -426,7 +427,7 @@ fstrans_print_mount(struct mount *mp, int verbose)
 {
 	struct fstrans_mount_info *fmi;
 
-	fmi = mount_getspecific(mp, mount_data_key);
+	fmi = mp->mnt_transinfo;
 	if (!verbose && (fmi == NULL || fmi->fmi_state == FSTRANS_NORMAL))
 		return;
 
@@ -476,3 +477,88 @@ fstrans_dump(int full)
 		fstrans_print_mount(mp, full == 1);
 }
 #endif /* defined(DDB) */
+
+int
+fscow_establish(struct mount *mp, int (*func)(void *, struct buf *, bool),
+    void *arg)
+{
+	struct fstrans_mount_info *fmi;
+	struct fscow_handler *new;
+
+	if ((mp->mnt_iflag & IMNT_HAS_TRANS) == 0)
+		return EINVAL;
+
+	fmi = mp->mnt_transinfo;
+
+	if ((new = kmem_alloc(sizeof(*new), KM_SLEEP)) == NULL)
+		return ENOMEM;
+	new->ch_func = func;
+	new->ch_arg = arg;
+	rw_enter(&fmi->fmi_cow_lock, RW_WRITER);
+	SLIST_INSERT_HEAD(&fmi->fmi_cow_handler, new, ch_list);
+	rw_exit(&fmi->fmi_cow_lock);
+
+	return 0;
+}
+
+int
+fscow_disestablish(struct mount *mp, int (*func)(void *, struct buf *, bool),
+    void *arg)
+{
+	struct fstrans_mount_info *fmi;
+	struct fscow_handler *hp = NULL;
+
+	if ((mp->mnt_iflag & IMNT_HAS_TRANS) == 0)
+		return EINVAL;
+
+	fmi = mp->mnt_transinfo;
+
+	rw_enter(&fmi->fmi_cow_lock, RW_WRITER);
+	SLIST_FOREACH(hp, &fmi->fmi_cow_handler, ch_list)
+		if (hp->ch_func == func && hp->ch_arg == arg)
+			break;
+	if (hp != NULL) {
+		SLIST_REMOVE(&fmi->fmi_cow_handler, hp, fscow_handler, ch_list);
+		kmem_free(hp, sizeof(*hp));
+	}
+	rw_exit(&fmi->fmi_cow_lock);
+
+	return hp ? 0 : EINVAL;
+}
+
+int
+fscow_run(struct buf *bp, bool data_valid)
+{
+	int error = 0;
+	struct mount *mp;
+	struct fstrans_mount_info *fmi;
+	struct fscow_handler *hp;
+
+	if ((bp->b_oflags & BO_COWDONE))
+		goto done;
+	if (bp->b_vp == NULL)
+		goto done;
+	if (bp->b_vp->v_type == VBLK)
+		mp = bp->b_vp->v_specmountpoint;
+	else
+		mp = bp->b_vp->v_mount;
+	if (mp == NULL || (mp->mnt_iflag & IMNT_HAS_TRANS) == 0)
+		goto done;
+
+	fmi = mp->mnt_transinfo;
+
+	rw_enter(&fmi->fmi_cow_lock, RW_READER);
+	SLIST_FOREACH(hp, &fmi->fmi_cow_handler, ch_list)
+		if ((error = (*hp->ch_func)(hp->ch_arg, bp, data_valid)) != 0)
+			break;
+	rw_exit(&fmi->fmi_cow_lock);
+
+ done:
+ 	if (error == 0) {
+ 		mutex_enter(bp->b_objlock);
+ 		bp->b_oflags |= BO_COWDONE;
+ 		mutex_exit(bp->b_objlock);
+ 	}
+
+	return error;
+}

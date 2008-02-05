@@ -1,4 +1,4 @@
-/*	$NetBSD: if_tokensubr.c,v 1.50 2007/08/30 02:17:35 dyoung Exp $	*/
+/*	$NetBSD: if_tokensubr.c,v 1.52 2007/12/20 21:08:22 dyoung Exp $	*/
 
 /*
  * Copyright (c) 1982, 1989, 1993
@@ -99,7 +99,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_tokensubr.c,v 1.50 2007/08/30 02:17:35 dyoung Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_tokensubr.c,v 1.52 2007/12/20 21:08:22 dyoung Exp $");
 
 #include "opt_inet.h"
 #include "opt_atalk.h"
@@ -119,7 +119,7 @@ __KERNEL_RCSID(0, "$NetBSD: if_tokensubr.c,v 1.50 2007/08/30 02:17:35 dyoung Exp
 #include <sys/errno.h>
 #include <sys/syslog.h>
 
-#include <machine/cpu.h>
+#include <sys/cpu.h>
 
 #include <net/if.h>
 #include <net/netisr.h>
@@ -653,7 +653,6 @@ token_ifattach(struct ifnet *ifp, void *lla)
 {
 
 	ifp->if_type = IFT_ISO88025;
-	ifp->if_addrlen = ISO88025_ADDR_LEN;
 	ifp->if_hdrlen = 14;
 	ifp->if_dlt = DLT_IEEE802;
 	ifp->if_mtu = ISO88025_MTU;
@@ -664,9 +663,7 @@ token_ifattach(struct ifnet *ifp, void *lla)
 	ifp->if_flags |= IFF_NOTRAILERS;
 #endif
 
-	if_alloc_sadl(ifp);
-	sockaddr_dl_setaddr(ifp->if_sadl, ifp->if_sadl->sdl_len, lla,
-	    ifp->if_addrlen);
+	if_set_sadl(ifp, lla, ISO88025_ADDR_LEN);
 
 #if NBPFILTER > 0
 	bpfattach(ifp, DLT_IEEE802, sizeof(struct token_header));

@@ -1,4 +1,4 @@
-/* $NetBSD: com_acpi.c,v 1.23 2007/05/04 14:18:36 christos Exp $ */
+/* $NetBSD: com_acpi.c,v 1.25 2007/12/21 21:52:10 xtraeme Exp $ */
 
 /*
  * Copyright (c) 2002 Jared D. McNeill <jmcneill@invisible.ca>
@@ -26,7 +26,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: com_acpi.c,v 1.23 2007/05/04 14:18:36 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: com_acpi.c,v 1.25 2007/12/21 21:52:10 xtraeme Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -37,7 +37,7 @@ __KERNEL_RCSID(0, "$NetBSD: com_acpi.c,v 1.23 2007/05/04 14:18:36 christos Exp $
 #include <sys/proc.h>
 #include <sys/termios.h>
 
-#include <machine/bus.h>
+#include <sys/bus.h>
 
 #include <dev/isa/isavar.h>
 #include <dev/isa/isadmavar.h>
@@ -154,6 +154,10 @@ com_acpi_attach(struct device *parent, struct device *self, void *aux)
 	asc->sc_ih = isa_intr_establish(aa->aa_ic, irq->ar_irq,
 	    (irq->ar_type == ACPI_EDGE_SENSITIVE) ? IST_EDGE : IST_LEVEL,
 	    IPL_SERIAL, comintr, sc);
+
+	if (!pmf_device_register(self, NULL, com_resume))
+		aprint_error_dev(self, "couldn't establish a power handler\n");
+
  out:
 	acpi_resource_cleanup(&res);
 }

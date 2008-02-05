@@ -1,4 +1,4 @@
-/*	$NetBSD: disksubr.c,v 1.54 2007/03/05 12:37:53 tsutsui Exp $	*/
+/*	$NetBSD: disksubr.c,v 1.57 2008/01/02 11:48:26 ad Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1988 Regents of the University of California.
@@ -65,7 +65,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: disksubr.c,v 1.54 2007/03/05 12:37:53 tsutsui Exp $");
+__KERNEL_RCSID(0, "$NetBSD: disksubr.c,v 1.57 2008/01/02 11:48:26 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -454,7 +454,7 @@ readdisklabel(dev_t dev, void (*strat)(struct buf *), struct disklabel *lp,
 			msg = "no disk label";
 	}
 
-	brelse(bp);
+	brelse(bp, 0);
 	return (msg);
 }
 
@@ -553,7 +553,8 @@ writedisklabel(dev_t dev, void (*strat)(struct buf *), struct disklabel *lp,
 		if (dlp->d_magic == DISKMAGIC && dlp->d_magic2 == DISKMAGIC &&
 		    dkcksum(dlp) == 0) {
 			*dlp = *lp;
-			bp->b_flags &= ~(B_READ|B_DONE);
+			bp->b_oflags &= ~(BO_DONE);
+			bp->b_flags &= ~(B_READ);
 			bp->b_flags |= B_WRITE;
 			(*strat)(bp);
 			error = biowait(bp);
@@ -562,7 +563,7 @@ writedisklabel(dev_t dev, void (*strat)(struct buf *), struct disklabel *lp,
 	}
 	error = ESRCH;
 done:
-	brelse(bp);
+	brelse(bp, 0);
 	return (error);
 #else
 	int i;

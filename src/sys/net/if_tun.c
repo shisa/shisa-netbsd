@@ -1,4 +1,4 @@
-/*	$NetBSD: if_tun.c,v 1.98 2007/09/01 04:32:51 dyoung Exp $	*/
+/*	$NetBSD: if_tun.c,v 1.101 2008/01/04 21:18:16 ad Exp $	*/
 
 /*
  * Copyright (c) 1988, Julian Onions <jpo@cs.nott.ac.uk>
@@ -15,7 +15,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_tun.c,v 1.98 2007/09/01 04:32:51 dyoung Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_tun.c,v 1.101 2008/01/04 21:18:16 ad Exp $");
 
 #include "opt_inet.h"
 
@@ -35,8 +35,8 @@ __KERNEL_RCSID(0, "$NetBSD: if_tun.c,v 1.98 2007/09/01 04:32:51 dyoung Exp $");
 #include <sys/signalvar.h>
 #include <sys/conf.h>
 #include <sys/kauth.h>
-
-#include <machine/cpu.h>
+#include <sys/simplelock.h>
+#include <sys/cpu.h>
 
 #include <net/if.h>
 #include <net/if_types.h>
@@ -1085,7 +1085,7 @@ tunkqfilter(dev_t dev, struct knote *kn)
 		break;
 
 	default:
-		rv = 1;
+		rv = EINVAL;
 		goto out;
 	}
 

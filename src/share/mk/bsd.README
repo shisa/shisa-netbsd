@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.README,v 1.196 2007/07/29 17:06:01 joerg Exp $
+#	$NetBSD: bsd.README,v 1.199 2008/01/09 11:26:14 simonb Exp $
 #	@(#)bsd.README	8.2 (Berkeley) 4/2/94
 
 This is the README file for the new (as of 1993) make "include" files
@@ -238,6 +238,10 @@ MKPICLIB	If "no", don't build *_pic.a libraries, and build the
 		_pic.a library pointing to the .a library.
 		Default: yes
 
+MKPIE		If "no", create regular executables. Otherwise create
+		PIE (Position Independent Executables).
+		Default: no
+
 MKPOSTFIX	If "no", don't build or install postfix(1).
 		Default: yes
 
@@ -299,6 +303,11 @@ USE_INET6	If "no", disables building INET6 (IPv6) support into
 		various system utilities/libraries that support it.
 		If ${MKINET6} is "no", USE_INET6 will also be
 		forced to "no".
+
+USE_JEMALLOC	If "no", disables building the "jemalloc" allocator
+		designed for improved performance with threaded
+		applications.  The "phkmalloc" allocator as used up
+		before NetBSD-5.0 will be substituted.
 
 USE_KERBEROS	If "no", disables building Kerberos v5
 		support into various system utilities/libraries that
@@ -508,8 +517,7 @@ USETOOLS	Indicates whether the tools specified by ${TOOLDIR} should
 		make(1) include files).
 
 OBJECT_FMT	Object file format.  [set to "ELF" on architectures that
-		use ELF -- currently all architectures but ns32k, set to
-		"a.out" on ns32k].
+		use ELF -- currently all architectures].
 
 TOOLCHAIN_MISSING
 		If not "no", this indicates that the platform being built

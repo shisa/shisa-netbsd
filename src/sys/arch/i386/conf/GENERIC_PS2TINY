@@ -1,4 +1,4 @@
-#	$NetBSD: GENERIC_PS2TINY,v 1.45 2007/09/06 10:24:18 martti Exp $
+#	$NetBSD: GENERIC_PS2TINY,v 1.51 2008/01/16 09:37:06 ad Exp $
 #
 #	GENERIC-style kernel config for IBM PS/2 with MCA bus. It only contains
 #	IBM PS/2 related stuff and has been generally trimmed down somewhat,
@@ -15,14 +15,7 @@ include "arch/i386/conf/std.i386"
 
 maxusers	16		# estimated number of users
 
-# CPU support.  At least one is REQUIRED.
-options 	I386_CPU
-options 	I486_CPU
-options 	I586_CPU
-#options 	I686_CPU
-
 # CPU-related options.
-options 	MATH_EMULATE	# floating point emulation
 options 	VM86		# virtual 8086 emulation
 options 	USER_LDT	# user-settable LDT; used by WINE
 
@@ -55,12 +48,7 @@ options 	NTP		# NTP phase/frequency locked loop
 
 options 	SYSVMSG		# System V-like message queues
 options 	SYSVSEM		# System V-like semaphores
-#options 	SEMMNI=10	# number of semaphore identifiers
-#options 	SEMMNS=60	# number of semaphores in system
-#options 	SEMUME=10	# max number of undo entries per process
-#options 	SEMMNU=30	# number of undo structures in system
 options 	SYSVSHM		# System V-like memory sharing
-#options 	SHMMAXPGS=2048	# 2048 pages is the default
 options 	P1003_1B_SEMAPHORE # p1003.1b semaphore support
 
 options 	LKM		# loadable kernel modules
@@ -78,8 +66,8 @@ options 	DDB		# in-kernel debugger
 options 	DDB_HISTORY_SIZE=512	# enable history editing in DDB
 #options 	KGDB		# remote debugger
 #options 	KGDB_DEVNAME="\"com\"",KGDB_DEVADDR=0x3f8,KGDB_DEVRATE=9600
-#makeoptions	DEBUG="-g"	# compile full symbol table
-makeoptions	COPTS="-Os"	# generates smaller code than -O2, -O1
+#makeoptions 	DEBUG="-g"	# compile full symbol table
+makeoptions 	COPTS="-Os"	# generates smaller code than -O2, -O1
 
 # File systems
 file-system 	FFS		# UFS
@@ -176,8 +164,6 @@ mca0	at mainbus0
 isa0	at mainbus0
 
 #npx0	at isa? port 0xf0 irq 13	# x86 math coprocessor
-
-#pc0	at isa? port 0x60 irq 1
 
 # wscons
 pckbc0		at isa?			# pc keyboard controller

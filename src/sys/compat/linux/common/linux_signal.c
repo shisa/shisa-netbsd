@@ -1,4 +1,4 @@
-/*	$NetBSD: linux_signal.c,v 1.54 2007/03/04 06:01:24 christos Exp $	*/
+/*	$NetBSD: linux_signal.c,v 1.58 2007/12/20 23:02:56 dsl Exp $	*/
 
 /*-
  * Copyright (c) 1995, 1998 The NetBSD Foundation, Inc.
@@ -55,7 +55,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: linux_signal.c,v 1.54 2007/03/04 06:01:24 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: linux_signal.c,v 1.58 2007/12/20 23:02:56 dsl Exp $");
 
 #define COMPAT_LINUX 1
 
@@ -81,6 +81,8 @@ __KERNEL_RCSID(0, "$NetBSD: linux_signal.c,v 1.54 2007/03/04 06:01:24 christos E
 #include <compat/linux/common/linux_siginfo.h>
 #include <compat/linux/common/linux_sigevent.h>
 #include <compat/linux/common/linux_util.h>
+#include <compat/linux/common/linux_ipc.h>
+#include <compat/linux/common/linux_sem.h>
 
 #include <compat/linux/linux_syscallargs.h>
 
@@ -105,10 +107,7 @@ extern const int linux_to_native_signo[];
  */
 #if LINUX__NSIG_WORDS > 1
 void
-linux_old_extra_to_native_sigset(bss, lss, extra)
-	sigset_t *bss;
-	const linux_old_sigset_t *lss;
-	const unsigned long *extra;
+linux_old_extra_to_native_sigset(sigset_t *bss, const linux_old_sigset_t *lss, const unsigned long *extra)
 {
 	linux_sigset_t lsnew;
 
@@ -123,10 +122,7 @@ linux_old_extra_to_native_sigset(bss, lss, extra)
 }
 
 void
-native_to_linux_old_extra_sigset(lss, extra, bss)
-	linux_old_sigset_t *lss;
-	unsigned long *extra;
-	const sigset_t *bss;
+native_to_linux_old_extra_sigset(linux_old_sigset_t *lss, unsigned long *extra, const sigset_t *bss)
 {
 	linux_sigset_t lsnew;
 
@@ -141,9 +137,7 @@ native_to_linux_old_extra_sigset(lss, extra, bss)
 #endif /* LINUX__NSIG_WORDS > 1 */
 
 void
-linux_to_native_sigset(bss, lss)
-	sigset_t *bss;
-	const linux_sigset_t *lss;
+linux_to_native_sigset(sigset_t *bss, const linux_sigset_t *lss)
 {
 	int i, newsig;
 
@@ -158,9 +152,7 @@ linux_to_native_sigset(bss, lss)
 }
 
 void
-native_to_linux_sigset(lss, bss)
-	linux_sigset_t *lss;
-	const sigset_t *bss;
+native_to_linux_sigset(linux_sigset_t *lss, const sigset_t *bss)
 {
 	int i, newsig;
 
@@ -175,8 +167,7 @@ native_to_linux_sigset(lss, bss)
 }
 
 unsigned int
-native_to_linux_sigflags(bsf)
-	const int bsf;
+native_to_linux_sigflags(const int bsf)
 {
 	unsigned int lsf = 0;
 	if ((bsf & SA_NOCLDSTOP) != 0)
@@ -197,8 +188,7 @@ native_to_linux_sigflags(bsf)
 }
 
 int
-linux_to_native_sigflags(lsf)
-	const unsigned long lsf;
+linux_to_native_sigflags(const unsigned long lsf)
 {
 	int bsf = 0;
 	if ((lsf & LINUX_SA_NOCLDSTOP) != 0)
@@ -226,9 +216,7 @@ linux_to_native_sigflags(lsf)
  * Convert between Linux and BSD sigaction structures.
  */
 void
-linux_old_to_native_sigaction(bsa, lsa)
-	struct sigaction *bsa;
-	const struct linux_old_sigaction *lsa;
+linux_old_to_native_sigaction(struct sigaction *bsa, const struct linux_old_sigaction *lsa)
 {
 	bsa->sa_handler = lsa->linux_sa_handler;
 	linux_old_to_native_sigset(&bsa->sa_mask, &lsa->linux_sa_mask);
@@ -236,9 +224,7 @@ linux_old_to_native_sigaction(bsa, lsa)
 }
 
 void
-native_to_linux_old_sigaction(lsa, bsa)
-	struct linux_old_sigaction *lsa;
-	const struct sigaction *bsa;
+native_to_linux_old_sigaction(struct linux_old_sigaction *lsa, const struct sigaction *bsa)
 {
 	lsa->linux_sa_handler = bsa->sa_handler;
 	native_to_linux_old_sigset(&lsa->linux_sa_mask, &bsa->sa_mask);
@@ -250,9 +236,7 @@ native_to_linux_old_sigaction(lsa, bsa)
 
 /* ...and the new sigaction conversion funcs. */
 void
-linux_to_native_sigaction(bsa, lsa)
-	struct sigaction *bsa;
-	const struct linux_sigaction *lsa;
+linux_to_native_sigaction(struct sigaction *bsa, const struct linux_sigaction *lsa)
 {
 	bsa->sa_handler = lsa->linux_sa_handler;
 	linux_to_native_sigset(&bsa->sa_mask, &lsa->linux_sa_mask);
@@ -260,9 +244,7 @@ linux_to_native_sigaction(bsa, lsa)
 }
 
 void
-native_to_linux_sigaction(lsa, bsa)
-	struct linux_sigaction *lsa;
-	const struct sigaction *bsa;
+native_to_linux_sigaction(struct linux_sigaction *lsa, const struct sigaction *bsa)
 {
 	lsa->linux_sa_handler = bsa->sa_handler;
 	native_to_linux_sigset(&lsa->linux_sa_mask, &bsa->sa_mask);
@@ -280,14 +262,14 @@ native_to_linux_sigaction(lsa, bsa)
  * ignored (see above).
  */
 int
-linux_sys_rt_sigaction(struct lwp *l, void *v, register_t *retval)
+linux_sys_rt_sigaction(struct lwp *l, const struct linux_sys_rt_sigaction_args *uap, register_t *retval)
 {
-	struct linux_sys_rt_sigaction_args /* {
+	/* {
 		syscallarg(int) signum;
 		syscallarg(const struct linux_sigaction *) nsa;
 		syscallarg(struct linux_sigaction *) osa;
 		syscallarg(size_t) sigsetsize;
-	} */ *uap = v;
+	} */
 	struct linux_sigaction nlsa, olsa;
 	struct sigaction nbsa, obsa;
 	int error, sig;
@@ -348,11 +330,7 @@ linux_sys_rt_sigaction(struct lwp *l, void *v, register_t *retval)
 }
 
 int
-linux_sigprocmask1(l, how, set, oset)
-	struct lwp *l;
-	int how;
-	const linux_old_sigset_t *set;
-	linux_old_sigset_t *oset;
+linux_sigprocmask1(struct lwp *l, int how, const linux_old_sigset_t *set, linux_old_sigset_t *oset)
 {
 	struct proc *p = l->l_proc;
 	linux_old_sigset_t nlss, olss;
@@ -395,14 +373,14 @@ linux_sigprocmask1(l, how, set, oset)
 }
 
 int
-linux_sys_rt_sigprocmask(struct lwp *l, void *v, register_t *retval)
+linux_sys_rt_sigprocmask(struct lwp *l, const struct linux_sys_rt_sigprocmask_args *uap, register_t *retval)
 {
-	struct linux_sys_rt_sigprocmask_args /* {
+	/* {
 		syscallarg(int) how;
 		syscallarg(const linux_sigset_t *) set;
 		syscallarg(linux_sigset_t *) oset;
 		syscallarg(size_t) sigsetsize;
-	} */ *uap = v;
+	} */
 	linux_sigset_t nlss, olss, *oset;
 	const linux_sigset_t *set;
 	struct proc *p = l->l_proc;
@@ -447,12 +425,12 @@ linux_sys_rt_sigprocmask(struct lwp *l, void *v, register_t *retval)
 }
 
 int
-linux_sys_rt_sigpending(struct lwp *l, void *v, register_t *retval)
+linux_sys_rt_sigpending(struct lwp *l, const struct linux_sys_rt_sigpending_args *uap, register_t *retval)
 {
-	struct linux_sys_rt_sigpending_args /* {
+	/* {
 		syscallarg(linux_sigset_t *) set;
 		syscallarg(size_t) sigsetsize;
-	} */ *uap = v;
+	} */
 	sigset_t bss;
 	linux_sigset_t lss;
 
@@ -466,11 +444,11 @@ linux_sys_rt_sigpending(struct lwp *l, void *v, register_t *retval)
 
 #ifndef __amd64__
 int
-linux_sys_sigpending(struct lwp *l, void *v, register_t *retval)
+linux_sys_sigpending(struct lwp *l, const struct linux_sys_sigpending_args *uap, register_t *retval)
 {
-	struct linux_sys_sigpending_args /* {
+	/* {
 		syscallarg(linux_old_sigset_t *) mask;
-	} */ *uap = v;
+	} */
 	sigset_t bss;
 	linux_old_sigset_t lss;
 
@@ -480,13 +458,13 @@ linux_sys_sigpending(struct lwp *l, void *v, register_t *retval)
 }
 
 int
-linux_sys_sigsuspend(struct lwp *l, void *v, register_t *retval)
+linux_sys_sigsuspend(struct lwp *l, const struct linux_sys_sigsuspend_args *uap, register_t *retval)
 {
-	struct linux_sys_sigsuspend_args /* {
+	/* {
 		syscallarg(void *) restart;
 		syscallarg(int) oldmask;
 		syscallarg(int) mask;
-	} */ *uap = v;
+	} */
 	linux_old_sigset_t lss;
 	sigset_t bss;
 
@@ -497,12 +475,12 @@ linux_sys_sigsuspend(struct lwp *l, void *v, register_t *retval)
 #endif /* __amd64__ */
 
 int
-linux_sys_rt_sigsuspend(struct lwp *l, void *v, register_t *retval)
+linux_sys_rt_sigsuspend(struct lwp *l, const struct linux_sys_rt_sigsuspend_args *uap, register_t *retval)
 {
-	struct linux_sys_rt_sigsuspend_args /* {
+	/* {
 		syscallarg(linux_sigset_t *) unewset;
 		syscallarg(size_t) sigsetsize;
-	} */ *uap = v;
+	} */
 	linux_sigset_t lss;
 	sigset_t bss;
 	int error;
@@ -524,10 +502,7 @@ linux_sys_rt_sigsuspend(struct lwp *l, void *v, register_t *retval)
  * Note: also used as sys_rt_queueinfo.  The info field is ignored.
  */
 int
-linux_sys_rt_queueinfo(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+linux_sys_rt_queueinfo(struct lwp *l, const struct linux_sys_rt_queueinfo_args *uap, register_t *retval)
 {
 	/* XXX XAX This isn't this really int, int, siginfo_t *, is it? */
 #if 0
@@ -540,19 +515,16 @@ linux_sys_rt_queueinfo(l, v, retval)
 
 	/* XXX To really implement this we need to	*/
 	/* XXX keep a list of queued signals somewhere.	*/
-	return (linux_sys_kill(l, v, retval));
+	return (linux_sys_kill(l, (const void *)uap, retval));
 }
 
 int
-linux_sys_kill(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+linux_sys_kill(struct lwp *l, const struct linux_sys_kill_args *uap, register_t *retval)
 {
-	struct linux_sys_kill_args /* {
+	/* {
 		syscallarg(int) pid;
 		syscallarg(int) signum;
-	} */ *uap = v;
+	} */
 
 	struct sys_kill_args ka;
 	int sig;
@@ -566,13 +538,11 @@ linux_sys_kill(l, v, retval)
 }
 
 #ifdef LINUX_SS_ONSTACK
-static void linux_to_native_sigaltstack __P((struct sigaltstack *,
-    const struct linux_sigaltstack *));
+static void linux_to_native_sigaltstack(struct sigaltstack *,
+    const struct linux_sigaltstack *);
 
 static void
-linux_to_native_sigaltstack(bss, lss)
-	struct sigaltstack *bss;
-	const struct linux_sigaltstack *lss;
+linux_to_native_sigaltstack(struct sigaltstack *bss, const struct linux_sigaltstack *lss)
 {
 	bss->ss_sp = lss->ss_sp;
 	bss->ss_size = lss->ss_size;
@@ -585,9 +555,7 @@ linux_to_native_sigaltstack(bss, lss)
 }
 
 void
-native_to_linux_sigaltstack(lss, bss)
-	struct linux_sigaltstack *lss;
-	const struct sigaltstack *bss;
+native_to_linux_sigaltstack(struct linux_sigaltstack *lss, const struct sigaltstack *bss)
 {
 	lss->ss_sp = bss->ss_sp;
 	lss->ss_size = bss->ss_size;
@@ -600,12 +568,12 @@ native_to_linux_sigaltstack(lss, bss)
 }
 
 int
-linux_sys_sigaltstack(struct lwp *l, void *v, register_t *retval)
+linux_sys_sigaltstack(struct lwp *l, const struct linux_sys_sigaltstack_args *uap, register_t *retval)
 {
-	struct linux_sys_sigaltstack_args /* {
+	/* {
 		syscallarg(const struct linux_sigaltstack *) ss;
 		syscallarg(struct linux_sigaltstack *) oss;
-	} */ *uap = v;
+	} */
 	struct linux_sigaltstack ss;
 	struct sigaltstack nss;
 	struct proc *p = l->l_proc;
@@ -644,15 +612,12 @@ linux_sys_sigaltstack(struct lwp *l, void *v, register_t *retval)
 
 #ifdef LINUX_NPTL
 int
-linux_sys_tkill(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+linux_sys_tkill(struct lwp *l, const struct linux_sys_tkill_args *uap, register_t *retval)
 {
-	struct linux_sys_tkill_args /* {
+	/* {
 		syscallarg(int) tid;
 		syscallarg(int) sig;
-	} */ *uap = v;
+	} */
 	struct linux_sys_kill_args cup;
 
 	/* We use the PID as the TID ... */
@@ -663,16 +628,13 @@ linux_sys_tkill(l, v, retval)
 }
 
 int
-linux_sys_tgkill(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
+linux_sys_tgkill(struct lwp *l, const struct linux_sys_tgkill_args *uap, register_t *retval)
 {
-	struct linux_sys_tgkill_args /* {
+	/* {
 		syscallarg(int) tgid;
 		syscallarg(int) tid;
 		syscallarg(int) sig;
-	} */ *uap = v;
+	} */
 	struct linux_sys_kill_args cup;
 	struct linux_emuldata *led;
 	struct proc *p;

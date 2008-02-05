@@ -1,4 +1,4 @@
-# $NetBSD: GENERIC,v 1.141 2007/08/06 21:26:55 adrianp Exp $
+# $NetBSD: GENERIC,v 1.145 2007/12/31 15:31:54 ad Exp $
 #
 # GENERIC machine description file
 # 
@@ -22,7 +22,7 @@ include 	"arch/hp300/conf/std.hp300"
 
 options 	INCLUDE_CONFIG_FILE	# embed config file in kernel binary
 
-#ident 		"GENERIC-$Revision: 1.141 $"
+#ident 		"GENERIC-$Revision: 1.145 $"
 
 maxusers	32		# estimated number of users
 
@@ -46,7 +46,6 @@ options 	FPSP		# floating point interface for 68040
 
 # Standard system options
 options 	KTRACE		# system call tracing support
-#options 	SYSTRACE	# system call vetting via systrace(1)
 options 	LKM		# Loadable kernel modules
 #options 	INSECURE	# disable kernel security level
 options 	USERCONF	# userconf(4) support
@@ -55,13 +54,8 @@ options 	SYSCTL_INCLUDE_DESCR	# Include sysctl descriptions in kernel
 #options 	RTC_OFFSET=0	# hardware clock is this many mins. west of GMT
 options 	NTP		# NTP phase/frequency locked loop
 options 	SYSVSHM		# System V-style shared memory
-#options 	SHMMAXPGS=1024	# 1024 pages is the default
 options 	SYSVMSG		# System V-style message queues
 options 	SYSVSEM		# System V-style semaphores
-#options 	SEMMNI=10	# number of semaphore identifiers
-#options 	SEMMNS=60	# number of semaphores in system
-#options 	SEMUME=10	# max number of undo entries per process
-#options 	SEMMNU=30	# number of undo structures in system
 options 	P1003_1B_SEMAPHORE # p1003.1b semaphore support
 
 # Enable experimental buffer queue strategy for better responsiveness under 
@@ -95,7 +89,6 @@ options 	COMPAT_40	# compatibility with NetBSD 4.0
 #options 	TCP_COMPAT_42	# 4.2BSD TCP/IP bug compat. Not recommended.
 
 # Binary compatibility.
-options 	COMPAT_HPUX	# HP-UX binary compatibility
 options 	COMPAT_AOUT_M68K	# NetBSD/m68k a.out binary compatibility
 options 	COMPAT_M68K4K	# NetBSD/m68k4k binary compatibility
 options 	COMPAT_SUNOS	# SunOS4 m68k binary compatibility

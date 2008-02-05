@@ -1,4 +1,4 @@
-/*	$NetBSD: linux_exec.c,v 1.95 2007/04/22 08:29:57 dsl Exp $	*/
+/*	$NetBSD: linux_exec.c,v 1.100 2007/12/08 18:36:06 dsl Exp $	*/
 
 /*-
  * Copyright (c) 1994, 1995, 1998, 2000, 2007 The NetBSD Foundation, Inc.
@@ -38,7 +38,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: linux_exec.c,v 1.95 2007/04/22 08:29:57 dsl Exp $");
+__KERNEL_RCSID(0, "$NetBSD: linux_exec.c,v 1.100 2007/12/08 18:36:06 dsl Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -58,7 +58,7 @@ __KERNEL_RCSID(0, "$NetBSD: linux_exec.c,v 1.95 2007/04/22 08:29:57 dsl Exp $");
 
 #include <uvm/uvm_extern.h>
 
-#include <machine/cpu.h>
+#include <sys/cpu.h>
 #include <machine/reg.h>
 
 #include <compat/linux/common/linux_types.h>
@@ -68,6 +68,8 @@ __KERNEL_RCSID(0, "$NetBSD: linux_exec.c,v 1.95 2007/04/22 08:29:57 dsl Exp $");
 #include <compat/linux/common/linux_machdep.h>
 #include <compat/linux/common/linux_exec.h>
 #include <compat/linux/common/linux_futex.h>
+#include <compat/linux/common/linux_ipc.h>
+#include <compat/linux/common/linux_sem.h>
 
 #include <compat/linux/linux_syscallargs.h>
 #include <compat/linux/linux_syscall.h>
@@ -79,38 +81,14 @@ extern struct sysent linux_sysent[];
 extern const char * const linux_syscallnames[];
 extern char linux_sigcode[], linux_esigcode[];
 
-static void linux_e_proc_exec __P((struct proc *, struct exec_package *));
-static void linux_e_proc_fork __P((struct proc *, struct proc *, int));
-static void linux_e_proc_exit __P((struct proc *));
-static void linux_e_proc_init __P((struct proc *, struct proc *, int));
+static void linux_e_proc_exec(struct proc *, struct exec_package *);
+static void linux_e_proc_fork(struct proc *, struct proc *, int);
+static void linux_e_proc_exit(struct proc *);
+static void linux_e_proc_init(struct proc *, struct proc *, int);
 
 #ifdef LINUX_NPTL
 void linux_userret(void);
 #endif
-
-/*
- * Execve(2). Just check the alternate emulation path, and pass it on
- * to the NetBSD execve().
- */
-int
-linux_sys_execve(l, v, retval)
-	struct lwp *l;
-	void *v;
-	register_t *retval;
-{
-	struct linux_sys_execve_args /* {
-		syscallarg(const char *) path;
-		syscallarg(char **) argv;
-		syscallarg(char **) envp;
-	} */ *uap = v;
-	struct sys_execve_args ap;
-
-	SCARG(&ap, path) = SCARG(uap, path);
-	SCARG(&ap, argp) = SCARG(uap, argp);
-	SCARG(&ap, envp) = SCARG(uap, envp);
-
-	return sys_execve(l, &ap, retval);
-}
 
 /*
  * Emulation switch.
@@ -260,8 +238,7 @@ linux_e_proc_exec(struct proc *p, struct exec_package *epp)
  * Emulation per-process exit hook.
  */
 static void
-linux_e_proc_exit(p)
-	struct proc *p;
+linux_e_proc_exit(struct proc *p)
 {
 	struct linux_emuldata *e = p->p_emuldata;
 
@@ -331,8 +308,7 @@ linux_userret(void)
 }
 
 void
-linux_nptl_proc_exit(p)
-	struct proc *p;
+linux_nptl_proc_exit(struct proc *p)
 {
 	struct linux_emuldata *e = p->p_emuldata;
 
@@ -429,9 +405,7 @@ linux_nptl_proc_fork(p, parent, luserret)
 }
 
 void
-linux_nptl_proc_init(p, parent)
-	struct proc *p;
-	struct proc *parent;
+linux_nptl_proc_init(struct proc *p, struct proc *parent)
 {
 	struct linux_emuldata *e = p->p_emuldata;
 	struct linux_emuldata *ep;

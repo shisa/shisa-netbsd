@@ -1,4 +1,4 @@
-/*	$NetBSD: usb.c,v 1.99 2007/08/15 04:00:34 kiyohara Exp $	*/
+/*	$NetBSD: usb.c,v 1.105 2008/01/04 03:56:48 smb Exp $	*/
 
 /*
  * Copyright (c) 1998, 2002 The NetBSD Foundation, Inc.
@@ -44,7 +44,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: usb.c,v 1.99 2007/08/15 04:00:34 kiyohara Exp $");
+__KERNEL_RCSID(0, "$NetBSD: usb.c,v 1.105 2008/01/04 03:56:48 smb Exp $");
 
 #include "opt_compat_netbsd.h"
 
@@ -64,6 +64,7 @@ __KERNEL_RCSID(0, "$NetBSD: usb.c,v 1.99 2007/08/15 04:00:34 kiyohara Exp $");
 #include <sys/select.h>
 #include <sys/vnode.h>
 #include <sys/signalvar.h>
+#include <sys/intr.h>
 
 #include <dev/usb/usb.h>
 #include <dev/usb/usbdi.h>
@@ -71,7 +72,7 @@ __KERNEL_RCSID(0, "$NetBSD: usb.c,v 1.99 2007/08/15 04:00:34 kiyohara Exp $");
 
 #define USB_DEV_MINOR 255
 
-#include <machine/bus.h>
+#include <sys/bus.h>
 
 #include <dev/usb/usbdivar.h>
 #include <dev/usb/usb_quirks.h>
@@ -180,7 +181,8 @@ USB_ATTACH(usb)
 	sc->sc_port.power = USB_MAX_POWER;
 
 	usbrev = sc->sc_bus->usbrev;
-	printf(": USB revision %s", usbrev_str[usbrev]);
+	aprint_naive("\n");
+	aprint_normal(": USB revision %s", usbrev_str[usbrev]);
 	switch (usbrev) {
 	case USBREV_1_0:
 	case USBREV_1_1:
@@ -190,11 +192,11 @@ USB_ATTACH(usb)
 		speed = USB_SPEED_HIGH;
 		break;
 	default:
-		printf(", not supported\n");
+		aprint_error(", not supported\n");
 		sc->sc_dying = 1;
 		USB_ATTACH_ERROR_RETURN;
 	}
-	printf("\n");
+	aprint_normal("\n");
 
 	/* Make sure not to use tsleep() if we are cold booting. */
 	if (cold)
@@ -206,10 +208,10 @@ USB_ATTACH(usb)
 
 #ifdef USB_USE_SOFTINTR
 	/* XXX we should have our own level */
-	sc->sc_bus->soft = softintr_establish(IPL_SOFTUSB,
+	sc->sc_bus->soft = softint_establish(SOFTINT_NET,
 	    sc->sc_bus->methods->soft_intr, sc->sc_bus);
 	if (sc->sc_bus->soft == NULL) {
-		printf("%s: can't register softintr\n", USBDEVNAME(sc->sc_dev));
+		aprint_error("%s: can't register softintr\n", USBDEVNAME(sc->sc_dev));
 		sc->sc_dying = 1;
 		USB_ATTACH_ERROR_RETURN;
 	}
@@ -221,7 +223,7 @@ USB_ATTACH(usb)
 		dev = sc->sc_port.device;
 		if (dev->hub == NULL) {
 			sc->sc_dying = 1;
-			printf("%s: root device is not a hub\n",
+			aprint_error("%s: root device is not a hub\n",
 			       USBDEVNAME(sc->sc_dev));
 			USB_ATTACH_ERROR_RETURN;
 		}
@@ -236,7 +238,7 @@ USB_ATTACH(usb)
 			dev->hub->explore(sc->sc_bus->root_hub);
 #endif
 	} else {
-		printf("%s: root hub problem, error=%d\n",
+		aprint_error("%s: root hub problem, error=%d\n",
 		       USBDEVNAME(sc->sc_dev), err);
 		sc->sc_dying = 1;
 	}
@@ -245,6 +247,9 @@ USB_ATTACH(usb)
 
 	config_pending_incr();
 	usb_kthread_create(usb_create_event_thread, sc);
+
+	if (!pmf_device_register(self, NULL, NULL))
+		aprint_error_dev(self, "couldn't establish power handler\n");
 
 	USB_ATTACH_SUCCESS_RETURN;
 }
@@ -728,7 +733,7 @@ usbkqfilter(dev_t dev, struct knote *kn)
 		break;
 
 	default:
-		return (1);
+		return (EINVAL);
 	}
 
 	kn->kn_hook = NULL;
@@ -875,7 +880,7 @@ usb_schedsoftintr(usbd_bus_handle bus)
 	if (bus->use_polling) {
 		bus->methods->soft_intr(bus);
 	} else {
-		softintr_schedule(bus->soft);
+		softint_schedule(bus->soft);
 	}
 #else
 	bus->methods->soft_intr(bus);
@@ -912,6 +917,7 @@ usb_detach(device_ptr_t self, int flags)
 
 	DPRINTF(("usb_detach: start\n"));
 
+	pmf_device_deregister(self);
 	/* Kill off event thread. */
 	while (sc->sc_event_thread != NULL) {
 		wakeup(&sc->sc_bus->needs_explore);
@@ -925,7 +931,7 @@ usb_detach(device_ptr_t self, int flags)
 
 #ifdef USB_USE_SOFTINTR
 	if (sc->sc_bus->soft != NULL) {
-		softintr_disestablish(sc->sc_bus->soft);
+		softint_disestablish(sc->sc_bus->soft);
 		sc->sc_bus->soft = NULL;
 	}
 #endif

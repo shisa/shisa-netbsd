@@ -1,4 +1,4 @@
-/* 	$NetBSD: lwp.h,v 1.64 2007/09/06 23:59:01 ad Exp $	*/
+/* 	$NetBSD: lwp.h,v 1.78 2008/01/26 17:55:29 rmind Exp $	*/
 
 /*-
  * Copyright (c) 2001, 2006, 2007 The NetBSD Foundation, Inc.
@@ -44,7 +44,9 @@
 #include <sys/callout.h>
 #include <sys/mutex.h>
 #include <sys/condvar.h>
+#include <sys/pset.h>
 #include <sys/signalvar.h>
+#include <sys/sched.h>
 #include <sys/specificdata.h>
 #include <sys/syncobj.h>
 
@@ -65,7 +67,7 @@
  * t:	l_proc->p_stmutex
  * S:	select_lock
  * (:	unlocked, stable
- * !:	unlocked, may only be safely accessed by the LWP itself
+ * !:	unlocked, may only be reliably accessed by the LWP itself
  * ?:	undecided
  *
  * Fields are clustered together by usage (to increase the likelyhood
@@ -77,23 +79,33 @@ struct lwp {
 	void		*l_sched_info;	/* s: Scheduler-specific structure */
 	struct cpu_info *volatile l_cpu;/* s: CPU we're on if LSONPROC */
 	kmutex_t * volatile l_mutex;	/* l: ptr to mutex on sched state */
+	int		l_ctxswtch;	/* l: performing a context switch */
 	struct user	*l_addr;	/* l: KVA of u-area (PROC ONLY) */
 	struct mdlwp	l_md;		/* l: machine-dependent fields. */
 	int		l_flag;		/* l: misc flag values */
 	int		l_stat;		/* l: overall LWP status */
-	struct timeval 	l_rtime;	/* l: real time */
+	struct bintime 	l_rtime;	/* l: real time */
+	struct bintime	l_stime;	/* l: start time (while ONPROC) */
 	u_int		l_swtime;	/* l: time swapped in or out */
-	int		l_holdcnt;	/* l: if non-zero, don't swap */
+	u_int		l_holdcnt;	/* l: if non-zero, don't swap */
 	int		l_biglocks;	/* l: biglock count before sleep */
-	pri_t		l_priority;	/* l: process priority */
-	pri_t		l_usrpri;	/* l: user-priority */
+	int		l_class;	/* l: scheduling class */
+	int		l_kpriority;	/* !: has kernel priority boost */
+	pri_t		l_kpribase;	/* !: kernel priority base level */
+	pri_t		l_priority;	/* l: scheduler priority */
 	pri_t		l_inheritedprio;/* l: inherited priority */
 	SLIST_HEAD(, turnstile) l_pi_lenders; /* l: ts lending us priority */
 	uint64_t	l_ncsw;		/* l: total context switches */
 	uint64_t	l_nivcsw;	/* l: involuntary context switches */
 	int		l_cpticks;	/* t: Ticks of CPU time */
 	fixpt_t		l_pctcpu;	/* t: %cpu during l_swtime */
+	fixpt_t		l_estcpu;	/* l: cpu time for SCHED_4BSD */
+	psetid_t	l_psid;		/* l: assigned processor-set ID */
+	struct cpu_info *l_target_cpu;	/* l: target CPU to migrate */
 	kmutex_t	l_swaplock;	/* l: lock to prevent swapping */
+	struct lwpctl	*l_lwpctl;	/* p: lwpctl block kernel address */
+	struct lcpage	*l_lcpage;	/* p: lwpctl containing page */
+	cpuset_t	l_affinity;	/* l: CPU set for affinity */
 
 	/* Synchronisation */
 	struct turnstile *l_ts;		/* l: current turnstile */
@@ -104,7 +116,7 @@ struct lwp {
 	struct sleepq	*l_sleepq;	/* l: current sleep queue */
 	int		l_sleeperr;	/* !: error before unblock */
 	u_int		l_slptime;	/* l: time since last blocked */
-	callout_t	l_timeout_ch;	/* !: callout for sleep timeout */
+	callout_t	l_timeout_ch;	/* !: callout for tsleep */
 
 	/* Process level and global state, misc. */
 	LIST_ENTRY(lwp)	l_list;		/* a: entry on list of all LWPs */
@@ -180,16 +192,17 @@ extern lwp_t lwp0;			/* LWP for proc0 */
 #define	LW_INMEM	0x00000004 /* Loaded into memory. */
 #define	LW_SINTR	0x00000080 /* Sleep is interruptible. */
 #define	LW_SYSTEM	0x00000200 /* Kernel thread */
+#define	LW_TIMEINTR	0x00010000 /* Time this soft interrupt */
 #define	LW_WSUSPEND	0x00020000 /* Suspend before return to user */
 #define	LW_WCORE	0x00080000 /* Stop for core dump on return to user */
 #define	LW_WEXIT	0x00100000 /* Exit before return to user */
+#define	LW_AFFINITY	0x00200000 /* Affinity is assigned to the thread */
 #define	LW_PENDSIG	0x01000000 /* Pending signal for us */
 #define	LW_CANCELLED	0x02000000 /* tsleep should not sleep */
 #define	LW_WUSERRET	0x04000000 /* Call proc::p_userret on return to user */
 #define	LW_WREBOOT	0x08000000 /* System is rebooting, please suspend */
 #define	LW_UNPARKED	0x10000000 /* Unpark op pending */
 #define	LW_RUNNING	0x20000000 /* Active on a CPU (except if LSZOMB) */
-#define	LW_INTR		0x40000000 /* Soft interrupt handler */
 #define	LW_BOUND	0x80000000 /* Bound to a CPU */
 
 /* The second set of flags is kept in l_pflag. */
@@ -199,6 +212,8 @@ extern lwp_t lwp0;			/* LWP for proc0 */
 #define	LP_UFSCOW	0x00000008 /* UFS: doing copy on write */
 #define	LP_OWEUPC	0x00000010 /* Owe user profiling tick */
 #define	LP_MPSAFE	0x00000020 /* Starts life without kernel_lock */
+#define	LP_INTR		0x00000040 /* Soft interrupt handler */
+#define	LP_SYSCTLWRITE	0x00000080 /* sysctl write lock held */
 
 /* The third set is kept in l_prflag. */
 #define	LPR_DETACHED	0x00800000 /* Won't be waited for. */
@@ -231,7 +246,7 @@ extern lwp_t lwp0;			/* LWP for proc0 */
 #ifdef _KERNEL
 #define	LWP_CACHE_CREDS(l, p)						\
 do {									\
-	if ((l)->l_cred != (p)->p_cred)					\
+	if (__predict_false((l)->l_cred != (p)->p_cred))		\
 		lwp_update_creds(l);					\
 } while (/* CONSTCOND */ 0)
 
@@ -255,13 +270,15 @@ void	lwp_continue(lwp_t *);
 void	cpu_setfunc(lwp_t *, void (*)(void *), void *);
 void	startlwp(void *);
 void	upcallret(lwp_t *);
-void	lwp_exit(lwp_t *) __attribute__((__noreturn__));
+void	lwp_exit(lwp_t *) __dead;
 void	lwp_exit_switchaway(lwp_t *);
 lwp_t *proc_representative_lwp(struct proc *, int *, int);
 int	lwp_suspend(lwp_t *, lwp_t *);
 int	lwp_create1(lwp_t *, const void *, size_t, u_long, lwpid_t *);
 void	lwp_update_creds(lwp_t *);
-lwp_t *lwp_find(struct proc *, int);
+void	lwp_migrate(lwp_t *, struct cpu_info *);
+lwp_t *lwp_find2(pid_t, lwpid_t);
+lwp_t *lwp_find(proc_t *, int);
 void	lwp_userret(lwp_t *);
 void	lwp_need_userret(lwp_t *);
 void	lwp_free(lwp_t *, bool, bool);
@@ -280,6 +297,9 @@ void	lwp_setspecific(specificdata_key_t, void *);
 /* Syscalls */
 int	lwp_park(struct timespec *, const void *);
 int	lwp_unpark(lwpid_t, const void *);
+
+/* ddb */
+void lwp_whatis(uintptr_t, void (*)(const char *, ...));
 
 
 /*
@@ -318,9 +338,6 @@ lwp_changepri(lwp_t *l, pri_t pri)
 {
 	KASSERT(mutex_owned(l->l_mutex));
 
-	if (l->l_priority == pri)
-		return;
-
 	(*l->l_syncobj->sobj_changepri)(l, pri);
 }
 
@@ -343,15 +360,19 @@ lwp_unsleep(lwp_t *l)
 	(*l->l_syncobj->sobj_unsleep)(l);
 }
 
-static inline int
+static inline pri_t
 lwp_eprio(lwp_t *l)
 {
+	pri_t pri;
 
-	return MIN(l->l_inheritedprio, l->l_priority);
+	pri = l->l_priority;
+	if (l->l_kpriority && pri < PRI_KERNEL)
+		pri = (pri >> 1) + l->l_kpribase;
+	return MAX(l->l_inheritedprio, pri);
 }
 
-int newlwp(lwp_t *, struct proc *, vaddr_t, bool, int,
-    void *, size_t, void (*)(void *), void *, lwp_t **);
+int lwp_create(lwp_t *, struct proc *, vaddr_t, bool, int,
+    void *, size_t, void (*)(void *), void *, lwp_t **, int);
 
 /*
  * We should provide real stubs for the below that LKMs can use.
@@ -367,6 +388,39 @@ static inline void
 spc_unlock(struct cpu_info *ci)
 {
 	mutex_spin_exit(ci->ci_schedstate.spc_mutex);
+}
+
+static inline void
+spc_dlock(struct cpu_info *ci1, struct cpu_info *ci2)
+{
+	struct schedstate_percpu *spc1 = &ci1->ci_schedstate;
+	struct schedstate_percpu *spc2 = &ci2->ci_schedstate;
+
+	KASSERT(ci1 != ci2);
+	if (spc1->spc_mutex == spc2->spc_mutex) {
+		mutex_spin_enter(spc1->spc_mutex);
+	} else if (ci1 < ci2) {
+		mutex_spin_enter(spc1->spc_mutex);
+		mutex_spin_enter(spc2->spc_mutex);
+	} else {
+		mutex_spin_enter(spc2->spc_mutex);
+		mutex_spin_enter(spc1->spc_mutex);
+	}
+}
+
+static inline void
+spc_dunlock(struct cpu_info *ci1, struct cpu_info *ci2)
+{
+	struct schedstate_percpu *spc1 = &ci1->ci_schedstate;
+	struct schedstate_percpu *spc2 = &ci2->ci_schedstate;
+
+	KASSERT(ci1 != ci2);
+	if (spc1->spc_mutex == spc2->spc_mutex) {
+		mutex_spin_exit(spc1->spc_mutex);
+	} else {
+		mutex_spin_exit(spc1->spc_mutex);
+		mutex_spin_exit(spc2->spc_mutex);
+	}
 }
 
 #endif /* _KERNEL */

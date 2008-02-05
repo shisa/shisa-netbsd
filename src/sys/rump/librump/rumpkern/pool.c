@@ -1,4 +1,4 @@
-/*	$NetBSD: pool.c,v 1.2 2007/08/14 13:54:15 pooka Exp $	*/
+/*	$NetBSD: pool.c,v 1.6 2008/01/03 02:48:03 pooka Exp $	*/
 
 /*
  * Copyright (c) 2007 Antti Kantee.  All Rights Reserved.
@@ -52,24 +52,42 @@ pool_destroy(struct pool *pp)
 	return;
 }
 
-void
-pool_cache_init(struct pool_cache *pc, struct pool *pp,
+pool_cache_t
+pool_cache_init(size_t size, u_int align, u_int align_offset, u_int flags,
+	const char *wchan, struct pool_allocator *palloc, int ipl,
 	int (*ctor)(void *, void *, int), void (*dtor)(void *, void *),
 	void *arg)
 {
+	pool_cache_t pc;
+	char *ptr;
 
-	pc->pc_pool = pp;
+	ptr = kmem_zalloc(sizeof(*pc) + CACHE_LINE_SIZE, KM_SLEEP);
+	pc = (pool_cache_t)(((uintptr_t)ptr + CACHE_LINE_SIZE - 1) &
+	    ~(CACHE_LINE_SIZE - 1));
+
+	pool_init(&pc->pc_pool, size, align, align_offset, flags,
+	    wchan, palloc, ipl);
 	pc->pc_ctor = ctor;
 	pc->pc_dtor = dtor;
 	pc->pc_arg = arg;
+
+	return pc;
+}
+
+void
+pool_cache_destroy(pool_cache_t pc)
+{
+
+	pool_destroy(&pc->pc_pool);
+	kmem_free(pc, sizeof(*pc) + CACHE_LINE_SIZE);
 }
 
 void *
-pool_cache_get_paddr(struct pool_cache *pc, int flags, paddr_t *pap)
+pool_cache_get_paddr(pool_cache_t pc, int flags, paddr_t *pap)
 {
 	void *item;
 
-	item = pool_get(pc->pc_pool, 0);
+	item = pool_get(&pc->pc_pool, 0);
 	if (pc->pc_ctor)
 		pc->pc_ctor(pc->pc_arg, item, flags);
 	if (pap)
@@ -79,12 +97,12 @@ pool_cache_get_paddr(struct pool_cache *pc, int flags, paddr_t *pap)
 }
 
 void
-pool_cache_put_paddr(struct pool_cache *pc, void *object, paddr_t pa)
+pool_cache_put_paddr(pool_cache_t pc, void *object, paddr_t pa)
 {
 
 	if (pc->pc_dtor)
 		pc->pc_dtor(pc->pc_arg, object);
-	pool_put(pc->pc_pool, object);
+	pool_put(&pc->pc_pool, object);
 }
 
 void *
@@ -95,7 +113,7 @@ pool_get(struct pool *pp, int flags)
 	if (pp->pr_size == 0)
 		panic("%s: pool unit size 0.  not initialized?", __func__);
 
-	rv = rumpuser_malloc(pp->pr_size, 1);
+	rv = kmem_alloc(pp->pr_size, KM_NOSLEEP);
 	if (rv == NULL && (flags & PR_WAITOK && (flags & PR_LIMITFAIL) == 0))
 		panic("%s: out of memory and PR_WAITOK", __func__);
 
@@ -106,7 +124,7 @@ void
 pool_put(struct pool *pp, void *item)
 {
 
-	rumpuser_free(item);
+	kmem_free(item, pp->pr_size);
 }
 
 void

@@ -1,4 +1,4 @@
-/*	$NetBSD: defs.h,v 1.132 2006/10/04 21:27:27 christos Exp $	*/
+/*	$NetBSD: defs.h,v 1.135 2008/01/28 02:47:12 rumble Exp $	*/
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.
@@ -54,6 +54,7 @@ deconst(const void *p)
 }
 
 #include "msg_defs.h"
+#include "menu_defs.h"
 
 #define min(a,b)	((a) < (b) ? (a) : (b))
 #define max(a,b)	((a) > (b) ? (a) : (b))
@@ -107,6 +108,7 @@ enum {
     SET_GAMES,		/* text games */
     SET_MAN_PAGES,	/* online manual pages */
     SET_MISC,		/* miscellaneuous */
+    SET_TESTS,		/* tests */
     SET_TEXT_TOOLS,	/* text processing tools */
 
     /* X11 sets */
@@ -137,7 +139,7 @@ enum {
 #define SET_CORE SET_BASE, SET_ETC
 /* All system sets */
 #define SET_SYSTEM SET_CORE, SET_COMPILER, SET_GAMES, \
-		    SET_MAN_PAGES, SET_MISC, SET_TEXT_TOOLS
+		    SET_MAN_PAGES, SET_MISC, SET_TESTS, SET_TEXT_TOOLS
 /* All X11 sets */
 #define SET_X11_NOSERVERS SET_X11_BASE, SET_X11_FONTS, SET_X11_PROG, SET_X11_ETC
 #define SET_X11 SET_X11_NOSERVERS, SET_X11_SERVERS
@@ -190,6 +192,22 @@ typedef struct _partinfo {
 #define PIF_RESET	0x1000		/* internal - restore previous values */
 } partinfo;	/* Single partition from a disklabel */
 
+struct ptn_info {
+	int		menu_no;
+	struct ptn_size {
+		int	ptn_id;
+		char	mount[20];
+		int	dflt_size;
+		int	size;
+		int	limit;
+		int	changed;
+	}		ptn_sizes[MAXPARTITIONS + 1];	/* +1 for delete code */
+	menu_ent	ptn_menus[MAXPARTITIONS + 1];	/* +1 for unit chg */
+	int		free_parts;
+	int		free_space;
+	struct ptn_size	*pool_part;
+	char		exit_msg[70];
+};
 
 /* variables */
 
@@ -303,6 +321,7 @@ int	md_pre_update(void);
 int	md_update(void);
 int	md_post_extract(void);
 void	md_init(void);
+void	md_init_set_status(int);
 void	md_set_no_x(void);
 
 /* from main.c */
@@ -428,6 +447,11 @@ void	unwind_mounts(void);
 
 /* from bsddisklabel.c */
 int	make_bsd_partitions(void);
+int	save_ptn(int, int, int, int, const char *);
+void	set_ptn_titles(menudesc *, int, void *);
+void	set_ptn_menu(struct ptn_info *);
+int	set_ptn_size(menudesc *, void *);
+void	get_ptn_sizes(int, int, int);
 
 /* from aout2elf.c */
 int move_aout_libs(void);

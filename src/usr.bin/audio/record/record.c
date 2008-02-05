@@ -1,4 +1,4 @@
-/*	$NetBSD: record.c,v 1.43 2006/05/11 01:19:10 mrg Exp $	*/
+/*	$NetBSD: record.c,v 1.45 2007/12/15 19:44:49 perry Exp $	*/
 
 /*
  * Copyright (c) 1999, 2002 Matthew R. Green
@@ -34,7 +34,7 @@
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: record.c,v 1.43 2006/05/11 01:19:10 mrg Exp $");
+__RCSID("$NetBSD: record.c,v 1.45 2007/12/15 19:44:49 perry Exp $");
 #endif
 
 
@@ -52,6 +52,7 @@ __RCSID("$NetBSD: record.c,v 1.43 2006/05/11 01:19:10 mrg Exp $");
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <util.h>
 
 #include "libaudio.h"
 #include "auconv.h"
@@ -82,7 +83,7 @@ void (*conv_func) (u_char *, int);
 void usage (void);
 int main (int, char *[]);
 int timeleft (struct timeval *, struct timeval *);
-void cleanup (int) __attribute__((__noreturn__));
+void cleanup (int) __dead;
 int write_header_sun (void **, size_t *, int *);
 int write_header_wav (void **, size_t *, int *);
 void write_header (void);
@@ -374,6 +375,9 @@ cleanup(signo)
 			err(1, "failed to reset audio info");
 	}
 	close(audiofd);
+	if (signo != 0) {
+		(void)raise_default_signal(signo);
+	}
 	exit(0);
 }
 

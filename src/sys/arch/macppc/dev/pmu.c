@@ -1,4 +1,4 @@
-/*	$NetBSD: pmu.c,v 1.8 2007/08/08 22:19:55 macallan Exp $ */
+/*	$NetBSD: pmu.c,v 1.11 2007/12/06 17:00:33 ad Exp $ */
 
 /*-
  * Copyright (c) 2006 Michael Lorenz
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: pmu.c,v 1.8 2007/08/08 22:19:55 macallan Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pmu.c,v 1.11 2007/12/06 17:00:33 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -40,6 +40,7 @@ __KERNEL_RCSID(0, "$NetBSD: pmu.c,v 1.8 2007/08/08 22:19:55 macallan Exp $");
 #include <sys/kthread.h>
 
 #include <machine/bus.h>
+#include <machine/pio.h>
 #include <machine/autoconf.h>
 #include <dev/clock_subr.h>
 #include <dev/i2c/i2cvar.h>
@@ -76,7 +77,6 @@ struct pmu_softc {
 	struct todr_chip_handle sc_todr;
 	struct adb_bus_accessops sc_adbops;
 	struct i2c_controller sc_i2c;
-	struct lock sc_buslock;
 	struct pmu_ops sc_pmu_ops;
 	bus_space_tag_t sc_memt;
 	bus_space_handle_t sc_memh;
@@ -256,13 +256,17 @@ pmu_attach(struct device *parent, struct device *dev, void *aux)
 	int irq = ca->ca_intr[0];
 	int node, extint_node, root_node;
 	int nbat = 1, i, pmnode;
+	int type = IST_EDGE;
 	uint8_t cmd[2] = {2, 0};
 	uint8_t resp[16];
 	char name[256];
 
-	extint_node = getnodebyname(OF_parent(ca->ca_node), "extint-gpio1");
-	if (extint_node)
+	extint_node = of_getnode_byname(OF_parent(ca->ca_node), "extint-gpio1");
+	if (extint_node) {
+
 		OF_getprop(extint_node, "interrupts", &irq, 4);
+		type = IST_LEVEL;
+	}
 
 	printf(" irq %d: ", irq);
 
@@ -285,7 +289,7 @@ pmu_attach(struct device *parent, struct device *dev, void *aux)
 		printf("%s: unable to map registers\n", dev->dv_xname);
 		return;
 	}
-	sc->sc_ih = intr_establish(irq, IST_LEVEL, IPL_TTY, pmu_intr, sc);
+	sc->sc_ih = intr_establish(irq, type, IPL_TTY, pmu_intr, sc);
 
 	pmu_init(sc);
 
@@ -371,7 +375,7 @@ next:
 	} else {
 
 		/* check how many batteries we have */
-		pmnode = getnodebyname(ca->ca_node, "power-mgt");
+		pmnode = of_getnode_byname(ca->ca_node, "power-mgt");
 		if (pmnode == -1)
 			goto bat_done;
 		if (OF_getprop(pmnode, "prim-info", regs, sizeof(regs)) < 24)

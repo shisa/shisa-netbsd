@@ -1,4 +1,4 @@
-/*	$NetBSD: linux_uselib.c,v 1.22 2007/04/30 09:20:19 dsl Exp $	*/
+/*	$NetBSD: linux_uselib.c,v 1.26 2007/12/20 23:02:57 dsl Exp $	*/
 
 /*-
  * Copyright (c) 1995, 1998 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: linux_uselib.c,v 1.22 2007/04/30 09:20:19 dsl Exp $");
+__KERNEL_RCSID(0, "$NetBSD: linux_uselib.c,v 1.26 2007/12/20 23:02:57 dsl Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -53,7 +53,7 @@ __KERNEL_RCSID(0, "$NetBSD: linux_uselib.c,v 1.22 2007/04/30 09:20:19 dsl Exp $"
 #include <sys/mman.h>
 #include <sys/syscallargs.h>
 
-#include <machine/cpu.h>
+#include <sys/cpu.h>
 #include <machine/reg.h>
 
 #include <compat/linux/common/linux_types.h>
@@ -61,6 +61,8 @@ __KERNEL_RCSID(0, "$NetBSD: linux_uselib.c,v 1.22 2007/04/30 09:20:19 dsl Exp $"
 #include <compat/linux/common/linux_util.h>
 #include <compat/linux/common/linux_exec.h>
 #include <compat/linux/common/linux_machdep.h>
+#include <compat/linux/common/linux_ipc.h>
+#include <compat/linux/common/linux_sem.h>
 
 #ifndef EXEC_AOUT
 /* define EXEC_AOUT to get prototype from linux_syscall.h */
@@ -88,11 +90,11 @@ __KERNEL_RCSID(0, "$NetBSD: linux_uselib.c,v 1.22 2007/04/30 09:20:19 dsl Exp $"
  */
 
 int
-linux_sys_uselib(struct lwp *l, void *v, register_t *retval)
+linux_sys_uselib(struct lwp *l, const struct linux_sys_uselib_args *uap, register_t *retval)
 {
-	struct linux_sys_uselib_args /* {
+	/* {
 		syscallarg(const char *) path;
-	} */ *uap = v;
+	} */
 	long bsize, dsize, tsize, taddr, baddr, daddr;
 	struct nameidata ni;
 	struct vnode *vp;
@@ -101,7 +103,8 @@ linux_sys_uselib(struct lwp *l, void *v, register_t *retval)
 	int i, magic, error;
 	size_t rem;
 
-	NDINIT(&ni, LOOKUP, FOLLOW | TRYEMULROOT, UIO_USERSPACE, SCARG(uap, path), l);
+	NDINIT(&ni, LOOKUP, FOLLOW | TRYEMULROOT, UIO_USERSPACE,
+	    SCARG(uap, path));
 
 	if ((error = namei(&ni)))
 		return error;

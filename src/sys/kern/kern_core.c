@@ -1,4 +1,4 @@
-/*	$NetBSD: kern_core.c,v 1.6 2007/09/22 13:34:23 dsl Exp $	*/
+/*	$NetBSD: kern_core.c,v 1.9 2008/01/25 14:32:14 ad Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1989, 1991, 1993
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_core.c,v 1.6 2007/09/22 13:34:23 dsl Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_core.c,v 1.9 2008/01/25 14:32:14 ad Exp $");
 
 #include "opt_coredump.h"
 
@@ -161,7 +161,7 @@ coredump(struct lwp *l, const char *pattern)
 	mutex_exit(&proclist_lock);
 	if (error)
 		goto done;
-	NDINIT(&nd, LOOKUP, NOFOLLOW, UIO_SYSSPACE, name, l);
+	NDINIT(&nd, LOOKUP, NOFOLLOW, UIO_SYSSPACE, name);
 	if ((error = vn_open(&nd, O_CREAT | O_NOFOLLOW | FWRITE,
 	    S_IRUSR | S_IWUSR)) != 0)
 		goto done;
@@ -169,7 +169,7 @@ coredump(struct lwp *l, const char *pattern)
 
 	/* Don't dump to non-regular files or files with links. */
 	if (vp->v_type != VREG ||
-	    VOP_GETATTR(vp, &vattr, cred, l) || vattr.va_nlink != 1) {
+	    VOP_GETATTR(vp, &vattr, cred) || vattr.va_nlink != 1) {
 		error = EINVAL;
 		goto out;
 	}
@@ -182,8 +182,7 @@ coredump(struct lwp *l, const char *pattern)
 		vattr.va_mode = security_setidcore_mode;
 	}
 
-	VOP_LEASE(vp, l, cred, LEASE_WRITE);
-	VOP_SETATTR(vp, &vattr, cred, l);
+	VOP_SETATTR(vp, &vattr, cred);
 	p->p_acflag |= ACORE;
 
 	io.io_lwp = l;

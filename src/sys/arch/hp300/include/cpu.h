@@ -1,4 +1,4 @@
-/*	$NetBSD: cpu.h,v 1.55 2007/08/04 09:49:51 ad Exp $	*/
+/*	$NetBSD: cpu.h,v 1.58 2008/01/28 16:21:20 tsutsui Exp $	*/
 
 /*
  * Copyright (c) 1982, 1990, 1993
@@ -141,7 +141,8 @@ struct clockframe {
 #define	CLKF_INTR(framep)	(((framep)->sr & PSL_M) == 0)
 #else
 /* but until we start using PSL_M, we have to do this instead */
-#define	CLKF_INTR(framep)	(0)	/* XXX */
+#include <machine/intr.h>
+#define	CLKF_INTR(framep)	(idepth > 1)	/* XXX */
 #endif
 
 
@@ -188,7 +189,7 @@ extern int astpending;		/* need to trap before returning to user mode */
  */
 
 #ifdef _KERNEL
-extern	char *intiobase, *intiolimit, *extiobase;
+extern	uint8_t *intiobase, *intiolimit, *extiobase;
 extern	void (*vectab[])(void);
 
 struct fpframe;
@@ -233,10 +234,10 @@ int	badbaddr(void *);
  * conversion between physical and kernel virtual addresses is easy.
  */
 #define	ISIIOVA(va) \
-	((char *)(va) >= intiobase && (char *)(va) < intiolimit)
-#define	IIOV(pa)	((int)(pa)-INTIOBASE+(int)intiobase)
-#define	IIOP(va)	((int)(va)-(int)intiobase+INTIOBASE)
-#define	IIOPOFF(pa)	((int)(pa)-INTIOBASE)
+	((uint8_t *)(va) >= intiobase && (uint8_t *)(va) < intiolimit)
+#define	IIOV(pa)	((paddr_t)(pa)-INTIOBASE+(vaddr_t)intiobase)
+#define	IIOP(va)	((vaddr_t)(va)-(vaddr_t)intiobase+INTIOBASE)
+#define	IIOPOFF(pa)	((paddr_t)(pa)-INTIOBASE)
 #define	IIOMAPSIZE	btoc(INTIOTOP-INTIOBASE)	/* 2mb */
 
 /*

@@ -1,4 +1,4 @@
-/*      $NetBSD: xbd_xenbus.c,v 1.20 2007/07/29 12:15:42 ad Exp $      */
+/*      $NetBSD: xbd_xenbus.c,v 1.23 2007/11/22 16:17:08 bouyer Exp $      */
 
 /*
  * Copyright (c) 2006 Manuel Bouyer.
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: xbd_xenbus.c,v 1.20 2007/07/29 12:15:42 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: xbd_xenbus.c,v 1.23 2007/11/22 16:17:08 bouyer Exp $");
 
 #include "opt_xen.h"
 #include "rnd.h"
@@ -55,11 +55,11 @@ __KERNEL_RCSID(0, "$NetBSD: xbd_xenbus.c,v 1.20 2007/07/29 12:15:42 ad Exp $");
 
 #include <uvm/uvm.h>
 
-#include <machine/xen3-public/io/ring.h>
-#include <machine/xen3-public/io/blkif.h>
+#include <xen/xen3-public/io/ring.h>
+#include <xen/xen3-public/io/blkif.h>
 
-#include <machine/granttables.h>
-#include <machine/xenbus.h>
+#include <xen/granttables.h>
+#include <xen/xenbus.h>
 #include "locators.h"
 
 #undef XBD_DEBUG
@@ -227,7 +227,7 @@ xbd_xenbus_attach(struct device *parent, struct device *self, void *aux)
 	sc->sc_xbusd->xbusd_otherend_changed = xbd_backend_changed;
 
 	dk_sc_init(&sc->sc_dksc, sc, sc->sc_dev.dv_xname);
-	sc->sc_dksc.sc_dkdev.dk_driver = &xbddkdriver;
+	disk_init(&sc->sc_dksc.sc_dkdev, sc->sc_dev.dv_xname, &xbddkdriver);
 	sc->sc_di = &dkintf_esdi;
 	/* initialize free requests list */
 	SLIST_INIT(&sc->sc_xbdreq_head);

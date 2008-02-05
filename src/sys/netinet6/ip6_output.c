@@ -1,4 +1,4 @@
-/*	$NetBSD: ip6_output.c,v 1.121 2007/09/19 04:33:44 dyoung Exp $	*/
+/*	$NetBSD: ip6_output.c,v 1.126 2008/01/14 04:16:45 dyoung Exp $	*/
 /*	$KAME: ip6_output.c,v 1.172 2001/03/25 09:55:56 itojun Exp $	*/
 
 /*
@@ -62,7 +62,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ip6_output.c,v 1.121 2007/09/19 04:33:44 dyoung Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ip6_output.c,v 1.126 2008/01/14 04:16:45 dyoung Exp $");
 
 #include "opt_inet.h"
 #include "opt_inet6.h"
@@ -125,25 +125,25 @@ struct ip6_exthdrs {
 	struct mbuf *ip6e_dest2;
 };
 
-static int ip6_pcbopt __P((int, u_char *, int, struct ip6_pktopts **,
-	int, int));
-static int ip6_getpcbopt __P((struct ip6_pktopts *, int, struct mbuf **));
-static int ip6_setpktopt __P((int, u_char *, int, struct ip6_pktopts *, int,
-	int, int, int));
-static int ip6_setmoptions __P((int, struct ip6_moptions **, struct mbuf *));
-static int ip6_getmoptions __P((int, struct ip6_moptions *, struct mbuf **));
-static int ip6_copyexthdr __P((struct mbuf **, void *, int));
-static int ip6_insertfraghdr __P((struct mbuf *, struct mbuf *, int,
-	struct ip6_frag **));
-static int ip6_insert_jumboopt __P((struct ip6_exthdrs *, u_int32_t));
-static int ip6_splithdr __P((struct mbuf *, struct ip6_exthdrs *));
+static int ip6_pcbopt(int, u_char *, int, struct ip6_pktopts **,
+	int, int);
+static int ip6_getpcbopt(struct ip6_pktopts *, int, struct mbuf **);
+static int ip6_setpktopt(int, u_char *, int, struct ip6_pktopts *, int,
+	int, int, int);
+static int ip6_setmoptions(int, struct ip6_moptions **, struct mbuf *);
+static int ip6_getmoptions(int, struct ip6_moptions *, struct mbuf **);
+static int ip6_copyexthdr(struct mbuf **, void *, int);
+static int ip6_insertfraghdr(struct mbuf *, struct mbuf *, int,
+	struct ip6_frag **);
+static int ip6_insert_jumboopt(struct ip6_exthdrs *, u_int32_t);
+static int ip6_splithdr(struct mbuf *, struct ip6_exthdrs *);
 static int ip6_getpmtu(struct route *, struct route *, struct ifnet *,
     const struct in6_addr *, u_long *, int *);
-static int copypktopts __P((struct ip6_pktopts *, struct ip6_pktopts *, int));
+static int copypktopts(struct ip6_pktopts *, struct ip6_pktopts *, int);
 
 #ifdef RFC2292
-static int ip6_pcbopts __P((struct ip6_pktopts **, struct mbuf *,
-	struct socket *));
+static int ip6_pcbopts(struct ip6_pktopts **, struct mbuf *,
+	struct socket *);
 #endif
 
 #define	IN6_NEED_CHECKSUM(ifp, csum_flags) \
@@ -204,6 +204,7 @@ ip6_output(
 	int s;
 #endif
 
+	memset(&ip6route, 0, sizeof(ip6route));
 
 #ifdef  DIAGNOSTIC
 	if ((m->m_flags & M_PKTHDR) == 0)
@@ -528,10 +529,7 @@ skip_ipsec2:;
 			  * the information from the
 			  * application.
 			  */
-			 bzero(&sa, sizeof(sa));
-			 sa.sin6_family = AF_INET6;
-			 sa.sin6_len = sizeof(sa);
-			 sa.sin6_addr = addr[0];
+			 sockaddr_in6_init(&sa, addr, 0, 0, 0);
 			 if ((error = sa6_embedscope(&sa,
 			     ip6_use_defzone)) != 0) {
 				 goto bad;
@@ -570,7 +568,6 @@ skip_ipsec2:;
 	 */
 	/* initialize cached route */
 	if (ro == NULL) {
-		memset(&ip6route, 0, sizeof(ip6route));
 		ro = &ip6route;
 	}
 	ro_pmtu = ro;
@@ -676,10 +673,7 @@ skip_ipsec2:;
 	/* adjust pointer */
 	ip6 = mtod(m, struct ip6_hdr *);
 
-	bzero(&dst_sa, sizeof(dst_sa));
-	dst_sa.sin6_family = AF_INET6;
-	dst_sa.sin6_len = sizeof(dst_sa);
-	dst_sa.sin6_addr = ip6->ip6_dst;
+	sockaddr_in6_init(&dst_sa, &ip6->ip6_dst, 0, 0, 0);
 	if ((error = in6_selectroute(&dst_sa, opt, im6o, ro,
 	    &ifp, &rt, 0)) != 0) {
 		if (ifp != NULL)
@@ -719,10 +713,7 @@ skip_ipsec2:;
 	src0 = ip6->ip6_src;
 	if (in6_setscope(&src0, origifp, &zone))
 		goto badscope;
-	bzero(&src_sa, sizeof(src_sa));
-	src_sa.sin6_family = AF_INET6;
-	src_sa.sin6_len = sizeof(src_sa);
-	src_sa.sin6_addr = ip6->ip6_src;
+	sockaddr_in6_init(&src_sa, &ip6->ip6_src, 0, 0, 0);
 	if (sa6_recoverscope(&src_sa) || zone != src_sa.sin6_scope_id)
 		goto badscope;
 
@@ -730,10 +721,7 @@ skip_ipsec2:;
 	if (in6_setscope(&dst0, origifp, &zone))
 		goto badscope;
 	/* re-initialize to be sure */
-	bzero(&dst_sa, sizeof(dst_sa));
-	dst_sa.sin6_family = AF_INET6;
-	dst_sa.sin6_len = sizeof(dst_sa);
-	dst_sa.sin6_addr = ip6->ip6_dst;
+	sockaddr_in6_init(&dst_sa, &ip6->ip6_dst, 0, 0, 0);
 	if (sa6_recoverscope(&dst_sa) || zone != dst_sa.sin6_scope_id)
 		goto badscope;
 
@@ -743,7 +731,7 @@ skip_ipsec2:;
 		if (dst == NULL)
 			dst = satocsin6(rtcache_getdst(ro));
 		KASSERT(dst != NULL);
-	} else if (opt && opt->ip6po_nextroute.ro_rt != NULL) {
+	} else if (opt && rtcache_validate(&opt->ip6po_nextroute) != NULL) {
 		/*
 		 * The nexthop is explicitly specified by the
 		 * application.  We assume the next hop is an IPv6
@@ -1183,11 +1171,7 @@ sendorfree:
 		ip6stat.ip6s_fragmented++;
 
 done:
-	/* XXX Second if is invariant? */
-	if (ro == &ip6route)
-		rtcache_free(ro);
-	else if (ro_pmtu == &ip6route)
-		rtcache_free(ro_pmtu);
+	rtcache_free(&ip6route);
 
 #ifdef IPSEC
 	if (sp != NULL)
@@ -1415,6 +1399,7 @@ static int
 ip6_getpmtu(struct route *ro_pmtu, struct route *ro, struct ifnet *ifp,
     const struct in6_addr *dst, u_long *mtup, int *alwaysfragp)
 {
+	struct rtentry *rt;
 	u_int32_t mtu = 0;
 	int alwaysfrag = 0;
 	int error = 0;
@@ -1427,15 +1412,16 @@ ip6_getpmtu(struct route *ro_pmtu, struct route *ro, struct ifnet *ifp,
 
 		/* The first hop and the final destination may differ. */
 		sockaddr_in6_init(&u.dst6, dst, 0, 0, 0);
-		rtcache_lookup(ro_pmtu, &u.dst);
-	}
-	if (ro_pmtu->ro_rt != NULL) {
+		rt = rtcache_lookup(ro_pmtu, &u.dst);
+	} else
+		rt = rtcache_validate(ro_pmtu);
+	if (rt != NULL) {
 		u_int32_t ifmtu;
 
 		if (ifp == NULL)
-			ifp = ro_pmtu->ro_rt->rt_ifp;
+			ifp = rt->rt_ifp;
 		ifmtu = IN6_LINKMTU(ifp);
-		mtu = ro_pmtu->ro_rt->rt_rmx.rmx_mtu;
+		mtu = rt->rt_rmx.rmx_mtu;
 		if (mtu == 0)
 			mtu = ifmtu;
 		else if (mtu < IPV6_MMTU) {
@@ -1459,8 +1445,8 @@ ip6_getpmtu(struct route *ro_pmtu, struct route *ro, struct ifnet *ifp,
 			 * field isn't locked).
 			 */
 			mtu = ifmtu;
-			if (!(ro_pmtu->ro_rt->rt_rmx.rmx_locks & RTV_MTU))
-				ro_pmtu->ro_rt->rt_rmx.rmx_mtu = mtu;
+			if (!(rt->rt_rmx.rmx_locks & RTV_MTU))
+				rt->rt_rmx.rmx_mtu = mtu;
 		}
 	} else if (ifp) {
 		mtu = IN6_LINKMTU(ifp);
@@ -2598,6 +2584,7 @@ ip6_setmoptions(int optname, struct ip6_moptions **im6op, struct mbuf *m)
 		 * appropriate one according to the given multicast address.
 		 */
 		if (mreq->ipv6mr_interface == 0) {
+			struct rtentry *rt;
 			union {
 				struct sockaddr		dst;
 				struct sockaddr_in6	dst6;
@@ -2612,8 +2599,8 @@ ip6_setmoptions(int optname, struct ip6_moptions **im6op, struct mbuf *m)
 			sockaddr_in6_init(&u.dst6, &mreq->ipv6mr_multiaddr, 0,
 			    0, 0);
 			rtcache_setdst(&ro, &u.dst);
-			rtcache_init(&ro);
-			ifp = (ro.ro_rt != NULL) ? ro.ro_rt->rt_ifp : NULL;
+			ifp = (rt = rtcache_init(&ro)) != NULL ? rt->rt_ifp
+			                                        : NULL;
 			rtcache_free(&ro);
 		} else {
 			/*
@@ -2719,10 +2706,8 @@ ip6_setmoptions(int optname, struct ip6_moptions **im6op, struct mbuf *m)
 			 * check if there's ambiguity with the default scope
 			 * zone as the last resort.
 			 */
-			bzero(&sa6_mc, sizeof(sa6_mc));
-			sa6_mc.sin6_family = AF_INET6;
-			sa6_mc.sin6_len = sizeof(sa6_mc);
-			sa6_mc.sin6_addr = mreq->ipv6mr_multiaddr;
+			sockaddr_in6_init(&sa6_mc, &mreq->ipv6mr_multiaddr,
+			    0, 0, 0);
 			error = sa6_embedscope(&sa6_mc, ip6_use_defzone);
 			if (error != 0)
 				break;

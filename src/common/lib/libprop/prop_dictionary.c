@@ -1,4 +1,4 @@
-/*	$NetBSD: prop_dictionary.c,v 1.20 2007/08/30 12:23:54 joerg Exp $	*/
+/*	$NetBSD: prop_dictionary.c,v 1.22 2008/01/05 01:15:02 ad Exp $	*/
 
 /*-
  * Copyright (c) 2006, 2007 The NetBSD Foundation, Inc.

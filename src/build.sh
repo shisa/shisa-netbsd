@@ -1,5 +1,5 @@
 #! /usr/bin/env sh
-#	$NetBSD: build.sh,v 1.175 2007/09/18 12:57:37 agc Exp $
+#	$NetBSD: build.sh,v 1.183 2008/01/18 09:45:05 jmmv Exp $
 #
 # Copyright (c) 2001-2005 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -327,17 +327,13 @@ getarch()
 		MACHINE_ARCH=mipsel
 		;;
 
-	pc532)
-		MACHINE_ARCH=ns32k
-		;;
-
-	evbppc64|macppc64)
+	evbppc64|macppc64|ofppc64)
 		makewrappermachine=${MACHINE}
 		MACHINE=${MACHINE%64}
 		MACHINE_ARCH=powerpc64
 		;;
 
-	amigappc|bebox|evbppc|ibmnws|macppc|mvmeppc|ofppc|pmppc|prep|sandpoint)
+	amigappc|bebox|evbppc|ibmnws|macppc|mvmeppc|ofppc|prep|rs6000|sandpoint)
 		MACHINE_ARCH=powerpc
 		;;
 
@@ -373,7 +369,7 @@ validatearch()
 	#
 	case "${MACHINE_ARCH}" in
 
-	alpha|arm|armeb|hppa|i386|m68000|m68k|mipse[bl]|mips64e[bl]|ns32k|powerpc|powerpc64|sh[35]e[bl]|sparc|sparc64|vax|x86_64|ia64)
+	alpha|arm|armeb|hppa|i386|m68000|m68k|mipse[bl]|mips64e[bl]|powerpc|powerpc64|sh[35]e[bl]|sparc|sparc64|vax|x86_64|ia64)
 		;;
 
 	"")
@@ -406,7 +402,7 @@ validatearch()
 		arches="sh3eb sh3el"
 		;;
 
-	macppc|evbppc)
+	macppc|evbppc|ofppc)
 		arches="powerpc powerpc64"
 		;;
 	*)
@@ -499,7 +495,7 @@ usage()
 	fi
 	cat <<_usage_
 
-Usage: ${progname} [-EnorUux] [-a arch] [-B buildid] [-C cddir] [-D dest]
+Usage: ${progname} [-EnorUux] [-a arch] [-B buildid] [-C cdextras] [-D dest]
 		[-j njob] [-M obj] [-m mach] [-N noisy] [-O obj] [-R release]
 		[-T tools] [-V var=[value]] [-w wrapper] [-X x11src] [-Z var]
 		operation [...]
@@ -525,13 +521,12 @@ Usage: ${progname} [-EnorUux] [-a arch] [-B buildid] [-C cddir] [-D dest]
     syspkgs             Create syspkgs in RELEASEDIR/MACHINE/binary/syspkgs.
     iso-image           Create CD-ROM image in RELEASEDIR/iso.
     iso-image-source    Create CD-ROM image with source in RELEASEDIR/iso.
-    iso-dir=cddir       Add the contents of \`cddir' to a CD-ROM image.
     params              Display various make(1) parameters.
 
  Options:
     -a arch     Set MACHINE_ARCH to arch.  [Default: deduced from MACHINE]
     -B buildId  Set BUILDID to buildId.
-    -C cddir    Set CDEXTRA to cddir.
+    -C cdextras Set CDEXTRA to cdextras
     -D dest     Set DESTDIR to dest.  [Default: destdir.MACHINE]
     -E          Set "expert" mode; disables various safety checks.
                 Should not be used without expert knowledge of the build system.
@@ -1096,21 +1091,26 @@ createmakewrapper()
 	eval cat <<EOF ${makewrapout}
 #! ${HOST_SH}
 # Set proper variables to allow easy "make" building of a NetBSD subtree.
-# Generated from:  \$NetBSD: build.sh,v 1.175 2007/09/18 12:57:37 agc Exp $
+# Generated from:  \$NetBSD: build.sh,v 1.183 2008/01/18 09:45:05 jmmv Exp $
 # with these arguments: ${_args}
 #
-EOF
-	for f in ${makeenv}; do
-		if eval "[ -z \"\${$f}\" -a \"\${${f}-X}\" = \"X\" ]"; then
-			eval echo "unset ${f}" ${makewrapout}
-		else
-			eval echo "${f}=\'\$$(echo ${f})\'\;\ export\ ${f}" ${makewrapout}
-		fi
-	done
 
-	eval cat <<EOF ${makewrapout}
+EOF
+	{
+		for f in ${makeenv}; do
+			if eval "[ -z \"\${$f}\" -a \"\${${f}-X}\" = \"X\" ]"; then
+				eval echo "unset ${f}"
+			else
+				eval echo "${f}=\'\$$(echo ${f})\'\;\ export\ ${f}"
+			fi
+		done
+
+		eval cat <<EOF
 MAKEWRAPPERMACHINE=${makewrappermachine:-${MACHINE}}; export MAKEWRAPPERMACHINE
 USETOOLS=yes; export USETOOLS
+EOF
+	} | eval sort -u "${makewrapout}"
+	eval cat <<EOF "${makewrapout}"
 
 exec "\${TOOLDIR}/bin/${toolprefix}make" \${1+"\$@"}
 EOF

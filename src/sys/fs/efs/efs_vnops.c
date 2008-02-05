@@ -1,4 +1,4 @@
-/*	$NetBSD: efs_vnops.c,v 1.9 2007/09/24 00:42:12 rumble Exp $	*/
+/*	$NetBSD: efs_vnops.c,v 1.14 2008/01/25 14:32:12 ad Exp $	*/
 
 /*
  * Copyright (c) 2006 Stephen M. Rumble <rumble@ephemeral.org>
@@ -17,7 +17,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: efs_vnops.c,v 1.9 2007/09/24 00:42:12 rumble Exp $");
+__KERNEL_RCSID(0, "$NetBSD: efs_vnops.c,v 1.14 2008/01/25 14:32:12 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -66,7 +66,7 @@ efs_lookup(void *v)
 	int err, nameiop = cnp->cn_nameiop;
 
 	/* ensure that the directory can be accessed first */
-        err = VOP_ACCESS(ap->a_dvp, VEXEC, cnp->cn_cred, cnp->cn_lwp);
+        err = VOP_ACCESS(ap->a_dvp, VEXEC, cnp->cn_cred);
 	if (err)
 		return (err);
 
@@ -105,7 +105,7 @@ efs_lookup(void *v)
 			if (err == ENOENT && (nameiop == CREATE ||
 			    nameiop == RENAME)) {
 				err = VOP_ACCESS(ap->a_dvp, VWRITE,
-				    cnp->cn_cred, cnp->cn_lwp);
+				    cnp->cn_cred);
 				if (err)
 					return (err);
 				cnp->cn_flags |= SAVENAME;
@@ -139,7 +139,6 @@ efs_access(void *v)
 		struct vnode *a_vp;
 		int a_mode;
 		struct ucred *a_cred;
-		struct lwp *a_l;
 	} */ *ap = v;
 	struct vnode *vp = ap->a_vp;
 	struct efs_inode *eip = EFS_VTOI(vp);
@@ -164,7 +163,6 @@ efs_getattr(void *v)
 		struct vnode *a_vp;
 		struct vattr *a_vap; 
 		struct ucred *a_cred;
-		struct lwp *a_l;
 	} */ *ap = v;
 
 	struct vattr *vap = ap->a_vap;
@@ -192,7 +190,8 @@ efs_getattr(void *v)
 	vap->va_ctime.tv_sec	= eip->ei_ctime;
 /*	vap->va_birthtime 	= */
 	vap->va_gen		= eip->ei_gen;
-	vap->va_flags		= ap->a_vp->v_flag;
+	vap->va_flags		= ap->a_vp->v_vflag |
+	    ap->a_vp->v_iflag | ap->a_vp->v_uflag;
 
 	if (ap->a_vp->v_type == VBLK || ap->a_vp->v_type == VCHR) {
 		uint32_t dmaj, dmin;
@@ -331,7 +330,7 @@ efs_readdir(void *v)
 			err = efs_bread(VFSTOEFS(ap->a_vp->v_mount),
 			    ex.ex_bn + i, NULL, &bp);
 			if (err) {
-				brelse(bp);
+				brelse(bp, 0);
 				goto exit_err;
 			}
 
@@ -339,7 +338,7 @@ efs_readdir(void *v)
 
 			if (be16toh(db->db_magic) != EFS_DIRBLK_MAGIC) {
 				printf("efs_readdir: bad dirblk\n");
-				brelse(bp);
+				brelse(bp, 0);
 				continue;
 			}
 
@@ -361,10 +360,10 @@ efs_readdir(void *v)
 					continue;
 				}
 
-				/* XXX - latter shouldn't happen, right? */
-				if (s > uio->uio_resid ||
-				    offset > uio->uio_offset) {
-					brelse(bp);
+				/* XXX - shouldn't happen, right? */
+				if (offset > uio->uio_offset ||
+				    s > uio->uio_resid) {
+					brelse(bp, 0);
 					goto exit_ok;
 				}
 
@@ -382,7 +381,7 @@ efs_readdir(void *v)
 				    VFSTOEFS(ap->a_vp->v_mount),
 				    dp->d_fileno, NULL, &edi);
 				if (err) {
-					brelse(bp);
+					brelse(bp, 0);
 					goto exit_err;
 				}
 
@@ -415,8 +414,8 @@ efs_readdir(void *v)
 
 				err = uiomove(dp, s, uio);
 				if (err) {
-					brelse(bp);
-					goto exit_err;
+					brelse(bp, 0);
+					goto exit_err;	
 				}
 
 				offset += s;
@@ -424,13 +423,13 @@ efs_readdir(void *v)
 				if (cookies != NULL && maxcookies != 0) {
 					cookies[ncookies++] = offset;
 					if (ncookies == maxcookies) {
-						brelse(bp);
+						brelse(bp, 0);
 						goto exit_ok;
 					}
 				}
 			}
 
-			brelse(bp);
+			brelse(bp, 0);
 		}
 	}
 
@@ -511,14 +510,14 @@ efs_readlink(void *v)
 				err = efs_bread(VFSTOEFS(ap->a_vp->v_mount),
 				    ex.ex_bn + i, NULL, &bp);
 				if (err) {
-					brelse(bp);
+					brelse(bp, 0);
 					free(buf, M_EFSTMP);
 					return (err);
 				}
 
 				len = MIN(resid, bp->b_bcount);
 				memcpy(buf + off, bp->b_data, len);
-				brelse(bp);
+				brelse(bp, 0);
 
 				off += len;
 				resid -= len;
@@ -560,14 +559,12 @@ efs_inactive(void *v)
 	struct vop_inactive_args /* {
 		const struct vnodeop_desc *a_desc;
 		struct vnode *a_vp;
-		struct lwp *a_l;
+		bool *a_recycle
 	} */ *ap = v;
 	struct efs_inode *eip = EFS_VTOI(ap->a_vp);
 
+	*ap->a_recycle = (eip->ei_mode == 0);
 	VOP_UNLOCK(ap->a_vp, 0);
-
-	if (eip->ei_mode == 0)
-		vrecycle(ap->a_vp, NULL, ap->a_l);
 
 	return (0);
 }
@@ -578,7 +575,6 @@ efs_reclaim(void *v)
 	struct vop_reclaim_args /* {
 		const struct vnodeop_desc *a_desc;
 		struct vnode *a_vp;
-		struct lwp *a_l;
 	} */ *ap = v;
 	struct vnode *vp = ap->a_vp;
 
@@ -824,7 +820,6 @@ const struct vnodeopv_entry_desc efs_vnodeop_entries[] = {
 							/* balloc */
 							/* vfree */
 							/* truncate */
-	{ &vop_lease_desc,	genfs_lease_check },	/* lease */
 							/* whiteout */
 	{ &vop_getpages_desc,	genfs_getpages	},	/* getpages */
 	{ &vop_putpages_desc,	genfs_putpages	},	/* putpages */

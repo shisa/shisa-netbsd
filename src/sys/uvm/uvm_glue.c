@@ -1,4 +1,4 @@
-/*	$NetBSD: uvm_glue.c,v 1.112 2007/09/21 00:18:35 ad Exp $	*/
+/*	$NetBSD: uvm_glue.c,v 1.115 2008/01/28 12:22:47 yamt Exp $	*/
 
 /*
  * Copyright (c) 1997 Charles D. Cranor and Washington University.
@@ -67,7 +67,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: uvm_glue.c,v 1.112 2007/09/21 00:18:35 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: uvm_glue.c,v 1.115 2008/01/28 12:22:47 yamt Exp $");
 
 #include "opt_coredump.h"
 #include "opt_kgdb.h"
@@ -86,6 +86,7 @@ __KERNEL_RCSID(0, "$NetBSD: uvm_glue.c,v 1.112 2007/09/21 00:18:35 ad Exp $");
 #include <sys/user.h>
 #include <sys/syncobj.h>
 #include <sys/cpu.h>
+#include <sys/atomic.h>
 
 #include <uvm/uvm.h>
 
@@ -99,8 +100,6 @@ static void uvm_swapout(struct lwp *);
 #define	UVM_NUAREA_LOWAT	16
 
 #define	UAREA_NEXTFREE(uarea)	(*(vaddr_t *)(UAREA_TO_USER(uarea)))
-
-void uvm_uarea_free(vaddr_t);
 
 /*
  * XXXCDC: do these really belong here?
@@ -286,9 +285,71 @@ void
 uvm_cpu_attach(struct cpu_info *ci)
 {
 
-	mutex_init(&ci->ci_data.cpu_uarea_lock, MUTEX_DEFAULT, IPL_NONE);
-	ci->ci_data.cpu_uarea_cnt = 0;
-	ci->ci_data.cpu_uarea_list = 0;
+}
+
+static int
+uarea_swapin(vaddr_t addr)
+{
+
+	return uvm_fault_wire(kernel_map, addr, addr + USPACE,
+	    VM_PROT_READ | VM_PROT_WRITE, 0);
+}
+
+static void
+uarea_swapout(vaddr_t addr)
+{
+
+	uvm_fault_unwire(kernel_map, addr, addr + USPACE);
+}
+
+#ifndef USPACE_ALIGN
+#define	USPACE_ALIGN	0
+#endif
+
+static pool_cache_t uvm_uarea_cache;
+
+static int
+uarea_ctor(void *arg, void *obj, int flags)
+{
+
+	KASSERT((flags & PR_WAITOK) != 0);
+	return uarea_swapin((vaddr_t)obj);
+}
+
+static void *
+uarea_poolpage_alloc(struct pool *pp, int flags)
+{
+
+	return (void *)uvm_km_alloc(kernel_map, pp->pr_alloc->pa_pagesz,
+	    USPACE_ALIGN, UVM_KMF_PAGEABLE |
+	    ((flags & PR_WAITOK) != 0 ? UVM_KMF_WAITVA :
+	    (UVM_KMF_NOWAIT | UVM_KMF_TRYLOCK)));
+}
+
+static void
+uarea_poolpage_free(struct pool *pp, void *addr)
+{
+
+	uvm_km_free(kernel_map, (vaddr_t)addr, pp->pr_alloc->pa_pagesz,
+	    UVM_KMF_PAGEABLE);
+}
+
+static struct pool_allocator uvm_uarea_allocator = {
+	.pa_alloc = uarea_poolpage_alloc,
+	.pa_free = uarea_poolpage_free,
+	.pa_pagesz = USPACE,
+};
+
+void
+uvm_uarea_init(void)
+{
+
+	uvm_uarea_cache = pool_cache_init(USPACE, USPACE_ALIGN, 0,
+#if USPACE_ALIGN == 0
+	    PR_NOALIGN |
+#endif
+	    PR_NOTOUCH,
+	    "uarea", &uvm_uarea_allocator, IPL_NONE, uarea_ctor, NULL, NULL);
 }
 
 /*
@@ -298,32 +359,9 @@ uvm_cpu_attach(struct cpu_info *ci)
 bool
 uvm_uarea_alloc(vaddr_t *uaddrp)
 {
-	struct cpu_info *ci;
-	vaddr_t uaddr;
 
-#ifndef USPACE_ALIGN
-#define USPACE_ALIGN    0
-#endif
-
-	ci = curcpu();
-
-	if (ci->ci_data.cpu_uarea_cnt > 0) {
-		mutex_enter(&ci->ci_data.cpu_uarea_lock);
-		if (ci->ci_data.cpu_uarea_cnt == 0) {
-			mutex_exit(&ci->ci_data.cpu_uarea_lock);
-		} else {
-			uaddr = ci->ci_data.cpu_uarea_list;
-			ci->ci_data.cpu_uarea_list = UAREA_NEXTFREE(uaddr);
-			ci->ci_data.cpu_uarea_cnt--;
-			mutex_exit(&ci->ci_data.cpu_uarea_lock);
-			*uaddrp = uaddr;
-			return true;
-		}
-	}
-
-	*uaddrp = uvm_km_alloc(kernel_map, USPACE, USPACE_ALIGN,
-	    UVM_KMF_PAGEABLE);
-	return false;
+	*uaddrp = (vaddr_t)pool_cache_get(uvm_uarea_cache, PR_WAITOK);
+	return true;
 }
 
 /*
@@ -331,69 +369,10 @@ uvm_uarea_alloc(vaddr_t *uaddrp)
  */
 
 void
-uvm_uarea_free(vaddr_t uaddr)
+uvm_uarea_free(vaddr_t uaddr, struct cpu_info *ci)
 {
-	struct cpu_info *ci;
 
-	ci = curcpu();
-
-	mutex_enter(&ci->ci_data.cpu_uarea_lock);
-	UAREA_NEXTFREE(uaddr) = ci->ci_data.cpu_uarea_list;
-	ci->ci_data.cpu_uarea_list = uaddr;
-	ci->ci_data.cpu_uarea_cnt++;
-	mutex_exit(&ci->ci_data.cpu_uarea_lock);
-}
-
-/*
- * uvm_uarea_drain: return memory of u-areas over limit
- * back to system
- *
- * => if asked to drain as much as possible, drain all cpus.
- * => if asked to drain to low water mark, drain local cpu only.
- */
-
-void
-uvm_uarea_drain(bool empty)
-{
-	CPU_INFO_ITERATOR cii;
-	struct cpu_info *ci;
-	vaddr_t uaddr, nuaddr;
-	int count;
-
-	if (empty) {
-		for (CPU_INFO_FOREACH(cii, ci)) {
-			mutex_enter(&ci->ci_data.cpu_uarea_lock);
-			count = ci->ci_data.cpu_uarea_cnt;
-			uaddr = ci->ci_data.cpu_uarea_list;
-			ci->ci_data.cpu_uarea_cnt = 0;
-			ci->ci_data.cpu_uarea_list = 0;
-			mutex_exit(&ci->ci_data.cpu_uarea_lock);
-
-			while (count != 0) {
-				nuaddr = UAREA_NEXTFREE(uaddr);
-				uvm_km_free(kernel_map, uaddr, USPACE,
-				    UVM_KMF_PAGEABLE);
-				uaddr = nuaddr;
-				count--;
-			}
-		}
-		return;
-	}
-
-	ci = curcpu();
-	if (ci->ci_data.cpu_uarea_cnt > UVM_NUAREA_HIWAT) {
-		mutex_enter(&ci->ci_data.cpu_uarea_lock);
-		while (ci->ci_data.cpu_uarea_cnt > UVM_NUAREA_LOWAT) {
-			uaddr = ci->ci_data.cpu_uarea_list;
-			ci->ci_data.cpu_uarea_list = UAREA_NEXTFREE(uaddr);
-			ci->ci_data.cpu_uarea_cnt--;
-			mutex_exit(&ci->ci_data.cpu_uarea_lock);
-			uvm_km_free(kernel_map, uaddr, USPACE,
-			    UVM_KMF_PAGEABLE);
-			mutex_enter(&ci->ci_data.cpu_uarea_lock);
-		}
-		mutex_exit(&ci->ci_data.cpu_uarea_lock);
-	}
+	pool_cache_put(uvm_uarea_cache, (void *)uaddr);
 }
 
 /*
@@ -430,7 +409,7 @@ uvm_lwp_exit(struct lwp *l)
 	vaddr_t va = USER_TO_UAREA(l->l_addr);
 
 	l->l_flag &= ~LW_INMEM;
-	uvm_uarea_free(va);
+	uvm_uarea_free(va, l->l_cpu);
 	l->l_addr = NULL;
 }
 
@@ -476,16 +455,12 @@ int	swapdebug = 0;
 void
 uvm_swapin(struct lwp *l)
 {
-	vaddr_t addr;
 	int error;
 
 	/* XXXSMP notyet KASSERT(mutex_owned(&l->l_swaplock)); */
 	KASSERT(l != curlwp);
 
-	addr = USER_TO_UAREA(l->l_addr);
-	/* make L_INMEM true */
-	error = uvm_fault_wire(kernel_map, addr, addr + USPACE,
-	    VM_PROT_READ | VM_PROT_WRITE, 0);
+	error = uarea_swapin(USER_TO_UAREA(l->l_addr));
 	if (error) {
 		panic("uvm_swapin: rewiring stack failed: %d", error);
 	}
@@ -540,8 +515,8 @@ uvm_scheduler(void)
 
 	l = curlwp;
 	lwp_lock(l);
-	l->l_priority = PVM;
-	l->l_usrpri = PVM;
+	l->l_priority = PRI_VM;
+	l->l_class = SCHED_FIFO;
 	lwp_unlock(l);
 
 	for (;;) {
@@ -762,7 +737,6 @@ uvm_swapout_threads(void)
 static void
 uvm_swapout(struct lwp *l)
 {
-	vaddr_t addr;
 	struct proc *p = l->l_proc;
 
 	KASSERT(mutex_owned(&l->l_swaplock));
@@ -800,8 +774,7 @@ uvm_swapout(struct lwp *l)
 	/*
 	 * Unwire the to-be-swapped process's user struct and kernel stack.
 	 */
-	addr = USER_TO_UAREA(l->l_addr);
-	uvm_fault_unwire(kernel_map, addr, addr + USPACE); /* !L_INMEM */
+	uarea_swapout(USER_TO_UAREA(l->l_addr));
 	pmap_collect(vm_map_pmap(&p->p_vmspace->vm_map));
 }
 
@@ -814,10 +787,15 @@ void
 uvm_lwp_hold(struct lwp *l)
 {
 
-	/* XXXSMP mutex_enter(&l->l_swaplock); */
-	if (l->l_holdcnt++ == 0 && (l->l_flag & LW_INMEM) == 0)
-		uvm_swapin(l);
-	/* XXXSMP mutex_exit(&l->l_swaplock); */
+	if (l == curlwp) {
+		atomic_inc_uint(&l->l_holdcnt);
+	} else {
+		mutex_enter(&l->l_swaplock);
+		if (atomic_inc_uint_nv(&l->l_holdcnt) == 1 &&
+		    (l->l_flag & LW_INMEM) == 0)
+			uvm_swapin(l);
+		mutex_exit(&l->l_swaplock);
+	}
 }
 
 /*
@@ -831,9 +809,7 @@ uvm_lwp_rele(struct lwp *l)
 
 	KASSERT(l->l_holdcnt != 0);
 
-	/* XXXSMP mutex_enter(&l->l_swaplock); */
-	l->l_holdcnt--;
-	/* XXXSMP mutex_exit(&l->l_swaplock); */
+	atomic_dec_uint(&l->l_holdcnt);
 }
 
 #ifdef COREDUMP

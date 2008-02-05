@@ -1,4 +1,4 @@
-/*	$NetBSD: sysconf.c,v 1.24 2007/09/07 18:56:05 rmind Exp $	*/
+/*	$NetBSD: sysconf.c,v 1.27 2008/01/26 17:55:30 rmind Exp $	*/
 
 /*-
  * Copyright (c) 1993
@@ -37,7 +37,7 @@
 #if 0
 static char sccsid[] = "@(#)sysconf.c	8.2 (Berkeley) 3/20/94";
 #else
-__RCSID("$NetBSD: sysconf.c,v 1.24 2007/09/07 18:56:05 rmind Exp $");
+__RCSID("$NetBSD: sysconf.c,v 1.27 2008/01/26 17:55:30 rmind Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
@@ -321,6 +321,11 @@ sysconf(int name)
 		    NULL, NULL, NULL, SYSCTL_VERSION))
 			return -1;
 		break; 
+	case _SC_PRIORITY_SCHEDULING:
+		if (sysctlgetmibinfo("kern.posix_sched", &mib[0], &mib_len,
+		    NULL, NULL, NULL, SYSCTL_VERSION))
+			return -1;
+		goto yesno;
 	case _SC_ATEXIT_MAX:
 		mib[0] = CTL_USER;
 		mib[1] = USER_ATEXIT_MAX;
@@ -339,6 +344,34 @@ yesno:		if (sysctl(mib, mib_len, &value, &len, NULL, 0) == -1)
 		return (value);
 		/*NOTREACHED*/
 		break;
+
+/* Extensions */
+	case _SC_NPROCESSORS_CONF:
+		mib[0] = CTL_HW;
+		mib[1] = HW_NCPU;
+		break;
+	case _SC_NPROCESSORS_ONLN:
+		mib[0] = CTL_HW;
+		mib[1] = HW_NCPUONLINE;
+		break;
+
+/* Native */
+	case _SC_SCHED_RT_TS:
+		if (sysctlgetmibinfo("kern.sched.rtts", &mib[0], &mib_len,
+		    NULL, NULL, NULL, SYSCTL_VERSION))      
+			return -1;              
+		break;
+	case _SC_SCHED_PRI_MIN:
+		if (sysctlgetmibinfo("kern.sched.pri_min", &mib[0], &mib_len,
+		    NULL, NULL, NULL, SYSCTL_VERSION))
+			return -1;
+		break;
+	case _SC_SCHED_PRI_MAX:
+		if (sysctlgetmibinfo("kern.sched.pri_max", &mib[0], &mib_len,
+		    NULL, NULL, NULL, SYSCTL_VERSION))
+			return -1;
+		break;
+
 	default:
 		errno = EINVAL;
 		return (-1);

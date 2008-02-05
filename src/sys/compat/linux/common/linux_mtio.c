@@ -1,4 +1,4 @@
-/* $NetBSD: linux_mtio.c,v 1.4 2007/03/04 06:01:24 christos Exp $ */
+/* $NetBSD: linux_mtio.c,v 1.6 2007/12/20 23:02:55 dsl Exp $ */
 
 /*
  * Copyright (c) 2005 Soren S. Jorvang.  All rights reserved.
@@ -26,7 +26,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: linux_mtio.c,v 1.4 2007/03/04 06:01:24 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: linux_mtio.c,v 1.6 2007/12/20 23:02:55 dsl Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -44,6 +44,8 @@ __KERNEL_RCSID(0, "$NetBSD: linux_mtio.c,v 1.4 2007/03/04 06:01:24 christos Exp 
 #include <compat/linux/common/linux_ioctl.h>
 #include <compat/linux/common/linux_signal.h>
 #include <compat/linux/common/linux_mtio.h>
+#include <compat/linux/common/linux_ipc.h>
+#include <compat/linux/common/linux_sem.h>
 
 #include <compat/linux/linux_syscallargs.h>
 
@@ -69,7 +71,7 @@ static const struct mtop_mapping {
 };
 
 int
-linux_ioctl_mtio(struct lwp *l, struct linux_sys_ioctl_args *uap,
+linux_ioctl_mtio(struct lwp *l, const struct linux_sys_ioctl_args *uap,
     register_t *retval)
 {
 	struct file *fp;

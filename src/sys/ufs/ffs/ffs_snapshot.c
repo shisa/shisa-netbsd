@@ -1,4 +1,4 @@
-/*	$NetBSD: ffs_snapshot.c,v 1.50 2007/08/21 09:27:33 hannken Exp $	*/
+/*	$NetBSD: ffs_snapshot.c,v 1.65 2008/01/30 17:20:04 hannken Exp $	*/
 
 /*
  * Copyright 2000 Marshall Kirk McKusick. All Rights Reserved.
@@ -38,7 +38,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ffs_snapshot.c,v 1.50 2007/08/21 09:27:33 hannken Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ffs_snapshot.c,v 1.65 2008/01/30 17:20:04 hannken Exp $");
 
 #if defined(_KERNEL_OPT)
 #include "opt_ffs.h"
@@ -78,10 +78,10 @@ __KERNEL_RCSID(0, "$NetBSD: ffs_snapshot.c,v 1.50 2007/08/21 09:27:33 hannken Ex
 #define ufs2_daddr_t	int64_t
 #define ufs_lbn_t	daddr_t
 #define VI_MTX(v)	(&(v)->v_interlock)
-#define VI_LOCK(v)	simple_lock(&(v)->v_interlock)
-#define VI_UNLOCK(v)	simple_unlock(&(v)->v_interlock)
-#define MNT_ILOCK(v)	simple_lock(&mntvnode_slock)
-#define MNT_IUNLOCK(v)	simple_unlock(&mntvnode_slock)
+#define VI_LOCK(v)	mutex_enter(&(v)->v_interlock)
+#define VI_UNLOCK(v)	mutex_exit(&(v)->v_interlock)
+#define MNT_ILOCK(v)	mutex_enter(&mntvnode_lock)
+#define MNT_IUNLOCK(v)	mutex_exit(&mntvnode_lock)
 
 #if !defined(FFS_NO_SNAPSHOT)
 static int cgaccount(int, struct vnode *, void *, int);
@@ -116,7 +116,7 @@ static int readvnblk(struct vnode *, void *, ufs2_daddr_t);
 
 static void si_mount_dtor(void *);
 static struct snap_info *si_mount_init(struct mount *);
-static int ffs_copyonwrite(void *, struct buf *);
+static int ffs_copyonwrite(void *, struct buf *, bool);
 static int readfsblk(struct vnode *, void *, ufs2_daddr_t);
 static int writevnblk(struct vnode *, void *, ufs2_daddr_t);
 static inline int cow_enter(void);
@@ -128,7 +128,7 @@ static inline void idb_assign(struct inode *, void *, int, ufs2_daddr_t);
 
 struct snap_info {
 	kmutex_t si_lock;			/* Lock this snapinfo */
-	struct lock si_vnlock;			/* Snapshot vnode common lock */
+	struct vnlock si_vnlock;		/* Snapshot vnode common lock */
 	TAILQ_HEAD(inodelst, inode) si_snapshots; /* List of active snapshots */
 	daddr_t *si_snapblklist;		/* Snapshot block hints list */
 	uint32_t si_gen;			/* Incremented on change */
@@ -164,8 +164,9 @@ si_mount_dtor(void *arg)
 
 	KASSERT(TAILQ_EMPTY(&si->si_snapshots));
 	mutex_destroy(&si->si_lock);
+	rw_destroy(&si->si_vnlock.vl_lock);
 	KASSERT(si->si_snapblklist == NULL);
-	free(si, M_MOUNT);
+	kmem_free(si, sizeof(*si));
 }
 
 static struct snap_info *
@@ -174,18 +175,21 @@ si_mount_init(struct mount *mp)
 	struct snap_info *new;
 
 	mutex_enter(&si_mount_init_lock);
-
 	if ((new = mount_getspecific(mp, si_mount_data_key)) != NULL) {
 		mutex_exit(&si_mount_init_lock);
 		return new;
 	}
-
-	new = malloc(sizeof(*new), M_MOUNT, M_WAITOK);
-	TAILQ_INIT(&new->si_snapshots);
-	mutex_init(&new->si_lock, MUTEX_DEFAULT, IPL_NONE);
-	new->si_gen = 0;
-	new->si_snapblklist = NULL;
-	mount_setspecific(mp, si_mount_data_key, new);
+	new = kmem_alloc(sizeof(*new), KM_SLEEP);
+	if (new != NULL) {
+		TAILQ_INIT(&new->si_snapshots);
+		mutex_init(&new->si_lock, MUTEX_DEFAULT, IPL_NONE);
+		rw_init(&new->si_vnlock.vl_lock);
+		new->si_vnlock.vl_canrecurse = 1;
+		new->si_vnlock.vl_recursecnt = 0;
+		new->si_gen = 0;
+		new->si_snapblklist = NULL;
+		mount_setspecific(mp, si_mount_data_key, new);
+	}
 	mutex_exit(&si_mount_init_lock);
 	return new;
 }
@@ -204,7 +208,7 @@ ffs_snapshot(struct mount *mp, struct vnode *vp,
 #else /* defined(FFS_NO_SNAPSHOT) */
 	ufs2_daddr_t numblks, blkno, *blkp, snaplistsize = 0, *snapblklist;
 	int error, ns, cg, snaploc;
-	int i, s, size, len, loc;
+	int i, size, len, loc;
 	int flag = mp->mnt_flag;
 	struct timeval starttime;
 #ifdef DEBUG
@@ -220,12 +224,16 @@ ffs_snapshot(struct mount *mp, struct vnode *vp,
 	struct inode *ip, *xp;
 	struct buf *bp, *ibp, *nbp;
 	struct vattr vat;
-	struct vnode *xvp, *nvp, *devvp;
+	struct vnode *xvp, *mvp, *devvp;
 	struct snap_info *si;
 
 	ns = UFS_FSNEEDSWAP(fs);
-	if ((si = mount_getspecific(mp, si_mount_data_key)) == NULL)
+	if ((si = mount_getspecific(mp, si_mount_data_key)) == NULL) {
 		si = si_mount_init(mp);
+		if (si == NULL)
+			return ENOMEM;
+	}
+
 	/*
 	 * Need to serialize access to snapshot code per filesystem.
 	 */
@@ -252,7 +260,7 @@ ffs_snapshot(struct mount *mp, struct vnode *vp,
 		return EACCES;
 
 	if (vp->v_size != 0) {
-		error = ffs_truncate(vp, 0, 0, NOCRED, l);
+		error = ffs_truncate(vp, 0, 0, NOCRED);
 		if (error)
 			return error;
 	}
@@ -343,7 +351,7 @@ ffs_snapshot(struct mount *mp, struct vnode *vp,
 	 * Since we have marked it as a snapshot it is safe to
 	 * unlock it as no process will be allowed to write to it.
 	 */
-	if ((error = VOP_FSYNC(vp, KERNCRED, FSYNC_WAIT, 0, 0, l)) != 0)
+	if ((error = VOP_FSYNC(vp, KERNCRED, FSYNC_WAIT, 0, 0)) != 0)
 		goto out;
 	VOP_UNLOCK(vp, 0);
 	/*
@@ -399,14 +407,13 @@ ffs_snapshot(struct mount *mp, struct vnode *vp,
 	if (len > 0) {
 		if ((error = bread(devvp, fsbtodb(fs, fs->fs_csaddr + loc),
 		    len, KERNCRED, &bp)) != 0) {
-			brelse(bp);
+			brelse(bp, 0);
 			free(copy_fs->fs_csp, M_UFSMNT);
 			goto out1;
 		}
 		bcopy(bp->b_data, space, (u_int)len);
 		space = (char *)space + len;
-		bp->b_flags |= B_INVAL | B_NOCACHE;
-		brelse(bp);
+		brelse(bp, BC_INVAL | BC_NOCACHE);
 	}
 	if (fs->fs_contigsumsize > 0) {
 		copy_fs->fs_maxcluster = lp = space;
@@ -427,35 +434,43 @@ ffs_snapshot(struct mount *mp, struct vnode *vp,
 	 */
 	snaplistsize = fs->fs_ncg + howmany(fs->fs_cssize, fs->fs_bsize) +
 	    FSMAXSNAP + 1 /* superblock */ + 1 /* last block */ + 1 /* size */;
+	/* Allocate a marker vnode */
+	if ((mvp = vnalloc(mp)) == NULL) {
+		error = ENOMEM;
+		goto out1;
+	}
 	MNT_ILOCK(mp);
-loop:
 	/*
 	 * NOTE: not using the TAILQ_FOREACH here since in this loop vgone()
 	 * and vclean() can be called indirectly
 	 */
-	for (xvp = TAILQ_FIRST(&mp->mnt_vnodelist); xvp; xvp = nvp) {
+	for (xvp = TAILQ_FIRST(&mp->mnt_vnodelist); xvp; xvp = vunmark(mvp)) {
+		vmark(mvp, xvp);
 		/*
 		 * Make sure this vnode wasn't reclaimed in getnewvnode().
 		 * Start over if it has (it won't be on the list anymore).
 		 */
-		if (xvp->v_mount != mp)
-			goto loop;
+		if (xvp->v_mount != mp || vismarker(xvp))
+			continue;
 		VI_LOCK(xvp);
-		nvp = TAILQ_NEXT(xvp, v_mntvnodes);
-		MNT_IUNLOCK(mp);
-		if ((xvp->v_flag & VXLOCK) ||
+		if ((xvp->v_iflag & VI_XLOCK) ||
 		    xvp->v_usecount == 0 || xvp->v_type == VNON ||
+		    VTOI(xvp) == NULL ||
 		    (VTOI(xvp)->i_flags & SF_SNAPSHOT)) {
 			VI_UNLOCK(xvp);
-			MNT_ILOCK(mp);
 			continue;
 		}
+		MNT_IUNLOCK(mp);
+		/*
+		 * XXXAD should increase vnode ref count to prevent it
+		 * disappearing or being recycled.
+		 */
 		VI_UNLOCK(xvp);
 #ifdef DEBUG
 		if (snapdebug)
 			vprint("ffs_snapshot: busy vnode", xvp);
 #endif
-		if (VOP_GETATTR(xvp, &vat, l->l_cred, l) == 0 &&
+		if (VOP_GETATTR(xvp, &vat, l->l_cred) == 0 &&
 		    vat.va_nlink > 0) {
 			MNT_ILOCK(mp);
 			continue;
@@ -493,37 +508,29 @@ loop:
 			    xp->i_mode);
 		if (error) {
 			free(copy_fs->fs_csp, M_UFSMNT);
+			(void)vunmark(mvp);
 			goto out1;
 		}
 		MNT_ILOCK(mp);
 	}
 	MNT_IUNLOCK(mp);
+	vnfree(mvp);
 	/*
-	 * If there already exist snapshots on this filesystem, grab a
-	 * reference to their shared lock. If this is the first snapshot
-	 * on this filesystem, we need to allocate a lock for the snapshots
-	 * to share. In either case, acquire the snapshot lock and give
-	 * up our original private lock.
+	 * Acquire the snapshot lock and give up our original private lock.
 	 */
-	mutex_enter(&si->si_lock);
-	if ((xp = TAILQ_FIRST(&si->si_snapshots)) != NULL) {
-		VI_LOCK(vp);
-		vp->v_vnlock = ITOV(xp)->v_vnlock;
-	} else {
-		lockinit(&si->si_vnlock, PVFS, "snaplk", 0, LK_CANRECURSE);
-		VI_LOCK(vp);
-		vp->v_vnlock = &si->si_vnlock;
-	}
-	mutex_exit(&si->si_lock);
+	VI_LOCK(vp);
+	vp->v_vnlock = &si->si_vnlock;
 	vn_lock(vp, LK_INTERLOCK | LK_EXCLUSIVE | LK_RETRY);
-	lockmgr(&vp->v_lock, LK_RELEASE, NULL);
+	vlockmgr(&vp->v_lock, LK_RELEASE);
 	/*
 	 * If this is the first snapshot on this filesystem, then we need
 	 * to allocate the space for the list of preallocated snapshot blocks.
 	 * This list will be refined below, but this preliminary one will
 	 * keep us out of deadlock until the full one is ready.
 	 */
-	if (xp == NULL) {
+	mutex_enter(&si->si_lock);
+	if ((xp = TAILQ_FIRST(&si->si_snapshots)) == NULL) {
+		mutex_exit(&si->si_lock);
 		snapblklist = malloc(
 		    snaplistsize * sizeof(ufs2_daddr_t), M_UFSMNT, M_WAITOK);
 		blkp = &snapblklist[1];
@@ -544,8 +551,7 @@ loop:
 		if (si->si_snapblklist != NULL)
 			panic("ffs_snapshot: non-empty list");
 		si->si_snapblklist = snapblklist;
-	} else
-		mutex_enter(&si->si_lock);
+	}
 	/*
 	 * Record snapshot inode. Since this is the newest snapshot,
 	 * it must be placed at the end of the list.
@@ -556,10 +562,10 @@ loop:
 		    (unsigned long long)ip->i_number);
 	TAILQ_INSERT_TAIL(&si->si_snapshots, ip, i_nextsnap);
 	if (xp == NULL)
-		vn_cow_establish(devvp, ffs_copyonwrite, devvp);
+		fscow_establish(mp, ffs_copyonwrite, devvp);
 	si->si_gen++;
 	mutex_exit(&si->si_lock);
-	vp->v_flag |= VSYSTEM;
+	vp->v_vflag |= VV_SYSTEM;
 out1:
 	/*
 	 * Resume operation on filesystem.
@@ -663,7 +669,7 @@ out1:
 	for (loc = 0; loc < len; loc++) {
 		error = bread(vp, blkno + loc, fs->fs_bsize, KERNCRED, &nbp);
 		if (error) {
-			brelse(nbp);
+			brelse(nbp, 0);
 			fs->fs_snapinum[snaploc] = 0;
 			FREE(snapblklist, M_UFSMNT);
 			goto done;
@@ -690,7 +696,7 @@ done:
 		error = bread(vp, lblkno(fs, fs->fs_sblockloc), fs->fs_bsize,
 		    KERNCRED, &nbp);
 		if (error) {
-			brelse(nbp);
+			brelse(nbp, 0);
 			fs->fs_snapinum[snaploc] = 0;
 		}
 		bcopy(sbbuf, nbp->b_data, fs->fs_bsize);
@@ -703,34 +709,27 @@ out:
 	 * Clean all dirty buffers now to avoid UBC inconsistencies.
 	 */
 	if (!error) {
-		simple_lock(&vp->v_interlock);
+		mutex_enter(&vp->v_interlock);
 		error = VOP_PUTPAGES(vp, 0, 0,
 		    PGO_ALLPAGES|PGO_CLEANIT|PGO_SYNCIO|PGO_FREE);
 	}
 	if (!error) {
-		s = splbio();
+		mutex_enter(&bufcache_lock);
 		for (bp = LIST_FIRST(&vp->v_dirtyblkhd); bp; bp = nbp) {
 			nbp = LIST_NEXT(bp, b_vnbufs);
-			simple_lock(&bp->b_interlock);
-			splx(s);
-			if ((bp->b_flags & (B_DELWRI|B_BUSY)) != B_DELWRI)
-				panic("ffs_snapshot: not dirty or busy, bp %p",
-				    bp);
-			bp->b_flags |= B_BUSY|B_VFLUSH;
+			bp->b_cflags |= BC_BUSY|BC_VFLUSH;
 			if (LIST_FIRST(&bp->b_dep) == NULL)
-				bp->b_flags |= B_NOCACHE;
-			simple_unlock(&bp->b_interlock);
+				bp->b_cflags |= BC_NOCACHE;
+			mutex_exit(&bufcache_lock);
 			bwrite(bp);
-			s = splbio();
+			mutex_enter(&bufcache_lock);
 		}
-		simple_lock(&global_v_numoutput_slock);
-		while (vp->v_numoutput) {
-			vp->v_flag |= VBWAIT;
-			ltsleep((void *)&vp->v_numoutput, PRIBIO+1,
-			    "snapflushbuf", 0, &global_v_numoutput_slock);
-		}
-		simple_unlock(&global_v_numoutput_slock);
-		splx(s);
+		mutex_exit(&bufcache_lock);
+
+		mutex_enter(&vp->v_interlock);
+		while (vp->v_numoutput > 0)
+			cv_wait(&vp->v_cv, &vp->v_interlock);
+		mutex_exit(&vp->v_interlock);
 	}
 	if (sbbuf)
 		free(sbbuf, M_UFSMNT);
@@ -740,7 +739,7 @@ out:
 	}
 	mp->mnt_flag = flag;
 	if (error)
-		(void) ffs_truncate(vp, (off_t)0, 0, NOCRED, l);
+		(void) ffs_truncate(vp, (off_t)0, 0, NOCRED);
 	else
 		vref(vp);
 	return (error);
@@ -770,18 +769,18 @@ cgaccount(int cg, struct vnode *vp, void *data, int passno)
 	error = bread(ip->i_devvp, fsbtodb(fs, cgtod(fs, cg)),
 		(int)fs->fs_cgsize, KERNCRED, &bp);
 	if (error) {
-		brelse(bp);
+		brelse(bp, 0);
 		return (error);
 	}
 	cgp = (struct cg *)bp->b_data;
 	if (!cg_chkmagic(cgp, ns)) {
-		brelse(bp);
+		brelse(bp, 0);
 		return (EIO);
 	}
 	ACTIVECG_SET(fs, cg);
 
 	bcopy(bp->b_data, data, fs->fs_cgsize);
-	brelse(bp);
+	brelse(bp, 0);
 	if (fs->fs_cgsize < fs->fs_bsize)
 		memset((char *)data + fs->fs_cgsize, 0,
 		    fs->fs_bsize - fs->fs_cgsize);
@@ -868,7 +867,7 @@ expunge_ufs1(struct vnode *snapvp, struct inode *cancelip, struct fs *fs,
 			return (error);
 		indiroff = (lbn - NDADDR) % NINDIR(fs);
 		blkno = idb_get(VTOI(snapvp), bp->b_data, indiroff);
-		brelse(bp);
+		brelse(bp, 0);
 	}
 	bf = malloc(fs->fs_bsize, M_UFSMNT, M_WAITOK);
 	if (blkno != 0)
@@ -959,9 +958,9 @@ indiracct_ufs1(struct vnode *snapvp, struct vnode *cancelvp, int level,
 	 */
 	bp = getblk(cancelvp, lbn, fs->fs_bsize, 0, 0);
 	bp->b_blkno = fsbtodb(fs, blkno);
-	if ((bp->b_flags & (B_DONE | B_DELWRI)) == 0 &&
+	if ((bp->b_oflags & (BO_DONE | BO_DELWRI)) == 0 &&
 	    (error = readfsblk(bp->b_vp, bp->b_data, fragstoblks(fs, blkno)))) {
-		brelse(bp);
+		brelse(bp, 0);
 		return (error);
 	}
 	/*
@@ -972,7 +971,7 @@ indiracct_ufs1(struct vnode *snapvp, struct vnode *cancelvp, int level,
 		last = NINDIR(fs);
 	bap = malloc(fs->fs_bsize, M_DEVBUF, M_WAITOK);
 	bcopy(bp->b_data, (void *)bap, fs->fs_bsize);
-	brelse(bp);
+	brelse(bp, 0);
 	error = (*acctfunc)(snapvp, &bap[0], &bap[last], fs,
 	    level == 0 ? rlbn : -1, expungetype);
 	if (error || level == 0)
@@ -1053,7 +1052,7 @@ snapacct_ufs1(struct vnode *vp, ufs1_daddr_t *oldblkp, ufs1_daddr_t *lastblkp,
 		blkno = ufs_rw32(*blkp, ns);
 		if (expungetype == BLK_SNAP && blkno == BLK_NOCOPY) {
 			if (lbn >= NDADDR)
-				brelse(ibp);
+				brelse(ibp, 0);
 		} else {
 			if (blkno != 0)
 				panic("snapacct_ufs1: bad block");
@@ -1136,7 +1135,7 @@ expunge_ufs2(struct vnode *snapvp, struct inode *cancelip, struct fs *fs,
 			return (error);
 		indiroff = (lbn - NDADDR) % NINDIR(fs);
 		blkno = idb_get(VTOI(snapvp), bp->b_data, indiroff);
-		brelse(bp);
+		brelse(bp, 0);
 	}
 	bf = malloc(fs->fs_bsize, M_UFSMNT, M_WAITOK);
 	if (blkno != 0)
@@ -1227,9 +1226,9 @@ indiracct_ufs2(struct vnode *snapvp, struct vnode *cancelvp, int level,
 	 */
 	bp = getblk(cancelvp, lbn, fs->fs_bsize, 0, 0);
 	bp->b_blkno = fsbtodb(fs, blkno);
-	if ((bp->b_flags & (B_DONE | B_DELWRI)) == 0 &&
+	if ((bp->b_oflags & (BO_DONE | BO_DELWRI)) == 0 &&
 	    (error = readfsblk(bp->b_vp, bp->b_data, fragstoblks(fs, blkno)))) {
-		brelse(bp);
+		brelse(bp, 0);
 		return (error);
 	}
 	/*
@@ -1240,7 +1239,7 @@ indiracct_ufs2(struct vnode *snapvp, struct vnode *cancelvp, int level,
 		last = NINDIR(fs);
 	bap = malloc(fs->fs_bsize, M_DEVBUF, M_WAITOK);
 	bcopy(bp->b_data, (void *)bap, fs->fs_bsize);
-	brelse(bp);
+	brelse(bp, 0);
 	error = (*acctfunc)(snapvp, &bap[0], &bap[last], fs,
 	    level == 0 ? rlbn : -1, expungetype);
 	if (error || level == 0)
@@ -1321,7 +1320,7 @@ snapacct_ufs2(struct vnode *vp, ufs2_daddr_t *oldblkp, ufs2_daddr_t *lastblkp,
 		blkno = ufs_rw64(*blkp, ns);
 		if (expungetype == BLK_SNAP && blkno == BLK_NOCOPY) {
 			if (lbn >= NDADDR)
-				brelse(ibp);
+				brelse(ibp, 0);
 		} else {
 			if (blkno != 0)
 				panic("snapacct_ufs2: bad block");
@@ -1426,7 +1425,7 @@ ffs_snapremove(struct vnode *vp)
 	struct vnode *devvp = ip->i_devvp;
 	struct fs *fs = ip->i_fs;
 	struct mount *mp = devvp->v_specmountpoint;
-	struct lock *lkp;
+	struct vnlock *lkp;
 	struct buf *ibp;
 	struct snap_info *si;
 	ufs2_daddr_t numblks, blkno, dblk;
@@ -1444,13 +1443,13 @@ ffs_snapremove(struct vnode *vp)
 	 */
 	if (ip->i_nextsnap.tqe_prev != 0) {
 		mutex_enter(&si->si_lock);
-		lockmgr(&vp->v_lock, LK_EXCLUSIVE, NULL);
+		vlockmgr(&vp->v_lock, LK_EXCLUSIVE);
 		TAILQ_REMOVE(&si->si_snapshots, ip, i_nextsnap);
 		ip->i_nextsnap.tqe_prev = 0;
-		VI_LOCK(vp);
 		lkp = vp->v_vnlock;
+		KASSERT(lkp == &si->si_vnlock);
 		vp->v_vnlock = &vp->v_lock;
-		lockmgr(lkp, LK_RELEASE | LK_INTERLOCK, VI_MTX(vp));
+		vlockmgr(lkp, LK_RELEASE);
 		if (TAILQ_FIRST(&si->si_snapshots) != 0) {
 			/* Roll back the list of preallocated blocks. */
 			xp = TAILQ_LAST(&si->si_snapshots, inodelst);
@@ -1459,9 +1458,7 @@ ffs_snapremove(struct vnode *vp)
 			si->si_snapblklist = 0;
 			si->si_gen++;
 			mutex_exit(&si->si_lock);
-			lockmgr(lkp, LK_DRAIN, NULL);
-			lockmgr(lkp, LK_RELEASE, NULL);
-			vn_cow_disestablish(devvp, ffs_copyonwrite, devvp);
+			fscow_disestablish(mp, ffs_copyonwrite, devvp);
 			mutex_enter(&si->si_lock);
 		}
 		si->si_gen++;
@@ -1557,12 +1554,12 @@ retry:
 	TAILQ_FOREACH(ip, &si->si_snapshots, i_nextsnap) {
 		vp = ITOV(ip);
 		if (snapshot_locked == 0) {
-			mutex_exit(&si->si_lock);
-			if (VOP_LOCK(vp, LK_EXCLUSIVE | LK_SLEEPFAIL) != 0) {
+			if (VOP_LOCK(vp, LK_EXCLUSIVE | LK_NOWAIT) != 0) {
+				mutex_exit(&si->si_lock);
+				kpause("snaplock", false, 1, NULL);
 				mutex_enter(&si->si_lock);
 				goto retry;
 			}
-			mutex_enter(&si->si_lock);
 			snapshot_locked = 1;
 			if (gen != si->si_gen)
 				goto retry;
@@ -1586,7 +1583,7 @@ retry:
 			blkno = idb_get(ip, ibp->b_data, indiroff);
 			mutex_enter(&si->si_lock);
 			if (gen != si->si_gen) {
-				brelse(ibp);
+				brelse(ibp, 0);
 				goto retry;
 			}
 		}
@@ -1627,7 +1624,7 @@ retry:
 			 * it is not needed.
 			 */
 			if (lbn >= NDADDR)
-				brelse(ibp);
+				brelse(ibp, 0);
 			continue;
 		}
 		/*
@@ -1659,7 +1656,7 @@ retry:
 			return (1);
 		}
 		if (lbn >= NDADDR)
-			brelse(ibp);
+			brelse(ibp, 0);
 #ifdef DEBUG
 		if (snapdebug)
 			printf("%s%llu lbn %" PRId64 " %s %llu size %ld\n",
@@ -1726,8 +1723,11 @@ ffs_snapshot_mount(struct mount *mp)
 	if (UFS_MPISAPPLEUFS(VFSTOUFS(mp)))
 		return;
 
-	if ((si = mount_getspecific(mp, si_mount_data_key)) == NULL)
+	if ((si = mount_getspecific(mp, si_mount_data_key)) == NULL) {
 		si = si_mount_init(mp);
+		if (si == NULL)
+			return;
+	}
 	ns = UFS_FSNEEDSWAP(fs);
 	/*
 	 * XXX The following needs to be set before ffs_truncate or
@@ -1798,23 +1798,13 @@ ffs_snapshot_mount(struct mount *mp)
 		ip->i_snapblklist = &snapblklist[0];
 
 		/*
-		 * If there already exist snapshots on this filesystem, grab a
-		 * reference to their shared lock. If this is the first snapshot
-		 * on this filesystem, we need to allocate a lock for the
-		 * snapshots to share. In either case, acquire the snapshot
-		 * lock and give up our original private lock.
+		 * Acquire the snapshot lock and give up our original
+		 * private lock.
 		 */
-		if ((xp = TAILQ_FIRST(&si->si_snapshots)) != NULL) {
-			VI_LOCK(vp);
-			vp->v_vnlock = ITOV(xp)->v_vnlock;
-		} else {
-			lockinit(&si->si_vnlock, PVFS, "snaplk",
-			    0, LK_CANRECURSE);
-			VI_LOCK(vp);
-			vp->v_vnlock = &si->si_vnlock;
-		}
+		VI_LOCK(vp);
+		vp->v_vnlock = &si->si_vnlock;
 		vn_lock(vp, LK_INTERLOCK | LK_EXCLUSIVE | LK_RETRY);
-		lockmgr(&vp->v_lock, LK_RELEASE, NULL);
+		vlockmgr(&vp->v_lock, LK_RELEASE);
 		/*
 		 * Link it onto the active snapshot list.
 		 */
@@ -1823,7 +1813,7 @@ ffs_snapshot_mount(struct mount *mp)
 			    (unsigned long long)ip->i_number);
 		else
 			TAILQ_INSERT_TAIL(&si->si_snapshots, ip, i_nextsnap);
-		vp->v_flag |= VSYSTEM;
+		vp->v_vflag |= VV_SYSTEM;
 		VOP_UNLOCK(vp, 0);
 	}
 	/*
@@ -1839,7 +1829,7 @@ ffs_snapshot_mount(struct mount *mp)
 	*/
 	xp = TAILQ_LAST(&si->si_snapshots, inodelst);
 	si->si_snapblklist = xp->i_snapblklist;
-	vn_cow_establish(devvp, ffs_copyonwrite, devvp);
+	fscow_establish(mp, ffs_copyonwrite, devvp);
 	si->si_gen++;
 	mutex_exit(&si->si_lock);
 }
@@ -1874,7 +1864,7 @@ ffs_snapshot_unmount(struct mount *mp)
 		}
 	}
 	if (vp)
-		vn_cow_disestablish(devvp, ffs_copyonwrite, devvp);
+		fscow_disestablish(mp, ffs_copyonwrite, devvp);
 	si->si_gen++;
 	mutex_exit(&si->si_lock);
 }
@@ -1884,7 +1874,7 @@ ffs_snapshot_unmount(struct mount *mp)
  * copying the block if necessary.
  */
 static int
-ffs_copyonwrite(void *v, struct buf *bp)
+ffs_copyonwrite(void *v, struct buf *bp, bool data_valid)
 {
 	struct buf *ibp;
 	struct fs *fs;
@@ -1934,6 +1924,8 @@ ffs_copyonwrite(void *v, struct buf *bp)
 	/*
 	 * Not in the precomputed list, so check the snapshots.
 	 */
+	 if (data_valid && bp->b_bcount == fs->fs_bsize)
+		saved_data = bp->b_data;
 retry:
 	gen = si->si_gen;
 	TAILQ_FOREACH(ip, &si->si_snapshots, i_nextsnap) {
@@ -1947,12 +1939,12 @@ retry:
 		if (bp->b_vp == vp)
 			continue;
 		if (snapshot_locked == 0) {
-			mutex_exit(&si->si_lock);
-			if (VOP_LOCK(vp, LK_EXCLUSIVE | LK_SLEEPFAIL) != 0) {
+			if (VOP_LOCK(vp, LK_EXCLUSIVE | LK_NOWAIT) != 0) {
+				mutex_exit(&si->si_lock);
+				kpause("snaplock", false, 1, NULL);
 				mutex_enter(&si->si_lock);
 				goto retry;
 			}
-			mutex_enter(&si->si_lock);
 			snapshot_locked = 1;
 			if (gen != si->si_gen)
 				goto retry;
@@ -1977,7 +1969,7 @@ retry:
 			}
 			indiroff = (lbn - NDADDR) % NINDIR(fs);
 			blkno = idb_get(ip, ibp->b_data, indiroff);
-			brelse(ibp);
+			brelse(ibp, 0);
 			mutex_enter(&si->si_lock);
 			if (gen != si->si_gen)
 				goto retry;
@@ -2044,7 +2036,7 @@ retry:
 	 * a crash, to ensure their integrity.
 	 */
 	mutex_exit(&si->si_lock);
-	if (saved_data)
+	if (saved_data && saved_data != bp->b_data)
 		free(saved_data, M_UFSMNT);
 	if (snapshot_locked)
 		VOP_UNLOCK(vp, 0);
@@ -2062,7 +2054,7 @@ readfsblk(struct vnode *vp, void *data, ufs2_daddr_t lbn)
 	struct fs *fs = ip->i_fs;
 	struct buf *nbp;
 
-	nbp = getiobuf();
+	nbp = getiobuf(NULL, true);
 	nbp->b_flags = B_READ;
 	nbp->b_bcount = nbp->b_bufsize = fs->fs_bsize;
 	nbp->b_error = 0;
@@ -2070,7 +2062,6 @@ readfsblk(struct vnode *vp, void *data, ufs2_daddr_t lbn)
 	nbp->b_blkno = nbp->b_rawblkno = fsbtodb(fs, blkstofrags(fs, lbn));
 	nbp->b_proc = NULL;
 	nbp->b_dev = ip->i_devvp->v_rdev;
-	nbp->b_vp = NULLVP;
 
 	bdev_strategy(nbp);
 
@@ -2100,7 +2091,7 @@ readvnblk(struct vnode *vp, void *data, ufs2_daddr_t lbn)
 
 	if (bn != (daddr_t)-1) {
 		offset = dbtob(bn);
-		simple_lock(&vp->v_interlock);
+		mutex_enter(&vp->v_interlock);
 		error = VOP_PUTPAGES(vp, trunc_page(offset),
 		    round_page(offset+fs->fs_bsize),
 		    PGO_CLEANIT|PGO_SYNCIO|PGO_FREE);
@@ -2130,7 +2121,7 @@ writevnblk(struct vnode *vp, void *data, ufs2_daddr_t lbn)
 
 	offset = lblktosize(fs, (off_t)lbn);
 	s = cow_enter();
-	simple_lock(&vp->v_interlock);
+	mutex_enter(&vp->v_interlock);
 	error = VOP_PUTPAGES(vp, trunc_page(offset),
 	    round_page(offset+fs->fs_bsize), PGO_CLEANIT|PGO_SYNCIO|PGO_FREE);
 	if (error == 0)
@@ -2141,7 +2132,10 @@ writevnblk(struct vnode *vp, void *data, ufs2_daddr_t lbn)
 		return error;
 
 	bcopy(data, bp->b_data, fs->fs_bsize);
-	bp->b_flags |= B_NOCACHE;
+	mutex_enter(&bufcache_lock);
+	/* XXX Shouldn't need to lock for this, NOCACHE is only read later. */
+	bp->b_cflags |= BC_NOCACHE;
+	mutex_exit(&bufcache_lock);
 
 	return bwrite(bp);
 }

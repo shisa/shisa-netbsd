@@ -1,4 +1,4 @@
-# $NetBSD: GENERIC,v 1.88 2007/06/04 08:55:23 martin Exp $
+# $NetBSD: GENERIC,v 1.91 2007/12/31 15:32:00 ad Exp $
 #
 # GENERIC machine description file
 # 
@@ -22,7 +22,7 @@ include 	"arch/mmeye/conf/std.mmeye"
 
 options 	INCLUDE_CONFIG_FILE	# embed config file in kernel binary
 
-#ident 		"GENERIC-$Revision: 1.88 $"
+#ident 		"GENERIC-$Revision: 1.91 $"
 
 maxusers	16		# estimated number of users
 
@@ -41,16 +41,10 @@ options 	INITTODR_ALWAYS_USE_RTC
 options 	HZ=50		# clock interrupt generates every 1/HZ sec
 options 	NTP		# NTP phase/frequency locked loop
 options 	KTRACE		# system call tracing via ktrace(1)
-#options 	SYSTRACE	# system call vetting via systrace(1)
 
 options 	SYSVMSG		# System V-like message queues
 options 	SYSVSEM		# System V-like semaphores
-#options 	SEMMNI=10	# number of semaphore identifiers
-#options 	SEMMNS=60	# number of semaphores in system
-#options 	SEMUME=10	# max number of undo entries per process
-#options 	SEMMNU=30	# number of undo structures in system
 options 	SYSVSHM		# System V-like memory sharing
-#options 	SHMMAXPGS=1024	# 1024 pages is the default
 options 	P1003_1B_SEMAPHORE # p1003.1b semaphore support
 
 #options 	LKM		# loadable kernel modules

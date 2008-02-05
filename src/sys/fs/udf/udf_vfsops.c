@@ -1,4 +1,4 @@
-/* $NetBSD: udf_vfsops.c,v 1.29 2007/07/31 21:14:19 pooka Exp $ */
+/* $NetBSD: udf_vfsops.c,v 1.35 2008/01/28 14:31:17 dholland Exp $ */
 
 /*
  * Copyright (c) 2006 Reinoud Zandijk
@@ -36,7 +36,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: udf_vfsops.c,v 1.29 2007/07/31 21:14:19 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: udf_vfsops.c,v 1.35 2008/01/28 14:31:17 dholland Exp $");
 #endif /* not lint */
 
 
@@ -52,6 +52,7 @@ __RCSID("$NetBSD: udf_vfsops.c,v 1.29 2007/07/31 21:14:19 pooka Exp $");
 #include <sys/proc.h>
 #include <sys/kernel.h>
 #include <sys/vnode.h>
+#include <miscfs/genfs/genfs.h>
 #include <miscfs/specfs/specdev.h>
 #include <sys/mount.h>
 #include <sys/buf.h>
@@ -116,7 +117,7 @@ struct vfsops udf_vfsops = {
 	udf_start,
 	udf_unmount,
 	udf_root,
-	udf_quotactl,
+	(void *)eopnotsupp,		/* vfs_quotactl */
 	udf_statvfs,
 	udf_sync,
 	udf_vget,
@@ -129,6 +130,8 @@ struct vfsops udf_vfsops = {
 	udf_snapshot,
 	vfs_stdextattrctl,
 	(void *)eopnotsupp,		/* vfs_suspendctl */
+	genfs_renamelock_enter,
+	genfs_renamelock_exit,
 	udf_vnodeopv_descs,
 	0, /* int vfs_refcount   */
 	{ NULL, NULL, }, /* LIST_ENTRY(vfsops) */
@@ -230,6 +233,8 @@ free_udf_mountinfo(struct mount *mp)
 		MPFREE(ump->vat_table,        M_UDFVOLD);
 		MPFREE(ump->sparing_table,    M_UDFVOLD);
 
+		mutex_destroy(&ump->ihash_lock);
+		mutex_destroy(&ump->get_node_lock);
 		free(ump, M_UDFMNT);
 	}
 }
@@ -239,8 +244,9 @@ free_udf_mountinfo(struct mount *mp)
 
 int
 udf_mount(struct mount *mp, const char *path,
-	  void *data, size_t *data_len, struct lwp *l)
+	  void *data, size_t *data_len)
 {
+	struct lwp *l = curlwp;
 	struct nameidata nd;
 	struct udf_args *args = data;
 	struct udf_mount *ump;
@@ -278,7 +284,7 @@ udf_mount(struct mount *mp, const char *path,
 	}
 
 	/* lookup name to get its vnode */
-	NDINIT(&nd, LOOKUP, FOLLOW, UIO_USERSPACE, args->fspec, l);
+	NDINIT(&nd, LOOKUP, FOLLOW, UIO_USERSPACE, args->fspec);
 	error = namei(&nd);
 	if (error)
 		return error;
@@ -311,27 +317,12 @@ udf_mount(struct mount *mp, const char *path,
 		if ((mp->mnt_flag & MNT_RDONLY) == 0)
 			accessmode |= VWRITE;
 		vn_lock(devvp, LK_EXCLUSIVE | LK_RETRY);
-		error = VOP_ACCESS(devvp, accessmode, l->l_cred, l);
+		error = VOP_ACCESS(devvp, accessmode, l->l_cred);
 		VOP_UNLOCK(devvp, 0);
 		if (error) {
 			vrele(devvp);
 			return error;
 		}
-	}
-
-	/*
-	 * Disallow multiple mounts of the same device.  Disallow mounting of
-	 * a device that is currently in use (except for root, which might
-	 * share swap device for miniroot).
-	 */
-	error = vfs_mountedon(devvp);
-	if (error) {
-		vrele(devvp);
-		return error;
-	}
-	if ((vcount(devvp) > 1) && (devvp != rootvp)) {
-		vrele(devvp);
-		return EBUSY;
 	}
 
 	/*
@@ -342,14 +333,14 @@ udf_mount(struct mount *mp, const char *path,
 	} else {
 		openflags = FREAD | FWRITE;
 	}
-	error = VOP_OPEN(devvp, openflags, FSCRED, l);
+	error = VOP_OPEN(devvp, openflags, FSCRED);
 	if (error == 0) {
 		/* opened ok, try mounting */
 		error = udf_mountfs(devvp, mp, l, args);
 		if (error) {
 			free_udf_mountinfo(mp);
 			vn_lock(devvp, LK_EXCLUSIVE | LK_RETRY);
-			(void) VOP_CLOSE(devvp, openflags, NOCRED, l);
+			(void) VOP_CLOSE(devvp, openflags, NOCRED);
 			VOP_UNLOCK(devvp, 0);
 		}
 	}
@@ -391,7 +382,7 @@ udf_unmount_sanity_check(struct mount *mp)
 
 
 int
-udf_unmount(struct mount *mp, int mntflags, struct lwp *l)
+udf_unmount(struct mount *mp, int mntflags)
 {
 	struct udf_mount *ump;
 	int error, flags, closeflags;
@@ -410,11 +401,11 @@ udf_unmount(struct mount *mp, int mntflags, struct lwp *l)
 #endif
 
 	/*
-	 * By specifying SKIPSYSTEM we can skip vnodes marked with VSYSTEM.
+	 * By specifying SKIPSYSTEM we can skip vnodes marked with VV_SYSTEM.
 	 * This hardly documented feature allows us to exempt certain files
 	 * from being flushed.
 	 */
-	if ((error = vflush(mp, NULLVP, flags | VSYSTEM)) != 0)
+	if ((error = vflush(mp, NULLVP, flags | SKIPSYSTEM)) != 0)
 		return error;
 
 #ifdef DEBUG
@@ -438,7 +429,7 @@ udf_unmount(struct mount *mp, int mntflags, struct lwp *l)
 
 	/* devvp is still locked by us */
 	vn_lock(ump->devvp, LK_EXCLUSIVE | LK_RETRY);
-	error = VOP_CLOSE(ump->devvp, closeflags, NOCRED, l);
+	error = VOP_CLOSE(ump->devvp, closeflags, NOCRED);
 	if (error)
 		printf("Error during closure of device! error %d, "
 		       "device might stay locked\n", error);
@@ -478,12 +469,11 @@ udf_mountfs(struct vnode *devvp, struct mount *mp,
 		return error;
 
 	/* allocate udf part of mount structure; malloc always succeeds */
-	ump = malloc(sizeof(struct udf_mount), M_UDFMNT, M_WAITOK);
-	memset(ump, 0, sizeof(struct udf_mount));
+	ump = malloc(sizeof(struct udf_mount), M_UDFMNT, M_WAITOK | M_ZERO);
 
 	/* init locks */
-	simple_lock_init(&ump->ihash_slock);
-	lockinit(&ump->get_node_lock, PINOD, "udf_getnode", 0, 0);
+	mutex_init(&ump->ihash_lock, MUTEX_DEFAULT, IPL_NONE);
+	mutex_init(&ump->get_node_lock, MUTEX_DEFAULT, IPL_NONE);
 
 	/* init `ino_t' to udf_node hash table */
 	for (lst = 0; lst < UDF_INODE_HASHSIZE; lst++) {
@@ -581,7 +571,7 @@ udf_mountfs(struct vnode *devvp, struct mount *mp,
 /* --------------------------------------------------------------------- */
 
 int
-udf_start(struct mount *mp, int flags, struct lwp *l)
+udf_start(struct mount *mp, int flags)
 {
 	/* do we have to do something here? */
 	return 0;
@@ -609,9 +599,7 @@ udf_root(struct mount *mp, struct vnode **vpp)
 		return error;
 
 	vp = root_dir->vnode;
-	simple_lock(&vp->v_interlock);
-		root_dir->vnode->v_flag |= VROOT;
-	simple_unlock(&vp->v_interlock);
+	root_dir->vnode->v_vflag |= VV_ROOT;
 
 	*vpp = vp;
 	return 0;
@@ -620,17 +608,7 @@ udf_root(struct mount *mp, struct vnode **vpp)
 /* --------------------------------------------------------------------- */
 
 int
-udf_quotactl(struct mount *mp, int cmds, uid_t uid,
-    void *arg, struct lwp *l)
-{
-	DPRINTF(NOTIMPL, ("udf_quotactl called\n"));
-	return EOPNOTSUPP;
-}
-
-/* --------------------------------------------------------------------- */
-
-int
-udf_statvfs(struct mount *mp, struct statvfs *sbp, struct lwp *l)
+udf_statvfs(struct mount *mp, struct statvfs *sbp)
 {
 	struct udf_mount *ump = VFSTOUDF(mp);
 	struct logvol_int_desc *lvid;
@@ -684,7 +662,7 @@ udf_statvfs(struct mount *mp, struct statvfs *sbp, struct lwp *l)
 
 int
 udf_sync(struct mount *mp, int waitfor,
-    kauth_cred_t cred, struct lwp *p)
+    kauth_cred_t cred)
 {
 	DPRINTF(CALL, ("udf_sync called\n"));
 	/* nothing to be done as upto now read-only */

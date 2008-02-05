@@ -1,4 +1,4 @@
-/*	$NetBSD: cpu.h,v 1.45 2007/08/04 09:49:53 ad Exp $	*/
+/*	$NetBSD: cpu.h,v 1.50 2008/01/07 05:00:12 uwe Exp $	*/
 
 /*-
  * Copyright (c) 2002 The NetBSD Foundation, Inc. All rights reserved.
@@ -58,6 +58,7 @@ struct cpu_info {
 	cpuid_t	ci_cpuid;
 	int	ci_mtx_count;
 	int	ci_mtx_oldspl;
+	int	ci_want_resched;
 };
 
 extern struct cpu_info cpu_info_store;
@@ -77,6 +78,11 @@ extern struct cpu_info cpu_info_store;
 #define	cpu_proc_fork(p1, p2)		/* nothing */
 
 /*
+ * Interrupt stack location.
+ */
+extern vaddr_t intstack, intfp, intsp;
+
+/*
  * Arguments to hardclock and gatherstats encapsulate the previous
  * machine state in an opaque clockframe.
  */
@@ -86,9 +92,10 @@ struct clockframe {
 	int	ssp;	/* stack pointer at time of interrupt */
 };
 
+
 #define	CLKF_USERMODE(cf)	(!KERNELMODE((cf)->ssr))
 #define	CLKF_PC(cf)		((cf)->spc)
-#define	CLKF_INTR(cf)		0	/* XXX */
+#define	CLKF_INTR(cf)		((vaddr_t)(cf)->ssp <= intsp)
 
 /*
  * This is used during profiling to integrate system time.  It can safely
@@ -103,19 +110,10 @@ struct clockframe {
  */
 #define	cpu_need_resched(ci, flags)					\
 do {									\
-	want_resched = 1;						\
+	ci->ci_want_resched = 1;					\
 	if (curlwp != ci->ci_data.cpu_idlelwp)				\
 		aston(curlwp);						\
 } while (/*CONSTCOND*/0)
-
-/*
- * MI code calls this with proper locking.
- */
-#define	cpu_did_resched()						\
-do {									\
-	want_resched = 0;						\
-} while (0)
-
 
 /*
  * Give a profiling tick to the current process when the user profiling
@@ -135,8 +133,6 @@ do {									\
 #define	cpu_signotify(l)	aston(l)
 
 #define	aston(l)		((l)->l_md.md_astpending = 1)
-
-extern int want_resched;		/* need_resched() was called */
 
 /*
  * We need a machine-independent name for this.

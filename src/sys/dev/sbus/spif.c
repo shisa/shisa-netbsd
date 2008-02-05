@@ -1,4 +1,4 @@
-/*	$NetBSD: spif.c,v 1.10 2007/03/04 06:02:41 christos Exp $	*/
+/*	$NetBSD: spif.c,v 1.14 2007/11/19 18:51:50 ad Exp $	*/
 /*	$OpenBSD: spif.c,v 1.12 2003/10/03 16:44:51 miod Exp $	*/
 
 /*
@@ -41,7 +41,7 @@
 
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: spif.c,v 1.10 2007/03/04 06:02:41 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: spif.c,v 1.14 2007/11/19 18:51:50 ad Exp $");
 
 #include "spif.h"
 #if NSPIF > 0
@@ -60,9 +60,9 @@ __KERNEL_RCSID(0, "$NetBSD: spif.c,v 1.10 2007/03/04 06:02:41 christos Exp $");
 #include <sys/conf.h>
 #include <sys/errno.h>
 #include <sys/kauth.h>
+#include <sys/intr.h>
 
-#include <machine/bus.h>
-#include <machine/intr.h>
+#include <sys/bus.h>
 #include <machine/autoconf.h>
 #include <machine/promlib.h>
 
@@ -220,7 +220,7 @@ spif_attach(parent, self, aux)
 		goto fail_unmapregs;
 	}
 
-	sc->sc_softih = softintr_establish(IPL_TTY, spif_softintr, sc);
+	sc->sc_softih = softint_establish(SOFTINT_SERIAL, spif_softintr, sc);
 	if (sc->sc_softih == NULL) {
 		printf(": can't get soft intr\n");
 		goto fail_unmapregs;
@@ -335,7 +335,6 @@ stty_open(dev, flags, mode, l)
 	struct tty *tp;
 	int card = SPIF_CARD(dev);
 	int port = SPIF_PORT(dev);
-	int s;
 
 	if (card >= stty_cd.cd_ndevs || card >= spif_cd.cd_ndevs)
 		return (ENXIO);
@@ -355,6 +354,7 @@ stty_open(dev, flags, mode, l)
 	if (kauth_authorize_device_tty(l->l_cred, KAUTH_DEVICE_TTY_OPEN, tp))
 		return (EBUSY);
 
+	mutex_spin_enter(&tty_lock);
 	if (!ISSET(tp->t_state, TS_ISOPEN) && tp->t_wopen == 0) {
 		ttychars(tp);
 		tp->t_iflag = TTYDEF_IFLAG;
@@ -371,8 +371,6 @@ stty_open(dev, flags, mode, l)
 
 		sp->sp_rput = sp->sp_rget = sp->sp_rbuf;
 
-		s = spltty();
-
 		STC_WRITE(csc, STC_CAR, sp->sp_channel);
 		stty_write_ccr(csc, CD180_CCR_CMD_RESET|CD180_CCR_RESETCHAN);
 		STC_WRITE(csc, STC_CAR, sp->sp_channel);
@@ -387,24 +385,20 @@ stty_open(dev, flags, mode, l)
 			SET(tp->t_state, TS_CARR_ON);
 		else
 			CLR(tp->t_state, TS_CARR_ON);
-	} else {
-		s = spltty();
 	}
 
 	if (!ISSET(flags, O_NONBLOCK)) {
 		while (!ISSET(tp->t_cflag, CLOCAL) &&
 		    !ISSET(tp->t_state, TS_CARR_ON)) {
 			int error;
-			error = ttysleep(tp, &tp->t_rawq, TTIPRI | PCATCH,
-			    "sttycd", 0);
+			error = ttysleep(tp, &tp->t_rawq.c_cv, true, 0);
 			if (error != 0) {
-				splx(s);
+				mutex_spin_exit(&tty_lock);
 				return (error);
 			}
 		}
 	}
-
-	splx(s);
+	mutex_spin_exit(&tty_lock);
 
 	return ((*tp->t_linesw->l_open)(dev, tp));
 }
@@ -745,14 +739,7 @@ stty_start(tp)
 	s = spltty();
 
 	if (!ISSET(tp->t_state, TS_TTSTOP | TS_TIMEOUT | TS_BUSY)) {
-		if (tp->t_outq.c_cc <= tp->t_lowat) {
-			if (ISSET(tp->t_state, TS_ASLEEP)) {
-				CLR(tp->t_state, TS_ASLEEP);
-				wakeup(&tp->t_outq);
-			}
-			selwakeup(&tp->t_wsel);
-		}
-		if (tp->t_outq.c_cc) {
+		if (ttypull(tp)) {
 			sp->sp_txc = ndqb(&tp->t_outq, 0);
 			sp->sp_txp = tp->t_outq.c_cf;
 			SET(tp->t_state, TS_BUSY);
@@ -929,7 +916,7 @@ spif_stcintr(vsc)
 	}
 
 	if (needsoft)
-		softintr_schedule(sc->sc_softih);
+		softint_schedule(sc->sc_softih);
 	return (r);
 }
 

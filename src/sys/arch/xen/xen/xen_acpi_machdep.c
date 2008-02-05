@@ -1,4 +1,4 @@
-/*	$NetBSD: xen_acpi_machdep.c,v 1.1 2006/04/09 19:28:01 bouyer Exp $	*/
+/*	$NetBSD: xen_acpi_machdep.c,v 1.3 2007/12/17 14:11:53 joerg Exp $	*/
 
 #include "acpi.h"
 

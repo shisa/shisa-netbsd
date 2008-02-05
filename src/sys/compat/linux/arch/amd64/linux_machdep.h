@@ -1,4 +1,4 @@
-/*	$NetBSD: linux_machdep.h,v 1.9 2007/05/24 11:21:52 njoly Exp $ */
+/*	$NetBSD: linux_machdep.h,v 1.11 2008/01/28 14:31:35 njoly Exp $ */
 
 /*-
  * Copyright (c) 2005 Emmanuel Dreyfus, all rights reserved.
@@ -105,7 +105,7 @@ struct linux_rt_sigframe {
 
 #ifdef _KERNEL
 __BEGIN_DECLS
-void linux_syscall_intern __P((struct proc *));
+void linux_syscall_intern(struct proc *);
 __END_DECLS
 #endif /* !_KERNEL */
 
@@ -116,6 +116,7 @@ __END_DECLS
 #define LINUX_UNAME_ARCH MACHINE_ARCH
 #define LINUX_NPTL
 #define LINUX_LARGEFILE64
+#define LINUX_SHMCTL_FORCEIPC64
 
 /*
  * Used in ugly patch to fake device numbers.
@@ -125,6 +126,5 @@ __END_DECLS
 #define LINUX_PTS_MAJOR                3
 /* Major device numbers of VT device on both Linux and NetBSD. */
 #define LINUX_CONS_MAJOR       4
-
 
 #endif /* _AMD64_LINUX_MACHDEP_H */

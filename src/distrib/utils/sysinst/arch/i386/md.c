@@ -1,4 +1,4 @@
-/*	$NetBSD: md.c,v 1.116 2007/07/05 20:03:00 dsl Exp $ */
+/*	$NetBSD: md.c,v 1.118 2008/01/28 02:47:14 rumble Exp $ */
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.
@@ -595,10 +595,6 @@ get_bootmodel(void)
 	if (strstr(ut.version, "TINY") != NULL)
 		return SET_KERNEL_TINY;
 #endif
-#if defined(SET_KERNEL_LAPTOP)
-	if (strstr(ut.version, "LAPTOP") != NULL)
-		return SET_KERNEL_LAPTOP;
-#endif
 #if defined(SET_KERNEL_PS2)
 	if (strstr(ut.version, "PS2") != NULL)
 		return SET_KERNEL_PS2;
@@ -610,6 +606,12 @@ get_bootmodel(void)
 void
 md_init(void)
 {
+}
+
+void
+md_init_set_status(int minimal)
+{
+	(void)minimal;
 
 	/* Default to install same type of kernel as we are running */
 	set_kernel_set(get_bootmodel());

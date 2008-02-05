@@ -1,4 +1,4 @@
-/*	$NetBSD: pm_direct.c,v 1.31 2007/01/24 13:08:12 hubertf Exp $	*/
+/*	$NetBSD: pm_direct.c,v 1.33 2007/11/07 19:47:00 garbled Exp $	*/
 
 /*
  * Copyright (C) 1997 Takashi Hamada
@@ -38,7 +38,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: pm_direct.c,v 1.31 2007/01/24 13:08:12 hubertf Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pm_direct.c,v 1.33 2007/11/07 19:47:00 garbled Exp $");
 
 #ifdef DEBUG
 #ifndef ADB_DEBUG
@@ -55,6 +55,7 @@ __KERNEL_RCSID(0, "$NetBSD: pm_direct.c,v 1.31 2007/01/24 13:08:12 hubertf Exp $
 #include <machine/adbsys.h>
 #include <machine/autoconf.h>
 #include <machine/cpu.h>
+#include <machine/pio.h>
 
 #include <dev/ofw/openfirm.h>
 
@@ -313,7 +314,7 @@ pm_init(void)
 		pmu_nbatt = 1;
 		pmu_batt_type = BATT_SMART;
 		pmu_type = PMU_KEYLARGO;
-		node = getnodebyname(0, "power-mgt");
+		node = of_getnode_byname(0, "power-mgt");
 		if (node == -1) {
 			printf("pmu: can't find power-mgt\n");
 			return;

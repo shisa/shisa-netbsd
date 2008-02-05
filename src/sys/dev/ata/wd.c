@@ -1,4 +1,4 @@
-/*	$NetBSD: wd.c,v 1.345 2007/09/16 18:41:47 bouyer Exp $ */
+/*	$NetBSD: wd.c,v 1.355 2008/01/02 11:48:37 ad Exp $ */
 
 /*
  * Copyright (c) 1998, 2001 Manuel Bouyer.  All rights reserved.
@@ -66,7 +66,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: wd.c,v 1.345 2007/09/16 18:41:47 bouyer Exp $");
+__KERNEL_RCSID(0, "$NetBSD: wd.c,v 1.355 2008/01/02 11:48:37 ad Exp $");
 
 #include "opt_ata.h"
 
@@ -88,13 +88,14 @@ __KERNEL_RCSID(0, "$NetBSD: wd.c,v 1.345 2007/09/16 18:41:47 bouyer Exp $");
 #include <sys/disk.h>
 #include <sys/syslog.h>
 #include <sys/proc.h>
+#include <sys/reboot.h>
 #include <sys/vnode.h>
 #if NRND > 0
 #include <sys/rnd.h>
 #endif
 
-#include <machine/intr.h>
-#include <machine/bus.h>
+#include <sys/intr.h>
+#include <sys/bus.h>
 
 #include <dev/ata/atareg.h>
 #include <dev/ata/atavar.h>
@@ -138,6 +139,9 @@ int	wddetach(struct device *, int);
 int	wdactivate(struct device *, enum devact);
 int	wdprint(void *, char *);
 void	wdperror(const struct wd_softc *);
+
+static bool	wd_suspend(device_t);
+static int	wd_standby(struct wd_softc *, int);
 
 CFATTACH_DECL(wd, sizeof(struct wd_softc),
     wdprobe, wdattach, wddetach, wdactivate);
@@ -189,9 +193,7 @@ void  __wdstart(struct wd_softc*, struct buf *);
 void  wdrestart(void *);
 void  wddone(void *);
 int   wd_get_params(struct wd_softc *, u_int8_t, struct ataparams *);
-int   wd_standby(struct wd_softc *, int);
 int   wd_flushcache(struct wd_softc *, int);
-void  wd_shutdown(void *);
 
 int   wd_getcache(struct wd_softc *, int *);
 int   wd_setcache(struct wd_softc *, int);
@@ -254,6 +256,8 @@ static const struct wd_quirk {
 	/* Attempt to catch all seagate drives larger than 200GB */
 	{ "ST3[2-9][0-9][0-9][0-9][0-9][0-9][A-Z]*",
 	  WD_QUIRK_FORCE_LBA48 },
+	{ "ST3[1-9][0-9][0-9][0-9][0-9][0-9][0-9][A-Z]*",
+	  WD_QUIRK_FORCE_LBA48 },
 	{ NULL,
 	  0 }
 };
@@ -299,8 +303,8 @@ wdattach(struct device *parent, struct device *self, void *aux)
 	int i, blank;
 	char tbuf[41], pbuf[9], c, *p, *q;
 	const struct wd_quirk *wdq;
-	ATADEBUG_PRINT(("wdattach\n"), DEBUG_FUNCS | DEBUG_PROBE);
 
+	ATADEBUG_PRINT(("wdattach\n"), DEBUG_FUNCS | DEBUG_PROBE);
 	callout_init(&wd->sc_restart_ch, 0);
 	bufq_alloc(&wd->sc_q, BUFQ_DISK_DEFAULT_STRAT, BUFQ_SORT_RAWBLOCK);
 #ifdef WD_SOFTBADSECT
@@ -408,15 +412,10 @@ wdattach(struct device *parent, struct device *self, void *aux)
 	/*
 	 * Initialize and attach the disk structure.
 	 */
-	wd->sc_dk.dk_driver = &wddkdriver;
-	wd->sc_dk.dk_name = wd->sc_dev.dv_xname;
 	/* we fill in dk_info later */
+	disk_init(&wd->sc_dk, wd->sc_dev.dv_xname, &wddkdriver);
 	disk_attach(&wd->sc_dk);
 	wd->sc_wdc_bio.lp = wd->sc_dk.dk_label;
-	wd->sc_sdhook = shutdownhook_establish(wd_shutdown, wd);
-	if (wd->sc_sdhook == NULL)
-		aprint_error("%s: WARNING: unable to establish shutdown hook\n",
-		    wd->sc_dev.dv_xname);
 #if NRND > 0
 	rnd_attach_source(&wd->rnd_source, wd->sc_dev.dv_xname,
 			  RND_TYPE_DISK, 0);
@@ -424,6 +423,28 @@ wdattach(struct device *parent, struct device *self, void *aux)
 
 	/* Discover wedges on this disk. */
 	dkwedge_discover(&wd->sc_dk);
+
+	if (!pmf_device_register(self, wd_suspend, NULL))
+		aprint_error_dev(self, "couldn't establish power handler\n");
+}
+
+static bool
+wd_suspend(device_t dv)
+{
+	struct wd_softc *sc = device_private(dv);
+	/* For shutdown and panic processing, use polling. */
+	int modus = doing_shutdown ? AT_POLL : AT_WAIT;
+
+	wd_flushcache(sc, modus);
+	/*
+	 * Only put the disk into standby mode if this not a shutdown or
+	 * if this is an explicit halt -p.
+	 */
+	if (doing_shutdown == 0 ||
+	    (boothowto & RB_POWERDOWN) == RB_POWERDOWN)
+		wd_standby(sc, modus);
+
+	return true;
 }
 
 int
@@ -488,9 +509,7 @@ wddetach(struct device *self, int flags)
 	sc->sc_bscount = 0;
 #endif
 
-	/* Get rid of the shutdown hook. */
-	if (sc->sc_sdhook != NULL)
-		shutdownhook_disestablish(sc->sc_sdhook);
+	pmf_device_deregister(self);
 
 #if NRND > 0
 	/* Unhook the entropy source. */
@@ -651,7 +670,9 @@ wd_split_mod15_write(struct buf *bp)
 	 * Advance the pointer to the second half and issue that command
 	 * using the same opening.
 	 */
-	bp->b_flags = obp->b_flags | B_CALL;
+	bp->b_flags = obp->b_flags;
+	bp->b_oflags = obp->b_oflags;
+	bp->b_cflags = obp->b_cflags;
 	bp->b_data = (char *)bp->b_data + bp->b_bcount;
 	bp->b_blkno += (bp->b_bcount / 512);
 	bp->b_rawblkno += (bp->b_bcount / 512);
@@ -686,7 +707,7 @@ __wdstart(struct wd_softc *wd, struct buf *bp)
 		struct buf *nbp;
 
 		/* already at splbio */
-		nbp = getiobuf_nowait();
+		nbp = getiobuf(NULL, false);
 		if (__predict_false(nbp == NULL)) {
 			/* No memory -- fail the iop. */
 			bp->b_error = ENOMEM;
@@ -698,7 +719,6 @@ __wdstart(struct wd_softc *wd, struct buf *bp)
 
 		nbp->b_error = 0;
 		nbp->b_proc = bp->b_proc;
-		nbp->b_vp = NULLVP;
 		nbp->b_dev = bp->b_dev;
 
 		nbp->b_bcount = bp->b_bcount / 2;
@@ -708,7 +728,9 @@ __wdstart(struct wd_softc *wd, struct buf *bp)
 		nbp->b_blkno = bp->b_blkno;
 		nbp->b_rawblkno = bp->b_rawblkno;
 
-		nbp->b_flags = bp->b_flags | B_CALL;
+		nbp->b_flags = bp->b_flags;
+		nbp->b_oflags = bp->b_oflags;
+		nbp->b_cflags = bp->b_cflags;
 		nbp->b_iodone = wd_split_mod15_write;
 
 		/* Put ptr to orig buf in b_private and use new buf */
@@ -762,10 +784,10 @@ wddone(void *v)
 	struct buf *bp = wd->sc_bp;
 	const char *errmsg;
 	int do_perror = 0;
-	ATADEBUG_PRINT(("wddone %s\n", wd->sc_dev.dv_xname),
-	    DEBUG_XFERS);
 	int nblks;
 
+	ATADEBUG_PRINT(("wddone %s\n", wd->sc_dev.dv_xname),
+	    DEBUG_XFERS);
 	if (bp == NULL)
 		return;
 	bp->b_resid = wd->sc_wdc_bio.bcount;
@@ -862,8 +884,7 @@ noerror:	if ((wd->sc_wdc_bio.flags & ATA_CORR) || wd->retries > 0)
 	rnd_add_uint32(&wd->rnd_source, bp->b_blkno);
 #endif
 	/* XXX Yuck, but we don't want to increment openings in this case */
-	if (__predict_false((bp->b_flags & B_CALL) != 0 &&
-			    bp->b_iodone == wd_split_mod15_write))
+	if (__predict_false(bp->b_iodone == wd_split_mod15_write))
 		biodone(bp);
 	else {
 		biodone(bp);
@@ -878,9 +899,9 @@ wdrestart(void *v)
 	struct wd_softc *wd = v;
 	struct buf *bp = wd->sc_bp;
 	int s;
+
 	ATADEBUG_PRINT(("wdrestart %s\n", wd->sc_dev.dv_xname),
 	    DEBUG_XFERS);
-
 	s = splbio();
 	__wdstart(v, bp);
 	splx(s);
@@ -1762,6 +1783,7 @@ wd_params_to_properties(struct wd_softc *wd, struct ataparams *params)
 int
 wd_get_params(struct wd_softc *wd, u_int8_t flags, struct ataparams *params)
 {
+
 	switch (wd->atabus->ata_get_params(wd->drvp, flags, params)) {
 	case CMD_AGAIN:
 		return 1;
@@ -1855,7 +1877,7 @@ wd_setcache(struct wd_softc *wd, int bits)
 	return 0;
 }
 
-int
+static int
 wd_standby(struct wd_softc *wd, int flags)
 {
 	struct ata_command ata_c;
@@ -1867,8 +1889,8 @@ wd_standby(struct wd_softc *wd, int flags)
 	ata_c.flags = flags;
 	ata_c.timeout = 30000; /* 30s timeout */
 	if (wd->atabus->ata_exec_command(wd->drvp, &ata_c) != ATACMD_COMPLETE) {
-		printf("%s: standby immediate command didn't complete\n",
-		    wd->sc_dev.dv_xname);
+		aprint_error_dev(&wd->sc_dev,
+		    "standby immediate command didn't complete\n");
 		return EIO;
 	}
 	if (ata_c.flags & AT_ERROR) {
@@ -1878,8 +1900,7 @@ wd_standby(struct wd_softc *wd, int flags)
 	if (ata_c.flags & (AT_ERROR | AT_TIMEOU | AT_DF)) {
 		char sbuf[sizeof(at_errbits) + 64];
 		bitmask_snprintf(ata_c.flags, at_errbits, sbuf, sizeof(sbuf));
-		printf("%s: wd_standby: status=%s\n", wd->sc_dev.dv_xname,
-		    sbuf);
+		aprint_error_dev(&wd->sc_dev, "wd_standby: status=%s\n", sbuf);
 		return EIO;
 	}
 	return 0;
@@ -1927,13 +1948,6 @@ wd_flushcache(struct wd_softc *wd, int flags)
 	return 0;
 }
 
-void
-wd_shutdown(void *arg)
-{
-	struct wd_softc *wd = arg;
-	wd_flushcache(wd, AT_POLL);
-}
-
 /*
  * Allocate space for a ioctl queue structure.  Mostly taken from
  * scsipi_ioctl.c
@@ -1945,7 +1959,7 @@ wi_get(void)
 	int s;
 
 	wi = malloc(sizeof(struct wd_ioctl), M_TEMP, M_WAITOK|M_ZERO);
-	simple_lock_init(&wi->wi_bp.b_interlock);
+	buf_init(&wi->wi_bp);
 	s = splbio();
 	LIST_INSERT_HEAD(&wi_head, wi, wi_list);
 	splx(s);
@@ -1964,6 +1978,7 @@ wi_free(struct wd_ioctl *wi)
 	s = splbio();
 	LIST_REMOVE(wi, wi_list);
 	splx(s);
+	buf_destroy(&wi->wi_bp);
 	free(wi, M_TEMP);
 }
 
@@ -2019,7 +2034,7 @@ wdioctlstrategy(struct buf *bp)
 		printf("wdioctlstrategy: "
 		    "No matching ioctl request found in queue\n");
 		error = EINVAL;
-		goto done;
+		goto bad;
 	}
 
 	memset(&ata_c, 0, sizeof(ata_c));
@@ -2031,7 +2046,7 @@ wdioctlstrategy(struct buf *bp)
 	if (bp->b_bcount != wi->wi_atareq.datalen) {
 		printf("physio split wd ioctl request... cannot proceed\n");
 		error = EIO;
-		goto done;
+		goto bad;
 	}
 
 	/*
@@ -2043,7 +2058,7 @@ wdioctlstrategy(struct buf *bp)
 	    (bp->b_bcount / wi->wi_softc->sc_dk.dk_label->d_secsize) >=
 	     (1 << NBBY)) {
 		error = EINVAL;
-		goto done;
+		goto bad;
 	}
 
 	/*
@@ -2052,7 +2067,7 @@ wdioctlstrategy(struct buf *bp)
 
 	if (wi->wi_atareq.timeout == 0) {
 		error = EINVAL;
-		goto done;
+		goto bad;
 	}
 
 	if (wi->wi_atareq.flags & ATACMD_READ)
@@ -2080,8 +2095,7 @@ wdioctlstrategy(struct buf *bp)
 	if (wi->wi_softc->atabus->ata_exec_command(wi->wi_softc->drvp, &ata_c)
 	    != ATACMD_COMPLETE) {
 		wi->wi_atareq.retsts = ATACMD_ERROR;
-		error = EIO;
-		goto done;
+		goto bad;
 	}
 
 	if (ata_c.flags & (AT_ERROR | AT_TIMEOU | AT_DF)) {
@@ -2104,7 +2118,10 @@ wdioctlstrategy(struct buf *bp)
 		}
 	}
 
-done:
+	bp->b_error = 0;
+	biodone(bp);
+	return;
+bad:
 	bp->b_error = error;
 	biodone(bp);
 }

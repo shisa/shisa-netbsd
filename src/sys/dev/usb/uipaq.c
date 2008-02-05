@@ -1,4 +1,4 @@
-/*	$NetBSD: uipaq.c,v 1.6 2007/03/13 13:51:55 drochner Exp $	*/
+/*	$NetBSD: uipaq.c,v 1.8 2007/12/11 12:36:02 lukem Exp $	*/
 /*	$OpenBSD: uipaq.c,v 1.1 2005/06/17 23:50:33 deraadt Exp $	*/
 
 /*
@@ -48,6 +48,9 @@
  * Contact isis@cs.umd.edu if you have any questions/comments about this driver
  */
 
+#include <sys/cdefs.h>
+__KERNEL_RCSID(0, "$NetBSD: uipaq.c,v 1.8 2007/12/11 12:36:02 lukem Exp $");
+
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/kernel.h>
@@ -56,7 +59,6 @@
 #include <sys/tty.h>
 
 #include <dev/usb/usb.h>
-#include <dev/usb/usbhid.h>
 
 #include <dev/usb/usbcdc.h>	/*UCDC_* stuff */
 

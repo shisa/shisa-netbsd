@@ -1,4 +1,4 @@
-/*	$NetBSD: kvm_sparc64.c,v 1.10 2003/08/07 16:44:40 agc Exp $	*/
+/*	$NetBSD: kvm_sparc64.c,v 1.13 2008/01/18 16:26:09 martin Exp $	*/
 
 /*-
  * Copyright (c) 1992, 1993
@@ -38,7 +38,7 @@
 #if 0
 static char sccsid[] = "@(#)kvm_sparc.c	8.1 (Berkeley) 6/4/93";
 #else
-__RCSID("$NetBSD: kvm_sparc64.c,v 1.10 2003/08/07 16:44:40 agc Exp $");
+__RCSID("$NetBSD: kvm_sparc64.c,v 1.13 2008/01/18 16:26:09 martin Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
@@ -112,34 +112,69 @@ _kvm_kvatop(kd, va, pa)
 	cpu_kcore_hdr_t *cpup = kd->cpu_data;
 	u_long kernbase = cpup->kernbase;
 	uint64_t *pseg, *pdir, *ptbl;
+	struct cpu_kcore_4mbseg *ktlb;
 	int64_t data;
+	int i;
 
 	if (va < kernbase)
 		goto lose;
 
-	/* Handle the wired 4MB TTEs */
-	if (va > cpup->ktextbase && va < (cpup->ktextbase + cpup->ktextsz)) {
-		u_long vaddr;
+	/* Handle the wired 4MB TTEs and per-CPU mappings */
+	if (cpup->memsegoffset > sizeof(cpu_kcore_hdr_t) &&
+	    cpup->newmagic == SPARC64_KCORE_NEWMAGIC) {
+		/*
+		 * new format: we have a list of 4 MB mappings
+		 */
+		ktlb = (struct cpu_kcore_4mbseg *)
+			((uintptr_t)kd->cpu_data + cpup->off4mbsegs);
+		for (i = 0; i < cpup->num4mbsegs; i++) {
+			uint64_t start = ktlb[i].va;
+			if (va < start || va >= start+PAGE_SIZE_4M)
+				continue;
+			*pa = ktlb[i].pa + va - start;
+			return (int)(start+PAGE_SIZE_4M - va);
+		}
 
-		vaddr = va - cpup->ktextbase;
-		*pa = cpup->ktextp + vaddr;
-		return (cpup->ktextsz - vaddr);
+		if (cpup->numcpuinfos > 0) {
+			/* we have per-CPU mapping info */
+			uint64_t start, base;
+
+			base = cpup->cpubase - 32*1024;
+			if (va >= base && va < (base + cpup->percpusz)) {
+				start = va - base;
+				*pa = cpup->cpusp
+				    + cpup->thiscpu*cpup->percpusz
+				    + start;
+				return cpup->percpusz - start;
+			}
+		}
+	} else {
+		/*
+		 * old format: just a textbase/size and database/size
+		 */
+		if (va > cpup->ktextbase && va < 
+		    (cpup->ktextbase + cpup->ktextsz)) {
+			u_long vaddr;
+
+			vaddr = va - cpup->ktextbase;
+			*pa = cpup->ktextp + vaddr;
+			return (int)(cpup->ktextsz - vaddr);
+		}
+		if (va > cpup->kdatabase && va < 
+		    (cpup->kdatabase + cpup->kdatasz)) {
+			u_long vaddr;
+
+			vaddr = va - cpup->kdatabase;
+			*pa = cpup->kdatap + vaddr;
+			return (int)(cpup->kdatasz - vaddr);
+		}
 	}
-
-	if (va > cpup->kdatabase && va < (cpup->kdatabase + cpup->kdatasz)) {
-		u_long vaddr;
-
-		vaddr = va - cpup->kdatabase;
-		*pa = cpup->kdatap + vaddr;
-		return (cpup->kdatasz - vaddr);
-	}
-
 
 	/*
 	 * Parse kernel page table.
 	 */
 	pseg = (uint64_t *)(u_long)cpup->segmapoffset;
-	if (pread(kd->pmfd, &pdir, sizeof(pdir),
+	if (_kvm_pread(kd, kd->pmfd, &pdir, sizeof(pdir),
 		_kvm_pa2off(kd, (u_long)&pseg[va_to_seg(va)])) 
 		!= sizeof(pdir)) {
 		_kvm_syserr(kd, 0, "could not read L1 PTE");
@@ -151,7 +186,7 @@ _kvm_kvatop(kd, va, pa)
 		goto lose;
 	}
 
-	if (pread(kd->pmfd, &ptbl, sizeof(ptbl),
+	if (_kvm_pread(kd, kd->pmfd, &ptbl, sizeof(ptbl),
 		_kvm_pa2off(kd, (u_long)&pdir[va_to_dir(va)])) 
 		!= sizeof(ptbl)) {
 		_kvm_syserr(kd, 0, "could not read L2 PTE");
@@ -163,7 +198,7 @@ _kvm_kvatop(kd, va, pa)
 		goto lose;
 	}
 
-	if (pread(kd->pmfd, &data, sizeof(data),
+	if (_kvm_pread(kd, kd->pmfd, &data, sizeof(data),
 		_kvm_pa2off(kd, (u_long)&ptbl[va_to_pte(va)])) 
 		!= sizeof(data)) {
 		_kvm_syserr(kd, 0, "could not read TTE");
@@ -188,10 +223,10 @@ _kvm_kvatop(kd, va, pa)
 	 * Parse and trnslate our TTE.
 	 */
 
-	return (kd->nbpg - va);
+	return (int)(kd->nbpg - va);
 
 lose:
-	*pa = -1;
+	*pa = (u_long)-1;
 	_kvm_err(kd, 0, "invalid address (%lx)", va);
 	return (0);
 }

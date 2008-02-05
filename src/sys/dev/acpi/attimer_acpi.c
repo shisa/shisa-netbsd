@@ -1,11 +1,11 @@
-/* $NetBSD: attimer_acpi.c,v 1.5 2006/11/16 01:32:47 christos Exp $ */
+/* $NetBSD: attimer_acpi.c,v 1.9 2008/01/03 01:21:45 dyoung Exp $ */
 
 /*
  * Copyright (c) 2005 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
  * This code is derived from software contributed to The NetBSD Foundation
- * by Juan Romero Pardines <xtraeme@NetBSD.org> and Quentin Garnier.
+ * by Quentin Garnier.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -66,7 +66,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: attimer_acpi.c,v 1.5 2006/11/16 01:32:47 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: attimer_acpi.c,v 1.9 2008/01/03 01:21:45 dyoung Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -75,7 +75,7 @@ __KERNEL_RCSID(0, "$NetBSD: attimer_acpi.c,v 1.5 2006/11/16 01:32:47 christos Ex
 #include <sys/device.h>
 #include <sys/proc.h>
 
-#include <machine/bus.h>
+#include <sys/bus.h>
 
 #include <dev/acpi/acpica.h>
 #include <dev/acpi/acpireg.h>
@@ -83,11 +83,11 @@ __KERNEL_RCSID(0, "$NetBSD: attimer_acpi.c,v 1.5 2006/11/16 01:32:47 christos Ex
 
 #include <dev/ic/attimervar.h>
 
-static int	attimer_acpi_match(struct device *, struct cfdata *, void *);
-static void	attimer_acpi_attach(struct device *, struct device *, void *);
+static int	attimer_acpi_match(device_t, struct cfdata *, void *);
+static void	attimer_acpi_attach(device_t, device_t, void *);
 
 CFATTACH_DECL(attimer_acpi, sizeof(struct attimer_softc), attimer_acpi_match,
-    attimer_acpi_attach, NULL, NULL);
+    attimer_acpi_attach, attimer_detach, NULL);
 
 /*
  * Supported device IDs
@@ -102,8 +102,7 @@ static const char * const attimer_acpi_ids[] = {
  * attimer_acpi_match: autoconf(9) match routine
  */
 static int
-attimer_acpi_match(struct device *parent,
-    struct cfdata *match, void *aux)
+attimer_acpi_match(device_t parent, struct cfdata *match, void *aux)
 {
 	struct acpi_attach_args *aa = aux;
 
@@ -117,10 +116,9 @@ attimer_acpi_match(struct device *parent,
  * attimer_acpi_attach: autoconf(9) attach routine
  */
 static void
-attimer_acpi_attach(struct device *parent, struct device *self,
-    void *aux)
+attimer_acpi_attach(device_t parent, device_t self, void *aux)
 {
-	struct attimer_softc *sc = (struct attimer_softc *)self;
+	struct attimer_softc *sc = device_private(self);
 	struct acpi_attach_args *aa = aux;
 	struct acpi_resources res;
 	struct acpi_io *io;
@@ -144,8 +142,9 @@ attimer_acpi_attach(struct device *parent, struct device *self,
 	}
 
 	sc->sc_iot = aa->aa_iot;
-	if (bus_space_map(sc->sc_iot, io->ar_base, io->ar_length,
-		    0, &sc->sc_ioh)) {
+	sc->sc_size = io->ar_length;
+	if (bus_space_map(sc->sc_iot, io->ar_base, sc->sc_size,
+		    0, &sc->sc_ioh) != 0) {
 		aprint_error("%s: can't map i/o space\n", sc->sc_dev.dv_xname);
 		goto out;
 	}

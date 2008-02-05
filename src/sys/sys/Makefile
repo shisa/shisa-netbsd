@@ -1,12 +1,12 @@
-#	$NetBSD: Makefile,v 1.98 2007/09/23 11:45:11 kiyohara Exp $
+#	$NetBSD: Makefile,v 1.108 2008/01/16 12:34:53 ad Exp $
 
 .include <bsd.sys.mk>
 
 INCSDIR= /usr/include/sys
 
-INCS=	acct.h agpio.h aio.h ansi.h ataio.h audioio.h \
-	bootblock.h bswap.h buf.h \
-	callout.h cdefs.h cdefs_aout.h \
+INCS=	acct.h agpio.h aio.h ansi.h ataio.h atomic.h audioio.h \
+	bitops.h bootblock.h bswap.h buf.h \
+	callback.h callout.h cdefs.h cdefs_aout.h \
 	cdefs_elf.h cdio.h chio.h clockctl.h condvar.h conf.h core.h \
 	cpuio.h device.h dir.h dirent.h disk.h disklabel.h disklabel_acorn.h \
 	disklabel_gpt.h \
@@ -17,19 +17,19 @@ INCS=	acct.h agpio.h aio.h ansi.h ataio.h audioio.h \
 	float_ieee754.h fstypes.h gcq.h gmon.h gpio.h hash.h \
 	ieee754.h inttypes.h ioccom.h ioctl.h ioctl_compat.h iostat.h ipc.h \
 	joystick.h \
-	kcore.h kgdb.h ksem.h ksyms.h ktrace.h \
-	lkm.h localedef.h lock.h lockf.h lwp.h \
+	kcore.h kgdb.h kmem.h ksem.h ksyms.h ktrace.h \
+	lkm.h localedef.h lock.h lockf.h lwp.h lwpctl.h \
 	malloc.h mallocvar.h mbuf.h md4.h \
-	md5.h midiio.h mman.h mount.h mqueue.h msg.h msgbuf.h mtio.h mutex.h \
+	md5.h midiio.h mman.h module.h mount.h mqueue.h msg.h msgbuf.h mtio.h mutex.h \
 	namei.h null.h \
 	param.h pipe.h pmc.h poll.h pool.h power.h proc.h \
-	protosw.h ptrace.h queue.h \
+	protosw.h pset.h ptrace.h queue.h \
 	ras.h reboot.h radioio.h resource.h resourcevar.h rmd160.h rnd.h rwlock.h \
 	scanio.h sched.h scsiio.h select.h selinfo.h sem.h sha1.h sha2.h \
 	shm.h siginfo.h signal.h signalvar.h sigtypes.h simplelock.h \
 	sleepq.h socket.h \
 	socketvar.h sockio.h specificdata.h stat.h statvfs.h \
-	syscall.h syscallargs.h sysctl.h systrace.h stdint.h swap.h \
+	syscall.h syscallargs.h sysctl.h stdint.h swap.h \
 	syncobj.h syslimits.h syslog.h \
 	tape.h termios.h time.h timeb.h timepps.h times.h \
 	timex.h trace.h tree.h tty.h ttychars.h ttycom.h \

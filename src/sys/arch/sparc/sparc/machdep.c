@@ -1,4 +1,4 @@
-/*	$NetBSD: machdep.c,v 1.273 2007/07/08 10:19:23 pooka Exp $ */
+/*	$NetBSD: machdep.c,v 1.276 2008/01/05 22:48:21 martin Exp $ */
 
 /*-
  * Copyright (c) 1996, 1997, 1998 The NetBSD Foundation, Inc.
@@ -78,7 +78,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.273 2007/07/08 10:19:23 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.276 2008/01/05 22:48:21 martin Exp $");
 
 #include "opt_compat_netbsd.h"
 #include "opt_compat_sunos.h"
@@ -105,6 +105,7 @@ __KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.273 2007/07/08 10:19:23 pooka Exp $");
 #include <sys/syscallargs.h>
 #include <sys/exec.h>
 #include <sys/ucontext.h>
+#include <sys/simplelock.h>
 
 #include <uvm/uvm.h>		/* we use uvm.kernel_object */
 
@@ -774,11 +775,11 @@ void sendsig(const ksiginfo_t *ksi, const sigset_t *mask)
  */
 /* ARGSUSED */
 int
-compat_16_sys___sigreturn14(struct lwp *l, void *v, register_t *retval)
+compat_16_sys___sigreturn14(struct lwp *l, const struct compat_16_sys___sigreturn14_args *uap, register_t *retval)
 {
-	struct compat_16_sys___sigreturn14_args /* {
+	/* {
 		syscallarg(struct sigcontext *) sigcntxp;
-	} */ *uap = v;
+	} */
 	struct sigcontext sc, *scp;
 	struct trapframe *tf;
 	struct proc *p;

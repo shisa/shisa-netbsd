@@ -1,4 +1,4 @@
-/*	$NetBSD: boot.c,v 1.15 2005/12/11 12:18:30 christos Exp $	*/
+/*	$NetBSD: boot.c,v 1.19 2008/01/24 19:52:53 garbled Exp $	*/
 
 /*-
  * Copyright (c) 1997 The NetBSD Foundation, Inc.
@@ -92,7 +92,6 @@
 
 #include <machine/cpu.h>
 
-#include "alloc.h"
 #include "boot.h"
 #include "ofdev.h"
 #include "openfirm.h"
@@ -108,7 +107,11 @@ char bootfile[128];
 int boothowto;
 int debug;
 
-static char *kernels[] = { "/netbsd.ofppc", "/netbsd", "/netbsd.gz", NULL };
+static char *kernels[] = { "/netbsd.ofppc", "/netbsd",
+			   "/netbsd.gz", "onetbsd", NULL };
+static char *kernels64[] = { "/netbsd.ofppc64", "/netbsd64", "/netbsd64.gz",
+			     "onetbsd64", "/netbsd.ofppc", "/netbsd",
+			     "/netbsd.gz", "onetbsd", NULL };
 
 static void
 prom2boot(char *dev)
@@ -158,23 +161,20 @@ chain(boot_entry_t entry, char *args, void *ssym, void *esym)
 	extern char end[], *cp;
 	u_int l, magic = 0x19730224;
 
-	freeall();
-
 	/*
 	 * Stash pointer to start and end of symbol table after the argument
 	 * strings.
 	 */
 	l = strlen(args) + 1;
-	l = (l + 3) & ~3;			/* align */
-	DPRINTF("magic @ %p\n", args + l);
-	memcpy(args + l, &magic, sizeof(magic));
-	l += sizeof(magic);
 	DPRINTF("ssym @ %p\n", args + l);
 	memcpy(args + l, &ssym, sizeof(ssym));
 	l += sizeof(ssym); 
 	DPRINTF("esym @ %p\n", args + l);
 	memcpy(args + l, &esym, sizeof(esym));
 	l += sizeof(esym);
+	DPRINTF("magic @ %p\n", args + l);
+	memcpy(args + l, &magic, sizeof(magic));
+	l += sizeof(magic);
 	DPRINTF("args + l -> %p\n", args + l);
 
 	OF_chain((void *) RELOC, end - (char *)RELOC, entry, args, l);
@@ -193,7 +193,7 @@ main(void)
 {
 	extern char bootprog_name[], bootprog_rev[],
 		    bootprog_maker[], bootprog_date[];
-	int chosen, options;
+	int chosen, options, cpu, cpunode, j, is64=0;
 	char bootline[512];		/* Should check size? */
 	char *cp;
 	u_long marks[MARK_MAX];
@@ -214,6 +214,14 @@ main(void)
 		OF_exit();
 	}
 
+	/* lets see if we can guess the 64bittedness */
+	if (OF_getprop(chosen, "cpu", &cpu, sizeof cpu) ==  sizeof(cpu)) {
+		cpunode = OF_instance_to_package(cpu);
+		if (OF_getprop(cpunode, "64-bit", &j, sizeof j) >= 0) {
+			is64 = 1;
+		}
+	}
+
 	prom2boot(bootdev);
 	parseargs(bootline, &boothowto);
 	DPRINTF("bootline=%s\n", bootline);
@@ -231,13 +239,22 @@ main(void)
 			kernels[0] = bootline;
 			kernels[1] = NULL;
 		}
+		if (!bootline[0] && is64) {
+			for (i = 0; kernels64[i]; i++) {
+				DPRINTF("Trying %s\n", kernels64[i]);
 
-		for (i = 0; kernels[i]; i++) {
-			DPRINTF("Trying %s\n", kernels[i]);
+				marks[MARK_START] = 0;
+				if (loadfile(kernels64[i], marks, LOAD_KERNEL) >= 0)
+					goto loaded;
+			}
+		} else {
+			for (i = 0; kernels[i]; i++) {
+				DPRINTF("Trying %s\n", kernels[i]);
 
-			marks[MARK_START] = 0;
-			if (loadfile(kernels[i], marks, LOAD_KERNEL) >= 0)
-				goto loaded;
+				marks[MARK_START] = 0;
+				if (loadfile(kernels[i], marks, LOAD_KERNEL) >= 0)
+					goto loaded;
+			}
 		}
 
 		boothowto |= RB_ASKNAME;

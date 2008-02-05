@@ -1,4 +1,4 @@
-/*	$NetBSD: rgephy.c,v 1.16 2006/12/03 03:16:48 tsutsui Exp $	*/
+/*	$NetBSD: rgephy.c,v 1.18 2008/01/26 14:24:14 tsutsui Exp $	*/
 
 /*
  * Copyright (c) 2003
@@ -33,7 +33,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: rgephy.c,v 1.16 2006/12/03 03:16:48 tsutsui Exp $");
+__KERNEL_RCSID(0, "$NetBSD: rgephy.c,v 1.18 2008/01/26 14:24:14 tsutsui Exp $");
 
 
 /*
@@ -153,6 +153,9 @@ rgephy_attach(struct device *parent, struct device *self, void *aux)
 
 	PHY_RESET(sc);
 	aprint_normal("\n");
+
+	if (!pmf_device_register(self, NULL, mii_phy_resume))
+		aprint_error_dev(self, "couldn't establish power handler\n");
 }
 
 static int
@@ -530,6 +533,7 @@ rgephy_reset(struct mii_softc *sc)
 		PHY_WRITE(sc, 0x1F, 0x0002);
 		PHY_WRITE(sc, 0x01, 0x90D0);
 		PHY_WRITE(sc, 0x1F, 0x0000);
+		PHY_WRITE(sc, 0x0e, 0x0000);
 	}
 
 	/* Reset capabilities */

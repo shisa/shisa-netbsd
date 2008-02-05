@@ -1,4 +1,4 @@
-/*	$NetBSD: coda_vfsops.c,v 1.58 2007/07/31 21:14:19 pooka Exp $	*/
+/*	$NetBSD: coda_vfsops.c,v 1.64 2008/01/28 14:31:15 dholland Exp $	*/
 
 /*
  *
@@ -45,7 +45,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: coda_vfsops.c,v 1.58 2007/07/31 21:14:19 pooka Exp $");
+__KERNEL_RCSID(0, "$NetBSD: coda_vfsops.c,v 1.64 2008/01/28 14:31:15 dholland Exp $");
 
 #ifdef	_LKM
 #define	NVCODA 4
@@ -73,6 +73,7 @@ __KERNEL_RCSID(0, "$NetBSD: coda_vfsops.c,v 1.58 2007/07/31 21:14:19 pooka Exp $
 #include <coda/coda_opstats.h>
 /* for VN_RDEV */
 #include <miscfs/specfs/specdev.h>
+#include <miscfs/genfs/genfs.h>
 
 MALLOC_DEFINE(M_CODA, "coda", "Coda file system structures and tables");
 
@@ -108,7 +109,7 @@ struct vfsops coda_vfsops = {
     coda_start,
     coda_unmount,
     coda_root,
-    coda_quotactl,
+    (void *)eopnotsupp,	/* vfs_quotactl */
     coda_nb_statvfs,
     coda_sync,
     coda_vget,
@@ -121,6 +122,8 @@ struct vfsops coda_vfsops = {
     (int (*)(struct mount *, struct vnode *, struct timespec *)) eopnotsupp,
     vfs_stdextattrctl,
     (void *)eopnotsupp,	/* vfs_suspendctl */
+    genfs_renamelock_enter,
+    genfs_renamelock_exit,
     coda_vnodeopv_descs,
     0,			/* vfs_refcount */
     { NULL, NULL },	/* vfs_list */
@@ -153,9 +156,9 @@ int
 coda_mount(struct mount *vfsp,	/* Allocated and initialized by mount(2) */
     const char *path,	/* path covered: ignored by the fs-layer */
     void *data,		/* Need to define a data type for this in netbsd? */
-    size_t *data_len,
-    struct lwp *l)		/* The ever-famous lwp pointer */
+    size_t *data_len)
 {
+    struct lwp *l = curlwp;
     struct nameidata nd;
     struct vnode *dvp;
     struct cnode *cp;
@@ -186,9 +189,11 @@ coda_mount(struct mount *vfsp,	/* Allocated and initialized by mount(2) */
      * XXX: coda passes the mount device as the entire mount args,
      * All other fs pass a structure contining a pointer.
      * In order to get sys_mount() to do the copyin() we've set a
-     * fixed size for the filename buffer.
+     * fixed default size for the filename buffer.
      */
-    NDINIT(&nd, LOOKUP, FOLLOW, UIO_SYSSPACE, data, l);
+    /* Ensure that namei() doesn't run off the filename buffer */
+    ((char *)data)[*data_len - 1] = 0;
+    NDINIT(&nd, LOOKUP, FOLLOW, UIO_SYSSPACE, data);
     error = namei(&nd);
     dvp = nd.ni_vp;
 
@@ -201,7 +206,7 @@ coda_mount(struct mount *vfsp,	/* Allocated and initialized by mount(2) */
 	vrele(dvp);
 	return(ENXIO);
     }
-    dev = dvp->v_specinfo->si_rdev;
+    dev = dvp->v_rdev;
     vrele(dvp);
     cdev = cdevsw_lookup(dev);
     if (cdev == NULL) {
@@ -248,7 +253,7 @@ coda_mount(struct mount *vfsp,	/* Allocated and initialized by mount(2) */
      */
     cp = make_coda_node(&rootfid, vfsp, VDIR);
     rtvp = CTOV(cp);
-    rtvp->v_flag |= VROOT;
+    rtvp->v_vflag |= VV_ROOT;
 
 /*  cp = make_coda_node(&ctlfid, vfsp, VCHR);
     The above code seems to cause a loop in the cnode links.
@@ -281,7 +286,7 @@ coda_mount(struct mount *vfsp,	/* Allocated and initialized by mount(2) */
 }
 
 int
-coda_start(struct mount *vfsp, int flags, struct lwp *l)
+coda_start(struct mount *vfsp, int flags)
 {
     ENTRY;
     vftomi(vfsp)->mi_started = 1;
@@ -289,7 +294,7 @@ coda_start(struct mount *vfsp, int flags, struct lwp *l)
 }
 
 int
-coda_unmount(struct mount *vfsp, int mntflags, struct lwp *l)
+coda_unmount(struct mount *vfsp, int mntflags)
 {
     struct coda_mntinfo *mi = vftomi(vfsp);
     int active, error = 0;
@@ -313,7 +318,7 @@ coda_unmount(struct mount *vfsp, int mntflags, struct lwp *l)
 	vrele(mi->mi_rootvp);
 
 	active = coda_kill(vfsp, NOT_DOWNCALL);
-	mi->mi_rootvp->v_flag &= ~VROOT;
+	mi->mi_rootvp->v_vflag &= ~VV_ROOT;
 	error = vflush(mi->mi_vfsp, NULLVP, FORCECLOSE);
 	printf("coda_unmount: active = %d, vflush active %d\n", active, error);
 	error = 0;
@@ -406,20 +411,13 @@ coda_root(struct mount *vfsp, struct vnode **vpp)
     return(error);
 }
 
-int
-coda_quotactl(struct mount *vfsp, int cmd, uid_t uid,
-    void *arg, struct lwp *l)
-{
-    ENTRY;
-    return (EOPNOTSUPP);
-}
-
 /*
  * Get file system statistics.
  */
 int
-coda_nb_statvfs(struct mount *vfsp, struct statvfs *sbp, struct lwp *l)
+coda_nb_statvfs(struct mount *vfsp, struct statvfs *sbp)
 {
+    struct lwp *l = curlwp;
     struct coda_statfs fsstat;
     int error;
 
@@ -462,7 +460,7 @@ coda_nb_statvfs(struct mount *vfsp, struct statvfs *sbp, struct lwp *l)
  */
 int
 coda_sync(struct mount *vfsp, int waitfor,
-    kauth_cred_t cred, struct lwp *l)
+    kauth_cred_t cred)
 {
     ENTRY;
     MARK_ENTRY(CODA_SYNC_STATS);

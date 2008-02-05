@@ -1,4 +1,4 @@
-.\"	$NetBSD: uvm.9,v 1.85 2007/08/11 19:16:21 pooka Exp $
+.\"	$NetBSD: uvm.9,v 1.89 2007/12/02 22:09:34 wiz Exp $
 .\"
 .\" Copyright (c) 1998 Matthew R. Green
 .\" All rights reserved.
@@ -26,7 +26,7 @@
 .\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 .\" SUCH DAMAGE.
 .\"
-.Dd August 11, 2007
+.Dd October 15, 2007
 .Dt UVM 9
 .Os
 .Sh NAME
@@ -44,7 +44,7 @@ UVM's external interface includes functions that:
 .Pp
 .Bl -hyphen -compact
 .It
-initialise UVM sub-systems
+initialize UVM sub-systems
 .It
 manage virtual address spaces
 .It
@@ -69,7 +69,7 @@ The swapper process swaps in runnable processes that are currently swapped
 out, if there is room.
 .Pp
 There are also several miscellaneous functions.
-.Sh INITIALISATION
+.Sh INITIALIZATION
 .Ft void
 .br
 .Fn uvm_init "void" ;
@@ -89,18 +89,18 @@ There are also several miscellaneous functions.
 .Fn uvm_init
 sets up the UVM system at system boot time, after the
 console has been setup.
-It initialises global state, the page, map, kernel virtual memory state,
+It initializes global state, the page, map, kernel virtual memory state,
 machine-dependent physical map, kernel memory allocator,
 pager and anonymous memory sub-systems, and then enables
 paging of kernel objects.
 .Pp
 .Fn uvm_init_limits
-initialises process limits for the named process.
+initializes process limits for the named process.
 This is for use by the system startup for process zero, before any
 other processes are created.
 .Pp
 .Fn uvm_setpagesize
-initialises the uvmexp members pagesize (if not already done by
+initializes the uvmexp members pagesize (if not already done by
 machine-dependent code), pageshift and pagemask.
 It should be called by machine-dependent code early in the
 .Fn pmap_init
@@ -108,7 +108,7 @@ call (see
 .Xr pmap 9 ) .
 .Pp
 .Fn uvm_swap_init
-initialises the swap sub-system.
+initializes the swap sub-system.
 .Sh VIRTUAL ADDRESS SPACE MANAGEMENT
 .Ft int
 .br
@@ -433,10 +433,6 @@ describing the type of access requested.
 .Fn uvm_fault
 returns a standard UVM return value.
 .Sh MEMORY MAPPING FILES AND DEVICES
-.Ft struct uvm_object *
-.br
-.Fn uvn_attach "void *arg" "vm_prot_t accessprot" ;
-.Pp
 .Ft void
 .br
 .Fn uvm_vnp_setsize "struct vnode *vp" "voff_t newsize" ;
@@ -450,11 +446,10 @@ returns a standard UVM return value.
 .br
 .Fn ubc_release "void *va" "int flags" ;
 .Pp
-.Fn uvn_attach
-attaches a UVM object to vnode
-.Fa arg ,
-creating the object if necessary.
-The object is returned.
+int
+.br
+.Fn ubc_uiomove "struct uvm_object *uobj" "struct uio *uio" "vsize_t todo" \
+"int advice" "int flags" ;
 .Pp
 .Fn uvm_vnp_setsize
 sets the size of vnode
@@ -486,11 +481,19 @@ Random access hint
 Sequential access hint (from lower offset to higher offset)
 .El
 .Pp
-The flags must be one of
-.Bd -literal
-#define UBC_READ        0x01    /* mapping will be accessed for read */
-#define UBC_WRITE       0x02    /* mapping will be accessed for write */
-.Ed
+The possible
+.Fa flags
+are
+.Pp
+.Bl -tag -offset indent -width "UVM_ADV_SEQUENTIAL" -compact
+.It UBC_READ
+Mapping will be accessed for read.
+.It UBC_WRITE
+Mapping will be accessed for write.
+.It UBC_FAULTBUSY
+Fault in window's pages already during mapping operation.
+Makes sense only for write.
+.El
 .Pp
 Currently,
 .Fa uobj
@@ -511,9 +514,28 @@ for reuse.
 The mapping may be cached to speed future accesses to the same region
 of the object.
 The flags can be any of
-.Bd -literal
-#define UBC_UNMAP       0x01    /* do not cache mapping */
-.Ed
+.Pp
+.Bl -tag -offset indent -width "UVM_ADV_SEQUENTIAL" -compact
+.It UBC_UNMAP
+Do not cache mapping.
+.El
+.Pp
+.Fn ubc_uiomove
+allocates an UBC memory window, performs I/O on it and unmaps the window.
+The
+.Fa advice
+parameter takes the same values as the respective parameter in
+.Fn ubc_alloc
+and the
+.Fa flags
+parameter takes the same arguments as
+.Fn ubc_alloc
+and
+.Fn ubc_unmap .
+Additionally, the flag
+.Dv UBC_PARTIALOK
+can be provided to indicate that it is acceptable to return if an error
+occurs mid-transfer.
 .Sh VIRTUAL MEMORY I/O
 .Ft int
 .br
@@ -744,7 +766,7 @@ If
 is non-zero, no segment of the list may cross this power-of-two
 boundary, relative to zero.
 .Fa nsegs
-is the maximum number of physically contigous segments.
+is the maximum number of physically contiguous segments.
 If
 .Fa waitok
 is non-zero, the function may sleep until enough memory is available.

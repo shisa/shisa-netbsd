@@ -1,4 +1,4 @@
-/*	$NetBSD: hpcin.c,v 1.9 2006/03/29 06:37:35 thorpej Exp $	*/
+/*	$NetBSD: hpcin.c,v 1.11 2007/12/15 00:39:27 perry Exp $	*/
 
 /*-
  * Copyright (c) 2000, 2001 The NetBSD Foundation, Inc.
@@ -37,14 +37,14 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: hpcin.c,v 1.9 2006/03/29 06:37:35 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: hpcin.c,v 1.11 2007/12/15 00:39:27 perry Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/device.h>
 
 #include <machine/config_hook.h>
-#include <machine/bus.h>
+#include <sys/bus.h>
 
 #include <dev/hpc/hpciovar.h>
 #include <dev/hpc/hpciomanvar.h>
@@ -118,7 +118,7 @@ hpcin_intr(void *arg)
 	if (sc->sc_connect) {
 		config_connected_call(sc->sc_ct, (void *)on);
 	} else {
-		printf("%s: type=%d, id=%d\n", __FUNCTION__,
+		printf("%s: type=%d, id=%d\n", __func__,
 		    sc->sc_type, sc->sc_id);
 		config_hook_call(sc->sc_type, sc->sc_id, (void *)on);
 		printf("done.\n");

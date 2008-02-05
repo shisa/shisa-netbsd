@@ -1,4 +1,4 @@
-/*	$NetBSD: ki2c.c,v 1.9 2007/09/27 08:49:33 dogcow Exp $	*/
+/*	$NetBSD: ki2c.c,v 1.11 2007/12/06 17:00:33 ad Exp $	*/
 /*	Id: ki2c.c,v 1.7 2002/10/05 09:56:05 tsubai Exp	*/
 
 /*-
@@ -30,6 +30,7 @@
 #include <sys/param.h>
 #include <sys/device.h>
 #include <sys/systm.h>
+#include <sys/mutex.h>
 
 #include <dev/ofw/openfirm.h>
 #include <uvm/uvm_extern.h>
@@ -116,7 +117,7 @@ ki2c_attach(parent, self, aux)
 	ki2c_setmode(sc, I2C_STDSUBMODE);
 	ki2c_setspeed(sc, I2C_100kHz);		/* XXX rate */
 	
-	lockinit(&sc->sc_buslock, PRIBIO|PCATCH, sc->sc_dev.dv_xname, 0, 0);
+	mutex_init(&sc->sc_buslock, MUTEX_DEFAULT, IPL_NONE);
 	ki2c_writereg(sc, IER,I2C_INT_DATA|I2C_INT_ADDR|I2C_INT_STOP);
 	
 	/* fill in the i2c tag */
@@ -150,6 +151,7 @@ ki2c_attach(parent, self, aux)
 		i2cbus = node;
 		
 	for (child = OF_child(i2cbus); child; child = OF_peer(child)) {
+		int ok = 0;
 		namelen = OF_getprop(child, "name", name, sizeof(name));
 		if (namelen < 0)
 			continue;
@@ -159,11 +161,22 @@ ki2c_attach(parent, self, aux)
 		name[namelen] = 0;
 		ka.ka_name = name;
 		ka.ka_node = child;
-		if (OF_getprop(child, "reg", reg, sizeof(reg))>0) {
+		ok = OF_getprop(child, "reg", reg, sizeof(reg));
+		if (ok <= 0) {
+			ok = OF_getprop(child, "i2c-address", reg,
+			    sizeof(reg));
+		}
+		if (ok > 0) {
 			ka.ka_addr = reg[0];
 			ka.ka_tag = &sc->sc_i2c;	
 			config_found_ia(self, "ki2c", &ka, ki2c_print);
+		} 
+#ifdef DIAGNOSTIC
+		else {
+			printf("%s: device (%s) has no reg or i2c-address property.\n",
+			    sc->sc_dev.dv_xname, name);
 		}
+#endif
 	}
 }
 
@@ -398,7 +411,8 @@ ki2c_i2c_acquire_bus(void *cookie, int flags)
 {
 	struct ki2c_softc *sc = cookie;
 
-	return (lockmgr(&sc->sc_buslock, LK_EXCLUSIVE, NULL));
+	mutex_enter(&sc->sc_buslock);
+	return 0;
 }
 
 static void
@@ -406,7 +420,7 @@ ki2c_i2c_release_bus(void *cookie, int flags)
 {
 	struct ki2c_softc *sc = cookie;
 
-	(void) lockmgr(&sc->sc_buslock, LK_RELEASE, NULL);
+	mutex_exit(&sc->sc_buslock);
 }
 
 int
@@ -420,8 +434,8 @@ ki2c_i2c_exec(void *cookie, i2c_op_t op, i2c_addr_t addr, const void *vcmd,
 
 	if (ki2c_write(sc, addr, 0, __UNCONST(vcmd), cmdlen) !=0 )
 		return -1;
-	if (I2C_OP_READ_P(op))
-	{
+
+	if (I2C_OP_READ_P(op)) {
 		if (ki2c_read(sc, addr, 0, vbuf, buflen) !=0 )
 			return -1;
 	}

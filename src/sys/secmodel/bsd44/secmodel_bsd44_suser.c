@@ -1,4 +1,4 @@
-/* $NetBSD: secmodel_bsd44_suser.c,v 1.37 2007/02/21 23:00:09 thorpej Exp $ */
+/* $NetBSD: secmodel_bsd44_suser.c,v 1.47 2008/01/30 17:54:56 elad Exp $ */
 /*-
  * Copyright (c) 2006 Elad Efrat <elad@NetBSD.org>
  * All rights reserved.
@@ -38,7 +38,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: secmodel_bsd44_suser.c,v 1.37 2007/02/21 23:00:09 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: secmodel_bsd44_suser.c,v 1.47 2008/01/30 17:54:56 elad Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -54,6 +54,7 @@ __KERNEL_RCSID(0, "$NetBSD: secmodel_bsd44_suser.c,v 1.37 2007/02/21 23:00:09 th
 #include <net/route.h>
 #include <sys/ptrace.h>
 #include <sys/vnode.h>
+#include <sys/proc.h>
 
 #include <miscfs/procfs/procfs.h>
 
@@ -234,13 +235,60 @@ secmodel_bsd44_suser_system_cb(kauth_cred_t cred, kauth_action_t action,
 
 		break;
 
+	case KAUTH_SYSTEM_PSET: {
+		psetid_t id;
+
+		id = (psetid_t)(unsigned long)arg1;
+
+		switch (req) {
+		case KAUTH_REQ_SYSTEM_PSET_ASSIGN:
+		case KAUTH_REQ_SYSTEM_PSET_BIND:
+			if (isroot || id == PS_QUERY)
+				result = KAUTH_RESULT_ALLOW;
+
+			break;
+
+		case KAUTH_REQ_SYSTEM_PSET_CREATE:
+		case KAUTH_REQ_SYSTEM_PSET_DESTROY:
+			if (isroot)
+				result = KAUTH_RESULT_ALLOW;
+
+			break;
+
+		default:
+			break;
+		}
+
+		break;
+		}
+
 	case KAUTH_SYSTEM_TIME:
 		switch (req) {
 		case KAUTH_REQ_SYSTEM_TIME_ADJTIME:
 		case KAUTH_REQ_SYSTEM_TIME_NTPADJTIME:
-		case KAUTH_REQ_SYSTEM_TIME_SYSTEM:
+		case KAUTH_REQ_SYSTEM_TIME_TIMECOUNTERS:
 			if (isroot)
 				result = KAUTH_RESULT_ALLOW;
+			break;
+
+		case KAUTH_REQ_SYSTEM_TIME_SYSTEM: {
+			bool device_context = (bool)arg3;
+
+			if (device_context || isroot)
+				result = KAUTH_RESULT_ALLOW;
+
+			break;
+		}
+
+		case KAUTH_REQ_SYSTEM_TIME_RTCOFFSET:
+			/*
+			 * Decisions here are root-agnostic.
+			 *
+			 * KAUTH_REQ_SYSTEM_TIME_RTCOFFSET - Should be used
+			 *  only after the caller was determined as someone
+			 *  who can modify sysctl. For us, this means root.
+			 */
+			result = KAUTH_RESULT_ALLOW;
 			break;
 
 		default:
@@ -250,8 +298,19 @@ secmodel_bsd44_suser_system_cb(kauth_cred_t cred, kauth_action_t action,
 		break;
 
 	case KAUTH_SYSTEM_SYSCTL:
-		if (isroot)
-			result = KAUTH_RESULT_ALLOW;
+		switch (req) {
+		case KAUTH_REQ_SYSTEM_SYSCTL_ADD:
+		case KAUTH_REQ_SYSTEM_SYSCTL_DELETE:
+		case KAUTH_REQ_SYSTEM_SYSCTL_DESC:
+		case KAUTH_REQ_SYSTEM_SYSCTL_PRVT:
+			if (isroot)
+				result = KAUTH_RESULT_ALLOW;
+			break;
+
+		default:
+			break;
+		}
+
 		break;
 
 	case KAUTH_SYSTEM_SWAPCTL:
@@ -260,6 +319,41 @@ secmodel_bsd44_suser_system_cb(kauth_cred_t cred, kauth_action_t action,
 	case KAUTH_SYSTEM_CHROOT:
 	case KAUTH_SYSTEM_FILEHANDLE:
 	case KAUTH_SYSTEM_MKNOD:
+		if (isroot)
+			result = KAUTH_RESULT_ALLOW;
+		break;
+
+	case KAUTH_SYSTEM_DEBUG:
+		switch (req) {
+		case KAUTH_REQ_SYSTEM_DEBUG_IPKDB:
+		default:
+			/* Decisions are root-agnostic. */
+			result = KAUTH_RESULT_ALLOW;
+			break;
+		}
+
+		break;
+
+	case KAUTH_SYSTEM_CHSYSFLAGS:
+	case KAUTH_SYSTEM_LKM:
+	case KAUTH_SYSTEM_SETIDCORE:
+		/*
+		 * Decisions here are root-agnostic.
+		 *
+		 * CHSYSFLAGS - Should be used only after the caller was
+		 *              determined as root. Needs to be re-factored
+		 *              anyway. Infects ufs, ext2fs, tmpfs, and rump.
+		 *
+		 * LKM - Subject to permissions on /dev/lkm for now.
+		 *
+		 * SETIDCORE - Should be used only after the caller was
+		 *             determined as someone who can modify sysctl
+		 *             data. For us, this means root.
+		 */
+		result = KAUTH_RESULT_ALLOW;
+		break;
+
+	case KAUTH_SYSTEM_MODULE:
 		if (isroot)
 			result = KAUTH_RESULT_ALLOW;
 		break;
@@ -327,7 +421,7 @@ secmodel_bsd44_suser_process_cb(kauth_cred_t cred, kauth_action_t action,
 	p = arg0;
 
 	switch (action) {
-	case KAUTH_PROCESS_CANSIGNAL: {
+	case KAUTH_PROCESS_SIGNAL: {
 		int signum;
 
 		signum = (int)(unsigned long)arg1;
@@ -338,14 +432,41 @@ secmodel_bsd44_suser_process_cb(kauth_cred_t cred, kauth_action_t action,
 		break;
 		}
 
-	case KAUTH_PROCESS_CANSEE:
-		if (!secmodel_bsd44_curtain)
-			result = KAUTH_RESULT_ALLOW;
-		else if (isroot || kauth_cred_uidmatch(cred, p->p_cred))
-			result = KAUTH_RESULT_ALLOW;
-		break;
+	case KAUTH_PROCESS_CANSEE: {
+		unsigned long req;
 
-	case KAUTH_PROCESS_CANKTRACE:
+		req = (unsigned long)arg1;
+
+		switch (req) {
+		case KAUTH_REQ_PROCESS_CANSEE_ARGS:
+		case KAUTH_REQ_PROCESS_CANSEE_ENTRY:
+		case KAUTH_REQ_PROCESS_CANSEE_OPENFILES:
+			if (!secmodel_bsd44_curtain)
+				result = KAUTH_RESULT_ALLOW;
+			else if (isroot || kauth_cred_uidmatch(cred, p->p_cred))
+				result = KAUTH_RESULT_ALLOW;
+			break;
+
+		case KAUTH_REQ_PROCESS_CANSEE_ENV:
+			if (!isroot &&
+			    (kauth_cred_getuid(cred) !=
+			     kauth_cred_getuid(p->p_cred) ||
+			    kauth_cred_getuid(cred) !=
+			     kauth_cred_getsvuid(p->p_cred)))
+				result = KAUTH_RESULT_DENY;
+			else
+				result = KAUTH_RESULT_ALLOW;
+
+			break;
+
+		default:
+			break;
+		}
+
+		break;
+		}
+
+	case KAUTH_PROCESS_KTRACE:
 		if (isroot) {
 			result = KAUTH_RESULT_ALLOW;
 			break;
@@ -367,7 +488,7 @@ secmodel_bsd44_suser_process_cb(kauth_cred_t cred, kauth_action_t action,
 		result = KAUTH_RESULT_DENY;
 		break;
 
-	case KAUTH_PROCESS_CANPROCFS: {
+	case KAUTH_PROCESS_PROCFS: {
 		enum kauth_process_req req = (enum kauth_process_req)arg2;
 		struct pfsnode *pfs = arg1;
 
@@ -376,7 +497,7 @@ secmodel_bsd44_suser_process_cb(kauth_cred_t cred, kauth_action_t action,
 			break;
 		}
 
-		if (req == KAUTH_REQ_PROCESS_CANPROCFS_CTL) {
+		if (req == KAUTH_REQ_PROCESS_PROCFS_CTL) {
 			result = KAUTH_RESULT_DENY;
 			break;
 		}
@@ -400,8 +521,9 @@ secmodel_bsd44_suser_process_cb(kauth_cred_t cred, kauth_action_t action,
 		break;
 		}
 
-	case KAUTH_PROCESS_CANPTRACE: {
+	case KAUTH_PROCESS_PTRACE: {
 		switch ((u_long)arg1) {
+		case PT_TRACE_ME:
 		case PT_ATTACH:
 		case PT_WRITE_I:
 		case PT_WRITE_D:
@@ -458,21 +580,6 @@ secmodel_bsd44_suser_process_cb(kauth_cred_t cred, kauth_action_t action,
 		break;
 		}
 
-	case KAUTH_PROCESS_CANSYSTRACE:
-		if (isroot) {
-			result = KAUTH_RESULT_ALLOW;
-			break;
-		}
-
-		if (kauth_cred_getuid(cred) != kauth_cred_getuid(p->p_cred) ||
-		    ISSET(p->p_flag, PK_SUGID)) {
-			result = KAUTH_RESULT_DENY;
-			break;
-		}
-
-		result = KAUTH_RESULT_ALLOW;
-		break;
-
 	case KAUTH_PROCESS_CORENAME:
 		result = KAUTH_RESULT_ALLOW;
 
@@ -483,6 +590,33 @@ secmodel_bsd44_suser_process_cb(kauth_cred_t cred, kauth_action_t action,
 			result = KAUTH_RESULT_DENY;
 			break;
 		}
+
+		break;
+
+	case KAUTH_PROCESS_FORK: {
+		int lnprocs = (int)(unsigned long)arg2;
+
+		/*
+		 * Don't allow a nonprivileged user to use the last few
+		 * processes. The variable lnprocs is the current number of
+		 * processes, maxproc is the limit.
+		 */
+		if (__predict_false((lnprocs >= maxproc - 5) && !isroot))
+			result = KAUTH_RESULT_DENY;
+		else
+			result = KAUTH_RESULT_ALLOW;
+
+		break;
+		}
+
+	case KAUTH_PROCESS_KEVENT_FILTER:
+		if ((kauth_cred_getuid(p->p_cred) !=
+		     kauth_cred_getuid(cred) ||
+		     ISSET(p->p_flag, PK_SUGID)) &&
+		    !isroot)
+			result = KAUTH_RESULT_DENY;
+		else
+			result = KAUTH_RESULT_ALLOW;
 
 		break;
 
@@ -506,26 +640,84 @@ secmodel_bsd44_suser_process_cb(kauth_cred_t cred, kauth_action_t action,
 		break;
 
 	case KAUTH_PROCESS_RLIMIT: {
-		struct rlimit *new_rlimit;
-		u_long which;
+		unsigned long req;
 
-		if (isroot) {
+		req = (unsigned long)arg1;
+
+		switch (req) {
+		case KAUTH_REQ_PROCESS_RLIMIT_SET: {
+			struct rlimit *new_rlimit;
+			u_long which;
+
+			if (isroot) {
+				result = KAUTH_RESULT_ALLOW;
+				break;
+			}
+
+			if ((p != curlwp->l_proc) &&
+			    (proc_uidmatch(cred, p->p_cred) != 0)) {
+				result = KAUTH_RESULT_DENY;
+				break;
+			}
+
+			new_rlimit = arg2;
+			which = (u_long)arg3;
+
+			if (new_rlimit->rlim_max <=
+			    p->p_rlimit[which].rlim_max)
+				result = KAUTH_RESULT_ALLOW;
+
+			break;
+			}
+
+		case KAUTH_REQ_PROCESS_RLIMIT_GET:
 			result = KAUTH_RESULT_ALLOW;
+			break;
+
+		default:
 			break;
 		}
 
-		if ((p != curlwp->l_proc) &&
-		    (proc_uidmatch(cred, p->p_cred) != 0)) {
-			result = KAUTH_RESULT_DENY;
+		break;
+	}
+
+	case KAUTH_PROCESS_SCHEDULER: {
+		unsigned long req;
+
+		req = (unsigned long)arg1;
+
+		switch (req) {
+		case KAUTH_REQ_PROCESS_SCHEDULER_GET:
+		case KAUTH_REQ_PROCESS_SCHEDULER_SET:
+		case KAUTH_REQ_PROCESS_SCHEDULER_GETPARAM:
+		case KAUTH_REQ_PROCESS_SCHEDULER_SETPARAM:
+			if (isroot ||
+			    (kauth_cred_getuid(cred) ==
+			     kauth_cred_getuid(p->p_cred) ||
+			    kauth_cred_geteuid(cred) ==
+			     kauth_cred_getuid(p->p_cred) ||
+			    kauth_cred_getuid(cred) ==
+			     kauth_cred_geteuid(p->p_cred) ||
+			    kauth_cred_geteuid(cred) ==
+			     kauth_cred_geteuid(p->p_cred)))
+				result = KAUTH_RESULT_ALLOW;
+
+			break;
+
+		case KAUTH_REQ_PROCESS_SCHEDULER_GETAFFINITY:
+			result = KAUTH_RESULT_ALLOW;
+
+			break;
+
+		case KAUTH_REQ_PROCESS_SCHEDULER_SETAFFINITY:
+			if (isroot)
+				result = KAUTH_RESULT_ALLOW;
+
+			break;
+
+		default:
 			break;
 		}
-
-		new_rlimit = arg1;
-		which = (u_long)arg2;
-
-		if (new_rlimit->rlim_max <=
-		    p->p_rlimit[which].rlim_max)
-			result = KAUTH_RESULT_ALLOW;
 
 		break;
 		}
@@ -611,6 +803,35 @@ secmodel_bsd44_suser_network_cb(kauth_cred_t cred, kauth_action_t action,
 			result = KAUTH_RESULT_ALLOW;
 			break;
 		}
+		break;
+
+	case KAUTH_NETWORK_FIREWALL:
+		switch (req) {
+		case KAUTH_REQ_NETWORK_FIREWALL_FW:
+		case KAUTH_REQ_NETWORK_FIREWALL_NAT:
+			/*
+			 * Decisions are root-agnostic.
+			 *
+			 * Both requests are issued from the context of a
+			 * device with permission bits acting as access
+			 * control.
+			 */
+			result = KAUTH_RESULT_ALLOW;
+			break;
+
+		default:
+			break;
+		}
+		break;
+
+	case KAUTH_NETWORK_FORWSRCRT:
+		/*
+		 * Decision is root-agnostic.
+		 *
+		 * Can only be issued from sysctl context, in our case, only
+		 * root can get here.
+		 */
+		result = KAUTH_RESULT_ALLOW;
 		break;
 
 	case KAUTH_NETWORK_INTERFACE:
@@ -752,6 +973,17 @@ secmodel_bsd44_suser_device_cb(kauth_cred_t cred, kauth_action_t action,
         result = KAUTH_RESULT_DENY;
 
 	switch (action) {
+	case KAUTH_DEVICE_RAWIO_SPEC:
+	case KAUTH_DEVICE_RAWIO_PASSTHRU:
+		/*
+		 * Decision is root-agnostic.
+		 *
+		 * Both requests can be issued on devices subject to their
+		 * permission bits.
+		 */
+		result = KAUTH_RESULT_ALLOW;
+		break;
+
 	case KAUTH_DEVICE_TTY_OPEN:
 		tty = arg0;
 
@@ -766,6 +998,12 @@ secmodel_bsd44_suser_device_cb(kauth_cred_t cred, kauth_action_t action,
 		break;
 
 	case KAUTH_DEVICE_TTY_PRIVSET:
+		if (isroot)
+			result = KAUTH_RESULT_ALLOW;
+
+		break;
+
+	case KAUTH_DEVICE_TTY_STI:
 		if (isroot)
 			result = KAUTH_RESULT_ALLOW;
 

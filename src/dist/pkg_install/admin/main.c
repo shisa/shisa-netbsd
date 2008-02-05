@@ -1,4 +1,4 @@
-/*	$NetBSD: main.c,v 1.1.1.4 2007/08/23 15:19:13 joerg Exp $	*/
+/*	$NetBSD: main.c,v 1.1.1.6 2007/12/24 00:03:05 joerg Exp $	*/
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -8,7 +8,7 @@
 #include <sys/cdefs.h>
 #endif
 #ifndef lint
-__RCSID("$NetBSD: main.c,v 1.1.1.4 2007/08/23 15:19:13 joerg Exp $");
+__RCSID("$NetBSD: main.c,v 1.1.1.6 2007/12/24 00:03:05 joerg Exp $");
 #endif
 
 /*
@@ -93,6 +93,7 @@ usage(void)
 	(void) fprintf(stderr, "usage: %s [-bqSV] [-d lsdir] [-K pkg_dbdir] [-s sfx] command args ...\n"
 	    "Where 'commands' and 'args' are:\n"
 	    " rebuild                     - rebuild pkgdb from +CONTENTS files\n"
+	    " rebuild-tree                - rebuild +REQUIRED_BY files from forward deps\n"
 	    " check [pkg ...]             - check md5 checksum of installed files\n"
 	    " add pkg ...                 - add pkg files to database\n"
 	    " delete pkg ...              - delete file entries for pkg in database\n"
@@ -177,8 +178,10 @@ check1pkg(const char *pkgdir)
 				}
 				
 				filecnt++;
+			} else if (isbrokenlink(file)) {
+				warnx("%s: Symlink `%s' exists and is in %s but target does not exist!", PkgName, file, CONTENTS_FNAME);
 			} else {
-				warnx("%s: File %s is in %s but not on filesystem!", PkgName, file, CONTENTS_FNAME);
+				warnx("%s: File `%s' is in %s but not on filesystem!", PkgName, file, CONTENTS_FNAME);
 			}
 			break;
 		case PLIST_CWD:
@@ -261,8 +264,13 @@ add1pkg(const char *pkgdir)
 			}
 			(void) snprintf(file, sizeof(file), "%s/%s", dirp, p->name);
 			if (!(isfile(file) || islinktodir(file))) {
-				warnx("%s: File `%s' is in %s but not on filesystem!",
-					PkgName, file, CONTENTS_FNAME);
+				if (isbrokenlink(file)) {
+					warnx("%s: Symlink `%s' exists and is in %s but target does not exist!",
+						PkgName, file, CONTENTS_FNAME);
+				} else {
+					warnx("%s: File `%s' is in %s but not on filesystem!",
+						PkgName, file, CONTENTS_FNAME);
+				}
 			} else {
 				pkgdb_store(file, PkgName);
 				cnt++;

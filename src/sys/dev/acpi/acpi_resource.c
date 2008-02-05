@@ -1,4 +1,4 @@
-/*	$NetBSD: acpi_resource.c,v 1.21 2006/11/16 01:32:47 christos Exp $	*/
+/*	$NetBSD: acpi_resource.c,v 1.24 2007/12/15 00:39:25 perry Exp $	*/
 
 /*
  * Copyright 2001 Wasabi Systems, Inc.
@@ -67,7 +67,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: acpi_resource.c,v 1.21 2006/11/16 01:32:47 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: acpi_resource.c,v 1.24 2007/12/15 00:39:25 perry Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -95,7 +95,7 @@ acpi_resource_parse_callback(ACPI_RESOURCE *res, void *context)
 	const struct acpi_resource_parse_ops *ops;
 	int i;
 
-	ACPI_FUNCTION_TRACE(__FUNCTION__);
+	ACPI_FUNCTION_TRACE(__func__);
 
 	ops = arg->ops;
 
@@ -113,7 +113,7 @@ acpi_resource_parse_callback(ACPI_RESOURCE *res, void *context)
 
 	case ACPI_RESOURCE_TYPE_IO:
 		if (res->Data.Io.Minimum ==
-			    res->Data.Io.Maximum) {
+		    res->Data.Io.Maximum) {
 			ACPI_DEBUG_PRINT((ACPI_DB_RESOURCES,
 					     "Io 0x%x/%d\n",
 					     res->Data.Io.Minimum,
@@ -128,7 +128,7 @@ acpi_resource_parse_callback(ACPI_RESOURCE *res, void *context)
 					     res->Data.Io.Minimum,
 					     res->Data.Io.Maximum,
 					     res->Data.Io.AddressLength));
-			if (ops->ioport)
+			if (ops->iorange)
 				(*ops->iorange)(arg->dev, arg->context,
 				    res->Data.Io.Minimum,
 				    res->Data.Io.Maximum,
@@ -237,10 +237,53 @@ acpi_resource_parse_callback(ACPI_RESOURCE *res, void *context)
 				     "End dependant functions\n"));
 		if (ops->end_dep)
 			(*ops->end_dep)(arg->dev, arg->context);
+		break;
 
 	case ACPI_RESOURCE_TYPE_ADDRESS32:
-		ACPI_DEBUG_PRINT((ACPI_DB_RESOURCES,
-				     "Address32 unimplemented\n"));
+		/* XXX Only fixed size supported for now */
+		if (res->Data.Address32.AddressLength == 0 ||
+		    res->Data.Address32.ProducerConsumer != ACPI_CONSUMER)
+			break;
+#define ADRRESS32_FIXED2(r)						\
+	((r)->Data.Address32.MinAddressFixed == ACPI_ADDRESS_FIXED &&	\
+	 (r)->Data.Address32.MaxAddressFixed == ACPI_ADDRESS_FIXED)
+		switch (res->Data.Address32.ResourceType) {
+		case ACPI_MEMORY_RANGE:
+			if (ADRRESS32_FIXED2(res)) {
+				if (ops->memory)
+					(*ops->memory)(arg->dev, arg->context,
+					    res->Data.Address32.Minimum,
+					    res->Data.Address32.AddressLength);
+			} else {
+				if (ops->memrange)
+					(*ops->memrange)(arg->dev, arg->context,
+					    res->Data.Address32.Minimum,
+					    res->Data.Address32.Maximum,
+					    res->Data.Address32.AddressLength,
+					    res->Data.Address32.Granularity);
+			}
+			break;
+		case ACPI_IO_RANGE:
+			if (ADRRESS32_FIXED2(res)) {
+				if (ops->ioport)
+					(*ops->ioport)(arg->dev, arg->context,
+					    res->Data.Address32.Minimum,
+					    res->Data.Address32.AddressLength);
+			} else {
+				if (ops->iorange)
+					(*ops->iorange)(arg->dev, arg->context,
+					    res->Data.Address32.Minimum,
+					    res->Data.Address32.Maximum,
+					    res->Data.Address32.AddressLength,
+					    res->Data.Address32.Granularity);
+			}
+			break;
+		case ACPI_BUS_NUMBER_RANGE:
+			ACPI_DEBUG_PRINT((ACPI_DB_RESOURCES,
+				      "Address32/BusNumber unimplemented\n"));
+			break;
+		}
+#undef ADRRESS32_FIXED2
 		break;
 
 	case ACPI_RESOURCE_TYPE_ADDRESS16:
@@ -260,7 +303,7 @@ acpi_resource_parse_callback(ACPI_RESOURCE *res, void *context)
 
 	case ACPI_RESOURCE_TYPE_GENERIC_REGISTER:
 		ACPI_DEBUG_PRINT((ACPI_DB_RESOURCES,
-				     "ExtendedIrq unimplemented\n"));
+				     "GenericRegister unimplemented\n"));
 		break;
 
 	case ACPI_RESOURCE_TYPE_VENDOR:
@@ -297,7 +340,7 @@ acpi_resource_parse(struct device *dev, ACPI_HANDLE handle, const char *path,
 	struct resource_parse_callback_arg cbarg;
 	ACPI_STATUS rv;
 
-	ACPI_FUNCTION_TRACE(__FUNCTION__);
+	ACPI_FUNCTION_TRACE(__func__);
 
 	if (ops->init)
 		(*ops->init)(dev, arg, &cbarg.context);
@@ -309,8 +352,8 @@ acpi_resource_parse(struct device *dev, ACPI_HANDLE handle, const char *path,
 	rv = AcpiWalkResources(handle, path, acpi_resource_parse_callback,
 	    &cbarg);
 	if (ACPI_FAILURE(rv)) {
-		printf("%s: ACPI: unable to get %s resources: %s\n",
-		    dev->dv_xname, path, AcpiFormatException(rv));
+		aprint_error_dev(dev, "ACPI: unable to get %s resources: %s\n",
+		    path, AcpiFormatException(rv));
 		return_ACPI_STATUS(rv);
 	}
 
@@ -338,17 +381,17 @@ acpi_resource_print(struct device *dev, struct acpi_resources *res)
 	    SIMPLEQ_EMPTY(&res->ar_drq))
 		return;
 
-	printf("%s:", dev->dv_xname);
+	aprint_normal("%s:", dev->dv_xname);
 
 	if (SIMPLEQ_EMPTY(&res->ar_io) == 0) {
 		struct acpi_io *ar;
 
 		sep = "";
-		printf(" io ");
+		aprint_normal(" io ");
 		SIMPLEQ_FOREACH(ar, &res->ar_io, ar_list) {
-			printf("%s0x%x", sep, ar->ar_base);
+			aprint_normal("%s0x%x", sep, ar->ar_base);
 			if (ar->ar_length > 1)
-				printf("-0x%x", ar->ar_base +
+				aprint_normal("-0x%x", ar->ar_base +
 				    ar->ar_length - 1);
 			sep = ",";
 		}
@@ -360,11 +403,11 @@ acpi_resource_print(struct device *dev, struct acpi_resources *res)
 		struct acpi_mem *ar;
 
 		sep = "";
-		printf(" mem ");
+		aprint_normal(" mem ");
 		SIMPLEQ_FOREACH(ar, &res->ar_mem, ar_list) {
-			printf("%s0x%x", sep, ar->ar_base);
+			aprint_normal("%s0x%x", sep, ar->ar_base);
 			if (ar->ar_length > 1)
-				printf("-0x%x", ar->ar_base +
+				aprint_normal("-0x%x", ar->ar_base +
 				    ar->ar_length - 1);
 			sep = ",";
 		}
@@ -376,9 +419,9 @@ acpi_resource_print(struct device *dev, struct acpi_resources *res)
 		struct acpi_irq *ar;
 
 		sep = "";
-		printf(" irq ");
+		aprint_normal(" irq ");
 		SIMPLEQ_FOREACH(ar, &res->ar_irq, ar_list) {
-			printf("%s%d", sep, ar->ar_irq);
+			aprint_normal("%s%d", sep, ar->ar_irq);
 			sep = ",";
 		}
 	}
@@ -387,14 +430,14 @@ acpi_resource_print(struct device *dev, struct acpi_resources *res)
 		struct acpi_drq *ar;
 
 		sep = "";
-		printf(" drq ");
+		aprint_normal(" drq ");
 		SIMPLEQ_FOREACH(ar, &res->ar_drq, ar_list) {
-			printf("%s%d", sep, ar->ar_drq);
+			aprint_normal("%s%d", sep, ar->ar_drq);
 			sep = ",";
 		}
 	}
 
-	printf("\n");
+	aprint_normal("\n");
 }
 
 /*
@@ -630,8 +673,8 @@ acpi_res_parse_ioport(struct device *dev, void *context, uint32_t base,
 
 	ar = AcpiOsAllocate(sizeof(*ar));
 	if (ar == NULL) {
-		printf("%s: ACPI: unable to allocate I/O resource %d\n",
-		    dev->dv_xname, res->ar_nio);
+		aprint_error_dev(dev, "ACPI: unable to allocate I/O resource %d\n",
+		    res->ar_nio);
 		res->ar_nio++;
 		return;
 	}
@@ -652,8 +695,8 @@ acpi_res_parse_iorange(struct device *dev, void *context, uint32_t low,
 
 	ar = AcpiOsAllocate(sizeof(*ar));
 	if (ar == NULL) {
-		printf("%s: ACPI: unable to allocate I/O range resource %d\n",
-		    dev->dv_xname, res->ar_niorange);
+		aprint_error_dev(dev, "ACPI: unable to allocate I/O range resource %d\n",
+		    res->ar_niorange);
 		res->ar_niorange++;
 		return;
 	}
@@ -676,8 +719,8 @@ acpi_res_parse_memory(struct device *dev, void *context, uint32_t base,
 
 	ar = AcpiOsAllocate(sizeof(*ar));
 	if (ar == NULL) {
-		printf("%s: ACPI: unable to allocate Memory resource %d\n",
-		    dev->dv_xname, res->ar_nmem);
+		aprint_error_dev(dev, "ACPI: unable to allocate Memory resource %d\n",
+		    res->ar_nmem);
 		res->ar_nmem++;
 		return;
 	}
@@ -698,8 +741,8 @@ acpi_res_parse_memrange(struct device *dev, void *context, uint32_t low,
 
 	ar = AcpiOsAllocate(sizeof(*ar));
 	if (ar == NULL) {
-		printf("%s: ACPI: unable to allocate Memory range resource "
-		    "%d\n", dev->dv_xname, res->ar_nmemrange);
+		aprint_error_dev(dev, "ACPI: unable to allocate Memory range resource %d\n",
+		    res->ar_nmemrange);
 		res->ar_nmemrange++;
 		return;
 	}
@@ -721,8 +764,8 @@ acpi_res_parse_irq(struct device *dev, void *context, uint32_t irq, uint32_t typ
 
 	ar = AcpiOsAllocate(sizeof(*ar));
 	if (ar == NULL) {
-		printf("%s: ACPI: unable to allocate IRQ resource %d\n",
-		    dev->dv_xname, res->ar_nirq);
+		aprint_error_dev(dev, "ACPI: unable to allocate IRQ resource %d\n",
+		    res->ar_nirq);
 		res->ar_nirq++;
 		return;
 	}
@@ -742,8 +785,8 @@ acpi_res_parse_drq(struct device *dev, void *context, uint32_t drq)
 
 	ar = AcpiOsAllocate(sizeof(*ar));
 	if (ar == NULL) {
-		printf("%s: ACPI: unable to allocate DRQ resource %d\n",
-		    dev->dv_xname, res->ar_ndrq);
+		aprint_error_dev(dev, "ACPI: unable to allocate DRQ resource %d\n",
+		    res->ar_ndrq);
 		res->ar_ndrq++;
 		return;
 	}
@@ -759,8 +802,7 @@ acpi_res_parse_start_dep(struct device *dev, void *context,
     int preference)
 {
 
-	printf("%s: ACPI: dependant functions not supported\n",
-	    dev->dv_xname);
+	aprint_error_dev(dev, "ACPI: dependant functions not supported\n");
 }
 
 static void

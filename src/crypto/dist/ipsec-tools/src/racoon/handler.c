@@ -1,4 +1,4 @@
-/*	$NetBSD: handler.c,v 1.16 2007/09/12 23:39:50 mgrooms Exp $	*/
+/*	$NetBSD: handler.c,v 1.18 2008/01/11 14:06:56 vanhu Exp $	*/
 
 /* Id: handler.c,v 1.28 2006/05/26 12:17:29 manubsd Exp */
 
@@ -142,8 +142,9 @@ getph1byindex0(index)
  * with phase 2's destinaion.
  */
 struct ph1handle *
-getph1byaddr(local, remote)
+getph1byaddr(local, remote, established)
 	struct sockaddr *local, *remote;
+	int established;
 {
 	struct ph1handle *p;
 
@@ -156,6 +157,11 @@ getph1byaddr(local, remote)
 			continue;
 		plog(LLV_DEBUG2, LOCATION, NULL, "p->local: %s\n", saddr2str(p->local));
 		plog(LLV_DEBUG2, LOCATION, NULL, "p->remote: %s\n", saddr2str(p->remote));
+
+		if(established && p->status != PHASE1ST_ESTABLISHED){
+			plog(LLV_DEBUG2, LOCATION, NULL, "status %d, skipping\n", p->status);
+			continue;
+		}
 		if (CMPSADDR(local, p->local) == 0
 			&& CMPSADDR(remote, p->remote) == 0){
 			plog(LLV_DEBUG2, LOCATION, NULL, "matched\n");
@@ -656,13 +662,23 @@ delph2(iph2)
 		iph2->dst = NULL;
 	}
 	if (iph2->src_id) {
-	      racoon_free(iph2->src_id);
-	      iph2->src_id = NULL;
+		racoon_free(iph2->src_id);
+		iph2->src_id = NULL;
 	}
 	if (iph2->dst_id) {
-	      racoon_free(iph2->dst_id);
-	      iph2->dst_id = NULL;
+		racoon_free(iph2->dst_id);
+		iph2->dst_id = NULL;
 	}
+#ifdef ENABLE_NATT
+	if (iph2->natoa_src) {
+		racoon_free(iph2->natoa_src);
+		iph2->natoa_src = NULL;
+	}
+	if (iph2->natoa_dst) {
+		racoon_free(iph2->natoa_dst);
+		iph2->natoa_dst = NULL;
+	}
+#endif
 
 	if (iph2->proposal) {
 		flushsaprop(iph2->proposal);
@@ -1122,7 +1138,7 @@ static int revalidate_ph2(struct ph2handle *iph2){
 	if (iph2->ph1 != NULL)
 		iph1=iph2->ph1;
 	else
-		iph1=getph1byaddr(iph2->src, iph2->dst);
+		iph1=getph1byaddr(iph2->src, iph2->dst, 0);
 
 	if(iph1 != NULL && iph1->rmconf != NULL) {
 		check_level = iph1->rmconf->pcheck_level;

@@ -1,4 +1,4 @@
-/*	$NetBSD: locore.s,v 1.239 2007/05/23 14:51:16 he Exp $	*/
+/*	$NetBSD: locore.s,v 1.243 2008/01/08 21:32:11 martin Exp $	*/
 
 /*
  * Copyright (c) 1996 Paul Kranenburg
@@ -2526,13 +2526,22 @@ softintr_common:
 	set	_C_LABEL(sintrhand), %l4! %l4 = sintrhand[intlev];
 	ld	[%l4 + %l5], %l4
 
+	sethi	%hi(CPUINFO_VA), %o2
+	ld	[ %o2 + CPUINFO_IDEPTH ], %o3
+	inc	%o3
+	st	%o3, [ %o2 + CPUINFO_IDEPTH ]
+
 #if defined(MULTIPROCESSOR)
-	/* Grab the kernel lock for interrupt levels <= IPL_CLOCK */
-	cmp	%l3, IPL_CLOCK
-	bgeu	3f
+	/*
+	 * Grab the kernel lock for interrupt levels <= IPL_VM
+	 * XXX Must not happen for fast soft interrupts!
+	 */
+	cmp	%l3, IPL_VM
+	bgeu	0f
 	 st	%fp, [%sp + CCFSZ + 16]
 	call	_C_LABEL(intr_lock_kernel)
 	 nop
+0:
 #endif
 
 	b	3f
@@ -2555,13 +2564,18 @@ softintr_common:
 	 nop
 
 #if defined(MULTIPROCESSOR)
-	cmp	%l3, IPL_CLOCK
+	cmp	%l3, IPL_VM
 	bgeu	0f
 	 nop
 	call	_C_LABEL(intr_unlock_kernel)
 	 nop
 0:
 #endif
+
+	sethi	%hi(CPUINFO_VA), %o2
+	ld	[ %o2 + CPUINFO_IDEPTH ], %o3
+	dec	%o3
+	st	%o3, [ %o2 + CPUINFO_IDEPTH ]
 
 	mov	%l7, %g1
 	wr	%l6, 0, %y
@@ -2710,9 +2724,14 @@ sparc_interrupt_common:
 	set	_C_LABEL(intrhand), %l4	! %l4 = intrhand[intlev];
 	ld	[%l4 + %l5], %l4
 
+	sethi	%hi(CPUINFO_VA), %o2
+	ld	[ %o2 + CPUINFO_IDEPTH ], %o3
+	inc	%o3
+	st	%o3, [ %o2 + CPUINFO_IDEPTH ]
+
 #if defined(MULTIPROCESSOR)
-	/* Grab the kernel lock for interrupt levels <= IPL_CLOCK */
-	cmp	%l3, IPL_CLOCK
+	/* Grab the kernel lock for interrupt levels =< IPL_VM */
+	cmp	%l3, IPL_VM
 	bgeu	3f
 	 st	%fp, [%sp + CCFSZ + 16]
 	call	_C_LABEL(intr_lock_kernel)
@@ -2752,13 +2771,18 @@ sparc_interrupt_common:
 	/* all done: restore registers and go return */
 4:
 #if defined(MULTIPROCESSOR)
-	cmp	%l3, IPL_CLOCK
+	cmp	%l3, IPL_VM
 	bgeu	0f
 	 nop
 	call	_C_LABEL(intr_unlock_kernel)
 	 nop
 0:
 #endif
+	sethi	%hi(CPUINFO_VA), %o2
+	ld	[ %o2 + CPUINFO_IDEPTH ], %o3
+	dec	%o3
+	st	%o3, [ %o2 + CPUINFO_IDEPTH ]
+
 	mov	%l7, %g1
 	wr	%l6, 0, %y
 	ldd	[%sp + CCFSZ + 24], %g2

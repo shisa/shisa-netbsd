@@ -1,4 +1,4 @@
-/*	$NetBSD: getconf.c,v 1.28 2007/09/07 18:56:14 rmind Exp $	*/
+/*	$NetBSD: getconf.c,v 1.31 2008/01/15 03:37:12 rmind Exp $	*/
 
 /*-
  * Copyright (c) 1996, 1998 The NetBSD Foundation, Inc.
@@ -38,7 +38,7 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: getconf.c,v 1.28 2007/09/07 18:56:14 rmind Exp $");
+__RCSID("$NetBSD: getconf.c,v 1.31 2008/01/15 03:37:12 rmind Exp $");
 #endif /* not lint */
 
 #include <err.h>
@@ -60,7 +60,7 @@ struct conf_variable
 static void print_longvar(const char *, long);
 static void print_strvar(const char *, const char *);
 static void printvar(const struct conf_variable *, const char *);
-static void usage(void) __attribute__((__noreturn__));
+static void usage(void) __dead;
 
 static const struct conf_variable conf_table[] =
 {
@@ -152,6 +152,7 @@ static const struct conf_variable conf_table[] =
   { "_POSIX_MEMORY_PROTECTION",	SYSCONF,	_SC_MEMORY_PROTECTION	},
   { "_POSIX_MESSAGE_PASSING",	SYSCONF,	_POSIX_MESSAGE_PASSING	},
   { "_POSIX_MONOTONIC_CLOCK",	SYSCONF,	_SC_MONOTONIC_CLOCK	},
+  { "_POSIX_PRIORITY_SCHEDULING", SYSCONF,	_SC_PRIORITY_SCHEDULING },
   { "_POSIX_SEMAPHORES",	SYSCONF,	_SC_SEMAPHORES		},
   { "_POSIX_SYNCHRONIZED_IO",	SYSCONF,	_SC_SYNCHRONIZED_IO	},
   { "_POSIX_TIMERS",		SYSCONF,	_SC_TIMERS		},
@@ -181,6 +182,12 @@ static const struct conf_variable conf_table[] =
   /* POSIX.1-2001 TSF Configurable System Variables */
   { "GETGR_R_SIZE_MAX",		SYSCONF,	_SC_GETGR_R_SIZE_MAX	},
   { "GETPW_R_SIZE_MAX",		SYSCONF,	_SC_GETPW_R_SIZE_MAX	},
+
+#ifdef _NETBSD_SOURCE
+  /* Commonly provided extensions */
+  { "NPROCESSORS_CONF",		SYSCONF,	_SC_NPROCESSORS_CONF	},
+  { "NPROCESSORS_ONLN",		SYSCONF,	_SC_NPROCESSORS_ONLN	},
+#endif	/* _NETBSD_SOURCE */
 
   { NULL, CONSTANT, 0L }
 };

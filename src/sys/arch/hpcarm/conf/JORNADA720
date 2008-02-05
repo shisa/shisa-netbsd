@@ -1,4 +1,4 @@
-#	$NetBSD: JORNADA720,v 1.65 2007/08/20 00:54:41 kiyohara Exp $
+#	$NetBSD: JORNADA720,v 1.68 2008/01/19 13:11:17 chris Exp $
 #
 #	JORNADA -- Windows-CE based jornada 720
 #
@@ -7,7 +7,7 @@ include	"arch/hpcarm/conf/std.hpcarm"
 
 #options 	INCLUDE_CONFIG_FILE	# embed config file in kernel binary
 
-#ident 		"GENERIC-$Revision: 1.65 $"
+#ident 		"GENERIC-$Revision: 1.68 $"
 
 # estimated number of users
 maxusers	32
@@ -124,7 +124,6 @@ options 	NFS_BOOT_DHCP
 #options 	DIAGNOSTIC	# internal consistency checks
 #options 	DEBUG		# expensive debugging checks/support
 #options 	PMAP_DEBUG	# Enable pmap_debug_level code
-#options 	IPKDB		# remote kernel debugging
 options 	DDB		# in-kernel debugger
 #options 	DDB_HISTORY_SIZE=100	# Enable history editing in DDB
 #makeoptions	DEBUG="-g"	# compile full symbol table
@@ -242,6 +241,7 @@ bt3c*	at pcmcia? function ?		# 3Com 3CRWB6096-A
 btbc*	at pcmcia? function ?		# AnyCom BlueCard LSE041/039/139
 
 # Bluetooth Device Hub
+bthub*	at bcsp?
 bthub*	at bt3c?
 bthub*	at btbc?
 bthub*	at btuart?
@@ -333,4 +333,5 @@ pseudo-device	md	1		# Ramdisk driver
 pseudo-device	rnd			# /dev/random and in-kernel generator
 pseudo-device	clockctl		# user control of clock subsystem
 pseudo-device	ksyms			# /dev/ksyms
+pseudo-device	bcsp			# BlueCore Serial Protocol
 pseudo-device	btuart			# Bluetooth HCI UART (H4)

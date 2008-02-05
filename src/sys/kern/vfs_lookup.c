@@ -1,4 +1,4 @@
-/*	$NetBSD: vfs_lookup.c,v 1.97 2007/08/15 12:07:34 ad Exp $	*/
+/*	$NetBSD: vfs_lookup.c,v 1.104 2008/01/30 11:47:00 ad Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1989, 1993
@@ -37,9 +37,8 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: vfs_lookup.c,v 1.97 2007/08/15 12:07:34 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: vfs_lookup.c,v 1.104 2008/01/30 11:47:00 ad Exp $");
 
-#include "opt_systrace.h"
 #include "opt_magiclinks.h"
 
 #include <sys/param.h>
@@ -59,10 +58,6 @@ __KERNEL_RCSID(0, "$NetBSD: vfs_lookup.c,v 1.97 2007/08/15 12:07:34 ad Exp $");
 #include <sys/kauth.h>
 #include <sys/ktrace.h>
 
-#ifdef SYSTRACE
-#include <sys/systrace.h>
-#endif
-
 #ifndef MAGICLINKS
 #define MAGICLINKS 0
 #endif
@@ -74,8 +69,7 @@ struct pathname_internal {
 
 int vfs_magiclinks = MAGICLINKS;
 
-struct pool pnbuf_pool;		/* pathname buffer pool */
-struct pool_cache pnbuf_cache;	/* pathname buffer cache */
+pool_cache_t pnbuf_cache;	/* pathname buffer cache */
 
 /*
  * Substitute replacement text for 'magic' strings in symlinks.
@@ -121,6 +115,8 @@ symlink_magic(struct proc *p, char *cp, int *len)
 	char *tmp;
 	int change, i, newlen;
 	int termchar = '/';
+	char uidtmp[11]; /* XXX elad */
+
 
 	tmp = PNBUF_GET();
 	for (change = i = newlen = 0; i < *len; ) {
@@ -166,11 +162,13 @@ symlink_magic(struct proc *p, char *cp, int *len)
 			SUBSTITUTE("ostype", ostype,
 			    strlen(ostype));
 		} else if (MATCH("uid")) {
-			char uidtmp[11]; /* XXX elad */
-
 			(void)snprintf(uidtmp, sizeof(uidtmp), "%u",
 			    kauth_cred_geteuid(kauth_cred_get()));
 			SUBSTITUTE("uid", uidtmp, strlen(uidtmp));
+		} else if (MATCH("ruid")) {
+			(void)snprintf(uidtmp, sizeof(uidtmp), "%u",
+			    kauth_cred_getuid(kauth_cred_get()));
+			SUBSTITUTE("ruid", uidtmp, strlen(uidtmp));
 		} else {
 			tmp[newlen++] = '@';
 			if (termchar == VC)
@@ -220,12 +218,13 @@ namei(struct nameidata *ndp)
 	char *cp;			/* pointer into pathname argument */
 	struct vnode *dp;		/* the directory we are searching */
 	struct iovec aiov;		/* uio for reading symbolic links */
+	struct lwp *l = curlwp;		/* thread doing namei() */
 	struct uio auio;
 	int error, linklen;
 	struct componentname *cnp = &ndp->ni_cnd;
 
 #ifdef DIAGNOSTIC
-	if (!cnp->cn_cred || !cnp->cn_lwp)
+	if (!cnp->cn_cred)
 		panic("namei: bad cred/proc");
 	if (cnp->cn_nameiop & (~OPMASK))
 		panic("namei: nameiop contaminated with flags");
@@ -263,7 +262,7 @@ namei(struct nameidata *ndp)
 	/*
 	 * Get root directory for the translation.
 	 */
-	cwdi = cnp->cn_lwp->l_proc->p_cwdi;
+	cwdi = l->l_proc->p_cwdi;
 	rw_enter(&cwdi->cwdi_lock, RW_READER);
 	dp = cwdi->cwdi_rdir;
 	if (dp == NULL)
@@ -312,17 +311,12 @@ namei(struct nameidata *ndp)
 			if (cnp->cn_flags & EMULROOTSET)
 				emul_path = ndp->ni_next;
 			else
-				emul_path = cnp->cn_lwp->l_proc->p_emul->e_path;
+				emul_path = l->l_proc->p_emul->e_path;
 			ktrnamei2(emul_path, strlen(emul_path),
 			    cnp->cn_pnbuf, ndp->ni_pathlen);
 		} else
 			ktrnamei(cnp->cn_pnbuf, ndp->ni_pathlen);
 	}
-
-#ifdef SYSTRACE
-	if (ISSET(cnp->cn_lwp->l_proc->p_flag, PK_SYSTRACE))
-		systrace_namei(ndp);
-#endif
 
 	vn_lock(dp, LK_EXCLUSIVE | LK_RETRY);
 	/* Loop through symbolic links */
@@ -372,8 +366,7 @@ namei(struct nameidata *ndp)
 			break;
 		}
 		if (ndp->ni_vp->v_mount->mnt_flag & MNT_SYMPERM) {
-			error = VOP_ACCESS(ndp->ni_vp, VEXEC, cnp->cn_cred,
-			    cnp->cn_lwp);
+			error = VOP_ACCESS(ndp->ni_vp, VEXEC, cnp->cn_cred);
 			if (error != 0)
 				break;
 		}
@@ -407,7 +400,7 @@ badlink:
 		 * check length for potential overflow.
 		 */
 		if ((vfs_magiclinks &&
-		     symlink_magic(cnp->cn_lwp->l_proc, cp, &linklen)) ||
+		     symlink_magic(l->l_proc, cp, &linklen)) ||
 		    (linklen + ndp->ni_pathlen >= MAXPATHLEN)) {
 			error = ENAMETOOLONG;
 			goto badlink;
@@ -524,7 +517,7 @@ lookup(struct nameidata *ndp)
 	int error = 0;
 	int slashes;
 	struct componentname *cnp = &ndp->ni_cnd;
-	struct lwp *l = cnp->cn_lwp;
+	struct lwp *l = curlwp;
 
 	/*
 	 * Setup: break out flag bits into variables.
@@ -682,7 +675,7 @@ dirloop:
 				    goto nextname;
 				}
 			}
-			if ((dp->v_flag & VROOT) == 0 ||
+			if ((dp->v_vflag & VV_ROOT) == 0 ||
 			    (cnp->cn_flags & NOCROSSMOUNT))
 				break;
 			tdp = dp;
@@ -710,7 +703,7 @@ unionlookup:
 		printf("not found\n");
 #endif /* NAMEI_DIAGNOSTIC */
 		if ((error == ENOENT) &&
-		    (dp->v_flag & VROOT) &&
+		    (dp->v_vflag & VV_ROOT) &&
 		    (dp->v_mount->mnt_flag & MNT_UNION)) {
 			tdp = dp;
 			dp = dp->v_mount->mnt_vnodecovered;
@@ -783,14 +776,14 @@ unionlookup:
 	 */
 	while (dp->v_type == VDIR && (mp = dp->v_mountedhere) &&
 	       (cnp->cn_flags & NOCROSSMOUNT) == 0) {
-		if (vfs_busy(mp, 0, 0))
+		if (vfs_busy(mp, RW_READER, 0))
 			continue;
 
 		KASSERT(ndp->ni_dvp != dp);
 		VOP_UNLOCK(ndp->ni_dvp, 0);
 		vput(dp);
 		error = VFS_ROOT(mp, &tdp);
-		vfs_unbusy(mp);
+		vfs_unbusy(mp, false);
 		if (error) {
 			vn_lock(ndp->ni_dvp, LK_EXCLUSIVE | LK_RETRY);
 			goto bad;

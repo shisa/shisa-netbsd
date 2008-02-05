@@ -1,4 +1,4 @@
-/*	$NetBSD: copy.S,v 1.5 2007/05/17 14:51:13 yamt Exp $	*/
+/*	$NetBSD: copy.S,v 1.8 2007/11/12 18:42:00 ad Exp $	*/
 
 /*
  * Copyright (c) 2001 Wasabi Systems, Inc.
@@ -40,12 +40,31 @@
 #include <sys/errno.h>
 #include <sys/syscall.h>
 
-#include <machine/param.h>
 #include <machine/asm.h>
+#include <machine/frameasm.h>
 
 #define GET_CURPCB(reg)	\
 	movq	CPUVAR(CURLWP), reg; \
 	movq	L_ADDR(reg), reg
+
+ENTRY(do_pmap_load)
+#if 1
+	pushq	%rbp
+	movq	%rsp,%rbp
+#endif
+	pushq	%rdi
+	pushq	%rsi
+	pushq	%rdx
+	pushq	%rcx
+	call	_C_LABEL(pmap_load)
+	popq	%rcx
+	popq	%rdx
+	popq	%rsi
+	popq	%rdi
+#if 1
+	leaveq
+#endif
+	ret
 
 /*
  * Copy routines from and to userland, plus a few more. See the
@@ -67,7 +86,6 @@ ENTRY(fillw)
 	movw	%ax,%cx
 	rorl	$16,%eax
 	movw	%cx,%ax
-	cld
 	movq	%rdx,%rcx
 	shrq	%rcx
 	rep
@@ -81,7 +99,7 @@ ENTRY(fillw)
 ENTRY(kcopy)
 	GET_CURPCB(%rax)
 	pushq	PCB_ONFAULT(%rax)
-	leaq	_C_LABEL(copy_fault)(%rip),%r11
+	leaq	_C_LABEL(kcopy_fault)(%rip),%r11
 	movq	%r11, PCB_ONFAULT(%rax)
 
 	xchgq	%rdi,%rsi
@@ -91,7 +109,7 @@ ENTRY(kcopy)
 	subq	%rsi,%rax
 	cmpq	%rcx,%rax		# overlapping?
 	jb	1f
-	cld				# nope, copy forward
+	# nope, copy forward
 	shrq	$3,%rcx			# copy by 64-bit words
 	rep
 	movsq
@@ -128,6 +146,7 @@ ENTRY(kcopy)
 	ret
 
 ENTRY(copyout)
+	DO_DEFERRED_SWITCH
 	pushq	$0
 
 	xchgq	%rdi,%rsi
@@ -144,7 +163,6 @@ ENTRY(copyout)
 	leaq	_C_LABEL(copy_fault)(%rip),%r11
 	movq	%r11,PCB_ONFAULT(%rdx)
 
-	cld
 	movq	%rax,%rcx
 	shrq	$3,%rcx
 	rep
@@ -159,6 +177,7 @@ ENTRY(copyout)
 	ret
 
 ENTRY(copyin)
+	DO_DEFERRED_SWITCH
 	GET_CURPCB(%rax)
 	pushq	$0
 	leaq	_C_LABEL(copy_fault)(%rip),%r11
@@ -175,7 +194,6 @@ ENTRY(copyin)
 	ja	_C_LABEL(copy_efault)
 
 3:	/* bcopy(%rsi, %rdi, %rax); */
-	cld
 	movq	%rax,%rcx
 	shrq	$3,%rcx
 	rep
@@ -193,12 +211,24 @@ ENTRY(copyin)
 NENTRY(copy_efault)
 	movq	$EFAULT,%rax
 
+/*
+ * kcopy_fault is used by kcopy and copy_fault is used by copyin/out.
+ *
+ * they're distinguished for lazy pmap switching.  see trap().
+ */
+
+NENTRY(kcopy_fault)
+	GET_CURPCB(%rdx)
+	popq	PCB_ONFAULT(%rdx)
+	ret
+
 NENTRY(copy_fault)
 	GET_CURPCB(%rdx)
 	popq	PCB_ONFAULT(%rdx)
 	ret
 
 ENTRY(copyoutstr)
+	DO_DEFERRED_SWITCH
 	xchgq	%rdi,%rsi
 	movq	%rdx,%r8
 	movq	%rcx,%r9
@@ -218,7 +248,6 @@ ENTRY(copyoutstr)
 	movq	%rax,%r8
 
 1:	incq	%rdx
-	cld
 
 1:	decq	%rdx
 	jz	2f
@@ -240,6 +269,7 @@ ENTRY(copyoutstr)
 	jmp	copystr_return
 
 ENTRY(copyinstr)
+	DO_DEFERRED_SWITCH
 	xchgq	%rdi,%rsi
 	movq	%rdx,%r8
 	movq	%rcx,%r9
@@ -260,7 +290,6 @@ ENTRY(copyinstr)
 	movq	%rax,%r8
 
 1:	incq	%rdx
-	cld
 
 1:	decq	%rdx
 	jz	2f
@@ -301,7 +330,6 @@ ENTRY(copystr)
 	movq	%rdx,%r8
 
 	incq	%rdx
-	cld
 
 1:	decq	%rdx
 	jz	4f
@@ -327,6 +355,7 @@ ENTRY(copystr)
 7:	ret
 
 ENTRY(fuword)
+	DO_DEFERRED_SWITCH
 	movq	$VM_MAXUSER_ADDRESS-4,%r11
 	cmpq	%r11,%rdi
 	ja	_C_LABEL(fusuaddrfault)
@@ -338,6 +367,7 @@ ENTRY(fuword)
 	ret
 	
 ENTRY(fusword)
+	DO_DEFERRED_SWITCH
 	movq	$VM_MAXUSER_ADDRESS-2,%r11
 	cmpq	%r11,%rdi
 	ja	_C_LABEL(fusuaddrfault)
@@ -349,6 +379,8 @@ ENTRY(fusword)
 	ret
 	
 ENTRY(fuswintr)
+	cmpq	$TLBSTATE_VALID, CPUVAR(TLBSTATE)
+	jnz	_C_LABEL(fusuaddrfault)
 	movq	$VM_MAXUSER_ADDRESS-2,%r11
 	cmpq	%r11,%rdi
 	ja	_C_LABEL(fusuaddrfault)
@@ -360,6 +392,7 @@ ENTRY(fuswintr)
 	ret
 	
 ENTRY(fubyte)
+	DO_DEFERRED_SWITCH
 	movq	$VM_MAXUSER_ADDRESS-1,%r11
 	cmpq	%r11,%rdi
 	ja	_C_LABEL(fusuaddrfault)
@@ -389,6 +422,7 @@ ENTRY(fusuaddrfault)
 	ret
 
 ENTRY(suword)
+	DO_DEFERRED_SWITCH
 	movq	$VM_MAXUSER_ADDRESS-4,%r11
 	cmpq	%r11,%rdi
 	ja	_C_LABEL(fusuaddrfault)
@@ -403,6 +437,7 @@ ENTRY(suword)
 	ret
 	
 ENTRY(susword)
+	DO_DEFERRED_SWITCH
 	movq	$VM_MAXUSER_ADDRESS-2,%r11
 	cmpq	%r11,%rdi
 	ja	_C_LABEL(fusuaddrfault)
@@ -417,6 +452,8 @@ ENTRY(susword)
 	ret
 
 ENTRY(suswintr)
+	cmpq	$TLBSTATE_VALID, CPUVAR(TLBSTATE)
+	jnz	_C_LABEL(fusuaddrfault)
 	movq	$VM_MAXUSER_ADDRESS-2,%r11
 	cmpq	%r11,%rdi
 	ja	_C_LABEL(fusuaddrfault)
@@ -430,6 +467,7 @@ ENTRY(suswintr)
 	ret
 
 ENTRY(subyte)
+	DO_DEFERRED_SWITCH
 	movq	$VM_MAXUSER_ADDRESS-1,%r11
 	cmpq	%r11,%rdi
 	ja	_C_LABEL(fusuaddrfault)

@@ -1,4 +1,4 @@
-/*	$NetBSD: autri.c,v 1.34 2006/11/16 01:33:08 christos Exp $	*/
+/*	$NetBSD: autri.c,v 1.37 2008/01/27 01:56:02 jmcneill Exp $	*/
 
 /*
  * Copyright (c) 2001 SOMEYA Yoshihiko and KUROSAWA Takahiro.
@@ -35,7 +35,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: autri.c,v 1.34 2006/11/16 01:33:08 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: autri.c,v 1.37 2008/01/27 01:56:02 jmcneill Exp $");
 
 #include "midi.h"
 
@@ -60,8 +60,8 @@ __KERNEL_RCSID(0, "$NetBSD: autri.c,v 1.34 2006/11/16 01:33:08 christos Exp $");
 #include <dev/ic/ac97var.h>
 #include <dev/ic/mpuvar.h>
 
-#include <machine/bus.h>
-#include <machine/intr.h>
+#include <sys/bus.h>
+#include <sys/intr.h>
 
 #include <dev/pci/autrireg.h>
 #include <dev/pci/autrivar.h>
@@ -97,7 +97,7 @@ static int	autri_write_codec(void *, uint8_t, uint16_t);
 static int	autri_reset_codec(void *);
 static enum ac97_host_flags	autri_flags_codec(void *);
 
-static void autri_powerhook(int, void *);
+static bool autri_resume(device_t);
 static int  autri_init(void *);
 static struct autri_dma *autri_find_dma(struct autri_softc *, void *);
 static void autri_setup_channel(struct autri_softc *, int,
@@ -517,20 +517,28 @@ autri_attach(struct device *parent, struct device *self, void *aux)
 	struct autri_softc *sc;
 	struct pci_attach_args *pa;
 	pci_chipset_tag_t pc;
+	pcitag_t tag;
 	struct autri_codec_softc *codec;
 	pci_intr_handle_t ih;
 	char const *intrstr;
 	char devinfo[256];
+	pcireg_t csr;
 	int r;
 	uint32_t reg;
 
 	sc = (struct autri_softc *)self;
 	pa = (struct pci_attach_args *)aux;
 	pc = pa->pa_pc;
+	tag = pa->pa_tag;
 	aprint_naive(": Audio controller\n");
 
 	sc->sc_devid = pa->pa_id;
 	sc->sc_class = pa->pa_class;
+
+	csr = pci_conf_read(pc, tag, PCI_COMMAND_STATUS_REG);
+	csr |= (PCI_COMMAND_IO_ENABLE | PCI_COMMAND_MEM_ENABLE |
+	    PCI_COMMAND_MASTER_ENABLE);
+	pci_conf_write(pc, tag, PCI_COMMAND_STATUS_REG, csr);
 
 	pci_devinfo(pa->pa_id, pa->pa_class, 0, devinfo, sizeof(devinfo));
 	sc->sc_revision = PCI_REVISION(pa->pa_class);
@@ -592,32 +600,28 @@ autri_attach(struct device *parent, struct device *self, void *aux)
 		return;
 	}
 
+	if (!pmf_device_register(self, NULL, autri_resume))
+		aprint_error_dev(self, "couldn't establish power handler\n");
+
 	audio_attach_mi(&autri_hw_if, sc, &sc->sc_dev);
 
 #if NMIDI > 0
 	midi_attach_mi(&autri_midi_hw_if, sc, &sc->sc_dev);
 #endif
-
-	sc->sc_old_power = PWR_RESUME;
-	powerhook_establish(sc->sc_dev.dv_xname, autri_powerhook, sc);
 }
 
 CFATTACH_DECL(autri, sizeof(struct autri_softc),
     autri_match, autri_attach, NULL, NULL);
 
-static void
-autri_powerhook(int why, void *addr)
+static bool
+autri_resume(device_t dv)
 {
-	struct autri_softc *sc;
+	struct autri_softc *sc = device_private(dv);
 
-	sc = addr;
-	if (why == PWR_RESUME && sc->sc_old_power == PWR_SUSPEND) {
-		DPRINTF(("PWR_RESUME\n"));
-		autri_init(sc);
-		/*autri_reset_codec(&sc->sc_codec);*/
-		(sc->sc_codec.codec_if->vtbl->restore_ports)(sc->sc_codec.codec_if);
-	}
-	sc->sc_old_power = why;
+	autri_init(sc);
+	(sc->sc_codec.codec_if->vtbl->restore_ports)(sc->sc_codec.codec_if);
+
+	return true;
 }
 
 static int

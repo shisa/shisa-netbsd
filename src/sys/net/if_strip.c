@@ -1,4 +1,4 @@
-/*	$NetBSD: if_strip.c,v 1.81 2007/09/01 04:32:51 dyoung Exp $	*/
+/*	$NetBSD: if_strip.c,v 1.84 2007/11/10 18:29:36 ad Exp $	*/
 /*	from: NetBSD: if_sl.c,v 1.38 1996/02/13 22:00:23 christos Exp $	*/
 
 /*
@@ -87,7 +87,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_strip.c,v 1.81 2007/09/01 04:32:51 dyoung Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_strip.c,v 1.84 2007/11/10 18:29:36 ad Exp $");
 
 #include "opt_inet.h"
 #include "bpfilter.h"
@@ -109,9 +109,8 @@ __KERNEL_RCSID(0, "$NetBSD: if_strip.c,v 1.81 2007/09/01 04:32:51 dyoung Exp $")
 #include <sys/kauth.h>
 #endif
 #include <sys/syslog.h>
-
-#include <machine/cpu.h>
-#include <machine/intr.h>
+#include <sys/cpu.h>
+#include <sys/intr.h>
 
 #include <net/if.h>
 #include <net/if_dl.h>
@@ -475,9 +474,6 @@ stripopen(dev_t dev, struct tty *tp)
 	struct lwp *l = curlwp;		/* XXX */
 	struct strip_softc *sc;
 	int error;
-#ifdef __NetBSD__
-	int s;
-#endif
 
 	if ((error = kauth_authorize_generic(l->l_cred,
 	    KAUTH_GENERIC_ISSUSER, NULL)) != 0)
@@ -488,17 +484,17 @@ stripopen(dev_t dev, struct tty *tp)
 
 	LIST_FOREACH(sc, &strip_softc_list, sc_iflist) {
 		if (sc->sc_ttyp == NULL) {
-			sc->sc_si = softintr_establish(IPL_SOFTNET,
+			sc->sc_si = softint_establish(SOFTINT_NET,
 			    stripintr, sc);
 			if (stripinit(sc) == 0) {
-				softintr_disestablish(sc->sc_si);
+				softint_disestablish(sc->sc_si);
 				return (ENOBUFS);
 			}
+			mutex_spin_enter(&tty_lock);
 			tp->t_sc = (void *)sc;
 			sc->sc_ttyp = tp;
 			sc->sc_if.if_baudrate = tp->t_ospeed;
 			ttyflush(tp, FREAD | FWRITE);
-#ifdef __NetBSD__
 			/*
 			 * Make sure tty output queue is large enough
 			 * to hold a full-sized packet (including frame
@@ -507,16 +503,15 @@ stripopen(dev_t dev, struct tty *tp)
 			 * of escapes and clever RLL bytestuffing),
 			 * plus frame header, and add two on for frame ends.
 			 */
-			s = spltty();
 			if (tp->t_outq.c_cn < STRIP_MTU_ONWIRE) {
 				sc->sc_oldbufsize = tp->t_outq.c_cn;
 				sc->sc_oldbufquot = tp->t_outq.c_cq != 0;
 
+				mutex_spin_exit(&tty_lock);
 				clfree(&tp->t_outq);
 				error = clalloc(&tp->t_outq, 3*SLMTU, 0);
 				if (error) {
-					splx(s);
-					softintr_disestablish(sc->sc_si);
+					softint_disestablish(sc->sc_si);
 					/*
 					 * clalloc() might return -1 which
 					 * is no good, so we need to return
@@ -524,13 +519,11 @@ stripopen(dev_t dev, struct tty *tp)
 					 */
 					return (ENOMEM);
 				}
-			} else
+				mutex_spin_enter(&tty_lock);
+			} else 
 				sc->sc_oldbufsize = sc->sc_oldbufquot = 0;
-			splx(s);
-#endif /* __NetBSD__ */
-			s = spltty();
 			strip_resetradio(sc, tp);
-			splx(s);
+			mutex_spin_exit(&tty_lock);
 
 			/*
 			 * Start the watchdog timer to get the radio
@@ -558,7 +551,7 @@ stripclose(struct tty *tp, int flag)
 	sc = tp->t_sc;
 
 	if (sc != NULL) {
-		softintr_disestablish(sc->sc_si);
+		softint_disestablish(sc->sc_si);
 		s = splnet();
 		/*
 		 * Cancel watchdog timer, which stops the "probe-for-death"/
@@ -911,7 +904,7 @@ stripstart(struct tty *tp)
 	 */
 	if (sc == NULL)
 		return (0);
-	softintr_schedule(sc->sc_si);
+	softint_schedule(sc->sc_si);
 	return (0);
 }
 
@@ -1042,7 +1035,7 @@ stripinput(int c, struct tty *tp)
 		goto error;
 
 	IF_ENQUEUE(&sc->sc_inq, m);
-	softintr_schedule(sc->sc_si);
+	softint_schedule(sc->sc_si);
 	goto newpack;
 
 error:
@@ -1224,7 +1217,7 @@ stripintr(void *arg)
 #endif
 		m->m_data = (void *) pktstart;
 		m->m_pkthdr.len = m->m_len = len;
-#if NPBFILTER > 0
+#if NBPFILTER > 0
 		if (sc->sc_if.if_bpf) {
 			bpf_mtap_sl_in(sc->sc_if.if_bpf, chdr, &m);
 			if (m == NULL)

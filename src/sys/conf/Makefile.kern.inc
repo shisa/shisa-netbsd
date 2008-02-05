@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile.kern.inc,v 1.102 2007/09/25 15:16:05 pooka Exp $
+#	$NetBSD: Makefile.kern.inc,v 1.107 2008/01/17 20:14:49 joerg Exp $
 #
 # This file contains common `MI' targets and definitions and it is included
 # at the bottom of each `MD' ${MACHINE}/conf/Makefile.${MACHINE}.
@@ -89,7 +89,7 @@ AFLAGS+=	${CPUFLAGS} -D_LOCORE -Wa,-fatal-warnings
 CFLAGS+=	-fno-strict-aliasing
 .endif
 
-.if ${USE_FORT:Uno} == "yes"
+.if ${USE_SSP:Uno} == "yes"
 CFLAGS+=-fstack-protector -Wstack-protector --param ssp-buffer-size=1
 LDFLAGS+=-fstack-protector -Wstack-protector --param ssp-buffer-size=1
 .endif
@@ -109,6 +109,11 @@ CFLAGS.kern_synch.c+=	-fno-reorder-blocks
 COPTS.${j}+=-g
 . endfor
 .endfor
+
+# Always compile subr_debug_info.c with debug informations.
+# This allows gdb to use type informations.
+#
+COPTS.debugsyms.c+=	-g
 
 # compile rules: rules are named ${TYPE}_${SUFFIX} where TYPE is NORMAL or
 # NOPROF and SUFFIX is the file suffix, capitalized (e.g. C for a .c file).
@@ -253,10 +258,7 @@ vers.o: ${SYSTEM_DEP} ${SYSTEM_SWAP_DEP} $S/conf/newvers.sh $S/conf/osrelease.sh
 .endif
 
 .if !target(config_time.h)
-EXTRA_CLEAN+= config_time.h
-config_time.h: Makefile
-	${_MKTARGET_CREATE}
-	cp config_time.src config_time.h
+BUILDSYMLINKS+=	config_time.src config_time.h
 .endif
 
 .if defined(MEMORY_DISK_IMAGE)
@@ -322,19 +324,19 @@ SRCS=${SSRCS} ${CSRCS}
 DEPS=	${SRCS:T:O:u:R:S/$/.d/g}
 
 .for _s in ${SSRCS}
-${_s:T:R}.d: ${_s} assym.h config_time.h
+${_s:T:R}.d: ${_s} assym.h
 	${_MKTARGET_CREATE}
 	${MKDEP} -f ${.TARGET} -- ${MKDEP_AFLAGS} \
 	    ${CPPFLAGS} ${CPPFLAGS.${_s:T}} ${_s}
 .endfor
 .for _s in ${CSRCS}
-${_s:T:R}.d: ${_s} config_time.h
+${_s:T:R}.d: ${_s}
 	${_MKTARGET_CREATE}
 	${MKDEP} -f ${.TARGET} -- ${MKDEP_CFLAGS} \
 	    ${CPPFLAGS} ${CPPFLAGS.${_s:T}} ${_s}
 .endfor
 
-assym.d: assym.h config_time.h
+assym.d: assym.h
 	${_MKTARGET_CREATE}
 	cat ${GENASSYM_CONF} ${GENASSYM_EXTRAS} | \
 	    ${GENASSYM} -- ${MKDEP} -f assym.dep -- \
@@ -454,7 +456,8 @@ EXTRA_CLEAN+= .gdbinit
 # Their full name is noted as documentation.
 VARSTACK=dev/cgd.c kern/uipc_socket.c miscfs/genfs/genfs_vnops.c \
     nfs/nfs_bio.c uvm/uvm_bio.c \
-    uvm/uvm_pager.c dev/ic/aic7xxx.c dev/ic/aic79xx.c arch/xen/i386/gdt.c
+    uvm/uvm_pager.c dev/ic/aic7xxx.c dev/ic/aic79xx.c arch/xen/i386/gdt.c \
+    dev/ofw/ofw_subr.c
 
 . if ${HAVE_GCC} > 3
 .for __varstack in ${VARSTACK}
@@ -466,6 +469,8 @@ AFLAGS+=	${AOPTS.${.IMPSRC:T}}
 CFLAGS+=	${COPTS.${.IMPSRC:T}} ${CPUFLAGS.${.IMPSRC:T}}
 CPPFLAGS+=	${CPPFLAGS.${.IMPSRC:T}}
 CWARNFLAGS+=	${CWARNFLAGS.${.IMPSRC:T}}
+
+.include <bsd.files.mk>
 
 ##
 ## the end

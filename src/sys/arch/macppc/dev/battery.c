@@ -1,4 +1,4 @@
-/*	$NetBSD: battery.c,v 1.5 2007/07/16 18:24:29 xtraeme Exp $ */
+/*	$NetBSD: battery.c,v 1.8 2007/12/12 18:19:20 macallan Exp $ */
 
 /*-
  * Copyright (c) 2007 Michael Lorenz
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: battery.c,v 1.5 2007/07/16 18:24:29 xtraeme Exp $");
+__KERNEL_RCSID(0, "$NetBSD: battery.c,v 1.8 2007/12/12 18:19:20 macallan Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -44,6 +44,7 @@ __KERNEL_RCSID(0, "$NetBSD: battery.c,v 1.5 2007/07/16 18:24:29 xtraeme Exp $");
 #include <macppc/dev/pmuvar.h>
 #include <macppc/dev/batteryvar.h>
 #include <machine/bus.h>
+#include <machine/pio.h>
 #include "opt_battery.h"
 
 #ifdef BATTERY_DEBUG
@@ -73,7 +74,7 @@ struct battery_softc {
 	int sc_type;
 	
 	/* envsys stuff */
-	struct sysmon_envsys sc_sysmon;
+	struct sysmon_envsys *sc_sme;
 	envsys_data_t sc_sensor[BAT_NSENSORS];
 	struct sysmon_pswitch sc_sm_acpower;
 
@@ -95,7 +96,7 @@ static void battery_attach(struct device *, struct device *, void *);
 static int battery_match(struct device *, struct cfdata *, void *);
 static int battery_update(struct battery_softc *, int);
 static void battery_setup_envsys(struct battery_softc *);
-static int battery_gtredata(struct sysmon_envsys *, envsys_data_t *);
+static void battery_refresh(struct sysmon_envsys *, envsys_data_t *);
 static void battery_poll(void *);
 
 CFATTACH_DECL(battery, sizeof(struct battery_softc),
@@ -231,15 +232,16 @@ battery_update(struct battery_softc *sc, int out)
 }
 
 #define INITDATA(index, unit, string)					\
-	sc->sc_sensor[index].sensor = index;				\
 	sc->sc_sensor[index].units = unit;     				\
-	sc->sc_sensor[index].state = ENVSYS_SVALID;			\
 	snprintf(sc->sc_sensor[index].desc,				\
 	    sizeof(sc->sc_sensor[index].desc), "%s", string);
 
 static void
 battery_setup_envsys(struct battery_softc *sc)
 {
+	int i;
+
+	sc->sc_sme = sysmon_envsys_create();
 
 	INITDATA(BAT_CPU_TEMPERATURE, ENVSYS_STEMP, "CPU temperature");
 	INITDATA(BAT_AC_PRESENT, ENVSYS_INDICATOR, "AC present");
@@ -253,19 +255,27 @@ battery_setup_envsys(struct battery_softc *sc)
 	INITDATA(BAT_FULL, ENVSYS_INDICATOR, "Battery full");
 #undef INITDATA
 
-	sc->sc_sysmon.sme_name = sc->sc_dev.dv_xname;
-	sc->sc_sysmon.sme_sensor_data = sc->sc_sensor;
-	sc->sc_sysmon.sme_cookie = sc;
-	sc->sc_sysmon.sme_gtredata = battery_gtredata;
-	sc->sc_sysmon.sme_nsensors = BAT_NSENSORS;
+	for (i = 0; i < BAT_NSENSORS; i++) {
+		if (sysmon_envsys_sensor_attach(sc->sc_sme,
+						&sc->sc_sensor[i])) {
+			sysmon_envsys_destroy(sc->sc_sme);
+			return;
+		}
+	}
 
-	if (sysmon_envsys_register(&sc->sc_sysmon))
+	sc->sc_sme->sme_name = sc->sc_dev.dv_xname;
+	sc->sc_sme->sme_cookie = sc;
+	sc->sc_sme->sme_refresh = battery_refresh;
+
+	if (sysmon_envsys_register(sc->sc_sme)) {
 		aprint_error("%s: unable to register with sysmon\n",
 		    sc->sc_dev.dv_xname);
+		sysmon_envsys_destroy(sc->sc_sme);
+	}
 }
 
-static int
-battery_gtredata(struct sysmon_envsys *sme, envsys_data_t *edata)
+static void
+battery_refresh(struct sysmon_envsys *sme, envsys_data_t *edata)
 {
 	struct battery_softc *sc = sme->sme_cookie;
 	int which = edata->sensor;
@@ -308,13 +318,13 @@ battery_gtredata(struct sysmon_envsys *sme, envsys_data_t *edata)
 	}
 
 	edata->state = ENVSYS_SVALID;
-	return 0;
 }
 
 static void
 battery_poll(void *cookie)
 {
 	struct battery_softc *sc = cookie;
+
 
 	battery_update(sc, 0);
 	if ((sc->sc_flags & PMU_PWR_AC_PRESENT) == sc->sc_oflags)

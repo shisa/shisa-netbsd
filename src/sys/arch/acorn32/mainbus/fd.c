@@ -1,4 +1,4 @@
-/*	$NetBSD: fd.c,v 1.30 2007/07/29 12:15:35 ad Exp $	*/
+/*	$NetBSD: fd.c,v 1.37 2008/01/08 06:29:39 matt Exp $	*/
 
 /*-
  * Copyright (c) 1998 The NetBSD Foundation, Inc.
@@ -89,7 +89,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: fd.c,v 1.30 2007/07/29 12:15:35 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: fd.c,v 1.37 2008/01/08 06:29:39 matt Exp $");
 
 #include "opt_ddb.h"
 
@@ -519,8 +519,7 @@ fdattach(parent, self, aux)
 	/*
 	 * Initialize and attach the disk structure.
 	 */
-	fd->sc_dk.dk_name = fd->sc_dev.dv_xname;
-	fd->sc_dk.dk_driver = &fddkdriver;
+	disk_init(&fd->sc_dk, fd->sc_dev.dv_xname, &fddkdriver);
 	disk_attach(&fd->sc_dk);
 
 	/* Needed to power off if the motor is on when we halt. */
@@ -1074,7 +1073,8 @@ loop:
 		fdc->sc_fh.fh_regs = &fdc->sc_fr;
 		fdc->sc_fr.fr_r9 = IOMD_BASE + (IOMD_FIQRQ << 2);
 		fdc->sc_fr.fr_r10 = fd->sc_nbytes;
-		fdc->sc_fr.fr_r11 = (u_int)(bp->b_data + fd->sc_skip);
+		fdc->sc_fr.fr_r11 =
+		    (u_int)((uintptr_t)bp->b_data + fd->sc_skip);
 		fdc->sc_fr.fr_r12 = fdc->sc_drq;
 #ifdef FD_DEBUG
 		printf("fdc-doio:r9=%x r10=%x r11=%x r12=%x data=%x skip=%x\n",
@@ -1507,17 +1507,17 @@ fdformat(dev, finfo, l)
 	struct ne7_fd_formb *finfo;
 	struct lwp *l;
 {
-	int rv = 0, s;
+	int rv = 0;
 	struct fd_softc *fd = fd_cd.cd_devs[FDUNIT(dev)];
 	struct fd_type *type = fd->sc_type;
 	struct buf *bp;
 
 	/* set up a buffer header for fdstrategy() */
-	bp = (struct buf *)malloc(sizeof(struct buf), M_TEMP, M_NOWAIT);
+	bp = getiobuf(NULL, false);
 	if(bp == 0)
 		return ENOBUFS;
-	memset((void *)bp, 0, sizeof(struct buf));
-	bp->b_flags = B_BUSY | B_PHYS | B_FORMAT;
+	bp->b_flags = B_PHYS | B_FORMAT;
+	bp->b_cflags |= BC_BUSY;
 	bp->b_proc = l->l_proc;
 	bp->b_dev = dev;
 
@@ -1540,21 +1540,22 @@ fdformat(dev, finfo, l)
 	fdstrategy(bp);
 
 	/* ...and wait for it to complete */
-	s = splbio();
-	while(!(bp->b_flags & B_DONE)) {
-		rv = tsleep((void *)bp, PRIBIO, "fdform", 20 * hz);
+	/* XXX very dodgy */
+	mutex_enter(bp->b_objlock);
+	while (!(bp->b_oflags & BO_DONE)) {
+		rv = cv_timedwait(&bp->b_done, bp->b_objlock, 20 * hz);
 		if (rv == EWOULDBLOCK)
 			break;
 	}
-	splx(s);
-       
+	mutex_exit(bp->b_objlock);
+
 	if (rv == EWOULDBLOCK) {
 		/* timed out */
 		rv = EIO;
 		biodone(bp);
 	} else if (bp->b_error != 0)
 		rv = bp->b_error;
-	free(bp, M_TEMP);
+	putiobuf(bp);
 	return rv;
 }
 
@@ -1606,7 +1607,7 @@ load_memory_disc_from_floppy(md, dev)
 	s = spl0();
 
 	if (fdopen(bp->b_dev, 0, 0, curlwp) != 0) {
-		brelse(bp);		
+		brelse(bp, 0);		
 		printf("Cannot open floppy device\n");
 			return(EINVAL);
 	}
@@ -1626,7 +1627,7 @@ load_memory_disc_from_floppy(md, dev)
 		if (biowait(bp))
 			panic("Cannot load floppy image");
                                                  
-		memcpy((void *)md->md_addr + loop * fd_types[type].sectrac
+		memcpy((char *)md->md_addr + loop * fd_types[type].sectrac
 		    * DEV_BSIZE, (void *)bp->b_data,
 		    fd_types[type].sectrac * DEV_BSIZE);
 	}
@@ -1635,7 +1636,7 @@ load_memory_disc_from_floppy(md, dev)
         
 	fdclose(bp->b_dev, 0, 0, curlwp);
 
-	brelse(bp);
+	brelse(bp, 0);
 
 	splx(s);
 	return(0);

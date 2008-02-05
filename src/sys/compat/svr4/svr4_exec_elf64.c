@@ -1,4 +1,4 @@
-/*	$NetBSD: svr4_exec_elf64.c,v 1.11 2007/04/22 08:29:59 dsl Exp $	 */
+/*	$NetBSD: svr4_exec_elf64.c,v 1.13 2007/12/08 18:36:24 dsl Exp $	 */
 
 /*-
  * Copyright (c) 1994 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: svr4_exec_elf64.c,v 1.11 2007/04/22 08:29:59 dsl Exp $");
+__KERNEL_RCSID(0, "$NetBSD: svr4_exec_elf64.c,v 1.13 2007/12/08 18:36:24 dsl Exp $");
 
 #define	ELFSIZE		64				/* XXX should die */
 
@@ -53,7 +53,7 @@ __KERNEL_RCSID(0, "$NetBSD: svr4_exec_elf64.c,v 1.11 2007/04/22 08:29:59 dsl Exp
 
 #include <sys/mman.h>
 
-#include <machine/cpu.h>
+#include <sys/cpu.h>
 #include <machine/reg.h>
 
 #include <compat/svr4/svr4_types.h>
@@ -62,12 +62,7 @@ __KERNEL_RCSID(0, "$NetBSD: svr4_exec_elf64.c,v 1.11 2007/04/22 08:29:59 dsl Exp
 #include <compat/svr4/svr4_errno.h>
 
 int
-svr4_elf64_probe(l, epp, eh, itp, pos)
-	struct lwp *l;
-	struct exec_package *epp;
-	void *eh;
-	char *itp;
-	vaddr_t *pos;
+svr4_elf64_probe(struct lwp *l, struct exec_package *epp, void *eh, char *itp, vaddr_t *pos)
 {
 	int error;
 

@@ -1,11 +1,8 @@
-/* $NetBSD: sysmon_envsys_util.c,v 1.3 2007/09/24 18:09:17 plunky Exp $ */
+/* $NetBSD: sysmon_envsys_util.c,v 1.5 2007/11/16 08:00:16 xtraeme Exp $ */
 
 /*-
- * Copyright (c) 2007 The NetBSD Foundation, Inc.
+ * Copyright (c) 2007 Juan Romero Pardines.
  * All rights reserved.
- *
- * This code is derived from software contributed to The NetBSD Foundation
- * by Juan Romero Pardines.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -15,29 +12,21 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. All advertising materials mentioning features or use of this software
- *    must display the following acknowledgement:
- *      This product includes software developed by Juan Romero Pardines
- *      for the NetBSD Foundation, Inc. and its contributors.
- * 4. Neither the name of The NetBSD Foundation nor the names of its
- *    contributors may be used to endorse or promote products derived
- *    from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS
- * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
- * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
- * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS
- * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: sysmon_envsys_util.c,v 1.3 2007/09/24 18:09:17 plunky Exp $");
+__KERNEL_RCSID(0, "$NetBSD: sysmon_envsys_util.c,v 1.5 2007/11/16 08:00:16 xtraeme Exp $");
 
 #include <sys/param.h>
 #include <sys/types.h>
@@ -50,9 +39,9 @@ __KERNEL_RCSID(0, "$NetBSD: sysmon_envsys_util.c,v 1.3 2007/09/24 18:09:17 plunk
 
 /*
  * Functions to create objects in a dictionary if they do not exist, or
- * for updating its value it value provided doesn't match with the value
- * in dictionary.
+ * for updating its value if it doesn't match with the value in dictionary.
  */
+
 int
 sme_sensor_upbool(prop_dictionary_t dict, const char *key, bool val)
 {
@@ -68,7 +57,6 @@ sme_sensor_upbool(prop_dictionary_t dict, const char *key, bool val)
 				    __func__, key, val));
 				return EINVAL;
 			}
-			SENSOR_OBJUPDATED(key, val);
 		}
 	} else {
 		if (!prop_dictionary_set_bool(dict, key, val)) {
@@ -96,7 +84,6 @@ sme_sensor_upint32(prop_dictionary_t dict, const char *key, int32_t val)
 				    __func__, key, val));
 				return EINVAL;
 			}
-			SENSOR_OBJUPDATED(key, val);
 		}
 	} else {
 		if (!prop_dictionary_set_int32(dict, key, val)) {
@@ -124,7 +111,6 @@ sme_sensor_upuint32(prop_dictionary_t dict, const char *key, uint32_t val)
 				    __func__, key, val));
 				return EINVAL;
 			}
-			SENSOR_OBJUPDATED(key, val);
 		}
 	} else {
 		if (!prop_dictionary_set_uint32(dict, key, val)) {

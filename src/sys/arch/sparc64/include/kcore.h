@@ -1,4 +1,4 @@
-/*	$NetBSD: kcore.h,v 1.4 2000/08/01 00:40:26 eeh Exp $	*/
+/*	$NetBSD: kcore.h,v 1.6 2008/01/18 16:24:42 martin Exp $	*/
 
 /*-
  * Copyright (c) 1996 The NetBSD Foundation, Inc.
@@ -42,6 +42,11 @@
  *	a `struct cpu_kcore_hdr'
  */
 
+struct cpu_kcore_4mbseg {
+	uint64_t	va;		/* virtual address */
+	uint64_t	pa;		/* physical address */
+};
+
 typedef struct cpu_kcore_hdr {
 	int		cputype;	/* CPU type associated with this dump */
 
@@ -64,4 +69,17 @@ typedef struct cpu_kcore_hdr {
 	uint64_t	kdatap;		/* Physical address of 4MB locked TLB */
 	uint64_t	kdatasz;	/* Size of locked kernel data segment. */
 
+	uint64_t	newmagic;	/* magic value: everything beyound is
+					   valid */
+#define	SPARC64_KCORE_NEWMAGIC	0x3AFEC01E
+	uint64_t	num4mbsegs;	/* number of 4MB segments */
+	uint64_t	off4mbsegs;	/* start of 4m segment array
+					   (relative to start of this
+					   header) */
+
+	uint64_t	numcpuinfos;	/* number of per CPU mapping infos */
+	uint64_t	percpusz;	/* size of per cpu mapping */
+	uint64_t	thiscpu;	/* index of the cpu writing the dump */
+	uint64_t	cpusp;		/* physical address of first per-cpu
+					   mapping */
 } cpu_kcore_hdr_t;

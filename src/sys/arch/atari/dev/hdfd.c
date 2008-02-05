@@ -1,4 +1,4 @@
-/*	$NetBSD: hdfd.c,v 1.57 2007/07/29 12:15:36 ad Exp $	*/
+/*	$NetBSD: hdfd.c,v 1.61 2008/01/03 16:06:24 he Exp $	*/
 
 /*-
  * Copyright (c) 1996 Leo Weppelman
@@ -91,7 +91,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: hdfd.c,v 1.57 2007/07/29 12:15:36 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: hdfd.c,v 1.61 2008/01/03 16:06:24 he Exp $");
 
 #include "opt_ddb.h"
 
@@ -545,8 +545,7 @@ fdattach(parent, self, aux)
 	/*
 	 * Initialize and attach the disk structure.
 	 */
-	fd->sc_dk.dk_name   = fd->sc_dev.dv_xname;
-	fd->sc_dk.dk_driver = &fddkdriver;
+	disk_init(&fd->sc_dk, fd->sc_dev.dv_xname, &fddkdriver);
 	disk_attach(&fd->sc_dk);
 
 	/* Needed to power off if the motor is on when we halt. */
@@ -1526,17 +1525,18 @@ fdformat(dev, finfo, p)
 	struct ne7_fd_formb *finfo;
 	struct proc *p;
 {
-	int rv = 0, s;
+	int rv = 0;
 	struct fd_softc *fd = hdfd_cd.cd_devs[FDUNIT(dev)];
 	struct fd_type *type = fd->sc_type;
 	struct buf *bp;
 
 	/* set up a buffer header for fdstrategy() */
-	bp = (struct buf *)malloc(sizeof(struct buf), M_TEMP, M_NOWAIT);
+	bp = getiobuf(NULL, false);
 	if(bp == 0)
 		return ENOBUFS;
 	bzero((void *)bp, sizeof(struct buf));
-	bp->b_flags = B_BUSY | B_PHYS | B_FORMAT;
+	bp->b_flags = B_PHYS | B_FORMAT;
+	bp->b_cflags |= BC_BUSY;
 	bp->b_proc = p;
 	bp->b_dev = dev;
 
@@ -1558,13 +1558,13 @@ fdformat(dev, finfo, p)
 	fdstrategy(bp);
 
 	/* ...and wait for it to complete */
-	s = splbio();
-	while(!(bp->b_flags & B_DONE)) {
-		rv = tsleep((void *)bp, PRIBIO, "fdform", 20 * hz);
+	mutex_enter(bp->b_objlock);
+	while(!(bp->b_oflags & BO_DONE)) {
+		rv = cv_timedwait(&bp->b_done, bp->b_objlock, 20 * hz);
 		if (rv == EWOULDBLOCK)
 			break;
 	}
-	splx(s);
+	mutex_exit(bp->b_objlock);
        
 	if (rv == EWOULDBLOCK) {
 		/* timed out */
@@ -1573,7 +1573,7 @@ fdformat(dev, finfo, p)
 	} else if (bp->b_error != 0) {
 		rv = bp->b_error;
 	}
-	free(bp, M_TEMP);
+	putiobuf(bp);
 	return rv;
 }
 

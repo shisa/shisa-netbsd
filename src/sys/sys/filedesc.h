@@ -1,4 +1,4 @@
-/*	$NetBSD: filedesc.h,v 1.40 2007/07/09 21:11:32 ad Exp $	*/
+/*	$NetBSD: filedesc.h,v 1.45 2008/01/27 19:48:52 dsl Exp $	*/
 
 /*
  * Copyright (c) 1990, 1993
@@ -34,7 +34,7 @@
 #ifndef _SYS_FILEDESC_H_
 #define	_SYS_FILEDESC_H_
 
-#include <sys/lock.h>
+#include <sys/mutex.h>
 #include <sys/rwlock.h>
 
 /*
@@ -79,7 +79,7 @@ struct filedesc {
 					 * hash table for attached
 					 * non-fd knotes
 					 */
-	struct simplelock fd_slock;	/* mutex. Note on locking order:
+	krwlock_t	fd_lock;	/* lock. Note on locking order:
 					 * acquire this lock first when
 					 * also locking an associated
 					 * `struct file' lock.
@@ -92,7 +92,7 @@ struct cwdinfo {
 	struct vnode	*cwdi_edir;	/* emulation root (if known) */
 	krwlock_t	cwdi_lock;	/* lock on entire struct */
 	u_short		cwdi_cmask;	/* mask for file creation */
-	u_short		cwdi_refcnt;	/* reference count */
+	u_int		cwdi_refcnt;	/* reference count */
 };
 
 
@@ -130,6 +130,8 @@ struct filedesc0 {
 /*
  * Kernel global variables and routines.
  */
+void	filedesc_init(void);
+
 int	dupfdopen(struct lwp *, int, int, int, int);
 int	fdalloc(struct proc *, int, int *);
 void	fdexpand(struct proc *);
@@ -156,14 +158,22 @@ void	cwdfree(struct cwdinfo *);
 #define GETCWD_CHECK_ACCESS 0x0001
 int	getcwd_common(struct vnode *, struct vnode *, char **, char *, int,
     int, struct lwp *);
+int	vnode_to_path(char *, size_t, struct vnode *, struct lwp *,
+    struct proc *);
 
 int	closef(struct file *, struct lwp *);
 int	getsock(struct filedesc *, int, struct file **);
+struct file *fgetdummy(void);
+void	fputdummy(struct file *);
 
 struct stat;
 int	do_sys_fstat(struct lwp *, int, struct stat *);
 struct flock;
 int	do_fcntl_lock(struct lwp *, int, int, struct flock *);
+int	do_posix_fadvise(struct lwp *, int, off_t, off_t, int, register_t *);
+
+extern kmutex_t filelist_lock;
+
 #endif /* _KERNEL */
 
 #endif /* !_SYS_FILEDESC_H_ */

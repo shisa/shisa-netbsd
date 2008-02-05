@@ -1,4 +1,4 @@
-/*	$NetBSD: netbsd32.h,v 1.67 2007/09/16 22:35:02 dsl Exp $	*/
+/*	$NetBSD: netbsd32.h,v 1.71 2007/12/25 18:33:36 perry Exp $	*/
 
 /*
  * Copyright (c) 1998, 2001 Matthew R. Green
@@ -149,6 +149,7 @@ typedef netbsd32_pointer_t netbsd32_fsid_tp_t;
 typedef netbsd32_pointer_t netbsd32_lwpidp;
 typedef netbsd32_pointer_t netbsd32_ucontextp;
 typedef netbsd32_pointer_t netbsd32_caddr_t;
+typedef netbsd32_pointer_t netbsd32_lwpctlp;
 
 /*
  * now, the compatibility structures and their fake pointer types.
@@ -544,7 +545,7 @@ struct netbsd32_stat13 {
 	u_int32_t st_spare2;
 } 
 #ifdef __x86_64__
-__attribute__((packed))
+__packed
 #endif
 ;
 
@@ -569,7 +570,7 @@ struct netbsd32_stat {
 	u_int32_t st_spare[2];
 }
 #ifdef __x86_64__
-__attribute__((packed))
+__packed
 #endif
 ;
 
@@ -580,14 +581,14 @@ struct netbsd32_statvfs {
 	netbsd32_u_long	f_bsize;	/* system block size */
 	netbsd32_u_long	f_frsize;	/* system fragment size */
 	netbsd32_u_long	f_iosize;	/* optimal file system block size */
-	fsblkcnt_t	f_blocks;	/* number of blocks in file system */
-	fsblkcnt_t	f_bfree;	/* free blocks avail in file system */
-	fsblkcnt_t	f_bavail;	/* free blocks avail to non-root */
-	fsblkcnt_t	f_bresvd;	/* blocks reserved for root */
-	fsfilcnt_t	f_files;	/* total file nodes in file system */
-	fsfilcnt_t	f_ffree;	/* free file nodes in file system */
-	fsfilcnt_t	f_favail;	/* free file nodes avail to non-root */
-	fsfilcnt_t	f_fresvd;	/* file nodes reserved for root */
+	netbsd32_uint64	f_blocks;	/* number of blocks in file system */
+	netbsd32_uint64	f_bfree;	/* free blocks avail in file system */
+	netbsd32_uint64	f_bavail;	/* free blocks avail to non-root */
+	netbsd32_uint64	f_bresvd;	/* blocks reserved for root */
+	netbsd32_uint64	f_files;	/* total file nodes in file system */
+	netbsd32_uint64	f_ffree;	/* free file nodes in file system */
+	netbsd32_uint64	f_favail;	/* free file nodes avail to non-root */
+	netbsd32_uint64	f_fresvd;	/* file nodes reserved for root */
 	netbsd32_uint64	f_syncreads;	/* count of sync reads since mount */
 	netbsd32_uint64	f_syncwrites;	/* count of sync writes since mount */
 	netbsd32_uint64	f_asyncreads;	/* count of async reads since mount */
@@ -674,9 +675,11 @@ struct netbsd32_kevent {
 	uint32_t		fflags;
 	int64_t			data;
 	netbsd32_intptr_t	udata;
-} __attribute__((packed));
+} __packed;
 
+#if 0
 int	netbsd32_kevent(struct lwp *, void *, register_t *);
+#endif
 
 /*
  * here are some macros to convert between netbsd32 and sparc64 types.
@@ -715,7 +718,8 @@ void	netbsd32_si_to_si32(siginfo32_t *, const siginfo_t *);
 void	netbsd32_si32_to_si(siginfo_t *, const siginfo32_t *);
 
 void	startlwp32(void *);
-int	do_netbsd32___semctl14(struct lwp *, void *, register_t *, void *);
+struct netbsd32___semctl14_args;
+int	do_netbsd32___semctl14(struct lwp *, const struct netbsd32___semctl14_args *, register_t *, void *);
 
 struct iovec *netbsd32_get_iov(struct netbsd32_iovec *, int, struct iovec *,
 	    int);

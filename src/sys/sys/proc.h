@@ -1,4 +1,4 @@
-/*	$NetBSD: proc.h,v 1.254 2007/09/07 18:56:12 rmind Exp $	*/
+/*	$NetBSD: proc.h,v 1.269 2008/01/04 21:18:17 ad Exp $	*/
 
 /*-
  * Copyright (c) 2006, 2007 The NetBSD Foundation, Inc.
@@ -83,7 +83,6 @@
 
 #include <machine/proc.h>		/* Machine-dependent proc substruct */
 #include <sys/aio.h>
-#include <sys/lock.h>
 #include <sys/rwlock.h>
 #include <sys/mqueue.h>
 #include <sys/mutex.h>
@@ -203,26 +202,25 @@ struct emul {
  * Field markings and the corresponding locks (not yet fully implemented,
  * more a statement of intent):
  *
+ * a:	p_auxlock
  * k:	ktrace_mutex
  * m:	proclist_mutex
  * l:	proclist_lock
  * s:	p_smutex
  * t:	p_stmutex
  * p:	p_mutex
- * r:	p_rasmutex
  * (:	unlocked, stable
  */
 struct proc {
 	LIST_ENTRY(proc) p_list;	/* l, m: List of all processes */
 
-	kmutex_t	p_rasmutex;	/* :: RAS mutex */
+	kmutex_t	p_auxlock;	/* :: secondary, longer term lock */
 	kmutex_t	p_mutex;	/* :: general mutex */
 	kmutex_t	p_smutex;	/* :: mutex on scheduling state */
 	kmutex_t	p_stmutex;	/* :: mutex on profiling state */
-	kcondvar_t	p_refcv;	/* p: reference count CV */
+	krwlock_t	p_reflock;	/* p: lock for debugger, procfs */
 	kcondvar_t	p_waitcv;	/* s: wait, stop CV on children */
 	kcondvar_t	p_lwpcv;	/* s: wait, stop CV on LWPs */
-	int		p_refcnt;	/* p: ref count for procfs etc */
       
 	/* Substructures: */
 	struct kauth_cred *p_cred;	/* p: Master copy of credentials */
@@ -246,7 +244,8 @@ struct proc {
 	int		p_lflag;	/* l: PL_* flags */
 	int		p_stflag;	/* t: PST_* flags */
 	char		p_stat;		/* s: S* process status. */
-	char		p_pad1[3];
+	char		p_trace_enabled; /* Cached by some syscall_intern() */
+	char		p_pad1[2];
 
 	pid_t		p_pid;		/* (: Process identifier. */
 	LIST_ENTRY(proc) p_pglist;	/* l: List of processes in pgrp. */
@@ -254,7 +253,7 @@ struct proc {
 	LIST_ENTRY(proc) p_sibling;	/* l: List of sibling processes. */
 	LIST_HEAD(, proc) p_children;	/* l: List of children. */
 	LIST_HEAD(, lwp) p_lwps;	/* s: List of LWPs. */
-	LIST_HEAD(, ras) p_raslist;	/* r: List of RAS entries */
+	struct ras	*p_raslist;	/* a: List of RAS entries */
 
 /* The following fields are all zeroed upon creation in fork. */
 #define	p_startzero	p_nlwps
@@ -278,16 +277,14 @@ struct proc {
 
 	struct proc	*p_opptr;	/* l: save parent during ptrace. */
 	struct ptimers	*p_timers;	/*    Timers: real, virtual, profiling */
-	struct timeval 	p_rtime;	/* s: real time */
+	struct bintime 	p_rtime;	/* s: real time */
 	u_quad_t 	p_uticks;	/* t: Statclock hits in user mode */
 	u_quad_t 	p_sticks;	/* t: Statclock hits in system mode */
 	u_quad_t 	p_iticks;	/* t: Statclock hits processing intr */
 
 	int		p_traceflag;	/* k: Kernel trace points */
 	void		*p_tracep;	/* k: Trace private data */
-	void		*p_systrace;	/*    Back pointer to systrace */
-
-	struct vnode 	*p_textvp;	/*    Vnode of executable */
+	struct vnode 	*p_textvp;	/* (: Vnode of executable */
 
 	void	     (*p_userret)(void);/* p: return-to-user hook */
 	const struct emul *p_emul;	/*    Emulation information */
@@ -298,6 +295,7 @@ struct proc {
 
 	LIST_HEAD(, lwp) p_sigwaiters;	/* s: LWPs waiting for signals */
 	sigpend_t	p_sigpend;	/* s: pending signals */
+	struct lcproc	*p_lwpctl;	/* s: _lwp_ctl() information */
 
 /*
  * End area that is zeroed on creation
@@ -330,6 +328,7 @@ struct proc {
 	u_short		p_xstat;	/* s: Exit status for wait; also stop signal */
 	u_short		p_acflag;	/* p: Acc. flags; see struct lwp also */
 	struct mdproc	p_md;		/*    Any machine-dependent fields */
+	vaddr_t		p_stackbase;	/*    ASLR randomized stack base */
 };
 
 #define	p_rlimit	p_limit->pl_rlimit
@@ -360,9 +359,6 @@ struct proc {
 #define	PK_NOCLDWAIT	0x00020000 /* No zombies if child dies */
 #define	PK_32		0x00040000 /* 32-bit process (used on 64-bit kernels) */
 #define	PK_CLDSIGIGN	0x00080000 /* Process is ignoring SIGCHLD */
-#define	PK_SYSTRACE	0x00200000 /* Process system call tracing active */
-#define	PK_PAXMPROTECT 	0x08000000 /* Explicitly enable PaX MPROTECT */
-#define	PK_PAXNOMPROTECT	0x10000000 /* Explicitly disable PaX MPROTECT */
 #define	PK_MARKER	0x80000000 /* Is a dummy marker process */
 
 /*
@@ -444,14 +440,15 @@ do {									\
 /*
  * Flags passed to fork1().
  */
-#define	FORK_PPWAIT	0x01		/* Block parent until child exit */
-#define	FORK_SHAREVM	0x02		/* Share vmspace with parent */
-#define	FORK_SHARECWD	0x04		/* Share cdir/rdir/cmask */
-#define	FORK_SHAREFILES	0x08		/* Share file descriptors */
-#define	FORK_SHARESIGS	0x10		/* Share signal actions */
-#define	FORK_NOWAIT	0x20		/* Make init the parent of the child */
-#define	FORK_CLEANFILES	0x40		/* Start with a clean descriptor set */
-#define	FORK_SYSTEM	0x80		/* Fork a kernel thread */
+#define	FORK_PPWAIT	0x0001		/* Block parent until child exit */
+#define	FORK_SHAREVM	0x0002		/* Share vmspace with parent */
+#define	FORK_SHARECWD	0x0004		/* Share cdir/rdir/cmask */
+#define	FORK_SHAREFILES	0x0008		/* Share file descriptors */
+#define	FORK_SHARESIGS	0x0010		/* Share signal actions */
+#define	FORK_NOWAIT	0x0020		/* Make init the parent of the child */
+#define	FORK_CLEANFILES	0x0040		/* Start with a clean descriptor set */
+#define	FORK_SYSTEM	0x0080		/* Fork a kernel thread */
+#define	FORK_SHARELIMIT	0x0100		/* Share rlimit values */
 
 /*
  * Allow machine-dependent code to override curlwp in <machine/cpu.h> for
@@ -465,11 +462,17 @@ extern struct lwp	*curlwp;		/* Current running LWP */
 #endif /* MULTIPROCESSOR */
 #endif /* ! curlwp */
 
-#define	CURCPU_IDLE_P()	(curlwp == curcpu()->ci_data.cpu_idlelwp)
+static inline bool
+CURCPU_IDLE_P(void)
+{
+	struct cpu_info *ci = curcpu();
+	return ci->ci_data.cpu_onproc == ci->ci_data.cpu_idlelwp;
+}
 #define	curproc		(curlwp->l_proc)
 
 extern struct proc	proc0;		/* Process slot for swapper */
-extern int		nprocs, maxproc; /* Current and max number of procs */
+extern u_int		nprocs;		/* Current number of procs */
+extern int		maxproc;	/* Max number of procs */
 #define	vmspace_kernel()	(proc0.p_vmspace)
 
 /* Process list locks; see kern_proc.c for locking protocol details */
@@ -486,10 +489,6 @@ extern struct proc	*initproc;	/* Process slots for init, pager */
 
 extern const struct proclist_desc proclists[];
 
-extern struct pool	pcred_pool;	/* Memory pool for pcreds */
-extern struct pool	plimit_pool;	/* Memory pool for plimits */
-extern struct pool 	pstats_pool;	/* memory pool for pstats */
-extern struct pool	rusage_pool;	/* Memory pool for rusages */
 extern struct pool	ptimer_pool;	/* Memory pool for ptimers */
 
 struct proc *p_find(pid_t, uint);	/* Find process by id */
@@ -519,10 +518,11 @@ int	mtsleep(wchan_t, pri_t, const char *, int, kmutex_t *);
 void	wakeup(wchan_t);
 void	wakeup_one(wchan_t);
 int	kpause(const char *, bool, int, kmutex_t *);
-void	exit1(struct lwp *, int) __attribute__((__noreturn__));
+void	exit1(struct lwp *, int) __dead;
 int	do_sys_wait(struct lwp *, int *, int *, int, struct rusage *, int *);
 struct proc *proc_alloc(void);
 void	proc0_init(void);
+void	proc_free_pid(struct proc *);
 void	proc_free_mem(struct proc *);
 void	exit_lwps(struct lwp *l);
 int	fork1(struct lwp *, int, int, void *, size_t,

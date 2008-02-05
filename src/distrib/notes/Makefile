@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.37 2007/04/15 17:12:04 uwe Exp $
+#	$NetBSD: Makefile,v 1.39 2008/01/09 11:25:58 simonb Exp $
 #
 
 .include <bsd.own.mk>
@@ -34,9 +34,7 @@ SUBDIR+= mvme68k
 SUBDIR+= news68k
 SUBDIR+= newsmips
 SUBDIR+= next68k
-SUBDIR+= pc532
 SUBDIR+= pmax
-SUBDIR+= pmppc
 SUBDIR+= prep
 SUBDIR+= sandpoint
 SUBDIR+= sgimips

@@ -1,4 +1,4 @@
-/*      $NetBSD: if_xge.c,v 1.5 2007/03/04 06:02:24 christos Exp $ */
+/*      $NetBSD: if_xge.c,v 1.7 2008/01/04 21:18:03 ad Exp $ */
 
 /*
  * Copyright (c) 2004, SUNET, Swedish University Computer Network.
@@ -43,7 +43,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_xge.c,v 1.5 2007/03/04 06:02:24 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_xge.c,v 1.7 2008/01/04 21:18:03 ad Exp $");
 
 #include "bpfilter.h"
 #include "rnd.h"
@@ -69,8 +69,8 @@ __KERNEL_RCSID(0, "$NetBSD: if_xge.c,v 1.5 2007/03/04 06:02:24 christos Exp $");
 #include <net/bpf.h>
 #endif
 
-#include <machine/bus.h>
-#include <machine/intr.h>
+#include <sys/bus.h>
+#include <sys/intr.h>
 #include <machine/endian.h>
 
 #include <dev/mii/mii.h>
@@ -80,7 +80,6 @@ __KERNEL_RCSID(0, "$NetBSD: if_xge.c,v 1.5 2007/03/04 06:02:24 christos Exp $");
 #include <dev/pci/pcireg.h>
 #include <dev/pci/pcidevs.h>
 
-#include <sys/lock.h>
 #include <sys/proc.h>
 
 #include <dev/pci/if_xgereg.h>

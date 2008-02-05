@@ -1,4 +1,4 @@
-/*	$NetBSD: intersil7170.c,v 1.8 2006/10/04 15:04:43 tsutsui Exp $ */
+/*	$NetBSD: intersil7170.c,v 1.11 2008/01/10 16:04:58 tsutsui Exp $ */
 /*-
  * Copyright (c) 2000 The NetBSD Foundation, Inc.
  * All rights reserved.
@@ -40,7 +40,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: intersil7170.c,v 1.8 2006/10/04 15:04:43 tsutsui Exp $");
+__KERNEL_RCSID(0, "$NetBSD: intersil7170.c,v 1.11 2008/01/10 16:04:58 tsutsui Exp $");
 
 #include <sys/param.h>
 #include <sys/malloc.h>
@@ -48,7 +48,7 @@ __KERNEL_RCSID(0, "$NetBSD: intersil7170.c,v 1.8 2006/10/04 15:04:43 tsutsui Exp
 #include <sys/device.h>
 #include <sys/errno.h>
 
-#include <machine/bus.h>
+#include <sys/bus.h>
 #include <dev/clock_subr.h>
 #include <dev/ic/intersil7170reg.h>
 #include <dev/ic/intersil7170var.h>
@@ -61,7 +61,7 @@ intersil7170_attach(struct intersil7170_softc *sc)
 {
 	todr_chip_handle_t handle;
 
-	printf(": intersil7170");
+	aprint_normal(": intersil7170");
 
 	handle = &sc->sc_handle;
 
@@ -71,6 +71,8 @@ intersil7170_attach(struct intersil7170_softc *sc)
 	handle->todr_gettime_ymdhms = intersil7170_gettime_ymdhms;
 	handle->todr_settime_ymdhms = intersil7170_settime_ymdhms;
 	handle->todr_setwen = NULL;
+
+	todr_attach(handle);
 }
 
 /*

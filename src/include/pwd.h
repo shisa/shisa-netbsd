@@ -1,4 +1,4 @@
-/*	$NetBSD: pwd.h,v 1.39 2005/05/24 17:36:29 kleink Exp $	*/
+/*	$NetBSD: pwd.h,v 1.41 2007/10/19 15:58:52 christos Exp $	*/
 
 /*-
  * Copyright (c) 1989, 1993

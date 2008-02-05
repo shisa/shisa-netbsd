@@ -1,14 +1,12 @@
-/*	$NetBSD: kern_fork.c,v 1.143 2007/09/21 19:19:20 dsl Exp $	*/
+/*	$NetBSD: kern_fork.c,v 1.157 2008/01/28 20:09:06 ad Exp $	*/
 
 /*-
- * Copyright (c) 1999, 2001, 2004 The NetBSD Foundation, Inc.
+ * Copyright (c) 1999, 2001, 2004, 2006, 2007 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
  * This code is derived from software contributed to The NetBSD Foundation
  * by Jason R. Thorpe of the Numerical Aerospace Simulation Facility,
- * NASA Ames Research Center.
- * This code is derived from software contributed to The NetBSD Foundation
- * by Charles M. Hannum.
+ * NASA Ames Research Center, by Charles M. Hannum, and by Andrew Doran.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -76,10 +74,9 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: kern_fork.c,v 1.143 2007/09/21 19:19:20 dsl Exp $");
+__KERNEL_RCSID(0, "$NetBSD: kern_fork.c,v 1.157 2008/01/28 20:09:06 ad Exp $");
 
 #include "opt_ktrace.h"
-#include "opt_systrace.h"
 #include "opt_multiprocessor.h"
 
 #include <sys/param.h>
@@ -99,15 +96,13 @@ __KERNEL_RCSID(0, "$NetBSD: kern_fork.c,v 1.143 2007/09/21 19:19:20 dsl Exp $");
 #include <sys/vmmeter.h>
 #include <sys/sched.h>
 #include <sys/signalvar.h>
-#include <sys/systrace.h>
 #include <sys/kauth.h>
-
+#include <sys/atomic.h>
 #include <sys/syscallargs.h>
 
 #include <uvm/uvm_extern.h>
 
-
-int	nprocs = 1;		/* process 0 */
+u_int	nprocs = 1;		/* process 0 */
 
 /*
  * Number of ticks to sleep if fork() would fail due to process hitting
@@ -117,7 +112,7 @@ int	forkfsleep = 0;
 
 /*ARGSUSED*/
 int
-sys_fork(struct lwp *l, void *v, register_t *retval)
+sys_fork(struct lwp *l, const void *v, register_t *retval)
 {
 
 	return (fork1(l, 0, SIGCHLD, NULL, 0, NULL, NULL, retval, NULL));
@@ -129,7 +124,7 @@ sys_fork(struct lwp *l, void *v, register_t *retval)
  */
 /*ARGSUSED*/
 int
-sys_vfork(struct lwp *l, void *v, register_t *retval)
+sys_vfork(struct lwp *l, const void *v, register_t *retval)
 {
 
 	return (fork1(l, FORK_PPWAIT, SIGCHLD, NULL, 0, NULL, NULL,
@@ -142,7 +137,7 @@ sys_vfork(struct lwp *l, void *v, register_t *retval)
  */
 /*ARGSUSED*/
 int
-sys___vfork14(struct lwp *l, void *v, register_t *retval)
+sys___vfork14(struct lwp *l, const void *v, register_t *retval)
 {
 
 	return (fork1(l, FORK_PPWAIT|FORK_SHAREVM, SIGCHLD, NULL, 0,
@@ -153,12 +148,12 @@ sys___vfork14(struct lwp *l, void *v, register_t *retval)
  * Linux-compatible __clone(2) system call.
  */
 int
-sys___clone(struct lwp *l, void *v, register_t *retval)
+sys___clone(struct lwp *l, const struct sys___clone_args *uap, register_t *retval)
 {
-	struct sys___clone_args /* {
+	/* {
 		syscallarg(int) flags;
 		syscallarg(void *) stack;
-	} */ *uap = v;
+	} */
 	int flags, sig;
 
 	/*
@@ -215,45 +210,49 @@ fork1(struct lwp *l1, int flags, int exitsig, void *stack, size_t stacksize,
     struct proc **rnewprocp)
 {
 	struct proc	*p1, *p2, *parent;
+	struct plimit   *p1_lim;
 	uid_t		uid;
 	struct lwp	*l2;
 	int		count;
 	vaddr_t		uaddr;
 	bool		inmem;
 	int		tmp;
+	int		tnprocs;
+	int		error = 0;
 
-	/*
-	 * Although process entries are dynamically created, we still keep
-	 * a global limit on the maximum number we will create.  Don't allow
-	 * a nonprivileged user to use the last few processes; don't let root
-	 * exceed the limit. The variable nprocs is the current number of
-	 * processes, maxproc is the limit.
-	 */
 	p1 = l1->l_proc;
 	mutex_enter(&p1->p_mutex);
 	uid = kauth_cred_getuid(p1->p_cred);
 	mutex_exit(&p1->p_mutex);
-	if (__predict_false((nprocs >= maxproc - 5 && uid != 0) ||
-			    nprocs >= maxproc)) {
-		static struct timeval lasttfm;
+	tnprocs = atomic_inc_uint_nv(&nprocs);
 
+	/*
+	 * Although process entries are dynamically created, we still keep
+	 * a global limit on the maximum number we will create.
+	 */
+	if (__predict_false(tnprocs >= maxproc))
+		error = -1;
+	else
+		error = kauth_authorize_process(l1->l_cred,
+		    KAUTH_PROCESS_FORK, p1, KAUTH_ARG(tnprocs), NULL, NULL);
+
+	if (error) {
+		static struct timeval lasttfm;
+		atomic_dec_uint(&nprocs);
 		if (ratecheck(&lasttfm, &fork_tfmrate))
 			tablefull("proc", "increase kern.maxproc or NPROC");
 		if (forkfsleep)
 			(void)tsleep(&nprocs, PUSER, "forkmx", forkfsleep);
 		return (EAGAIN);
 	}
-	nprocs++;
 
 	/*
-	 * Increment the count of procs running with this uid. Don't allow
-	 * a nonprivileged user to exceed their current limit.
+	 * Enforce limits.
 	 */
 	count = chgproccnt(uid, 1);
-	if (__predict_false(uid != 0 && count >
-			    p1->p_rlimit[RLIMIT_NPROC].rlim_cur)) {
+	if (__predict_false(count > p1->p_rlimit[RLIMIT_NPROC].rlim_cur)) {
 		(void)chgproccnt(uid, -1);
-		nprocs--;
+		atomic_dec_uint(&nprocs);
 		if (forkfsleep)
 			(void)tsleep(&nprocs, PUSER, "forkulim", forkfsleep);
 		return (EAGAIN);
@@ -269,7 +268,7 @@ fork1(struct lwp *l1, int flags, int exitsig, void *stack, size_t stacksize,
 	inmem = uvm_uarea_alloc(&uaddr);
 	if (__predict_false(uaddr == 0)) {
 		(void)chgproccnt(uid, -1);
-		nprocs--;
+		atomic_dec_uint(&nprocs);
 		return (ENOMEM);
 	}
 
@@ -318,18 +317,17 @@ fork1(struct lwp *l1, int flags, int exitsig, void *stack, size_t stacksize,
 	}
 
 	/* XXX p_smutex can be IPL_VM except for audio drivers */
-	mutex_init(&p2->p_smutex, MUTEX_SPIN, IPL_SCHED);
-	mutex_init(&p2->p_stmutex, MUTEX_SPIN, IPL_HIGH);
-	mutex_init(&p2->p_rasmutex, MUTEX_SPIN, IPL_SCHED);
+	mutex_init(&p2->p_smutex, MUTEX_DEFAULT, IPL_SCHED);
+	mutex_init(&p2->p_stmutex, MUTEX_DEFAULT, IPL_HIGH);
+	mutex_init(&p2->p_auxlock, MUTEX_DEFAULT, IPL_NONE);
 	mutex_init(&p2->p_mutex, MUTEX_DEFAULT, IPL_NONE);
-	cv_init(&p2->p_refcv, "drainref");
+	rw_init(&p2->p_reflock);
 	cv_init(&p2->p_waitcv, "wait");
 	cv_init(&p2->p_lwpcv, "lwpwait");
 
-	p2->p_refcnt = 1;
 	kauth_proc_fork(p1, p2);
 
-	LIST_INIT(&p2->p_raslist);
+	p2->p_raslist = NULL;
 #if defined(__HAVE_RAS)
 	ras_fork(p1, p2);
 #endif
@@ -352,20 +350,20 @@ fork1(struct lwp *l1, int flags, int exitsig, void *stack, size_t stacksize,
 		p2->p_cwdi = cwdinit(p1);
 
 	/*
-	 * If p_limit is still copy-on-write, bump refcnt,
-	 * otherwise get a copy that won't be modified.
-	 * (If PL_SHAREMOD is clear, the structure is shared
-	 * copy-on-write.)
+	 * p_limit (rlimit stuff) is usually copy-on-write, so we just need
+	 * to bump pl_refcnt.
+	 * However in some cases (see compat irix, and plausibly from clone)
+	 * the parent and child share limits - in which case nothing else
+	 * must have a copy of the limits (PL_SHAREMOD is set).
 	 */
-	if (p1->p_limit->pl_flags & PL_SHAREMOD) {
-		mutex_enter(&p1->p_mutex);
-		p2->p_limit = limcopy(p1);
-		mutex_exit(&p1->p_mutex);
-	} else {
-		mutex_enter(&p1->p_limit->pl_lock);
-		p1->p_limit->pl_refcnt++;
-		mutex_exit(&p1->p_limit->pl_lock);
-		p2->p_limit = p1->p_limit;
+	if (__predict_false(flags & FORK_SHARELIMIT))
+		lim_privatise(p1, 1);
+	p1_lim = p1->p_limit;
+	if (p1_lim->pl_flags & PL_WRITEABLE && !(flags & FORK_SHARELIMIT))
+		p2->p_limit = lim_copy(p1_lim);
+	else {
+		lim_addref(p1_lim);
+		p2->p_limit = p1_lim;
 	}
 
 	p2->p_sflag = ((flags & FORK_PPWAIT) ? PS_PPWAIT : 0);
@@ -394,8 +392,8 @@ fork1(struct lwp *l1, int flags, int exitsig, void *stack, size_t stacksize,
 	/*
 	 * Create signal actions for the child process.
 	 */
-	mutex_enter(&p1->p_smutex);
 	p2->p_sigacts = sigactsinit(p1, flags & FORK_SHARESIGS);
+	mutex_enter(&p1->p_smutex);
 	p2->p_sflag |=
 	    (p1->p_sflag & (PS_STOPFORK | PS_STOPEXEC | PS_NOCLDSTOP));
 	sched_proc_fork(p1, p2);
@@ -432,9 +430,9 @@ fork1(struct lwp *l1, int flags, int exitsig, void *stack, size_t stacksize,
 	 * Finish creating the child process.
 	 * It will return through a different path later.
 	 */
-	newlwp(l1, p2, uaddr, inmem, 0, stack, stacksize,
-	    (func != NULL) ? func : child_return,
-	    arg, &l2);
+	lwp_create(l1, p2, uaddr, inmem, 0, stack, stacksize,
+	    (func != NULL) ? func : child_return, arg, &l2,
+	    l1->l_class);
 
 	/*
 	 * It's now safe for the scheduler and other processes to see the
@@ -450,16 +448,10 @@ fork1(struct lwp *l1, int flags, int exitsig, void *stack, size_t stacksize,
 
 	mutex_enter(&proclist_mutex);
 	LIST_INSERT_AFTER(p1, p2, p_pglist);
-	LIST_INSERT_HEAD(&allproc, p2, p_list);
 	mutex_exit(&proclist_mutex);
+	LIST_INSERT_HEAD(&allproc, p2, p_list);
 
 	mutex_exit(&proclist_lock);
-
-#ifdef SYSTRACE
-	/* Tell systrace what's happening. */
-	if (ISSET(p1->p_flag, PK_SYSTRACE))
-		systrace_sys_fork(p1, p2);
-#endif
 
 #ifdef __HAVE_SYSCALL_INTERN
 	(*p2->p_emul->e_syscall_intern)(p2);

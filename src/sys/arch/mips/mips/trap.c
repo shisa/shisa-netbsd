@@ -1,4 +1,4 @@
-/*	$NetBSD: trap.c,v 1.213 2007/08/15 12:07:25 ad Exp $	*/
+/*	$NetBSD: trap.c,v 1.216 2007/12/03 15:33:56 ad Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -78,7 +78,7 @@
 
 #include <sys/cdefs.h>			/* RCS ID & Copyright macro defns */
 
-__KERNEL_RCSID(0, "$NetBSD: trap.c,v 1.213 2007/08/15 12:07:25 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: trap.c,v 1.216 2007/12/03 15:33:56 ad Exp $");
 
 #include "opt_cputype.h"	/* which mips CPU levels do we support? */
 #include "opt_ddb.h"
@@ -110,8 +110,6 @@ __KERNEL_RCSID(0, "$NetBSD: trap.c,v 1.213 2007/08/15 12:07:25 ad Exp $");
 #include <mips/pte.h>
 #include <mips/psl.h>
 #include <mips/userret.h>
-
-#include <net/netisr.h>
 
 #ifdef DDB
 #include <machine/db_machdep.h>
@@ -572,28 +570,6 @@ trap(unsigned int status, unsigned int cause, vaddr_t vaddr, vaddr_t opc,
 }
 
 /*
- * Software (low priority) network interrupt. i.e. softnet().
- */
-void
-netintr(void)
-{
-#define DONETISR(bit, fn)			\
-	do {					\
-		if (n & (1 << bit))		\
-			fn();			\
-	} while (0)
-
-	int n;
-
-	n = netisr;
-	netisr = 0;
-
-#include <net/netisr_dispatch.h>
-
-#undef DONETISR
-}
-
-/*
  * Handle asynchronous software traps.
  * This is called from MachUserIntr() either to deliver signals or
  * to make involuntary context switch (preemption).
@@ -652,7 +628,7 @@ mips_singlestep(struct lwp *l)
 	 * We can't single-step into a RAS.  Check if we're in
 	 * a RAS, and set the breakpoint just past it.
 	 */
-	if (!LIST_EMPTY(&p->p_raslist)) {
+	if (p->p_raslist != NULL) {
 		while (ras_lookup(p, (void *)va) != (void *)-1)
 			va += sizeof(int);
 	}

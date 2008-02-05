@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.kmod.mk,v 1.84 2007/08/05 21:43:24 pooka Exp $
+#	$NetBSD: bsd.kmod.mk,v 1.86 2008/01/16 12:34:56 ad Exp $
 
 .include <bsd.init.mk>
 .include <bsd.klinks.mk>

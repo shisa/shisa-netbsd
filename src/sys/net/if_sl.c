@@ -1,4 +1,4 @@
-/*	$NetBSD: if_sl.c,v 1.107 2007/09/01 04:32:50 dyoung Exp $	*/
+/*	$NetBSD: if_sl.c,v 1.109 2007/11/10 18:29:36 ad Exp $	*/
 
 /*
  * Copyright (c) 1987, 1989, 1992, 1993
@@ -60,7 +60,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_sl.c,v 1.107 2007/09/01 04:32:50 dyoung Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_sl.c,v 1.109 2007/11/10 18:29:36 ad Exp $");
 
 #include "opt_inet.h"
 #include "bpfilter.h"
@@ -81,9 +81,8 @@ __KERNEL_RCSID(0, "$NetBSD: if_sl.c,v 1.107 2007/09/01 04:32:50 dyoung Exp $");
 #include <sys/systm.h>
 #include <sys/kauth.h>
 #endif
-
-#include <machine/cpu.h>
-#include <machine/intr.h>
+#include <sys/cpu.h>
+#include <sys/intr.h>
 
 #include <net/if.h>
 #include <net/if_types.h>
@@ -303,7 +302,6 @@ slopen(dev_t dev, struct tty *tp)
 	struct lwp *l = curlwp;		/* XXX */
 	struct sl_softc *sc;
 	int error;
-	int s;
 
 	if ((error = kauth_authorize_generic(l->l_cred, KAUTH_GENERIC_ISSUSER,
 	    NULL)) != 0)
@@ -314,22 +312,20 @@ slopen(dev_t dev, struct tty *tp)
 
 	LIST_FOREACH(sc, &sl_softc_list, sc_iflist)
 		if (sc->sc_ttyp == NULL) {
-			sc->sc_si = softintr_establish(IPL_SOFTNET,
+			sc->sc_si = softint_establish(SOFTINT_NET,
 			    slintr, sc);
 			if (sc->sc_si == NULL)
 				return ENOMEM;
 			if (slinit(sc) == 0) {
-				softintr_disestablish(sc->sc_si);
+				softint_disestablish(sc->sc_si);
 				return ENOBUFS;
 			}
 			tp->t_sc = (void *)sc;
 			sc->sc_ttyp = tp;
 			sc->sc_if.if_baudrate = tp->t_ospeed;
-			s = spltty();
+			mutex_spin_enter(&tty_lock);
 			tp->t_state |= TS_ISOPEN | TS_XCLUDE;
-			splx(s);
 			ttyflush(tp, FREAD | FWRITE);
-#ifdef __NetBSD__
 			/*
 			 * make sure tty output queue is large enough
 			 * to hold a full-sized packet (including frame
@@ -338,16 +334,15 @@ slopen(dev_t dev, struct tty *tp)
 			 * of possible escapes), and add two on for frame
 			 * ends.
 			 */
-			s = spltty();
 			if (tp->t_outq.c_cn < 2 * SLMAX + 2) {
 				sc->sc_oldbufsize = tp->t_outq.c_cn;
 				sc->sc_oldbufquot = tp->t_outq.c_cq != 0;
 
 				clfree(&tp->t_outq);
+				mutex_spin_exit(&tty_lock);
 				error = clalloc(&tp->t_outq, 2 * SLMAX + 2, 0);
 				if (error) {
-					splx(s);
-					softintr_disestablish(sc->sc_si);
+					softint_disestablish(sc->sc_si);
 					/*
 					 * clalloc() might return -1 which
 					 * is no good, so we need to return
@@ -355,10 +350,10 @@ slopen(dev_t dev, struct tty *tp)
 					 */
 					return ENOMEM; /* XXX ?! */
 				}
-			} else
+			} else {
 				sc->sc_oldbufsize = sc->sc_oldbufquot = 0;
-			splx(s);
-#endif /* __NetBSD__ */
+				mutex_spin_exit(&tty_lock);
+			}
 			return 0;
 		}
 	return ENXIO;
@@ -378,7 +373,7 @@ slclose(struct tty *tp, int flag)
 	sc = tp->t_sc;
 
 	if (sc != NULL) {
-		softintr_disestablish(sc->sc_si);
+		softint_disestablish(sc->sc_si);
 		s = splnet();
 		if_down(&sc->sc_if);
 		IF_PURGE(&sc->sc_fastq);
@@ -543,7 +538,7 @@ slstart(struct tty *tp)
 	 */
 	if (sc == NULL)
 		return 0;
-	softintr_schedule(sc->sc_si);
+	softint_schedule(sc->sc_si);
 	return 0;
 }
 
@@ -660,7 +655,7 @@ slinput(int c, struct tty *tp)
 			goto error;
 
 		IF_ENQUEUE(&sc->sc_inq, m);
-		softintr_schedule(sc->sc_si);
+		softint_schedule(sc->sc_si);
 		goto newpack;
 	}
 	if (sc->sc_mp < sc->sc_ep) {

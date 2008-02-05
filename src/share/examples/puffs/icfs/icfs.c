@@ -1,4 +1,4 @@
-/*	$NetBSD: icfs.c,v 1.5 2007/07/17 11:34:54 pooka Exp $	*/
+/*	$NetBSD: icfs.c,v 1.9 2007/11/30 19:02:37 pooka Exp $	*/
 
 /*
  * Copyright (c) 2007  Antti Kantee.  All Rights Reserved.
@@ -149,7 +149,8 @@ main(int argc, char *argv[])
 	struct puffs_node *pn_root;
 	struct stat sb;
 	mntoptparse_t mp;
-	int mntflags, pflags, lflags;
+	int mntflags, pflags;
+	int detach;
 	int ch;
 
 	setprogname(argv[0]);
@@ -157,7 +158,8 @@ main(int argc, char *argv[])
 	if (argc < 3)
 		usage();
 
-	pflags = lflags = mntflags = 0;
+	pflags = mntflags = 0;
+	detach = 1;
 	while ((ch = getopt(argc, argv, "o:s")) != -1) {
 		switch (ch) {
 		case 'o':
@@ -167,7 +169,7 @@ main(int argc, char *argv[])
 			freemntopts(mp);
 			break;
 		case 's':
-			lflags |= PUFFSLOOP_NODAEMON;
+			detach = 0;
 			break;
 		}
 	}
@@ -177,7 +179,7 @@ main(int argc, char *argv[])
 	argc -= optind;
 
 	if (pflags & PUFFS_FLAG_OPDUMP)
-		lflags = PUFFSLOOP_NODAEMON;
+		detach = 0;
 
 	if (argc != 2)
 		usage();
@@ -210,14 +212,20 @@ main(int argc, char *argv[])
 	puffs_set_pathcmp(pu, icpathcmp);
 	puffs_set_pathtransform(pu, icpathxform);
 
+	if (detach)
+		if (puffs_daemon(pu, 1, 1) == -1)
+			err(1, "puffs_daemon");
+
 	if (puffs_mount(pu, argv[1], mntflags, pn_root) == -1)
 		err(1, "puffs_mount");
+	if (puffs_mainloop(pu) == -1)
+		err(1, "mainloop");
 
-	return puffs_mainloop(pu, lflags);
+	return 0;
 }
 
 int
-ic_node_readdir(struct puffs_cc *pcc, void *opc, struct dirent *dent,
+ic_node_readdir(struct puffs_usermount *pu, void *opc, struct dirent *dent,
 	off_t *readoff, size_t *reslen, const struct puffs_cred *pcr,
 	int *eofflag, off_t *cookies, size_t *ncookies)
 {
@@ -228,7 +236,7 @@ ic_node_readdir(struct puffs_cc *pcc, void *opc, struct dirent *dent,
 	dp = dent;
 	rl = *reslen;
 
-	rv = puffs_null_node_readdir(pcc, opc, dent, readoff, reslen, pcr,
+	rv = puffs_null_node_readdir(pu, opc, dent, readoff, reslen, pcr,
 	    eofflag, cookies, ncookies);
 	if (rv)
 		return rv;

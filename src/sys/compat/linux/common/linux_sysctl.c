@@ -1,4 +1,4 @@
-/*	$NetBSD: linux_sysctl.c,v 1.31 2007/08/15 12:07:30 ad Exp $	*/
+/*	$NetBSD: linux_sysctl.c,v 1.34 2008/01/07 16:12:53 ad Exp $	*/
 
 /*-
  * Copyright (c) 2003 The NetBSD Foundation, Inc.
@@ -41,7 +41,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: linux_sysctl.c,v 1.31 2007/08/15 12:07:30 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: linux_sysctl.c,v 1.34 2008/01/07 16:12:53 ad Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -54,6 +54,8 @@ __KERNEL_RCSID(0, "$NetBSD: linux_sysctl.c,v 1.31 2007/08/15 12:07:30 ad Exp $")
 
 #include <compat/linux/common/linux_types.h>
 #include <compat/linux/common/linux_signal.h>
+#include <compat/linux/common/linux_ipc.h>
+#include <compat/linux/common/linux_sem.h>
 
 #include <compat/linux/linux_syscallargs.h>
 #include <compat/linux/common/linux_sysctl.h>
@@ -116,9 +118,8 @@ SYSCTL_SETUP(linux_sysctl_setup, "linux emulated sysctl subtree setup")
  * linux sysctl system call
  */
 int
-linux_sys___sysctl(struct lwp *l, void *v, register_t *retval)
+linux_sys___sysctl(struct lwp *l, const struct linux_sys___sysctl_args *uap, register_t *retval)
 {
-	struct linux_sys___sysctl_args *uap = v;
 	struct linux___sysctl ls;
 	int error, nerror, name[CTL_MAXNAME];
 	size_t savelen = 0, oldlen = 0;
@@ -150,27 +151,17 @@ linux_sys___sysctl(struct lwp *l, void *v, register_t *retval)
 	if (error)
 		return (error);
 
-       ktrmib(name, ls.nlen);
-
-	/*
-	 * wire old so that copyout() is less likely to fail?
-	 */
-	error = sysctl_lock(l, ls.oldval, savelen);
-	if (error)
-		return (error);
+	ktrmib(name, ls.nlen);
 
 	/*
 	 * dispatch request into linux sysctl tree
 	 */
+	sysctl_lock(ls.newval != NULL);
 	error = sysctl_dispatch(&name[0], ls.nlen,
 				ls.oldval, &oldlen,
 				ls.newval, ls.newlen,
 				&name[0], l, &linux_sysctl_root);
-
-	/*
-	 * release the sysctl lock
-	 */
-	sysctl_unlock(l);
+	sysctl_unlock();
 
 	/*
 	 * reset caller's oldlen, even if we got an error

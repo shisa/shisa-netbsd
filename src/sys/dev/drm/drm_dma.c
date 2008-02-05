@@ -1,3 +1,5 @@
+/* $NetBSD: drm_dma.c,v 1.5 2007/12/11 11:17:31 lukem Exp $ */
+
 /* drm_dma.c -- DMA IOCTL and function support -*- linux-c -*-
  * Created: Fri Mar 19 14:30:16 1999 by faith@valinux.com
  */
@@ -32,6 +34,7 @@
  */
 
 #include <sys/cdefs.h>
+__KERNEL_RCSID(0, "$NetBSD: drm_dma.c,v 1.5 2007/12/11 11:17:31 lukem Exp $");
 /*
 __FBSDID("$FreeBSD: src/sys/dev/drm/drm_dma.c,v 1.2 2005/11/28 23:13:52 anholt Exp $");
 */
@@ -45,7 +48,7 @@ int drm_dma_setup(drm_device_t *dev)
 	if (dev->dma == NULL)
 		return DRM_ERR(ENOMEM);
 
-	DRM_SPININIT(dev->dma_lock, "drmdma");
+	DRM_SPININIT(&dev->dma_lock, "drmdma");
 
 	return 0;
 }
@@ -90,7 +93,7 @@ void drm_dma_takedown(drm_device_t *dev)
 	if (dev->dma)
 		free(dev->dma, M_DRM);
 	dev->dma = NULL;
-	DRM_SPINUNINIT(dev->dma_lock);
+	DRM_SPINUNINIT(&dev->dma_lock);
 }
 
 

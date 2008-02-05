@@ -1,4 +1,4 @@
-/* $NetBSD: nvram_pnpbus.c,v 1.8 2007/03/21 04:13:53 garbled Exp $ */
+/* $NetBSD: nvram_pnpbus.c,v 1.11 2008/01/10 15:31:26 tsutsui Exp $ */
 
 /*-
  * Copyright (c) 2006 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: nvram_pnpbus.c,v 1.8 2007/03/21 04:13:53 garbled Exp $");
+__KERNEL_RCSID(0, "$NetBSD: nvram_pnpbus.c,v 1.11 2008/01/10 15:31:26 tsutsui Exp $");
 
 #include <sys/types.h>
 #include <sys/param.h>
@@ -47,10 +47,10 @@ __KERNEL_RCSID(0, "$NetBSD: nvram_pnpbus.c,v 1.8 2007/03/21 04:13:53 garbled Exp
 #include <sys/kthread.h>
 #include <sys/device.h>
 #include <sys/malloc.h>
-#include <sys/lock.h>
+#include <sys/simplelock.h>
+#include <sys/bus.h>
+#include <sys/intr.h>
 
-#include <machine/bus.h>
-#include <machine/intr.h>
 #include <machine/isa_machdep.h>
 /* clock stuff for motorolla machines */
 #include <dev/clock_subr.h>
@@ -210,7 +210,6 @@ nvram_pnpbus_attach(struct device *parent, struct device *self, void *aux)
 	aprint_normal("%s: attaching clock", device_xname(self));
 	mk48txx_attach((struct mk48txx_softc *)&sc->sc_mksc);
 	aprint_normal("\n");
-	todr_attach(&sc->sc_mksc.sc_handle);
 }
 
 /*
@@ -540,7 +539,7 @@ mkclock_pnpbus_nvrd(struct mk48txx_softc *osc, int off)
 	int s;
 
 #ifdef DEBUG
-	printf("mkclock_pnpbus_nvrd(%d)", off);
+	aprint_debug("mkclock_pnpbus_nvrd(%d)", off);
 #endif
 	s = splclock();
 	bus_space_write_1(sc->sc_bst, sc->sc_bsh, 0, off & 0xff);
@@ -548,7 +547,7 @@ mkclock_pnpbus_nvrd(struct mk48txx_softc *osc, int off)
 	datum = bus_space_read_1(sc->sc_data, sc->sc_datah, 0);
 	splx(s);
 #ifdef DEBUG
-	printf(" -> %02x\n", datum);
+	aprint_debug(" -> %02x\n", datum);
 #endif
 	return datum;
 }
@@ -560,7 +559,7 @@ mkclock_pnpbus_nvwr(struct mk48txx_softc *osc, int off, uint8_t datum)
 	int s;
 
 #ifdef DEBUG
-	printf("mkclock_isa_nvwr(%d, %02x)\n", off, datum);
+	aprint_debug("mkclock_isa_nvwr(%d, %02x)\n", off, datum);
 #endif
 	s = splclock();
 	bus_space_write_1(sc->sc_bst, sc->sc_bsh, 0, off & 0xff);

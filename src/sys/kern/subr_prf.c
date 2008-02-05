@@ -1,4 +1,4 @@
-/*	$NetBSD: subr_prf.c,v 1.109 2007/09/26 07:40:36 he Exp $	*/
+/*	$NetBSD: subr_prf.c,v 1.114 2008/01/04 21:18:13 ad Exp $	*/
 
 /*-
  * Copyright (c) 1986, 1988, 1991, 1993
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: subr_prf.c,v 1.109 2007/09/26 07:40:36 he Exp $");
+__KERNEL_RCSID(0, "$NetBSD: subr_prf.c,v 1.114 2008/01/04 21:18:13 ad Exp $");
 
 #include "opt_ddb.h"
 #include "opt_ipkdb.h"
@@ -60,7 +60,6 @@ __KERNEL_RCSID(0, "$NetBSD: subr_prf.c,v 1.109 2007/09/26 07:40:36 he Exp $");
 #include <sys/tprintf.h>
 #include <sys/syslog.h>
 #include <sys/malloc.h>
-#include <sys/lock.h>
 #include <sys/kprintf.h>
 
 #include <dev/cons.h>
@@ -78,9 +77,7 @@ __KERNEL_RCSID(0, "$NetBSD: subr_prf.c,v 1.109 2007/09/26 07:40:36 he Exp $");
 #include <ipkdb/ipkdb.h>
 #endif
 
-#if defined(MULTIPROCESSOR)
 struct simplelock kprintf_slock = SIMPLELOCK_INITIALIZER;
-#endif /* MULTIPROCESSOR */
 
 /*
  * note that stdarg.h and the ansi style va_start macro is used for both
@@ -92,7 +89,7 @@ struct simplelock kprintf_slock = SIMPLELOCK_INITIALIZER;
 
 #ifdef KGDB
 #include <sys/kgdb.h>
-#include <machine/cpu.h>
+#include <sys/cpu.h>
 #endif
 #ifdef DDB
 #include <ddb/db_output.h>	/* db_printf, db_putchar prototypes */
@@ -145,19 +142,6 @@ const char HEXDIGITS[] = "0123456789ABCDEF";
 /*
  * functions
  */
-
-/*
- * tablefull: warn that a system table is full
- */
-
-void
-tablefull(const char *tab, const char *hint)
-{
-	if (hint)
-		log(LOG_ERR, "%s: table is full - %s\n", tab, hint);
-	else
-		log(LOG_ERR, "%s: table is full\n", tab);
-}
 
 /*
  * twiddle: spin a little propellor on the console.
@@ -368,7 +352,6 @@ addlog(const char *fmt, ...)
 static void
 putchar(int c, int flags, struct tty *tp)
 {
-	struct kern_msgbuf *mbp;
 
 	if (panicstr)
 		constty = NULL;
@@ -381,30 +364,8 @@ putchar(int c, int flags, struct tty *tp)
 	    (flags & TOCONS) && tp == constty)
 		constty = NULL;
 	if ((flags & TOLOG) &&
-	    c != '\0' && c != '\r' && c != 0177 && msgbufenabled) {
-		mbp = msgbufp;
-		if (mbp->msg_magic != MSG_MAGIC) {
-			/*
-			 * Arguably should panic or somehow notify the
-			 * user...  but how?  Panic may be too drastic,
-			 * and would obliterate the message being kicked
-			 * out (maybe a panic itself), and printf
-			 * would invoke us recursively.  Silently punt
-			 * for now.  If syslog is running, it should
-			 * notice.
-			 */
-			msgbufenabled = 0;
-		} else {
-			mbp->msg_bufc[mbp->msg_bufx++] = c;
-			if (mbp->msg_bufx < 0 || mbp->msg_bufx >= mbp->msg_bufs)
-				mbp->msg_bufx = 0;
-			/* If the buffer is full, keep the most recent data. */
-			if (mbp->msg_bufr == mbp->msg_bufx) {
-				 if (++mbp->msg_bufr >= mbp->msg_bufs)
-					mbp->msg_bufr = 0;
-			}
-		}
-	}
+	    c != '\0' && c != '\r' && c != 0177)
+	    	logputchar(c);
 	if ((flags & TOCONS) && constty == NULL && c != '\0')
 		(*v_putc)(c);
 #ifdef DDB

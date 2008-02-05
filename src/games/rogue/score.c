@@ -1,4 +1,4 @@
-/*	$NetBSD: score.c,v 1.11 2003/08/07 09:37:40 agc Exp $	*/
+/*	$NetBSD: score.c,v 1.14 2008/01/14 03:50:02 dholland Exp $	*/
 
 /*
  * Copyright (c) 1988, 1993
@@ -37,7 +37,7 @@
 #if 0
 static char sccsid[] = "@(#)score.c	8.1 (Berkeley) 5/31/93";
 #else
-__RCSID("$NetBSD: score.c,v 1.11 2003/08/07 09:37:40 agc Exp $");
+__RCSID("$NetBSD: score.c,v 1.14 2008/01/14 03:50:02 dholland Exp $");
 #endif
 #endif /* not lint */
 
@@ -58,11 +58,12 @@ __RCSID("$NetBSD: score.c,v 1.11 2003/08/07 09:37:40 agc Exp $");
 #include "pathnames.h"
 
 void
-killed_by(monster, other)
-	const object *monster;
-	short other;
+killed_by(const object *monster, short other)
 {
-	char buf[128];
+	const char *mechanism = "killed by something unknown (?)";
+	char mechanism_buf[128];
+	const char *article;
+	char message_buf[128];
 
 	md_ignore_signals();
 
@@ -73,32 +74,35 @@ killed_by(monster, other)
 	if (other) {
 		switch(other) {
 		case HYPOTHERMIA:
-			(void) strcpy(buf, "died of hypothermia");
+			mechanism = "died of hypothermia";
 			break;
 		case STARVATION:
-			(void) strcpy(buf, "died of starvation");
+			mechanism = "died of starvation";
 			break;
 		case POISON_DART:
-			(void) strcpy(buf, "killed by a dart");
+			mechanism = "killed by a dart";
 			break;
 		case QUIT:
-			(void) strcpy(buf, "quit");
+			mechanism = "quit";
 			break;
 		case KFIRE:
-			(void) strcpy(buf, "killed by fire");
+			mechanism = "killed by fire";
 			break;
 		}
 	} else {
-		(void) strcpy(buf, "Killed by ");
 		if (is_vowel(m_names[monster->m_char - 'A'][0])) {
-			(void) strcat(buf, "an ");
+			article = "an";
 		} else {
-			(void) strcat(buf, "a ");
+			article = "a";
 		}
-		(void) strcat(buf, m_names[monster->m_char - 'A']);
+		snprintf(mechanism_buf, sizeof(mechanism_buf),
+			"Killed by %s %s",
+			 article, m_names[monster->m_char - 'A']);
+		mechanism = mechanism_buf;
 	}
-	(void) strcat(buf, " with ");
-	sprintf(buf+strlen(buf), "%ld gold", rogue.gold);
+	snprintf(message_buf, sizeof(message_buf),
+		 "%s with %ld gold", mechanism, rogue.gold);
+
 	if ((!other) && (!no_skull)) {
 		clear();
 		mvaddstr(4, 32, "__---------__");
@@ -118,16 +122,16 @@ killed_by(monster, other)
 		mvaddstr(18, 31, "\\_           _/");
 		mvaddstr(19, 33, "~---------~");
 		center(21, nick_name);
-		center(22, buf);
+		center(22, message_buf);
 	} else {
-		message(buf, 0);
+		messagef(0, "%s", message_buf);
 	}
-	message("", 0);
+	messagef(0, "%s", "");		/* gcc objects to just "" */
 	put_scores(monster, other);
 }
 
 void
-win()
+win(void)
 {
 	unwield(rogue.weapon);		/* disarm and relax */
 	unwear(rogue.armor);
@@ -143,18 +147,17 @@ win()
 	mvaddstr(17, 11, "Congratulations,  you have  been admitted  to  the");
 	mvaddstr(18, 11, "Fighters' Guild.   You return home,  sell all your");
 	mvaddstr(19, 11, "treasures at great profit and retire into comfort.");
-	message("", 0);
-	message("", 0);
+	messagef(0, "%s", "");		/* gcc objects to just "" */
+	messagef(0, "%s", "");		/* gcc objects to just "" */
 	id_all();
 	sell_pack();
-	put_scores((object *) 0, WIN);
+	put_scores(NULL, WIN);
 }
 
 void
-quit(from_intrpt)
-	boolean from_intrpt;
+quit(boolean from_intrpt)
 {
-	char buf[128];
+	char buf[DCOLS];
 	short i, orow, ocol;
 	boolean mc;
 
@@ -173,7 +176,7 @@ quit(from_intrpt)
 		}
 	}
 	check_message();
-	message("really quit?", 1);
+	messagef(1, "really quit?");
 	if (rgetchar() != 'y') {
 		md_heed_signals();
 		check_message();
@@ -191,20 +194,145 @@ quit(from_intrpt)
 		clean_up(byebye_string);
 	}
 	check_message();
-	killed_by((object *) 0, QUIT);
+	killed_by(NULL, QUIT);
+}
+
+/*
+ * The score file on disk is up to ten entries of the form
+ *      score block [80 bytes]
+ *      nickname block [30 bytes]
+ *
+ * The score block is to be parsed as follows:
+ *      bytes 0-1	Rank (" 1" to "10")
+ *      bytes 2-4	space padding
+ *      bytes 5-15	Score/gold
+ *      byte 15 up to a ':'	Login name
+ *      past the ':'    Death mechanism
+ *
+ * The nickname block is an alternate name to be printed in place of the
+ * login name. Both blocks are supposed to contain a null-terminator.
+ */
+
+struct score_entry {
+	long gold;
+	char username[80];
+	char death[80];
+	char nickname[30];
+};
+
+#define NUM_SCORE_ENTRIES 10
+
+static void make_score(struct score_entry *, const object *, int);
+
+static
+void
+pad_spaces(char *str, size_t len)
+{
+	size_t x;
+	for (x=strlen(str); x<len-1; x++) {
+		str[x] = ' ';
+	}
+	str[len-1] = 0;
+}
+
+static
+void
+unpad_spaces(char *str)
+{
+	size_t x;
+	for (x=strlen(str); x>0 && str[x-1]==' '; x--);
+	str[x] = 0;
+}
+
+static
+int
+read_score_entry(struct score_entry *se, FILE *fp)
+{
+	char score_block[80];
+	char nickname_block[30];
+	size_t n, x;
+
+	n = fread(score_block, 1, sizeof(score_block), fp);
+	if (n==0) {
+		/* EOF */
+		return 0;
+	}
+	if (n != sizeof(score_block)) {
+		sf_error();
+	}
+
+	n = fread(nickname_block, 1, sizeof(nickname_block), fp);
+	if (n != sizeof(nickname_block)) {
+		sf_error();
+	}
+
+	xxxx(score_block, sizeof(score_block));
+	xxxx(nickname_block, sizeof(nickname_block));
+
+	/* Ensure null termination */
+	score_block[sizeof(score_block)-1] = 0;
+	nickname_block[sizeof(nickname_block)-1] = 0;
+
+	/* If there are other nulls in the score block, file is corrupt */
+	if (strlen(score_block)!=sizeof(score_block)-1) {
+		sf_error();
+	}
+	/* but this is NOT true of the nickname block */
+
+	/* quash trailing spaces */
+	unpad_spaces(score_block);
+	unpad_spaces(nickname_block);
+
+	for (x=5; score_block[x] == ' '; x++);
+	se->gold = lget_number(score_block+x);
+
+	for (x=15; score_block[x] != 0 && score_block[x] != ':'; x++);
+	if (score_block[x] == 0) {
+		sf_error();
+	}
+	score_block[x++] = 0;
+	strlcpy(se->username, score_block+15, sizeof(se->username));
+
+	strlcpy(se->death, score_block+x, sizeof(se->death));
+	strlcpy(se->nickname, nickname_block, sizeof(se->nickname));
+
+	return 1;
+}
+
+static
+void
+write_score_entry(const struct score_entry *se, int rank, FILE *fp)
+{
+	char score_block[80];
+	char nickname_block[30];
+
+	/* avoid writing crap to score file */
+	memset(score_block, 0, sizeof(score_block));
+	memset(nickname_block, 0, sizeof(nickname_block));
+
+	snprintf(score_block, sizeof(score_block),
+		 "%2d    %6ld   %s: %s",
+		 rank+1, se->gold, se->username, se->death);
+	strlcpy(nickname_block, se->nickname, sizeof(nickname_block));
+
+	/* pad blocks out with spaces */
+	pad_spaces(score_block, sizeof(score_block));
+	/*pad_spaces(nickname_block, sizeof(nickname_block)); -- wrong! */
+
+	xxxx(score_block, sizeof(score_block));
+	xxxx(nickname_block, sizeof(nickname_block));
+
+	fwrite(score_block, 1, sizeof(score_block), fp);
+	fwrite(nickname_block, 1, sizeof(nickname_block), fp);
 }
 
 void
-put_scores(monster, other)
-	const object *monster;
-	short other;
+put_scores(const object *monster, short other)
 {
-	short i, n, rank = 10, x, ne = 0, found_player = -1;
-	char scores[10][82];
-	char n_names[10][30];
-	char buf[128];
+	short i, rank=-1, found_player = -1, numscores = 0;
+	struct score_entry scores[NUM_SCORE_ENTRIES];
+	const char *name;
 	FILE *fp;
-	long s;
 	boolean dopause = score_only;
 
 	md_lock(1);
@@ -213,185 +341,173 @@ put_scores(monster, other)
 	if ((fp = fopen(_PATH_SCOREFILE, "r+")) == NULL &&
 	    (fp = fopen(_PATH_SCOREFILE, "w+")) == NULL) {
 		setegid(gid);
-		message("cannot read/write/create score file", 0);
+		messagef(0, "cannot read/write/create score file");
 		sf_error();
 	}
 	setegid(gid);
 	rewind(fp);
-	(void) xxx(1);
+	(void)xxx(1);
 
-	for (i = 0; i < 10; i++) {
-		if (((n = fread(scores[i], sizeof(char), 80, fp)) < 80) && (n != 0)) {
-			sf_error();
-		} else if (n != 0) {
-			xxxx(scores[i], 80);
-			if ((n = fread(n_names[i], sizeof(char), 30, fp)) < 30) {
-				sf_error();
-			}
-			xxxx(n_names[i], 30);
-		} else {
+	for (numscores = 0; numscores < NUM_SCORE_ENTRIES; numscores++) {
+		if (read_score_entry(&scores[numscores], fp) == 0) {
 			break;
 		}
-		ne++;
-		if ((!score_only) && (found_player == -1)) {
-			if (!name_cmp(scores[i]+15, login_name)) {
-				x = 5;
-				while (scores[i][x] == ' ') {
-					x++;
-				}
-				s = lget_number(scores[i] + x);
-				if (rogue.gold < s) {
-					score_only = 1;
-				} else {
-					found_player = i;
-				}
-			}
-		}
 	}
-	if (found_player != -1) {
-		ne--;
-		for (i = found_player; i < ne; i++) {
-			(void) strcpy(scores[i], scores[i+1]);
-			(void) strcpy(n_names[i], n_names[i+1]);
-		}
-	}
-	if (!score_only) {
-		for (i = 0; i < ne; i++) {
-			x = 5;
-			while (scores[i][x] == ' ') {
-				x++;
-			}
-			s = lget_number(scores[i] + x);
 
-			if (rogue.gold >= s) {
+	/* Search the score list. */
+	for (i=0; i<numscores; i++) {
+		if (!strcmp(scores[i].username, login_name)) {
+			/* found our score */
+			if (rogue.gold < scores[i].gold) {
+				/* we didn't do as well as last time */
+				score_only = 1;
+			} else {
+				/* we did better; mark entry for removal */
+				found_player = i;
+			}
+			break;
+		}
+	}
+
+	/* Remove a superseded entry, if any. */
+	if (found_player != -1) {
+		numscores--;
+		for (i = found_player; i < numscores; i++) {
+			scores[i] = scores[i+1];
+		}
+	}
+
+	/* If we're going to insert ourselves, do it now */
+	if (!score_only) {
+
+		/* if we aren't better than anyone, add at end. */
+		rank = numscores;
+
+		/* Otherwise, find our slot. */
+		for (i = 0; i < numscores; i++) {
+			if (rogue.gold >= scores[i].gold) {
 				rank = i;
 				break;
 			}
 		}
-		if (ne == 0) {
-			rank = 0;
-		} else if ((ne < 10) && (rank == 10)) {
-			rank = ne;
-		}
-		if (rank < 10) {
-			insert_score(scores, n_names, nick_name, rank, ne,
-			    monster, other);
-			if (ne < 10) {
-				ne++;
+
+		if (rank < NUM_SCORE_ENTRIES) {
+			/* Open up a slot */
+			for (i = numscores; i > rank; i--) {
+				scores[i] = scores[i-1];
 			}
+			numscores++;
+
+			/* Put our info in the slot */
+			make_score(&scores[rank], monster, other);
 		}
+
+		/* Now rewrite the score file */
+
+		md_ignore_signals();
 		rewind(fp);
+		(void)xxx(1);
+
+		for (i = 0; i < numscores; i++) {
+			write_score_entry(&scores[i], i, fp);
+		}
 	}
+	md_lock(0);
+	fclose(fp);
+
+	/* Display the scores */
 
 	clear();
 	mvaddstr(3, 30, "Top  Ten  Rogueists");
 	mvaddstr(8, 0, "Rank   Score   Name");
 
-	md_ignore_signals();
-
-	(void) xxx(1);
-
-	for (i = 0; i < ne; i++) {
+	for (i = 0; i < numscores; i++) {
 		if (i == rank) {
 			standout();
 		}
-		if (i == 9) {
-			scores[i][0] = '1';
-			scores[i][1] = '0';
+
+		if (scores[i].nickname[0]) {
+			name = scores[i].nickname;
 		} else {
-			scores[i][0] = ' ';
-			scores[i][1] = i + '1';
+			name = scores[i].username;
 		}
-		nickize(buf, scores[i], n_names[i]);
-		mvaddstr(i+10, 0, buf);
-		if (rank < 10) {
-			xxxx(scores[i], 80);
-			fwrite(scores[i], sizeof(char), 80, fp);
-			xxxx(n_names[i], 30);
-			fwrite(n_names[i], sizeof(char), 30, fp);
-		}
+
+		mvprintw(i+10, 0, "%2d    %6ld   %s: %s",
+			 i+1, scores[i].gold, name, scores[i].death);
+
 		if (i == rank) {
 			standend();
 		}
 	}
-	md_lock(0);
 	refresh();
-	fclose(fp);
-	message("", 0);
+	messagef(0, "%s", "");		/* gcc objects to just "" */
 	if (dopause) {
-		message("", 0);
+		messagef(0, "%s", "");
 	}
 	clean_up("");
 }
 
+static
 void
-insert_score(scores, n_names, n_name, rank, n, monster, other)
-	char scores[][82];
-	char n_names[][30];
-	const char *n_name;
-	short rank, n;
-	const object *monster;
-	int other;
+make_score(struct score_entry *se, const object *monster, int other)
 {
-	short i;
-	char buf[128];
+	const char *death = "bolts from the blue (?)";
+	const char *hasamulet;
+	char deathbuf[80];
 
-	if (n > 0) {
-		for (i = n; i > rank; i--) {
-			if ((i < 10) && (i > 0)) {
-				(void) strcpy(scores[i], scores[i-1]);
-				(void) strcpy(n_names[i], n_names[i-1]);
-			}
-		}
-	}
-	sprintf(buf, "%2d    %6ld   %s: ", rank+1, (long)rogue.gold,
-	    login_name);
+	se->gold = rogue.gold;
+	strlcpy(se->username, login_name, sizeof(se->username));
 
 	if (other) {
 		switch(other) {
 		case HYPOTHERMIA:
-			(void) strcat(buf, "died of hypothermia");
+			death = "died of hypothermia";
 			break;
 		case STARVATION:
-			(void) strcat(buf, "died of starvation");
+			death = "died of starvation";
 			break;
 		case POISON_DART:
-			(void) strcat(buf, "killed by a dart");
+			death = "killed by a dart";
 			break;
 		case QUIT:
-			(void) strcat(buf, "quit");
+			death = "quit";
 			break;
 		case WIN:
-			(void) strcat(buf, "a total winner");
+			death = "a total winner";
 			break;
 		case KFIRE:
-			(void) strcat(buf, "killed by fire");
+			death = "killed by fire";
 			break;
 		}
 	} else {
-		(void) strcat(buf, "killed by ");
-		if (is_vowel(m_names[monster->m_char - 'A'][0])) {
-			(void) strcat(buf, "an ");
+		const char *mn, *article;
+
+		mn = m_names[monster->m_char - 'A'];
+		if (is_vowel(mn[0])) {
+			article = "an";
 		} else {
-			(void) strcat(buf, "a ");
+			article = "a";
 		}
-		(void) strcat(buf, m_names[monster->m_char - 'A']);
+
+		snprintf(deathbuf, sizeof(deathbuf),
+			 "killed by %s %s", article, mn);
+		death = deathbuf;
 	}
-	sprintf(buf+strlen(buf), " on level %d ",  max_level);
-	if ((other != WIN) && has_amulet()) {
-		(void) strcat(buf, "with amulet");
+
+	if (other != WIN && has_amulet()) {
+		hasamulet = " with amulet";
+	} else {
+		hasamulet = "";
 	}
-	for (i = strlen(buf); i < 79; i++) {
-		buf[i] = ' ';
-	}
-	buf[79] = 0;
-	(void) strcpy(scores[rank], buf);
-	(void) strcpy(n_names[rank], n_name);
+
+	snprintf(se->death, sizeof(se->death), "%s on level %d%s",
+		 death, max_level, hasamulet);
+
+	strlcpy(se->nickname, nick_name, sizeof(se->nickname));
 }
 
 boolean
-is_vowel(ch)
-	short ch;
+is_vowel(short ch)
 {
 	return( (ch == 'a') ||
 		(ch == 'e') ||
@@ -401,7 +517,7 @@ is_vowel(ch)
 }
 
 void
-sell_pack()
+sell_pack(void)
 {
 	object *obj;
 	short row = 2, val;
@@ -419,9 +535,8 @@ sell_pack()
 			rogue.gold += val;
 
 			if (row < DROWS) {
-				sprintf(buf, "%5d      ", val);
-				get_desc(obj, buf+11);
-				mvaddstr(row++, 0, buf);
+				get_desc(obj, buf, sizeof(buf));
+				mvprintw(row++, 0, "%5d      %s", val, buf);
 			}
 		}
 		obj = obj->next_object;
@@ -430,12 +545,11 @@ sell_pack()
 	if (rogue.gold > MAX_GOLD) {
 		rogue.gold = MAX_GOLD;
 	}
-	message("", 0);
+	messagef(0, "%s", "");		/* gcc objects to just "" */
 }
 
 int
-get_value(obj)
-	const object *obj;
+get_value(const object *obj)
 {
 	short wc;
 	int val;
@@ -483,7 +597,7 @@ get_value(obj)
 }
 
 void
-id_all()
+id_all(void)
 {
 	short i;
 
@@ -504,27 +618,8 @@ id_all()
 	}
 }
 
-int
-name_cmp(s1, s2)
-	char *s1;
-	const char *s2;
-{
-	short i = 0;
-	int r;
-
-	while(s1[i] != ':') {
-		i++;
-	}
-	s1[i] = 0;
-	r = strcmp(s1, s2);
-	s1[i] = ':';
-	return(r);
-}
-
 void
-xxxx(buf, n)
-	char *buf;
-	short n;
+xxxx(char *buf, short n)
 {
 	short i;
 	unsigned char c;
@@ -532,15 +627,14 @@ xxxx(buf, n)
 	for (i = 0; i < n; i++) {
 
 		/* It does not matter if accuracy is lost during this assignment */
-		c = (unsigned char) xxx(0);
+		c = (unsigned char)xxx(0);
 
 		buf[i] ^= c;
 	}
 }
 
 long
-xxx(st)
-	boolean st;
+xxx(boolean st)
 {
 	static long f, s;
 	long r;
@@ -557,36 +651,7 @@ xxx(st)
 }
 
 void
-nickize(buf, score, n_name)
-	char *buf;
-	const char *score, *n_name;
-{
-	short i = 15, j;
-
-	if (!n_name[0]) {
-		(void) strcpy(buf, score);
-	} else {
-		(void) strncpy(buf, score, 16);
-
-		while (score[i] != ':') {
-			i++;
-		}
-
-		(void) strcpy(buf+15, n_name);
-		j = strlen(buf);
-
-		while (score[i]) {
-			buf[j++] = score[i++];
-		}
-		buf[j] = 0;
-		buf[79] = 0;
-	}
-}
-
-void
-center(row, buf)
-	short row;
-	const char *buf;
+center(short row, const char *buf)
 {
 	short margin;
 
@@ -595,9 +660,9 @@ center(row, buf)
 }
 
 void
-sf_error()
+sf_error(void)
 {
 	md_lock(0);
-	message("", 1);
+	messagef(1, "%s", "");		/* gcc objects to just "" */
 	clean_up("sorry, score file is out of order");
 }

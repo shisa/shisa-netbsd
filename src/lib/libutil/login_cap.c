@@ -1,4 +1,4 @@
-/*	$NetBSD: login_cap.c,v 1.27 2007/02/04 08:19:26 elad Exp $	*/
+/*	$NetBSD: login_cap.c,v 1.29 2007/12/04 22:09:02 mjf Exp $	*/
 
 /*-
  * Copyright (c) 1995,1997 Berkeley Software Design, Inc. All rights reserved.
@@ -36,7 +36,7 @@
 
 #include <sys/cdefs.h>
 #if defined(LIBC_SCCS) && !defined(lint)
-__RCSID("$NetBSD: login_cap.c,v 1.27 2007/02/04 08:19:26 elad Exp $");
+__RCSID("$NetBSD: login_cap.c,v 1.29 2007/12/04 22:09:02 mjf Exp $");
 #endif /* LIBC_SCCS and not lint */
  
 #include <sys/types.h>
@@ -559,9 +559,11 @@ int
 setusercontext(login_cap_t *lc, struct passwd *pwd, uid_t uid, u_int flags)
 {
 	char per_user_tmp[MAXPATHLEN + 1];
+	const char *component_name;
 	login_cap_t *flc;
 	quad_t p;
 	int i;
+	ssize_t len;
 
 	flc = NULL;
 
@@ -575,6 +577,12 @@ setusercontext(login_cap_t *lc, struct passwd *pwd, uid_t uid, u_int flags)
 	if (pwd == NULL)
 		flags &= ~(LOGIN_SETGROUP|LOGIN_SETLOGIN);
 
+#ifdef LOGIN_OSETGROUP
+	if (pwd == NULL)
+		flags &= ~LOGIN_OSETGROUP;
+	if (flags & LOGIN_OSETGROUP)
+		flags = (flags & ~LOGIN_OSETGROUP) | LOGIN_SETGROUP;
+#endif
 	if (flags & LOGIN_SETRESOURCES)
 		for (i = 0; r_list[i].name; ++i) 
 			(void)gsetrl(lc, r_list[i].what, r_list[i].name,
@@ -583,24 +591,26 @@ setusercontext(login_cap_t *lc, struct passwd *pwd, uid_t uid, u_int flags)
 	if (flags & LOGIN_SETPRIORITY) {
 		p = login_getcapnum(lc, "priority", (quad_t)0, (quad_t)0);
 
-		if (setpriority(PRIO_PROCESS, 0, (int)p) < 0)
+		if (setpriority(PRIO_PROCESS, 0, (int)p) == -1)
 			syslog(LOG_ERR, "%s: setpriority: %m", lc->lc_class);
 	}
 
 	if (flags & LOGIN_SETUMASK) {
 		p = login_getcapnum(lc, "umask", (quad_t) LOGIN_DEFUMASK,
-												   (quad_t) LOGIN_DEFUMASK);
+		    (quad_t)LOGIN_DEFUMASK);
 		umask((mode_t)p);
 	}
 
-	if (flags & LOGIN_SETGROUP) {
-		if (setgid(pwd->pw_gid) < 0) {
+	if (flags & LOGIN_SETGID) {
+		if (setgid(pwd->pw_gid) == -1) {
 			syslog(LOG_ERR, "setgid(%d): %m", pwd->pw_gid);
 			login_close(flc);
 			return (-1);
 		}
+	}
 
-		if (initgroups(pwd->pw_name, pwd->pw_gid) < 0) {
+	if (flags & LOGIN_SETGROUPS) {
+		if (initgroups(pwd->pw_name, pwd->pw_gid) == -1) {
 			syslog(LOG_ERR, "initgroups(%s,%d): %m",
 			    pwd->pw_name, pwd->pw_gid);
 			login_close(flc);
@@ -609,34 +619,80 @@ setusercontext(login_cap_t *lc, struct passwd *pwd, uid_t uid, u_int flags)
 	}
 
 	/* Create per-user temporary directories if needed. */
-	if (readlink("/tmp", per_user_tmp, sizeof(per_user_tmp)) != -1) {
-		static const char atuid[] = "/@uid";
+	if ((len = readlink("/tmp", per_user_tmp, 
+	    sizeof(per_user_tmp) - 6)) != -1) {
+
+		static const char atuid[] = "/@ruid";
 		char *lp;
+
+		/* readlink does not nul-terminate the string */
+		per_user_tmp[len] = '\0';
 
 		/* Check if it's magic symlink. */
 		lp = strstr(per_user_tmp, atuid);
 		if (lp != NULL && *(lp + (sizeof(atuid) - 1)) == '\0') {
 			lp++;
 
-			if ((sizeof(per_user_tmp) - (lp - per_user_tmp)) < 64) {
+			if (snprintf(lp, 11, "/%u", pwd->pw_uid) > 10) {
 				syslog(LOG_ERR, "real temporary path too long");
 				login_close(flc);
 				return (-1);
 			}
-			(void)sprintf(lp, "/%u", pwd->pw_uid); /* safe */
 			if (mkdir(per_user_tmp, S_IRWXU) != -1) {
-				(void)chown(per_user_tmp, pwd->pw_uid,
-				    pwd->pw_gid);
+				if (chown(per_user_tmp, pwd->pw_uid,
+				    pwd->pw_gid)) {
+					component_name = "chown";
+					goto out;
+				}
+
+				/* 
+			 	 * Must set sticky bit for tmp directory, some
+			 	 * programs rely on this.
+			 	 */
+				if(chmod(per_user_tmp, S_IRWXU | S_ISVTX)) {
+					component_name = "chmod";
+					goto out;
+				}
 			} else {
-				syslog(LOG_ERR, "can't create `%s' directory",
-				    per_user_tmp);
+				if (errno != EEXIST) {
+					component_name = "mkdir";
+					goto out;
+				} else {
+					/* 
+					 * We must ensure that we own the
+					 * directory and that is has the correct
+					 * permissions, otherwise a DOS attack
+					 * is possible.
+					 */
+					struct stat sb;
+					if (stat(per_user_tmp, &sb) == -1) {
+						component_name = "stat";
+						goto out;
+					}
+
+					if (sb.st_uid != pwd->pw_uid) {
+						if (chown(per_user_tmp, 
+						    pwd->pw_uid, pwd->pw_gid)) {
+							component_name = "chown";
+							goto out;
+						}
+					}
+
+					if (sb.st_mode != (S_IRWXU | S_ISVTX)) {
+						if (chmod(per_user_tmp, 
+						    S_IRWXU | S_ISVTX)) {
+							component_name = "chmod";
+							goto out;
+						}
+					}
+				}
 			}
 		}
 	}
 	errno = 0;
 
 	if (flags & LOGIN_SETLOGIN)
-		if (setlogin(pwd->pw_name) < 0) {
+		if (setlogin(pwd->pw_name) == -1) {
 			syslog(LOG_ERR, "setlogin(%s) failure: %m",
 			    pwd->pw_name);
 			login_close(flc);
@@ -644,7 +700,7 @@ setusercontext(login_cap_t *lc, struct passwd *pwd, uid_t uid, u_int flags)
 		}
 
 	if (flags & LOGIN_SETUSER)
-		if (setuid(uid) < 0) {
+		if (setuid(uid) == -1) {
 			syslog(LOG_ERR, "setuid(%d): %m", uid);
 			login_close(flc);
 			return (-1);
@@ -658,6 +714,17 @@ setusercontext(login_cap_t *lc, struct passwd *pwd, uid_t uid, u_int flags)
 
 	login_close(flc);
 	return (0);
+
+out:
+	if (component_name != NULL) {
+		syslog(LOG_ERR, "%s %s: %m", component_name, per_user_tmp);
+		login_close(flc);
+		return (-1);
+	} else {
+		syslog(LOG_ERR, "%s: %m", per_user_tmp);
+		login_close(flc);
+		return (-1);
+	}
 }
 
 void

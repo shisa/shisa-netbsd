@@ -1,4 +1,4 @@
-/*	$NetBSD: db_disasm.c,v 1.7 2007/06/22 20:54:59 dsl Exp $	*/
+/*	$NetBSD: db_disasm.c,v 1.11 2008/01/01 21:24:17 yamt Exp $	*/
 
 /* 
  * Mach Operating System
@@ -33,7 +33,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: db_disasm.c,v 1.7 2007/06/22 20:54:59 dsl Exp $");
+__KERNEL_RCSID(0, "$NetBSD: db_disasm.c,v 1.11 2008/01/01 21:24:17 yamt Exp $");
 
 #ifndef _KERNEL
 #include "stubs.h"
@@ -1207,7 +1207,7 @@ db_disasm(loc, altfmt)
 	/*
 	* Don't try to disassemble the location if the mapping is invalid.
 	* If we do, we'll fault, and end up debugging the debugger!
-	* in a LARGEPAGES kernel, "pte" is really the pde and "pde" is
+	* in the case of largepages, "pte" is really the pde and "pde" is
 	* really the entry for the pdp itself.
 	*/
 	if ((vaddr_t)loc >= VM_MIN_KERNEL_ADDRESS)
@@ -1313,8 +1313,15 @@ db_disasm(loc, altfmt)
 	    ip->i_extra == (const char *)db_Grp2 ||
 	    ip->i_extra == (const char *)db_Grp6 ||
 	    ip->i_extra == (const char *)db_Grp7 ||
-	    ip->i_extra == (const char *)db_Grp8) {
-		i_name = ((const char * const *)ip->i_extra)[f_reg(regmodrm)];
+	    ip->i_extra == (const char *)db_Grp8 ||
+	    ip->i_extra == (const char *)db_Grp9) {
+		if (ip->i_extra == (const char *)db_Grp7 && regmodrm == 0xf8) {
+			i_name = "swapgs";
+			i_mode = 0;
+		} else {
+			i_name = ((const char * const *)ip->i_extra)
+			    [f_reg(regmodrm)];
+		}
 	} else if (ip->i_extra == (const char *)db_Grp3) {
 		ip = (const struct inst *)ip->i_extra;
 		ip = &ip[f_reg(regmodrm)];
