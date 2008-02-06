@@ -1,4 +1,4 @@
-/*	$NetBSD: ip6_var.h,v 1.45 2007/07/19 20:48:57 dyoung Exp $	*/
+/*	$NetBSD: ip6_var.h,v 1.46 2007/10/29 16:54:43 dyoung Exp $	*/
 /*	$KAME: ip6_var.h,v 1.33 2000/06/11 14:59:20 jinmei Exp $	*/
 
 /*
@@ -255,7 +255,7 @@ struct ip6flow {
  * XXX do not make it a kitchen sink!
  */
 struct ip6aux {
-	u_int32_t ip6a_flags;
+	u_int32_t ip6a_osrc_flags;
 #define IP6A_SWAP		0x01	/* swapped home/care-of on packet */
 #define IP6A_HASEEN		0x02	/* HA was present */
 
@@ -266,8 +266,10 @@ struct ip6aux {
 	/* ip6.ip6_src */
 	struct in6_addr ip6a_coa;       /* care of address of the peer */
 
-       /* ip6.ip6_dst */
-	struct in6_ifaddr *ip6a_dstia6;	/* my ifaddr that matches ip6_dst */
+	/* ip6.ip6_dst */
+	struct in6_addr	ip6a_src;
+	uint32_t	ip6a_src_scope_id;
+	int		ip6a_src_flags;
 };
 
 /* flags passed to ip6_output as last parameter */
@@ -333,7 +335,7 @@ int	icmp6_ctloutput(int, struct socket *, int, int, struct mbuf **);
 void	ip6_init(void);
 void	ip6intr(void);
 void	ip6_input(struct mbuf *);
-struct in6_ifaddr *ip6_getdstifaddr(struct mbuf *);
+const struct ip6aux *ip6_getdstifaddr(struct mbuf *);
 void	ip6_freepcbopts(struct ip6_pktopts *);
 void	ip6_freemoptions(struct ip6_moptions *);
 int	ip6_unknown_opt(u_int8_t *, struct mbuf *, int);

@@ -1,4 +1,4 @@
-/*	$NetBSD: key.c,v 1.156 2007/07/09 21:11:14 ad Exp $	*/
+/*	$NetBSD: key.c,v 1.157 2008/01/13 10:45:19 msaitoh Exp $	*/
 /*	$KAME: key.c,v 1.310 2003/09/08 02:23:44 itojun Exp $	*/
 
 /*
@@ -35,7 +35,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: key.c,v 1.156 2007/07/09 21:11:14 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: key.c,v 1.157 2008/01/13 10:45:19 msaitoh Exp $");
 
 #include "opt_inet.h"
 #include "opt_ipsec.h"
@@ -7010,7 +7010,7 @@ key_register(so, m, mhp)
 	}
 #endif
 
-#ifdef DIGAGNOSTIC
+#ifdef DIAGNOSTIC
 	if (off != len)
 		panic("length assumption failed in key_register");
 #endif
@@ -8571,10 +8571,7 @@ key_mip6_update_mobile_node_ipsecdb(haddr, ocoa, ncoa, haaddr)
 
 			/* free a cached route for the destination of
 			   the SA to update. */
-			if (sa->sa_route.ro_rt) {
-				RTFREE(sa->sa_route.ro_rt);
-				sa->sa_route.ro_rt = NULL;
-			}
+			rtcache_free(&sa->sa_route);
 		}
 		/* update the tunnel endpoint of a mobile node side. */
 		sin6 = *(struct sockaddr_in6 *)(&sahint->dst);
@@ -8798,10 +8795,7 @@ key_mip6_update_home_agent_ipsecdb(haddr, ocoa, ncoa, haaddr)
 			*(struct sockaddr_in6 *)&(sa->saidx.dst) = *ncoa;
 			/* free the cached route for the destination of
 			   the SA to update. */
-			if (sa->sa_route.ro_rt) {
-				RTFREE(sa->sa_route.ro_rt);
-				sa->sa_route.ro_rt = NULL;
-			}
+			rtcache_free(&sa->sa_route);
 		}
 		/* update a tunnel endpoint of a mobile node side. */
 		sin6 = *(struct sockaddr_in6 *)(&sahint->dst);

@@ -128,7 +128,7 @@ dest6_input(struct mbuf **mp, int *offp, int proto)
 				goto bad;
 			}
 			ip6a = (struct ip6aux *) (n + 1);
-			if ((ip6a->ip6a_flags & IP6A_HASEEN) != 0) {
+			if ((ip6a->ip6a_osrc_flags & IP6A_HASEEN) != 0) {
 				/* XXX icmp6 paramprob? */
 				goto bad;
 			}
@@ -147,7 +147,7 @@ dest6_input(struct mbuf **mp, int *offp, int proto)
 			    sizeof(struct in6_addr));
 
 			bcopy(&home, &ip6a->ip6a_coa, sizeof(ip6a->ip6a_coa));
-			ip6a->ip6a_flags |= IP6A_HASEEN;
+			ip6a->ip6a_osrc_flags |= IP6A_HASEEN;
 
 #if 0
 			mip6stat.mip6s_hao++;
@@ -207,7 +207,7 @@ dest6_swap_hao(ip6, ip6a, haopt)
 	struct ip6_opt_home_address *haopt;
 {
 
-	if ((ip6a->ip6a_flags & (IP6A_HASEEN | IP6A_SWAP)) != IP6A_HASEEN)
+	if ((ip6a->ip6a_osrc_flags & (IP6A_HASEEN | IP6A_SWAP)) != IP6A_HASEEN)
 		return (EINVAL);
 
 	/* XXX should we do this at all?  do it now or later? */
@@ -223,7 +223,7 @@ dest6_swap_hao(ip6, ip6a, haopt)
 	    NULL)) != 0)
 		return (error);
 #endif
-	ip6a->ip6a_flags |= IP6A_SWAP;
+	ip6a->ip6a_osrc_flags |= IP6A_SWAP;
 
 	return (0);
 }
@@ -282,7 +282,7 @@ dest6_mip6_hao(m, mhoff, nxt)
 	if (!n)
 		return (0);
 	ip6a = (struct ip6aux *) (n + 1);
-	if ((ip6a->ip6a_flags & (IP6A_HASEEN | IP6A_SWAP)) != IP6A_HASEEN)
+	if ((ip6a->ip6a_osrc_flags & (IP6A_HASEEN | IP6A_SWAP)) != IP6A_HASEEN)
 		return (0);
 
 	ip6 = mtod(m, struct ip6_hdr *);

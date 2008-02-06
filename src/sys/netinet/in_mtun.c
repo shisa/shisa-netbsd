@@ -1,4 +1,4 @@
-/*	$Id: in_mtun.c,v 1.7 2007/11/16 08:10:57 keiichi Exp $	*/
+/*	$Id: in_mtun.c,v 1.8 2008/02/06 02:50:47 keiichi Exp $	*/
 /*	$NetBSD: in_gif.c,v 1.51 2006/11/23 04:07:07 rpaulo Exp $	*/
 /*	$KAME: in_gif.c,v 1.66 2001/07/29 04:46:09 itojun Exp $	*/
 
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$Id: in_mtun.c,v 1.7 2007/11/16 08:10:57 keiichi Exp $");
+__KERNEL_RCSID(0, "$Id: in_mtun.c,v 1.8 2008/02/06 02:50:47 keiichi Exp $");
 
 #include "opt_inet.h"
 #include "opt_iso.h"
@@ -91,6 +91,7 @@ const struct protosw in_mtun_protosw =
 int
 in_mtun_output(struct ifnet *ifp, int family, struct mbuf *m)
 {
+	struct rtentry *rt;
 	struct mtun_softc *sc = (struct mtun_softc*)ifp;
 	struct sockaddr_in *sin_src = (struct sockaddr_in *)sc->mtun_psrc;
 	struct sockaddr_in *sin_dst = (struct sockaddr_in *)sc->mtun_pdst;
@@ -184,13 +185,13 @@ in_mtun_output(struct ifnet *ifp, int family, struct mbuf *m)
 	bcopy(&iphdr, mtod(m, struct ip *), sizeof(struct ip));
 
 	sockaddr_in_init(&u.dst4, &sin_dst->sin_addr, 0);
-	if (rtcache_lookup(&sc->mtun_ro, &u.dst) == NULL) {
+	if ((rt = rtcache_lookup(&sc->mtun_ro, &u.dst)) == NULL) {
 		m_freem(m);
 		return ENETUNREACH;
 	}
 
 	/* If the route constitutes infinite encapsulation, punt. */
-	if (sc->mtun_ro.ro_rt->rt_ifp == ifp) {
+	if (rt->rt_ifp == ifp) {
 		rtcache_free(&sc->mtun_ro);
 		m_freem(m);
 		return ENETUNREACH;	/*XXX*/

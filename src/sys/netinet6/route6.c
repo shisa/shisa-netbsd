@@ -1,4 +1,4 @@
-/*	$NetBSD: route6.c,v 1.20 2007/05/23 17:15:04 christos Exp $	*/
+/*	$NetBSD: route6.c,v 1.21 2007/10/29 16:54:43 dyoung Exp $	*/
 /*	$KAME: route6.c,v 1.22 2000/12/03 00:54:00 itojun Exp $	*/
 
 /*
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: route6.c,v 1.20 2007/05/23 17:15:04 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: route6.c,v 1.21 2007/10/29 16:54:43 dyoung Exp $");
 
 #include <sys/param.h>
 #include <sys/mbuf.h>
@@ -155,7 +155,7 @@ ip6_rthdr0(struct mbuf *m, struct ip6_hdr *ip6,
 {
 	int addrs, index;
 	struct in6_addr *nextaddr, tmpaddr;
-	struct in6_ifaddr *ifa;
+	const struct ip6aux *ip6a;
 
 	if (rh0->ip6r0_segleft == 0)
 		return (0);
@@ -212,9 +212,9 @@ ip6_rthdr0(struct mbuf *m, struct ip6_hdr *ip6,
 	 * of the current hop. [RFC4007, Section 9]
 	 * Then disambiguate the scope zone for the next hop (if necessary). 
 	 */
-	if ((ifa = ip6_getdstifaddr(m)) == NULL)
+	if ((ip6a = ip6_getdstifaddr(m)) == NULL)
 		goto bad;
-	if (in6_setscope(nextaddr, ifa->ia_ifp, NULL) != 0) {
+	if (in6_setzoneid(nextaddr, ip6a->ip6a_scope_id) != 0) {
 		ip6stat.ip6s_badscope++;
 		goto bad;
 	}
@@ -250,7 +250,7 @@ static int
 ip6_rthdr2(struct mbuf *m, struct ip6_hdr *ip6, struct ip6_rthdr2 *rh2)
 {
 	struct in6_addr *nextaddr, tmpaddr;
-	struct in6_ifaddr *ifa;
+	const struct ip6aux *ip6a;
 	struct in6_ifaddr *ia;
 	int  myhoa = 0;
 	int  mycoa = 0;
@@ -274,9 +274,9 @@ ip6_rthdr2(struct mbuf *m, struct ip6_hdr *ip6, struct ip6_rthdr2 *rh2)
 			goto bad;
 		}
 
-		if ((ifa = ip6_getdstifaddr(m)) == NULL) 
+		if ((ip6a = ip6_getdstifaddr(m)) == NULL) 
 			goto bad;
-		if (in6_setscope(nextaddr, ifa->ia_ifp, NULL) != 0) {
+		if (in6_setzoneid(nextaddr, ip6a->ip6a_src_scope_id) != 0) {
 			ip6stat.ip6s_badscope++;
 			goto bad;
 		}
@@ -341,9 +341,9 @@ ip6_rthdr2(struct mbuf *m, struct ip6_hdr *ip6, struct ip6_rthdr2 *rh2)
 	 * of the current hop. [RFC4007, Section 9]
 	 * Then disambiguate the scope zone for the next hop (if necessary).
 	 */
-	if ((ifa = ip6_getdstifaddr(m)) == NULL) 
+	if ((ip6a = ip6_getdstifaddr(m)) == NULL) 
 		goto bad;
-	if (in6_setscope(nextaddr, ifa->ia_ifp, NULL) != 0) {
+	if (in6_setzoneid(nextaddr, ip6a->ip6a_src_scope_id) != 0) {
 		ip6stat.ip6s_badscope++;
 		goto bad;
 	}

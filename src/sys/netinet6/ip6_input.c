@@ -1,4 +1,4 @@
-/*	$NetBSD: ip6_input.c,v 1.110 2007/09/11 14:18:09 degroote Exp $	*/
+/*	$NetBSD: ip6_input.c,v 1.113 2007/12/04 10:27:34 dyoung Exp $	*/
 /*	$KAME: ip6_input.c,v 1.188 2001/03/29 05:34:31 itojun Exp $	*/
 
 /*
@@ -62,7 +62,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ip6_input.c,v 1.110 2007/09/11 14:18:09 degroote Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ip6_input.c,v 1.113 2007/12/04 10:27:34 dyoung Exp $");
 
 #include "opt_inet.h"
 #include "opt_inet6.h"
@@ -148,11 +148,11 @@ struct pfil_head inet6_pfil_hook;
 
 struct ip6stat ip6stat;
 
-static void ip6_init2 __P((void *));
-static struct m_tag *ip6_setdstifaddr __P((struct mbuf *, struct in6_ifaddr *));
+static void ip6_init2(void *);
+static struct m_tag *ip6_setdstifaddr(struct mbuf *, const struct in6_ifaddr *);
 
-static int ip6_hopopts_input __P((u_int32_t *, u_int32_t *, struct mbuf **, int *));
-static struct mbuf *ip6_pullexthdr __P((struct mbuf *, size_t, int));
+static int ip6_hopopts_input(u_int32_t *, u_int32_t *, struct mbuf **, int *);
+static struct mbuf *ip6_pullexthdr(struct mbuf *, size_t, int);
 
 /*
  * IP6 initialization: fill in IP6 protocol switch table.
@@ -524,7 +524,7 @@ ip6_input(struct mbuf *m)
 
 #ifdef MOBILE_IPV6
 		/* check unicast NS */
-		if ((ip6_forward_rt.ro_rt->rt_flags & RTF_ANNOUNCE) != 0) {
+		if ((rt->rt_flags & RTF_ANNOUNCE) != 0) {
 			/* This route shows proxy nd. thus the packet was
 			 *  captured. this packet should be tunneled to
 			 * actual coa with tunneling unless this is NS.
@@ -596,7 +596,7 @@ ip6_input(struct mbuf *m)
 	 * working right.
 	 */
 	struct ifaddr *ifa;
-	TAILQ_FOREACH(ifa, &m->m_pkthdr.rcvif->if_addrlist, ifa_list) {
+	IFADDR_FOREACH(ifa, m->m_pkthdr.rcvif) {
 		if (ifa->ifa_addr == NULL)
 			continue;	/* just for safety */
 		if (ifa->ifa_addr->sa_family != AF_INET6)
@@ -627,18 +627,16 @@ ip6_input(struct mbuf *m)
 	 * as our interface address (e.g. multicast addresses, addresses
 	 * within FAITH prefixes and such).
 	 */
-	if (deliverifp && !ip6_getdstifaddr(m)) {
+	if (deliverifp && ip6_getdstifaddr(m) == NULL) {
 		struct in6_ifaddr *ia6;
 
 		ia6 = in6_ifawithifp(deliverifp, &ip6->ip6_dst);
-		if (ia6) {
-			if (!ip6_setdstifaddr(m, ia6)) {
-				/*
-				 * XXX maybe we should drop the packet here,
-				 * as we could not provide enough information
-				 * to the upper layers.
-				 */
-			}
+		if (ia6 != NULL && ip6_setdstifaddr(m, ia6) == NULL) {
+			/*
+			 * XXX maybe we should drop the packet here,
+			 * as we could not provide enough information
+			 * to the upper layers.
+			 */
 		}
 	}
 
@@ -870,24 +868,30 @@ ip6_input(struct mbuf *m)
  * set/grab in6_ifaddr correspond to IPv6 destination address.
  */
 static struct m_tag *
-ip6_setdstifaddr(struct mbuf *m, struct in6_ifaddr *ia6)
+ip6_setdstifaddr(struct mbuf *m, const struct in6_ifaddr *ia)
 {
 	struct m_tag *mtag;
 
 	mtag = ip6_addaux(m);
-	if (mtag)
-		((struct ip6aux *)(mtag + 1))->ip6a_dstia6 = ia6;
+	if (mtag != NULL) {
+		struct ip6aux *ip6a;
+
+		ip6a = (struct ip6aux *)(mtag + 1);
+		in6_setscope(&ip6a->ip6a_src, ia->ia_ifp, &ip6a->ip6a_src_scope_id);
+		ip6a->ip6a_src = ia->ia_addr.sin6_addr;
+		ip6a->ip6a_src_flags = ia->ia6_flags;
+	}
 	return mtag;	/* NULL if failed to set */
 }
 
-struct in6_ifaddr *
+const struct ip6aux *
 ip6_getdstifaddr(struct mbuf *m)
 {
 	struct m_tag *mtag;
 
 	mtag = ip6_findaux(m);
-	if (mtag)
-		return ((struct ip6aux *)(mtag + 1))->ip6a_dstia6;
+	if (mtag != NULL)
+		return (struct ip6aux *)(mtag + 1);
 	else
 		return NULL;
 }

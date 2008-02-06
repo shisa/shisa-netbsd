@@ -1,4 +1,4 @@
-/*	$Id: in6_mtun.c,v 1.7 2008/01/17 07:16:18 keiichi Exp $	*/
+/*	$Id: in6_mtun.c,v 1.8 2008/02/06 02:50:48 keiichi Exp $	*/
 /*	$NetBSD: in6_gif.c,v 1.44.4.1 2006/09/09 02:58:55 rpaulo Exp $	*/
 /*	$KAME: in6_gif.c,v 1.62 2001/07/29 04:27:25 itojun Exp $	*/
 
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$Id: in6_mtun.c,v 1.7 2008/01/17 07:16:18 keiichi Exp $");
+__KERNEL_RCSID(0, "$Id: in6_mtun.c,v 1.8 2008/02/06 02:50:48 keiichi Exp $");
 
 #include "opt_inet.h"
 #include "opt_iso.h"
@@ -98,6 +98,7 @@ in6_mtun_output(ifp, family, m)
 	int family; /* family of the packet to be encapsulate. */
 	struct mbuf *m;
 {
+	struct rtentry *rt;
 	struct mtun_softc *sc = (struct mtun_softc*)ifp;
 	struct sockaddr_in6 *sin6_src = (struct sockaddr_in6 *)sc->mtun_psrc;
 	struct sockaddr_in6 *sin6_dst = (struct sockaddr_in6 *)sc->mtun_pdst;
@@ -206,14 +207,14 @@ in6_mtun_output(ifp, family, m)
 	ip6->ip6_flow |= htonl((u_int32_t)otos << 20);
 
 	sockaddr_in6_init(&u.dst6, &sin6_dst->sin6_addr, 0, 0, 0);
-	if (rtcache_lookup(&sc->mtun_ro, &u.dst) == NULL) {
+	if ((rt = rtcache_lookup(&sc->mtun_ro, &u.dst)) == NULL) {
 		printf("no cached route\n");
 		m_freem(m);
 		return ENETUNREACH;
 	}
 
 	/* If the route constitutes infinite encapsulation, punt. */
-	if (sc->mtun_ro.ro_rt->rt_ifp == ifp
+	if (rt->rt_ifp == ifp
 		&& sc->mtun_nexthop == NULL) {
 		m_freem(m);
 		return ENETUNREACH;	/* XXX */
@@ -481,8 +482,6 @@ in6_mtun_ctlinput(cmd, sa, d)
 		if ((sc->mtun_if.if_flags & IFF_RUNNING) == 0)
 			continue;
 		if (sc->mtun_psrc->sa_family != AF_INET6)
-			continue;
-		if (sc->mtun_ro.ro_rt == NULL)
 			continue;
 
 		dst6 = satocsin6(rtcache_getdst(&sc->mtun_ro));

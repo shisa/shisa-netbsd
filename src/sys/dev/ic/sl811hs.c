@@ -1,4 +1,4 @@
-/*	$NetBSD: sl811hs.c,v 1.14 2007/08/24 01:49:08 kiyohara Exp $	*/
+/*	$NetBSD: sl811hs.c,v 1.19 2008/01/07 01:55:15 ad Exp $	*/
 
 /*
  * Not (c) 2007 Matthew Orgass
@@ -86,7 +86,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: sl811hs.c,v 1.14 2007/08/24 01:49:08 kiyohara Exp $");
+__KERNEL_RCSID(0, "$NetBSD: sl811hs.c,v 1.19 2008/01/07 01:55:15 ad Exp $");
 
 #include <sys/cdefs.h>
 #include <sys/param.h>
@@ -97,10 +97,10 @@ __KERNEL_RCSID(0, "$NetBSD: sl811hs.c,v 1.14 2007/08/24 01:49:08 kiyohara Exp $"
 #include <sys/malloc.h>
 #include <sys/queue.h>
 #include <sys/gcq.h>
-#include <sys/lock.h>
-
-#include <machine/bus.h>
-#include <machine/cpu.h>
+#include <sys/simplelock.h>
+#include <sys/intr.h>
+#include <sys/cpu.h>
+#include <sys/bus.h>
 
 #include <dev/usb/usb.h>
 #include <dev/usb/usbdi.h>
@@ -650,17 +650,8 @@ DDOLOGBUF(uint8_t *buf, unsigned int length)
 #define DLOGBUF(x, b, l) ((void)0)
 #endif /* SLHCI_DEBUG */
 
-#ifdef LOCKDEBUG
-#define SLHCI_MAINLOCKASSERT(sc) 					 \
-    simple_lock_assert_locked(&(sc)->sc_lock, "slhci")
-#define SLHCI_LOCKASSERT(sc, main, wait) do {				 \
-	simple_lock_assert_ ## main (&(sc)->sc_lock, "slhci");	    	 \
-	simple_lock_assert_ ## wait (&(sc)->sc_wait_lock, "slhci wait"); \
-} while (/*CONSTCOND*/0)
-#else
 #define SLHCI_MAINLOCKASSERT(sc) ((void)0)
 #define SLHCI_LOCKASSERT(sc, main, wait) ((void)0)
-#endif
 
 #ifdef DIAGNOSTIC
 #define LK_SLASSERT(exp, sc, spipe, xfer, ext) do {			\
@@ -1218,7 +1209,7 @@ slhci_detach(struct slhci_softc *sc, int flags)
 	while (t->flags & (F_RESET|F_CALLBACK))
 		tsleep(&sc, PPAUSE, "slhci_detach", hz);
 
-	softintr_disestablish(sc->sc_cb_softintr);
+	softint_disestablish(sc->sc_cb_softintr);
 
 	ret = 0;
 
@@ -2496,7 +2487,7 @@ slhci_do_callback_schedule(struct slhci_softc *sc)
 
 	if (!(t->flags & F_CALLBACK)) {
 		t->flags |= F_CALLBACK;
-		softintr_schedule(sc->sc_cb_softintr);
+		softint_schedule(sc->sc_cb_softintr);
 	}
 }
 
@@ -2663,7 +2654,7 @@ slhci_do_attach(struct slhci_softc *sc, struct slhci_pipe *spipe, struct
 	/* It is not safe to call the soft interrupt directly as 
 	 * usb_schedsoftintr does in the use_polling case (due to locking).  
 	 */
-	sc->sc_cb_softintr = softintr_establish(IPL_SOFTUSB, 
+	sc->sc_cb_softintr = softint_establish(SOFTINT_NET, 
 	    slhci_callback_entry, sc);
 
 #ifdef SLHCI_DEBUG

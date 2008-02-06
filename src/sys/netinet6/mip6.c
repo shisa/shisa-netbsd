@@ -1,4 +1,4 @@
-/*	$Id: mip6.c,v 1.10 2007/11/12 09:06:23 keiichi Exp $	*/
+/*	$Id: mip6.c,v 1.11 2008/02/06 02:50:48 keiichi Exp $	*/
 
 /*
  * Copyright (C) 2004 WIDE Project.  All rights reserved.
@@ -1363,7 +1363,7 @@ mip6_bc_proxy_control(target, local, cmd)
 {
 	struct sockaddr_in6 target_sa, local_sa, mask_sa;
 	struct in6_addr daddr;
-	struct sockaddr_dl *sdl;
+	const struct sockaddr_dl *sdl;
         struct rtentry *rt, *nrt;
 	struct ifaddr *ifa;
 	struct ifnet *ifp;
@@ -1451,7 +1451,7 @@ mip6_bc_proxy_control(target, local, cmd)
 		flags = (RTF_STATIC | RTF_HOST | RTF_ANNOUNCE);
 
 		error = rtrequest(RTM_ADD, (struct sockaddr *)&target_sa,
-		    (struct sockaddr *)sdl, (struct sockaddr *)&mask_sa, flags,
+		    (const struct sockaddr *)sdl, (struct sockaddr *)&mask_sa, flags,
 		    &nrt);
 
 		if (error == 0) {
@@ -1484,7 +1484,7 @@ mip6_bc_proxy_control(target, local, cmd)
 		daddr.s6_addr16[1] = htons(ifp->if_index);
 #endif 
 		nd6_na_output(ifp, &daddr, &target_sa.sin6_addr,
-			      ND_NA_FLAG_OVERRIDE, 1, (struct sockaddr *)sdl);
+			      ND_NA_FLAG_OVERRIDE, 1, (const struct sockaddr *)sdl);
 		break;
 
 	default:
