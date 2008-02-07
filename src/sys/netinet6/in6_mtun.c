@@ -1,4 +1,4 @@
-/*	$Id: in6_mtun.c,v 1.8 2008/02/06 02:50:48 keiichi Exp $	*/
+/*	$Id: in6_mtun.c,v 1.9 2008/02/07 05:01:04 keiichi Exp $	*/
 /*	$NetBSD: in6_gif.c,v 1.44.4.1 2006/09/09 02:58:55 rpaulo Exp $	*/
 /*	$KAME: in6_gif.c,v 1.62 2001/07/29 04:27:25 itojun Exp $	*/
 
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$Id: in6_mtun.c,v 1.8 2008/02/06 02:50:48 keiichi Exp $");
+__KERNEL_RCSID(0, "$Id: in6_mtun.c,v 1.9 2008/02/07 05:01:04 keiichi Exp $");
 
 #include "opt_inet.h"
 #include "opt_iso.h"
@@ -365,10 +365,15 @@ mtun_validate6(ip6, sc, ifp)
 	struct mtun_softc *sc;
 	struct ifnet *ifp;
 {
-	struct sockaddr_in6 *src, *dst;
+	struct sockaddr_in6 *src, *dst, *nexthop;
 
 	src = (struct sockaddr_in6 *)sc->mtun_psrc;
 	dst = (struct sockaddr_in6 *)sc->mtun_pdst;
+	nexthop = (struct sockaddr_in6 *)sc->mtun_nexthop;
+
+	/* check if the nexthop address of this mtun i/f is set */
+	if (nexthop == NULL)
+		return 0;
 
 	/* check for address match */
 	if (!IN6_ARE_ADDR_EQUAL(&src->sin6_addr, &ip6->ip6_dst) ||
@@ -383,16 +388,14 @@ mtun_validate6(ip6, sc, ifp)
 		struct rtentry *rt;
 
 		bzero(&sin6, sizeof(sin6));
-		sin6.sin6_family = AF_INET6;
-		sin6.sin6_len = sizeof(struct sockaddr_in6);
-		sin6.sin6_addr = ip6->ip6_src;
-		/* XXX scopeid */
+		bcopy(nexthop, &sin6, sizeof(sin6));
+		sa6_embedscope(&sin6, ip6_use_defzone);
 		rt = rtalloc1((struct sockaddr *)&sin6, 0);
 		if (!rt || rt->rt_ifp != ifp) {
 #if 0
 			log(LOG_WARNING, "%s: packet from %s dropped "
 			    "due to ingress filter\n", if_name(&sc->mtun_if),
-			    ip6_sprintf(&sin6.sin6_addr));
+			    ip6_sprintf(&ip6->ip6_src));
 #endif
 			if (rt)
 				rtfree(rt);
