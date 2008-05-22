@@ -55,7 +55,8 @@ struct ip6_mh {
 #define IP6_MH_TYPE_BU		5
 #define IP6_MH_TYPE_BACK	6
 #define IP6_MH_TYPE_BERROR	7
-#define IP6_MH_TYPE_MAX		7
+#define IP6_MH_TYPE_HASWITCH	12
+#define IP6_MH_TYPE_MAX		12
 
 /* Binding Refresh Request (BRR) message */
 struct ip6_mh_binding_request {
@@ -264,6 +265,21 @@ struct ip6_mh_binding_error {
 /* Binding Error status codes */
 #define IP6_MH_BES_UNKNOWN_HAO		1
 #define IP6_MH_BES_UNKNOWN_MH		2
+
+/* Home Agent Switch message */
+struct ip6_mh_home_agent_switch {
+	struct ip6_mh   ip6mhhas_hdr;
+	u_int8_t        ip6mhhas_naddrs;	/* number of addresses */
+	/* followed by home agent addresses */
+	/* followed by mobility options */
+} __attribute__((__packed__));
+#ifdef _KERNEL
+#define ip6mhhas_proto ip6mhhas_hdr.ip6mh_proto
+#define ip6mhhas_len ip6mhhas_hdr.ip6mh_len
+#define ip6mhhas_type ip6mhhas_hdr.ip6mh_type
+#define ip6mhhas_reserved0 ip6mhhas_hdr.ip6mh_reserved
+#define ip6mhhas_cksum ip6mhhas_hdr.ip6mh_cksum
+#endif /* _KERNEL */
 
 /* Mobility options */
 struct ip6_mh_opt {
