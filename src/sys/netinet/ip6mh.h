@@ -56,7 +56,8 @@ struct ip6_mh {
 #define IP6_MH_TYPE_BACK	6
 #define IP6_MH_TYPE_BERROR	7
 #define IP6_MH_TYPE_HASWITCH	12
-#define IP6_MH_TYPE_MAX		12
+#define IP6_MH_TYPE_BUMIGRATE	13
+#define IP6_MH_TYPE_MAX		13
 
 /* Binding Refresh Request (BRR) message */
 struct ip6_mh_binding_request {
@@ -279,6 +280,21 @@ struct ip6_mh_home_agent_switch {
 #define ip6mhhas_type ip6mhhas_hdr.ip6mh_type
 #define ip6mhhas_reserved0 ip6mhhas_hdr.ip6mh_reserved
 #define ip6mhhas_cksum ip6mhhas_hdr.ip6mh_cksum
+#endif /* _KERNEL */
+
+/* Binding Migration message */
+struct ip6_mh_binding_migration {
+	struct ip6_mh   ip6mhbm_hdr;
+	u_int16_t       ip6mhbm_reserved;
+	struct in6_addr ip6mhbm_hoa;	/* Target Home Address */
+	/* followed by mobility options */
+} __attribute__((__packed__));
+#ifdef _KERNEL
+#define ip6mhbm_proto ip6mhbm_hdr.ip6mh_proto
+#define ip6mhbm_len ip6mhbm_hdr.ip6mh_len
+#define ip6mhbm_type ip6mhbm_hdr.ip6mh_type
+#define ip6mhbm_reserved0 ip6mhbm_hdr.ip6mh_reserved
+#define ip6mhbm_cksum ip6mhbm_hdr.ip6mh_cksum
 #endif /* _KERNEL */
 
 /* Mobility options */
