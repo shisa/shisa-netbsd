@@ -271,6 +271,7 @@ struct ip6_mh_binding_error {
 struct ip6_mh_home_agent_switch {
 	struct ip6_mh   ip6mhhas_hdr;
 	u_int8_t        ip6mhhas_naddrs;	/* number of addresses */
+	u_int8_t        ip6mhhas_reserved;
 	/* followed by home agent addresses */
 	/* followed by mobility options */
 } __attribute__((__packed__));
