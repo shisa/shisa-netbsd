@@ -540,6 +540,7 @@ rt_msg1(int type, struct rt_addrinfo *rtinfo, void *data, int datalen)
 
 	case RTM_DELADDR:
 	case RTM_NEWADDR:
+	case RTM_ADDRINFO:
 		len = sizeof(struct ifa_msghdr);
 		break;
 
